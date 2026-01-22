@@ -7,6 +7,7 @@ AbortRepairMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -23,6 +24,7 @@ AddDropColumnMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: false
   schema_changes: true
@@ -39,6 +41,7 @@ AddRemoveDcNemesis:
   kubernetes: false
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: false
   schema_changes: false
@@ -55,6 +58,7 @@ AddRemoveMvNemesis:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -71,6 +75,7 @@ AddRemoveRackNemesis:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -87,6 +92,7 @@ BlockNetworkMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: true
   run_with_gemini: false
   schema_changes: false
@@ -103,6 +109,7 @@ BootstrapStreamingErrorNemesis:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -119,6 +126,7 @@ CDCStressorMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -135,6 +143,7 @@ ClusterRollingRestart:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -151,6 +160,7 @@ ClusterRollingRestartRandomOrder:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -167,6 +177,7 @@ CorruptThenRebuildMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -183,6 +194,7 @@ CorruptThenRepairMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -199,6 +211,7 @@ CorruptThenScrubMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -215,6 +228,7 @@ CreateIndexNemesis:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -231,6 +245,7 @@ DecommissionMonkey:
   kubernetes: false
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -247,6 +262,7 @@ DecommissionSeedNode:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -263,6 +279,7 @@ DecommissionStreamingErrMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -279,6 +296,7 @@ DeleteByPartitionsMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -295,6 +313,7 @@ DeleteByRowsRangeMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -311,6 +330,7 @@ DeleteOverlappingRowRangesMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -327,6 +347,7 @@ DisableBinaryGossipExecuteMajorCompaction:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -343,6 +364,7 @@ DrainKubernetesNodeThenDecommissionAndAddScyllaNode:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -359,6 +381,7 @@ DrainKubernetesNodeThenReplaceScyllaNode:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -375,6 +398,7 @@ DrainerMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -391,6 +415,7 @@ EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -407,6 +432,7 @@ EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -423,6 +449,7 @@ EndOfQuotaNemesis:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -439,6 +466,7 @@ EnospcAllNodesMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -455,6 +483,7 @@ EnospcMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -471,6 +500,7 @@ GrowShrinkClusterNemesis:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -487,6 +517,7 @@ GrowShrinkZeroTokenNode:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -503,6 +534,7 @@ HardRebootNodeMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -519,6 +551,7 @@ IsolateNodeWithIptableRuleNemesis:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -535,6 +568,7 @@ IsolateNodeWithProcessSignalNemesis:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -551,6 +585,7 @@ KillMVBuildingCoordinator:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -567,6 +602,7 @@ LoadAndStreamMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: false
   schema_changes: false
@@ -583,6 +619,7 @@ MajorCompactionMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -599,6 +636,7 @@ MemoryStressMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -615,6 +653,7 @@ MgmtBackup:
   kubernetes: false
   limited: true
   manager_operation: true
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -631,6 +670,7 @@ MgmtBackupSpecificKeyspaces:
   kubernetes: false
   limited: true
   manager_operation: true
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -647,6 +687,7 @@ MgmtCorruptThenRepair:
   kubernetes: true
   limited: false
   manager_operation: true
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -663,6 +704,7 @@ MgmtRepair:
   kubernetes: true
   limited: true
   manager_operation: true
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -679,6 +721,7 @@ MgmtRestore:
   kubernetes: true
   limited: true
   manager_operation: true
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -695,6 +738,7 @@ ModifyTableBloomFilterFpChanceMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -711,6 +755,7 @@ ModifyTableCachingMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -727,6 +772,7 @@ ModifyTableCommentMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -743,6 +789,7 @@ ModifyTableCompactionMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -759,6 +806,7 @@ ModifyTableCompressionMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -775,6 +823,7 @@ ModifyTableCrcCheckChanceMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -791,6 +840,7 @@ ModifyTableDclocalReadRepairChanceMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -807,6 +857,7 @@ ModifyTableDefaultTimeToLiveMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -823,6 +874,7 @@ ModifyTableGcGraceTimeMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -839,6 +891,7 @@ ModifyTableMaxIndexIntervalMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -855,6 +908,7 @@ ModifyTableMemtableFlushPeriodInMsMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -871,22 +925,7 @@ ModifyTableMinIndexIntervalMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: true
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-ModifyTableMonkey:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: true
-  has_steady_run: false
-  kubernetes: true
-  limited: true
-  manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -903,6 +942,7 @@ ModifyTableReadRepairChanceMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -919,6 +959,7 @@ ModifyTableSpeculativeRetryMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -935,6 +976,7 @@ ModifyTableTwcsWindowSizeMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -951,6 +993,7 @@ MultipleHardRebootNodeMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -967,6 +1010,7 @@ NemesisSequence:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: false
   schema_changes: false
@@ -983,6 +1027,7 @@ NoCorruptRepairMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -999,6 +1044,7 @@ NodeRestartWithResharding:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1015,6 +1061,7 @@ NodeTerminateAndReplace:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1031,6 +1078,7 @@ NodeToolCleanupMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1047,6 +1095,7 @@ OperatorNodeReplace:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1063,6 +1112,7 @@ OperatorNodetoolFlushAndReshard:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1079,6 +1129,7 @@ PauseLdapNemesis:
   kubernetes: false
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1095,6 +1146,7 @@ RandomInterruptionNetworkMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: true
   run_with_gemini: false
   schema_changes: false
@@ -1111,6 +1163,7 @@ RebuildStreamingErrMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1127,6 +1180,7 @@ RefreshBigMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: false
   schema_changes: false
@@ -1143,6 +1197,7 @@ RefreshMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: false
   schema_changes: false
@@ -1159,6 +1214,7 @@ RejectInterNodeNetworkMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: true
   run_with_gemini: false
   schema_changes: false
@@ -1175,6 +1231,7 @@ RejectNodeExporterNetworkMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: true
   run_with_gemini: false
   schema_changes: false
@@ -1191,6 +1248,7 @@ RejectThriftNetworkMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: true
   run_with_gemini: false
   schema_changes: false
@@ -1207,6 +1265,7 @@ RemoveServiceLevelMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1223,6 +1282,7 @@ RepairStreamingErrMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1239,6 +1299,7 @@ ResetLocalSchemaMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1255,6 +1316,7 @@ RestartThenRepairNodeMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1271,6 +1333,7 @@ RollingRestartConfigChangeInternodeCompression:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1287,6 +1350,7 @@ ScyllaKillMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1303,6 +1367,7 @@ SerialRestartOfElectedTopologyCoordinatorNemesis:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1319,6 +1384,7 @@ SlaDecreaseSharesDuringLoad:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1335,6 +1401,7 @@ SlaIncreaseSharesByAttachAnotherSlDuringLoad:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1351,6 +1418,7 @@ SlaIncreaseSharesDuringLoad:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1367,6 +1435,7 @@ SlaMaximumAllowedSlsWithMaxSharesDuringLoad:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1383,6 +1452,7 @@ SlaReplaceUsingDetachDuringLoad:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1399,6 +1469,7 @@ SlaReplaceUsingDropDuringLoad:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1415,6 +1486,7 @@ SnapshotOperations:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1431,6 +1503,7 @@ SoftRebootNodeMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1447,6 +1520,7 @@ SslHotReloadingNemesis:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1463,6 +1537,7 @@ StartStopCleanupCompaction:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1479,6 +1554,7 @@ StartStopMajorCompaction:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1495,6 +1571,7 @@ StartStopScrubCompaction:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1511,6 +1588,7 @@ StartStopValidationCompaction:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1527,6 +1605,7 @@ StopStartInterfacesNetworkMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: true
   run_with_gemini: false
   schema_changes: false
@@ -1543,6 +1622,7 @@ StopStartMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1559,6 +1639,7 @@ StopWaitStartMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1575,6 +1656,7 @@ SwitchBetweenPasswordAuthAndSaslauthdAuth:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1591,6 +1673,7 @@ TerminateAndRemoveNodeMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1607,6 +1690,7 @@ TerminateKubernetesHostThenDecommissionAndAddScyllaNode:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1623,6 +1707,7 @@ TerminateKubernetesHostThenReplaceScyllaNode:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1639,6 +1724,7 @@ ToggleAuditNemesisSyslog:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -1655,6 +1741,7 @@ ToggleCDCMonkey:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -1671,6 +1758,7 @@ ToggleGcModeMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -1687,6 +1775,7 @@ ToggleLdapConfiguration:
   kubernetes: false
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1703,6 +1792,7 @@ ToggleTableIcsMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -1719,6 +1809,7 @@ TopPartitions:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1735,6 +1826,7 @@ TruncateLargeParititionMonkey:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1751,6 +1843,7 @@ TruncateMonkey:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1767,6 +1860,7 @@ ValidateHintedHandoffShortDowntime:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false

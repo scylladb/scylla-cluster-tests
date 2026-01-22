@@ -1,2 +1,3 @@
-nemesis_class_name: 'NoCorruptRepairMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'NoCorruptRepairMonkey'
 user_prefix: 'longevity-5gb-1h-NoCorruptRepairMonkey'

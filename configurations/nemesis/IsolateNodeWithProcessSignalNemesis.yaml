@@ -1,2 +1,3 @@
-nemesis_class_name: 'IsolateNodeWithProcessSignalNemesis'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'IsolateNodeWithProcessSignalNemesis'
 user_prefix: 'longevity-5gb-1h-IsolateNodeWithProcessSignalNemesis'
