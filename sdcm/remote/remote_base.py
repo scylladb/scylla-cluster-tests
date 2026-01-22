@@ -453,7 +453,7 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         """
         Check if rsync is available on the remote host.
         """
-        result = self.run("rsync --version", ignore_status=True)
+        result = self.run("/usr/bin/rsync --version", ignore_status=True)
         return result.ok
 
     def _encode_remote_paths(self, paths: List[str], escape=True) -> str:
