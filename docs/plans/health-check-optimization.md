@@ -224,7 +224,7 @@ cluster_health_check_sampling_mode: 'all'  # all | cluster_quorum | dc_quorum | 
 
 These heuristics ensure health checks focus on nodes most likely to be affected by nemesis operations while ensuring complete cluster coverage over time:
 
-1. **HIGHEST PRIORITY: Always include all nodes participating in the nemesis** 
+1. **HIGHEST PRIORITY: Always include all nodes participating in the nemesis**
    - **For health checks done at the end of a nemesis**: Include ALL nodes that participated in the nemesis operation
    - The target node (directly affected) is checked FIRST
    - Additional participating nodes (e.g., replacement nodes, nodes involved in data migration) are checked next
