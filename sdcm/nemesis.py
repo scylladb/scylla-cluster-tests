@@ -3047,7 +3047,7 @@ class Nemesis(NemesisFlags):
         options = ("'ALWAYS'", "'%spercentile'" % random.randint(95, 99), "'%sms'" % random.randint(300, 1000))
         self._modify_table_property(name="speculative_retry", val=random.choice(options))
 
-    def modify_table_twcs_window_size(self):
+    def disrupt_modify_table_twcs_window_size(self):
         """Change window size for tables with TWCS
 
         After window size of TWCS changed, tables should be
@@ -7653,3 +7653,14 @@ class KillMVBuildingCoordinator(Nemesis):
 
     def disrupt(self):
         self.disrupt_kill_mv_building_coordinator()
+
+
+class ModifyTableTwcsWindowSizeMonkey(Nemesis):
+    disruptive = True
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_twcs_window_size()
