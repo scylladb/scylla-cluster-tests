@@ -274,6 +274,85 @@ All unit tests in `unit_tests/` should follow pytest conventions:
 4. **Use conftest.py for shared fixtures** - Place common fixtures in `unit_tests/conftest.py`, auto-discovered by pytest
 5. **Prefer simple assertions** - Use `assert x == y` not `self.assertEqual(x, y)`
 
+## Documentation Standards
+
+When writing or updating documentation in this repository, follow these standards to ensure consistency and quality:
+
+### Docstrings
+
+- **Format**: Follow Google Python docstring format
+- **Include**: Description, Args, Returns, Raises sections where applicable
+- **Example**:
+  ```python
+  def check_cluster_health(self, nodes=None):
+      """Check the health of cluster nodes.
+      
+      Args:
+          nodes: List of nodes to check. If None, checks all nodes.
+          
+      Returns:
+          bool: True if all nodes are healthy, False otherwise.
+          
+      Raises:
+          ClusterHealthError: If critical health issues are detected.
+      """
+  ```
+
+### Configuration Parameters
+
+When documenting configuration parameters:
+- **Type**: Specify the parameter type (str, int, bool, list, dict)
+- **Default value**: Always include the default value
+- **Valid range**: Document acceptable values or ranges
+- **Usage example**: Provide a practical example
+
+**Example**:
+```python
+cluster_health_check_parallel_workers: int = 5
+"""Number of parallel workers for health checks.
+
+Type: int
+Default: 5
+Valid range: 1-10 (max recommended: 10)
+Example: cluster_health_check_parallel_workers: 10
+"""
+```
+
+### Code Comments
+
+- **Purpose**: Explain "why" not "what" - focus on intent and context
+- **When to use**: For complex logic, non-obvious decisions, or important constraints
+- **Avoid**: Redundant comments that just restate the code
+
+**Good example**:
+```python
+# Skip health check if nemesis was skipped to avoid wasting 2+ hours on large clusters
+if nemesis_skipped:
+    return
+```
+
+**Bad example**:
+```python
+# Set x to 5
+x = 5
+```
+
+### User Documentation
+
+When writing user-facing documentation:
+- **Context**: Provide background and explain why something is useful
+- **Examples**: Include practical, tested examples that users can copy
+- **Common use cases**: Document typical scenarios and recommended configurations
+- **Troubleshooting**: Anticipate common issues and provide solutions
+
+### Migration Notes
+
+When documenting changes that affect existing users:
+- **Clearly mark breaking changes**: Use bold or special formatting
+- **Provide upgrade paths**: Explain how to migrate from old to new approach
+- **Include before/after examples**: Show the old way and the new way side by side
+- **Document deprecation timeline**: If applicable, specify when deprecated features will be removed
+
 ## Environment Variables
 
 Critical environment variables:
