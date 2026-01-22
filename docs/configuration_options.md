@@ -217,7 +217,7 @@ Url to the repo of scylla version to install scylla. Can provide specific versio
 
 APT keys for ScyllaDB repos
 
-**default:** ['17723034C56D4B19', '5E08FBD8B5D6EC9C', 'D0A112E067426AB2', '491C93B9DE7496A7', 'A43E06657BAC99E3']
+**default:** ['17723034C56D4B19', '5E08FBD8B5D6EC9C', 'D0A112E067426AB2', '491C93B9DE7496A7', 'A43E06657BAC99E3', 'C503C686B007F39E']
 
 **type:** str_or_list (appendable)
 
