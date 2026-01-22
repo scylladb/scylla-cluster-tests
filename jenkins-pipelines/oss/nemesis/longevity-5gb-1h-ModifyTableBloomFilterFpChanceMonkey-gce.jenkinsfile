@@ -7,5 +7,5 @@ longevityPipeline(
     backend: "gce",
     region: "us-east1",
     test_name: "longevity_test.LongevityTest.test_custom_time",
-    test_config: "['configurations/nemesis/longevity-5gb-1h-nemesis.yaml', 'configurations/nemesis/ModifyTableMonkey.yaml']"
+    test_config: "['configurations/nemesis/longevity-5gb-1h-nemesis.yaml', 'configurations/nemesis/ModifyTableBloomFilterFpChanceMonkey.yaml']"
 )
