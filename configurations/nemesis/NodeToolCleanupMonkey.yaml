@@ -1,2 +1,3 @@
-nemesis_class_name: 'NodeToolCleanupMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'NodeToolCleanupMonkey'
 user_prefix: 'longevity-5gb-1h-NodeToolCleanupMonkey'
