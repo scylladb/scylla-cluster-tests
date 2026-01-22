@@ -638,6 +638,22 @@ disrupt_modify_table:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
+disrupt_modify_table_twcs_window_size:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
 disrupt_multiple_hard_reboot_node:
   config_changes: false
   delete_rows: false
