@@ -324,6 +324,45 @@ cluster_health_check_exclude_running_nemesis: true  # default: true
 
 ---
 
+### Phase 6: Documentation Review and Update
+
+**Objective**: Ensure all health check documentation across the codebase is accurate, comprehensive, and consistent with the optimization implementation
+
+**Scope**: Review and update health check documentation in the following areas:
+
+1. **Configuration Documentation**:
+   - `docs/configuration_options.md` - Auto-generated configuration reference (ensure accurate descriptions)
+   - Source parameter descriptions in `sdcm/sct_config.py` (these feed into auto-generated docs)
+   - Test case YAML examples with health check configurations
+   - Default configuration files in `defaults/test_default.yaml` and backend-specific defaults
+
+2. **Plan and Design Documentation**:
+   - This document (`docs/plans/health-check-optimization.md`) - Keep updated with implementation progress
+   - Add migration guide for users of older health check configurations
+   - Document breaking changes or behavioral differences from previous versions
+
+**Implementation Tasks**:
+
+1. **Audit Phase**:
+   - Create checklist of all files containing health check references
+   - Identify outdated, incomplete, or missing documentation
+   - Flag inconsistencies between code behavior and documentation
+
+2. **Update Phase**:
+   - Update docstrings to match current implementation
+   - Add examples for new configuration parameters introduced in Phases 1-5
+   - Document edge cases, limitations, and known issues
+   - Update configuration option descriptions with recommended values per cluster size
+   - Add troubleshooting section for common health check issues
+
+3. **Validation Phase**:
+   - Cross-reference code implementation with documentation
+   - Verify all configuration parameters are documented
+   - Ensure examples in documentation are tested and working
+   - Check for broken links and outdated references
+
+---
+
 ## Reference Performance Test Plan
 
 **Purpose**: Establish baseline measurements to evaluate speed of each health check optimization
