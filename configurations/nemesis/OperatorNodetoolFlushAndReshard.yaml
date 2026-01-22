@@ -1,2 +1,3 @@
-nemesis_class_name: 'OperatorNodetoolFlushAndReshard'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'OperatorNodetoolFlushAndReshard'
 user_prefix: 'longevity-5gb-1h-OperatorNodetoolFlushAndReshard'
