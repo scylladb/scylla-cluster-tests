@@ -1,0 +1,13 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// Cron configuration is defined in configurations/triggers/tier1.yaml
+// It can also be overridden here if needed
+triggerMatrixPipeline(
+    matrix_file: 'configurations/triggers/tier1.yaml',
+    parameterizedCron: '''
+        00 6 * * 6 %scylla_version=master:latest;labels_selector=master-weekly;requested_by_user=timtimb0t
+    '''
+)
