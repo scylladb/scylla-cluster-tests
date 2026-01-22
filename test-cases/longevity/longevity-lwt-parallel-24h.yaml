@@ -11,8 +11,8 @@ round_robin: true
 
 instance_type_db: 'i4i.large'
 
-nemesis_class_name: 'SisyphusMonkey:1 ModifyTableMonkey:1'
-nemesis_selector: ["disruptive", ""]
+nemesis_class_name: 'SisyphusMonkey:1 SisyphusMonkey:1'
+nemesis_selector: ["disruptive", "modify_table and not disruptive"]
 nemesis_during_prepare: false
 space_node_threshold: 64424
 

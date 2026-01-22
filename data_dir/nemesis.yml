@@ -8,6 +8,7 @@ disrupt_abort_repair:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -24,6 +25,7 @@ disrupt_add_drop_column:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: true
   sla: false
@@ -40,6 +42,7 @@ disrupt_add_remove_dc:
   kubernetes: false
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -56,6 +59,7 @@ disrupt_add_remove_mv:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: true
   sla: false
@@ -72,6 +76,7 @@ disrupt_bootstrap_streaming_error:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -88,6 +93,7 @@ disrupt_corrupt_then_scrub:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -104,6 +110,7 @@ disrupt_create_index:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: true
   sla: false
@@ -120,6 +127,7 @@ disrupt_decommission_streaming_err:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -136,6 +144,7 @@ disrupt_delete_10_full_partitions:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -152,6 +161,7 @@ disrupt_delete_by_rows_range:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -168,6 +178,7 @@ disrupt_delete_overlapping_row_ranges:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -184,6 +195,7 @@ disrupt_destroy_data_then_rebuild:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -200,6 +212,7 @@ disrupt_destroy_data_then_repair:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -216,6 +229,7 @@ disrupt_disable_binary_gossip_execute_major_compaction:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -232,6 +246,7 @@ disrupt_disable_enable_ldap_authorization:
   kubernetes: false
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -248,6 +263,7 @@ disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -264,6 +280,7 @@ disrupt_drain_kubernetes_node_then_replace_scylla_node:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -280,6 +297,7 @@ disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -296,6 +314,7 @@ disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -312,6 +331,7 @@ disrupt_end_of_quota_nemesis:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -328,6 +348,7 @@ disrupt_grow_shrink_cluster:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -344,6 +365,7 @@ disrupt_grow_shrink_new_rack:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -360,6 +382,7 @@ disrupt_grow_shrink_zero_nodes:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -376,6 +399,7 @@ disrupt_hard_reboot_node:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -392,6 +416,7 @@ disrupt_hot_reloading_internode_certificate:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -408,6 +433,7 @@ disrupt_increase_shares_by_attach_another_sl_during_load:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: true
@@ -424,6 +450,7 @@ disrupt_kill_mv_building_coordinator:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -440,6 +467,7 @@ disrupt_kill_scylla:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -456,6 +484,7 @@ disrupt_ldap_connection_toggle:
   kubernetes: false
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -472,6 +501,7 @@ disrupt_load_and_stream:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -488,6 +518,7 @@ disrupt_major_compaction:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -504,6 +535,7 @@ disrupt_manager_backup:
   kubernetes: false
   limited: false
   manager_operation: true
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -520,6 +552,7 @@ disrupt_maximum_allowed_sls_with_max_shares_during_load:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: true
@@ -536,6 +569,7 @@ disrupt_memory_stress:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -552,6 +586,7 @@ disrupt_mgmt_backup:
   kubernetes: false
   limited: true
   manager_operation: true
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -568,6 +603,7 @@ disrupt_mgmt_backup_specific_keyspaces:
   kubernetes: false
   limited: true
   manager_operation: true
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -584,6 +620,7 @@ disrupt_mgmt_corrupt_then_repair:
   kubernetes: true
   limited: false
   manager_operation: true
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -600,6 +637,7 @@ disrupt_mgmt_repair_cli:
   kubernetes: true
   limited: true
   manager_operation: true
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -616,13 +654,14 @@ disrupt_mgmt_restore:
   kubernetes: true
   limited: true
   manager_operation: true
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
   topology_changes: false
   zero_node_changes: false
-disrupt_modify_table:
+disrupt_modify_table_bloom_filter_fp_chance:
   config_changes: false
   delete_rows: false
   disruptive: false
@@ -632,6 +671,228 @@ disrupt_modify_table:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_caching:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_comment:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_compaction:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_compression:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_crc_check_chance:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_dclocal_read_repair_chance:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_default_time_to_live:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_gc_grace_time:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_max_index_interval:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_memtable_flush_period_in_ms:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_min_index_interval:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_read_repair_chance:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_modify_table_speculative_retry:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
   networking: false
   schema_changes: true
   sla: false
@@ -648,6 +909,7 @@ disrupt_modify_table_twcs_window_size:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   schema_changes: true
   sla: false
@@ -664,6 +926,7 @@ disrupt_multiple_hard_reboot_node:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -680,6 +943,7 @@ disrupt_network_block:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: true
   schema_changes: false
   sla: false
@@ -696,6 +960,7 @@ disrupt_network_random_interruptions:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: true
   schema_changes: false
   sla: false
@@ -712,6 +977,7 @@ disrupt_network_reject_inter_node_communication:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: true
   schema_changes: false
   sla: false
@@ -728,6 +994,7 @@ disrupt_network_reject_node_exporter:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: true
   schema_changes: false
   sla: false
@@ -744,6 +1011,7 @@ disrupt_network_reject_thrift:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: true
   schema_changes: false
   sla: false
@@ -760,6 +1028,7 @@ disrupt_network_start_stop_interface:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: true
   schema_changes: false
   sla: false
@@ -776,6 +1045,7 @@ disrupt_no_corrupt_repair:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -792,6 +1062,7 @@ disrupt_nodetool_cleanup:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -808,6 +1079,7 @@ disrupt_nodetool_decommission:
   kubernetes: false
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -824,6 +1096,7 @@ disrupt_nodetool_drain:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -840,6 +1113,7 @@ disrupt_nodetool_enospc:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -856,6 +1130,7 @@ disrupt_nodetool_flush_and_reshard_on_kubernetes:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -872,6 +1147,7 @@ disrupt_nodetool_refresh:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -888,6 +1164,7 @@ disrupt_nodetool_seed_decommission:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -904,6 +1181,7 @@ disrupt_rebuild_streaming_err:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -920,6 +1198,7 @@ disrupt_refuse_connection_with_block_scylla_ports_on_banned_node:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -936,6 +1215,7 @@ disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -952,6 +1232,7 @@ disrupt_remove_node_then_add_node:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -968,6 +1249,7 @@ disrupt_remove_service_level_while_load:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: true
@@ -984,6 +1266,7 @@ disrupt_repair_streaming_err:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1000,6 +1283,7 @@ disrupt_replace_scylla_node_on_kubernetes:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1016,6 +1300,7 @@ disrupt_replace_service_level_using_detach_during_load:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: true
@@ -1032,6 +1317,7 @@ disrupt_replace_service_level_using_drop_during_load:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: true
@@ -1048,6 +1334,7 @@ disrupt_resetlocalschema:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1064,6 +1351,7 @@ disrupt_restart_then_repair_node:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1080,6 +1368,7 @@ disrupt_restart_with_resharding:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1097,6 +1386,7 @@ disrupt_rolling_config_change_internode_compression:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1113,6 +1403,7 @@ disrupt_rolling_restart_cluster:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1129,6 +1420,7 @@ disrupt_run_cdcstressor_tool:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1145,6 +1437,7 @@ disrupt_run_unique_sequence:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1161,6 +1454,7 @@ disrupt_serial_restart_elected_topology_coordinator:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1177,6 +1471,7 @@ disrupt_show_toppartitions:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1193,6 +1488,7 @@ disrupt_sla_decrease_shares_during_load:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: true
@@ -1209,6 +1505,7 @@ disrupt_sla_increase_shares_during_load:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: true
@@ -1225,6 +1522,7 @@ disrupt_snapshot_operations:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1241,6 +1539,7 @@ disrupt_soft_reboot_node:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1257,6 +1556,7 @@ disrupt_start_stop_cleanup_compaction:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1273,6 +1573,7 @@ disrupt_start_stop_major_compaction:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1289,6 +1590,7 @@ disrupt_start_stop_scrub_compaction:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1305,6 +1607,7 @@ disrupt_start_stop_validation_compaction:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1321,6 +1624,7 @@ disrupt_stop_start_scylla_server:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1337,6 +1641,7 @@ disrupt_stop_wait_start_scylla_server:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1353,6 +1658,7 @@ disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_ba
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1369,6 +1675,7 @@ disrupt_terminate_and_replace_node:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1385,6 +1692,7 @@ disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1401,6 +1709,7 @@ disrupt_terminate_kubernetes_host_then_replace_scylla_node:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1417,6 +1726,7 @@ disrupt_toggle_audit_syslog:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: true
   sla: false
@@ -1433,6 +1743,7 @@ disrupt_toggle_cdc_feature_properties_on_table:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: true
   sla: false
@@ -1449,6 +1760,7 @@ disrupt_toggle_table_gc_mode:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: true
   sla: false
@@ -1465,6 +1777,7 @@ disrupt_toggle_table_ics:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: true
   sla: false
@@ -1481,6 +1794,7 @@ disrupt_truncate:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1497,6 +1811,7 @@ disrupt_truncate_large_partition:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1513,6 +1828,7 @@ disrupt_validate_hh_short_downtime:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false

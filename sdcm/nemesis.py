@@ -264,6 +264,7 @@ class NemesisFlags:
     zero_node_changes: bool = False
     sla: bool = False  # flag that signal that nemesis is used for SLA tests
     enospc: bool = False  # flag that signal that nemesis causes a node to go out of space
+    modify_table: bool = False  # flag that modifies table properties, not columns
 
 
 class Nemesis(NemesisFlags):
@@ -2731,12 +2732,14 @@ class Nemesis(NemesisFlags):
         InfoEvent(f"AddDropColumnMonkey table {'.'.join(self._add_drop_column_target_table)}").publish()
         self._add_drop_column_run_in_cycle()
 
-    def modify_table_comment(self):
-        # default: comment = ''
+    def disrupt_modify_table_comment(self):
+        """
+        Adds random comment to a test table
+        """
         prop_val = generate_random_string(24)
         self._modify_table_property(name="comment", val=f"'{prop_val}'")
 
-    def modify_table_gc_grace_time(self):
+    def disrupt_modify_table_gc_grace_time(self):
         """
         The number of seconds after data is marked with a tombstone (deletion marker)
         before it is eligible for garbage-collection.
@@ -2744,7 +2747,7 @@ class Nemesis(NemesisFlags):
         """
         self._modify_table_property(name="gc_grace_seconds", val=random.randint(216000, 864000))
 
-    def modify_table_caching(self):
+    def disrupt_modify_table_caching(self):
         """
         Caching optimizes the use of cache memory by a table without manual tuning.
         Cassandra weighs the cached data by size and access frequency.
@@ -2756,7 +2759,7 @@ class Nemesis(NemesisFlags):
         )
         self._modify_table_property(name="caching", val=str(prop_val))
 
-    def modify_table_bloom_filter_fp_chance(self):
+    def disrupt_modify_table_bloom_filter_fp_chance(self):
         """
         The Bloom filter sets the false-positive probability for SSTable Bloom filters.
         When a client requests data, Cassandra uses the Bloom filter to check if the row
@@ -2864,7 +2867,7 @@ class Nemesis(NemesisFlags):
         with self.action_log_scope("Waiting for schema agreement"):
             self.cluster.wait_for_schema_agreement()
 
-    def modify_table_compaction(self):
+    def disrupt_modify_table_compaction(self):
         """
         The compaction property defines the compaction strategy class for this table.
         default: compaction = {
@@ -2910,7 +2913,7 @@ class Nemesis(NemesisFlags):
 
         self._modify_table_property(name="compaction", val=str(prop_val))
 
-    def modify_table_compression(self):
+    def disrupt_modify_table_compression(self):
         """
         The compression algorithm. Valid values are LZ4Compressor, SnappyCompressor, DeflateCompressor and
         ZstdCompressor
@@ -2930,13 +2933,14 @@ class Nemesis(NemesisFlags):
             prop_val["crc_check_chance"] = random.random()
         self._modify_table_property(name="compression", val=str(prop_val))
 
-    def modify_table_crc_check_chance(self):
+    def disrupt_modify_table_crc_check_chance(self):
         """
-        default: crc_check_chance = 1.0
+        Not implemented, value is ignored, testing it only for backwards compatibility
+        https://docs.scylladb.com/manual/stable/cql/ddl.html
         """
         self._modify_table_property(name="crc_check_chance", val=random.random())
 
-    def modify_table_dclocal_read_repair_chance(self):
+    def disrupt_modify_table_dclocal_read_repair_chance(self):
         """
         The probability that a successful read operation triggers a read repair.
         Unlike the repair controlled by read_repair_chance, this repair is limited to
@@ -2945,7 +2949,7 @@ class Nemesis(NemesisFlags):
         """
         self._modify_table_property(name="dclocal_read_repair_chance", val=random.choice([0, 0.2, 0.5, 0.9]))
 
-    def modify_table_default_time_to_live(self):
+    def disrupt_modify_table_default_time_to_live(self):
         """
         The value of this property is a number of seconds. If it is set, Cassandra applies a
         default TTL marker to each column in the table, set to this value. When the table TTL
@@ -2990,7 +2994,7 @@ class Nemesis(NemesisFlags):
             keyspace_table=keyspace_table,
         )
 
-    def modify_table_max_index_interval(self):
+    def disrupt_modify_table_max_index_interval(self):
         """
         If the total memory usage of all index summaries reaches this value, Cassandra decreases
         the index summaries for the coldest SSTables to the maximum set by max_index_interval.
@@ -2999,7 +3003,7 @@ class Nemesis(NemesisFlags):
         """
         self._modify_table_property(name="max_index_interval", val=random.choice([1024, 4096, 8192]))
 
-    def modify_table_min_index_interval(self):
+    def disrupt_modify_table_min_index_interval(self):
         """
         The minimum gap between index entries in the index summary. A lower min_index_interval
         means the index summary contains more entries from the index, which allows Cassandra
@@ -3009,7 +3013,7 @@ class Nemesis(NemesisFlags):
         """
         self._modify_table_property(name="min_index_interval", val=random.choice([128, 256, 512]))
 
-    def modify_table_memtable_flush_period_in_ms(self):
+    def disrupt_modify_table_memtable_flush_period_in_ms(self):
         """
         The number of milliseconds before Cassandra flushes memtables associated with this table.
         default: memtable_flush_period_in_ms = 0
@@ -3018,7 +3022,7 @@ class Nemesis(NemesisFlags):
             name="memtable_flush_period_in_ms", val=random.choice([0, random.randint(60000, 200000)])
         )
 
-    def modify_table_read_repair_chance(self):
+    def disrupt_modify_table_read_repair_chance(self):
         """
         The probability that a successful read operation will trigger a read repair.of read repairs
         being invoked. Unlike the repair controlled by dc_local_read_repair_chance, this repair is
@@ -3027,7 +3031,7 @@ class Nemesis(NemesisFlags):
         """
         self._modify_table_property(name="read_repair_chance", val=random.choice([0, 0.2, 0.5, 0.9]))
 
-    def modify_table_speculative_retry(self):
+    def disrupt_modify_table_speculative_retry(self):
         """
         Use the speculative retry property to configure rapid read protection. In a normal read,
         Cassandra sends data requests to just enough replica nodes to satisfy the consistency
@@ -3185,12 +3189,6 @@ class Nemesis(NemesisFlags):
 
     def disrupt_toggle_table_gc_mode(self):
         self.toggle_table_gc_mode()
-
-    def disrupt_modify_table(self):
-        # randomly select and run one of disrupt_modify_table* methods
-        disrupt_func_name = random.choice([dm for dm in dir(self) if dm.startswith("modify_table")])
-        disrupt_func = getattr(self, disrupt_func_name)
-        disrupt_func()
 
     def _run_manager_backup(
         self, mgr_cluster, object_storage_upload_mode: ObjectStorageUploadMode, timeout: int
@@ -6941,17 +6939,6 @@ class MdcChaosMonkey(Nemesis):
         self.call_next_nemesis()
 
 
-class ModifyTableMonkey(Nemesis):
-    disruptive = False
-    kubernetes = True
-    limited = True
-    schema_changes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_modify_table()
-
-
 class AddDropColumnMonkey(Nemesis):
     disruptive = False
     networking = False
@@ -7661,6 +7648,161 @@ class ModifyTableTwcsWindowSizeMonkey(Nemesis):
     limited = True
     schema_changes = True
     free_tier_set = True
+    modify_table = True
 
     def disrupt(self):
         self.disrupt_modify_table_twcs_window_size()
+
+
+class ModifyTableCommentMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_comment()
+
+
+class ModifyTableGcGraceTimeMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_gc_grace_time()
+
+
+class ModifyTableCachingMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_caching()
+
+
+class ModifyTableBloomFilterFpChanceMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_bloom_filter_fp_chance()
+
+
+class ModifyTableCompactionMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_compaction()
+
+
+class ModifyTableCompressionMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_compression()
+
+
+class ModifyTableCrcCheckChanceMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_crc_check_chance()
+
+
+class ModifyTableDclocalReadRepairChanceMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_dclocal_read_repair_chance()
+
+
+class ModifyTableDefaultTimeToLiveMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_default_time_to_live()
+
+
+class ModifyTableMaxIndexIntervalMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_max_index_interval()
+
+
+class ModifyTableMinIndexIntervalMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_min_index_interval()
+
+
+class ModifyTableMemtableFlushPeriodInMsMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_memtable_flush_period_in_ms()
+
+
+class ModifyTableReadRepairChanceMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_read_repair_chance()
+
+
+class ModifyTableSpeculativeRetryMonkey(Nemesis):
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+    modify_table = True
+
+    def disrupt(self):
+        self.disrupt_modify_table_speculative_retry()
