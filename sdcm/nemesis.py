@@ -6470,6 +6470,10 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
             # TODO: Temporary print. Will be removed later
             data_validation_prints(args=args)
         finally:
+            # Store nemesis event to track skip status for health checks
+            # Must be in finally block to ensure it's always executed, even if exceptions occur
+            args[0].cluster.last_nemesis_event = nemesis_event
+
             if is_exclusive:
                 # NOTE: sleep the nemesis interval here because the next one is already
                 #       ready to start right after the lock gets released.

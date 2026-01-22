@@ -4756,6 +4756,7 @@ class BaseScyllaCluster:
         self.nemesis = []
         self.nemesis_threads = []
         self.nemesis_count = 0
+        self.last_nemesis_event = None
         self.test_config = TestConfig()
         self._node_cycle = None
         self.vector_store_cluster = None
@@ -5165,6 +5166,15 @@ class BaseScyllaCluster:
         # Disable it
         if not self.params.get("cluster_health_check"):
             self.log.debug("Cluster health check disabled")
+            return
+
+        # Skip health check if previous nemesis was skipped
+        if self.last_nemesis_event and self.last_nemesis_event.is_skipped:
+            self.log.info(
+                "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
+                self.last_nemesis_event.nemesis_name,
+                self.last_nemesis_event.skip_reason,
+            )
             return
 
         with ClusterHealthValidatorEvent() as chc_event:
