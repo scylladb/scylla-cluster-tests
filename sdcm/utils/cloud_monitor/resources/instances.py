@@ -59,7 +59,7 @@ class AWSInstance(CloudInstance):
 
     def get_owner(self):
         # try to get the owner using tags
-        if owner := self._tags.get("RunByUser", self._tags.get("Owner")):
+        if owner := self._tags.get("RunByUser", self._tags.get("Owner", self._tags.get("owner"))):
             return owner
         # get the owner from the Cloud Trail
         if owner := self.get_owner_from_cloud_trail():
