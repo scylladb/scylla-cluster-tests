@@ -367,7 +367,6 @@ class LongevityEmailReporter(BaseEmailReporter):
         "nemesis_name",
         "scylla_ami_id",
         "node_benchmarks",
-        "parallel_timelines_report",
     )
     email_template_file = "results_longevity.html"
     last_events_body_limit_per_severity_in_attachment = 3000000
@@ -553,7 +552,7 @@ class JepsenEmailReporter(BaseEmailReporter):
 
 
 class SlaPerUserEmailReporter(LongevityEmailReporter):
-    _fields = ("grafana_screenshots", "scylla_ami_id", "parallel_timelines_report", "workload_comparison")
+    _fields = ("grafana_screenshots", "scylla_ami_id", "workload_comparison")
     email_template_file = "results_sl_workloads.html"
 
 
