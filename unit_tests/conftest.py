@@ -255,6 +255,7 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
     class MockTester:
         def __init__(self):
             self.rack_names_per_datacenter_and_rack_idx_map = {}
+            self.params = {"billing-project": "test-project"}
 
     TestConfig.set_tester_obj(MockTester())
 
