@@ -3069,7 +3069,7 @@ def download_and_unpack_logs(test_id: str, log_type: str, download_to: str = Non
         raise ValueError("%s not found in argus logs", log_type)
 
     LOGGER.debug("Unpacking loader logs...")
-    from sdcm.monitorstack import extract_file_from_tar_archive  # noqa: PLC0415 # avoid circular import
+    from sdcm.monitorstack.service import extract_file_from_tar_archive  # noqa: PLC0415 # avoid circular import
 
     hdr_folder = extract_file_from_tar_archive(pattern=log_type, archive=logs_file, extract_dir=tmp_dir)
     LOGGER.debug("%s logs unpacked to %s", log_type, hdr_folder[test_id])

@@ -17,102 +17,136 @@ from sdcm.utils.mp_start import ensure_start_method
 
 ensure_start_method()
 
-from collections import defaultdict
-from datetime import datetime, timezone, timedelta, UTC
 import json
-import os
-import re
-import sys
-import unittest
 import logging
-import time
-import subprocess
-import traceback
+import os
 import pprint
+import re
+import subprocess
+import sys
+import time
+import traceback
+import unittest
+from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
+from datetime import UTC, datetime, timedelta, timezone
 from functools import partial, reduce
 from typing import List, Literal
+from pathlib import Path
 from uuid import UUID
 
-import pytest
 import click
+import pytest
 import yaml
 from prettytable import PrettyTable
-from argus.client.sct.types import LogLink
+
+import sct_scan_issues
+import sct_ssh
+import sdcm.provision.azure.utils as azure_utils
 from argus.client.base import ArgusClientError
+from argus.client.sct.types import LogLink
 from argus.common.enums import TestStatus
 from argus.common.sct_types import RawEventPayload
-
-import sct_ssh
-import sct_scan_issues
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.cluster_cloud import extract_short_test_id_from_name
+from sdcm.cluster_k8s import mini_k8s
 from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
-from sdcm.provision import AzureProvisioner
-from sdcm.provision.provisioner import VmInstance, VmArch
-from sdcm.remote import LOCALRUNNER
+from sdcm.logcollector import Collector
+from sdcm.monitorstack.service import (
+    get_monitoring_stack_services,
+    kill_running_monitoring_stack_services,
+    restore_monitoring_stack,
+)
 from sdcm.nemesis import SisyphusMonkey
-from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
+from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
+from sdcm.provision import AzureProvisioner
+from sdcm.provision.provisioner import VmArch, VmInstance
+from sdcm.remote import LOCALRUNNER
+from sdcm.results_analyze import BaseResultsAnalyzer, PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import (
     AwsSctRunner,
-    GceSctRunner,
     AzureSctRunner,
+    GceSctRunner,
     OciSctRunner,
-    get_sct_runner,
     clean_sct_runners,
-    update_sct_runner_tags,
+    get_sct_runner,
     list_sct_runners,
+    update_sct_runner_tags,
 )
-
-from sdcm.utils.ci_tools import get_job_name, get_job_url
-from sdcm.utils.git import get_git_commit_id, get_git_status_info
+from sdcm.send_email import (
+    build_reporter,
+    get_running_instances_for_email_report,
+    read_email_data_from_file,
+    send_perf_email,
+)
 from sdcm.utils.argus import argus_offline_collect_events, create_proxy_argus_s3_url, get_argus_client
+from sdcm.utils.aws_builder import AwsBuilder, AwsCiBuilder
 from sdcm.utils.aws_kms import AwsKms
+from sdcm.utils.aws_okta import try_auth_with_okta
+from sdcm.utils.aws_peering import AwsVpcPeering
+from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.aws_utils import AwsArchType
 from sdcm.utils.azure_region import AzureRegion
-from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
+from sdcm.utils.ci_tools import get_job_name, get_job_url
+from sdcm.utils.cloud_monitor import cloud_qa_report, cloud_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
 from sdcm.utils.common import (
     S3Storage,
     aws_tags_to_dict,
     create_pretty_table,
+    download_and_unpack_logs,
+    find_equivalent_ami,
     format_timestamp,
+    gce_meta_to_dict,
     get_ami_images,
     get_ami_images_versioned,
+    get_builder_by_test_id,
     get_gce_images,
     get_gce_images_versioned,
-    gce_meta_to_dict,
-    get_builder_by_test_id,
+    get_hdr_tags,
+    get_latest_scylla_release,
     get_testrun_dir,
+    images_dict_in_json_format,
+    list_cloudformation_stacks_aws,
     list_clusters_eks,
     list_clusters_gke,
     list_elastic_ips_aws,
-    list_test_security_groups,
-    list_load_balancers_aws,
-    list_cloudformation_stacks_aws,
     list_instances_aws,
-    list_placement_groups_aws,
     list_instances_gce,
+    list_load_balancers_aws,
     list_logs_by_test_id,
+    list_parallel_timelines_report_urls,
+    list_placement_groups_aws,
     list_resources_docker,
+    list_test_security_groups,
     search_test_id_in_latest,
-    get_latest_scylla_release,
-    images_dict_in_json_format,
-    get_hdr_tags,
-    download_and_unpack_logs,
-    find_equivalent_ami,
 )
-from sdcm.utils.nemesis_generation import generate_nemesis_yaml, NemesisJobGenerator
-from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
+from sdcm.utils.context_managers import environment
+from sdcm.utils.docker_utils import docker_hub_login, get_ip_address_of_container, running_in_podman
+from sdcm.utils.es_index import create_index, get_mapping
+from sdcm.utils.gce_builder import GceBuilder
+from sdcm.utils.gce_region import GceRegion
+from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
+from sdcm.utils.get_username import get_username
+from sdcm.utils.git import get_git_commit_id, get_git_status_info
+from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
+from sdcm.utils.jepsen import JepsenResults
+from sdcm.utils.log import disable_loggers_during_startup, setup_stdout_logger
+from sdcm.utils.nemesis_generation import NemesisJobGenerator, generate_nemesis_yaml
+from sdcm.utils.net import get_sct_runner_ip
+from sdcm.utils.oci_builder import OciBuilder
+from sdcm.utils.oci_region import OciRegion
+from sdcm.utils.open_with_diff import ErrorCarrier, OpenWithDiff
 from sdcm.utils.resources_cleanup import (
     clean_cloud_resources,
     clean_resources_according_post_behavior,
     init_argus_client,
 )
+from sdcm.utils.sct_cmd_helpers import CloudRegion, add_file_logger, get_all_regions, get_test_config
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login, running_in_podman
@@ -145,12 +179,9 @@ from sdcm.cluster_k8s import mini_k8s
 from sdcm.utils.es_index import create_index, get_mapping
 from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
 import sdcm.provision.azure.utils as azure_utils
+from unit_tests.nemesis.fake_cluster import FakeTester
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
-from sdcm.utils.docker_utils import get_ip_address_of_container
-from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
-from unit_tests.nemesis.fake_cluster import FakeTester
-from sdcm.logcollector import Collector
 
 SUPPORTED_CLOUDS = (
     "aws",
