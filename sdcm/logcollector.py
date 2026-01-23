@@ -1389,20 +1389,6 @@ class JepsenLogCollector(LogCollector):
         return s3_link
 
 
-class ParallelTimelinesReportCollector(BaseSCTLogCollector):
-    """
-    Collect HTML file with parallel timelines report and upload it to S3
-    """
-
-    log_entities = [FileLog(name="parallel-timelines-report.html", search_locally=True)]
-    cluster_log_type = "parallel-timelines-report"
-    cluster_dir_prefix = "parallel-timelines-report"
-
-    @property
-    def is_collect_to_a_single_archive(self) -> bool:
-        return True
-
-
 class SSTablesCollector(BaseSCTLogCollector):
     """
     Collect corrupted sstables from db node.
@@ -1522,7 +1508,6 @@ class Collector:
         self.loader_set = []
         self.kubernetes_set = []
         self.sct_set = []
-        self.pt_report_set = []
         self.cluster_log_collectors = {}
         self.localhost = None
         if self.backend.startswith("k8s"):
@@ -1543,7 +1528,6 @@ class Collector:
             VectorStoreLogCollector: self.vector_store_set,
             SSTablesCollector: self.db_cluster,
             JepsenLogCollector: self.loader_set,
-            ParallelTimelinesReportCollector: self.pt_report_set,
         }
         if self.params.get("server_encrypt") or self.params.get("client_encrypt"):
             self.cluster_log_collectors[SSLConfCollector] = self.sct_set

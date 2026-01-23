@@ -98,7 +98,6 @@ from sdcm.utils.common import (
     list_instances_gce,
     list_logs_by_test_id,
     list_resources_docker,
-    list_parallel_timelines_report_urls,
     search_test_id_in_latest,
     get_latest_scylla_release,
     images_dict_in_json_format,
@@ -137,7 +136,6 @@ from sdcm.send_email import (
     build_reporter,
     send_perf_email,
 )
-from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
 from sdcm.utils.aws_utils import AwsArchType
 from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
@@ -1953,13 +1951,9 @@ def send_email(  # noqa: PLR0914, PLR0912
             LOGGER.error("failed to get a reporter")
             sys.exit(1)
         return
-    job_name = os.environ.get("JOB_NAME", "")
     if reporter := test_results.get("reporter", ""):
         test_results["nodes"] = get_running_instances_for_email_report(test_id, runner_ip)
         test_results["logs_links"] = list_logs_by_test_id(test_results.get("test_id", test_id))
-        if "longevity" in job_name:
-            pt_report_urls = list_parallel_timelines_report_urls(test_id=test_results.get("test_id", test_id))
-            test_results["parallel_timelines_report"] = pt_report_urls[0] if pt_report_urls else None
 
         reporter = build_reporter(reporter, email_recipients, testrun_dir)
         if not reporter:
@@ -2258,32 +2252,6 @@ def clean_runner_instances(runner_ip, test_status, backend, user, billing_projec
         dry_run=dry_run,
         force=force,
     )
-
-
-@cli.command("generate-pt-report", help="Generate parallel timelines representation for the SCT test events")
-@click.option("-t", "--test-id", envvar="SCT_TEST_ID", help="Test ID to search in sct-results")
-@click.option("-d", "--logdir", envvar="HOME", type=click.Path(exists=True), help="Directory with sct-results folder")
-def generate_parallel_timelines_report(logdir: str | None, test_id: str | None) -> None:
-    add_file_logger()
-
-    event_log_file = "raw_events.log"
-
-    LOGGER.debug("Searching for the required test run directory in %s...", logdir)
-    testrun_dir = get_testrun_dir(os.path.join(logdir, "sct-results"), test_id)
-    if not testrun_dir:
-        click.secho(message=f"Couldn't find directory for the required test run in '{logdir}'! Aborting...", fg="red")
-        sys.exit(1)
-    LOGGER.info("Found the test run directory '%s'", testrun_dir)
-
-    LOGGER.debug("Searching for the %s in %s...", event_log_file, testrun_dir)
-    raw_events_log_path = next(Path(testrun_dir).glob(f"**/{event_log_file}"), None)
-
-    if raw_events_log_path is None:
-        click.secho(message=f"Couldn't find '{event_log_file}' in '{testrun_dir}'! Aborting...", fg="red")
-        sys.exit(1)
-    LOGGER.info("Found the file '%s'", raw_events_log_path)
-    pt_report_generator = ParallelTimelinesReportGenerator(events_file=raw_events_log_path)
-    pt_report_generator.generate_full_report()
 
 
 @cli.command("create-es-index", help="Create ElasticSearch index with mapping ")
