@@ -16,6 +16,11 @@ import time
 import random
 import pytest
 import logging
+import typing
+
+if typing.TYPE_CHECKING:
+    from sdcm.utils.vector_store_client import VectorStoreClient
+    from unit_tests.dummy_remote import LocalScyllaClusterDummy
 
 pytestmark = [
     pytest.mark.usefixtures("events"),
