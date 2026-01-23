@@ -51,7 +51,6 @@ from sdcm.utils.common import (
     list_instances_aws,
     list_instances_gce,
     remove_files,
-    get_builder_by_test_id,
     get_testrun_dir,
     search_test_id_in_latest,
     filter_aws_instances_by_type,
@@ -1110,27 +1109,11 @@ class BaseSCTLogCollector(LogCollector):
         for ent in self.log_entities:
             ent.collect(None, self.local_dir, None, local_search_path=local_search_path)
         if not os.listdir(self.local_dir):
-            LOGGER.warning("No any local files")
-            LOGGER.info("Searching on builders")
-            builders = get_builder_by_test_id(self.test_id)
-
-            for obj in builders:
-                builder = CollectingNode(
-                    name=obj["builder"]["name"],
-                    ssh_login_info={
-                        "hostname": obj["builder"]["public_ip"],
-                        "user": obj["builder"]["user"],
-                        "key_file": obj["builder"]["key_file"],
-                    },
-                    instance=None,
-                    global_ip=obj["builder"]["public_ip"],
-                )
-                for ent in self.log_entities:
-                    ent.collect_from_builder(builder, self.local_dir, obj["path"])
-
-            if not os.listdir(self.local_dir):
-                LOGGER.warning("Nothing found")
-                return []
+            error_msg = (
+                f"No local files found for {self.cluster_log_type}. SCT runner logs should be available locally."
+            )
+            LOGGER.error(error_msg)
+            raise FileNotFoundError(error_msg)
 
         return self.create_archive_and_upload()
 
@@ -1950,6 +1933,7 @@ class Collector:
         as single stage in pipeline for defined cluster sets
         """
         results = {}
+        failed_critical_collectors = []
         self.localhost = LocalHost(user_prefix=self.params.get("user_prefix"), test_id=self.test_id)
 
         self.define_test_id()
@@ -1974,14 +1958,27 @@ class Collector:
                     LOGGER.info("collected data for %s\n%s\n", log_collector.cluster_log_type, result)
                 else:
                     LOGGER.warning("There are no logs collected for %s", log_collector.cluster_log_type)
-            except Exception:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.warning(
                     "%s is not able to collect logs. Moving to the next log collector",
                     log_collector.__class__.__name__,
                     exc_info=True,
                 )
+                # Track critical collector failures (SCT runner logs)
+                # Check if collector is BaseSCTLogCollector or any of its subclasses
+                if issubclass(cluster_log_collector, BaseSCTLogCollector):
+                    failed_critical_collectors.append((log_collector.cluster_log_type, str(exc)))
 
         self.localhost.destroy()
+
+        # Raise exception if critical SCT logs are missing
+        if failed_critical_collectors:
+            error_msg = "Failed to collect critical SCT runner logs: " + ", ".join(
+                f"{collector_type} ({error})" for collector_type, error in failed_critical_collectors
+            )
+            LOGGER.error(error_msg)
+            raise RuntimeError(error_msg)
+
         return results
 
     def create_base_storage_dir(self, test_dir=None):
