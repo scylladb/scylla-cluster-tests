@@ -20,6 +20,22 @@ Doing a commit without the hook checks::
     git commit ... -n
 ```
 
+### Using .git-blame-ignore-revs for formatting changes
+
+When making formatting changes or adding new linting rules (e.g., ruff), it's helpful to exclude these commits from `git blame` so that the blame shows the original author of the logic rather than the person who reformatted the code.
+
+To use the `.git-blame-ignore-revs` file locally:
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+For PRs with formatting changes, add the `Formatting` label to your PR. This will trigger the automation that:
+- Extracts all commit SHAs from your PR
+- Adds them to `.git-blame-ignore-revs` with descriptive comments
+- Automatically commits and pushes the changes to your PR branch
+
+This automation is similar to the hydra image build workflow and ensures that formatting commits don't clutter `git blame` output.
+
 ### update the configuration docs
 
 Any time new SCT configuration option is added, the docs should be updated

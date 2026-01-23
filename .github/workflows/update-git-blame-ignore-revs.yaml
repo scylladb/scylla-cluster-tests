@@ -1,0 +1,118 @@
+name: Update git-blame-ignore-revs
+
+on:
+  pull_request_target:
+    types: [labeled, synchronize]
+
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  check_org_membership:
+    runs-on: ubuntu-latest
+    outputs:
+      isTeamMember: ${{ steps.teamAffiliation.outputs.isTeamMember }}
+    steps:
+      - name: Check user for team affiliation
+        uses: tspascoal/get-user-teams-membership@v3
+        if: github.event.pull_request.user.login != 'renovate[bot]'
+        id: teamAffiliation
+        with:
+          GITHUB_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
+          username: ${{ github.event.pull_request.user.login }}
+          team: 'dev'
+
+  prepare:
+    needs: check_org_membership
+    if: ( github.event.pull_request.user.login == 'renovate[bot]' || needs.check_org_membership.outputs.isTeamMember == 'true' ) && contains(github.event.pull_request.labels.*.name, 'Formatting')
+    runs-on: ubuntu-latest
+    outputs:
+      should_update: ${{ steps.build.outputs.should_update }}
+      commits_b64: ${{ steps.build.outputs.commits_b64 }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Build commits list
+        id: build
+        run: |
+          git fetch origin master
+
+          # get commit headlines to detect existing generated commit
+          commits_headlines=$(git log origin/master..HEAD --pretty=format:"%s")
+          if [[ "$commits_headlines" == *"chore(git-blame): add PR commits to ignore list"* ]]; then
+            echo "already_done=true"
+            echo "should_update=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Get all commits from the PR
+          pr_commits=$(git log origin/master..HEAD --pretty=format:"%H")
+
+          commits_file="commits_to_add.txt"
+          : > "$commits_file"
+
+          for commit in $pr_commits; do
+            commit_msg=$(git log -1 --pretty=format:"%s" "$commit")
+            if [[ "$commit_msg" == format* ]]; then
+              if ! grep -q "$commit" .git-blame-ignore-revs 2>/dev/null; then
+                echo "$commit # $commit_msg" >> "$commits_file"
+              fi
+            fi
+          done
+
+          if [[ -s "$commits_file" ]]; then
+            commits_b64=$(base64 --wrap=0 "$commits_file")
+            echo "should_update=true" >> $GITHUB_OUTPUT
+            echo "commits_b64=$commits_b64" >> $GITHUB_OUTPUT
+          else
+            echo "should_update=false" >> $GITHUB_OUTPUT
+            echo "commits_b64=" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update:
+    needs: prepare
+    runs-on: ubuntu-latest
+    if: ${{ needs.prepare.outputs.should_update == 'true' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Append commits to .git-blame-ignore-revs
+        run: |
+          echo "" >> .git-blame-ignore-revs
+          echo "# PR #${{ github.event.number }}: ${{ github.event.pull_request.title }}" >> .git-blame-ignore-revs
+          echo "${{ needs.prepare.outputs.commits_b64 }}" | base64 --decode >> .git-blame-ignore-revs
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'scylla-sct[bot]'
+          git config --global user.email 'scylla-sct[bot]@users.noreply.github.com'
+
+      - name: Commit changes
+        run: |
+          git add .git-blame-ignore-revs
+          git fetch origin master
+          pr_commits=$(git log origin/master..HEAD --pretty=format:"%h" | tr '\n' ' ')
+          git commit -m "chore(git-blame): add PR commits to ignore list" -m "Added commits: $pr_commits"
+
+      - name: Push changes
+        uses: ad-m/github-push-action@v1.0.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.head_ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
