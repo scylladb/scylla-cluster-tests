@@ -115,7 +115,7 @@ def call(Map pipelineParams) {
             string(defaultValue: 'next',
                    description: 'Default branch to be used for scylla and other repositories. Default is "next".',
                    name: 'byo_default_branch')
-            string(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
+            text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
                    description: 'Extra environment variables to inject (format: KEY1=VAL1\nKEY2=VAL2)',
                    name: 'extra_environment_variables')
         }
