@@ -1,0 +1,110 @@
+name: Update git-blame-ignore-revs
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  check_org_membership:
+    runs-on: ubuntu-latest
+    outputs:
+      isTeamMember: ${{ steps.teamAffiliation.outputs.isTeamMember }}
+    steps:
+      - name: Check user for team affiliation
+        uses: tspascoal/get-user-teams-membership@v3
+        if: github.event.pull_request.user.login != 'renovate[bot]'
+        id: teamAffiliation
+        with:
+          GITHUB_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
+          username: ${{ github.event.pull_request.user.login }}
+          team: 'dev'
+
+  update_ignore_revs:
+    needs: check_org_membership
+    if: ( github.event.pull_request.user.login == 'renovate[bot]' || needs.check_org_membership.outputs.isTeamMember == 'true' ) && contains(github.event.pull_request.labels.*.name, 'Formatting')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check if commits already added
+        id: check_commits
+        run: |
+          git fetch origin master
+
+          # Get all commits from the PR
+          pr_commits=$(git log origin/master..HEAD --pretty=format:"%H")
+
+          # Check if any of the commits are NOT in .git-blame-ignore-revs
+          needs_update=false
+          for commit in $pr_commits; do
+            if ! grep -q "$commit" .git-blame-ignore-revs 2>/dev/null; then
+              needs_update=true
+              break
+            fi
+          done
+
+          echo "needs_update=$needs_update" >> $GITHUB_OUTPUT
+
+          # Check if there's already a commit with the message pattern
+          commits_headlines=$(git log origin/master..HEAD --pretty=format:"%s")
+          if [[ "$commits_headlines" == *"chore(git-blame): add PR commits to ignore list"* ]]; then
+            echo "Commit already exists for updating git-blame-ignore-revs"
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add PR commits to .git-blame-ignore-revs
+        if: steps.check_commits.outputs.needs_update == 'true'
+        run: |
+          git fetch origin master
+
+          # Get all commits from the PR (excluding the merge base)
+          pr_commits=$(git log origin/master..HEAD --pretty=format:"%H")
+
+          # Add a section header for this PR
+          echo "" >> .git-blame-ignore-revs
+          echo "# PR #${{ github.event.number }}: ${{ github.event.pull_request.title }}" >> .git-blame-ignore-revs
+
+          # Add each commit that's not already in the file
+          for commit in $pr_commits; do
+            if ! grep -q "$commit" .git-blame-ignore-revs 2>/dev/null; then
+              commit_msg=$(git log -1 --pretty=format:"%s" "$commit")
+              echo "$commit # $commit_msg" >> .git-blame-ignore-revs
+            fi
+          done
+
+      - name: Configure Git
+        if: steps.check_commits.outputs.needs_update == 'true'
+        run: |
+          git config --global user.name 'scylla-sct[bot]'
+          git config --global user.email 'scylla-sct[bot]@users.noreply.github.com'
+
+      - name: Commit changes
+        if: steps.check_commits.outputs.needs_update == 'true'
+        run: |
+          git add .git-blame-ignore-revs
+
+          # Get list of commits being added
+          git fetch origin master
+          pr_commits=$(git log origin/master..HEAD --pretty=format:"%h" | tr '\n' ' ')
+
+          git commit -m "chore(git-blame): add PR commits to ignore list" -m "Added commits: $pr_commits"
+
+      - name: Push changes
+        if: steps.check_commits.outputs.needs_update == 'true'
+        uses: ad-m/github-push-action@v1.0.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.head_ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
