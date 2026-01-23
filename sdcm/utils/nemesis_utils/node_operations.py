@@ -1,6 +1,5 @@
 import contextlib
 import logging
-
 from typing import Optional
 
 from sdcm.cluster import BaseNode

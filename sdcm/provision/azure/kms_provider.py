@@ -14,8 +14,9 @@ import logging
 from dataclasses import dataclass
 
 from azure.core.exceptions import AzureError, HttpResponseError
-from sdcm.utils.azure_utils import AzureService
+
 from sdcm.keystore import KeyStore
+from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)

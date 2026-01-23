@@ -6,7 +6,6 @@ from sdcm.cluster import BaseScyllaCluster
 from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 
-
 PARAMS = dict(nemesis_interval=1, nemesis_filter_seeds=False)
 
 

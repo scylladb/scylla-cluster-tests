@@ -7,10 +7,10 @@ import uuid
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestStepEvent
 from sdcm.sla.libs.sla_utils import SlaUtils
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.decorators import retrying
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
-from test_lib.sla import create_sla_auth, ServiceLevel, Role
+from test_lib.sla import Role, ServiceLevel, create_sla_auth
 
 LOGGER = logging.getLogger(__name__)
 

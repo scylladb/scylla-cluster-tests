@@ -1,6 +1,6 @@
 import ast
 import inspect
-from typing import List, TypeVar, Callable, Dict, Any
+from typing import Any, Callable, Dict, List, TypeVar
 
 from sdcm.utils.ast_utils import BooleanEvaluator
 

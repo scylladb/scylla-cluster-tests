@@ -11,32 +11,32 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
-import os
 import logging
+import os
+import re
+from collections import defaultdict, namedtuple
 from dataclasses import dataclass
 from enum import Enum, auto
-from string import Template
-from typing import List, Optional, Literal
-from collections import namedtuple, defaultdict
-from urllib.parse import urlparse
 from functools import lru_cache, wraps
+from string import Template
+from typing import List, Literal, Optional
+from urllib.parse import urlparse
 
-import yaml
 import boto3
-import requests
 import dateutil.parser
-from mypy_boto3_s3 import S3Client
+import requests
+import yaml
 from botocore import UNSIGNED
 from botocore.client import Config
-from sdcm.utils.repo_parser import Parser
+from mypy_boto3_s3 import S3Client
 
 from sdcm.remote import LOCALRUNNER
-from sdcm.utils.aws_utils import DEFAULT_AWS_REGION
-from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events.system import ScyllaRepoEvent
+from sdcm.utils.aws_utils import DEFAULT_AWS_REGION
 from sdcm.utils.decorators import retrying
 from sdcm.utils.features import get_enabled_features
+from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.repo_parser import Parser
 
 # Examples of ScyllaDB version strings:
 #   - 666.development-0.20200205.2816404f575

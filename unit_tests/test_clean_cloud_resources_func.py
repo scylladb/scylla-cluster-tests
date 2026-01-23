@@ -27,7 +27,6 @@ from sdcm.utils.resources_cleanup import (
     clean_resources_docker,
 )
 
-
 SCT_RUNNER_AWS = {
     "Tags": [{"Key": "NodeType", "Value": "sct-runner"}],
     "InstanceId": "i-1111",

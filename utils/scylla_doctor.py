@@ -8,7 +8,6 @@ from textwrap import dedent
 import boto3
 
 from argus.client.sct.types import Package
-
 from sdcm.cluster import BaseNode
 from sdcm.remote.remote_file import remote_file
 from sdcm.test_config import TestConfig

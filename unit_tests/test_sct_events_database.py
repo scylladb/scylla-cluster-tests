@@ -11,18 +11,18 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import unittest
 import re
+import unittest
 from pathlib import Path
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.database import (
+    SYSTEM_ERROR_EVENTS,
+    TOLERABLE_REACTOR_STALL,
     DatabaseLogEvent,
     FullScanEvent,
     IndexSpecialColumnErrorEvent,
-    TOLERABLE_REACTOR_STALL,
-    SYSTEM_ERROR_EVENTS,
 )
 from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 

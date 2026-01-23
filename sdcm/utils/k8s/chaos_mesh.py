@@ -14,18 +14,18 @@
 import ast
 import json
 import logging
+import time
 from datetime import datetime
 from enum import Enum
 from json import JSONDecodeError
 from tempfile import NamedTemporaryFile
-import time
 from typing import Literal
 
 import yaml
 from botocore.utils import deep_merge
 
-from sdcm.log import SDCMAdapter
 from sdcm import sct_abs_path
+from sdcm.log import SDCMAdapter
 from sdcm.utils.common import time_period_str_to_seconds
 from sdcm.utils.k8s import HelmValues, get_helm_pool_affinity_values
 

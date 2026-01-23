@@ -11,16 +11,16 @@ import boto3
 import yaml
 from invoke import exceptions
 
-from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
-from sdcm.mgmt.cli import ScyllaManagerTool
 from sdcm import mgmt
 from sdcm.exceptions import FilesNotCorrupted
-from sdcm.remote import shell_script_cmd, LOCALRUNNER
+from sdcm.mgmt import TaskStatus, get_scylla_manager_tool
+from sdcm.mgmt.cli import ScyllaManagerTool
+from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.sct_events.system import InfoEvent
 from sdcm.test_config import TestConfig
 from sdcm.tester import ClusterTester
 from sdcm.utils.azure_utils import AzureService
-from sdcm.utils.cluster_tools import flush_nodes, major_compaction_nodes, clear_snapshot_nodes
+from sdcm.utils.cluster_tools import clear_snapshot_nodes, flush_nodes, major_compaction_nodes
 from sdcm.utils.compaction_ops import CompactionOps
 from sdcm.utils.gce_utils import get_gce_storage_client
 from sdcm.utils.loader_utils import LoaderUtilsMixin

@@ -11,27 +11,27 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import itertools
+import logging
 import os
 import re
-import logging
 import warnings
+from functools import cache
 from pprint import pformat
 from types import SimpleNamespace
-from typing import List, Optional, Union, Any, Tuple, Protocol
-from functools import cache
-import itertools
+from typing import Any, List, Optional, Protocol, Tuple, Union
 
-import docker
-from docker.errors import DockerException, NotFound, ImageNotFound, NullResource, BuildError
-from docker.models.images import Image
+from docker.errors import BuildError, DockerException, ImageNotFound, NotFound, NullResource
 from docker.models.containers import Container
+from docker.models.images import Image
 from docker.utils.json_stream import json_stream
 
+import docker
+from sdcm.keystore import KeyStore, pub_key_from_private_key_file
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.base import CommandRunner
 from sdcm.remote.remote_file import remote_file
-from sdcm.keystore import pub_key_from_private_key_file, KeyStore
-from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.decorators import Retry, retrying
 
 DOCKER_API_CALL_TIMEOUT = 180  # seconds
 

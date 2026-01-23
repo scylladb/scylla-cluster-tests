@@ -13,14 +13,13 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-import time
 import datetime
 import random
+import time
 
+from sdcm import nemesis, prometheus
 from sdcm.tester import ClusterTester
 from sdcm.utils.common import get_data_dir_path, skip_optional_stage
-from sdcm import nemesis
-from sdcm import prometheus
 
 
 class GrowClusterTest(ClusterTester):

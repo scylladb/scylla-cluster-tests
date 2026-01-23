@@ -19,7 +19,6 @@ from urllib.parse import urljoin
 import requests
 from requests import Response
 
-
 LOGGER = logging.getLogger(__name__)
 
 

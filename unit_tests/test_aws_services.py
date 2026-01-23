@@ -4,20 +4,21 @@ import os
 import stat
 from pathlib import Path
 
-import pytest
 import boto3
+import pytest
+
 # we need to set the environment variable before importing moto
 # otherwise it won't pick it up
 
 os.environ["MOTO_AMIS_PATH"] = str(Path(__file__).parent / "test_data" / "mocked_ami_data.json")
 from moto.server import ThreadedMotoServer
 
-from sdcm.keystore import KeyStore
-from sdcm.utils.aws_region import AwsRegion
-from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
-from sdcm.utils.common import get_scylla_ami_versions
 from sdcm.ec2_client import EC2ClientWrapper
+from sdcm.keystore import KeyStore
+from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
+from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import tags_as_ec2_tags
+from sdcm.utils.common import get_scylla_ami_versions
 from sdcm.utils.context_managers import environment
 from sdcm.utils.version_utils import parse_scylla_version_tag
 

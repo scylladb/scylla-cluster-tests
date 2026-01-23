@@ -13,59 +13,58 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-import traceback
-from itertools import zip_longest, chain, count as itertools_count
+import contextlib
 import json
 import random
-import time
 import re
-from functools import wraps, cache
+import time
+import traceback
+from functools import cache, wraps
+from itertools import chain, zip_longest
+from itertools import count as itertools_count
 from typing import List
-import contextlib
 
 import cassandra
 import tenacity
-from argus.client.sct.types import Package
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement
 
-from sdcm import argus_results
-from sdcm import wait
+from argus.client.sct.types import Package
+from sdcm import argus_results, wait
 from sdcm.cluster import BaseNode
-from sdcm.utils.issues import SkipPerIssues
+from sdcm.exceptions import Group0LimitedVotersFeatureNotEnableOnNodes
 from sdcm.fill_db_data import FillDatabaseData
+from sdcm.rest.raft_upgrade_procedure import RaftUpgradeProcedure
 from sdcm.sct_events import Severity
-from sdcm.stress_thread import CassandraStressThread
-from sdcm.utils.parallel_object import ParallelObject
-from sdcm.utils.decorators import retrying
-from sdcm.utils.sstable.sstable_utils import get_sstable_data_dump_command
-from sdcm.utils.user_profile import get_profile_content
-from sdcm.utils.version_utils import (
-    get_node_supported_sstable_versions,
-    get_node_enabled_sstable_version,
-    ComparableScyllaVersion,
-)
-from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import (
-    IndexSpecialColumnErrorEvent,
     DatabaseLogEvent,
+    IndexSpecialColumnErrorEvent,
 )
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.group_common_events import (
     decorate_with_context,
     ignore_abort_requested_errors,
+    ignore_raft_topology_cmd_failing,
     ignore_topology_change_coordinator_errors,
     ignore_upgrade_schema_errors,
     ignore_ycsb_connection_refused,
-    ignore_raft_topology_cmd_failing,
 )
+from sdcm.sct_events.system import InfoEvent
+from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils import loader_utils
+from sdcm.utils.decorators import retrying
 from sdcm.utils.features import CONSISTENT_TOPOLOGY_CHANGES_FEATURE, is_tablets_feature_enabled
+from sdcm.utils.issues import SkipPerIssues
+from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.sstable.sstable_utils import get_sstable_data_dump_command
+from sdcm.utils.user_profile import get_profile_content
+from sdcm.utils.version_utils import (
+    ComparableScyllaVersion,
+    get_node_enabled_sstable_version,
+    get_node_supported_sstable_versions,
+)
 from sdcm.wait import wait_for
-from sdcm.rest.raft_upgrade_procedure import RaftUpgradeProcedure
 from test_lib.sla import create_sla_auth
-from sdcm.exceptions import Group0LimitedVotersFeatureNotEnableOnNodes
-
 
 NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
 

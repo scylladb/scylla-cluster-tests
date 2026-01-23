@@ -12,14 +12,13 @@
 # Copyright (c) 2020 ScyllaDB
 #
 
-import time
-import threading
-from threading import Thread as LibThread
-from threading import Thread
 import multiprocessing
-from multiprocessing import Process as LibProcess
+import threading
+import time
 from multiprocessing import Process
-
+from multiprocessing import Process as LibProcess
+from threading import Thread
+from threading import Thread as LibThread
 
 __all__ = [
     "LibMultiprocessingProcessCustomClass",

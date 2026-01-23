@@ -14,7 +14,7 @@
 import abc
 from dataclasses import dataclass, field
 from textwrap import dedent
-from typing import List, Dict
+from typing import Dict, List
 
 import yaml
 

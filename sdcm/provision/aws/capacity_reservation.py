@@ -12,18 +12,18 @@
 # Copyright (c) 2024 ScyllaDB
 import logging
 import time
-from datetime import datetime, timedelta
-from typing import List, Dict, Tuple
 from collections import defaultdict
+from datetime import datetime, timedelta
+from typing import Dict, List, Tuple
 
-from botocore.exceptions import ClientError
 import boto3
+from botocore.exceptions import ClientError
 
 from sdcm.exceptions import CapacityReservationError
 from sdcm.test_config import TestConfig
+from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.utils.common import all_aws_regions
 from sdcm.utils.parallel_object import ParallelObject
-from sdcm.utils.aws_utils import tags_as_ec2_tags
 
 LOGGER = logging.getLogger(__name__)
 

@@ -18,16 +18,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sdcm.provision.aws.utils import (
-    get_provisioned_spot_instance_ids,
-    get_provisioned_fleet_instance_ids,
-)
 from sdcm.provision.aws.constants import (
+    FLEET_LIMIT_EXCEEDED_ERROR,
     SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
     SPOT_PRICE_TOO_LOW,
-    STATUS_FULFILLED,
     SPOT_STATUS_UNEXPECTED_ERROR,
-    FLEET_LIMIT_EXCEEDED_ERROR,
+    STATUS_FULFILLED,
+)
+from sdcm.provision.aws.utils import (
+    get_provisioned_fleet_instance_ids,
+    get_provisioned_spot_instance_ids,
 )
 
 

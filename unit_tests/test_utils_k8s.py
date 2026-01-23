@@ -7,7 +7,6 @@ from sdcm.utils.k8s import (
     ScyllaPodsIPChangeTrackerThread,
 )
 
-
 BASE_HELM_VALUES = {
     "no_nesting_key": "no_nesting_value",
     "nested_dict": {

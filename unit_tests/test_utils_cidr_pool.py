@@ -12,11 +12,11 @@
 # Copyright (c) 2025 ScyllaDB
 
 import ipaddress
-import pytest
 from unittest.mock import Mock, patch
 
-from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
+import pytest
 
+from sdcm.utils.cidr_pool import CidrAllocationError, CidrPoolManager
 
 DEFAULT_SC_CIDR = "172.31.0.0/24"
 

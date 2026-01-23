@@ -13,22 +13,20 @@
 import json
 import logging
 import time
-from datetime import timezone, datetime
+from datetime import datetime, timezone
 
 from argus.client import ArgusClient
 from argus.client.base import ArgusClientError
 from argus.client.generic_result import (
-    GenericResultTable,
     ColumnMetadata,
+    GenericResultTable,
     ResultType,
+    StaticGenericResultTable,
     Status,
     ValidationRule,
-    StaticGenericResultTable,
 )
-
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 from sdcm.sct_events.system import FailedResultEvent
-
 
 LOGGER = logging.getLogger(__name__)
 

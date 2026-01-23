@@ -31,8 +31,8 @@ from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from datetime import UTC, datetime, timedelta, timezone
 from functools import partial, reduce
-from typing import List, Literal
 from pathlib import Path
+from typing import List, Literal
 from uuid import UUID
 
 import click
@@ -59,7 +59,6 @@ from sdcm.monitorstack.service import (
     restore_monitoring_stack,
 )
 from sdcm.nemesis import SisyphusMonkey
-from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
 from sdcm.provision import AzureProvisioner
 from sdcm.provision.provisioner import VmArch, VmInstance
 from sdcm.remote import LOCALRUNNER
@@ -119,7 +118,6 @@ from sdcm.utils.common import (
     list_instances_gce,
     list_load_balancers_aws,
     list_logs_by_test_id,
-    list_parallel_timelines_report_urls,
     list_placement_groups_aws,
     list_resources_docker,
     list_test_security_groups,
@@ -147,38 +145,7 @@ from sdcm.utils.resources_cleanup import (
     init_argus_client,
 )
 from sdcm.utils.sct_cmd_helpers import CloudRegion, add_file_logger, get_all_regions, get_test_config
-from sdcm.utils.net import get_sct_runner_ip
-from sdcm.utils.jepsen import JepsenResults
-from sdcm.utils.docker_utils import docker_hub_login, running_in_podman
-from sdcm.monitorstack import (
-    restore_monitoring_stack,
-    get_monitoring_stack_services,
-    kill_running_monitoring_stack_services,
-)
-from sdcm.utils.log import setup_stdout_logger, disable_loggers_during_startup
-from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder
-from sdcm.utils.gce_region import GceRegion
-from sdcm.utils.gce_builder import GceBuilder
-from sdcm.utils.oci_region import OciRegion
-from sdcm.utils.oci_builder import OciBuilder
-from sdcm.utils.aws_peering import AwsVpcPeering
-from sdcm.utils.get_username import get_username
-from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
-from sdcm.send_email import (
-    get_running_instances_for_email_report,
-    read_email_data_from_file,
-    build_reporter,
-    send_perf_email,
-)
-from sdcm.utils.aws_utils import AwsArchType
-from sdcm.utils.aws_okta import try_auth_with_okta
-from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
-from sdcm.utils.context_managers import environment
-from sdcm.cluster_k8s import mini_k8s
-from sdcm.utils.es_index import create_index, get_mapping
 from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
-import sdcm.provision.azure.utils as azure_utils
 from unit_tests.nemesis.fake_cluster import FakeTester
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion

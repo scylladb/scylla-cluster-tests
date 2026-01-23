@@ -1,11 +1,11 @@
-import sys
+import json
 import logging
 import logging.config
+import sys
 import warnings
 from datetime import datetime
 
 import urllib3
-import json
 
 LOGGER = logging.getLogger(__name__)
 

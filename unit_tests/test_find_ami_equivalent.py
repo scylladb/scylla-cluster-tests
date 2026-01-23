@@ -4,9 +4,10 @@
 Unit tests for find_ami_equivalent functionality.
 """
 
-import pytest
 from unittest.mock import Mock, patch
-from botocore.exceptions import ClientError, NoCredentialsError, BotoCoreError
+
+import pytest
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 
 from sdcm.utils.common import find_equivalent_ami
 

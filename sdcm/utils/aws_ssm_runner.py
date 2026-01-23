@@ -20,7 +20,8 @@ AWS Systems Manager Run Command, replacing the AWS CLI with boto3 API calls.
 
 import logging
 import time
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple
+
 import boto3
 from botocore.exceptions import ClientError
 from invoke.runners import Result

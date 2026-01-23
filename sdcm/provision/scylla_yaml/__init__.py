@@ -11,11 +11,11 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-from .scylla_yaml import ScyllaYaml
-from .auxiliaries import ServerEncryptionOptions, ClientEncryptionOptions, SeedProvider, RequestSchedulerOptions
+from .auxiliaries import ClientEncryptionOptions, RequestSchedulerOptions, SeedProvider, ServerEncryptionOptions
 from .certificate_builder import ScyllaYamlCertificateAttrBuilder
 from .cluster_builder import ScyllaYamlClusterAttrBuilder
 from .node_builder import ScyllaYamlNodeAttrBuilder
+from .scylla_yaml import ScyllaYaml
 
 __all__ = [
     "ScyllaYaml",

@@ -1,5 +1,4 @@
-from sdcm.utils.alternator import consts
-from sdcm.utils.alternator import enums
+from sdcm.utils.alternator import consts, enums
 
 HASH_SCHEMA = dict(
     KeySchema=[

@@ -1,19 +1,18 @@
-import time
-import tarfile
-from io import BytesIO
-from typing import TYPE_CHECKING
-from shlex import quote
-from pathlib import Path
 import shutil
+import tarfile
+import time
+from io import BytesIO
+from pathlib import Path
+from shlex import quote
+from typing import TYPE_CHECKING
 
-from invoke.runners import Result
 from invoke.exceptions import UnexpectedExit
+from invoke.runners import Result
 from invoke.watchers import StreamWatcher
 
 from sdcm.remote.base import CommandRunner, RetryableNetworkException
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
-
 
 if TYPE_CHECKING:
     from sdcm.cluster_docker import DockerNode

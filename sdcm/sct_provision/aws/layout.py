@@ -15,7 +15,7 @@ from functools import cached_property
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
-from sdcm.sct_provision.aws.cluster import OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup
+from sdcm.sct_provision.aws.cluster import DBCluster, LoaderCluster, MonitoringCluster, OracleDBCluster, PlacementGroup
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.test_config import TestConfig
 

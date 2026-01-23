@@ -23,7 +23,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.parallel_object import ParallelObject
-from test_lib.compaction import CompactionStrategy, LOGGER
+from test_lib.compaction import LOGGER, CompactionStrategy
 
 KEYSPACE_NAME = "keyspace1"
 TABLE_NAME = "standard1"

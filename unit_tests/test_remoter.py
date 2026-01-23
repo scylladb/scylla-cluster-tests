@@ -11,27 +11,27 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import getpass
-import unittest
+import os
 import threading
-from typing import Union, Optional
+import unittest
 from logging import getLogger
+from typing import Optional, Union
+
+from sdcm.cluster_k8s import KubernetesCluster
 
 # from parameterized import parameterized
-
 from sdcm.remote import (
-    RemoteLibSSH2CmdRunner,
-    RemoteCmdRunner,
     LocalCmdRunner,
+    RemoteCmdRunner,
+    RemoteLibSSH2CmdRunner,
     RetryableNetworkException,
     SSHConnectTimeoutError,
     shell_script_cmd,
 )
-from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.remote.base import CommandRunner, Result
+from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.remote.remote_file import remote_file
-from sdcm.cluster_k8s import KubernetesCluster
 
 
 class FakeKluster(KubernetesCluster):

@@ -21,11 +21,11 @@ from unittest import TestCase
 
 from cassandra.cluster import Cluster
 from thrift.transport import TSocket
+from thrift_bindings.v22.Cassandra import *
+from thrift_bindings.v22.ttypes import NotFoundException
 
 from sdcm.nemesis import UpgradeNemesisOneNode
 from sdcm.tester import ClusterTester
-from thrift_bindings.v22.Cassandra import *
-from thrift_bindings.v22.ttypes import NotFoundException
 
 tests = []
 ks_name = "test_upgrade_schema_ks"

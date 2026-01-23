@@ -16,16 +16,16 @@
 from dataclasses import dataclass, field
 from typing import Dict
 
+import pytest
 import yaml
 from invoke import Result
-import pytest
 
 from sdcm.utils.k8s.chaos_mesh import (
-    PodFailureExperiment,
-    ExperimentStatus,
-    ChaosMeshTimeout,
     ChaosMeshExperimentException,
+    ChaosMeshTimeout,
+    ExperimentStatus,
     MemoryStressExperiment,
+    PodFailureExperiment,
 )
 
 

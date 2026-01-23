@@ -11,19 +11,19 @@
 #
 # Copyright (c) 2019 ScyllaDB
 
+import concurrent.futures
 import logging
 import random
-import concurrent.futures
-from functools import cached_property
 import uuid
 from datetime import datetime
+from functools import cached_property
 
 from sdcm.cluster import BaseLoaderSet
-from sdcm.utils.common import generate_random_string
-from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.remote.libssh2_client.exceptions import Failure
 from sdcm.sct_events import Severity
 from sdcm.sct_events.stress_events import StressEvent
-from sdcm.remote.libssh2_client.exceptions import Failure
+from sdcm.utils.common import generate_random_string
+from sdcm.utils.docker_remote import RemoteDocker
 
 LOGGER = logging.getLogger(__name__)
 

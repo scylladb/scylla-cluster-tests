@@ -15,205 +15,201 @@ from __future__ import annotations
 
 import contextlib
 import copy
-import queue
+import itertools
+import json
 import logging
 import os
+import queue
+import random
+import re
+import shlex
 import shutil
 import socket
 import ssl
 import sys
-import random
-import re
 import tempfile
 import threading
 import time
 import traceback
-import itertools
-import json
-import shlex
 import uuid
-from decimal import Decimal, ROUND_UP
-from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable, Literal
-from datetime import datetime, timezone
-from textwrap import dedent
-from functools import cached_property, wraps, lru_cache, partial
 from collections import defaultdict
 from collections.abc import Iterator
-from dataclasses import dataclass
-from pathlib import Path
-from contextlib import ExitStack, contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import packaging.version
+from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from decimal import ROUND_UP, Decimal
+from functools import cached_property, lru_cache, partial, wraps
+from pathlib import Path
+from textwrap import dedent
+from typing import IO, Any, AnyStr, Callable, ContextManager, Dict, Iterable, List, Literal, Optional, Set, Union
 
-import yaml
+import packaging.version
 import requests
-from paramiko import SSHException
-from tenacity import RetryError
-from invoke import Result
-from invoke.exceptions import UnexpectedExit, Failure
+import yaml
+from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver
 from cassandra.cluster import NoHostAvailable
-from cassandra.policies import RetryPolicy
-from cassandra.policies import WhiteListRoundRobinPolicy, RackAwareRoundRobinPolicy, LoadBalancingPolicy
+from cassandra.policies import LoadBalancingPolicy, RackAwareRoundRobinPolicy, RetryPolicy, WhiteListRoundRobinPolicy
 from cassandra.query import SimpleStatement
-from argus.common.enums import ResourceState
-from argus.client.sct.types import LogLink
-from sdcm.node_exporter_setup import NodeExporterSetup
-from sdcm.db_log_reader import DbLogReader
-from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
-from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
-from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
-from sdcm.log import SDCMAdapter
-from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
-from sdcm.provision.common.utils import disable_daily_apt_triggers
-from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder
-from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificateAttrBuilder
-from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuilder
-from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
-from sdcm.provision.helpers.certificate import (
-    create_ca,
-    install_client_certificate,
-    install_encryption_at_rest_files,
-    create_certificate,
-    export_pem_cert_to_pkcs12_keystore,
-    CA_CERT_FILE,
-    CA_KEY_FILE,
-    JKS_TRUSTSTORE_FILE,
-    TLSAssets,
-)
-from sdcm.provision.network_configuration import network_interfaces_count
-from sdcm.remote import (
-    RemoteCmdRunnerBase,
-    LOCALRUNNER,
-    NETWORK_EXCEPTIONS,
-    shell_script_cmd,
-    RetryableNetworkException,
-)
-from sdcm.remote.agent_cmd_runner import AgentCmdRunner
-from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
-from sdcm.remote.remote_long_running import run_long_running_cmd
-from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
-from sdcm import wait, mgmt
-from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
-from sdcm.sct_events.system import AwsKmsEvent
-from sdcm.snitch_configuration import SnitchConfig
-from sdcm.utils import properties
-from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout, AdaptiveTimeoutStore
-from sdcm.utils.aws_kms import AwsKms
-from sdcm.utils.azure_utils import AzureService
-from sdcm.provision.azure.kms_provider import AzureKmsProvider
-from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
-from sdcm.utils.gcp_kms import GcpKms
-from sdcm.provision.gce.kms_provider import GcpKmsProvider
 from google.cloud.exceptions import GoogleCloudError
-from sdcm.keystore import KeyStore
-from sdcm.utils.cql_utils import cql_quote_if_needed
-from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
-from sdcm.utils.common import (
-    S3Storage,
-    ScyllaCQLSession,
-    PageFetcher,
-    get_data_dir_path,
-    verify_scylla_repo_file,
-    normalize_ipv6_url,
-    download_dir_from_cloud,
-    generate_random_string,
-    prepare_and_start_saslauthd_service,
-    raise_exception_in_thread,
-    get_sct_root_path,
-)
-from sdcm.utils.context_managers import DbNodeLogger
-from sdcm.utils.ci_tools import get_test_name
-from sdcm.utils.database_query_utils import is_system_keyspace
-from sdcm.utils.distro import Distro
-from sdcm.utils.features import get_enabled_features, is_tablets_feature_enabled
-from sdcm.utils.install import InstallMode
-from sdcm.utils.issues import SkipPerIssues
-from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
-from sdcm.utils.health_checker import (
-    check_nodes_status,
-    check_node_status_in_gossip_and_nodetool_status,
-    check_schema_version,
-    check_nulls_in_peers,
-    check_schema_agreement_in_gossip_and_peers,
-    check_group0_tokenring_consistency,
-    CHECK_NODE_HEALTH_RETRIES,
-    CHECK_NODE_HEALTH_RETRY_DELAY,
-)
-from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property, optional_stage
-from sdcm.test_config import TestConfig
-from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
-from sdcm.utils.sstable.sstable_utils import SstableUtils
-from sdcm.utils.version_utils import (
-    assume_version,
-    get_gemini_version,
-    get_systemd_version,
-    ComparableScyllaVersion,
-    SCYLLA_VERSION_RE,
-    is_enterprise,
-)
-from sdcm.utils.net import get_my_ip, to_inet_ntop_format
-from sdcm.utils.node import build_node_api_command
-from sdcm.wait import wait_for_log_lines
-from sdcm.sct_events import Severity
-from sdcm.sct_events.base import LogEvent, add_severity_limit_rules, max_severity
-from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.sct_events.system import TestFrameworkEvent, INSTANCE_STATUS_EVENTS_PATTERNS, InfoEvent
-from sdcm.sct_events.grafana import set_grafana_url
-from sdcm.sct_events.database import (
-    SYSTEM_ERROR_EVENTS_PATTERNS,
-    ScyllaHelpErrorEvent,
-    ScyllaYamlUpdateEvent,
-    SYSTEM_ERROR_EVENTS,
-)
-from sdcm.sct_events.nodetool import NodetoolEvent
-from sdcm.sct_events.decorators import raise_event_on_failure
-from sdcm.sct_events.filters import EventsSeverityChangerFilter
-from sdcm.utils.auto_ssh import AutoSshContainerMixin
-from sdcm.monitorstack.ui import AlternatorDashboard
-from sdcm.logcollector import (
-    GrafanaScreenShot,
-    PrometheusSnapshots,
-    upload_archive_to_s3,
-    save_kallsyms_map,
-    collect_diagnostic_data,
-    ScyllaLogCollector,
-)
-from sdcm.utils.ldap import (
-    LDAP_SSH_TUNNEL_LOCAL_PORT,
-    LDAP_BASE_OBJECT,
-    LDAP_PASSWORD,
-    LDAP_USERS,
-    LDAP_PORT,
-    DEFAULT_PWD_SUFFIX,
-)
-from sdcm.utils.remote_logger import get_system_logging_thread
-from sdcm.utils.scylla_args import ScyllaArgParser
-from sdcm.utils.file import File
-from sdcm.utils import cdc
-from sdcm.utils.raft import get_raft_mode
-from sdcm.utils.sct_agent_installer import reconfigure_agent_script
-from sdcm.coredump import CoredumpExportSystemdThread
-from sdcm.keystore import KeyStore
-from sdcm.paths import (
-    SCYLLA_YAML_PATH,
-    SCYLLA_PROPERTIES_PATH,
-    SCYLLA_MANAGER_YAML_PATH,
-    SCYLLA_MANAGER_AGENT_YAML_PATH,
-    SCYLLA_MANAGER_TLS_CERT_FILE,
-    SCYLLA_MANAGER_TLS_KEY_FILE,
-)
-from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
+from invoke import Result
+from invoke.exceptions import Failure, UnexpectedExit
+from paramiko import SSHException
+from tenacity import RetryError
 
+from argus.client.sct.types import LogLink
+from argus.common.enums import ResourceState
+from sdcm import mgmt, wait
+from sdcm.coredump import CoredumpExportSystemdThread
+from sdcm.db_log_reader import DbLogReader
 from sdcm.exceptions import (
     KillNemesis,
     NodeNotReady,
     SstablesNotFound,
 )
-from sdcm.utils.replication_strategy_utils import ReplicationStrategy, DataCenterTopologyRfControl
+from sdcm.keystore import KeyStore
+from sdcm.log import SDCMAdapter
+from sdcm.logcollector import (
+    GrafanaScreenShot,
+    PrometheusSnapshots,
+    ScyllaLogCollector,
+    collect_diagnostic_data,
+    save_kallsyms_map,
+    upload_archive_to_s3,
+)
+from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
+from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
+from sdcm.monitorstack.ui import AlternatorDashboard
+from sdcm.node_exporter_setup import NodeExporterSetup
+from sdcm.paths import (
+    SCYLLA_MANAGER_AGENT_YAML_PATH,
+    SCYLLA_MANAGER_TLS_CERT_FILE,
+    SCYLLA_MANAGER_TLS_KEY_FILE,
+    SCYLLA_MANAGER_YAML_PATH,
+    SCYLLA_PROPERTIES_PATH,
+    SCYLLA_YAML_PATH,
+)
+from sdcm.prometheus import AlertSilencer, PrometheusAlertManagerListener, start_metrics_server
+from sdcm.provision.azure.kms_provider import AzureKmsProvider
+from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
+from sdcm.provision.common.utils import disable_daily_apt_triggers
+from sdcm.provision.gce.kms_provider import GcpKmsProvider
+from sdcm.provision.helpers.certificate import (
+    CA_CERT_FILE,
+    CA_KEY_FILE,
+    JKS_TRUSTSTORE_FILE,
+    TLSAssets,
+    create_ca,
+    create_certificate,
+    export_pem_cert_to_pkcs12_keystore,
+    install_client_certificate,
+    install_encryption_at_rest_files,
+)
+from sdcm.provision.network_configuration import network_interfaces_count
+from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder
+from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificateAttrBuilder
+from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuilder
+from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
+from sdcm.remote import (
+    LOCALRUNNER,
+    NETWORK_EXCEPTIONS,
+    RemoteCmdRunnerBase,
+    RetryableNetworkException,
+    shell_script_cmd,
+)
+from sdcm.remote.agent_cmd_runner import AgentCmdRunner
+from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
+from sdcm.remote.remote_file import dict_to_yaml_file, remote_file, yaml_file_to_dict
+from sdcm.remote.remote_long_running import run_long_running_cmd
+from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import LogEvent, add_severity_limit_rules, max_severity
+from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
+from sdcm.sct_events.database import (
+    SYSTEM_ERROR_EVENTS,
+    SYSTEM_ERROR_EVENTS_PATTERNS,
+    ScyllaHelpErrorEvent,
+    ScyllaYamlUpdateEvent,
+)
+from sdcm.sct_events.decorators import raise_event_on_failure
+from sdcm.sct_events.filters import EventsSeverityChangerFilter
+from sdcm.sct_events.grafana import set_grafana_url
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
+from sdcm.sct_events.nodetool import NodetoolEvent
+from sdcm.sct_events.system import INSTANCE_STATUS_EVENTS_PATTERNS, AwsKmsEvent, InfoEvent, TestFrameworkEvent
+from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
+from sdcm.snitch_configuration import SnitchConfig
+from sdcm.test_config import TestConfig
+from sdcm.utils import cdc, properties
+from sdcm.utils.adaptive_timeouts import AdaptiveTimeoutStore, Operations, adaptive_timeout
+from sdcm.utils.auto_ssh import AutoSshContainerMixin
+from sdcm.utils.aws_kms import AwsKms
+from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
+from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.common import (
+    PageFetcher,
+    S3Storage,
+    ScyllaCQLSession,
+    download_dir_from_cloud,
+    generate_random_string,
+    get_data_dir_path,
+    get_sct_root_path,
+    normalize_ipv6_url,
+    prepare_and_start_saslauthd_service,
+    raise_exception_in_thread,
+    verify_scylla_repo_file,
+)
+from sdcm.utils.context_managers import DbNodeLogger
+from sdcm.utils.cql_utils import cql_quote_if_needed
+from sdcm.utils.database_query_utils import is_system_keyspace
+from sdcm.utils.decorators import NoValue, log_run_info, optional_cached_property, optional_stage, retrying
+from sdcm.utils.distro import Distro
+from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
+from sdcm.utils.features import get_enabled_features, is_tablets_feature_enabled
+from sdcm.utils.file import File
+from sdcm.utils.gcp_kms import GcpKms
+from sdcm.utils.health_checker import (
+    CHECK_NODE_HEALTH_RETRIES,
+    CHECK_NODE_HEALTH_RETRY_DELAY,
+    check_group0_tokenring_consistency,
+    check_node_status_in_gossip_and_nodetool_status,
+    check_nodes_status,
+    check_nulls_in_peers,
+    check_schema_agreement_in_gossip_and_peers,
+    check_schema_version,
+)
+from sdcm.utils.install import InstallMode
+from sdcm.utils.issues import SkipPerIssues
+from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
+from sdcm.utils.ldap import (
+    DEFAULT_PWD_SUFFIX,
+    LDAP_BASE_OBJECT,
+    LDAP_PASSWORD,
+    LDAP_PORT,
+    LDAP_SSH_TUNNEL_LOCAL_PORT,
+    LDAP_USERS,
+)
+from sdcm.utils.net import get_my_ip, to_inet_ntop_format
+from sdcm.utils.node import build_node_api_command
+from sdcm.utils.raft import get_raft_mode
+from sdcm.utils.remote_logger import get_system_logging_thread
+from sdcm.utils.replication_strategy_utils import DataCenterTopologyRfControl, ReplicationStrategy
+from sdcm.utils.sct_agent_installer import reconfigure_agent_script
+from sdcm.utils.scylla_args import ScyllaArgParser
+from sdcm.utils.sstable.sstable_utils import SstableUtils
+from sdcm.utils.version_utils import (
+    SCYLLA_VERSION_RE,
+    ComparableScyllaVersion,
+    assume_version,
+    get_gemini_version,
+    get_systemd_version,
+    is_enterprise,
+)
+from sdcm.wait import wait_for_log_lines
 
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed

@@ -11,12 +11,13 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
-import logging
-import re
-import os
-import time
 import contextlib
+import logging
+import os
+import re
+import time
 from typing import Any
+
 from sdcm.loader import CqlStressCassandraStressExporter, CqlStressHDRExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, cql_stress_transport_str

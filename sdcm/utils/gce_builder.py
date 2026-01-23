@@ -10,23 +10,23 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2023 ScyllaDB
-import sys
 import logging
-from typing import Any
+import sys
 from functools import cached_property
+from typing import Any
 
 import click
-import requests
-from google.oauth2 import service_account
-from google.cloud import compute_v1
-from google.api_core.extended_operation import ExtendedOperation
 import google.api_core.exceptions
+import requests
+from google.api_core.extended_operation import ExtendedOperation
+from google.cloud import compute_v1
+from google.oauth2 import service_account
 
+from sdcm.keystore import KeyStore
+from sdcm.sct_runner import GceSctRunner
+from sdcm.utils.context_managers import environment
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, SUPPORTED_REGIONS
-from sdcm.utils.context_managers import environment
-from sdcm.sct_runner import GceSctRunner
-from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)
 

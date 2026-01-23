@@ -11,38 +11,38 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import List, Optional, Dict
-from time import perf_counter, sleep
-from os.path import normpath, expanduser, exists
-from sys import float_info
-from io import StringIO
-from warnings import warn
-from socket import socket, AF_INET, AF_INET6, SOCK_STREAM, gaierror, gethostbyname, error as sock_error
-from threading import Thread, Lock, Event, BoundedSemaphore
-from abc import abstractmethod, ABC
-from queue import SimpleQueue as Queue
 import ipaddress
+from abc import ABC, abstractmethod
+from io import StringIO
+from os.path import exists, expanduser, normpath
+from queue import SimpleQueue as Queue
+from socket import AF_INET, AF_INET6, SOCK_STREAM, gaierror, gethostbyname, socket
+from socket import error as sock_error
+from sys import float_info
+from threading import BoundedSemaphore, Event, Lock, Thread
+from time import perf_counter, sleep
+from typing import Dict, List, Optional
+from warnings import warn
 
 from ssh2.channel import Channel
-from ssh2.exceptions import AuthenticationError
 from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN
+from ssh2.exceptions import AuthenticationError
 
 from .exceptions import (
     AuthenticationException,
-    UnknownHostException,
-    ConnectError,
-    PKeyFileError,
-    UnexpectedExit,
     CommandTimedOut,
-    FailedToReadCommandOutput,
+    ConnectError,
     ConnectTimeout,
+    FailedToReadCommandOutput,
     FailedToRunCommand,
     OpenChannelTimeout,
+    PKeyFileError,
+    UnexpectedExit,
+    UnknownHostException,
 )
 from .result import Result
 from .session import Session
-from .timings import Timings, NullableTiming
-
+from .timings import NullableTiming, Timings
 
 __all__ = ["Session", "Timings", "Client", "Channel", "FailedToRunCommand"]
 

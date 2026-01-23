@@ -12,48 +12,46 @@
 # Copyright (c) 2020 ScyllaDB
 import base64
 import os
-import time
 import pprint
+import time
+from collections.abc import Callable
+from functools import cached_property
 from textwrap import dedent
 from threading import Lock
-from typing import List, Dict, Literal, ParamSpec, TypeVar
-from functools import cached_property
-from collections.abc import Callable
+from typing import Dict, List, Literal, ParamSpec, TypeVar
 
 import boto3
 import tenacity
+from botocore.exceptions import ClientError
 from mypy_boto3_ec2.type_defs import (
     LaunchTemplateBlockDeviceMappingRequestTypeDef,
     LaunchTemplateEbsBlockDeviceRequestTypeDef,
-    RequestLaunchTemplateDataTypeDef,
     LaunchTemplateTagSpecificationRequestTypeDef,
+    RequestLaunchTemplateDataTypeDef,
 )
-from botocore.exceptions import ClientError
 
-from sdcm import sct_abs_path, cluster
+from sdcm import cluster, ec2_client, sct_abs_path
 from sdcm.cluster_aws import MonitorSetAWS
-from sdcm import ec2_client
-from sdcm.utils.ci_tools import get_test_name
-from sdcm.utils.common import list_instances_aws
-from sdcm.utils.k8s import TokenUpdateThread
-from sdcm.wait import wait_for, exponential_retry
 from sdcm.cluster_k8s import (
+    SCYLLA_AGENT_CONFIG_NAME,
+    SCYLLA_NAMESPACE,
     BaseScyllaPodContainer,
     CloudK8sNodePool,
     KubernetesCluster,
     ScyllaPodCluster,
-    SCYLLA_AGENT_CONFIG_NAME,
-    SCYLLA_NAMESPACE,
 )
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.aws_utils import (
+    EksClusterCleanupMixin,
     get_arch_from_instance_type,
     get_ec2_network_configuration,
     tags_as_ec2_tags,
-    EksClusterCleanupMixin,
 )
+from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.common import list_instances_aws
+from sdcm.utils.k8s import TokenUpdateThread
 from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
-
+from sdcm.wait import exponential_retry, wait_for
 
 P = ParamSpec("P")
 R = TypeVar("R")

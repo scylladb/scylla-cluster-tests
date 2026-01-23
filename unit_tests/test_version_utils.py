@@ -6,30 +6,30 @@ import unittest
 import pytest
 
 import sdcm
-from unit_tests.lib.s3_utils import get_latest_branches_from_s3
 from sdcm.utils.version_utils import (
+    ARGUS_VERSION_RE,
+    SCYLLA_VERSION_GROUPED_RE,
+    VERSION_NOT_FOUND_ERROR,
+    ComparableScyllaOperatorVersion,
+    ComparableScyllaVersion,
+    FullVersionTag,
+    MethodVersionNotFound,
+    RepositoryDetails,
+    ScyllaFileType,
     assume_version,
     get_all_versions,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
     get_branched_repo,
     get_git_tag_from_helm_chart_version,
+    get_scylla_docker_repo_from_version,
     get_scylla_urls_from_repository,
     get_specific_tag_of_docker_image,
     is_enterprise,
-    scylla_versions,
-    ComparableScyllaOperatorVersion,
-    ComparableScyllaVersion,
-    MethodVersionNotFound,
-    RepositoryDetails,
-    ScyllaFileType,
-    SCYLLA_VERSION_GROUPED_RE,
-    ARGUS_VERSION_RE,
-    VERSION_NOT_FOUND_ERROR,
-    get_scylla_docker_repo_from_version,
     parse_scylla_version_tag,
-    FullVersionTag,
+    scylla_versions,
 )
+from unit_tests.lib.s3_utils import get_latest_branches_from_s3
 
 BASE_S3_DOWNLOAD_URL = "https://s3.amazonaws.com/downloads.scylladb.com"
 DEB_URL = (

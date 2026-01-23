@@ -11,11 +11,10 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import re
-import logging
 import argparse
-from typing import Text, NoReturn, Callable
-
+import logging
+import re
+from typing import Callable, NoReturn, Text
 
 # Regexp for parsing arguments from the output of `scylla --help' command:
 # $ scylla --help

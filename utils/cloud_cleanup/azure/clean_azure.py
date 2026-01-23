@@ -18,10 +18,9 @@ import os
 from datetime import datetime
 from typing import Callable
 
-
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.log import setup_stdout_logger
-from utils.cloud_cleanup import update_argus_resource_status, should_keep, get_keep_hours_from_tags, DEFAULT_KEEP_HOURS
+from utils.cloud_cleanup import DEFAULT_KEEP_HOURS, get_keep_hours_from_tags, should_keep, update_argus_resource_status
 
 LOGGER = setup_stdout_logger()
 azure_service = AzureService()

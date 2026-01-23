@@ -4,6 +4,7 @@ Should not be dependent on the implementation of Nemesis class
 """
 
 import pytest
+
 from sdcm.nemesis_registry import NemesisRegistry
 from unit_tests.nemesis import (
     CustomNemesisA,

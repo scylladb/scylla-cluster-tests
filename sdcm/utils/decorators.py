@@ -12,23 +12,23 @@
 # Copyright (c) 2020 ScyllaDB
 from __future__ import annotations
 
-import sys
-import time
-import logging
 import datetime
 import json
+import logging
 import os
-from functools import wraps, partial, cached_property
-from typing import Optional, Callable, TYPE_CHECKING
+import sys
+import time
+from functools import cached_property, partial, wraps
+from typing import TYPE_CHECKING, Callable, Optional
 
 from botocore.exceptions import ClientError
 from google.api_core.exceptions import ServiceUnavailable
 
 from sdcm.argus_results import send_result_to_argus
+from sdcm.exceptions import UnsupportedNemesis
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.event_counter import EventCounterContextManager
-from sdcm.exceptions import UnsupportedNemesis
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.cluster_tools import check_cluster_layout
 
@@ -209,8 +209,8 @@ def latency_calculator_decorator(
     def wrapper(func):
         @wraps(func)
         def wrapped(*args, **kwargs):  # noqa: PLR0914
-            from sdcm.tester import ClusterTester  # noqa: PLC0415
             from sdcm.nemesis import NemesisRunner  # noqa: PLC0415
+            from sdcm.tester import ClusterTester  # noqa: PLC0415
 
             start = time.time()
             # If the decorator is applied dynamically, "self" argument is not transferred  via "args" and may be found in bounded function

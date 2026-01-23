@@ -11,36 +11,35 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from textwrap import dedent
-from typing import List, Dict, ParamSpec, TypeVar
-from functools import cached_property
-from collections.abc import Callable
-
-import tempfile
 import json
-import yaml
+import tempfile
+from collections.abc import Callable
+from functools import cached_property
+from textwrap import dedent
+from typing import Dict, List, ParamSpec, TypeVar
+
 import tenacity
+import yaml
 from google.cloud import compute_v1
 
-from sdcm import sct_abs_path, cluster
-from sdcm.wait import exponential_retry
-from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
-from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
+from sdcm import cluster, sct_abs_path
+from sdcm.cluster_gce import MonitorSetGCE
+from sdcm.cluster_k8s import BaseScyllaPodContainer, CloudK8sNodePool, KubernetesCluster, ScyllaPodCluster
+from sdcm.keystore import KeyStore
+from sdcm.remote import LOCALRUNNER
+from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.common import gce_meta_to_dict, list_instances_gce
 from sdcm.utils.gce_utils import (
     GcloudContainerMixin,
     GcloudContextManager,
+    gce_private_addresses,
+    gce_public_addresses,
     get_gce_compute_instances_client,
     wait_for_extended_operation,
-    gce_public_addresses,
-    gce_private_addresses,
 )
-from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
 from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
-from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
-from sdcm.cluster_gce import MonitorSetGCE
-from sdcm.keystore import KeyStore
-from sdcm.remote import LOCALRUNNER
-
+from sdcm.wait import exponential_retry
 
 GKE_API_CALL_RATE_LIMIT = 5  # ops/s
 GKE_API_CALL_QUEUE_SIZE = 1000  # ops

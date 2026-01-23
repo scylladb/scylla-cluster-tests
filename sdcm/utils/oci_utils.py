@@ -18,18 +18,18 @@ from __future__ import annotations
 import logging
 import time
 from functools import cached_property
+
 import oci
 from oci.core import ComputeClient, VirtualNetworkClient
-from oci.core.models import Instance, Image
+from oci.core.models import Image, Instance
+from oci.exceptions import ServiceError
 from oci.identity import IdentityClient
 from oci.object_storage import ObjectStorageClient
 from oci.work_requests import WorkRequestClient
-from oci.exceptions import ServiceError
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.metaclasses import Singleton
 from sdcm.provision.provisioner import VmArch
-
+from sdcm.utils.metaclasses import Singleton
 
 LOGGER = logging.getLogger(__name__)
 

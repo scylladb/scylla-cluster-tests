@@ -6,7 +6,6 @@ import threading
 import traceback
 from typing import Any
 
-
 LOGGER = logging.getLogger(__name__)
 
 

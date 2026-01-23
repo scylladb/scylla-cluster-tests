@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 import os
 import re
 import sys
 import tempfile
-import logging
 
+from git import GitCommandError, Repo
 from github import Github, GithubException
-from git import Repo, GitCommandError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 try:

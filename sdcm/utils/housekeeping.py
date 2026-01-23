@@ -12,12 +12,11 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
-from typing import Sequence, Optional, Any
+from typing import Any, Optional, Sequence
 
 import mysql.connector
 
 from sdcm.keystore import KeyStore
-
 
 DB_NAME = "housekeeping"
 

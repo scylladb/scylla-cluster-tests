@@ -15,76 +15,76 @@
 Handling Scylla-cluster-test configuration loading
 """
 
-import os
-import random
-import re
 import ast
+import copy
+import getpass
 import json
 import logging
-import getpass
+import os
 import pathlib
+import random
+import re
 import tempfile
-from functools import cached_property
-
-import yaml
-import copy
 from copy import deepcopy
-from typing import List, Union, Set
+from functools import cached_property
+from typing import List, Set, Union
 
-from distutils.util import strtobool
 import anyconfig
-from argus.client.sct.types import Package
+import yaml
+from distutils.util import strtobool
 from packaging import version
 from pydantic import BaseModel
 
-from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
-from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
+from argus.client.sct.types import Package
+from sdcm import sct_abs_path
+from sdcm.cloud_api_client import CloudProviderType, ScyllaCloudAPIClient
+from sdcm.kafka.kafka_config import SctKafkaConfiguration
 from sdcm.keystore import KeyStore
-from sdcm.utils.cloud_api_utils import get_cloud_rest_credentials_from_file
+from sdcm.mgmt.common import AgentBackupParameters
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
+from sdcm.remote import LOCALRUNNER, shell_script_cmd
+from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
+from sdcm.test_config import TestConfig
 from sdcm.utils import alternator
-from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
+from sdcm.utils.aws_utils import aws_check_instance_type_supported, get_arch_from_instance_type
+from sdcm.utils.azure_utils import (
+    azure_check_instance_type_available,
+)
+from sdcm.utils.cloud_api_utils import MIN_SCYLLA_VERSION_FOR_VS, get_cloud_rest_credentials_from_file
 from sdcm.utils.common import (
     ami_built_by_scylla,
+    convert_name_to_ami_if_needed,
     get_ami_tags,
     get_branched_ami,
     get_branched_gce_images,
+    get_sct_root_path,
     get_scylla_ami_versions,
     get_scylla_gce_images_versions,
     get_vector_store_ami_versions,
-    convert_name_to_ami_if_needed,
-    get_sct_root_path,
+)
+from sdcm.utils.gce_utils import (
+    SUPPORTED_REGIONS as GCE_SUPPORTED_REGIONS,
+)
+from sdcm.utils.gce_utils import (
+    gce_check_if_machine_type_supported,
+    get_gce_compute_machine_types_client,
+    get_gce_image_tags,
 )
 from sdcm.utils.operations_thread import ConfigParams
 from sdcm.utils.version_utils import (
     ARGUS_VERSION_RE,
+    ComparableScyllaVersion,
+    find_scylla_repo,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
     get_scylla_docker_repo_from_version,
-    resolve_latest_repo_symlink,
     get_specific_tag_of_docker_image,
-    find_scylla_repo,
     is_enterprise,
-    ComparableScyllaVersion,
+    parse_scylla_version_tag,
+    resolve_latest_repo_symlink,
 )
-from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
-from sdcm.utils.gce_utils import (
-    SUPPORTED_REGIONS as GCE_SUPPORTED_REGIONS,
-    get_gce_image_tags,
-    get_gce_compute_machine_types_client,
-    gce_check_if_machine_type_supported,
-)
-from sdcm.utils.azure_utils import (
-    azure_check_instance_type_available,
-)
-from sdcm.utils.cloud_api_utils import MIN_SCYLLA_VERSION_FOR_VS
-from sdcm.remote import LOCALRUNNER, shell_script_cmd
-from sdcm.test_config import TestConfig
-from sdcm.kafka.kafka_config import SctKafkaConfiguration
-from sdcm.mgmt.common import AgentBackupParameters
-from sdcm.utils.version_utils import parse_scylla_version_tag
 
 
 def _str(value: str) -> str:

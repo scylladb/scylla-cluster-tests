@@ -7,7 +7,6 @@ from contextlib import contextmanager
 from sdcm.exceptions import QuotaConfigurationFailure
 from sdcm.wait import wait_for
 
-
 LOGGER = logging.getLogger(__name__)
 
 

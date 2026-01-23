@@ -13,8 +13,7 @@
 
 import logging
 from dataclasses import dataclass, field
-
-from typing import Dict, Iterable, Union, List
+from typing import Dict, Iterable, List, Union
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.network.models import NetworkSecurityGroup

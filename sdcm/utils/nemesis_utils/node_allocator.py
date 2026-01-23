@@ -1,17 +1,16 @@
 import logging
 import random
 import threading
-from enum import Enum
-from contextlib import contextmanager
 from collections.abc import Iterable
+from contextlib import contextmanager
+from enum import Enum
 from functools import wraps
 from typing import TYPE_CHECKING, Union
 
-from sdcm.utils.nemesis_utils import unique_disruption_name
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.metaclasses import Singleton
-from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS, DefaultValue
+from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS, DefaultValue, unique_disruption_name
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode

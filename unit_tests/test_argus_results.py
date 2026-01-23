@@ -16,8 +16,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, call
 
 from argus.client.generic_result import Cell, Status
-
-from sdcm.argus_results import ReactorStallStatsResult, send_result_to_argus, LatencyCalculatorMixedResult
+from sdcm.argus_results import LatencyCalculatorMixedResult, ReactorStallStatsResult, send_result_to_argus
 
 
 def test_send_latency_decorator_result_to_argus():

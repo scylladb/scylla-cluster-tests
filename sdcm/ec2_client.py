@@ -1,21 +1,21 @@
-import logging
-import datetime
-import time
 import base64
+import datetime
+import logging
+import time
 from typing import Sequence
 
 import boto3
+from botocore.exceptions import ClientError, NoRegionError
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Instance
 from mypy_boto3_ec2.type_defs import TagSpecificationTypeDef
-from botocore.exceptions import ClientError, NoRegionError
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
-from sdcm.utils.decorators import retrying
-from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.test_config import TestConfig
+from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.utils.common import list_placement_groups_aws
+from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
 

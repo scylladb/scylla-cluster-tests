@@ -1,7 +1,7 @@
 import logging
 import shlex
 import socket
-from functools import cached_property, cache
+from functools import cache, cached_property
 from pathlib import Path
 
 from invoke.exceptions import UnexpectedExit

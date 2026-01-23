@@ -18,7 +18,6 @@ from sdcm.sct_provision.user_data_objects import SctUserDataObject
 from sdcm.test_config import TestConfig
 from sdcm.utils.sct_agent_installer import install_agent_script
 
-
 logger = logging.getLogger(__name__)
 
 

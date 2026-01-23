@@ -13,17 +13,17 @@
 
 
 from __future__ import absolute_import
+
 import logging
 import threading
 import time
 import unittest
-
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 from sdcm.cluster import BaseNode
-from sdcm.wait import wait_for, wait_for_log_lines, WaitForTimeoutError, ExitByEventError
+from sdcm.wait import ExitByEventError, WaitForTimeoutError, wait_for, wait_for_log_lines
 
 logging.basicConfig(level=logging.DEBUG)
 

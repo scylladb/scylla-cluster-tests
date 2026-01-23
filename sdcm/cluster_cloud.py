@@ -11,41 +11,41 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import os
+import functools
 import ipaddress
 import logging
+import os
 import re
 import time
 from functools import cached_property
-from typing import Any
-import functools
 from pathlib import Path
+from typing import Any
 
 import requests
 
 from sdcm import cluster, wait
-from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
+from sdcm.cloud_api_client import CloudProviderType, ScyllaCloudAPIClient
 from sdcm.exceptions import WaitForTimeoutError
-from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.ci_tools import get_test_name
-from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
-from sdcm.utils.cloud_api_utils import (
-    compute_cluster_exp_hours,
-    build_cloud_cluster_name,
-    apply_keep_tag_to_name,
-    CLOUD_KEEP_ALIVE_HOURS,
-)
-from sdcm.utils.gce_region import GceRegion
-from sdcm.utils.get_username import get_username
-from sdcm.utils.vector_store_utils import VectorStoreClusterMixin
-from sdcm.test_config import TestConfig
-from sdcm.remote import RemoteLibSSH2CmdRunner, shell_script_cmd
-from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.common.utils import (
     configure_backoff_timeout,
     configure_vector_target_script,
     install_vector_from_local_pkg,
 )
+from sdcm.provision.network_configuration import ssh_connection_ip_type
+from sdcm.remote import RemoteLibSSH2CmdRunner, shell_script_cmd
+from sdcm.test_config import TestConfig
+from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.cidr_pool import CidrAllocationError, CidrPoolManager
+from sdcm.utils.cloud_api_utils import (
+    CLOUD_KEEP_ALIVE_HOURS,
+    apply_keep_tag_to_name,
+    build_cloud_cluster_name,
+    compute_cluster_exp_hours,
+)
+from sdcm.utils.gce_region import GceRegion
+from sdcm.utils.get_username import get_username
+from sdcm.utils.vector_store_utils import VectorStoreClusterMixin
 
 LOGGER = logging.getLogger(__name__)
 

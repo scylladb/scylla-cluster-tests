@@ -1,8 +1,8 @@
-import unittest
-import tempfile
 import logging
-import shutil
 import os.path
+import shutil
+import tempfile
+import unittest
 
 import sdcm.cluster
 from sdcm import sct_config

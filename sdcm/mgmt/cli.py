@@ -12,33 +12,33 @@
 # Copyright (c) 2021 ScyllaDB
 
 
-import json
-import time
-import logging
 import datetime
+import json
+import logging
 import re
+import time
+from contextlib import contextmanager
 from pathlib import Path
 from re import findall
-from textwrap import dedent
 from statistics import mean
-from contextlib import contextmanager
-from distutils.version import LooseVersion
+from textwrap import dedent
 
 import requests
+from distutils.version import LooseVersion
 from invoke.exceptions import Failure as InvokeFailure
 
-from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2Failure
 from sdcm import wait
 from sdcm.mgmt.common import (
-    TaskStatus,
-    ScyllaManagerError,
-    HostStatus,
-    HostSsl,
-    HostRestStatus,
-    duration_to_timedelta,
     DEFAULT_TASK_TIMEOUT,
+    HostRestStatus,
+    HostSsl,
+    HostStatus,
+    ScyllaManagerError,
+    TaskStatus,
+    duration_to_timedelta,
 )
 from sdcm.provision.helpers.certificate import TLSAssets
+from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2Failure
 from sdcm.utils.context_managers import DbNodeLogger
 from sdcm.wait import WaitForTimeoutError
 

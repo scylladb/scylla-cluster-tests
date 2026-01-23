@@ -11,23 +11,21 @@
 #
 # Copyright (c) 2024 ScyllaDB
 
-import logging
-import time
-import random
 import itertools
+import logging
+import random
+import time
 from typing import Dict
 
 import boto3
-from botocore.exceptions import ClientError
 import tenacity
+from botocore.exceptions import ClientError
 
-
-from sdcm.wait import exponential_retry
+from sdcm.test_config import TestConfig
 from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.utils.common import all_aws_regions
 from sdcm.utils.parallel_object import ParallelObject
-from sdcm.test_config import TestConfig
-
+from sdcm.wait import exponential_retry
 
 LOGGER = logging.getLogger(__name__)
 
