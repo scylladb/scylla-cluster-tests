@@ -140,7 +140,6 @@ The `sdcm/` directory is the heart of the SCT framework. Here's a detailed break
 - `reporting/` - Test result reporting
   - `elastic_reporter.py` - Elasticsearch-based reporting
   - `tooling_reporter.py` - Tools and libraries reporting
-- `parallel_timeline_report/` - Timeline visualization of events
 
 #### Scylla Manager Integration
 - `mgmt/` - Scylla Manager integration
