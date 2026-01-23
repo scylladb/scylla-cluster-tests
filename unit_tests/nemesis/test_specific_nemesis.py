@@ -1,6 +1,7 @@
 """This module tests specific nemesis and is heavily dependent on the implementation"""
 
 import logging
+
 import pytest
 
 from sdcm.cluster_aws import ScyllaAWSCluster

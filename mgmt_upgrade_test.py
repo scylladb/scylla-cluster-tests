@@ -12,14 +12,14 @@
 # Copyright (c) 2021 ScyllaDB
 
 import logging
-from time import sleep
 from datetime import datetime, timedelta
+from time import sleep
 
-from sdcm.tester import ClusterTester
-from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
+from sdcm.mgmt import TaskStatus, get_scylla_manager_tool
 from sdcm.mgmt.cli import RepairTask
-from sdcm.mgmt.common import get_manager_repo_from_defaults, create_cron_list_from_timedelta
+from sdcm.mgmt.common import create_cron_list_from_timedelta, get_manager_repo_from_defaults
 from sdcm.mgmt.operations import ManagerTestFunctionsMixIn
+from sdcm.tester import ClusterTester
 
 LOGGER = logging.getLogger(__name__)
 

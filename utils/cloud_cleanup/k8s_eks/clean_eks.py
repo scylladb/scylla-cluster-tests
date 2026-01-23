@@ -30,11 +30,11 @@ import boto3
 
 from sdcm.utils.aws_utils import EksClusterForCleaner
 from sdcm.utils.common import all_aws_regions
-from utils.cloud_cleanup import LOGGER
 from utils.cloud_cleanup import (
-    should_keep,
-    get_keep_hours_from_tags,
     DEFAULT_KEEP_HOURS,
+    LOGGER,
+    get_keep_hours_from_tags,
+    should_keep,
 )
 
 

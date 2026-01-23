@@ -12,34 +12,34 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
+import contextlib
+import itertools
 import json
 import os
 import re
 import string
 import tempfile
-import itertools
-import contextlib
-from typing import List, Dict
+from typing import Dict, List
 
 import yaml
 from cassandra import AlreadyExists, InvalidRequest
 from cassandra.query import SimpleStatement
 
 from sdcm import sct_abs_path
+from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
+from sdcm.sct_events import Severity
 from sdcm.sct_events.group_common_events import (
     ignore_large_collection_warning,
     ignore_max_memory_for_unlimited_query_soft_limit,
 )
+from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.tester import ClusterTester
 from sdcm.utils import loader_utils
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
-from sdcm.utils.common import skip_optional_stage
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.cluster_tools import group_nodes_by_dc_idx
+from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import optional_stage
 from sdcm.utils.operations_thread import ThreadParams
-from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
-from sdcm.sct_events import Severity
-from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
 
 
 class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):

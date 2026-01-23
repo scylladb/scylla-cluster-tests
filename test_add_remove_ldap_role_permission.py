@@ -6,7 +6,7 @@ from cassandra import Unauthorized
 from longevity_test import LongevityTest
 from sdcm.cluster import BaseNode
 from sdcm.sct_events.system import InfoEvent
-from sdcm.utils.ldap import LdapServerType, LDAP_USERS, LDAP_PASSWORD, LdapUtilsMixin
+from sdcm.utils.ldap import LDAP_PASSWORD, LDAP_USERS, LdapServerType, LdapUtilsMixin
 
 
 class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):

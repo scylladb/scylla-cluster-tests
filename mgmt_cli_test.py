@@ -20,32 +20,32 @@ from datetime import timedelta
 
 from sdcm import mgmt
 from sdcm.argus_results import (
+    ManagerOneOneRestoreBenchmarkResult,
+    ManagerRestoreBenchmarkResult,
     send_manager_benchmark_results_to_argus,
     send_manager_snapshot_details_to_argus,
-    ManagerRestoreBenchmarkResult,
-    ManagerOneOneRestoreBenchmarkResult,
 )
-from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
-from sdcm.mgmt.argus_report import report_to_argus, ManagerReportType
+from sdcm.mgmt import HostRestStatus, HostSsl, HostStatus, ScyllaManagerError, TaskStatus
+from sdcm.mgmt.argus_report import ManagerReportType, report_to_argus
 from sdcm.mgmt.cli import RestoreTask
 from sdcm.mgmt.common import (
-    reconfigure_scylla_manager,
-    get_persistent_snapshots,
-    get_backup_size,
     ObjectStorageUploadMode,
+    get_backup_size,
+    get_persistent_snapshots,
+    reconfigure_scylla_manager,
 )
-from sdcm.provision.helpers.certificate import TLSAssets
+from sdcm.mgmt.operations import ManagerTestFunctionsMixIn, SnapshotData
 from sdcm.nemesis import MgmtRepair
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.provision.helpers.certificate import TLSAssets
+from sdcm.sct_events.group_common_events import ignore_no_space_errors, ignore_stream_mutation_fragments_errors
+from sdcm.sct_events.system import InfoEvent
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.alternator.table_setup import alternator_backuped_tables
 from sdcm.utils.aws_utils import AwsIAM
+from sdcm.utils.common import clean_enospc_on_node, reach_enospc_on_node
 from sdcm.utils.features import is_tablets_feature_enabled
-from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
-from sdcm.utils.time_utils import ExecutionTimer
-from sdcm.mgmt.operations import ManagerTestFunctionsMixIn, SnapshotData
-from sdcm.sct_events.system import InfoEvent
-from sdcm.sct_events.group_common_events import ignore_no_space_errors, ignore_stream_mutation_fragments_errors
 from sdcm.utils.tablets.common import TabletsConfiguration
+from sdcm.utils.time_utils import ExecutionTimer
 
 
 class ManagerRestoreTests(ManagerTestFunctionsMixIn):

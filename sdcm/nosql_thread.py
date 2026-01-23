@@ -11,15 +11,15 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import os
 import logging
+import os
+import threading
 import time
 import uuid
-import threading
 
 from sdcm.cluster import BaseNode
+from sdcm.sct_events.loaders import NOSQLBENCH_EVENT_PATTERNS, NoSQLBenchStressEvent
 from sdcm.stress.base import DockerBasedStressThread
-from sdcm.sct_events.loaders import NoSQLBenchStressEvent, NOSQLBENCH_EVENT_PATTERNS
 from sdcm.utils.common import FileFollowerThread
 
 LOGGER = logging.getLogger(__name__)

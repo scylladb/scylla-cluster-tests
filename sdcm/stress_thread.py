@@ -11,13 +11,13 @@
 #
 # Copyright (c) 2019 ScyllaDB
 
+import contextlib
+import logging
 import os
 import re
 import time
-import logging
-import contextlib
-from typing import Any
 from itertools import chain
+from typing import Any
 
 from sdcm.db_stats import get_stress_cmd_params
 from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
@@ -25,13 +25,12 @@ from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, c_s_transport_str
 from sdcm.reporting.tooling_reporter import CassandraStressVersionReporter
 from sdcm.sct_events import Severity
-from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
-from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_internal_path
-from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
+from sdcm.sct_events.loaders import CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS, CassandraStressEvent
 from sdcm.stress.base import DockerBasedStressThread
+from sdcm.utils.common import FileFollowerThread, SoftTimeoutContext, get_data_dir_path, time_period_str_to_seconds
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
-
+from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_internal_path
 
 LOGGER = logging.getLogger(__name__)
 

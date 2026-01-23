@@ -16,15 +16,15 @@ import uuid
 import pytest
 
 from sdcm.logcollector import (
-    Collector,
     BaseSCTLogCollector,
+    Collector,
+    FailureStatisticsCollector,
     PythonSCTLogCollector,
     SchemaLogCollector,
-    FailureStatisticsCollector,
 )
 from sdcm.provision import provisioner_factory
-from unit_tests.lib.fake_resources import prepare_fake_region
 from sdcm.utils import common
+from unit_tests.lib.fake_resources import prepare_fake_region
 
 
 @pytest.fixture(scope="session")

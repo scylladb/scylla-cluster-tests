@@ -11,24 +11,23 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import glob
+import logging
 import os
 import re
+import tempfile
 import time
 import uuid
-import tempfile
-import logging
-import glob
 from functools import cached_property
 from textwrap import dedent
 
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.remote import FailuresWatcher
+from sdcm.sct_events.loaders import YcsbStressEvent
+from sdcm.stress.base import DockerBasedStressThread, format_stress_cmd_error
 from sdcm.utils import alternator
-from sdcm.utils.common import FileFollowerThread
+from sdcm.utils.common import FileFollowerThread, generate_random_string
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.utils.common import generate_random_string
-from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 LOGGER = logging.getLogger(__name__)

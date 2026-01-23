@@ -1,16 +1,16 @@
+import datetime
+import logging
 import re
 from datetime import datetime
 from enum import Enum
-import logging
-import datetime
-import yaml
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
+import yaml
 from pydantic import BaseModel, ConfigDict
 
-from sdcm.utils.distro import Distro
 from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.distro import Distro
 
 DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
 LOGGER = logging.getLogger(__name__)

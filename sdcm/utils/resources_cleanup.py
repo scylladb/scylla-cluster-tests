@@ -12,16 +12,17 @@
 # Copyright (c) 2017 ScyllaDB
 
 from __future__ import absolute_import, annotations
+
+import ipaddress
 import logging
 import os
 import time
-import ipaddress
 from typing import Optional
 from unittest.mock import MagicMock
 
-from botocore.exceptions import ClientError
 import boto3
 import google.api_core.exceptions
+from botocore.exceptions import ClientError
 from google.cloud.compute_v1.types import Instance as GceInstance
 from mypy_boto3_ec2 import EC2Client
 
@@ -32,15 +33,14 @@ from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.common import (
     all_aws_regions,
     aws_tags_to_dict,
     get_post_behavior_actions,
     get_testrun_status,
     list_cloudformation_stacks_aws,
-    list_clusters_gke,
     list_clusters_eks,
+    list_clusters_gke,
     list_elastic_ips_aws,
     list_instances_aws,
     list_instances_gce,
@@ -50,14 +50,14 @@ from sdcm.utils.common import (
     list_resources_docker,
     list_test_security_groups,
 )
-from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.context_managers import environment
 from sdcm.utils.decorators import retrying
+from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.gce_utils import (
     GkeCleaner,
     get_gce_compute_instances_client,
 )
-
+from sdcm.utils.parallel_object import ParallelObject
 
 LOGGER = logging.getLogger("utils")
 

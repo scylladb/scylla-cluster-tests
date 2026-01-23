@@ -11,43 +11,42 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
 import os
 import re
 import time
-import logging
-from typing import Dict, Any, ParamSpec, TypeVar
-from textwrap import dedent
-from functools import cached_property, cache
 from collections.abc import Callable
+from functools import cache, cached_property
+from textwrap import dedent
+from typing import Any, Dict, ParamSpec, TypeVar
 
-import tenacity
 import google.api_core.exceptions
+import tenacity
 from google.cloud import compute_v1
 
 from sdcm import cluster
-from sdcm.provision.network_configuration import ssh_connection_ip_type
+from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
+from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
+from sdcm.sct_events.system import SpotTerminationEvent
+from sdcm.utils.common import gce_meta_to_dict, list_instances_gce
+from sdcm.utils.decorators import retrying
 from sdcm.utils.gce_utils import (
     GceLoggingClient,
     create_instance,
     disk_from_image,
-    get_gce_compute_disks_client,
-    wait_for_extended_operation,
     gce_private_addresses,
     gce_public_addresses,
-    random_zone,
     gce_set_labels,
+    get_gce_compute_disks_client,
+    random_zone,
+    wait_for_extended_operation,
 )
-from sdcm.wait import exponential_retry
-from sdcm.keystore import pub_key_from_private_key_file
-from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
-from sdcm.utils.decorators import retrying
 from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import resolve_ip_to_dns
-
+from sdcm.wait import exponential_retry
 
 SPOT_TERMINATION_CHECK_DELAY = 5 * 60
 

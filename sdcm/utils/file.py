@@ -11,8 +11,8 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, TextIO, List, Union, AnyStr, Iterable
 from re import Pattern
+from typing import AnyStr, Iterable, List, Optional, TextIO, Union
 
 
 class ReiterableGenerator:

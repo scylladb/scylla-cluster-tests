@@ -15,16 +15,15 @@ import time
 import unittest
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.sct_events.file_logger import (
     EventsFileLogger,
-    start_events_logger,
-    get_events_logger,
     get_events_grouped_by_category,
+    get_events_logger,
     get_logger_event_summary,
+    start_events_logger,
 )
-
+from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
+from sdcm.sct_events.system import SpotTerminationEvent
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 

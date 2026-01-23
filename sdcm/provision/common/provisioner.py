@@ -1,8 +1,7 @@
 import abc
-from typing import Dict, Any, List, Union
+from typing import Any, Dict, List, Union
 
 from pydantic import BaseModel
-
 
 TagsType = Dict[str, str]
 

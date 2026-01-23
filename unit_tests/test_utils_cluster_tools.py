@@ -1,5 +1,6 @@
-from sdcm.utils.cluster_tools import group_nodes_by_dc_idx, check_cluster_layout
 from unittest.mock import MagicMock
+
+from sdcm.utils.cluster_tools import check_cluster_layout, group_nodes_by_dc_idx
 
 
 def test_nodes_grouped_by_dc_idx_are_correctly_grouped():

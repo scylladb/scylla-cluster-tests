@@ -1,19 +1,18 @@
 import logging
-import re
 import os
-from pathlib import Path
+import re
 import threading
+from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
-from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
+from argus.client.sct.client import ArgusSCTClient
 from argus.client.sct.types import EventsInfo
-
 from sdcm.keystore import KeyStore
-from sdcm.sct_events.events_processes import EventsProcessesRegistry
 from sdcm.sct_events.events_device import start_events_main_device
-from sdcm.sct_events.file_logger import get_logger_event_summary, start_events_logger, get_events_grouped_by_category
+from sdcm.sct_events.events_processes import EventsProcessesRegistry
+from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary, start_events_logger
 
 LOGGER = logging.getLogger(__name__)
 

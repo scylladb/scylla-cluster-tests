@@ -11,23 +11,23 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from abc import abstractmethod
-from typing import Type, Tuple, List, Optional
-from shlex import quote
 import glob
 import os
 import shutil
 import tempfile
-import time
 import threading
-from path import Path
+import time
+from abc import abstractmethod
+from shlex import quote
+from typing import List, Optional, Tuple, Type
 
-from invoke.watchers import StreamWatcher
 from invoke.runners import Result
+from invoke.watchers import StreamWatcher
+from path import Path
 
 from sdcm.utils.decorators import retrying
 
-from .base import RetryableNetworkException, CommandRunner, RetryMixin
+from .base import CommandRunner, RetryableNetworkException, RetryMixin
 from .local_cmd_runner import LocalCmdRunner
 
 

@@ -18,15 +18,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.utils.oci_utils import (
+    OciService,
     filter_oci_by_tags,
     get_ubuntu_image_ocid,
     list_instances_oci,
     oci_tags_to_dict,
-    OciService,
     resolve_availability_domain,
     wait_for_instance_state,
 )
-
 
 # --- Tests for oci_tags_to_dict ---
 

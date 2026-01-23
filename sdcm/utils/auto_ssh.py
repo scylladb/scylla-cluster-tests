@@ -14,7 +14,6 @@
 import os
 from functools import cached_property
 
-
 AUTO_SSH_IMAGE = "jnovack/autossh:1.2.2"
 AUTO_SSH_LOGFILE = "autossh.log"
 
