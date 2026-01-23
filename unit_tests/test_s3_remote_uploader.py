@@ -1,16 +1,17 @@
+import logging
 import os
 import pathlib
+import secrets
+import subprocess
+import tarfile
 import tempfile
 import time
-import subprocess
+
 import boto3
 import pytest
-import logging
-import secrets
-import tarfile
 
-from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 from sdcm.utils.common import S3Storage
+from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 
 # Constants for the test
 TEST_S3_BUCKET = S3Storage.bucket_name

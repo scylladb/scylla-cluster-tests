@@ -13,17 +13,17 @@
 
 import logging
 from functools import cached_property
-from typing import Optional
-from string import Template
 from ipaddress import ip_network
 from pathlib import Path
+from string import Template
+from typing import Optional
 
 import click
 import requests
 
-from sdcm.utils.oci_region import OciRegion
-from sdcm.sct_runner import OciSctRunner
 from sdcm.keystore import KeyStore
+from sdcm.sct_runner import OciSctRunner
+from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.sct_cmd_helpers import get_all_regions
 
 LOGGER = logging.getLogger(__name__)

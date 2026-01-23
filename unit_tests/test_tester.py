@@ -10,20 +10,21 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+import logging
 import re
-import time
 import threading
+import time
 import unittest
 from unittest.mock import MagicMock
-import logging
+
 import pytest
 
-from sdcm.sct_events import Severity
-from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.tester import ClusterTester, silence, TestResultEvent
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.sct_events import Severity
 from sdcm.sct_events.file_logger import get_events_grouped_by_category
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
+from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.tester import ClusterTester, TestResultEvent, silence
 from sdcm.utils.action_logger import get_action_logger
 from unit_tests.lib.events_utils import EventsUtilsMixin
 

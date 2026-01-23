@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
-from typing import Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode

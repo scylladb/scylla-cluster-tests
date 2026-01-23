@@ -11,10 +11,10 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import hashlib
-import shutil
 import logging
+import os
+import shutil
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -22,9 +22,9 @@ from pathlib import Path
 import pytest
 
 from sdcm import sct_config
-from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
-from sdcm.utils.distro import Distro
+from sdcm.cluster import BaseCluster, BaseNode, BaseScyllaCluster
 from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud
+from sdcm.utils.distro import Distro
 from sdcm.utils.sstable import load_inventory
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 

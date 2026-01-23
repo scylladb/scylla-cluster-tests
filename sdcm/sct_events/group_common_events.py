@@ -10,15 +10,15 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-from contextlib import contextmanager, ExitStack, ContextDecorator
+from contextlib import ContextDecorator, ExitStack, contextmanager
 from functools import wraps
-from typing import ContextManager, Callable, Sequence
+from typing import Callable, ContextManager, Sequence
 
 from sdcm.cluster import TestConfig
 from sdcm.sct_events import Severity
-from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter, EventsFilter
-from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
+from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 from sdcm.utils.issues import SkipPerIssues
 

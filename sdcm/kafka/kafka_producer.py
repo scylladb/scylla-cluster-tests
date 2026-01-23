@@ -18,16 +18,15 @@ import time
 from string import ascii_letters
 from threading import Event, Thread
 
-from confluent_kafka import Producer, Message
+from confluent_kafka import Message, Producer
 from confluent_kafka.schema_registry import SchemaRegistryClient
-from confluent_kafka.serialization import SerializationContext, MessageField, StringSerializer, StringDeserializer
-from confluent_kafka.schema_registry.avro import AvroSerializer, AvroDeserializer
+from confluent_kafka.schema_registry.avro import AvroDeserializer, AvroSerializer
+from confluent_kafka.serialization import MessageField, SerializationContext, StringDeserializer, StringSerializer
 
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.wait import wait_for
-
 
 LOGGER = logging.getLogger(__name__)
 

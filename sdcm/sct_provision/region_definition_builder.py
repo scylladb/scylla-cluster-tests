@@ -13,24 +13,23 @@
 import abc
 from dataclasses import dataclass
 from functools import cache
-from typing import List, Dict, Type
 from pathlib import Path
+from typing import Dict, List, Type
 
 from sdcm.keystore import KeyStore, SSHKey
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.types import NodeTypeType
-
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 from sdcm.sct_provision.user_data_objects.apt_daily_triggers import DisableAptTriggersUserDataObject
-from sdcm.sct_provision.user_data_objects.scylla import ScyllaUserDataObject
-from sdcm.sct_provision.user_data_objects.sshd import SshdUserDataObject
-from sdcm.sct_provision.user_data_objects.syslog_ng import SyslogNgUserDataObject, SyslogNgExporterUserDataObject
-from sdcm.sct_provision.user_data_objects.vector_dev import VectorDevUserDataObject
-from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
 from sdcm.sct_provision.user_data_objects.docker_service import DockerUserDataObject
 from sdcm.sct_provision.user_data_objects.sct_agent import SctAgentUserDataObject
+from sdcm.sct_provision.user_data_objects.scylla import ScyllaUserDataObject
+from sdcm.sct_provision.user_data_objects.sshd import SshdUserDataObject
+from sdcm.sct_provision.user_data_objects.syslog_ng import SyslogNgExporterUserDataObject, SyslogNgUserDataObject
+from sdcm.sct_provision.user_data_objects.vector_dev import VectorDevUserDataObject
+from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
 from sdcm.test_config import TestConfig
 
 

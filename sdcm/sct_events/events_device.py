@@ -11,36 +11,33 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
-import queue
 import ctypes
-import pickle
 import logging
 import multiprocessing
-from typing import Optional, Generator, Any, Tuple, Callable, cast, Dict
-from pathlib import Path
+import pickle
+import queue
+import time
 from functools import cached_property, partial
+from pathlib import Path
+from typing import Any, Callable, Dict, Generator, Optional, Tuple, cast
 from uuid import UUID
-
-from sdcm.utils.action_logger import get_action_logger
-from sdcm.sct_events import Severity
-
-from sdcm.sct_events.base import max_severity
-from sdcm.sct_events.system import SystemEvent
-from sdcm.sct_events.filters import BaseFilter
 
 import zmq
 
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import max_severity
 from sdcm.sct_events.events_processes import (
     EVENTS_MAIN_DEVICE_ID,
-    StopEvent,
     EventsProcessesRegistry,
-    start_events_process,
+    StopEvent,
     get_events_process,
-    verbose_suppress,
+    start_events_process,
     suppress_interrupt,
+    verbose_suppress,
 )
-
+from sdcm.sct_events.filters import BaseFilter
+from sdcm.sct_events.system import SystemEvent
+from sdcm.utils.action_logger import get_action_logger
 
 EVENTS_DEVICE_START_DELAY: float = 0  # seconds
 EVENTS_DEVICE_START_TIMEOUT: float = 30  # seconds

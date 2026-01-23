@@ -21,17 +21,16 @@ from typing import Optional
 import yaml
 from cassandra.query import SimpleStatement
 
-from sdcm.utils import loader_utils
-from upgrade_test import UpgradeTest
-from sdcm.tester import ClusterTester, teardown_on_exception
 from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
+from sdcm.tester import ClusterTester, teardown_on_exception
+from sdcm.utils import loader_utils
+from sdcm.utils.decorators import latency_calculator_decorator, log_run_info, optional_stage
+from sdcm.utils.nemesis_utils.indexes import create_materialized_view, wait_for_view_to_be_built
 from sdcm.utils.parallel_object import ParallelObject
-from sdcm.utils.decorators import log_run_info, latency_calculator_decorator, optional_stage
-from sdcm.utils.nemesis_utils.indexes import wait_for_view_to_be_built, create_materialized_view
-
+from upgrade_test import UpgradeTest
 
 KB = 1024
 

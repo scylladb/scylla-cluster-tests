@@ -13,27 +13,28 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import cached_property
-import re
-from typing import Any, TYPE_CHECKING
 from itertools import count
-from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 import yaml
-from cachetools import cached, TTLCache
-from argus.client.generic_result import StaticGenericResultTable, ColumnMetadata, ResultType, Status
+from cachetools import TTLCache, cached
+
+from argus.client.generic_result import ColumnMetadata, ResultType, StaticGenericResultTable, Status
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
 
+from sdcm.argus_results import submit_results_to_argus
 from sdcm.remote import RemoteCmdRunner
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying
 from sdcm.utils.metaclasses import Singleton
-from sdcm.argus_results import submit_results_to_argus
 
 LOGGER = logging.getLogger(__name__)
 

@@ -20,7 +20,6 @@ from dataclasses import dataclass
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.sct_events.system import InfoEvent
 
-
 LOGGER = logging.getLogger(__name__)
 
 

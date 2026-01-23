@@ -12,8 +12,9 @@
 # Copyright (c) 2025 ScyllaDB
 
 import logging
-import requests
 import time
+
+import requests
 
 LOGGER = logging.getLogger(__name__)
 

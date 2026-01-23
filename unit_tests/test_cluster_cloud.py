@@ -1,11 +1,12 @@
 """Unit tests for cluster_cloud module."""
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 
-from sdcm.cluster_cloud import xcloud_super_if_supported, ScyllaCloudCluster
-from sdcm.utils.cloud_api_utils import build_cloud_cluster_name
+from sdcm.cluster_cloud import ScyllaCloudCluster, xcloud_super_if_supported
 from sdcm.exceptions import WaitForTimeoutError
+from sdcm.utils.cloud_api_utils import build_cloud_cluster_name
 
 
 class TestXCloudSuperIfSupportedDecorator:

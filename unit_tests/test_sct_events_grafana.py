@@ -16,8 +16,11 @@ import unittest
 import unittest.mock
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
+from sdcm.sct_events.events_processes import (
+    EVENTS_GRAFANA_AGGREGATOR_ID,
+    EVENTS_GRAFANA_ANNOTATOR_ID,
+    get_events_process,
+)
 from sdcm.sct_events.grafana import (
     GrafanaAnnotator,
     GrafanaEventAggregator,
@@ -27,13 +30,9 @@ from sdcm.sct_events.grafana import (
     start_grafana_pipeline,
     start_posting_grafana_annotations,
 )
-from sdcm.sct_events.events_processes import (
-    EVENTS_GRAFANA_ANNOTATOR_ID,
-    EVENTS_GRAFANA_AGGREGATOR_ID,
-    get_events_process,
-)
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
+from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.wait import wait_for
-
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 

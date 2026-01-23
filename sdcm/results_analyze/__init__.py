@@ -11,37 +11,36 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import json
-import os
-import math
-import pprint
-import logging
 import collections
+import json
+import logging
+import math
+import os
+import pprint
 import re
-
 from datetime import datetime, timedelta
 from typing import Any
-from sortedcontainers import SortedDict
 
 import jinja2
+from sortedcontainers import SortedDict
 
-from sdcm.es import ES
-from sdcm.test_config import TestConfig
 from sdcm.db_stats import TestStatsMixin
-from sdcm.send_email import Email, BaseEmailReporter
+from sdcm.es import ES
 from sdcm.sct_events import Severity
+from sdcm.send_email import BaseEmailReporter, Email
+from sdcm.test_config import TestConfig
 from sdcm.utils.common import format_timestamp
 from sdcm.utils.es_queries import (
-    QueryFilter,
-    PerformanceFilterYCSB,
-    PerformanceFilterScyllaBench,
-    PerformanceFilterCS,
     CDCQueryFilterCS,
     LatencyWithNemesisQueryFilter,
+    PerformanceFilterCS,
+    PerformanceFilterScyllaBench,
+    PerformanceFilterYCSB,
+    QueryFilter,
 )
 from test_lib.utils import MagicList, get_data_by_path
-from .test import TestResultClass
 
+from .test import TestResultClass
 
 LOGGER = logging.getLogger(__name__)
 PP = pprint.PrettyPrinter(indent=2)

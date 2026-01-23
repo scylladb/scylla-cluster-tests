@@ -11,21 +11,21 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import json
-import hashlib
-import threading
 import configparser
-from typing import BinaryIO
-from concurrent.futures.thread import ThreadPoolExecutor
+import hashlib
+import json
+import os
+import threading
 from collections import namedtuple
+from concurrent.futures.thread import ThreadPoolExecutor
+from typing import BinaryIO
 
 import boto3
 import paramiko
-from mypy_boto3_s3.client import S3Client
-from mypy_boto3_s3.service_resource import S3ServiceResource
 from botocore.exceptions import ClientError
 from cloud_detect import provider
+from mypy_boto3_s3.client import S3Client
+from mypy_boto3_s3.service_resource import S3ServiceResource
 
 KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
 

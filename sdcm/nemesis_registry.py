@@ -2,7 +2,7 @@ import ast
 import inspect
 import re
 from functools import lru_cache
-from typing import List, TypeVar, Callable, Dict, Tuple, Any
+from typing import Any, Callable, Dict, List, Tuple, TypeVar
 
 from sdcm.utils.ast_utils import BooleanEvaluator
 

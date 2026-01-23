@@ -1,5 +1,7 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 from sdcm.utils.nemesis_utils.indexes import get_column_names
 
 

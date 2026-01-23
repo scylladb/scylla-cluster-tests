@@ -12,6 +12,7 @@
 # Copyright (c) 2025 ScyllaDB
 
 import unittest.mock
+
 import pytest
 from botocore.exceptions import ClientError
 
