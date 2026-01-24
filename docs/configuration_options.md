@@ -153,7 +153,7 @@ Number list of loader nodes in multiple data centers
 **type:** int | list[int]
 
 
-## **n_monitor_nodes** / SCT_N_MONITORS_NODES
+## **n_monitor_nodes** / SCT_N_MONITOR_NODES
 
 Number list of monitor nodes in multiple data centers
 
@@ -644,7 +644,7 @@ when enabled scylla will enforce mutual authentication when node-to-node encrypt
 **type:** bool
 
 
-## **sct_ngrok_name** / SCT_NGROK_NAME
+## **sct_ngrok_name** / SCT_SCT_NGROK_NAME
 
 Override the default hostname address of the sct test runner, using ngrok server, see readme for more instructions
 
@@ -739,7 +739,7 @@ Billing project for the test run. Used for cost tracking and reporting
 * appendable
 
 
-## **db_nodes_shards_selection** / SCT_NODES_SHARDS_SELECTION
+## **db_nodes_shards_selection** / SCT_DB_NODES_SHARDS_SELECTION
 
 How to select number of shards of Scylla. Expected values: default/random.<br>Default value: 'default'.<br>In case of random option - Scylla will start with different (random) shards on every node of the cluster
 
@@ -795,7 +795,7 @@ Turn on sct profiling
 **type:** bool
 
 
-## **ssh_transport** / SSH_TRANSPORT
+## **ssh_transport** / SCT_SSH_TRANSPORT
 
 Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'
 
@@ -1781,7 +1781,7 @@ Instance type for zero token node
 * appendable
 
 
-## **sct_aws_account_id** / SCT_AWS_ACCOUNT_ID
+## **sct_aws_account_id** / SCT_SCT_AWS_ACCOUNT_ID
 
 AWS account id on behalf of which the test is run
 
@@ -1893,7 +1893,7 @@ If True, SCT configures a hybrid RAID of NVMEs and an SSD for scylla's data
 **type:** int
 
 
-## **gce_pd_ssd_disk_size_monitor** / SCT_GCE_SSD_DISK_SIZE_MONITOR
+## **gce_pd_ssd_disk_size_monitor** / SCT_GCE_PD_SSD_DISK_SIZE_MONITOR
 
 
 
@@ -2209,7 +2209,7 @@ Specifies the name of the Scylla cluster to be deployed in K8S.
 * appendable
 
 
-## **k8s_n_scylla_pods_per_cluster** / K8S_N_SCYLLA_PODS_PER_CLUSTER
+## **k8s_n_scylla_pods_per_cluster** / SCT_K8S_N_SCYLLA_PODS_PER_CLUSTER
 
 Number of Scylla pods per cluster.
 
@@ -2325,7 +2325,7 @@ Defines whether the K8S API server logging must be enabled and its logs gathered
 **type:** bool
 
 
-## **k8s_tenants_num** / SCT_TENANTS_NUM
+## **k8s_tenants_num** / SCT_K8S_TENANTS_NUM
 
 Number of Scylla clusters to create in the K8S cluster.
 
@@ -2620,7 +2620,7 @@ Enable or disable running full scans during tests
 **type:** list
 
 
-## **run_full_partition_scan** / SCT_run_full_partition_scan
+## **run_full_partition_scan** / SCT_RUN_FULL_PARTITION_SCAN
 
 Enable or disable running full partition scans during tests
 
@@ -2716,7 +2716,7 @@ Compaction strategy to use for pre-created schema
 * appendable
 
 
-## **sstable_size** / SSTABLE_SIZE
+## **sstable_size** / SCT_SSTABLE_SIZE
 
 Configure sstable size for pre-create-schema mode
 
