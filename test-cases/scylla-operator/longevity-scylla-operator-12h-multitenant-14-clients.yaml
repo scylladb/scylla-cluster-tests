@@ -32,36 +32,50 @@ instance_type_loader: 'c6i.large'
 k8s_minio_storage_size: 1024Gi
 
 nemesis_class_name:
-  - 'SisyphusMonkey'
-  - 'SisyphusMonkey'
-  - 'SisyphusMonkey'
-  - 'SisyphusMonkey'
-  - 'SisyphusMonkey'
-  - 'NoOpMonkey'
-  - 'NoOpMonkey'
-  - 'NoOpMonkey'
-  - 'NoOpMonkey'
-  - 'NoOpMonkey'
-  - 'NoOpMonkey'
-  - 'NoOpMonkey'
-  - 'NoOpMonkey'
-  - 'NoOpMonkey'
+  tenant1: 'SisyphusMonkey'
+  tenant2: 'SisyphusMonkey'
+  tenant3: 'SisyphusMonkey'
+  tenant4: 'SisyphusMonkey'
+  tenant5: 'SisyphusMonkey'
+  tenant6: 'NoOpMonkey'
+  tenant7: 'NoOpMonkey'
+  tenant8: 'NoOpMonkey'
+  tenant9: 'NoOpMonkey'
+  tenant10: 'NoOpMonkey'
+  tenant11: 'NoOpMonkey'
+  tenant12: 'NoOpMonkey'
+  tenant13: 'NoOpMonkey'
+  tenant14: 'NoOpMonkey'
 nemesis_selector:
-  - "free_tier_set"
-  - "free_tier_set"
-  - "free_tier_set"
-  - "free_tier_set"
-  - "free_tier_set"
-  - ""
-  - ""
-  - ""
-  - ""
-  - ""
-  - ""
-  - ""
-  - ""
-  - ""
-nemesis_seed: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14']
+  tenant1: "free_tier_set"
+  tenant2: "free_tier_set"
+  tenant3: "free_tier_set"
+  tenant4: "free_tier_set"
+  tenant5: "free_tier_set"
+  tenant6: ""
+  tenant7: ""
+  tenant8: ""
+  tenant9: ""
+  tenant10: ""
+  tenant11: ""
+  tenant12: ""
+  tenant13: ""
+  tenant14: ""
+nemesis_seed:
+  tenant1: 1
+  tenant2: 2
+  tenant3: 3
+  tenant4: 4
+  tenant5: 5
+  tenant6: 6
+  tenant7: 7
+  tenant8: 8
+  tenant9: 9
+  tenant10: 10
+  tenant11: 11
+  tenant12: 12
+  tenant13: 13
+  tenant14: 14
 nemesis_during_prepare: false
 
 user_prefix: 'long-scylla-operator-12h-multitenant-14-clients'
