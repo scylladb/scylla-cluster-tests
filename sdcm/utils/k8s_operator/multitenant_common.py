@@ -20,6 +20,7 @@ import time
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.tester import silence
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes
+from sdcm.sct_config import is_multitenant_field
 
 LOGGER = logging.getLogger(__name__)
 
@@ -101,33 +102,66 @@ def get_tenants(test_class_instance):
         )
 
     # Process multitenant parameters if present
+    num_tenants = len(tenants)
     for field_name, field in test_class_instance.params.model_fields.items():
         param_name = field_name
         param_value = test_class_instance.params.get(param_name)
-        if not (
-            field.json_schema_extra
-            and field.json_schema_extra.get("is_k8s_multitenant_value")
-            and isinstance(param_value, list)
-        ):
+
+        # Check if field supports multitenancy via MultitenantValue type
+        if not is_multitenant_field(field):
             continue
-        LOGGER.debug("Process multitenant option '%s'. It's value: %s", param_name, param_value)
-        for i, _ in enumerate(tenants):
-            current_param_value = param_value[i]
-            if (
-                param_name.startswith("stress_")
-                and isinstance(current_param_value, list)
-                and len(current_param_value) == 1
-            ):
-                # NOTE: performance tests expect only single string values
-                #       for the main stress commands. So, transform list of a single str to str.
-                current_param_value = current_param_value[0]
-            LOGGER.debug(
-                "Setting '%s' option of the '%s' tenant with the following value: %s",
-                param_name,
-                str(tenants[i]),
-                current_param_value,
-            )
-            tenants[i].params[param_name] = tenants[i].db_cluster.params[param_name] = current_param_value
+
+        # Handle dict-based configuration (new format with tenant keys)
+        if isinstance(param_value, dict) and len(param_value) >= num_tenants:
+            # Check if dict has tenant keys (tenant1, tenant2, etc.)
+            has_tenant_keys = all(f"tenant{i + 1}" in param_value for i in range(num_tenants))
+            if has_tenant_keys:
+                LOGGER.debug("Process multitenant dict option '%s'. Value: %s", param_name, param_value)
+                for i, tenant in enumerate(tenants):
+                    tenant_key = f"tenant{i + 1}"
+                    current_param_value = param_value[tenant_key]
+                    # Apply stress_cmd single-element list unwrapping if needed
+                    if (
+                        param_name.startswith("stress_")
+                        and isinstance(current_param_value, list)
+                        and len(current_param_value) == 1
+                    ):
+                        current_param_value = current_param_value[0]
+                    LOGGER.debug(
+                        "Setting '%s' option of the '%s' tenant with the following value: %s",
+                        param_name,
+                        str(tenant),
+                        current_param_value,
+                    )
+                    tenant.params[param_name] = tenant.db_cluster.params[param_name] = current_param_value
+                continue
+
+        # Handle list-based configuration (legacy format)
+        # Only split if list length matches tenant count and contains per-tenant values
+        # (i.e., elements are lists/dicts/distinct values for each tenant)
+        if isinstance(param_value, list) and len(param_value) == num_tenants and num_tenants > 1:
+            # Check if this looks like per-tenant config (elements are lists or all different types)
+            # vs shared config (like stress_cmd: ["cmd1", "cmd2"] for all tenants)
+            is_per_tenant = any(isinstance(elem, (list, dict)) for elem in param_value)
+            if is_per_tenant:
+                LOGGER.debug("Process multitenant list option '%s'. Value: %s", param_name, param_value)
+                for i, tenant in enumerate(tenants):
+                    current_param_value = param_value[i]
+                    if (
+                        param_name.startswith("stress_")
+                        and isinstance(current_param_value, list)
+                        and len(current_param_value) == 1
+                    ):
+                        # NOTE: performance tests expect only single string values
+                        #       for the main stress commands. So, transform list of a single str to str.
+                        current_param_value = current_param_value[0]
+                    LOGGER.debug(
+                        "Setting '%s' option of the '%s' tenant with the following value: %s",
+                        param_name,
+                        str(tenant),
+                        current_param_value,
+                    )
+                    tenant.params[param_name] = tenant.db_cluster.params[param_name] = current_param_value
 
     return tenants
 
