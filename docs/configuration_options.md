@@ -153,7 +153,7 @@ Number list of loader nodes in multiple data centers
 **type:** int | list[int]
 
 
-## **n_monitor_nodes** / SCT_N_MONITORS_NODES
+## **n_monitor_nodes** / SCT_N_MONITOR_NODES
 
 Number list of monitor nodes in multiple data centers
 
@@ -634,7 +634,7 @@ when enabled scylla will enforce mutual authentication when node-to-node encrypt
 **type:** bool
 
 
-## **sct_ngrok_name** / SCT_NGROK_NAME
+## **sct_ngrok_name** / SCT_SCT_NGROK_NAME
 
 Override the default hostname address of the sct test runner, using ngrok server, see readme for more instructions
 
@@ -729,7 +729,7 @@ Billing project for the test run. Used for cost tracking and reporting
 * appendable
 
 
-## **db_nodes_shards_selection** / SCT_NODES_SHARDS_SELECTION
+## **db_nodes_shards_selection** / SCT_DB_NODES_SHARDS_SELECTION
 
 How to select number of shards of Scylla. Expected values: default/random.<br>Default value: 'default'.<br>In case of random option - Scylla will start with different (random) shards on every node of the cluster
 
@@ -785,7 +785,7 @@ Turn on sct profiling
 **type:** bool
 
 
-## **ssh_transport** / SSH_TRANSPORT
+## **ssh_transport** / SCT_SSH_TRANSPORT
 
 Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'
 
@@ -1799,7 +1799,7 @@ Instance type for zero token node
 * appendable
 
 
-## **sct_aws_account_id** / SCT_AWS_ACCOUNT_ID
+## **sct_aws_account_id** / SCT_SCT_AWS_ACCOUNT_ID
 
 AWS account id on behalf of which the test is run
 
@@ -1911,7 +1911,7 @@ If True, SCT configures a hybrid RAID of NVMEs and an SSD for scylla's data
 **type:** int
 
 
-## **gce_pd_ssd_disk_size_monitor** / SCT_GCE_SSD_DISK_SIZE_MONITOR
+## **gce_pd_ssd_disk_size_monitor** / SCT_GCE_PD_SSD_DISK_SIZE_MONITOR
 
 
 
@@ -2227,7 +2227,7 @@ Specifies the name of the Scylla cluster to be deployed in K8S.
 * appendable
 
 
-## **k8s_n_scylla_pods_per_cluster** / K8S_N_SCYLLA_PODS_PER_CLUSTER
+## **k8s_n_scylla_pods_per_cluster** / SCT_K8S_N_SCYLLA_PODS_PER_CLUSTER
 
 Number of Scylla pods per cluster.
 
@@ -2343,7 +2343,7 @@ Defines whether the K8S API server logging must be enabled and its logs gathered
 **type:** bool
 
 
-## **k8s_tenants_num** / SCT_TENANTS_NUM
+## **k8s_tenants_num** / SCT_K8S_TENANTS_NUM
 
 Number of Scylla clusters to create in the K8S cluster.
 
@@ -2638,7 +2638,7 @@ Enable or disable running full scans during tests
 **type:** list
 
 
-## **run_full_partition_scan** / SCT_run_full_partition_scan
+## **run_full_partition_scan** / SCT_RUN_FULL_PARTITION_SCAN
 
 Enable or disable running full partition scans during tests
 
@@ -2734,7 +2734,7 @@ Compaction strategy to use for pre-created schema
 * appendable
 
 
-## **sstable_size** / SSTABLE_SIZE
+## **sstable_size** / SCT_SSTABLE_SIZE
 
 Configure sstable size for pre-create-schema mode
 
@@ -4067,6 +4067,15 @@ Replication factor for Scylla Cloud cluster
 ## **xcloud_vpc_peering** / SCT_XCLOUD_VPC_PEERING
 
 Dictionary of VPC peering parameters for private connectivity between<br>SCT infrastructure and Scylla Cloud. The following parameters are used:<br>enabled: bool - indicates whether VPC peering is to be used<br>cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)<br>cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)
+
+**default:** N/A
+
+**type:** dict
+
+
+## **xcloud_scaling_config** / SCT_XCLOUD_SCALING_CONFIG
+
+Scaling policy configuration. The payload should follow the following structure:<br><br>{<br>"InstanceFamilies": ["i8g"],<br>"Mode": "xcloud",<br>"Policies": {<br>"Storage": {"Min": 0, "TargetUtilization": 0.8},<br>"VCPU": {"Min": 0}<br>}<br>}<br><br>- InstanceFamilies(list): instance families to use for scaling (e.g., ["i4i", "i8g"])<br>- Mode(str): scaling mode, always "xcloud"<br>- Policies(dict): scaling policies with the following keys:<br>- Storage(dict):<br>- Min(int): minimum storage in TB to maintain<br>- TargetUtilization(float): target storage utilization from 0.7 to 0.9 with 0.05 step<br>- VCPU(dict):<br>- Min(int): minimum number of virtual CPUs to maintain<br><br>For more details, see `scaling` parameter description in Cloud REST API documentation:<br>https://cloud.docs.scylladb.com/stable/api.html#tag/Cluster/operation/createCluster
 
 **default:** N/A
 
