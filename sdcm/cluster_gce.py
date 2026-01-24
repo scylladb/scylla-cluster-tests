@@ -785,9 +785,11 @@ class GCPKernelPanicChecker(threading.Thread):
                 LOGGER.debug("[GCP] %s: status = %s", self.instance_name, status)
                 if status not in ("RUNNING", "PROVISIONING", "STAGING"):
                     LOGGER.info(
-                        "[%s] [GCP] %s: status = %s", datetime.datetime.now(datetime.UTC), self.instance_name, status
+                        "[%s] [GCP] %s: status = %s",
+                        datetime.datetime.now(datetime.timezone.utc),
+                        self.instance_name,
+                        status,
                     )
-
                 # Fetch serial port output (port 1)
                 serial_output = self.client.get_serial_port_output(
                     project=self.project_id, zone=self.zone, instance=self.instance_name
