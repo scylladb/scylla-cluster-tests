@@ -112,11 +112,12 @@ class TestUtilsOperatorMultitenantCommon:
             for cmd_name in ("stress_read_cmd", "stress_cmd_w"):
                 # NOTE: StringOrList type always converts single strings to a list with one element
                 assert tenant.params.get(cmd_name) == [f"fake__{cmd_name}__all_tenants__single_str"]
-            assert tenant.params.get("nemesis_class_name") == "FakeNemesisClassName"
+            # NOTE: StringOrList type always converts single strings to a list with one element
+            assert tenant.params.get("nemesis_class_name") == ["FakeNemesisClassName"]
             assert tenant.params.get("nemesis_interval") == 5
             assert tenant.params.get("nemesis_sequence_sleep_between_ops") == 3
             assert tenant.params.get("nemesis_during_prepare") is False
-            assert tenant.params.get("nemesis_seed") == "013"
+            assert tenant.params.get("nemesis_seed") == 13
             assert tenant.params.get("nemesis_add_node_cnt") == 1
             assert tenant.params.get("space_node_threshold") == 13531
             assert tenant.params.get("nemesis_filter_seeds") is False
@@ -158,14 +159,15 @@ class TestUtilsOperatorMultitenantCommon:
         # Process tenant-1 specific options
         for cmd_name in ("stress_cmd_r", "stress_cmd_m"):
             assert tenants[0].params.get(cmd_name) == [f"fake__{cmd_name}__tenant1__part{j}" for j in range(1, 3)]
-        assert tenants[0].params.get("nemesis_class_name") == "FakeNemesisClassNameForTenant1"
+        # NOTE: StringOrList type always converts single strings to a list with one element
+        assert tenants[0].params.get("nemesis_class_name") == ["FakeNemesisClassNameForTenant1"]
         assert tenants[0].params.get("nemesis_selector") == [
             f"fake__nemesis_selector__tenant1__part{j}" for j in range(1, 3)
         ]
         assert tenants[0].params.get("nemesis_interval") == 5
         assert tenants[0].params.get("nemesis_sequence_sleep_between_ops") == 3
         assert tenants[0].params.get("nemesis_during_prepare") is False
-        assert tenants[0].params.get("nemesis_seed") == "024"
+        assert tenants[0].params.get("nemesis_seed") == 24
         assert tenants[0].params.get("nemesis_add_node_cnt") == 1
         assert tenants[0].params.get("space_node_threshold") == 1357
         assert tenants[0].params.get("nemesis_filter_seeds") is False
@@ -174,16 +176,18 @@ class TestUtilsOperatorMultitenantCommon:
         assert tenants[0].params.get("round_robin") is True
 
         # Process tenant-2 specific options
-        assert tenants[1].params.get("stress_cmd_r") == "fake__stress_cmd_r__tenant2__single_str_in_list"
-        assert tenants[1].params.get("stress_cmd_m") == "fake__stress_cmd_m__tenant2__single_str"
-        assert tenants[1].params.get("nemesis_class_name") == "FakeNemesisClassNameForTenant2"
+        # NOTE: StringOrList type always converts single strings to a list with one element
+        assert tenants[1].params.get("stress_cmd_r") == ["fake__stress_cmd_r__tenant2__single_str_in_list"]
+        assert tenants[1].params.get("stress_cmd_m") == ["fake__stress_cmd_m__tenant2__single_str"]
+        # NOTE: StringOrList type always converts single strings to a list with one element
+        assert tenants[1].params.get("nemesis_class_name") == ["FakeNemesisClassNameForTenant2"]
         assert tenants[1].params.get("nemesis_selector") == ["fake__nemesis_selector__tenant2"]
         assert tenants[1].params.get("nemesis_interval") == 7
         assert tenants[1].params.get("nemesis_sequence_sleep_between_ops") == 5
         assert tenants[1].params.get("nemesis_during_prepare") is True
-        assert tenants[1].params.get("nemesis_seed") == "135"
+        assert tenants[1].params.get("nemesis_seed") == 135
         assert tenants[1].params.get("nemesis_add_node_cnt") == 2
-        assert tenants[1].params.get("space_node_threshold") == "2468"
+        assert tenants[1].params.get("space_node_threshold") == 2468
         assert tenants[1].params.get("nemesis_filter_seeds") is True
         assert tenants[1].params.get("nemesis_exclude_disabled") is False
         assert tenants[1].params.get("nemesis_multiply_factor") == 6
