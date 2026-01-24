@@ -1472,7 +1472,7 @@ class AWSKernelPanicChecker(threading.Thread):
                         LOGGER.info("[AWS] %s: instance status = %s", self.instance_id, status)
 
                 # Check console output for panic
-                console = self.ec2.get_console_output(InstanceId=self.instance_id, Latest=True)
+                console = self.ec2.get_console_output(InstanceId=self.instance_id)
                 output = console.get("Output", "")
                 output_lower = output.lower()
                 if ("kernel panic" in output_lower or "not syncing" in output_lower) and not self._panic_detected:
