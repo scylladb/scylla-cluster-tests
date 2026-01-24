@@ -54,7 +54,7 @@ def params(monkeypatch):
             "SCT_N_DB_NODES",
             "SCT_AZURE_IMAGE_DB",
             "SCT_N_LOADERS",
-            "SCT_N_MONITORS_NODES",
+            "SCT_N_MONITOR_NODES",
             "SCT_AVAILABILITY_ZONE",
             "SCT_IP_SSH_CONNECTIONS",
         ],
@@ -68,7 +68,7 @@ def params(monkeypatch):
         SCT_AZURE_IMAGE_DB="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/"
         "scylla-images/providers/Microsoft.Compute/images/scylla-2024.1.9-x86_64-2024-08-30T04-49-46",
         SCT_N_LOADERS="2 0",
-        SCT_N_MONITORS_NODES="1",
+        SCT_N_MONITOR_NODES="1",
         SCT_AVAILABILITY_ZONE="a",
         SCT_IP_SSH_CONNECTIONS="public",
     )
