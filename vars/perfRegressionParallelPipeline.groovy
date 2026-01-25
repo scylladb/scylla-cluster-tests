@@ -275,7 +275,6 @@ def call(Map pipelineParams) {
                             sub_tests = [params.test_name]
                         }
                         // select the step function to use for throttling, if not throttling, it's a no-op
-                        def throttle_closure = params.use_job_throttling ? this.&throttle : { labels, closure -> closure() }
                         def job_throttle_category = params.job_throttle_category ?: "SCT-perf-${builder.region}"
                         for (t in sub_tests) {
                             def perf_test
@@ -287,7 +286,11 @@ def call(Map pipelineParams) {
                             }
 
                             // Create params_mapping for each sub_test
-                            params_mapping[sub_test] = params.collectEntries { param -> [param.key, param.value] }
+                            def tempParams = [:]
+                            for (entry in params) {
+                                tempParams[entry.key] = entry.value
+                            }
+                            params_mapping[sub_test] = tempParams
                             params_mapping[sub_test].put('test_name', perf_test)
 
                             // Add supportedVersions if available
@@ -416,7 +419,11 @@ def call(Map pipelineParams) {
                                 }
                             }
                         }
-                        throttle_closure([job_throttle_category]) {
+                        if (params.use_job_throttling) {
+                            throttle([job_throttle_category]) {
+                                parallel tasks
+                            }
+                        } else {
                             parallel tasks
                         }
                     }
