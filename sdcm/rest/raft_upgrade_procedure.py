@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2024 ScyllaDB
 import json
+
 from sdcm.cluster import BaseNode
 from sdcm.rest.remote_curl_client import RemoteCurlClient
 from sdcm.wait import wait_for

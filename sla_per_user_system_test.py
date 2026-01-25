@@ -21,9 +21,9 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.es import ES
 from sdcm.sct_events import Severity
 from sdcm.sct_events.workload_prioritisation import WorkloadPrioritisationEvent
-from sdcm.utils.version_utils import ComparableScyllaVersion
-from test_lib.sla import ServiceLevel, Role, User
 from sdcm.utils.features import is_tablets_feature_enabled
+from sdcm.utils.version_utils import ComparableScyllaVersion
+from test_lib.sla import Role, ServiceLevel, User
 
 
 class SlaPerUserTest(LongevityTest):

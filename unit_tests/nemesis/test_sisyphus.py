@@ -9,7 +9,7 @@ import pytest
 from sdcm.nemesis import Nemesis, SisyphusMonkey
 from sdcm.nemesis_registry import NemesisRegistry
 from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
-from unit_tests.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
+from unit_tests.nemesis.fake_cluster import PARAMS, Cluster, FakeTester, Node
 from unit_tests.nemesis.test_registry import FlagClass
 from unit_tests.test_tester import ClusterTesterForTests
 

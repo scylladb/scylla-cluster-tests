@@ -1,10 +1,10 @@
+import csv
+import logging
 import re
 import sys
-import csv
 import warnings
-import logging
-from functools import lru_cache, cache, cached_property
 from dataclasses import dataclass
+from functools import cache, cached_property, lru_cache
 from typing import NamedTuple
 
 import github

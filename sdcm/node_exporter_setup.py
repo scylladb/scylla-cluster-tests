@@ -1,6 +1,5 @@
 from sdcm.remote import shell_script_cmd
 
-
 NODE_EXPORTER_VERSION = "1.8.2"
 
 

@@ -1,13 +1,13 @@
-import unittest
 import os
-import time
 import tempfile
+import time
+import unittest
 from abc import abstractmethod
 
 import pytest
 
 from sdcm.cluster import BaseNode
-from sdcm.coredump import CoredumpExportSystemdThread, CoreDumpInfo, CoredumpExportFileThread, CoredumpThreadBase
+from sdcm.coredump import CoredumpExportFileThread, CoredumpExportSystemdThread, CoreDumpInfo, CoredumpThreadBase
 from unit_tests.lib.data_pickle import Pickler
 from unit_tests.lib.mock_remoter import MockRemoter
 

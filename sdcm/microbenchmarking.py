@@ -13,17 +13,17 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import sys
-import logging
+import argparse
+import contextlib
 import datetime
 import json
-import argparse
+import logging
+import os
 import socket
+import sys
 import tempfile
-from collections import defaultdict
-import contextlib
 import warnings
+from collections import defaultdict
 
 # disable InsecureRequestWarning
 import urllib3

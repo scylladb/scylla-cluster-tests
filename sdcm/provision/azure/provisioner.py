@@ -28,11 +28,11 @@ from sdcm.provision.azure.subnet_provider import SubnetProvider
 from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
 from sdcm.provision.azure.virtual_network_provider import VirtualNetworkProvider
 from sdcm.provision.provisioner import (
-    Provisioner,
     InstanceDefinition,
-    VmInstance,
-    PricingModel,
     OperationPreemptedError,
+    PricingModel,
+    Provisioner,
+    VmInstance,
 )
 from sdcm.provision.security import ScyllaOpenPorts
 from sdcm.utils.azure_utils import AzureService

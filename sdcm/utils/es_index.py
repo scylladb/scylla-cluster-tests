@@ -1,10 +1,9 @@
-import logging
 import json
-import sys
+import logging
 import os
-
-from typing import Any
+import sys
 from pathlib import Path
+from typing import Any
 
 from sdcm.es import ES
 

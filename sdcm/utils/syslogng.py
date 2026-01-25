@@ -11,9 +11,9 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import os
-import logging
 import getpass
+import logging
+import os
 from functools import cached_property
 from pwd import getpwnam
 from tempfile import mkstemp

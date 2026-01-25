@@ -13,11 +13,11 @@
 
 import re
 import time
-from typing import Optional, Type, Union
 from functools import cached_property
+from typing import Optional, Type, Union
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent, SctEventProtocol, BaseFilter, LogEventProtocol
+from sdcm.sct_events.base import BaseFilter, LogEventProtocol, SctEvent, SctEventProtocol
 
 
 class DbEventsFilter(BaseFilter):

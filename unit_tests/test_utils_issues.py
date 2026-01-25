@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from sdcm.utils.issues import SkipPerIssues, parse_issue, GitHubIssue, JiraIssue, DEFAULT_GH_USER, DEFAULT_GH_REPO
+from sdcm.utils.issues import DEFAULT_GH_REPO, DEFAULT_GH_USER, GitHubIssue, JiraIssue, SkipPerIssues, parse_issue
 
 pytestmark = pytest.mark.integration
 

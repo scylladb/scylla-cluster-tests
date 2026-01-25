@@ -21,8 +21,8 @@ from invoke import Result
 
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
+from sdcm.utils.adaptive_timeouts import TABLETS_HARD_TIMEOUT, Operations, adaptive_timeout
 from sdcm.utils.adaptive_timeouts.load_info_store import AdaptiveTimeoutStore
-from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout, TABLETS_HARD_TIMEOUT
 from unit_tests.test_cluster import DummyDbCluster
 
 LOGGER = logging.getLogger(__name__)

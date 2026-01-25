@@ -17,7 +17,6 @@ from typing import Literal
 
 from sdcm.provision.common.builders import AttrBuilder
 
-
 DataDeviceType = Literal["attached", "instance_store"]
 
 

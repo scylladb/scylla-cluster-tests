@@ -11,13 +11,13 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
 import pickle
+import re
 import unittest
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 
 
 class TestDbEventsFilter(unittest.TestCase):

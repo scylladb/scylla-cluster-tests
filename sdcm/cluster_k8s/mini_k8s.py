@@ -15,11 +15,11 @@ import getpass
 import logging
 import os
 import re
-from typing import Tuple, Optional, Callable
-from textwrap import dedent
 from functools import cached_property
-import yaml
+from textwrap import dedent
+from typing import Callable, Optional, Tuple
 
+import yaml
 from invoke.exceptions import UnexpectedExit
 
 from sdcm import (
@@ -27,13 +27,7 @@ from sdcm import (
     sct_abs_path,
 )
 from sdcm.cluster import LocalK8SHostNode
-from sdcm.remote import LOCALRUNNER
-from sdcm.remote.base import CommandRunner
 from sdcm.cluster_k8s import (
-    CloudK8sNodePool,
-    KubernetesCluster,
-    BaseScyllaPodContainer,
-    ScyllaPodCluster,
     COMMON_CONTAINERS_RESOURCES,
     INGRESS_CONTROLLER_CONFIG_PATH,
     K8S_LOCAL_VOLUME_PROVISIONER_VERSION,
@@ -42,13 +36,18 @@ from sdcm.cluster_k8s import (
     OPERATOR_CONTAINERS_RESOURCES,
     SCYLLA_MANAGER_AGENT_RESOURCES,
     SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER,
+    BaseScyllaPodContainer,
+    CloudK8sNodePool,
+    KubernetesCluster,
+    ScyllaPodCluster,
 )
-from sdcm.utils.k8s import TokenUpdateThread, HelmValues
-from sdcm.utils.k8s.chaos_mesh import ChaosMesh
+from sdcm.remote import LOCALRUNNER
+from sdcm.remote.base import CommandRunner
+from sdcm.utils import version_utils
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import docker_hub_login
-from sdcm.utils import version_utils
-
+from sdcm.utils.k8s import HelmValues, TokenUpdateThread
+from sdcm.utils.k8s.chaos_mesh import ChaosMesh
 
 SRC_APISERVER_AUDIT_POLICY = sct_abs_path("sdcm/k8s_configs/local-kind/audit-policy.yaml")
 DST_APISERVER_AUDIT_POLICY = "/etc/kubernetes/policies/audit-policy.yaml"
