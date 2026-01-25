@@ -297,6 +297,10 @@ All unit tests in `unit_tests/` should follow pytest conventions:
 3. **Scope fixtures appropriately** - Use `scope="module"` for expensive setup, `scope="function"` (default) for clean state
 4. **Use conftest.py for shared fixtures** - Place common fixtures in `unit_tests/conftest.py`, auto-discovered by pytest
 5. **Prefer simple assertions** - Use `assert x == y` not `self.assertEqual(x, y)`
+6. **NEVER use `time.sleep()` in unit tests** - Avoid `time.sleep()` at all costs as it makes tests slow and flaky. Instead:
+   - Use helper functions that poll for the desired state (e.g., `wait_for_condition()`, look of those first)
+   - Use retry loops with `sdcm/wait` module until the expected result is achieved
+   - Mock time-dependent behavior using `unittest.mock` or `freezegun`
 
 ## Environment Variables
 
