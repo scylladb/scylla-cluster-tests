@@ -6537,6 +6537,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
                             end_time=end_time,
                             target_node=str(args[0].target_node),
                         )
+                        args[0].log.warning(f"{ error_counts=}, {event_details=}")
                         errors_during_nemesis = []
                         for severity in ["ERROR", "CRITICAL"]:
                             count = error_counts.get(severity, 0)
