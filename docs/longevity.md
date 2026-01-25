@@ -37,3 +37,58 @@ On a high level overview, the test operations are:
 
 Keep in mind that the suite libraries are flexible, and will allow you to
 set scenarios that differ from this base one.
+
+## Nemesis Error Detection
+
+By default, nemesis operations now automatically fail if ERROR or CRITICAL events (such as coredumps, database errors, or backtraces) occur during their execution. This helps identify problematic nemesis operations and maintain accurate test statistics.
+
+### Configuration
+
+The feature is controlled by the `nemesis_fail_on_error_events` parameter:
+
+```yaml
+nemesis_fail_on_error_events: true  # Default - nemesis fails on ERROR/CRITICAL events
+# or
+nemesis_fail_on_error_events: false  # Disable - nemesis ignores error events
+```
+
+You can also set it via environment variable:
+```bash
+export SCT_NEMESIS_FAIL_ON_ERROR_EVENTS=false
+```
+
+### Behavior
+
+When enabled (default), if ERROR or CRITICAL events occur during a nemesis operation:
+- The nemesis will be marked as **Failed** instead of Succeeded
+- A detailed error message will list the events (types, timestamps, brief descriptions)
+- Full event details are available in the nemesis `full_traceback` field for debugging
+
+Example error output:
+```
+Nemesis failed due to 2 ERROR event(s), 1 CRITICAL event(s) during execution
+
+Event Details:
+CRITICAL Events:
+  1. [2026-01-20 13:00:10] CoreDumpEvent: Scylla crashed on node...
+
+ERROR Events:
+  1. [2026-01-20 13:00:08] DatabaseLogEvent: Connection timeout occurred...
+  2. [2026-01-20 13:00:09] BacktraceEvent: Stack trace captured...
+```
+
+### When to Disable
+
+You may want to disable this feature (`nemesis_fail_on_error_events: false`) when:
+- Testing error recovery scenarios where errors are expected
+- Running tests specifically designed to verify behavior under error conditions
+- Debugging tests where you want nemesis to complete despite errors
+
+### Parallel Nemesis Support
+
+The error detection system correctly handles parallel/concurrent nemesis scenarios by:
+- Only counting events that occurred during the specific nemesis execution time window
+- Excluding events attributed to other running nemeses
+- Respecting all configured event filters
+
+This ensures each nemesis only fails for events truly related to its own execution.
