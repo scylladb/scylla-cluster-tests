@@ -4,11 +4,11 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
-    backend: "aws",
-    region: "us-east-1",
-    test_name: "performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest",
+    backend: 'aws',
+    region: 'us-east-1',
+    test_name: 'performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest',
     test_config: '''["test-cases/performance/perf-regression-predefined-throughput-steps.yaml", "configurations/performance/cassandra_stress_gradual_load_steps.yaml", "configurations/disable_kms.yaml", "configurations/tablets_disabled.yaml", "configurations/disable_speculative_retry.yaml"]''',
-    sub_tests: ["test_write_gradual_increase_load", "test_read_gradual_increase_load", "test_mixed_gradual_increase_load"],
+    sub_tests: ['test_write_gradual_increase_load', 'test_read_gradual_increase_load', 'test_mixed_gradual_increase_load'],
 
-    timeout: [time: 1600, unit: "MINUTES"]
+    timeout: [time: 1600, unit: 'MINUTES']
 )

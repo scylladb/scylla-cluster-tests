@@ -4,11 +4,11 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
-    backend: "aws",
-    region: "us-east-1",
-    test_name: "performance_regression_test.PerformanceRegressionTest",
-    test_config: '''["test-cases/performance/perf-regression-latency-125gb.yaml","configurations/ebs/ebs-gp3-2v-4tb-16k-iops.yaml"]'''
-    sub_tests: ["test_latency"],
+    backend: 'aws',
+    region: 'us-east-1',
+    test_name: 'performance_regression_test.PerformanceRegressionTest',
+    test_config: '''["test-cases/performance/perf-regression-latency-125gb.yaml","configurations/ebs/ebs-gp3-2v-4tb-16k-iops.yaml"]''',
+    sub_tests: ['test_latency'],
 
-    timeout: [time: 1600, unit: "MINUTES"]
+    timeout: [time: 1600, unit: 'MINUTES']
 )

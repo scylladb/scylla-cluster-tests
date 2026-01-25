@@ -1,7 +1,7 @@
 #!groovy
 import groovy.json.JsonSlurperClassic
 
-def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0, 0, 0, 0, 0]
 def base_versions_list = []
 
 def call(Map pipelineParams) {
@@ -74,7 +74,7 @@ def call(Map pipelineParams) {
                    name: 'post_behavior_k8s_cluster')
             // Performance Test Configuration
             separator(name: 'PERF_TEST', sectionHeader: 'Performance Test Configuration')
-            string(defaultValue: "false",
+            string(defaultValue: 'false',
                    description: 'Stop test if perf hardware test values exceed the set limits',
                    name: 'stop_on_hw_perf_failure')
             string(defaultValue: "${groovy.json.JsonOutput.toJson(pipelineParams.get('sub_tests', ''))}",
@@ -175,7 +175,7 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
-            stage("Preparation") {
+            stage('Preparation') {
                 // NOTE: this stage is a workaround for the following Jenkins bug:
                 // https://issues.jenkins-ci.org/browse/JENKINS-41929
                 when { expression { env.BUILD_NUMBER == '1' } }
@@ -221,7 +221,7 @@ def call(Map pipelineParams) {
                                                 new_repo,
                                                 params.backend
                                             ).last()
-                                            new_params["scylla_version"] = supportedVersions
+                                            new_params['scylla_version'] = supportedVersions
                                         }
                                         println("the supported version is $supportedVersions")
                                     }
@@ -250,15 +250,15 @@ def call(Map pipelineParams) {
                         }
                     }
                 }
-                post{
+                post {
                     failure {
-                        script{
-                            sh "exit 1"
+                        script {
+                            sh 'exit 1'
                         }
                     }
                     unstable {
-                        script{
-                            sh "exit 1"
+                        script {
+                            sh 'exit 1'
                         }
                     }
                 }
@@ -299,7 +299,7 @@ def call(Map pipelineParams) {
                                 node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
-                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",
+                                             "SCT_TEST_ID=${UUID.randomUUID()}",
                                              "SCT_GCE_PROJECT=${env.SCT_GCE_PROJECT ?: ''}",
                                              "SCT_BILLING_PROJECT=${env.SCT_BILLING_PROJECT ?: ''}",]) {
                                         stage("Checkout for ${sub_test}") {
@@ -312,7 +312,7 @@ def call(Map pipelineParams) {
                                                                 checkout scm
                                                                 checkoutQaInternal(params_mapping[sub_test])
                                                             }
-                                                        dockerLogin(params_mapping[sub_test])
+                                                            dockerLogin(params_mapping[sub_test])
                                                         }
                                                     }
                                                 }
@@ -359,7 +359,7 @@ def call(Map pipelineParams) {
                                             }
                                         }
 
-                                        stage("Run ${sub_test}"){
+                                        stage("Run ${sub_test}") {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     timeout(time: testRunTimeout, unit: 'MINUTES') {
@@ -412,7 +412,7 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
-                                    }
+                                             }
                                 }
                             }
                         }

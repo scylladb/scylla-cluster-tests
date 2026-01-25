@@ -17,4 +17,4 @@ def call(String backend) {
     }
     def cloud_provider = backend.trim().toLowerCase()
     return backend_to_provider.get(cloud_provider, cloud_provider)
-    }
+}

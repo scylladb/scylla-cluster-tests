@@ -1,9 +1,9 @@
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels("aws", "eu-west-1")
+    def builder = getJenkinsLabels('aws', 'eu-west-1')
     pipeline {
         agent {
             label {
-                   label builder.label
+                label builder.label
             }
         }
         environment {
@@ -21,12 +21,12 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
-            string(defaultValue: "",
+            string(defaultValue: '',
                    description: 'Billing project for the test run',
                    name: 'billing_project')
         }
         triggers {
-            parameterizedCron (
+            parameterizedCron(
                 '''
                     0 8 * * * %scylla_version=master:latest;labels_selector=alternator-daily;requested_by_user=radoslawcybulski
                     0 8 * * 6 %scylla_version=master:latest;labels_selector=alternator-weekly;requested_by_user=radoslawcybulski
@@ -43,13 +43,11 @@ def call(Map pipelineParams) {
                     script {
                         def scylla_version = params.scylla_version?.trim()
                         def labels_selector = params.labels_selector?.trim()
-                        if (scylla_version == "master:latest") {
-                            scylla_version = "master"
+                        if (scylla_version == 'master:latest') {
+                            scylla_version = 'master'
                             if (!labels_selector) {
                                 error "Labels selector is not set. Please provide one of a valid 'labels_selector' values: 'master-weekly' OR 'master-daily' OR 'master-3weeks'."
                             }
-
-
                         }
                         def testRegionMatrix = [
                             [
@@ -237,62 +235,62 @@ def call(Map pipelineParams) {
                         for (job_name in jobs_names) {
                             println("Job name: $job_name")
                             for (def entry in testRegionMatrix) {
-                                 def cloud_provider = entry.cloud_provider ?: 'aws'
-                                 def version = null
-                                 def sub_tests = []
-                                 def region = null
-                                 def image_name_for_job = null
-                                 def rolling_upgrade_test = null
-                                 def microbenchmark = null
-                                 if (scylla_version == "master" && !image_name){
+                                def cloud_provider = entry.cloud_provider ?: 'aws'
+                                def version = null
+                                def sub_tests = []
+                                def region = null
+                                def image_name_for_job = null
+                                def rolling_upgrade_test = null
+                                def microbenchmark = null
+                                if (scylla_version == 'master' && !image_name) {
                                     region = entry.region ?: 'us-east-1'
                                     def output = sh(script: "./docker/env/hydra.sh list-images -c ${cloud_provider} -r ${region} -o text", returnStdout: true).trim()
                                     println("Output from hydra list-images: $output")
                                     def image_name_json = output.split('\n')[-1].trim()
                                     println("Image name json: $image_name_json")
-                                    if (!image_name_json){
-                                        error "Image name is empty. Please check the hydra.sh command output."
+                                    if (!image_name_json) {
+                                        error 'Image name is empty. Please check the hydra.sh command output.'
                                     }
 
                                     image_name = new groovy.json.JsonSlurperClassic().parseText(image_name_json).keySet()[0]
                                     println("Image name: $image_name")
-                                 }
+                                }
 
                                 if (entry.job_name == job_name) {
                                     for (def ver in entry.versions) {
-                                        if (scylla_version?.trim() == ver || scylla_version?.trim().startsWith(ver + ".")) {
+                                        if (scylla_version?.trim() == ver || scylla_version?.trim().startsWith(ver + '.')) {
                                             version = params.scylla_version
                                         }
-                                    if (version) {
-                                        if (labels_selector && !(entry.labels.contains(labels_selector))) {
-                                            println("Skipping job $job_name for labels_selector: $labels_selector")
-                                            continue
+                                        if (version) {
+                                            if (labels_selector && !(entry.labels.contains(labels_selector))) {
+                                                println("Skipping job $job_name for labels_selector: $labels_selector")
+                                                continue
+                                            }
+                                            // NOTE: Check that Scylla version matches specified 'pre-release' parts.
+                                            //       Semver structure: <major> "." <minor> "." <patch> "-" <pre-release> "+" <build>
+                                            if (entry.pre_release && !entry.pre_release.any { pr -> version.contains("-${pr}") }) {
+                                                println("Skipping job $job_name because $version version doesn't match specified pre-releases: ${entry.pre_release}")
+                                                continue
                                         }
-                                        // NOTE: Check that Scylla version matches specified 'pre-release' parts.
-                                        //       Semver structure: <major> "." <minor> "." <patch> "-" <pre-release> "+" <build>
-                                        if (entry.pre_release && !entry.pre_release.any { pr -> version.contains("-${pr}") }) {
-                                            println("Skipping job $job_name because $version version doesn't match specified pre-releases: ${entry.pre_release}")
+                                            region = entry.region
+                                            sub_tests = entry.sub_tests
+                                            println("Found for job $job_name: region : $region, version: $version, sub_tests: $sub_tests")
+                                    } else {
                                             continue
+                                    }
+                                        rolling_upgrade_test = entry.rolling_upgrade_test
+                                        microbenchmark = entry.microbenchmark
+                                        if (rolling_upgrade_test || microbenchmark) {
+                                            image_name_for_job = null
+                                    } else {
+                                            image_name_for_job = image_name
                                         }
-                                        region = entry.region
-                                        sub_tests = entry.sub_tests
-                                        println("Found for job $job_name: region : $region, version: $version, sub_tests: $sub_tests")
-                                    } else {
-                                        continue
-                                    }
-                                    rolling_upgrade_test = entry.rolling_upgrade_test
-                                    microbenchmark = entry.microbenchmark
-                                    if (rolling_upgrade_test || microbenchmark) {
-                                        image_name_for_job = null
-                                    } else {
-                                        image_name_for_job = image_name
-                                    }
                                 }
                             }
-                            if (region && version && sub_tests) {
-                                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                                    println("Building job: $job_name with sub_test: ${sub_tests}, region: ${region}, image_name_for_job: ${image_name_for_job}, scylla_version: ${version}")
-                                    println("Send to job: scylla_version: ${rolling_upgrade_test ? null : (image_name_for_job ? null : params.scylla_version)}; scylla_ami_id: ${image_name_for_job ? image_name_for_job : null}")
+                                if (region && version && sub_tests) {
+                                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                                        println("Building job: $job_name with sub_test: ${sub_tests}, region: ${region}, image_name_for_job: ${image_name_for_job}, scylla_version: ${version}")
+                                        println("Send to job: scylla_version: ${rolling_upgrade_test ? null : (image_name_for_job ? null : params.scylla_version)}; scylla_ami_id: ${image_name_for_job ? image_name_for_job : null}")
                                         build job: job_name, wait: false, parameters: [
                                             string(name: 'scylla_version', value: rolling_upgrade_test ? null : (image_name_for_job ? null : params.scylla_version)),
                                             string(name: 'scylla_ami_id', value: image_name_for_job ? image_name_for_job : null),
@@ -307,11 +305,11 @@ def call(Map pipelineParams) {
                                         ]
                                     }
                                 }
-                            }
                         }
                     }
                 }
             }
         }
     }
+}
 }

@@ -1,6 +1,6 @@
 #! groovy
 
-def call(Integer test_duration){
+def call(Integer test_duration) {
     if (test_duration <= 480) {
         sh '''#!/bin/bash
 

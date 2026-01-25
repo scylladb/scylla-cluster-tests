@@ -2,14 +2,14 @@
 
 import org.jenkinsci.plugins.workflow.support.steps.build.RunWrapper
 
-def call(Map params, RunWrapper currentBuild){
+def call(Map params, RunWrapper currentBuild) {
     def start_time = currentBuild.startTimeInMillis.intdiv(1000)
     def test_status = currentBuild.currentResult
     if (test_status) {
-        test_status = "--test-status " + test_status
+        test_status = '--test-status ' + test_status
     }
     if (start_time) {
-        start_time = "--start-time " + start_time
+        start_time = '--start-time ' + start_time
     }
 
     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)

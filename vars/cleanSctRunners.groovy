@@ -2,7 +2,7 @@
 
 import org.jenkinsci.plugins.workflow.support.steps.build.RunWrapper
 
-def call(Map params, RunWrapper currentBuild){
+def call(Map params, RunWrapper currentBuild) {
     def cloud_provider = getCloudProviderFromBackend(params.backend)
     def test_status = currentBuild.currentResult
 

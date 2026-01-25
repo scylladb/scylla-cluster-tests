@@ -1,17 +1,16 @@
 #!groovy
 
 def completed_stages = [:]
-def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0, 0, 0, 0, 0]
 
 def call(Map pipelineParams) {
-
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, null /* oci placeholder */)
     def functional_test = pipelineParams.functional_test
 
     pipeline {
         agent {
             label {
-                   label builder.label
+                label builder.label
             }
         }
         environment {
@@ -19,7 +18,7 @@ def call(Map pipelineParams) {
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID = UUID.randomUUID().toString()
             SCT_GCE_PROJECT = "${params.gce_project}"
-            SCT_ENABLE_ARGUS_REPORT = "1"
+            SCT_ENABLE_ARGUS_REPORT = '1'
             SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
@@ -51,21 +50,21 @@ def call(Map pipelineParams) {
 
             // Stress Test Configuration
             separator(name: 'STRESS_TEST', sectionHeader: 'Stress Test Configuration')
-            string(defaultValue: "",
+            string(defaultValue: '',
                description: 'Duration in minutes for stress commands(gemini, c-s, s-b)',
                name: 'stress_duration')
 
-            string(defaultValue: "",
+            string(defaultValue: '',
                description: ('Time duration in minutes for preparing dataset with commands prepare_*_cmd, if empty value, default value is 5h = 300 minutes.' +
                              'Prepare commands could finish earlier and have not to run full prepare_stress_duration time'),
                name: 'prepare_stress_duration')
 
             // ScyllaDB Configuration
-	    separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 6 options)')
-	    string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
-	    string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
-	    string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
-	    string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs:// ', name: 'update_db_packages')
+            separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 6 options)')
+            string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
+            string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
+            string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
+            string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs:// ', name: 'update_db_packages')
             string(defaultValue: "${pipelineParams.get('scylla_version', '')}",
                    description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
                    name: 'scylla_version')
@@ -136,7 +135,7 @@ def call(Map pipelineParams) {
                    name: 'test_name')
 
             string(defaultValue: '', description: 'run gemini job with specific gemini seed number',
-                   name: "gemini_seed")
+                   name: 'gemini_seed')
 
             string(defaultValue: "${pipelineParams.get('pytest_addopts', '')}",
                    description: (
@@ -219,14 +218,14 @@ def call(Map pipelineParams) {
             string(defaultValue: 'next',
                    description: 'Default branch to be used for scylla and other repositories. Default is "next".',
                    name: 'byo_default_branch')
-	 }
+        }
         options {
             timestamps()
             disableConcurrentBuilds()
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
-            stage("Preparation") {
+            stage('Preparation') {
                 // NOTE: this stage is a workaround for the following Jenkins bug:
                 // https://issues.jenkins-ci.org/browse/JENKINS-41929
                 when { expression { env.BUILD_NUMBER == '1' } }
@@ -302,15 +301,15 @@ def call(Map pipelineParams) {
                         }
                     }
                 }
-                post{
+                post {
                     failure {
-                        script{
-                            sh "exit 1"
+                        script {
+                            sh 'exit 1'
                         }
                     }
                     unstable {
-                        script{
-                            sh "exit 1"
+                        script {
+                            sh 'exit 1'
                         }
                     }
                 }
@@ -371,7 +370,7 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage("Parallel timelines report") {
+            stage('Parallel timelines report') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
                         script {
@@ -387,7 +386,7 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage("Collect log data") {
+            stage('Collect log data') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
                         script {
@@ -435,7 +434,7 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage("Send email with result") {
+            stage('Send email with result') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
                         script {
@@ -540,7 +539,7 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
-                                      cleanSctRunners(params, currentBuild)
+                                        cleanSctRunners(params, currentBuild)
                                     }
                                 }
                             }

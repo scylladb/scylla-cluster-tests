@@ -3,7 +3,7 @@
 List supportedVersions = []
 def params_mapping = [:] // this would hold the params per split of this pipeline
 def completed_stages = [:]
-(testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+(testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0, 0, 0, 0, 0]
 
 def call(Map pipelineParams) {
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, null /* oci placeholder */)
@@ -19,7 +19,7 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_GCE_PROJECT = "${params.gce_project}"
-            SCT_ENABLE_ARGUS_REPORT = "1"
+            SCT_ENABLE_ARGUS_REPORT = '1'
             SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
@@ -40,7 +40,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
-            string(defaultValue: "",
+            string(defaultValue: '',
                description: 'Availability zone',
                name: 'availability_zone')
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
@@ -125,7 +125,7 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
-            stage("Preparation") {
+            stage('Preparation') {
                 // NOTE: this stage is a workaround for the following Jenkins bug:
                 // https://issues.jenkins-ci.org/browse/JENKINS-41929
                 when { expression { env.BUILD_NUMBER == '1' } }
@@ -148,7 +148,7 @@ def call(Map pipelineParams) {
                     }
                 }
                 steps {
-                    catchError(stageResult: "FAILURE") {
+                    catchError(stageResult: 'FAILURE') {
                         timeout(time: 10, unit: 'MINUTES') {
                             script {
                                 wrap([$class: 'BuildUser']) {
@@ -200,15 +200,15 @@ def call(Map pipelineParams) {
                         }
                     }
                 }
-                post{
+                post {
                     failure {
-                        script{
-                            sh "exit 1"
+                        script {
+                            sh 'exit 1'
                         }
                     }
                     unstable {
-                        script{
-                            sh "exit 1"
+                        script {
+                            sh 'exit 1'
                         }
                     }
                 }
@@ -238,7 +238,7 @@ def call(Map pipelineParams) {
                                 node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
-                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
+                                             "SCT_TEST_ID=${UUID.randomUUID()}",]) {
                                         stage("Split for ${base_version}") {
                                             try {
                                                 stage("Checkout for ${base_version}") {
@@ -441,7 +441,7 @@ def call(Map pipelineParams) {
                                                         script {
                                                             wrap([$class: 'BuildUser']) {
                                                                 dir('scylla-cluster-tests') {
-                                                                  cleanSctRunners(params_mapping[base_version], currentBuild)
+                                                                    cleanSctRunners(params_mapping[base_version], currentBuild)
                                                                 }
                                                             }
                                                         }
@@ -449,7 +449,7 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
-                                    }
+                                             }
                                 }
                             }
                         }

@@ -1,7 +1,7 @@
 #!groovy
 import groovy.json.JsonSlurperClassic
 
-def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0, 0, 0, 0, 0]
 
 def call(Map pipelineParams) {
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, null /* azure placeholder */, null /* oci placeholder */)
@@ -14,7 +14,7 @@ def call(Map pipelineParams) {
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_GCE_PROJECT = "${params.gce_project}"
             SCT_BILLING_PROJECT = "${params.billing_project}"
-		}
+        }
         parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce',
@@ -132,7 +132,7 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
-            stage("Preparation") {
+            stage('Preparation') {
                 // NOTE: this stage is a workaround for the following Jenkins bug:
                 // https://issues.jenkins-ci.org/browse/JENKINS-41929
                 when { expression { env.BUILD_NUMBER == '1' } }
@@ -195,7 +195,7 @@ def call(Map pipelineParams) {
                                 node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
-                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",
+                                             "SCT_TEST_ID=${UUID.randomUUID()}",
                                              "SCT_GCE_PROJECT=${env.SCT_GCE_PROJECT ?: ''}",
                                              "SCT_BILLING_PROJECT=${env.SCT_BILLING_PROJECT ?: ''}",]) {
                                         stage("Checkout for ${sub_test}") {
@@ -222,14 +222,13 @@ def call(Map pipelineParams) {
                                             }
                                         }
 
-                                        stage("Run ${sub_test}"){
+                                        stage("Run ${sub_test}") {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                                     def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                     timeout(time: testRunTimeout, unit: 'MINUTES') { dir('scylla-cluster-tests') {
-
-                                                        sh """#!/bin/bash
+                                                            sh """#!/bin/bash
                                                         set -xe
                                                         env
 
@@ -242,7 +241,6 @@ def call(Map pipelineParams) {
                                                             export SCT_REGION_NAME=${pipelineParams.region}
                                                         fi
                                                         export SCT_CONFIG_FILES=${test_config}
-
 
                                                         if [[ ! -z "${params.instance_type_db}" ]] ; then
                                                             export SCT_INSTANCE_TYPE_DB=${params.instance_type_db}
@@ -277,7 +275,6 @@ def call(Map pipelineParams) {
                                                         if [[ ! -z "${params.loader_ami_id}" ]] ; then
                                                             export SCT_AMI_ID_LOADER=${params.loader_ami_id}
                                                         fi
-
 
                                                         if [[ ! -z "${params.prepare_write_cmd}" ]] ; then
                                                             export SCT_PREPARE_WRITE_CMD="${params.prepare_write_cmd}"
@@ -320,7 +317,6 @@ def call(Map pipelineParams) {
                                                             echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
                                                             exit 1
                                                         fi
-
 
                                                         export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                         export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
@@ -405,7 +401,7 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
-                                    }
+                                             }
                                 }
                             }
                         }

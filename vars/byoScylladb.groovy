@@ -1,22 +1,22 @@
 #!groovy
 import groovy.json.JsonSlurperClassic
 
-def call(Map params, boolean build_image){
+def call(Map params, boolean build_image) {
     if (! (params.byo_scylla_repo && params.byo_scylla_branch) ) {
-        println("BYO scylladb is not provided. Skipping this step.")
+        println('BYO scylladb is not provided. Skipping this step.')
         return ''
     }
     config_conflict_error_msg_suffix = ' and "byo_scylla_repo"+"byo_scylla_branch" are mutually exclusive params.'
-    if (params.backend == "aws" && params.scylla_ami_id && build_image) {
+    if (params.backend == 'aws' && params.scylla_ami_id && build_image) {
         error('CONFLICT: "scylla_ami_id"' + config_conflict_error_msg_suffix)
-    } else if (params.backend == "gce" && params.gce_image_db && build_image) {
+    } else if (params.backend == 'gce' && params.gce_image_db && build_image) {
         error('CONFLICT: "gce_image_db"' + config_conflict_error_msg_suffix)
-    } else if (params.backend == "azure" && params.azure_image_db && build_image) {
+    } else if (params.backend == 'azure' && params.azure_image_db && build_image) {
         error('CONFLICT: "azure_image_db"' + config_conflict_error_msg_suffix)
     } else if (params.new_scylla_repo && !build_image) {
         // NOTE: rolling upgrade case
         error('CONFLICT: "new_scylla_repo"' + config_conflict_error_msg_suffix)
-    } else if (params.backend == 'docker' || params.backend.startsWith("k8s")) {
+    } else if (params.backend == 'docker' || params.backend.startsWith('k8s')) {
         // TODO: add docker image building support
         error('BYO Scylladb is not supported yet for building docker image in SCT.')
     }
@@ -24,17 +24,17 @@ def call(Map params, boolean build_image){
     if (params.byo_job_path) {
         jobToTrigger = params.byo_job_path
     } else {
-        jobToTrigger = "/scylla-master/byo/byo_build_tests_dtest"
+        jobToTrigger = '/scylla-master/byo/byo_build_tests_dtest'
     }
-    if (jobToTrigger.startsWith("./")) {
+    if (jobToTrigger.startsWith('./')) {
         currentJobDirectoryPath = JOB_NAME.substring(0, JOB_NAME.lastIndexOf('/'))
         jobToTrigger = currentJobDirectoryPath + '/' + jobToTrigger[2..-1].trim()
     }
 
     try {
         copyAmiToRegions = new JsonSlurperClassic().parseText(params.region)
-        copyAmiToRegions = copyAmiToRegions.join(",").replace(" ", "")
-    } catch(Exception) {
+        copyAmiToRegions = copyAmiToRegions.join(',').replace(' ', '')
+    } catch (Exception) {
         copyAmiToRegions = params.region
     }
     byoParameterList = [
@@ -72,21 +72,21 @@ def call(Map params, boolean build_image){
         booleanParam(name: 'DRY_RUN', value: false),
     ]
     try {
-        jobResults=build job: jobToTrigger,
+        jobResults = build job: jobToTrigger,
             parameters: byoParameterList,
             propagate: true,
             wait: true
-    } catch(Exception ex) {
+    } catch (Exception ex) {
         echo "Could not trigger jon $jobToTrigger due to"
         println(ex.toString())
     }
-    def byoBuildInfo = jobResults.getBuildVariables();
+    def byoBuildInfo = jobResults.getBuildVariables()
     try {
         println('byoBuildInfo=' + byoBuildInfo)
-    } catch(Exception ex) {
+    } catch (Exception ex) {
         println('Failed to print BYO ScyllaDB build info')
     }
-    scyllaBuildFailed = !(jobResults.result == "SUCCESS")
+    scyllaBuildFailed = !(jobResults.result == 'SUCCESS')
     if (scyllaBuildFailed) {
         currentBuild.description = ('BYO ScyllaDB failed')
         currentBuild.result = 'FAILED'
@@ -96,16 +96,16 @@ def call(Map params, boolean build_image){
     // NOTE: export appropriate env vars to be reused further by the SCT
     if (build_image) {
         // NOTE: longevity case
-        if (params.backend == "aws") {
+        if (params.backend == 'aws') {
             env.SCT_AMI_ID_DB_SCYLLA = byoBuildInfo.BYO_AMI_ID
-        } else if (params.backend == "gce") {
+        } else if (params.backend == 'gce') {
             env.SCT_GCE_IMAGE_DB = byoBuildInfo.BYO_GCE_IMAGE_DB_URL
-        } else if (params.backend == "azure") {
+        } else if (params.backend == 'azure') {
             env.SCT_AZURE_IMAGE_DB = byoBuildInfo.BYO_AZURE_IMAGE_NAME
         }
     } else {
         // NOTE: rolling upgrade case
-        if (byoBuildInfo.BYO_SCYLLA_DEB_LIST_FILE_URL.startsWith("http")) {
+        if (byoBuildInfo.BYO_SCYLLA_DEB_LIST_FILE_URL.startsWith('http')) {
             env.SCT_NEW_SCYLLA_REPO = byoBuildInfo.BYO_SCYLLA_DEB_LIST_FILE_URL
         } else {
             env.SCT_NEW_SCYLLA_REPO = 'https://' + byoBuildInfo.BYO_SCYLLA_DEB_LIST_FILE_URL

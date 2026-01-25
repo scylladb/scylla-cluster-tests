@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 pipeline {
     agent {
         label {
-            label "aws-sct-builders-eu-west-1-v3-CI"
+            label 'aws-sct-builders-eu-west-1-v3-CI'
         }
     }
     environment {
@@ -43,10 +43,9 @@ pipeline {
                             export SCT_AZURE_REGION_NAME=
                             ./docker/env/hydra.sh clean-resources --backend ${params.backend} --test-id ${params.test_id}
                         """
-                   }
+                    }
                 }
             }
         }
-
     }
 }
