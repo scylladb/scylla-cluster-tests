@@ -61,7 +61,7 @@ def get_scylla_images_private_galleries(
     if parse_scylla_version_tag(scylla_version):
         # For full version tags, use exact matching with normalized version
         # Azure tags use ~ separator which gets normalized to - for matching
-        tags_to_search["scylla_version"] = scylla_version
+        tags_to_search["scylla_version"] = scylla_version.replace("~", "-")
         branch = "master"
     elif len(version_bucket) == 1:
         return []
@@ -128,7 +128,7 @@ def get_scylla_images(
     if parse_scylla_version_tag(scylla_version):
         # For full version tags, use exact matching with normalized version
         # Azure tags use ~ separator which gets normalized to - for matching
-        tags_to_search["scylla_version"] = scylla_version
+        tags_to_search["scylla_version"] = scylla_version.replace("~", "-")
     elif len(version_bucket) == 1:
         if "." in scylla_version:
             # Plain version, like 4.5.0
