@@ -121,4 +121,3 @@ def test_schema_log_collector_is_tracked_as_critical(tmp_path):
     # since it inherits from BaseSCTLogCollector
     with pytest.raises(FileNotFoundError, match="No local files found for schema-logs"):
         collector.collect_logs(local_search_path=str(tmp_path))
-
