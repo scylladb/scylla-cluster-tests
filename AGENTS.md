@@ -388,3 +388,30 @@ Jenkins pipelines are in `jenkins-pipelines/` organized by:
 - `manager/` - Scylla Manager tests
 
 Pipeline utilities are in `vars/` directory.
+
+## Implementation Plans
+
+Major features and refactorings are documented in implementation plans stored in `/docs/plans/`.
+
+### Plan Structure
+
+Plans should follow this structure:
+- **Problem Statement**: Clear description of what needs to be implemented and why
+- **Current State**: Analysis of existing implementation (if any)
+- **Goals**: Specific, measurable objectives
+- **Implementation Phases**: Step-by-step breakdown with Definition of Done for each phase
+- **Testing Requirements**: Unit, integration, and manual testing for each phase
+- **Success Criteria**: How to determine if the implementation is successful
+- **Risk Mitigation**: Known risks and how to address them
+
+### Plan Guidelines
+
+When creating or reading implementation plans:
+- Plans are written in Markdown format
+- Store plans in `/docs/plans/` directory
+- Use descriptive filenames (e.g., `gce-azure-fallback-features.md`)
+- Plans should be implementation-focused, not time-bound
+- Include clear Definition of Done (DoD) for each phase
+- Provide comprehensive testing requirements
+- Document backend-specific details (AWS, GCE, Azure, etc.)
+- Include code examples where helpful
