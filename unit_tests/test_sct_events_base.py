@@ -15,12 +15,13 @@ import os
 import pickle
 import tempfile
 import unittest
+import json
 from typing import Optional, Type, Protocol, runtime_checkable
 from unittest.mock import patch
 
 from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.base import SctEvent, SctEventTypesRegistry, BaseFilter, LogEvent, LogEventProtocol
-
+from sdcm.sct_events.nemesis import DisruptionEvent
 
 Y = None  # define a global name for pickle.
 
@@ -440,6 +441,19 @@ class TestBaseFilter(SctEventTestCase):
 
 
 class TestLogEvent(SctEventTestCase):
+    def _create_test_event(self, subcontext=None):
+        """Helper to create a test event with hardcoded event_id and severity."""
+
+        class Y(SctEvent):
+            pass
+
+        event = Y()
+        event.event_id = "test-event-id"
+        event.severity = Severity.ERROR
+        if subcontext is not None:
+            event.subcontext = subcontext
+        return event
+
     def test_log_event_subclass(self):
         class Y(LogEvent):
             pass
@@ -582,3 +596,47 @@ class TestLogEvent(SctEventTestCase):
             "event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=1 "
             "node=n1\nl1\nb1",
         )
+
+    def test_subcontext_with_dict_and_event_objects(self):
+        """Test that __getstate__ handles both dict and SctEvent objects in subcontext."""
+        # Create a DisruptionEvent to add to subcontext
+        disruption = DisruptionEvent(nemesis_name="TestNemesis", node="test-node")
+        disruption.event_id = "disruption-event-id"
+
+        # Initialize subcontext with both a SctEvent and a dict
+        subcontext = [
+            disruption,  # SctEvent object
+            {"event_id": "dict-event-id", "base": "TestBase", "nemesis_name": "DictNemesis"},  # dict object
+        ]
+        event = self._create_test_event(subcontext=subcontext)
+
+        # Call __getstate__ which should handle both types without error
+        state = event.__getstate__()
+
+        # Verify subcontext was serialized correctly
+        assert isinstance(state["subcontext"], list)
+        assert len(state["subcontext"]) == 2
+
+        # First item should be serialized from DisruptionEvent
+        assert isinstance(state["subcontext"][0], dict)
+        assert "event_id" in state["subcontext"][0]
+        assert state["subcontext"][0]["event_id"] == "disruption-event-id"
+
+        # Second item should be the original dict
+        assert isinstance(state["subcontext"][1], dict)
+        assert state["subcontext"][1]["event_id"] == "dict-event-id"
+
+    def test_to_json_with_dict_in_subcontext(self):
+        """Test that to_json() works when subcontext contains dict objects."""
+        # Initialize subcontext with a dict (simulating deserialized event)
+        subcontext = [{"event_id": "dict-event-id", "base": "TestBase", "nemesis_name": "DictNemesis"}]
+        event = self._create_test_event(subcontext=subcontext)
+
+        # This should not raise AttributeError
+        json_str = event.to_json()
+
+        # Verify the JSON is valid and contains the subcontext
+        parsed = json.loads(json_str)
+        assert "subcontext" in parsed
+        assert len(parsed["subcontext"]) == 1
+        assert parsed["subcontext"][0]["event_id"] == "dict-event-id"
