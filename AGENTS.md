@@ -237,6 +237,30 @@ Nemesis are chaos operations that test database resilience. Common types:
 4. Use cluster reuse for faster iteration
 5. Run pre-commit before commit, and after commit: `uv run sct.py pre-commit`
 
+### Code Quality Rules
+
+**Import Management:**
+- Always check for and remove unused imports before committing
+- Run `ruff check --select F401` to detect unused imports
+- Pre-commit hooks will flag unused imports automatically
+
+**Testing with Temporary Files:**
+- Always prefer pytest's `tmp_path` fixture over `tempfile` module context managers
+- The `tmp_path` fixture provides automatic cleanup and better integration with pytest
+- Example:
+  ```python
+  # Good - using tmp_path fixture
+  def test_something(tmp_path):
+      test_file = tmp_path / "test.txt"
+      test_file.write_text("content")
+
+  # Avoid - using tempfile module
+  import tempfile
+  def test_something():
+      with tempfile.TemporaryDirectory() as tmpdir:
+          # ...
+  ```
+
 ### Debugging SCT Tests
 - Check logs in `~/sct-results/latest/`
 
@@ -272,6 +296,10 @@ All unit tests in `unit_tests/` should follow pytest conventions:
 3. **Scope fixtures appropriately** - Use `scope="module"` for expensive setup, `scope="function"` (default) for clean state
 4. **Use conftest.py for shared fixtures** - Place common fixtures in `unit_tests/conftest.py`, auto-discovered by pytest
 5. **Prefer simple assertions** - Use `assert x == y` not `self.assertEqual(x, y)`
+6. **NEVER use `time.sleep()` in unit tests** - Avoid `time.sleep()` at all costs as it makes tests slow and flaky. Instead:
+   - Use helper functions that poll for the desired state (e.g., `wait_for_condition()`, look of those first)
+   - Use retry loops with `sdcm/wait` module until the expected result is achieved
+   - Mock time-dependent behavior using `unittest.mock` or `freezegun`
 
 ## Documentation Standards
 

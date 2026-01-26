@@ -1,6 +1,7 @@
 """Mock classes"""
 
 from dataclasses import dataclass, field
+from unittest.mock import MagicMock
 
 from sdcm.cluster import BaseScyllaCluster
 from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
@@ -10,11 +11,26 @@ from unit_tests.dummy_remote import LocalLoaderSetDummy
 PARAMS = dict(nemesis_interval=1, nemesis_filter_seeds=False)
 
 
+class FakeTestConfig:
+    """Mock TestConfig for argus client calls"""
+
+    def argus_client(self):
+        mock_client = MagicMock()
+        mock_client.submit_nemesis = MagicMock()
+        mock_client.finalize_nemesis = MagicMock()
+        return mock_client
+
+
 @dataclass
 class Node:
     running_nemesis = None
     public_ip_address: str = "127.0.0.1"
     name: str = "Node1"
+    _test_config: FakeTestConfig = field(default_factory=FakeTestConfig)
+
+    @property
+    def test_config(self):
+        return self._test_config
 
     @property
     def scylla_shards(self):
@@ -28,6 +44,11 @@ class Node:
 class Cluster:
     nodes: list
     params: dict = field(default_factory=lambda: PARAMS)
+    _test_config: FakeTestConfig = field(default_factory=FakeTestConfig)
+
+    @property
+    def test_config(self):
+        return self._test_config
 
     def check_cluster_health(self):
         pass
@@ -51,6 +72,7 @@ class FakeTester:
     db_cluster: Cluster | BaseScyllaCluster = field(default_factory=lambda: Cluster(nodes=[Node(), Node()]))
     monitors: list = field(default_factory=list)
     nemesis_allocator: NemesisNodeAllocator = None
+    events_processes_registry: object = None
 
     @property
     def all_db_nodes(self):
@@ -71,6 +93,10 @@ class FakeTester:
 
     def get_test_details(self):
         pass
+
+    def get_event_summary(self):
+        """Return empty event summary for tests"""
+        return {}
 
     def id(self):
         return 0

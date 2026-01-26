@@ -1069,6 +1069,13 @@ class SCTConfiguration(dict):
             k8s_multitenancy_supported=True,
             help="""If true runs the nemesis only on non seed nodes""",
         ),
+        dict(
+            name="nemesis_fail_on_error_events",
+            env="SCT_NEMESIS_FAIL_ON_ERROR_EVENTS",
+            type=boolean,
+            k8s_multitenancy_supported=True,
+            help="""If true, nemesis will fail if ERROR or CRITICAL events occurred during its execution""",
+        ),
         # Stress Commands
         dict(
             name="stress_cmd",
