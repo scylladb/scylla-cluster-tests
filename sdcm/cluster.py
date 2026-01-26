@@ -6379,7 +6379,7 @@ class BaseMonitorSet:
         self.configure_overview_template(node)
         try:
             self.start_scylla_monitoring(node)
-        except (Failure, UnexpectedExit):
+        except (Failure, UnexpectedExit, Libssh2_UnexpectedExit):
             self.restart_scylla_monitoring()
         # The time will be used in url of Grafana monitor,
         # the data from this point to the end of test will
