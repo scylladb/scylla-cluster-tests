@@ -311,10 +311,15 @@ class SctEvent:
         attrs = self.attribute_with_value_for_json(attributes_list=attr_list)
 
         if subcontext := getattr(self, "subcontext"):
-            attrs["subcontext"] = [
-                self.attribute_with_value_for_json(attributes_list=event.subcontext_fields, event=event)
-                for event in subcontext
-            ]
+            attrs["subcontext"] = []
+            for event in subcontext:
+                # Handle both dict and SctEvent objects in subcontext
+                if isinstance(event, dict):
+                    attrs["subcontext"].append(event)
+                elif isinstance(event, SctEvent):
+                    attrs["subcontext"].append(
+                        self.attribute_with_value_for_json(attributes_list=event.subcontext_fields, event=event)
+                    )
         else:
             attrs["subcontext"] = []
         return attrs
