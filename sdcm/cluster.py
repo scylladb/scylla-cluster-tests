@@ -4558,6 +4558,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.remoter.sudo('systemctl disable iptables', ignore_status=True)
             node.remoter.sudo('systemctl stop firewalld', ignore_status=True)
             node.remoter.sudo('systemctl disable firewalld', ignore_status=True)
+            # upgrade openssl and openssh together to avoid sshd crash due to version mismatch
+            node.remoter.sudo('yum update -y openssl openssh-server openssh-clients', ignore_status=True)
 
         if self.params.get('logs_transport') == 'ssh':
             node.install_package('python3')
