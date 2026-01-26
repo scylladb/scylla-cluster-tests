@@ -285,13 +285,13 @@ When writing or updating documentation in this repository, follow these standard
   ```python
   def check_cluster_health(self, nodes=None):
       """Check the health of cluster nodes.
-      
+
       Args:
           nodes: List of nodes to check. If None, checks all nodes.
-          
+
       Returns:
           bool: True if all nodes are healthy, False otherwise.
-          
+
       Raises:
           ClusterHealthError: If critical health issues are detected.
       """

@@ -856,7 +856,8 @@ class Nemesis(NemesisFlags):
             self.log.debug("Rebooting %s out of %s times", i + 1, num_of_reboots)
             cdc_expected_error = self.target_node.follow_system_log(patterns=cdc_expected_error_patterns)
             cdc_success_msg = self.target_node.follow_system_log(patterns=cdc_success_msg_patterns)
-            self.reboot_node(target_node=self.target_node, hard=True)
+            with ignore_raft_topology_cmd_failing():
+                self.reboot_node(target_node=self.target_node, hard=True)
             if random.choice([True, False]):
                 self.log.info("Waiting scylla services to start after node reboot")
                 self.target_node.wait_db_up()
@@ -887,11 +888,12 @@ class Nemesis(NemesisFlags):
 
     @target_all_nodes
     def disrupt_soft_reboot_node(self):
-        self.reboot_node(target_node=self.target_node, hard=False)
+        with ignore_raft_topology_cmd_failing():
+            self.reboot_node(target_node=self.target_node, hard=False)
         with self.action_log_scope(f"Wait for {self.target_node.name} node to be fully started"):
             self.target_node.wait_node_fully_start()
 
-    @decorate_with_context(ignore_ycsb_connection_refused)
+    @decorate_with_context([ignore_ycsb_connection_refused, ignore_raft_topology_cmd_failing])
     @target_all_nodes
     def disrupt_rolling_restart_cluster(self, random_order=False):
         with self.action_log_scope(f"Rolling restart cluster. random order: {random_order}"):
@@ -937,7 +939,7 @@ class Nemesis(NemesisFlags):
             with self.cluster.cql_connection_patient(self.target_node) as session:
                 session.execute("DROP KEYSPACE keyspace_for_authenticator_switch")
 
-    @decorate_with_context(ignore_ycsb_connection_refused)
+    @decorate_with_context([ignore_ycsb_connection_refused, ignore_raft_topology_cmd_failing])
     @target_all_nodes
     def disrupt_rolling_config_change_internode_compression(self):
         def get_internode_compression_new_value_randomly(current_compression):
@@ -3376,7 +3378,7 @@ class Nemesis(NemesisFlags):
                 cluster_id=chosen_snapshot_info["cluster_id"],
                 tag=chosen_snapshot_tag,
             )
-            with ignore_ycsb_connection_refused():
+            with ignore_ycsb_connection_refused(), ignore_raft_topology_cmd_failing():
                 self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
 
             # TODO: Bring it back after the implementation of https://github.com/scylladb/scylla-manager/issues/4049
@@ -4822,7 +4824,7 @@ class Nemesis(NemesisFlags):
             enable_kms_key_rotation=True, additional_scylla_encryption_options={"key_provider": "KmsKeyProviderFactory"}
         )
 
-    @decorate_with_context(ignore_ycsb_connection_refused)
+    @decorate_with_context([ignore_ycsb_connection_refused, ignore_raft_topology_cmd_failing])
     @scylla_versions(("2023.1.1-dev", None))
     def _enable_disable_table_encryption(self, enable_kms_key_rotation, additional_scylla_encryption_options=None):  # noqa: PLR0914
         if self.cluster.params.get("cluster_backend") != "aws":
@@ -5704,7 +5706,8 @@ class Nemesis(NemesisFlags):
                 raise UnsupportedNemesis("Non-system keyspace and table are not found. nemesis can't be run")
             ks_name, base_table_name = random.choice(ks_cfs).split(".")
             view_name = f"{base_table_name}_view"
-            self.target_node.stop_scylla()
+            with ignore_raft_topology_cmd_failing():
+                self.target_node.stop_scylla()
             with self.cluster.cql_connection_patient(node=cql_query_executor_node, connect_timeout=600) as session:
                 try:
                     create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
@@ -5990,7 +5993,10 @@ class Nemesis(NemesisFlags):
             elif coordinator_node != self.target_node:
                 self.switch_target_node(coordinator_node)
             self.log.debug("Coordinator node: %s, %s", coordinator_node, coordinator_node.name)
-            with self.action_log_scope(f"Stop Scylla coordinator {coordinator_node.name} node"):
+            with (
+                self.action_log_scope(f"Stop Scylla coordinator {coordinator_node.name} node"),
+                ignore_raft_topology_cmd_failing(),
+            ):
                 self.target_node.stop_scylla()
             self.log.debug("Wait random timeout %s to new coordinator will be elected", election_wait_timeout)
             time.sleep(election_wait_timeout)
