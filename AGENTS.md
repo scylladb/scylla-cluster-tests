@@ -16,6 +16,23 @@ export UV_PROJECT_ENVIRONMENT=.venv
 uv sync
 ```
 
+**Setting up the unit test environment:**
+```bash
+# Install Python and create virtual environment
+uv python install
+
+# Sync all dependencies (including dev dependencies for unit tests)
+uv sync
+
+# The .venv directory will be created with all required packages
+# No need to manually install pytest, dependencies are handled by uv
+```
+
+**Note:** `uv sync` installs all dependencies from `pyproject.toml`, including:
+- Core SCT dependencies (boto3, cassandra-driver, azure-mgmt-*, etc.)
+- Development tools (pytest, ruff, autopep8, etc.)
+- Type stubs and testing utilities
+
 ### Using Hydra (Docker/Podman container environment)
 ```bash
 # Install hydra
@@ -34,6 +51,9 @@ uv run sct.py unit-tests
 
 # Specific unit test
 uv run sct.py unit-tests -t test_config.py
+
+# Run a specific test class or method
+uv run sct.py unit-tests -t test_longevity.py::DummyLongevityTest::test_user_batch_custom_time
 ```
 
 #### Run integration tests
