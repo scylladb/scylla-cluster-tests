@@ -19,7 +19,7 @@ Kernel panics during testing are critical failures that can cause nodes to becom
 
 ## Goals
 
-1. **Automatic kernel panic detection** across AWS, GCE, and Azure platforms
+1. **Automatic kernel panic detection** across AWS, GCE, Azure, and OCI platforms
 2. **Early failure detection** to minimize wasted test time
 3. **Event system integration** for automated response and alerting
 4. **Cloud-agnostic API** with provider-specific implementations
@@ -48,6 +48,7 @@ This is a clean re-implementation of PR #12753, addressing all review feedback.
 - AWS: EC2 console output monitoring
 - GCE: Serial port output monitoring
 - Azure: Boot diagnostics blob monitoring
+- OCI: Console history monitoring (WIP backend)
 
 ---
 
@@ -121,7 +122,27 @@ This is a clean re-implementation of PR #12753, addressing all review feedback.
 
 ---
 
-### Phase 5: Comprehensive Unit Testing
+### Phase 5: OCI Implementation (Future)
+
+**Objective**: Implement kernel panic detection for OCI instances
+
+**Files Modified**:
+- `sdcm/cluster_oci.py` - Add `OCIKernelPanicChecker` class and integrate into `OCINode`
+
+**Key Requirements**:
+1. ✅ **Import placement**: All imports at top of file
+2. ✅ **Thread safety**: Use `threading.Event()` for `_panic_detected`
+3. ✅ **Logging cleanup**: Use module-level `LOGGER`, no timestamp prefixes
+4. ✅ **Daemon thread**: Set `daemon=True`
+5. ✅ **OCI-specific**: Monitor console history for kernel panics
+
+**Status**: Deferred - OCI backend is still work in progress
+
+**Expected Outcome**: OCI nodes automatically monitor for kernel panics (when backend is ready)
+
+---
+
+### Phase 6: Comprehensive Unit Testing
 
 **Objective**: Create pytest-style unit tests with full coverage
 
@@ -150,7 +171,7 @@ This is a clean re-implementation of PR #12753, addressing all review feedback.
 
 ---
 
-### Phase 6: Code Quality and Security Validation
+### Phase 7: Code Quality and Security Validation
 
 **Objective**: Ensure code quality and security before finalizing
 
@@ -167,13 +188,14 @@ This is a clean re-implementation of PR #12753, addressing all review feedback.
 ## Success Criteria
 
 1. ✅ All three cloud providers (AWS, GCE, Azure) have kernel panic detection
-2. ✅ Events are published correctly with CRITICAL severity
-3. ✅ All review feedback from PR #12753 addressed
-4. ✅ 15+ unit tests with 100% pass rate
-5. ✅ No false positives in testing
-6. ✅ Code passes pre-commit, code review, and security scans
-7. ✅ Thread-safe implementation with proper cleanup
-8. ✅ Documentation in plan format
+2. ✅ OCI support documented for future implementation (backend WIP)
+3. ✅ Events are published correctly with CRITICAL severity
+4. ✅ All review feedback from PR #12753 addressed
+5. ✅ 15+ unit tests with 100% pass rate
+6. ✅ No false positives in testing
+7. ✅ Code passes pre-commit, code review, and security scans
+8. ✅ Thread-safe implementation with proper cleanup
+9. ✅ Documentation in plan format
 
 ## Non-Goals
 
@@ -182,6 +204,7 @@ This is a clean re-implementation of PR #12753, addressing all review feedback.
 - Panic prevention mechanisms
 - Integration with specific alerting systems (events can be consumed by any system)
 - Docker/Kubernetes backend support (cloud providers only)
+- OCI implementation (deferred until backend is ready)
 
 ## Timeline
 
@@ -189,10 +212,11 @@ This is a clean re-implementation of PR #12753, addressing all review feedback.
 - Phase 2 (AWS): ~1 hour
 - Phase 3 (GCE): ~1 hour
 - Phase 4 (Azure): ~1.5 hours (includes encapsulation fix)
-- Phase 5 (Testing): ~2 hours
-- Phase 6 (Validation): ~1 hour
+- Phase 5 (OCI): Deferred (backend WIP)
+- Phase 6 (Testing): ~2 hours
+- Phase 7 (Validation): ~1 hour
 
-**Total Estimated Time**: ~7 hours
+**Total Estimated Time**: ~7 hours (excluding OCI)
 
 ## References
 

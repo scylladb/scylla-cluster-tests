@@ -34,6 +34,7 @@ from sdcm.utils.gce_utils import (
     create_instance,
     disk_from_image,
     get_gce_compute_disks_client,
+    get_gce_compute_instances_client,
     wait_for_extended_operation,
     gce_private_addresses,
     gce_public_addresses,
@@ -92,6 +93,7 @@ class GCENode(cluster.BaseNode):
         self._gce_service = gce_service
         self._gce_logging_client = GceLoggingClient(instance_name=name, zone=self.zone)
         self._last_logs_fetch_time = 0.0
+        self.kernel_panic_checker = None
         ssh_login_info = {
             "hostname": None,
             "user": gce_image_username,
@@ -123,6 +125,16 @@ class GCENode(cluster.BaseNode):
         time.sleep(10)
 
         super().init()
+
+        # Start kernel panic monitoring
+        self.kernel_panic_checker = GCPKernelPanicChecker(
+            node=self,
+            instance_name=self._instance.name,
+            project=self.project,
+            zone=self.zone
+        )
+        self.kernel_panic_checker.start()
+        LOGGER.info("Started kernel panic monitoring for node %s (instance: %s)", self.name, self._instance.name)
 
     def wait_for_cloud_init(self):
         if self.remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:
@@ -240,6 +252,13 @@ class GCENode(cluster.BaseNode):
             self.log.exception("Instance doesn't exist, skip destroy")
 
     def destroy(self):
+        # Stop kernel panic monitoring
+        if self.kernel_panic_checker:
+            LOGGER.info("Stopping kernel panic monitoring for node %s", self.name)
+            self.kernel_panic_checker.stop()
+            self.kernel_panic_checker.join(timeout=5)
+            self.kernel_panic_checker = None
+
         self.stop_task_threads()
         self.wait_till_tasks_threads_are_stopped()
         self._instance_wait_safe(self._safe_destroy)
@@ -740,3 +759,29 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
             gce_region_names=gce_datacenter,
             add_nodes=add_nodes,
         )
+
+
+
+
+class GCPKernelPanicChecker(cluster.BaseKernelPanicChecker):
+    """Monitor GCE instance for kernel panics via serial port output."""
+
+    def __init__(self, node, instance_name, project, zone):
+        super().__init__(node, provider_name="GCP")
+        self.instance_name = instance_name
+        self.project = project
+        self.zone = zone
+        self.compute_client, _ = get_gce_compute_instances_client()
+
+    def _get_console_output(self) -> str:
+        """Get serial port output from GCE instance."""
+        serial_output = self.compute_client.get_serial_port_output(
+            project=self.project,
+            zone=self.zone,
+            instance=self.instance_name
+        )
+        return serial_output.contents if hasattr(serial_output, 'contents') else ""
+
+    def _get_instance_identifier(self) -> str:
+        """Return the GCE instance name for logging."""
+        return f"instance {self.instance_name}"
