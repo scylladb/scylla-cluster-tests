@@ -255,7 +255,6 @@ class NemesisFlags:
     # i.e switch off/on network interface, network issues
     kubernetes: bool = False  # flag that signal that nemesis run with k8s cluster
     limited: bool = False  # flag that signal that nemesis are belong to limited set of nemesises
-    has_steady_run: bool = False  # flag that signal that nemesis should be run with perf tests with steady run
     schema_changes: bool = False
     config_changes: bool = False
     free_tier_set: bool = False  # nemesis should be run in FreeTierNemesisSet
@@ -282,6 +281,7 @@ class Nemesis(NemesisFlags):
         self.actions_log = get_action_logger(source=nemesis_thread_name)
         self.action_log_scope = self.actions_log.action_scope
         self.target_node: BaseNode = None
+        self.has_steady_run = False
         self.disruptions_list = []
         self.termination_event = termination_event
         self.operation_log = []
