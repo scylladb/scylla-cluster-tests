@@ -5294,8 +5294,7 @@ class Nemesis(NemesisFlags):
             properties_file.update(**rackdc_value)
         
         # Restart Scylla to apply the new DC configuration
-        new_node.stop_scylla(verify_down=True)
-        new_node.start_scylla(verify_up=True)
+        new_node.restart_scylla_server(verify_up_after=True)
         
         new_node.wait_node_fully_start()
         self.monitoring_set.reconfigure_scylla_monitoring()
