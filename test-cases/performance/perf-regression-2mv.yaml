@@ -19,7 +19,6 @@ instance_type_monitor: 't3.small'
 
 user_prefix: 'perf-regression-mv'
 
-store_perf_results: true
 email_recipients: ['scylla-perf-results@scylladb.com']
 backtrace_decoding: true
 backtrace_stall_decoding: false
