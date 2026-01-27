@@ -12,6 +12,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+from textwrap import dedent
 
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
@@ -1338,11 +1339,24 @@ def integration_tests(test):
 def pre_commit():
     result = 0
     target = "origin/$CHANGE_TARGET" if "CHANGE_TARGET" in os.environ else "upstream/master"
-    result += os.system(
-        "bash -ec 'rm *.commit_msg || true ;"
-        f"for c in $(git rev-list {target}..HEAD --no-merges); do git show -s --format='%B' $c > $c.commit_msg ; done; "
-        "for f in *.commit_msg ; do echo linting $f ; pre-commit run --hook-stage commit-msg --commit-msg-filename $f; done'"
-    )
+
+    if not sys.stdin.isatty():
+        lint_commits = True
+
+    else:
+        click.echo(
+            dedent("""
+            WARNING: This command will temporarily checkout different commits to validate commit messages.
+                Any uncommitted changes should be saved before running this command.
+                This is primarily intended for CI usage.
+        """).strip()
+        )
+        lint_commits = bool(click.confirm("Do you want to continue?"))
+
+    if lint_commits:
+        # Check commit messages by checking out each commit
+        result += os.system(f"bash scripts/lint_commits.sh {target}")
+
     result += os.system("pre-commit run -a --show-diff-on-failure")
     result = 1 if result else 0
     sys.exit(result)
