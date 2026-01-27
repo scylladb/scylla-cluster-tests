@@ -1641,7 +1641,7 @@ def integration_tests(test, n):
 @cli.command("pre-commit", help="Run pre-commit checkers")
 def pre_commit():
     result = 0
-    target = "origin/$CHANGE_TARGET" if "CHANGE_TARGET" in os.environ else "upstream/master"
+    target = "$CHANGE_TARGET" if "CHANGE_TARGET" in os.environ else "upstream/master"
     result += os.system(
         "bash -ec 'rm *.commit_msg || true ;"
         f"for c in $(git rev-list {target}..HEAD --no-merges); do git show -s --format='%B' $c > $c.commit_msg ; done; "
