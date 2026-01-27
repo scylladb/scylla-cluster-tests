@@ -43,7 +43,7 @@ class ReplicationStrategy:
     def apply(self, node: "BaseNode", keyspace: str):
         cql = f"ALTER KEYSPACE {cql_quote_if_needed(keyspace)} WITH replication = {self}"
         with node.parent_cluster.cql_connection_patient(node, connect_timeout=300) as session:
-            session.execute(cql, timeout=300)
+            session.execute(cql, timeout=600)
 
         node.parent_cluster.wait_for_schema_agreement()
 
