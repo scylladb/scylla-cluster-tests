@@ -1581,6 +1581,13 @@ def clean_clusters_eks(tags_dict: dict, regions: list = None, dry_run: bool = Fa
     ParallelObject(eks_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
 
 
+def _ami_version_matches(ami_name: str, target_version: str) -> bool:
+    """Check if AMI name contains the target version at a proper word boundary."""
+    version = target_version.replace('enterprise-', '')
+    pattern = rf'(?<!\d){re.escape(version)}(\.\d+)*(-|\s|$)'
+    return bool(re.search(pattern, ami_name))
+
+
 @lru_cache
 def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', version: str = None) -> list[EC2Image]:
     """Get the list of all the formal scylla ami from specific region."""
@@ -1607,6 +1614,10 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
     images = sorted(images, key=lambda x: x.creation_date, reverse=True)
     images = [image for image in images if image.tags and 'debug' not in {
         i['Key']: i['Value'] for i in image.tags}.get('Name', '')]
+
+    # ensure version matching at proper word boundary (to prevent "5.4" from matching "2025.4.2" as substring)
+    if version and version != "all":
+        images = [img for img in images if _ami_version_matches(img.name, version)]
 
     return images
 
