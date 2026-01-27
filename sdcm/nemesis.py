@@ -290,7 +290,9 @@ class Nemesis(NemesisFlags):
         self.current_disruption = None
         self.duration_list = []
         self.error_list = []
-        self.interval = 60 * self.tester.params.get("nemesis_interval")  # convert from min to sec
+        self.interval = 60 * (
+            kwargs.get("nemesis_interval", None) or self.tester.params.get("nemesis_interval")
+        )  # convert from min to sec
         self.start_time = time.time()
         self.stats = {}
         self.nemesis_selector = nemesis_selector

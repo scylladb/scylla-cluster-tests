@@ -1004,7 +1004,7 @@ class SCTConfiguration(dict):
         dict(
             name="nemesis_interval",
             env="SCT_NEMESIS_INTERVAL",
-            type=int,
+            type=int_or_space_separated_ints,
             k8s_multitenancy_supported=True,
             help="""Nemesis sleep interval to use if None provided specifically in the test""",
         ),
