@@ -385,6 +385,21 @@ class Client:
         if self.pkey is not None:
             self._pkey_auth()
             return
+        # when no pkey and no password, try "none" auth first (used by SSH proxies)
+        if self.password is None:
+            if self._none_auth():
+                return
+            # if none auth failed and we have no password, try agent auth as fallback
+            if self.allow_agent:
+                try:
+                    with self.session.lock:
+                        self.session.agent_auth(self.user)
+                    return
+                except Exception:  # noqa: BLE001
+                    pass
+            raise AuthenticationException(
+                "Authentication failed: none auth and agent auth both failed, and no password provided"
+            )
         if self.allow_agent:
             try:
                 with self.session.lock:
@@ -427,6 +442,18 @@ class Client:
             )
         except Exception as error:  # noqa: BLE001
             raise AuthenticationException("Password authentication failed") from error
+
+    def _none_auth(self) -> bool:
+        """Attempt 'none' authentication for SSH proxies"""
+        try:
+            methods = self.session.eagain(
+                self.session.userauth_list, args=(self.user,), timeout=self.timings.auth_timeout
+            )
+            if not methods:  # 'none' auth succeeded
+                return True
+            return bool(self.session.eagain(self.session.userauth_authenticated, timeout=self.timings.auth_timeout))
+        except Exception:  # noqa: BLE001
+            return False
 
     @staticmethod
     def _get_socket_family(host):

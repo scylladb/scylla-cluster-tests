@@ -84,7 +84,7 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport="fabric", default=True)
             # creating new connection each time in order not to interfere the main connection to decrease probability
             # of the EOF bug https://github.com/paramiko/paramiko/issues/1584
             with self._create_connection() as connection:
-                result = connection.run("true", timeout=30, warn=False, encoding="utf-8", hide=True)
+                result = connection.run("true", timeout=30, warn=False, encoding="utf-8", hide=True, in_stream=False)
                 return result.ok
         except AuthenticationException as auth_exception:
             # in order not to overwhelm SSH server with connection attempts that can cause further connection drops

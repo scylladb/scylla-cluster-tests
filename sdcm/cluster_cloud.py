@@ -16,7 +16,6 @@ import ipaddress
 import logging
 import re
 from functools import cached_property
-from types import SimpleNamespace
 from typing import Any
 import functools
 from pathlib import Path
@@ -34,7 +33,7 @@ from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.get_username import get_username
 from sdcm.utils.vector_store_utils import VectorStoreClusterMixin
 from sdcm.test_config import TestConfig
-from sdcm.remote import RemoteCmdRunner, shell_script_cmd
+from sdcm.remote import RemoteLibSSH2CmdRunner, shell_script_cmd
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.common.utils import (
     configure_backoff_timeout,
@@ -319,8 +318,7 @@ class CloudNode(cluster.BaseNode):
         localhost = TestConfig().tester_obj().localhost
         if localhost.xcloud_connect_supported(self.parent_cluster.params):
             ssh_login_info = self._get_ssh_address(localhost)
-            # hardcode the fabric implementation for now, as it the only one we support right now
-            self.remoter = RemoteCmdRunner(**ssh_login_info)
+            self.remoter = RemoteLibSSH2CmdRunner(**ssh_login_info)
             self.log.debug(self.remoter.ssh_debug_cmd())
         else:
             self.log.warning(f"XCloud connectivity is not supported, {self.node_type} SSH remoter is not initialized")
@@ -376,11 +374,6 @@ class CloudNode(cluster.BaseNode):
     @cached_property
     def cql_address(self):
         return self._private_ip if self.parent_cluster.vpc_peering_enabled else self._public_ip
-
-    @cached_property
-    def raft(self):
-        """Override BaseNode.raft property to return a dummy raft object for PoC purposes"""
-        return SimpleNamespace(is_enabled=True, is_ready=lambda: True)
 
     @property
     def scylla_shards(self) -> int:
@@ -1169,10 +1162,6 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self.log.debug(
             "Skip validating seeds on Scylla Cloud, pending until approach to SSHing/accessing nodes is developed"
         )
-
-    def start_nemesis(self, interval=None, cycles_count: int = -1):
-        # TODO: Enable nemesis start for Scylla Cloud
-        self.log.info("Skip starting nemesis on Scylla Cloud")
 
     def check_nodes_up_and_normal(self, nodes=None, verification_node=None):
         """Checks via Scylla Cloud API that nodes are in ACTIVE/NORMAL state"""

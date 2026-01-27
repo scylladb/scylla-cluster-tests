@@ -1,0 +1,27 @@
+test_duration: 90
+
+prepare_write_cmd:
+    - "cassandra-stress write cl=QUORUM n=5048570 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=80 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
+    - "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=10000 -clustering-row-count=555 -clustering-row-size=uniform:128..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data"
+
+stress_cmd:
+    - "cassandra-stress write cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=40 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
+    - "cassandra-stress read  cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=40 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
+    - "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=10000 -clustering-row-count=555 -clustering-row-size=uniform:128..2048 -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=60m -validate-data"
+
+n_db_nodes: 3
+n_loaders: 1
+
+instance_type_db: 'i4i.large'
+instance_type_loader: 'c6i.large'
+gce_instance_type_db: 'n2-highmem-2'
+gce_instance_type_loader: 'e2-standard-2'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: "not disruptive and schema_changes"
+nemesis_seed: '111'
+nemesis_interval: 5
+
+run_db_node_benchmarks: false
+
+user_prefix: 'longevity-scylla-cloud-5gb-1h'

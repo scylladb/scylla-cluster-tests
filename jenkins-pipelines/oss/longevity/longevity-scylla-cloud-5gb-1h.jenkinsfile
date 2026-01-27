@@ -6,7 +6,8 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'xcloud',
     xcloud_provider: 'aws',
-    region: 'eu-west-1',
+    xcloud_env: 'staging',
+    region: 'us-east-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-scylla-cloud-sanity-30m.yaml'
+    test_config: 'test-cases/longevity/longevity-scylla-cloud-5gb-1h.yaml'
 )
