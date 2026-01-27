@@ -438,77 +438,67 @@ class MonitorSetAzure(cluster.BaseMonitorSet, AzureCluster):
 CHECK_INTERVAL_SECONDS = 30  # Check every 30 seconds
 
 
-class AzureKernelPanicChecker(threading.Thread):
+class AzureKernelPanicChecker(cluster.BaseKernelPanicChecker):
     """Monitor Azure VM for kernel panics via boot diagnostics."""
 
     def __init__(self, node, vm_name, region, resource_group):
-        super().__init__()
-        self.node = node
+        super().__init__(node, provider_name="Azure")
         self.vm_name = vm_name
         self.region = region
         self.resource_group = resource_group
         self.compute_client = AzureService().compute
-        self._stop_event = threading.Event()
-        self._panic_detected = threading.Event()  # Thread-safe flag
-        self.daemon = True
 
-    def run(self):
-        while not self._stop_event.is_set():
-            try:
-                # Handle potential VM termination race condition
-                try:
-                    instance_view = self.compute_client.virtual_machines.instance_view(
-                        resource_group_name=self.resource_group,
-                        vm_name=self.vm_name
-                    )
-                except Exception as exc:
-                    # Check if VM was terminated (ResourceNotFoundError)
-                    if "ResourceNotFoundError" in str(type(exc).__name__):
-                        LOGGER.debug("[Azure] VM %s no longer exists, stopping monitoring", self.vm_name)
-                        self._stop_event.set()
-                        return
-                    raise
+    def _get_console_output(self) -> str:
+        """Get boot diagnostics output from Azure VM.
+        
+        Note: Azure implementation is simplified as boot diagnostics retrieval
+        varies by API version and requires Azure storage access.
+        """
+        # Handle potential VM termination race condition
+        try:
+            instance_view = self.compute_client.virtual_machines.instance_view(
+                resource_group_name=self.resource_group,
+                vm_name=self.vm_name
+            )
+        except Exception as exc:
+            # Check if VM was terminated (ResourceNotFoundError)
+            if "ResourceNotFoundError" in str(type(exc).__name__):
+                LOGGER.debug("[Azure] VM %s no longer exists, stopping monitoring", self.vm_name)
+                self._stop_event.set()
+                return ""
+            raise
 
-                # Get boot diagnostics console log
-                # Note: Boot diagnostics retrieval varies by Azure API version
-                # This is a simplified implementation
-                try:
-                    boot_diagnostics = self.compute_client.virtual_machines.retrieve_boot_diagnostics_data(
-                        resource_group_name=self.resource_group,
-                        vm_name=self.vm_name
-                    )
-                    # The serial console log URL
-                    if hasattr(boot_diagnostics, 'console_screenshot_blob_uri'):
-                        # Get the serial log content (implementation would need Azure storage access)
-                        # For now, log that we're monitoring
-                        pass
-                except Exception as exc:
-                    LOGGER.debug("[Azure] Error retrieving boot diagnostics for %s: %s", self.vm_name, exc)
+        # Get boot diagnostics console log
+        # Note: Boot diagnostics retrieval varies by Azure API version
+        # This is a simplified implementation
+        try:
+            boot_diagnostics = self.compute_client.virtual_machines.retrieve_boot_diagnostics_data(
+                resource_group_name=self.resource_group,
+                vm_name=self.vm_name
+            )
+            # The serial console log URL
+            if hasattr(boot_diagnostics, 'console_screenshot_blob_uri'):
+                # Get the serial log content (implementation would need Azure storage access)
+                # For now, return empty string as this is WIP
+                pass
+        except Exception as exc:
+            LOGGER.debug("[Azure] Error retrieving boot diagnostics for %s: %s", self.vm_name, exc)
 
-                # Check for kernel panic in available diagnostics
-                # This is simplified - real implementation would parse boot diagnostics
-                power_state = None
-                if hasattr(instance_view, 'statuses'):
-                    for status in instance_view.statuses:
-                        if status.code.startswith('PowerState/'):
-                            power_state = status.code.split('/')[-1]
+        # Check for kernel panic in available diagnostics
+        # This is simplified - real implementation would parse boot diagnostics
+        power_state = None
+        if hasattr(instance_view, 'statuses'):
+            for status in instance_view.statuses:
+                if status.code.startswith('PowerState/'):
+                    power_state = status.code.split('/')[-1]
 
-                # If VM is in a failed state, it might indicate a kernel panic
-                if power_state and power_state.lower() in ['stopped', 'deallocated']:
-                    LOGGER.debug("[Azure] %s: power state = %s", self.vm_name, power_state)
+        # If VM is in a failed state, it might indicate a kernel panic
+        if power_state and power_state.lower() in ['stopped', 'deallocated']:
+            LOGGER.debug("[Azure] %s: power state = %s", self.vm_name, power_state)
 
-            except Exception as exc:  # noqa: BLE001
-                LOGGER.error("[Azure] Error checking %s: %s", self.vm_name, exc)
+        # Return empty for now - Azure implementation is WIP
+        return ""
 
-            self._stop_event.wait(CHECK_INTERVAL_SECONDS)
-
-    def stop(self):
-        self._stop_event.set()
-
-    def __enter__(self):
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.stop()
-        self.join()
+    def _get_instance_identifier(self) -> str:
+        """Return the Azure VM name for logging."""
+        return f"VM {self.vm_name}"
