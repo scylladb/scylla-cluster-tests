@@ -19,6 +19,7 @@ import configparser
 from typing import BinaryIO
 from concurrent.futures.thread import ThreadPoolExecutor
 from collections import namedtuple
+from pathlib import Path
 
 import boto3
 import paramiko
@@ -204,6 +205,9 @@ class KeyStore:
         return self.get_json("argus_rest_credentials.json")
 
     def get_baremetal_config(self, config_name: str):
+        local_config_path = Path(f"{config_name}.json")
+        if local_config_path.exists():
+            return json.load(local_config_path.open("r", encoding="utf-8"))
         return self.get_json(f"{config_name}.json")
 
     def get_cloud_rest_credentials(self, environment: str = "lab"):
