@@ -21,8 +21,8 @@ pipeline {
         string(defaultValue: '',
                description: 'ID of a SCT test to restore the monitoring stack',
                name: 'test_id')
-        string(defaultValue: '1440',
-               description: 'how long to keep an AWS instance with the restored monitoring stack (in minutes)',
+        string(defaultValue: '720',
+               description: 'how long to keep an AWS instance with the restored monitoring stack (in minutes, default is 720 minutes, which is 12 hours!)',
                name: 'duration')
         string(defaultValue: 'us-east-1',
                description: 'a region where to deploy an AWS instance',
