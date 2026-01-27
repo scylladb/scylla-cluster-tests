@@ -15,7 +15,13 @@ import uuid
 
 import pytest
 
-from sdcm.logcollector import Collector, BaseSCTLogCollector, PythonSCTLogCollector, SchemaLogCollector
+from sdcm.logcollector import (
+    Collector,
+    BaseSCTLogCollector,
+    PythonSCTLogCollector,
+    SchemaLogCollector,
+    FailureStatisticsCollector,
+)
 from sdcm.provision import provisioner_factory
 from unit_tests.lib.fake_resources import prepare_fake_region
 from sdcm.utils import common
@@ -121,3 +127,23 @@ def test_schema_log_collector_is_tracked_as_critical(tmp_path):
     # since it inherits from BaseSCTLogCollector
     with pytest.raises(FileNotFoundError, match="No local files found for schema-logs"):
         collector.collect_logs(local_search_path=str(tmp_path))
+
+
+def test_failure_statistics_collector_does_not_raise_when_no_files(tmp_path):
+    """Test that FailureStatisticsCollector does NOT raise exception when no files are found.
+
+    Failure statistics are optional diagnostic files created only on test failures.
+    This collector should not be treated as critical and should gracefully handle
+    missing files by returning an empty list instead of raising an exception.
+    """
+    test_id = str(uuid.uuid4())
+    storage_dir = tmp_path / "storage"
+    storage_dir.mkdir()
+
+    collector = FailureStatisticsCollector(
+        nodes=[], test_id=test_id, storage_dir=str(storage_dir), params={"cluster_backend": "fake"}
+    )
+
+    # collect_logs should return empty list when no files exist, NOT raise an exception
+    result = collector.collect_logs(local_search_path=str(tmp_path))
+    assert result == []

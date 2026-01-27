@@ -2002,6 +2002,54 @@ class SchemaLogCollector(BaseSCTLogCollector):
     cluster_dir_prefix = "schema-logs"
 
 
+<<<<<<< HEAD
+||||||| parent of 1379778d9 (fix(logcollector): make failure-statistics logs optional)
+class FailureStatisticsCollector(BaseSCTLogCollector):
+    """Failure diagnostic statistics log collector
+
+    Collects diagnostic files generated on test failure:
+    - nodetool status, gossipinfo, compactionstats outputs
+    - scylla-doctor vitals and logs (if enabled)
+
+    Extends:
+        BaseSCTLogCollector
+    """
+
+    log_entities = [
+        FileLog(name="nodetool_status_failure.log", search_locally=True),
+        FileLog(name="nodetool_gossipinfo_failure_*", search_locally=True),
+        FileLog(name="nodetool_compactionstats_failure_*", search_locally=True),
+        FileLog(name="scylla_doctor_*_vitals.json", search_locally=True),
+        FileLog(name="scylla_doctor_*_logs.tar.gz", search_locally=True),
+    ]
+    cluster_log_type = "failure-statistics"
+    cluster_dir_prefix = "failure-statistics"
+
+
+=======
+class FailureStatisticsCollector(LogCollector):
+    """Failure diagnostic statistics log collector
+
+    Collects diagnostic files generated on test failure:
+    - nodetool status, gossipinfo, compactionstats outputs
+    - scylla-doctor vitals and logs (if enabled)
+
+    Extends:
+        LogCollector
+    """
+
+    log_entities = [
+        FileLog(name="nodetool_status_failure.log", search_locally=True),
+        FileLog(name="nodetool_gossipinfo_failure_*", search_locally=True),
+        FileLog(name="nodetool_compactionstats_failure_*", search_locally=True),
+        FileLog(name="scylla_doctor_*_vitals.json", search_locally=True),
+        FileLog(name="scylla_doctor_*_logs.tar.gz", search_locally=True),
+    ]
+    cluster_log_type = "failure-statistics"
+    cluster_dir_prefix = "failure-statistics"
+
+
+>>>>>>> 1379778d9 (fix(logcollector): make failure-statistics logs optional)
 def check_archive(remoter, path: str) -> bool:
     """Ensure that given path is a good and not empty archive."""
 
