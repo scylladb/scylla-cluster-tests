@@ -152,3 +152,4 @@ ScrubValidationErrorEvent: ERROR
 PartitionRowsValidationEvent: CRITICAL
 FailedResultEvent: ERROR
 HDRFileMissed: ERROR
+KernelPanicEvent: CRITICAL

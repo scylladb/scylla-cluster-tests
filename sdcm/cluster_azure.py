@@ -12,17 +12,20 @@
 # Copyright (c) 2022 ScyllaDB
 import json
 import logging
+import threading
+import urllib.request
 from functools import cached_property
 from typing import Dict, List
 
 from sdcm import cluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
-from sdcm.sct_events.system import SpotTerminationEvent
+from sdcm.sct_events.system import SpotTerminationEvent, KernelPanicEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
 from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
+from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.net import resolve_ip_to_dns
 
 LOGGER = logging.getLogger(__name__)
@@ -60,6 +63,7 @@ class AzureNode(cluster.BaseNode):
         self._instance_type = azure_instance.instance_type
         name = f"{node_prefix}-{self.region}-{node_index}".lower()
         self.last_event_document_incarnation = -1
+        self.kernel_panic_checker = None
         ssh_login_info = {
             "hostname": None,
             "user": azure_instance.user_name,
@@ -83,6 +87,16 @@ class AzureNode(cluster.BaseNode):
         self.remoter.sudo("systemctl disable auditd", ignore_status=True)
         self.remoter.sudo("systemctl mask auditd", ignore_status=True)
         self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
+
+        # Start kernel panic monitoring
+        self.kernel_panic_checker = AzureKernelPanicChecker(
+            node=self,
+            vm_name=self._instance.name,
+            region=self.region,
+            resource_group=self._instance._provisioner._resource_group_name,
+        )
+        self.kernel_panic_checker.start()
+        LOGGER.info("Started kernel panic monitoring for node %s (VM: %s)", self.name, self._instance.name)
 
     def wait_for_cloud_init(self):
         pass  # azure for it, on resources creation
@@ -162,6 +176,13 @@ class AzureNode(cluster.BaseNode):
         self._instance.reboot(wait=True, hard=True)
 
     def destroy(self):
+        # Stop kernel panic monitoring
+        if self.kernel_panic_checker:
+            LOGGER.info("Stopping kernel panic monitoring for node %s", self.name)
+            self.kernel_panic_checker.stop()
+            self.kernel_panic_checker.join(timeout=5)
+            self.kernel_panic_checker = None
+
         self.stop_task_threads()
         self.wait_till_tasks_threads_are_stopped()
         self._instance.terminate(wait=True)
@@ -413,3 +434,125 @@ class MonitorSetAzure(cluster.BaseMonitorSet, AzureCluster):
             node_type="monitor",
             region_names=region_names,
         )
+
+
+CHECK_INTERVAL_SECONDS = 30  # Check every 30 seconds
+
+
+class AzureKernelPanicChecker(threading.Thread):
+    """Monitor Azure VM for kernel panics via boot diagnostics logs and instance status."""
+
+    def __init__(self, node, vm_name, region="eastus", resource_group=None):
+        super().__init__()
+        self.node = node
+        self.subscription_id = AzureService().subscription_id
+        self.resource_group = resource_group
+        self.vm_name = vm_name
+        self.compute_client = AzureService().compute
+        self._stop_event = threading.Event()
+        self._panic_detected = False
+        self.daemon = True
+        self.last_panic_blob = None  # To avoid duplicate alerts
+
+    def run(self):
+        while not self._stop_event.is_set():
+            try:
+                # 1. Check instance view statuses
+                instance_view = self.compute_client.virtual_machines.instance_view(
+                    resource_group_name=self.resource_group, vm_name=self.vm_name
+                )
+                power_state = None
+                provisioning_state = None
+
+                for status in instance_view.statuses:
+                    code = status.code.lower()
+                    if code.startswith("powerstate/"):
+                        power_state = status.display_status
+                    if code.startswith("provisioningstate/"):
+                        provisioning_state = status.display_status
+                LOGGER.debug(
+                    "[Azure] %s: power_state=%s, provisioning_state=%s", self.vm_name, power_state, provisioning_state
+                )
+                if power_state and power_state.lower() != "vm running":
+                    LOGGER.info(
+                        "[Azure] %s: power state = %s",
+                        self.vm_name,
+                        power_state,
+                    )
+                if provisioning_state and provisioning_state.lower() != "provisioning succeeded":
+                    LOGGER.info(
+                        "[Azure] %s: provisioning state = %s",
+                        self.vm_name,
+                        provisioning_state,
+                    )
+
+                # 2. Check boot diagnostics logs for kernel panic
+                # Use retrieve_boot_diagnostics_data API to get serial log data
+                try:
+                    boot_diagnostics_data = self.compute_client.virtual_machines.retrieve_boot_diagnostics_data(
+                        resource_group_name=self.resource_group, vm_name=self.vm_name
+                    )
+
+                    # Get the serial console log URL
+                    if boot_diagnostics_data.console_screenshot_blob_uri:
+                        serial_log_uri = boot_diagnostics_data.serial_console_log_blob_uri
+
+                        if serial_log_uri and serial_log_uri != self.last_panic_blob:
+                            # Download and check the serial log for kernel panic
+                            # The URI is a blob storage URL that we can read directly
+                            with urllib.request.urlopen(serial_log_uri) as response:
+                                log_data = response.read().decode(errors="ignore")
+
+                            # Check for kernel panic strings
+                            log_data_lower = log_data.lower()
+                            if (
+                                "kernel panic" in log_data_lower or "not syncing" in log_data_lower
+                            ) and not self._panic_detected:
+                                self._panic_detected = True
+
+                                # Extract the kernel panic line(s)
+                                panic_lines = []
+                                for line in log_data.splitlines():
+                                    line_lower = line.lower()
+                                    if "kernel panic" in line_lower or "not syncing" in line_lower:
+                                        panic_lines.append(line.strip())
+
+                                panic_text = (
+                                    " | ".join(panic_lines)
+                                    if panic_lines
+                                    else "Kernel panic detected (see full output below)"
+                                )
+                                message = (
+                                    f"Kernel panic detected in boot diagnostics log for VM {self.vm_name}: {panic_text}"
+                                )
+
+                                # Log the full boot diagnostics output to sct.log
+                                LOGGER.error("[Azure] %s", message)
+                                LOGGER.error(
+                                    "[Azure] Full boot diagnostics output for %s:\n%s",
+                                    self.vm_name,
+                                    log_data,
+                                )
+
+                                KernelPanicEvent(node=self.node, message=message).publish()
+                                self.last_panic_blob = serial_log_uri
+                                # Stop checking after panic is detected and event is raised
+                                self._stop_event.set()
+                except Exception as exc:  # noqa: BLE001
+                    LOGGER.debug("[Azure] Error retrieving boot diagnostics for %s: %s", self.vm_name, exc)
+
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.exception("[Azure] Error checking %s: %s", self.vm_name, exc)
+
+            self._stop_event.wait(CHECK_INTERVAL_SECONDS)
+
+    def stop(self):
+        self._stop_event.set()
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
+        self.join()
