@@ -267,6 +267,7 @@ function run_in_docker () {
         -e BUILD_NUMBER="${BUILD_NUMBER}" \
         -e _SCT_BASE_DIR="${SCT_DIR}" \
         -e GIT_USER_EMAIL \
+        -e PYTHONUNBUFFERED=1 \
         -e RUNNER_IP \
         -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
         -v /etc/passwd:/etc/passwd:ro \
