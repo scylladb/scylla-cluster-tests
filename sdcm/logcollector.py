@@ -1940,7 +1940,7 @@ class SchemaLogCollector(BaseSCTLogCollector):
     cluster_dir_prefix = "schema-logs"
 
 
-class FailureStatisticsCollector(BaseSCTLogCollector):
+class FailureStatisticsCollector(LogCollector):
     """Failure diagnostic statistics log collector
 
     Collects diagnostic files generated on test failure:
@@ -1948,7 +1948,7 @@ class FailureStatisticsCollector(BaseSCTLogCollector):
     - scylla-doctor vitals and logs (if enabled)
 
     Extends:
-        BaseSCTLogCollector
+        LogCollector
     """
 
     log_entities = [
