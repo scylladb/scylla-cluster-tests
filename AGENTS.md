@@ -388,3 +388,9 @@ Jenkins pipelines are in `jenkins-pipelines/` organized by:
 - `manager/` - Scylla Manager tests
 
 Pipeline utilities are in `vars/` directory.
+
+## Implementation Plans
+
+I have strict standards for feature planning. You can find the full guidelines in `docs/plans/INSTRUCTIONS.md`.
+
+**Rule:** When I ask you to "generate an implementation plan" or "draft a plan", you MUST read `docs/plans/INSTRUCTIONS.md` and follow the structure defined there. Do not apply this format to regular coding questions.
