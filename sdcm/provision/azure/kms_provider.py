@@ -79,14 +79,14 @@ class AzureKmsProvider:
                 parameters={
                     "location": self._region,
                     "properties": {
-                        "tenant_id": tenant_id,
+                        "tenantId": tenant_id,
                         "sku": {"name": "standard", "family": "A"},
-                        "enabled_for_disk_encryption": True,
-                        "enable_rbac_authorization": False,
-                        "access_policies": [
+                        "enableRbacAuthorization": False,
+                        "enabledForDiskEncryption": False,
+                        "accessPolicies": [
                             {
-                                "tenant_id": tenant_id,
-                                "object_id": self.managed_identity_config["principal_id"],
+                                "tenantId": tenant_id,
+                                "objectId": self.managed_identity_config["principal_id"],
                                 "permissions": {
                                     "keys": ["get", "encrypt", "decrypt", "wrapKey", "unwrapKey"],
                                     "secrets": ["get"],
@@ -95,8 +95,8 @@ class AzureKmsProvider:
                             },
                             {
                                 # SCT service principal
-                                "tenant_id": tenant_id,
-                                "object_id": self.sct_service_principal_id,
+                                "tenantId": tenant_id,
+                                "objectId": self.sct_service_principal_id,
                                 "permissions": {
                                     "keys": ["create", "get", "list", "update", "import", "delete", "rotate"],
                                     "secrets": ["get"],
