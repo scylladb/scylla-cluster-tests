@@ -8,7 +8,6 @@ from longevity_test import LongevityTest
 from sdcm.cluster import NoMonitorSet
 from sdcm.sct_events import events_processes
 from unit_tests.test_utils_common import DummyDbCluster, DummyNode
-from unit_tests.test_cluster import DummyDbCluster
 
 
 LongevityTest.__test__ = False
@@ -23,7 +22,7 @@ def fixture_mock_calls():
     events_processes._EVENTS_PROCESSES = None
 
 
-@pytest.mark.sct_config(files="test-cases/unit-tests/longevity-elasticity-unit-test.yaml")
+@pytest.mark.sct_config(files="unit_tests/test_configs/longevity-elasticity-unit-test.yaml")
 class DummyLongevityTest(LongevityTest):
     __test__ = True
     test_custom_time = None
