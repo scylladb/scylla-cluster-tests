@@ -13,6 +13,7 @@ backtrace_decoding: false
 store_perf_results: false
 use_mgmt: false
 email_recipients: ['']
+argus_email_report_template: email_report_performance.yaml
 user_prefix: 'perf-rgrsn-prdfnd-steps-cstm-d3w1'
 custom_es_index: 'performancestatsv2'
 use_hdrhistogram: true
