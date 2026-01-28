@@ -7700,7 +7700,7 @@ class ModifyTableTwcsWindowSizeMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_twcs_window_size()
+        self.runner.disrupt_modify_table_twcs_window_size()
 
 
 class ModifyTableCommentMonkey(NemesisBaseClass):
@@ -7711,7 +7711,7 @@ class ModifyTableCommentMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_comment()
+        self.runner.disrupt_modify_table_comment()
 
 
 class ModifyTableGcGraceTimeMonkey(NemesisBaseClass):
@@ -7722,7 +7722,7 @@ class ModifyTableGcGraceTimeMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_gc_grace_time()
+        self.runner.disrupt_modify_table_gc_grace_time()
 
 
 class ModifyTableCachingMonkey(NemesisBaseClass):
@@ -7733,7 +7733,7 @@ class ModifyTableCachingMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_caching()
+        self.runner.disrupt_modify_table_caching()
 
 
 class ModifyTableBloomFilterFpChanceMonkey(NemesisBaseClass):
@@ -7744,7 +7744,7 @@ class ModifyTableBloomFilterFpChanceMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_bloom_filter_fp_chance()
+        self.runner.disrupt_modify_table_bloom_filter_fp_chance()
 
 
 class ModifyTableCompactionMonkey(NemesisBaseClass):
@@ -7755,7 +7755,7 @@ class ModifyTableCompactionMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_compaction()
+        self.runner.disrupt_modify_table_compaction()
 
 
 class ModifyTableCompressionMonkey(NemesisBaseClass):
@@ -7766,7 +7766,7 @@ class ModifyTableCompressionMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_compression()
+        self.runner.disrupt_modify_table_compression()
 
 
 class ModifyTableCrcCheckChanceMonkey(NemesisBaseClass):
@@ -7777,7 +7777,7 @@ class ModifyTableCrcCheckChanceMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_crc_check_chance()
+        self.runner.disrupt_modify_table_crc_check_chance()
 
 
 class ModifyTableDclocalReadRepairChanceMonkey(NemesisBaseClass):
@@ -7788,7 +7788,7 @@ class ModifyTableDclocalReadRepairChanceMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_dclocal_read_repair_chance()
+        self.runner.disrupt_modify_table_dclocal_read_repair_chance()
 
 
 class ModifyTableDefaultTimeToLiveMonkey(NemesisBaseClass):
@@ -7799,7 +7799,7 @@ class ModifyTableDefaultTimeToLiveMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_default_time_to_live()
+        self.runner.disrupt_modify_table_default_time_to_live()
 
 
 class ModifyTableMaxIndexIntervalMonkey(NemesisBaseClass):
@@ -7810,7 +7810,7 @@ class ModifyTableMaxIndexIntervalMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_max_index_interval()
+        self.runner.disrupt_modify_table_max_index_interval()
 
 
 class ModifyTableMinIndexIntervalMonkey(NemesisBaseClass):
@@ -7821,7 +7821,7 @@ class ModifyTableMinIndexIntervalMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_min_index_interval()
+        self.runner.disrupt_modify_table_min_index_interval()
 
 
 class ModifyTableMemtableFlushPeriodInMsMonkey(NemesisBaseClass):
@@ -7832,7 +7832,7 @@ class ModifyTableMemtableFlushPeriodInMsMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_memtable_flush_period_in_ms()
+        self.runner.disrupt_modify_table_memtable_flush_period_in_ms()
 
 
 class ModifyTableReadRepairChanceMonkey(NemesisBaseClass):
@@ -7843,7 +7843,7 @@ class ModifyTableReadRepairChanceMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_read_repair_chance()
+        self.runner.disrupt_modify_table_read_repair_chance()
 
 
 class ModifyTableSpeculativeRetryMonkey(NemesisBaseClass):
@@ -7854,4 +7854,4 @@ class ModifyTableSpeculativeRetryMonkey(NemesisBaseClass):
     modify_table = True
 
     def disrupt(self):
-        self.disrupt_modify_table_speculative_retry()
+        self.runner.disrupt_modify_table_speculative_retry()
