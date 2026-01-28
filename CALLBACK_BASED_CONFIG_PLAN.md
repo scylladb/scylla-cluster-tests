@@ -9,6 +9,16 @@ Currently, the `_add_new_node_in_new_dc()` nemesis operation requires restarting
 3. After startup, we modify `scylla.yaml` and `cassandra-rackdc.properties` 
 4. **Restart required** to apply the changes
 
+### Important Context: Preinstalled Scylla vs Fresh Installation
+
+**This issue only occurs when NOT using preinstalled Scylla images.**
+
+- **Fresh Installation** (e.g., installing from repos): The original bug occurs where `scylla.yaml` doesn't exist until after `wait_for_init()` completes. Accessing it before causes "No such file or directory" errors.
+
+- **SMI-Based Images** (preinstalled Scylla): This issue is NOT problematic because Scylla and its configuration files are already present on the image. The files exist immediately after instance creation, before `wait_for_init()`.
+
+**Testing Requirement**: Both installation methods (fresh install and preinstalled/SMI-based images) must be tested with the callback mechanism to ensure it works correctly in both scenarios.
+
 ## Analysis of Other Nemesis Operations
 
 A comprehensive search of the codebase identified all nemesis operations that add nodes:
@@ -218,21 +228,32 @@ def _add_new_node_in_new_dc(self, is_zero_node=False) -> BaseNode:
 
 ## Edge Cases & Considerations
 
-### Preinstalled Scylla
+### Preinstalled Scylla vs Fresh Installation
 
-For nodes with preinstalled Scylla (`use_preinstalled_scylla=True`):
+The callback mechanism must handle both installation scenarios:
 
+**Fresh Installation** (installing from repos):
 ```python
 def node_setup(self, node: BaseNode, ...):
+    install_scylla = True
     if self.params.get("use_preinstalled_scylla") and node.is_scylla_installed(...):
         install_scylla = False
     
-    # ... installation code ...
+    if install_scylla:
+        self._scylla_install(node)  # Installs Scylla, creates config files
+    else:
+        self._wait_for_preinstalled_scylla(node)  # Config files already exist
     
     # Execute callback regardless of installation method
+    # At this point, scylla.yaml exists in BOTH cases
     if hasattr(node, 'config_callback') and node.config_callback:
         node.config_callback(node)
 ```
+
+**Key Points**:
+- **Fresh install**: Config files created during `_scylla_install()`, callback executes after
+- **Preinstalled/SMI**: Config files already exist, callback can modify them immediately
+- **Testing**: Both scenarios must be tested to ensure callback works correctly
 
 The callback executes whether Scylla was just installed or was preinstalled.
 
@@ -259,6 +280,8 @@ The callback executes whether Scylla was just installed or was preinstalled.
 3. **Error handling**: Verify callback exceptions propagate and fail node_setup
 4. **Correct parameters**: Verify callback receives the correct node object
 5. **Execution order**: Verify callback executes after config_setup but before node_startup
+6. **Fresh install**: Test callback with nodes installed from repos
+7. **Preinstalled Scylla**: Test callback with SMI-based/preinstalled images
 
 ### Integration Tests
 
@@ -267,6 +290,24 @@ The callback executes whether Scylla was just installed or was preinstalled.
 **Test Cases**:
 1. **No restart required**: Verify new node in DC doesn't require restart with callback
 2. **Config modification**: Verify callback successfully modifies scylla.yaml
+3. **Properties modification**: Verify callback successfully modifies cassandra-rackdc.properties
+4. **Nemesis flow**: Verify complete nemesis operation with callback mechanism
+5. **Fresh install scenario**: Test with `use_preinstalled_scylla=False`
+6. **Preinstalled scenario**: Test with `use_preinstalled_scylla=True` (SMI-based images)
+
+### Functional Tests
+
+**Location**: `functional_tests/test_callback_dc_config.py`
+
+**Test Cases**:
+1. **End-to-end flow**: Add a node with custom DC configuration using callback
+   - Verify node starts successfully
+   - Verify configuration is applied correctly
+   - Verify no restart is needed
+   - Verify node joins cluster in correct DC
+2. **Preinstalled Scylla**: Test callback works with preinstalled Scylla nodes (SMI-based images)
+3. **Fresh installation**: Test callback works with nodes installed from repos
+4. **Multi-node**: Test adding multiple nodes simultaneously with callbacks
 3. **Properties modification**: Verify callback successfully modifies cassandra-rackdc.properties
 4. **Nemesis flow**: Verify complete nemesis operation with callback mechanism
 
