@@ -275,7 +275,7 @@ def provision_resources(backend, test_name: str, config: str):
     test_id = params.get("test_id")
     if not test_id or test_id == "None":
         raise ValueError("No test_id was provided. Aborting provisioning.")
-    test_config.set_test_id(test_id)
+    test_config.set_test_id_only(test_id)
     localhost = LocalHost(user_prefix=params.get("user_prefix"), test_id=test_config.test_id())
 
     if params.get("logs_transport") == "syslog-ng":
