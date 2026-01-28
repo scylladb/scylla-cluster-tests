@@ -259,9 +259,50 @@ The callback executes whether Scylla was just installed or was preinstalled.
 
 ### Callback Failure Handling
 
-- **Exception propagation**: If callback fails, `node_setup()` should fail
-- **Logging**: Clear logging of callback execution and errors
-- **Rollback**: Consider if we need to undo partial changes on failure
+Exceptions from the callback must propagate up to the nemesis code to ensure clear failure messages and proper error handling.
+
+**Exception Propagation Flow**:
+```
+callback raises exception 
+  → node_setup() fails and propagates exception
+  → wait_for_init() catches and re-raises with context
+  → nemesis code receives clear error message
+```
+
+**Implementation Requirements**:
+
+1. **No exception catching in callback execution**: Let exceptions bubble up naturally
+   ```python
+   # In node_setup()
+   if hasattr(node, 'config_callback') and node.config_callback:
+       node.log.info("Executing custom configuration callback")
+       # NO try/except here - let exceptions propagate
+       node.config_callback(node)
+   ```
+
+2. **wait_for_init() propagates failures**: The existing `wait_for_init_wrap` decorator already handles this:
+   - Catches exceptions from `node_setup()`
+   - Stores exception details with traceback
+   - Re-raises or reports failures to nemesis code
+   - Ensures nemesis receives clear error messages
+
+3. **Alternative: Explicit failure checking**: If needed, add a method to check callback success:
+   ```python
+   # Option: Check callback status after wait_for_init
+   try:
+       self.cluster.wait_for_init(node_list=[new_node], ...)
+   except NodeSetupFailed as e:
+       # Exception message includes callback failure details
+       self.log.error(f"Node setup failed, likely due to config callback: {e}")
+       raise
+   ```
+
+**Key Points**:
+- **No silent failures**: Callback exceptions MUST propagate to nemesis
+- **Clear error messages**: Exception messages should indicate callback failure
+- **Existing infrastructure**: `wait_for_init_wrap` already handles exception propagation
+- **Logging**: Add debug logging before callback execution for troubleshooting
+- **No rollback needed**: If callback fails, node_setup fails, node won't start
 
 ### Backward Compatibility
 
