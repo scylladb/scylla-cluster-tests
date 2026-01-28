@@ -66,6 +66,22 @@ class TestConfig(metaclass=Singleton):
 
     @classmethod
     def set_test_id_only(cls, test_id) -> bool:
+        """Set the test ID in memory only, without persisting to disk.
+
+        WARNING: This method should ONLY be used in non-main test phases such as:
+        - Provisioning phase (provision-resources command)
+        - Post-test reporting phase (collect-logs, update-argus-with-status, etc.)
+        - Utility commands that need test_id for lookup but don't run the actual test
+
+        For the main test execution phase (the actual test run), use set_test_id() instead,
+        which also writes the test_id to disk for later reference by other tools.
+
+        Args:
+            test_id: The test ID to set
+
+        Returns:
+            bool: True if successfully set, False if test_id was already set
+        """
         if not cls._test_id:
             cls._test_id = str(test_id)
             return True
@@ -74,6 +90,20 @@ class TestConfig(metaclass=Singleton):
 
     @classmethod
     def set_test_id(cls, test_id):
+        """Set the test ID in memory and persist it to disk.
+
+        WARNING: This method should ONLY be used in the main test execution phase
+        (when actually running a test). It creates a test_id file in the log directory
+        that is used by various tools (log collection, monitoring, reporting, etc.) to
+        identify the main test run.
+
+        For non-main phases (provisioning, post-test utilities, reporting), use
+        set_test_id_only() instead to avoid creating multiple test_id files which
+        could confuse log collection and other tools.
+
+        Args:
+            test_id: The test ID to set
+        """
         if cls.set_test_id_only(test_id):
             test_id_file_path = os.path.join(cls.logdir(), "test_id")
             with open(test_id_file_path, "w", encoding="utf-8") as test_id_file:
