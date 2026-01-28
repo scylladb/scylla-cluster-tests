@@ -5211,6 +5211,11 @@ class NemesisRunner:
         new_node = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(self.cluster.add_nodes)(
             **add_node_func_args
         )[0]
+        # Wait for node initialization before accessing scylla.yaml and cassandra-rackdc.properties
+        # These files are created during node_setup() which is called by wait_for_init()
+        self.cluster.wait_for_init(node_list=[new_node], timeout=900, check_node_health=False)
+        
+        # Now configure the node with nemesis-specific settings for the new DC
         with new_node.remote_scylla_yaml() as scylla_yml:
             scylla_yml.rpc_address = new_node.ip_address
             scylla_yml.seed_provider = [
@@ -5226,7 +5231,10 @@ class NemesisRunner:
                 rackdc_value = {"dc_suffix": "_nemesis_dc"}
         with new_node.remote_cassandra_rackdc_properties() as properties_file:
             properties_file.update(**rackdc_value)
-        self.cluster.wait_for_init(node_list=[new_node], timeout=900, check_node_health=False)
+        
+        # Restart Scylla to apply the new DC configuration
+        new_node.restart_scylla_server(verify_up_after=True)
+        
         new_node.wait_node_fully_start()
         self.monitoring_set.reconfigure_scylla_monitoring()
         return new_node
