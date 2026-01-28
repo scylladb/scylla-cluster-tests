@@ -183,13 +183,13 @@ def test_access_policies_include_tenant_id(mock_logger, kms_provider, azure_serv
     call_args = azure_service_mock.keyvault.vaults.begin_create_or_update.call_args
     parameters = call_args.kwargs.get("parameters") or call_args[1].get("parameters")
 
-    access_policies = parameters["properties"]["access_policies"]
-    vault_tenant_id = parameters["properties"]["tenant_id"]
+    access_policies = parameters["properties"]["accessPolicies"]
+    vault_tenant_id = parameters["properties"]["tenantId"]
 
     # Verify each access policy has tenant_id matching the vault's tenant_id
     for policy in access_policies:
-        assert "tenant_id" in policy, "Access policy must include tenant_id"
-        assert policy["tenant_id"] == vault_tenant_id, "Access policy tenant_id must match vault tenant_id"
+        assert "tenantId" in policy, "Access policy must include tenantId"
+        assert policy["tenantId"] == vault_tenant_id, "Access policy tenant_id must match vault tenantId"
 
 
 def test_vm_creation_fails_when_kms_returns_none(vm_provider, mock_ssh_key):
