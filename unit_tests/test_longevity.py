@@ -23,7 +23,7 @@ def fixture_mock_calls():
     events_processes._EVENTS_PROCESSES = None
 
 
-@pytest.mark.sct_config(files="test-cases/features/elasticity/longevity-elasticity-many-small-tables.yaml")
+@pytest.mark.sct_config(files="test-cases/unit-tests/longevity-elasticity-unit-test.yaml")
 class DummyLongevityTest(LongevityTest):
     __test__ = True
     test_custom_time = None
