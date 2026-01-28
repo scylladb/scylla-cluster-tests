@@ -251,251 +251,47 @@ The callback executes whether Scylla was just installed or was preinstalled.
 
 ### Unit Tests
 
-**File**: `unit_tests/test_node_config_callback.py`
+**Location**: `unit_tests/test_node_config_callback.py`
 
-```python
-import pytest
-from unittest.mock import Mock, MagicMock, patch
-from sdcm.cluster import BaseNode, BaseScyllaCluster
-
-class TestConfigCallback:
-    """Test configuration callback mechanism"""
-    
-    def test_callback_executed_during_node_setup(self):
-        """Verify callback is executed during node_setup"""
-        callback = Mock()
-        node = Mock(spec=BaseNode)
-        node.config_callback = callback
-        
-        cluster = Mock(spec=BaseScyllaCluster)
-        # Mock the node_setup to call callback
-        
-        # Simulate node_setup flow
-        cluster.node_setup(node)
-        
-        # Verify callback was called with node
-        callback.assert_called_once_with(node)
-    
-    def test_callback_not_required(self):
-        """Verify node_setup works without callback (backward compatibility)"""
-        node = Mock(spec=BaseNode)
-        node.config_callback = None
-        
-        cluster = Mock(spec=BaseScyllaCluster)
-        
-        # Should not raise exception
-        cluster.node_setup(node)
-    
-    def test_callback_exception_propagates(self):
-        """Verify callback exceptions fail node_setup"""
-        def failing_callback(node):
-            raise ValueError("Test error")
-        
-        node = Mock(spec=BaseNode)
-        node.config_callback = failing_callback
-        
-        cluster = Mock(spec=BaseScyllaCluster)
-        
-        with pytest.raises(ValueError, match="Test error"):
-            cluster.node_setup(node)
-    
-    def test_callback_receives_correct_node(self):
-        """Verify callback receives the correct node object"""
-        received_nodes = []
-        
-        def track_callback(node):
-            received_nodes.append(node)
-        
-        node = Mock(spec=BaseNode)
-        node.config_callback = track_callback
-        
-        cluster = Mock(spec=BaseScyllaCluster)
-        cluster.node_setup(node)
-        
-        assert len(received_nodes) == 1
-        assert received_nodes[0] is node
-    
-    def test_callback_executes_after_config_setup(self):
-        """Verify callback executes after config_setup but before startup"""
-        execution_order = []
-        
-        def callback(node):
-            execution_order.append("callback")
-        
-        node = Mock(spec=BaseNode)
-        node.config_callback = callback
-        
-        # Mock config_setup and startup to track order
-        with patch.object(node, 'config_setup') as mock_config:
-            mock_config.side_effect = lambda *a, **k: execution_order.append("config_setup")
-            
-            cluster = Mock(spec=BaseScyllaCluster)
-            # Simulate execution order
-            node.config_setup()
-            callback(node)
-            
-            assert execution_order == ["config_setup", "callback"]
-```
+**Test Cases**:
+1. **Callback execution**: Verify callback is executed during node_setup
+2. **Optional callback**: Verify node_setup works without callback (backward compatibility)
+3. **Error handling**: Verify callback exceptions propagate and fail node_setup
+4. **Correct parameters**: Verify callback receives the correct node object
+5. **Execution order**: Verify callback executes after config_setup but before node_startup
 
 ### Integration Tests
 
-**File**: `unit_tests/test_nemesis_with_callback.py`
+**Location**: `unit_tests/test_nemesis_with_callback.py`
 
-```python
-import pytest
-from sdcm.nemesis import MultiDcAddRemoveNemesis
-from unit_tests.nemesis.fake_cluster import FakeTester
-
-class TestNemesisWithCallback:
-    """Test nemesis operations using config callback"""
-    
-    def test_add_new_node_in_new_dc_no_restart(self):
-        """Verify new node in DC doesn't require restart with callback"""
-        tester = FakeTester()
-        nemesis = MultiDcAddRemoveNemesis(tester, None)
-        
-        # Track if restart was called
-        restart_called = []
-        
-        with patch.object(BaseNode, 'restart_scylla_server') as mock_restart:
-            mock_restart.side_effect = lambda *a, **k: restart_called.append(True)
-            
-            new_node = nemesis._add_new_node_in_new_dc()
-            
-            # Verify no restart was needed
-            assert len(restart_called) == 0
-            assert new_node is not None
-    
-    def test_callback_modifies_scylla_yaml(self):
-        """Verify callback successfully modifies scylla.yaml"""
-        tester = FakeTester()
-        nemesis = MultiDcAddRemoveNemesis(tester, None)
-        
-        # Track scylla.yaml modifications
-        with patch('sdcm.cluster.remote_file') as mock_remote_file:
-            yaml_context = MagicMock()
-            mock_remote_file.return_value.__enter__.return_value = yaml_context
-            
-            new_node = nemesis._add_new_node_in_new_dc()
-            
-            # Verify rpc_address was set
-            assert yaml_context.rpc_address == new_node.ip_address
-    
-    def test_callback_modifies_rackdc_properties(self):
-        """Verify callback successfully modifies cassandra-rackdc.properties"""
-        tester = FakeTester()
-        nemesis = MultiDcAddRemoveNemesis(tester, None)
-        
-        # Track properties modifications
-        properties_updates = []
-        
-        with patch('sdcm.cluster.remote_file') as mock_remote_file:
-            props_context = MagicMock()
-            props_context.update.side_effect = lambda d: properties_updates.append(d)
-            mock_remote_file.return_value.__enter__.return_value = props_context
-            
-            new_node = nemesis._add_new_node_in_new_dc()
-            
-            # Verify DC properties were updated
-            assert len(properties_updates) > 0
-            assert any('dc' in update or 'dc_suffix' in update 
-                      for update in properties_updates)
-```
+**Test Cases**:
+1. **No restart required**: Verify new node in DC doesn't require restart with callback
+2. **Config modification**: Verify callback successfully modifies scylla.yaml
+3. **Properties modification**: Verify callback successfully modifies cassandra-rackdc.properties
+4. **Nemesis flow**: Verify complete nemesis operation with callback mechanism
 
 ### Functional Tests
 
-**File**: `functional_tests/test_callback_dc_config.py`
+**Location**: `functional_tests/test_callback_dc_config.py`
 
-```python
-import pytest
-from sdcm.cluster import BaseNode
-
-@pytest.mark.docker_scylla_args(docker_network="scylla-test-network")
-def test_add_node_with_custom_dc_callback(docker_scylla):
-    """
-    Functional test: Add a node with custom DC configuration using callback
-    
-    Verifies:
-    1. Node starts successfully
-    2. Configuration is applied correctly
-    3. No restart is needed
-    4. Node joins cluster in correct DC
-    """
-    # Setup cluster
-    cluster = docker_scylla.db_cluster
-    
-    # Define callback
-    def custom_dc_config(node: BaseNode):
-        with node.remote_scylla_yaml() as scylla_yml:
-            scylla_yml.rpc_address = node.ip_address
-        
-        with node.remote_cassandra_rackdc_properties() as props:
-            props.update({"dc": "test_dc", "rack": "test_rack"})
-    
-    # Add node with callback
-    new_nodes = cluster.add_nodes(
-        count=1, 
-        dc_idx=0,
-        config_callback=custom_dc_config
-    )
-    
-    # Wait for initialization
-    cluster.wait_for_init(node_list=new_nodes, timeout=600)
-    
-    new_node = new_nodes[0]
-    
-    # Verify node started (no restart needed)
-    assert new_node.is_running()
-    
-    # Verify DC configuration
-    status = cluster.get_nodetool_status()
-    assert "test_dc" in status
-    
-    # Verify no restart occurred (check uptime)
-    uptime = new_node.remoter.run("uptime -s").stdout
-    # Node should have single startup time
-    
-@pytest.mark.docker_scylla_args(docker_network="scylla-test-network")
-def test_preinstalled_scylla_with_callback(docker_scylla):
-    """
-    Test callback works with preinstalled Scylla
-    
-    Verifies callback executes correctly even when Scylla is preinstalled
-    """
-    # Similar test but with use_preinstalled_scylla=True
-    pass
-```
+**Test Cases**:
+1. **End-to-end flow**: Add a node with custom DC configuration using callback
+   - Verify node starts successfully
+   - Verify configuration is applied correctly
+   - Verify no restart is needed
+   - Verify node joins cluster in correct DC
+2. **Preinstalled Scylla**: Test callback works with preinstalled Scylla nodes
+3. **Multi-node**: Test adding multiple nodes simultaneously with callbacks
 
 ### Performance Tests
 
-**File**: `performance_tests/test_callback_performance.py`
+**Location**: `performance_tests/test_callback_performance.py`
 
-```python
-import time
-import pytest
-
-def test_node_addition_time_comparison():
-    """
-    Compare node addition time with and without restart
-    
-    Expected: Callback approach saves 30-60 seconds per node
-    """
-    # Test with restart (old approach)
-    start = time.time()
-    add_node_with_restart()
-    time_with_restart = time.time() - start
-    
-    # Test with callback (new approach)
-    start = time.time()
-    add_node_with_callback()
-    time_with_callback = time.time() - start
-    
-    # Verify callback is faster
-    time_saved = time_with_restart - time_with_callback
-    assert time_saved >= 30, f"Expected at least 30s savings, got {time_saved}s"
-    
-    print(f"Time saved: {time_saved}s ({time_saved/time_with_restart*100:.1f}%)")
-```
+**Test Cases**:
+1. **Time comparison**: Compare node addition time with and without restart
+   - Expected: Callback approach saves 30-60 seconds per node
+2. **Resource usage**: Monitor CPU/memory during callback execution vs restart
+3. **Scalability**: Test callback performance with multiple simultaneous node additions
 
 ## Migration Plan
 
