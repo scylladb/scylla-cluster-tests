@@ -312,7 +312,7 @@ pipeline {
                                                             """
                                                         } else {
                                                             sh """
-                                                                echo 'Skipping because non-AWS/Azure backends are not supported'
+                                                                echo 'Skipping resource provisioning because this backend is not supported'
                                                             """
                                                         }
                                                     }
