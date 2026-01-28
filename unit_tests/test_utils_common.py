@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
+import time
 import hashlib
 import shutil
 import logging
@@ -22,7 +23,7 @@ from pathlib import Path
 from sdcm import sct_config
 from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
 from sdcm.utils.distro import Distro
-from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud
+from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud, get_testrun_dir
 from sdcm.utils.sstable import load_inventory
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 
@@ -285,3 +286,62 @@ class TestSstableLoadUtils(unittest.TestCase):
     def test_load_and_stream_waits_for_log_lines(self):
         self.node.remoter = Remoter(self.node.system_log)
         SstableLoadUtils.run_load_and_stream(self.node, start_timeout=1, end_timeout=2)
+
+
+def test_get_testrun_dir_returns_newest_when_multiple_found(tmp_path):
+    """Test that get_testrun_dir returns the newest directory when multiple directories contain the same test_id."""
+
+    # Create a test_id
+    test_id = "12345678-1234-1234-1234-123456789abc"
+
+    # Create multiple test run directories with the same test_id
+    # Older directory (created first)
+    older_dir = tmp_path / "20240101-120000-older"
+    older_dir.mkdir()
+    older_test_id_file = older_dir / "test_id"
+    older_test_id_file.write_text(test_id)
+
+    # Small delay to ensure different modification times
+    time.sleep(0.1)
+
+    # Newer directory (created later)
+    newer_dir = tmp_path / "20240101-130000-newer"
+    newer_dir.mkdir()
+    newer_test_id_file = newer_dir / "test_id"
+    newer_test_id_file.write_text(test_id)
+
+    # Call get_testrun_dir and verify it returns the newer directory
+    result = get_testrun_dir(base_dir=str(tmp_path), test_id=test_id)
+
+    # Should return the newer directory (most recently modified)
+    assert result == str(newer_dir), f"Expected {newer_dir}, got {result}"
+
+
+def test_get_testrun_dir_returns_none_when_not_found(tmp_path):
+    """Test that get_testrun_dir returns None when test_id is not found."""
+
+    # Create a directory without any test_id file
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+
+    # Call get_testrun_dir with a test_id that doesn't exist
+    result = get_testrun_dir(base_dir=str(tmp_path), test_id="nonexistent-test-id")
+
+    assert result is None, f"Expected None, got {result}"
+
+
+def test_get_testrun_dir_returns_single_match(tmp_path):
+    """Test that get_testrun_dir returns the directory when only one match is found."""
+
+    test_id = "single-match-test-id"
+
+    # Create a single test run directory
+    test_dir = tmp_path / "20240101-140000-single"
+    test_dir.mkdir()
+    test_id_file = test_dir / "test_id"
+    test_id_file.write_text(test_id)
+
+    # Call get_testrun_dir
+    result = get_testrun_dir(base_dir=str(tmp_path), test_id=test_id)
+
+    assert result == str(test_dir), f"Expected {test_dir}, got {result}"
