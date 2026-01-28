@@ -1812,7 +1812,7 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
     collector = Collector(test_id=test_id, params=config, test_dir=logdir)
 
-    collected_logs = collector.run()
+    collected_logs, collection_error = collector.run()
 
     table = PrettyTable(["Cluster set", "Link"])
     table.align = "l"
@@ -1833,8 +1833,13 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
     click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
     update_sct_runner_tags(backend=backend, test_id=collector.test_id, tags={"logs_collected": True})
 
+    # Always send collected logs to Argus, even if there were collection errors
     if collector.test_id:
         store_logs_in_argus(test_id=UUID(collector.test_id), logs=collected_logs)
+
+    # Raise error only after logs have been sent to Argus
+    if collection_error:
+        raise RuntimeError(collection_error)
 
 
 def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]], update: bool = False):

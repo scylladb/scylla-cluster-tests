@@ -1869,6 +1869,11 @@ class Collector:
 
         Run collect log operations as standalon process or run
         as single stage in pipeline for defined cluster sets
+
+        Returns:
+            tuple: (results dict, error_msg str or None)
+                - results: dict of collected logs by cluster type
+                - error_msg: error message if critical collectors failed, None otherwise
         """
         results = {}
         failed_critical_collectors = []
@@ -1877,7 +1882,7 @@ class Collector:
         self.define_test_id()
         if not self.test_id:
             LOGGER.warning("No test_id provided or found")
-            return results
+            return results, None
         self.get_running_cluster_sets(self.backend)
 
         local_dir_with_logs = get_testrun_dir(self.sct_result_dir, self.test_id)
@@ -1909,15 +1914,16 @@ class Collector:
 
         self.localhost.destroy()
 
-        # Raise exception if critical SCT logs are missing
+        # Prepare error message if critical SCT logs are missing, but don't raise yet
+        # Allow caller to handle the error after uploading logs to Argus
+        error_msg = None
         if failed_critical_collectors:
             error_msg = "Failed to collect critical SCT runner logs: " + ", ".join(
                 f"{collector_type} ({error})" for collector_type, error in failed_critical_collectors
             )
             LOGGER.error(error_msg)
-            raise RuntimeError(error_msg)
 
-        return results
+        return results, error_msg
 
     def create_base_storage_dir(self, test_dir=None):
         date_time_formatted = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")

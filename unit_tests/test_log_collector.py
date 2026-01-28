@@ -88,7 +88,7 @@ def test_python_sct_log_collector_raises_when_no_local_files(tmp_path):
 
 
 def test_collector_tracks_critical_failures(test_id, tmp_path_factory, monkeypatch):
-    """Test that Collector.run() tracks and raises exception for critical SCT log failures."""
+    """Test that Collector.run() tracks and returns error message for critical SCT log failures."""
     test_dir = tmp_path_factory.mktemp("log-collector-fail")
 
     # Create a collector instance
@@ -108,9 +108,10 @@ def test_collector_tracks_critical_failures(test_id, tmp_path_factory, monkeypat
 
     monkeypatch.setattr(common, "get_testrun_dir", mock_get_testrun_dir)
 
-    # The run() should raise RuntimeError when SCT logs are missing
-    with pytest.raises(RuntimeError, match="Failed to collect critical SCT runner logs"):
-        collector.run()
+    # The run() should return error message when SCT logs are missing
+    results, error_msg = collector.run()
+    assert error_msg is not None
+    assert "Failed to collect critical SCT runner logs" in error_msg
 
 
 def test_schema_log_collector_is_tracked_as_critical(tmp_path):
