@@ -13,7 +13,6 @@
 
 import os
 import re
-import threading
 import time
 import logging
 from typing import Dict, Any, ParamSpec, TypeVar
@@ -44,7 +43,7 @@ from sdcm.utils.gce_utils import (
 )
 from sdcm.wait import exponential_retry
 from sdcm.keystore import pub_key_from_private_key_file
-from sdcm.sct_events.system import KernelPanicEvent, SpotTerminationEvent
+from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
 from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
@@ -762,7 +761,6 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
         )
 
 
-CHECK_INTERVAL_SECONDS = 30  # Check every 30 seconds
 
 
 class GCPKernelPanicChecker(cluster.BaseKernelPanicChecker):

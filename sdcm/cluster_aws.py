@@ -17,7 +17,6 @@ import os
 import random
 import re
 import tempfile
-import threading
 import time
 import uuid
 from collections.abc import Callable
@@ -51,7 +50,7 @@ from sdcm.sct_provision.aws.cluster import PlacementGroup
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
-from sdcm.sct_events.system import KernelPanicEvent, SpotTerminationEvent
+from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
 from sdcm.utils.common import list_instances_aws
 from sdcm.utils.decorators import retrying
@@ -1446,7 +1445,6 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
         return node
 
 
-CHECK_INTERVAL_SECONDS = 30  # Check every 30 seconds
 
 
 class AWSKernelPanicChecker(cluster.BaseKernelPanicChecker):

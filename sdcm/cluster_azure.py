@@ -12,14 +12,13 @@
 # Copyright (c) 2022 ScyllaDB
 import json
 import logging
-import threading
 from functools import cached_property
 from typing import Dict, List
 
 from sdcm import cluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
-from sdcm.sct_events.system import KernelPanicEvent, SpotTerminationEvent
+from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
@@ -435,7 +434,6 @@ class MonitorSetAzure(cluster.BaseMonitorSet, AzureCluster):
         )
 
 
-CHECK_INTERVAL_SECONDS = 30  # Check every 30 seconds
 
 
 class AzureKernelPanicChecker(cluster.BaseKernelPanicChecker):

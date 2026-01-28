@@ -7193,7 +7193,7 @@ class BaseKernelPanicChecker(threading.Thread):
         """
         raise NotImplementedError("Subclasses must implement _get_console_output()")
 
-    def _extract_panic_lines(self, output: str) -> list[str]:
+    def _extract_panic_lines(self, output: str) -> List[str]:
         """Extract lines containing kernel panic indicators from console output.
         
         Args:
