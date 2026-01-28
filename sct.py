@@ -27,7 +27,7 @@ import pprint
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial, reduce
-from typing import List
+from typing import List, Literal
 from uuid import UUID
 
 import pytest
@@ -964,9 +964,14 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
     show_default=True,
     help="architecture of the AMI",
 )
-@click.option("-o", "--output-format", type=str, default="table", help="")
+@click.option("-o", "--output-format", type=click.Choice(["table", "json"]), default="table", help="")
 def list_images(  # noqa: PLR0912, PLR0914
-    cloud_provider: str, branch: str, version: str, regions: List[str], arch: str, output_format: str = "table"
+    cloud_provider: str,
+    branch: str,
+    version: str,
+    regions: List[str],
+    arch: str,
+    output_format: Literal["table", "json"] = "table",
 ):
     if len(regions) == 0:
         regions = [NemesisJobGenerator.BACKEND_TO_REGION[cloud_provider]]
@@ -1007,7 +1012,7 @@ def list_images(  # noqa: PLR0912, PLR0914
                                 title=f"AWS Machine Images by Version in region {region}"
                             )
                         )
-                    elif output_format == "text":
+                    elif output_format == "json":
                         ami_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields_aws)
                         click.echo(ami_images_json)
                 case "gce":
@@ -1018,7 +1023,7 @@ def list_images(  # noqa: PLR0912, PLR0914
                                 title="GCE Machine Images by version"
                             )
                         )
-                    elif output_format == "text":
+                    elif output_format == "json":
                         gce_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
                         click.echo(gce_images_json)
                 case "azure":
@@ -1062,7 +1067,7 @@ def list_images(  # noqa: PLR0912, PLR0914
                                 title="Azure Machine Images by version"
                             )
                         )
-                    elif output_format == "text":
+                    elif output_format == "json":
                         azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
                         click.echo(azure_images_json)
 
@@ -1082,7 +1087,7 @@ def list_images(  # noqa: PLR0912, PLR0914
                                 title=f"AMI Machine Images for {branch} in region {region}"
                             )
                         )
-                    elif output_format == "text":
+                    elif output_format == "json":
                         ami_images_json = images_dict_in_json_format(rows=ami_images, field_names=branch_fields_aws)
                         click.echo(ami_images_json)
                 case "gce":
@@ -1093,7 +1098,7 @@ def list_images(  # noqa: PLR0912, PLR0914
                                 title=f"GCE Machine Images for {branch}"
                             )
                         )
-                    elif output_format == "text":
+                    elif output_format == "json":
                         gce_images_json = images_dict_in_json_format(rows=gce_images, field_names=branch_fields)
                         click.echo(gce_images_json)
                 case "azure":
@@ -1110,7 +1115,7 @@ def list_images(  # noqa: PLR0912, PLR0914
                                 title="Azure Machine Images by version"
                             )
                         )
-                    elif output_format == "text":
+                    elif output_format == "json":
                         azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
                         click.echo(azure_images_json)
                 case _:

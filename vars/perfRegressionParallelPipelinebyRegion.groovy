@@ -237,7 +237,7 @@ def call(Map pipelineParams) {
                                  def region = null
                                  if (scylla_version == "master" && !image_name){
                                     region = entry.region ?: 'us-east-1'
-                                    def output = sh(script: "./docker/env/hydra.sh list-images -c ${cloud_provider} -r ${region} -o text", returnStdout: true).trim()
+                                    def output = sh(script: "./docker/env/hydra.sh list-images -c ${cloud_provider} -r ${region} -o json", returnStdout: true).trim()
                                     println("Output from hydra list-images: $output")
                                     def image_name_json = output.split('\n')[-1].trim()
                                     println("Image name json: $image_name_json")
