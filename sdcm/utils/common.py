@@ -2164,16 +2164,46 @@ def search_test_id_in_latest(logdir):
 
 
 def get_testrun_dir(base_dir, test_id=None):
+    """Get the test run directory for a given test_id.
+
+    When multiple directories are found with the same test_id (which shouldn't
+    happen after proper use of set_test_id() vs set_test_id_only(), but could
+    occur in legacy scenarios), this function returns the newest directory by
+    modification time, which should be the main test run directory.
+
+    Args:
+        base_dir: Base directory to search in (typically ~/sct-results)
+        test_id: Test ID to search for. If None, uses search_test_id_in_latest()
+
+    Returns:
+        str: Path to the test run directory, or None if not found
+    """
     if not test_id:
         test_id = search_test_id_in_latest(base_dir)
     LOGGER.info("Search dir with logs locally for test id: %s", test_id)
-    search_cmd = "find {base_dir} -name test_id | xargs grep -rl {test_id}".format(**locals())
+    # Use -r flag with xargs to avoid running grep when no files are found
+    search_cmd = "find {base_dir} -name test_id | xargs -r grep -l {test_id}".format(**locals())
     result = LocalCmdRunner().run(cmd=search_cmd, ignore_status=True)
     LOGGER.info("Search result %s", result)
     if result.exited == 0 and result.stdout:
-        found_dirs = result.stdout.strip().split("\n")
-        LOGGER.info(found_dirs)
-        return os.path.dirname(found_dirs[0])
+        found_files = result.stdout.strip().split("\n")
+        # Convert test_id file paths to directory paths and sort by modification time (newest first)
+        found_dirs = [os.path.dirname(f) for f in found_files]
+        LOGGER.info("Found directories with test_id: %s", found_dirs)
+
+        # Sort by modification time, newest first
+        found_dirs_with_mtime = [(d, os.path.getmtime(d)) for d in found_dirs]
+        found_dirs_sorted = sorted(found_dirs_with_mtime, key=lambda x: x[1], reverse=True)
+
+        if len(found_dirs_sorted) > 1:
+            LOGGER.warning(
+                "Multiple directories found for test_id %s. Returning newest: %s. All found: %s",
+                test_id,
+                found_dirs_sorted[0][0],
+                [d[0] for d in found_dirs_sorted],
+            )
+
+        return found_dirs_sorted[0][0]
     LOGGER.info("No any dirs found locally for current test id")
     return None
 
