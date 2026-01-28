@@ -363,17 +363,16 @@ wheels = [
 
 [[package]]
 name = "azure-mgmt-keyvault"
-version = "12.0.0"
+version = "13.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "azure-common", marker = "sys_platform != 'win32'" },
     { name = "azure-mgmt-core", marker = "sys_platform != 'win32'" },
     { name = "isodate", marker = "sys_platform != 'win32'" },
     { name = "typing-extensions", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/69/7a/c3e8af7c180eae71c1ea87595a2411a5ef3c6005c4edc797428ad61341b9/azure_mgmt_keyvault-12.0.0.tar.gz", hash = "sha256:e2cf18e8a4928b5d1cab127be42ea9ad0246d687ca12fc27a2ad66487ce1c86b", size = 98466, upload-time = "2025-07-11T04:42:32.442Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/39/44/d453a7a125cb44f6443808f11c820a4c3f88d0af2c5b8d9adaf490ed064e/azure_mgmt_keyvault-13.0.0.tar.gz", hash = "sha256:56c12904e6d9ac49f886483e50e3f635d8bf43a489eb32fa7b4832f323d396c7", size = 102260, upload-time = "2025-12-11T10:14:41.609Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/97/cc/f539899361c1e276d026b3b6652ba1d7ee1aa7d26d525698c385f624fd7e/azure_mgmt_keyvault-12.0.0-py3-none-any.whl", hash = "sha256:621435752f236797752984773a330044a575268f8fb6a74c612e727b4742ee32", size = 141744, upload-time = "2025-07-11T04:42:33.902Z" },
+    { url = "https://files.pythonhosted.org/packages/00/e4/f11ae6caa523834be04a1d52dee11c79f8838e6752f95af3bcfd4f979713/azure_mgmt_keyvault-13.0.0-py3-none-any.whl", hash = "sha256:02c5ca1b428fa7a2c393c6891b7436ad529a7ad22d378eba0b9a26291da67a0d", size = 102054, upload-time = "2025-12-11T10:14:43.064Z" },
 ]
 
 [[package]]
@@ -3918,7 +3917,7 @@ requires-dist = [
     { name = "azure-identity", specifier = "==1.16.1" },
     { name = "azure-keyvault-keys", specifier = "==4.11.0" },
     { name = "azure-mgmt-compute", specifier = "==37.0.1" },
-    { name = "azure-mgmt-keyvault", specifier = "==12.0.0" },
+    { name = "azure-mgmt-keyvault", specifier = "==13.0.0" },
     { name = "azure-mgmt-msi", specifier = "==7.0.0" },
     { name = "azure-mgmt-network", specifier = "==30.0.0" },
     { name = "azure-mgmt-resource", specifier = "==24.0.0" },

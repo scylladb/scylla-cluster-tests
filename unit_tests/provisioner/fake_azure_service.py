@@ -654,6 +654,7 @@ class FakeAzureService:
         self.path.mkdir(exist_ok=True)
         self.azure_credentials = {"tenant_id": "fake-tenant-id"}
         self.subscription_id = "fake-subscription-id"
+        self.tenant_id = "fake-tenant-id"
 
     def get_vault_key(self, vault_uri, key_name):
         return None
