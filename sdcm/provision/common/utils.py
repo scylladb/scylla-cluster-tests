@@ -257,24 +257,48 @@ def install_syslogng_service():
 
 def install_vector_service():
     return dedent("""\
-        # install repo
+        # Install vector package using the official setup script
+        # The setup script handles repository setup and GPG keys correctly for all distros
+
+        VECTOR_SETUP_DONE=0
         for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
-            if bash -c "$(curl -L https://setup.vector.dev)"; then
+            if curl -fsSL https://setup.vector.dev | bash; then
+                VECTOR_SETUP_DONE=1
                 break
             fi
+            echo "Vector setup script failed, retrying in $(backoff $n) seconds..."
             sleep $(backoff $n)
         done
 
-        # install vector
+        if [ "$VECTOR_SETUP_DONE" != "1" ]; then
+            echo "ERROR: Failed to run Vector setup script after multiple attempts"
+            exit 1
+        fi
+
         if yum --help 2>/dev/null 1>&2 ; then
+            # YUM-based systems (CentOS, RHEL, etc.)
             for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
                 if yum install -y vector; then
                     break
                 fi
                 sleep $(backoff $n)
             done
+
         elif apt-get --help 2>/dev/null 1>&2 ; then
-            for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+            # APT-based systems (Debian, Ubuntu, etc.)
+            # The setup script already configured the repository and GPG keys
+            # Just need to update and install with proper lock handling
+
+            for n in 1 2 3 4 5; do
+                if apt-get -o DPkg::Lock::Timeout=300 update; then
+                    break
+                fi
+                echo "apt-get update failed, retrying in $(backoff $n) seconds..."
+                sleep $(backoff $n)
+            done
+
+            # Install vector with lock timeout
+            for n in 1 2 3; do
                 DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=300 -y vector || true
                 if dpkg-query --show vector ; then
                     break
