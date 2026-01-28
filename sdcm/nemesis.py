@@ -264,9 +264,9 @@ class NemesisBaseClass(NemesisFlags, ABC):
 
     exclusive: bool = False  # True, if the nemesis is exclusive, i.e. it should not run in parallel with other nemeses
 
-    def __init__(self, runner):
+    def __init__(self, runner: "NemesisRunner"):
         super().__init__()
-        self.runner = runner
+        self.runner: "NemesisRunner" = runner
 
     @abstractmethod
     def disrupt(self):
