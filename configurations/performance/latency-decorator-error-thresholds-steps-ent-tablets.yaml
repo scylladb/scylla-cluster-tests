@@ -81,9 +81,9 @@ latency_decorator_error_thresholds:
   mixed:
     "50000":
       P90 write:
-          fixed_limit: null
+        fixed_limit: null
       P90 read:
-          fixed_limit: null
+        fixed_limit: null
       P99 write:
         fixed_limit: 3
       P99 read:
