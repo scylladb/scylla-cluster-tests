@@ -842,6 +842,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         Needed in a case when you want to create a table to run queries on it,
           but don't know what is the replication factor to set to make sure that
           queries won't fail due to the lack of nodes in the cluster.
+
+        When rf_rack_valid_keyspaces is enabled, RF must be compatible with rack count
+        (RF should equal rack count or be evenly divisible).
         :return:
         """
         n_db_nodes = str(self.params.get("n_db_nodes"))
@@ -852,7 +855,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             max([min_nodes_dc - 1, 1]) if is_tablets_feature_enabled(self.db_cluster.nodes[0]) else min_nodes_dc
         )
         # NOTE: use RF=3 at max to avoid problems on big setups
-        return min(rf_candidate, 3)
+        rf_candidate = min(rf_candidate, 3)
+
+        # When rf_rack_valid_keyspaces is enabled, ensure RF is compatible with rack count
+        append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
+        if append_scylla_yaml.get("rf_rack_valid_keyspaces"):
+            rack_count = self.db_cluster.racks_count if self.db_cluster else 1
+            # RF must equal rack count for rf_rack_valid to work properly
+            # Adjust RF to match rack count (but not exceed min_nodes_dc)
+            rf_candidate = min(rack_count, min_nodes_dc, 3)
+
+        return rf_candidate
 
     @property
     def test_id(self):
