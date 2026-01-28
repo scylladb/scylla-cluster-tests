@@ -60,10 +60,15 @@ class DummyLongevityTest(LongevityTest):
         """Mock implementation that avoids creating 500 temporary files on disk."""
         # Return fake stress params without file I/O
         # The unit test only validates batch processing logic, not file creation
+        # The real YAML has 2 commands (insert and read), so we return 2 to match
         fake_profile_path = f"/tmp/mock_profile_table{idx}.yaml"
         return [
             {
-                "stress_cmd": f"cassandra-stress user profile={fake_profile_path} 'ops(insert=1)' cl=QUORUM n=1000",
+                "stress_cmd": f"cassandra-stress user profile={fake_profile_path} 'ops(insert=1)' cl=QUORUM n=1495501 -rate threads=1",
+                "profile": fake_profile_path
+            },
+            {
+                "stress_cmd": f"cassandra-stress user profile={fake_profile_path} 'ops(read1=1)' cl=QUORUM n=747748 -rate threads=1",
                 "profile": fake_profile_path
             }
         ]
