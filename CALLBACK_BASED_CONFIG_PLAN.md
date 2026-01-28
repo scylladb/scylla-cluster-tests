@@ -9,6 +9,57 @@ Currently, the `_add_new_node_in_new_dc()` nemesis operation requires restarting
 3. After startup, we modify `scylla.yaml` and `cassandra-rackdc.properties` 
 4. **Restart required** to apply the changes
 
+## Analysis of Other Nemesis Operations
+
+A comprehensive search of the codebase identified all nemesis operations that add nodes:
+
+### Operations That Add Nodes
+
+1. **`_add_new_node_in_new_dc()`** (line 5272) - **AFFECTED** ✗
+   - **Issue**: Modifies `scylla.yaml` and `cassandra-rackdc.properties` after `wait_for_init()`
+   - **Current fix**: Requires restart to apply DC configuration
+   - **Benefit from callback**: Would eliminate restart overhead
+
+2. **`_replace_cluster_node()`** (line 1263) - **NOT AFFECTED** ✓
+   - Uses `add_nodes()` → `wait_for_init()` → normal flow
+   - No post-initialization config modifications
+   - Sets `replacement_host_id` or `replacement_node_ip` BEFORE `wait_for_init()`
+   - These properties are used during initialization, not after
+
+3. **`_add_and_init_new_cluster_nodes()`** (line 1324) - **NOT AFFECTED** ✓
+   - Standard add nodes flow: `add_nodes()` → `wait_for_init()`
+   - No post-initialization config modifications
+   - Used by grow/shrink cluster operations
+
+4. **`disrupt_bootstrap_streaming_error()`** (line 5904) - **NOT AFFECTED** ✓
+   - Uses `add_nodes()` → monitors bootstrap process
+   - No config file modifications
+   - Intentionally aborts bootstrap for testing
+
+### Operations That Modify Config Files (Not on New Nodes)
+
+The following operations modify `scylla.yaml` on **existing nodes** (not newly added):
+
+- `disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back()` (line 916)
+- `disrupt_toggle_internode_compression()` (line 951, 957)
+- `disrupt_toggle_ldap_configuration()` (lines 1206, 1227)
+- `disrupt_encryption_at_rest()` (line 4866)
+
+**Conclusion**: These operations are NOT affected by the issue because they:
+1. Operate on existing, running nodes (not newly added)
+2. Already call `remote_scylla_yaml()` on initialized nodes
+3. Explicitly restart nodes after config changes (expected behavior)
+
+### Summary
+
+**Only `_add_new_node_in_new_dc()` is affected by this issue.**
+
+All other node addition operations follow the correct pattern:
+- `add_nodes()` → `wait_for_init()` → continue
+- No post-initialization config modifications required
+
+The callback mechanism would **only benefit `_add_new_node_in_new_dc()`** but provides a clean architectural pattern that could be leveraged by future nemesis operations if needed.
+
 ## Proposed Solution: Configuration Callback Mechanism
 
 ### High-Level Design
