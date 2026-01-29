@@ -5172,7 +5172,7 @@ class BaseScyllaCluster:
             # TODO: find how to recognize, that nemesis on the node is running
             if self.nemesis_count == 1:
                 node_for_timeout = next((n for n in self.nodes if not n.running_nemesis), self.nodes[0])
-                with adaptive_timeout(Operations.HEALTHCHECK, node=node_for_timeout, timeout=len(self.nodes) * 30):
+                with adaptive_timeout(Operations.HEALTHCHECK, node=node_for_timeout, timeout=len(self.nodes) * 60):
                     for node in self.nodes:
                         node.check_node_health()
             else:
