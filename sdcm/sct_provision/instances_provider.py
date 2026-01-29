@@ -17,6 +17,7 @@ from typing import List, Any
 
 from sdcm.provision import provisioner_factory
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
+from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import (
     PricingModel,
     VmInstance,
@@ -46,6 +47,7 @@ def provision_instances_with_fallback(
     definitions: List[InstanceDefinition],
     pricing_model: PricingModel,
     fallback_on_demand: bool,
+    params: SCTConfiguration,
 ) -> List[VmInstance]:
     try:
         provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
@@ -56,9 +58,14 @@ def provision_instances_with_fallback(
             raise
 
     provisioned_instances = provisioner.get_or_create_instances(definitions=definitions)
+    use_public_ip = ssh_connection_ip_type(params) == "public"
     for v_m in provisioned_instances:
+        if use_public_ip:
+            hostname = v_m.public_ip_address if v_m.public_ip_address else v_m.private_ip_address
+        else:
+            hostname = v_m.private_ip_address
         ssh_login_info = {
-            "hostname": v_m.public_ip_address if v_m.public_ip_address else v_m.private_ip_address,
+            "hostname": hostname,
             "user": v_m.user_name,
             "key_file": f"~/.ssh/{v_m.ssh_key_name}",
         }
@@ -75,16 +82,22 @@ def provision_sct_resources(params: SCTConfiguration, test_config: TestConfig, *
     pricing_model = PricingModel(params.get("instance_provision"))
     provision_fallback_on_demand = params.get("instance_provision_fallback_on_demand")
     for request in definitions_per_region:
+        # Add backend-specific configuration
+        backend_config = dict(provisioner_config)
+        if request.backend == "gce":
+            backend_config["network_name"] = params.get("gce_network")
+
         provisioner = provisioner_factory.create_provisioner(
             backend=request.backend,
             test_id=request.test_id,
             region=request.region,
             availability_zone=request.availability_zone,
-            **provisioner_config,
+            **backend_config,
         )
         provision_instances_with_fallback(
             provisioner=provisioner,
             definitions=request.definitions,
             pricing_model=pricing_model,
             fallback_on_demand=provision_fallback_on_demand,
+            params=params,
         )

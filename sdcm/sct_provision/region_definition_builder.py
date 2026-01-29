@@ -21,6 +21,7 @@ from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.types import NodeTypeType
+from sdcm.utils.gce_utils import get_gce_service_accounts
 
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 from sdcm.sct_provision.user_data_objects.apt_daily_triggers import DisableAptTriggersUserDataObject
@@ -55,6 +56,7 @@ class ConfigParamsMap:
     type: str
     user_name: str
     root_disk_size: str
+    local_ssd_count: str | None = None  # Maps to gce_n_local_ssd_disk_* parameters
 
 
 class DefinitionBuilder(abc.ABC):
@@ -77,15 +79,19 @@ class DefinitionBuilder(abc.ABC):
     def regions(self) -> List[str]:
         return self.params.get(self.REGION_MAP)
 
+    def instance_name(self, user_prefix, node_type_short, short_test_id, region, index, dc_idx: int = 0):
+        return f"{user_prefix}-{node_type_short}-node-{short_test_id}-{region}-{index}".lower()
+
     def build_instance_definition(
-        self, region: str, node_type: NodeTypeType, index: int, instance_type: str = None
+        self, region: str, node_type: NodeTypeType, index: int, dc_idx: int = 0, instance_type: str = None
     ) -> InstanceDefinition:
         """Builds one instance definition of given type and index for given region"""
         user_prefix = self.params.get("user_prefix")
         common_tags = TestConfig.common_tags()
         node_type_short = "db" if "db" in node_type else node_type
         short_test_id = self.test_config.test_id()[:8]
-        name = f"{user_prefix}-{node_type_short}-node-{short_test_id}-{region}-{index}".lower()
+        name = self.instance_name(user_prefix, node_type_short, short_test_id, region, index, dc_idx)
+        # name = f"{user_prefix}-{node_type_short}-node-{short_test_id}-{region}-{index}".lower()
         action = self.params.get(f"post_behavior_{node_type_short}_nodes")
         tags = common_tags | {
             "NodeType": node_type,
@@ -95,29 +101,44 @@ class DefinitionBuilder(abc.ABC):
         user_data = self._get_user_data_objects(node_type=node_type, instance_name=name)
         mapper = self.SCT_PARAM_MAPPER[node_type]
         use_public_ip = ssh_connection_ip_type(self.params) == "public" or node_type == "monitor"
+        local_ssd_count = self.params.get(mapper.local_ssd_count) if mapper.local_ssd_count else 0
         return InstanceDefinition(
             name=name,
             image_id=self.params.get(mapper.image_id),
             type=instance_type or self.params.get(mapper.type),
             user_name=self.params.get(mapper.user_name),
             root_disk_size=self.params.get(mapper.root_disk_size),
+            local_ssd_count=local_ssd_count or 0,
             tags=tags,
             ssh_key=self._get_ssh_key(),
             user_data=user_data,
             use_public_ip=use_public_ip,
+            service_accounts=get_gce_service_accounts() if self.BACKEND == "gce" else None,
         )
 
     def build_region_definition(
-        self, region: str, availability_zone: str, n_db_nodes: int, n_loader_nodes: int, n_monitor_nodes: int
+        self,
+        region: str,
+        availability_zone: str,
+        n_db_nodes: int,
+        n_loader_nodes: int,
+        n_monitor_nodes: int,
+        dc_idx: int = 0,
     ) -> RegionDefinition:
         """Builds instances definitions for given region"""
         definitions = []
         for idx in range(n_db_nodes):
-            definitions.append(self.build_instance_definition(region=region, node_type="scylla-db", index=idx + 1))
+            definitions.append(
+                self.build_instance_definition(region=region, node_type="scylla-db", index=idx + 1, dc_idx=dc_idx)
+            )
         for idx in range(n_loader_nodes):
-            definitions.append(self.build_instance_definition(region=region, node_type="loader", index=idx + 1))
+            definitions.append(
+                self.build_instance_definition(region=region, node_type="loader", index=idx + 1, dc_idx=dc_idx)
+            )
         for idx in range(n_monitor_nodes):
-            definitions.append(self.build_instance_definition(region=region, node_type="monitor", index=idx + 1))
+            definitions.append(
+                self.build_instance_definition(region=region, node_type="monitor", index=idx + 1, dc_idx=dc_idx)
+            )
         return RegionDefinition(
             backend=self.BACKEND,
             test_id=self.test_id,
@@ -138,8 +159,8 @@ class DefinitionBuilder(abc.ABC):
         if self.params.get("cluster_backend") == "xcloud" or self.params.get("xcloud_provisioning_mode"):
             n_db_nodes = [0] * len(self.regions)
 
-        for region, db_nodes, loader_nodes, monitor_nodes in zip(
-            self.regions, n_db_nodes, n_loader_nodes, n_monitor_nodes
+        for dc_idx, (region, db_nodes, loader_nodes, monitor_nodes) in enumerate(
+            zip(self.regions, n_db_nodes, n_loader_nodes, n_monitor_nodes)
         ):
             region_definitions.append(
                 self.build_region_definition(
@@ -148,6 +169,7 @@ class DefinitionBuilder(abc.ABC):
                     n_db_nodes=db_nodes,
                     n_loader_nodes=loader_nodes,
                     n_monitor_nodes=monitor_nodes,
+                    dc_idx=dc_idx,
                 )
             )
         return region_definitions

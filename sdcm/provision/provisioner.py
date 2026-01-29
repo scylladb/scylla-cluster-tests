@@ -48,11 +48,13 @@ class InstanceDefinition:
     tags: Dict[str, str] = field(default_factory=dict)
     arch: VmArch = VmArch.X86
     root_disk_size: int | None = None
+    local_ssd_count: int = 0  # Number of local SSDs to attach (GCE: gce_n_local_ssd_disk_*)
     data_disks: List[DataDisk] | None = None
     user_data: List[UserDataObject] | None = field(
         default_factory=list, repr=False
     )  # None when no cloud-init use at all
     use_public_ip: bool = False
+    service_accounts: List[Dict[str, any]] | None = None  # GCE service accounts for KMS/API access
 
 
 class ProvisionError(Exception):
