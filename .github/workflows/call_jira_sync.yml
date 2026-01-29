@@ -1,0 +1,18 @@
+﻿name: Jira Sync
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, review_requested, labeled, unlabeled, closed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  call_jira_sync:
+    uses: scylladb/scylla-cloud-devops-workflows/.github/workflows/jira_sync.yml@main
+    secrets:
+      jira_base_url: ${{ secrets.JIRA_BASE_URL }}
+      jira_user_email: ${{ secrets.JIRA_USER_EMAIL }}
+      jira_api_token: ${{ secrets.JIRA_API_TOKEN }}
