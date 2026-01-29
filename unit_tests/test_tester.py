@@ -521,3 +521,57 @@ class TestGatherFailureStatistics:
 
         # Cleanup
         tester.teardown_events_processes()
+
+    def test_reliable_replication_factor_with_rf_rack_valid(self, tmp_path):
+        """Test that reliable_replication_factor respects rf_rack_valid_keyspaces."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_rf_rack_valid")
+        tester.logdir = str(tmp_path)
+
+        # Setup mock db_cluster
+        tester.db_cluster = MagicMock()
+        tester.db_cluster.racks_count = 3  # 3 racks
+        mock_node = MagicMock()
+        mock_node.is_enterprise = False
+        tester.db_cluster.nodes = [mock_node]
+
+        # Setup params with rf_rack_valid_keyspaces enabled
+        tester.params = FakeSCTConfiguration()
+        tester.params["n_db_nodes"] = "3"
+        tester.params["append_scylla_yaml"] = {"rf_rack_valid_keyspaces": True}
+
+        # Mock tablets as disabled (so rf_candidate would be min_nodes_dc = 3)
+        # But with rf_rack_valid and 3 racks, RF should still be 3
+        with unittest.mock.patch("sdcm.tester.is_tablets_feature_enabled", return_value=False):
+            rf = tester.reliable_replication_factor
+            assert rf == 3, f"Expected RF=3 with 3 racks and rf_rack_valid, got RF={rf}"
+
+        # Test with tablets enabled (rf_candidate would be min_nodes_dc - 1 = 2)
+        # With rf_rack_valid and 3 racks, RF should be 3 to match rack count
+        with unittest.mock.patch("sdcm.tester.is_tablets_feature_enabled", return_value=True):
+            rf = tester.reliable_replication_factor
+            assert rf == 3, f"Expected RF=3 to match 3 racks with rf_rack_valid, got RF={rf}"
+
+    def test_reliable_replication_factor_without_rf_rack_valid(self, tmp_path):
+        """Test that reliable_replication_factor works without rf_rack_valid_keyspaces."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_rf_no_rack_valid")
+        tester.logdir = str(tmp_path)
+
+        # Setup mock db_cluster
+        tester.db_cluster = MagicMock()
+        tester.db_cluster.racks_count = 3  # 3 racks
+        mock_node = MagicMock()
+        mock_node.is_enterprise = False
+        tester.db_cluster.nodes = [mock_node]
+
+        # Setup params WITHOUT rf_rack_valid_keyspaces
+        tester.params = FakeSCTConfiguration()
+        tester.params["n_db_nodes"] = "3"
+        tester.params["append_scylla_yaml"] = {}  # rf_rack_valid_keyspaces not set
+
+        # Test with tablets enabled (rf_candidate would be min_nodes_dc - 1 = 2)
+        # Without rf_rack_valid, RF should be 2 (normal behavior)
+        with unittest.mock.patch("sdcm.tester.is_tablets_feature_enabled", return_value=True):
+            rf = tester.reliable_replication_factor
+            assert rf == 2, f"Expected RF=2 with tablets and no rf_rack_valid, got RF={rf}"
