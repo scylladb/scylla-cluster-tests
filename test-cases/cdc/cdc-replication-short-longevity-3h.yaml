@@ -1,4 +1,4 @@
-test_duration: 900
+test_duration: 600
 cluster_backend: aws
 user_prefix: 'cdc-replication-longevity'
 db_type: mixed_scylla
@@ -22,17 +22,18 @@ extra_network_interface: True
 
 gemini_cmd: |
   --duration 30m
-  --warmup 0s
-  --concurrency 4
+  --warmup 0m
+  --concurrency 1
   --mode write
   --cql-features basic
-  --max-mutation-retries 100
-  --max-mutation-retries-backoff 100ms
+  --use-server-timestamps
+  --dataset-size large
 
 gemini_table_options:
-  - "cdc = {'enabled': true, 'ttl': 0}"
+  - "cdc={'enabled': true}"
 
-# Required by SCT, although not used:
-gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
-
-cdc_replication_rounds_num: 9
+gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
+gemini_log_cql_statements: true
+# gemini_version: 'latest'
+# # Required by SCT, although not used:
+# gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
