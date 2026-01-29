@@ -801,10 +801,14 @@ class NemesisRunner:
         self.log.debug("Sleep for 60 sec: the other nodes should pull new version")
         time.sleep(60)
 
-    def disrupt_hard_reboot_node(self):
+    @latency_calculator_decorator(legend="Hard reboot node")
+    def _hard_reboot_node(self):
         self.reboot_node(target_node=self.target_node, hard=True)
         with self.action_log_scope(f"Wait for {self.target_node.name} node to be fully started"):
             self.target_node.wait_node_fully_start()
+
+    def disrupt_hard_reboot_node(self):
+        self._hard_reboot_node()
 
     def disrupt_multiple_hard_reboot_node(self) -> None:
         cdc_expected_error_patterns = [
@@ -4994,7 +4998,7 @@ class NemesisRunner:
         time.sleep(sleep_time)
         InfoEvent(message="FinishEvent - Steady State sleep has been finished").publish()
 
-    def disrupt_run_unique_sequence(self):
+    def disrupt_run_unique_sequence(self, reboot_node=False):
         sleep_time_between_ops = self.cluster.params.get("nemesis_sequence_sleep_between_ops")
         sleep_time_between_ops = sleep_time_between_ops if sleep_time_between_ops else 8
         sleep_time_between_ops = sleep_time_between_ops * 60
@@ -5013,6 +5017,11 @@ class NemesisRunner:
         InfoEvent(message="Finished grow disruption").publish()
         for node in new_nodes:
             self.node_allocator.unset_running_nemesis(node, self.current_disruption)
+        if reboot_node:
+            time.sleep(sleep_time_between_ops)
+            InfoEvent(message="Starting hard_reboot_node disruption").publish()
+            self._hard_reboot_node()
+            InfoEvent(message="Finished hard_reboot_node disruption").publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message="Starting terminate_and_replace disruption").publish()
         self._terminate_and_replace_node()
@@ -7286,6 +7295,14 @@ class NemesisSequence(NemesisBaseClass):
 
     def disrupt(self):
         self.runner.disrupt_run_unique_sequence()
+
+
+class NemesisSequenceWithReboot(NemesisBaseClass):
+    disruptive = True
+    networking = False
+
+    def disrupt(self):
+        self.runner.disrupt_run_unique_sequence(reboot_node=True)
 
 
 @target_all_nodes
