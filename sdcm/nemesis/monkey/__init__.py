@@ -693,6 +693,14 @@ class NemesisSequence(NemesisBaseClass):
         self.runner.disrupt_run_unique_sequence()
 
 
+class NemesisSequenceWithReboot(NemesisBaseClass):
+    disruptive = True
+    networking = False
+
+    def disrupt(self):
+        self.runner.disrupt_run_unique_sequence(reboot_node=True)
+
+
 @target_all_nodes
 class TerminateAndRemoveNodeMonkey(NemesisBaseClass):
     """Remove a Node from a Scylla Cluster (Down Scale)"""
