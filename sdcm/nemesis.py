@@ -6147,21 +6147,21 @@ class NemesisRunner:
             try:
                 num_of_restarts = len(self.cluster.nodes) // 2
                 self.log.debug("Number of serial restart of topology coordinator: %s", num_of_restarts)
-
-                for i in range(num_of_restarts):
-                    self.log.debug("Kill coordinator node: %s round: %s", self.target_node.name, i + 1)
-                    self._kill_scylla_daemon()
-                    coordinator_node = get_topology_coordinator_node(working_node)
-                    self.log.debug("New coordinator node %s", coordinator_node.name)
-                    try:
-                        self.switch_target_node(coordinator_node)
-                    except NemesisNodeAllocationError:
-                        self.log.debug(
-                            "Coordinator node is busy with %s, number of coordinator successful restarts: %s",
-                            coordinator_node.running_nemesis,
-                            i,
-                        )
-                        break
+                with ignore_raft_topology_cmd_failing():
+                    for i in range(num_of_restarts):
+                        self.log.debug("Kill coordinator node: %s round: %s", self.target_node.name, i + 1)
+                        self._kill_scylla_daemon()
+                        coordinator_node = get_topology_coordinator_node(working_node)
+                        self.log.debug("New coordinator node %s", coordinator_node.name)
+                        try:
+                            self.switch_target_node(coordinator_node)
+                        except NemesisNodeAllocationError:
+                            self.log.debug(
+                                "Coordinator node is busy with %s, number of coordinator successful restarts: %s",
+                                coordinator_node.running_nemesis,
+                                i,
+                            )
+                            break
 
                 with adaptive_timeout(operation=Operations.CREATE_MV, node=working_node, timeout=14400) as timeout:
                     wait_for_view_to_be_built(working_node, ks_name, view_name, timeout=timeout * 2)
