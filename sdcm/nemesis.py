@@ -1632,13 +1632,14 @@ class NemesisRunner:
         host_id = self.target_node.host_id
         is_old_node_seed = self.target_node.is_seed
         InfoEvent(message="StartEvent - Terminate node and wait 5 minutes").publish()
-        self.terminate_node(target_node=self.target_node)
-        time.sleep(300)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
-        assert get_node_state(old_node_ip) == "DN", "Removed node state should be DN"
-        InfoEvent(message="FinishEvent - target_node was terminated").publish()
-        new_node = self.replace_node(
-            old_node_ip, host_id, rack=self.target_node.rack, is_zero_node=self.target_node._is_zero_token_node
-        )
+        with ignore_raft_topology_cmd_failing():
+            self.terminate_node(target_node=self.target_node)
+            time.sleep(300)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
+            assert get_node_state(old_node_ip) == "DN", "Removed node state should be DN"
+            InfoEvent(message="FinishEvent - target_node was terminated").publish()
+            new_node = self.replace_node(
+                old_node_ip, host_id, rack=self.target_node.rack, is_zero_node=self.target_node._is_zero_token_node
+            )
         try:
             if new_node.get_scylla_config_param("enable_repair_based_node_ops") == "false":
                 InfoEvent(message="StartEvent - Run repair on new node").publish()
