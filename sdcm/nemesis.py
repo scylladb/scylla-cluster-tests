@@ -6500,7 +6500,7 @@ class ToggleLdapConfiguration(NemesisBaseClass):
 class NoOpMonkey(NemesisRunner):
     kubernetes = True
 
-    def disrupt(self):
+    def call_next_nemesis(self):
         time.sleep(300)
 
 
@@ -6935,9 +6935,6 @@ class MdcChaosMonkey(NemesisRunner):
         )
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
-    def disrupt(self):
-        self.call_next_nemesis()
-
 
 class AddDropColumnMonkey(NemesisBaseClass):
     disruptive = False
@@ -7112,9 +7109,6 @@ class DisruptKubernetesNodeThenDecommissionAndAddScyllaNode(NemesisRunner):
             ]
         )
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
-
-    def disrupt(self):
-        self.call_next_nemesis()
 
 
 class K8sSetMonkey(NemesisRunner):
@@ -7414,7 +7408,7 @@ class ManagerRcloneBackup(NemesisRunner):
     disruptive = False
     supports_high_disk_utilization = False
 
-    def disrupt(self):
+    def call_next_nemesis(self):
         self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.RCLONE, label="rclone_backup")
 
 
@@ -7423,22 +7417,8 @@ class ManagerNativeBackup(NemesisRunner):
     disruptive = False
     supports_high_disk_utilization = False
 
-    def disrupt(self):
+    def call_next_nemesis(self):
         self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.NATIVE, label="native_backup")
-
-
-COMPLEX_NEMESIS = [
-    NoOpMonkey,
-    ScyllaCloudLimitedChaosMonkey,
-    MdcChaosMonkey,
-    SisyphusMonkey,
-    DisruptKubernetesNodeThenReplaceScyllaNode,
-    DisruptKubernetesNodeThenDecommissionAndAddScyllaNode,
-    CategoricalMonkey,
-    NemesisSequence,
-    ManagerNativeBackup,
-    ManagerRcloneBackup,
-]
 
 
 @target_data_nodes
