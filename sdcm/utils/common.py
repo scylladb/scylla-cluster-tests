@@ -2967,11 +2967,11 @@ def get_hdr_tags(stress_tool: str, stress_operation: str, throttled_load: bool) 
             else:
                 raise ValueError(f"Unsupported stress_operation: {stress_operation}")
         case "scylla-bench":
-            if stress_operation.lower() == "write":
+            if stress_operation.lower() in ("write", "counter_update"):
                 return ["co-fixed"]
             elif stress_operation.lower() == "mixed":
                 return ["co-fixed-write", "co-fixed-read"]
-            elif stress_operation.lower() == "read":
+            elif stress_operation.lower() in ("read", "counter_read", "scan"):
                 return ["co-fixed"]
             else:
                 raise ValueError(f"Unknown scylla-bench mode: {stress_operation}")
