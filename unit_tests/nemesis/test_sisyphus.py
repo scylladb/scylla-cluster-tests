@@ -8,9 +8,10 @@ from contextlib import nullcontext
 
 import pytest
 
-from sdcm.nemesis import NemesisRunner, SisyphusMonkey
-from sdcm.nemesis_registry import NemesisRegistry
-from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
+from sdcm.nemesis.monkey.runners import SisyphusMonkey
+from sdcm.nemesis import NemesisRunner
+from sdcm.nemesis.registry import NemesisRegistry
+from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from unit_tests.nemesis import TestBaseClass
 from unit_tests.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
 from unit_tests.test_tester import ClusterTesterForTests

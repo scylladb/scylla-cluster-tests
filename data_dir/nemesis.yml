@@ -26,7 +26,7 @@ AddDropColumnMonkey:
   manager_operation: false
   modify_table: false
   networking: false
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
@@ -43,7 +43,7 @@ AddRemoveDcNemesis:
   manager_operation: false
   modify_table: false
   networking: false
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -94,7 +94,7 @@ BlockNetworkMonkey:
   manager_operation: false
   modify_table: false
   networking: true
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -604,7 +604,7 @@ LoadAndStreamMonkey:
   manager_operation: false
   modify_table: false
   networking: false
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1012,7 +1012,7 @@ NemesisSequence:
   manager_operation: false
   modify_table: false
   networking: false
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1041,7 +1041,7 @@ NodeRestartWithResharding:
   disruptive: true
   free_tier_set: false
   has_steady_run: false
-  kubernetes: true
+  kubernetes: false
   limited: false
   manager_operation: false
   modify_table: false
@@ -1148,7 +1148,7 @@ RandomInterruptionNetworkMonkey:
   manager_operation: false
   modify_table: false
   networking: true
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1182,7 +1182,7 @@ RefreshBigMonkey:
   manager_operation: false
   modify_table: false
   networking: false
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1199,7 +1199,7 @@ RefreshMonkey:
   manager_operation: false
   modify_table: false
   networking: false
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1216,7 +1216,7 @@ RejectInterNodeNetworkMonkey:
   manager_operation: false
   modify_table: false
   networking: true
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1233,7 +1233,7 @@ RejectNodeExporterNetworkMonkey:
   manager_operation: false
   modify_table: false
   networking: true
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1250,7 +1250,7 @@ RejectThriftNetworkMonkey:
   manager_operation: false
   modify_table: false
   networking: true
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1607,7 +1607,7 @@ StopStartInterfacesNetworkMonkey:
   manager_operation: false
   modify_table: false
   networking: true
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
