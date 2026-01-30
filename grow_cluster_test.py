@@ -17,9 +17,9 @@ import time
 import datetime
 import random
 
+from sdcm.nemesis.monkey import DecommissionMonkey
 from sdcm.tester import ClusterTester
 from sdcm.utils.common import get_data_dir_path, skip_optional_stage
-from sdcm import nemesis
 from sdcm import prometheus
 
 
@@ -166,7 +166,7 @@ class GrowClusterTest(ClusterTester):
             if rm_cnt > 0:
                 self.log.info("Remove %s nodes from cluster", rm_cnt)
                 for _ in range(rm_cnt):
-                    decommision_nemesis = nemesis.DecommissionMonkey(
+                    decommision_nemesis = DecommissionMonkey(
                         tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event
                     )
                     decommision_nemesis.disrupt_nodetool_decommission(add_node=False)
