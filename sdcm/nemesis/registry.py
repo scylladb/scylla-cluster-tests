@@ -1,3 +1,5 @@
+"""Module for discovering and filtering nemesis"""
+
 import ast
 import inspect
 from typing import List, TypeVar, Callable, Dict, Any
