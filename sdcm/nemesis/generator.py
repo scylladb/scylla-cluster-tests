@@ -1,3 +1,10 @@
+"""
+Module containing logic for generating nemesis related files
+Generates nemesis.yaml and nemesis_classes.yml, which serve as a list of current disruptions
+Generates configs/pipelines for each nemesis
+
+"""
+
 import logging
 from functools import cached_property
 from pathlib import Path

@@ -1,3 +1,8 @@
+"""
+Module containing all disruptions logic/classes
+Classes can be used in nemesis_selector
+"""
+
 from sdcm.nemesis import target_all_nodes, NemesisBaseClass, target_data_nodes
 from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS
 
