@@ -53,7 +53,7 @@ from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
 from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
-from sdcm.nemesis import SisyphusMonkey
+from sdcm.nemesis.monkey.runners import SisyphusMonkey
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
@@ -106,7 +106,7 @@ from sdcm.utils.common import (
     download_and_unpack_logs,
     find_equivalent_ami,
 )
-from sdcm.utils.nemesis_generation import generate_nemesis_yaml, NemesisJobGenerator
+from sdcm.nemesis.generator import generate_nemesis_yaml, NemesisJobGenerator
 from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
 from sdcm.utils.resources_cleanup import (
     clean_cloud_resources,
