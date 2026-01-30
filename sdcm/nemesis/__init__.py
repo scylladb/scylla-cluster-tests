@@ -170,8 +170,8 @@ from sdcm.utils.k8s.chaos_mesh import (
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
 
-from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS, DefaultValue, node_operations, unique_disruption_name
-from sdcm.utils.nemesis_utils.indexes import (
+from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS, DefaultValue, node_operations, unique_disruption_name
+from sdcm.nemesis.utils.indexes import (
     is_cf_a_view,
     get_random_column_name,
     create_index,
@@ -184,7 +184,7 @@ from sdcm.utils.nemesis_utils.indexes import (
     wait_materialized_view_building_tasks_started,
     ViewFinishedBuildingException,
 )
-from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator, NemesisNodeAllocationError
+from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator, NemesisNodeAllocationError
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.parallel_object import ParallelObjectResult, ParallelObject
 from sdcm.utils.quota import (
