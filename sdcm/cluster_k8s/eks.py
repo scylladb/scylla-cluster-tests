@@ -52,7 +52,7 @@ from sdcm.utils.aws_utils import (
     tags_as_ec2_tags,
     EksClusterCleanupMixin,
 )
-from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
+from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 
 
 P = ParamSpec("P")
