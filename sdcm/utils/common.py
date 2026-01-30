@@ -458,15 +458,21 @@ def list_logs_by_test_id(test_id):
         # return the old date to display them earlier
         return datetime.datetime(2019, 1, 1, 1, 1, 1)
 
-    log_files = S3Storage().search_by_path(path=test_id)
+    s3_storage = S3Storage()
+    log_files = s3_storage.search_by_path(path=test_id)
     for log_file in log_files:
         for log_type in log_types:
             if log_type in log_file:
+                # Generate original S3 URL for Argus storage
+                s3_url = f"https://{s3_storage.bucket_name}.s3.amazonaws.com/{log_file}"
+                # Generate proxied URL for display
+                proxied_url = create_proxy_argus_s3_url(log_file).format(test_id, log_file.split("/")[-1])
                 results.append(
                     {
                         "file_path": log_file,
                         "type": log_type,
-                        "link": create_proxy_argus_s3_url(log_file).format(test_id, log_file.split("/")[-1]),
+                        "link": proxied_url,
+                        "s3_url": s3_url,
                         "date": convert_to_date(log_file.split("/")[1]),
                     }
                 )

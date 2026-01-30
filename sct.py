@@ -1482,7 +1482,7 @@ def show_log(test_id, output_format, update_argus: bool):
         try:
             store_logs_in_argus(
                 test_id=test_id,
-                logs=reduce(lambda acc, log: acc[log["type"]].append(log["link"]) or acc, files, defaultdict(list)),
+                logs=reduce(lambda acc, log: acc[log["type"]].append(log["s3_url"]) or acc, files, defaultdict(list)),
                 update=True,
             )
         except Exception:  # noqa: BLE001
