@@ -777,6 +777,7 @@ class NemesisRunner:
             with (
                 DbNodeLogger(self.cluster.nodes, "restart node", target_node=self.target_node),
                 self.action_log_scope(f"Restart {self.target_node.name} node"),
+                ignore_raft_topology_cmd_failing(),
             ):
                 self.target_node.restart()
 
