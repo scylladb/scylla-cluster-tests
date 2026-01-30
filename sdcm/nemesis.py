@@ -6150,7 +6150,6 @@ class NemesisRunner:
                 LOGGER.debug("Query result %s", result)
                 assert not result, f"New rows were added from banned node, {result}"
 
-    @target_all_nodes
     def disrupt_kill_mv_building_coordinator(self):
         """
         MV building coordinator is responsible for building MV from base table in
@@ -7664,6 +7663,7 @@ class IsolateNodeWithIptableRuleNemesis(NemesisBaseClass):
         self.runner.disrupt_refuse_connection_with_block_scylla_ports_on_banned_node()
 
 
+@target_all_nodes
 class KillMVBuildingCoordinator(NemesisBaseClass):
     disruptive = True
     topology_changes = True
