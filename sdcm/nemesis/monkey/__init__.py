@@ -1,5 +1,5 @@
 from sdcm.nemesis import target_all_nodes, NemesisBaseClass, target_data_nodes
-from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS
+from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS
 
 
 @target_all_nodes
