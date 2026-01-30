@@ -64,7 +64,7 @@ upgrade_test.py                             @abramche @fruch
 /sdcm/monitorstack                                  @k0machi
 /sdcm/utils/sstable                                 @juliayakovlev
 /sdcm/utils/adaptive_timeouts                       @soyacz @fruch
-/sdcm/utils/nemesis_utils/node_allocator.py         @dimakr
+/sdcm/nemesis/utils/node_allocator.py         @dimakr
 /sdcm/provision/helpers/certificate.py              @dimakr
 /sdcm/provision/scylla_yaml/certificate_builder.py  @dimakr
 /sdcm/hdrhistogram.py                               @juliayakovlev
@@ -89,7 +89,7 @@ upgrade_test.py                             @abramche @fruch
 /sdcm/logcollector.py                       @fruch
 
 # Nemesis orchestration
-/sdcm/nemesis_registry                      @pehala
+/sdcm/nemesis/registry                      @pehala
 
 # Tombstone GC
 /test-cases/features/tombstone_gc           @pehala
