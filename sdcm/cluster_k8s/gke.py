@@ -35,7 +35,7 @@ from sdcm.utils.gce_utils import (
     gce_private_addresses,
 )
 from sdcm.utils.ci_tools import get_test_name
-from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
+from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
 from sdcm.cluster_gce import MonitorSetGCE
 from sdcm.keystore import KeyStore
