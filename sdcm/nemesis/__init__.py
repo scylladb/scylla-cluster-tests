@@ -13,7 +13,7 @@
 
 
 """
-Classes that introduce disruption in clusters.
+Module containing logic for running disruptions on a test cluster
 """
 
 import contextlib
