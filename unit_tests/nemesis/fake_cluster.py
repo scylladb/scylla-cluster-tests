@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from sdcm.cluster import BaseScyllaCluster
-from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
+from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 
 
