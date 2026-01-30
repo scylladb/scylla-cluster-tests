@@ -106,7 +106,7 @@ from sdcm.utils.common import (
     download_and_unpack_logs,
     find_equivalent_ami,
 )
-from sdcm.utils.nemesis_generation import generate_nemesis_yaml, NemesisJobGenerator
+from sdcm.nemesis.generator import generate_nemesis_yaml, NemesisJobGenerator
 from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
 from sdcm.utils.resources_cleanup import (
     clean_cloud_resources,
