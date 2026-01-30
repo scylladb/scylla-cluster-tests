@@ -144,7 +144,7 @@ from sdcm.utils.ldap import (
 )
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.utils.issues import SkipPerIssues
-from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
+from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import (
     PerformanceResultsAnalyzer,
