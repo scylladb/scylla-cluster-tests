@@ -30,7 +30,7 @@ from sdcm.mgmt.argus_report import report_to_argus, ManagerReportType
 from sdcm.mgmt.cli import RestoreTask
 from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots, get_backup_size
 from sdcm.provision.helpers.certificate import TLSAssets
-from sdcm.nemesis import MgmtRepair
+from sdcm.nemesis.monkey import MgmtRepair
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.alternator.table_setup import alternator_backuped_tables
 from sdcm.utils.aws_utils import AwsIAM

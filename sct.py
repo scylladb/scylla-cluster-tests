@@ -48,7 +48,7 @@ from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
 from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
-from sdcm.nemesis import SisyphusMonkey
+from sdcm.nemesis.monkey.runners import SisyphusMonkey
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
