@@ -28,7 +28,7 @@ from cassandra.query import SimpleStatement
 from sdcm import cluster
 from sdcm.tester import ClusterTester
 from sdcm.gemini_thread import GeminiStressThread
-from sdcm.nemesis import CategoricalMonkey
+from sdcm.nemesis.monkey.runners import CategoricalMonkey
 from sdcm.stress_thread import get_timeout_from_stress_cmd
 
 
