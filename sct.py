@@ -97,7 +97,7 @@ from sdcm.utils.common import (
     get_latest_scylla_release,
     images_dict_in_json_format,
 )
-from sdcm.utils.nemesis_generation import generate_nemesis_yaml, NemesisJobGenerator
+from sdcm.nemesis.generator import generate_nemesis_yaml, NemesisJobGenerator
 from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
 from sdcm.utils.resources_cleanup import (
     clean_cloud_resources,
