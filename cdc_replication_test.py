@@ -28,7 +28,7 @@ from cassandra.query import SimpleStatement
 from sdcm import cluster
 from sdcm.tester import ClusterTester
 from sdcm.gemini_thread import GeminiStressThread
-from sdcm.nemesis import CategoricalMonkey
+from sdcm.nemesis.monkey.runners import CategoricalMonkey
 
 
 class Mode(Enum):
