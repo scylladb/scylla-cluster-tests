@@ -1,10 +1,13 @@
+import logging
+from functools import cached_property
 from pathlib import Path
 
 import yaml
 from jinja2 import Template
 
 from sdcm import sct_abs_path
-from sdcm.nemesis import *
+from sdcm.nemesis import NemesisBaseClass, NemesisFlags
+from sdcm.nemesis.registry import NemesisRegistry
 
 DEFAULT_JOB_NAME = "longevity-5gb-1h"
 TEST_CASE_TEMPLATE_DIR = "test_config"
