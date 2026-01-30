@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 from jinja2 import Template
 
-from sdcm import sct_abs_path
+from sdcm import sct_abs_path, nemesis
 from sdcm.nemesis import NemesisBaseClass, NemesisFlags
 from sdcm.nemesis.registry import NemesisRegistry
 
@@ -103,7 +103,7 @@ class NemesisJobGenerator:
 
     def create_job_files_from_template(self):
         for cls in self.nemesis_class_list:
-            clazz = globals()[cls]
+            clazz = getattr(nemesis, cls)
             additional_configs = clazz.additional_configs or []
             additional_params = clazz.additional_params or {}
             for backend in self.backends:
