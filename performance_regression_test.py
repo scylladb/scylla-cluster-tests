@@ -30,7 +30,7 @@ from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.decorators import log_run_info, latency_calculator_decorator, optional_stage
-from sdcm.utils.nemesis_utils.indexes import wait_for_view_to_be_built, create_materialized_view
+from sdcm.nemesis.utils.indexes import wait_for_view_to_be_built, create_materialized_view
 
 
 KB = 1024
