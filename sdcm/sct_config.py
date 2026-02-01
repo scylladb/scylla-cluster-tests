@@ -2262,7 +2262,15 @@ class SCTConfiguration(dict):
             name="stress_before_upgrade",
             env="SCT_STRESS_BEFORE_UPGRADE",
             type=str,
-            help="Stress command to be run before upgrade (preapre stage)",
+            help="Stress command to be run before upgrade starts (preload/validation stage). "
+                 "This workload runs before any nodes are upgraded and can use CL=ALL for data validation.",
+        ),
+        dict(
+            name="large_partition_stress_during_upgrade",
+            env="SCT_LARGE_PARTITION_STRESS_DURING_UPGRADE",
+            type=str,
+            help="Stress command to be run during rolling upgrade while nodes are being upgraded. "
+                 "This workload cannot use CL=ALL as not all nodes may be available during the upgrade.",
         ),
         dict(
             name="stress_during_entire_upgrade",
