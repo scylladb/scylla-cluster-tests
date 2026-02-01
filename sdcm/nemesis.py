@@ -235,6 +235,45 @@ def target_all_nodes(func: Callable) -> Callable:
     return func
 
 
+def safe_split_keyspace_table(keyspace_table: Union[str, list]) -> Tuple[str, str]:
+    """
+    Safely split a keyspace.table string into keyspace and table components.
+
+    Handles cases where keyspace_table might unexpectedly be a list instead of a string,
+    which can occur due to race conditions or data inconsistencies in get_non_system_ks_cf_list.
+
+    Args:
+        keyspace_table: Either a "keyspace.table" string or a list (which shouldn't happen but we handle it)
+
+    Returns:
+        Tuple of (keyspace, table)
+
+    Raises:
+        ValueError: If keyspace_table is invalid (empty list, missing delimiter, etc.)
+    """
+    if isinstance(keyspace_table, list):
+        if not keyspace_table:
+            raise ValueError("keyspace_table is an empty list, expected 'keyspace.table' string")
+        # If it's a list, try to use the first element
+        keyspace_table = keyspace_table[0]
+
+    if not isinstance(keyspace_table, str):
+        raise ValueError(f"keyspace_table must be a string, got {type(keyspace_table)}: {keyspace_table}")
+
+    if "." not in keyspace_table:
+        raise ValueError(f"keyspace_table must contain a dot separator, got: {keyspace_table}")
+
+    parts = keyspace_table.split(".", 1)
+    if len(parts) != 2:
+        raise ValueError(f"keyspace_table must be in 'keyspace.table' format, got: {keyspace_table}")
+
+    keyspace, table = parts
+    if not keyspace or not table:
+        raise ValueError(f"keyspace and table cannot be empty, got: {keyspace_table}")
+
+    return keyspace, table
+
+
 class NemesisFlags:
     # nemesis flags:
     topology_changes: bool = False  # flag that signal that nemesis is changing cluster topology,
@@ -2776,7 +2815,7 @@ class NemesisRunner:
             )
 
         keyspace_table = random.choice(all_ks_cfs)
-        keyspace, table = keyspace_table.split(".")
+        keyspace, table = safe_split_keyspace_table(keyspace_table)
         current_gc_mode = get_gc_mode(node=self.target_node, keyspace=keyspace, table=table)
         if current_gc_mode != GcMode.REPAIR:
             new_gc_mode = GcMode.REPAIR
@@ -2809,7 +2848,7 @@ class NemesisRunner:
             raise UnsupportedNemesis("Non-system keyspace and table are not found. toggle_tables_ics nemesis can't run")
 
         keyspace_table = random.choice(all_ks_cfs)
-        keyspace, table = keyspace_table.split(".")
+        keyspace, table = safe_split_keyspace_table(keyspace_table)
         cur_compaction_strategy = get_compaction_strategy(node=self.target_node, keyspace=keyspace, table=table)
         if cur_compaction_strategy != CompactionStrategy.INCREMENTAL:
             new_compaction_strategy = CompactionStrategy.INCREMENTAL
@@ -2954,7 +2993,7 @@ class NemesisRunner:
             raise UnsupportedNemesis("No non-system user tables found")
 
         keyspace_table = random.choice(ks_cfs) if ks_cfs else ks_cfs
-        keyspace, table = keyspace_table.split(".")
+        keyspace, table = safe_split_keyspace_table(keyspace_table)
         compaction_strategy = get_compaction_strategy(node=self.target_node, keyspace=keyspace, table=table)
 
         if compaction_strategy == CompactionStrategy.TIME_WINDOW:
@@ -3667,7 +3706,7 @@ class NemesisRunner:
 
             if one_ks:
                 keyspace_table = random.choice(ks_cf)
-                keyspace, _ = keyspace_table.split(".")
+                keyspace, _ = safe_split_keyspace_table(keyspace_table)
             else:
                 keyspaces = {ks.split(".")[0] for ks in ks_cf}
                 if len(keyspaces) == 1:
