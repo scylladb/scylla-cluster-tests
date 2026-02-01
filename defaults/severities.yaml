@@ -63,10 +63,6 @@ CassandraHarryEvent.error: ERROR
 CassandraHarryEvent.timeout: ERROR
 CassandraHarryEvent.start: NORMAL
 CassandraHarryEvent.finish: NORMAL
-YcsbStressEvent.failure: CRITICAL
-YcsbStressEvent.error: ERROR
-YcsbStressEvent.start: NORMAL
-YcsbStressEvent.finish: NORMAL
 NdBenchStressEvent.failure: CRITICAL
 NdBenchStressEvent.error: ERROR
 NdBenchStressEvent.start: NORMAL
@@ -131,6 +127,7 @@ CassandraStressEvent: CRITICAL
 CqlStressCassandraStressEvent: CRITICAL
 LatteStressEvent: CRITICAL
 GeminiStressEvent: CRITICAL
+YcsbStressEvent: CRITICAL
 ScyllaServerStatusEvent: NORMAL
 BootstrapEvent: NORMAL
 RepairEvent: NORMAL
