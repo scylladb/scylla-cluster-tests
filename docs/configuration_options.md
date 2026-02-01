@@ -1234,6 +1234,16 @@ AWS image type of the oracle node
 * appendable
 
 
+## **instance_type_db_target** / SCT_INSTANCE_TYPE_DB_TARGET
+
+Target AWS instance type for platform migration (e.g., i8g.2xlarge for ARM)
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
 ## **instance_type_runner** / SCT_INSTANCE_TYPE_RUNNER
 
 instance type of the sct-runner node
@@ -3014,6 +3024,26 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **type:** str | list[str]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
+
+
+## **stress_before_migration** / SCT_STRESS_BEFORE_MIGRATION
+
+Stress command to write data for post-migration validation
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **verify_stress_after_migration** / SCT_VERIFY_STRESS_AFTER_MIGRATION
+
+Stress command to verify data after migration
+
+**default:** N/A
+
+**type:** str
+* appendable
 
 
 ## **stress_cmd_no_mv** / SCT_STRESS_CMD_NO_MV
