@@ -498,10 +498,10 @@ class BaseNode(AutoSshContainerMixin):
         self._add_node_to_argus()
 
     def _add_node_to_argus(self):
-        client = self.test_config.argus_client()
-        if isinstance(client, MagicMock):
-            return
         try:
+            client = self.test_config.argus_client()
+            if isinstance(client, MagicMock):
+                return
             shards = -1 if "db" in self.node_type else self.cpu_cores
             client.create_resource(
                 name=self.name,
@@ -520,10 +520,10 @@ class BaseNode(AutoSshContainerMixin):
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
 
     def update_shards_in_argus(self):
-        client = self.test_config.argus_client()
-        if isinstance(client, MagicMock):
-            return
         try:
+            client = self.test_config.argus_client()
+            if isinstance(client, MagicMock):
+                return
             shards = self.scylla_shards if "db" in self.node_type else self.cpu_cores
             shards = int(shards) if shards else 0
             client.update_shards_for_resource(name=self.name, new_shards=shards)
@@ -531,10 +531,10 @@ class BaseNode(AutoSshContainerMixin):
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
 
     def update_rack_info_in_argus(self, dc_name: str, rack_name: str):
-        client = self.test_config.argus_client()
-        if isinstance(client, MagicMock):
-            return
         try:
+            client = self.test_config.argus_client()
+            if isinstance(client, MagicMock):
+                return
             client.update_resource(
                 name=self.name, update_data={"instance_info": {"rack_name": rack_name, "dc_name": dc_name}}
             )
@@ -542,10 +542,10 @@ class BaseNode(AutoSshContainerMixin):
             LOGGER.error("Encountered an unhandled exception while updating resource in Argus", exc_info=True)
 
     def _terminate_node_in_argus(self):
-        client = self.test_config.argus_client()
-        if isinstance(client, MagicMock):
-            return
         try:
+            client = self.test_config.argus_client()
+            if isinstance(client, MagicMock):
+                return
             reason = self.running_nemesis if self.running_nemesis else "GracefulShutdown"
             client.terminate_resource(name=self.name, reason=reason)
         except Exception:
