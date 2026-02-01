@@ -59,51 +59,53 @@ class TestArgusDisabled(unittest.TestCase):
     def test_add_node_to_argus_when_disabled(self):
         """Test that _add_node_to_argus doesn't make API calls when Argus is disabled."""
         # Set up MagicMock as the argus_client (simulating Argus being disabled)
-        mock_client = MagicMock()
-        self.node.test_config.argus_client.return_value = mock_client
+        # This matches the default state in TestConfig when enable_argus: false
+        disabled_argus_client = MagicMock()
+        self.node.test_config.argus_client.return_value = disabled_argus_client
 
         # Call the method
         self.node._add_node_to_argus()
 
         # Verify that no API methods were called on the mock client
-        mock_client.create_resource.assert_not_called()
+        # because isinstance(disabled_argus_client, MagicMock) is True
+        disabled_argus_client.create_resource.assert_not_called()
 
     def test_update_shards_in_argus_when_disabled(self):
         """Test that update_shards_in_argus doesn't make API calls when Argus is disabled."""
         # Set up MagicMock as the argus_client
-        mock_client = MagicMock()
-        self.node.test_config.argus_client.return_value = mock_client
+        disabled_argus_client = MagicMock()
+        self.node.test_config.argus_client.return_value = disabled_argus_client
         self.node.scylla_shards = 4
 
         # Call the method
         self.node.update_shards_in_argus()
 
         # Verify that no API methods were called
-        mock_client.update_shards_for_resource.assert_not_called()
+        disabled_argus_client.update_shards_for_resource.assert_not_called()
 
     def test_update_rack_info_in_argus_when_disabled(self):
         """Test that update_rack_info_in_argus doesn't make API calls when Argus is disabled."""
         # Set up MagicMock as the argus_client
-        mock_client = MagicMock()
-        self.node.test_config.argus_client.return_value = mock_client
+        disabled_argus_client = MagicMock()
+        self.node.test_config.argus_client.return_value = disabled_argus_client
 
         # Call the method
         self.node.update_rack_info_in_argus("dc1", "rack1")
 
         # Verify that no API methods were called
-        mock_client.update_resource.assert_not_called()
+        disabled_argus_client.update_resource.assert_not_called()
 
     def test_terminate_node_in_argus_when_disabled(self):
         """Test that _terminate_node_in_argus doesn't make API calls when Argus is disabled."""
         # Set up MagicMock as the argus_client
-        mock_client = MagicMock()
-        self.node.test_config.argus_client.return_value = mock_client
+        disabled_argus_client = MagicMock()
+        self.node.test_config.argus_client.return_value = disabled_argus_client
 
         # Call the method
         self.node._terminate_node_in_argus()
 
         # Verify that no API methods were called
-        mock_client.terminate_resource.assert_not_called()
+        disabled_argus_client.terminate_resource.assert_not_called()
 
 
 if __name__ == "__main__":
