@@ -3615,6 +3615,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 node=node, cmd="select JSON * from system.truncated", log_file="system_truncated.log"
             )
             self.save_cqlsh_output_in_file(
+                node=node, cmd="select JSON * from system.tablets", log_file="system_tablets.log"
+            )
+            self.save_cqlsh_output_in_file(
                 node=node, cmd="desc schema with internals", log_file="schema_with_internals.log"
             )
             break

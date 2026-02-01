@@ -110,9 +110,6 @@ class ClusterTesterForTests(ClusterTester):
     def events(self) -> dict:
         return get_events_grouped_by_category(_registry=self.events_processes_registry)
 
-    def save_schema(self):
-        pass
-
     @pytest.fixture(autouse=True, name="event_system")
     def fixture_event_system(self, setup_logging):
         start_events_device(log_dir=self.logdir, _registry=self.events_processes_registry)
@@ -297,3 +294,104 @@ class SubtestsSuccessTest(ClusterTesterForTests):
 
         assert self.event_summary == {"NORMAL": 2}
         assert self.final_event.test_status == "SUCCESS"
+
+
+class TestSaveSchema:
+    """Tests for the save_schema functionality."""
+
+    def test_save_schema_no_db_cluster(self, tmp_path):
+        """Test that save_schema handles missing db_cluster gracefully."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_no_cluster")
+        tester.db_cluster = None
+        tester.logdir = str(tmp_path)
+
+        # Should not raise an exception
+        tester.save_schema()
+
+    def test_save_schema_saves_all_tables(self, tmp_path):
+        """Test that save_schema saves all expected tables including system.tablets."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_save_schema")
+        tester.logdir = str(tmp_path)
+
+        # Mock db_cluster with a node
+        mock_node = MagicMock()
+        mock_node.name = "test_node_1"
+        mock_node._is_node_ready_run_scylla_commands.return_value = True
+
+        # Mock run_cqlsh to return sample data
+        mock_result = MagicMock()
+        mock_result.stdout = "Sample output"
+        mock_node.run_cqlsh.return_value = mock_result
+
+        tester.db_cluster = MagicMock()
+        tester.db_cluster.nodes = [mock_node]
+
+        # Run save_schema
+        tester.save_schema()
+
+        # Verify run_cqlsh was called with expected commands
+        cqlsh_calls = [call[0][0] for call in mock_node.run_cqlsh.call_args_list]
+        assert "desc schema" in cqlsh_calls
+        assert "select JSON * from system_schema.tables" in cqlsh_calls
+        assert "select JSON * from system.truncated" in cqlsh_calls
+        assert "select JSON * from system.tablets" in cqlsh_calls
+        assert "desc schema with internals" in cqlsh_calls
+
+        # Verify files were created
+        assert (tmp_path / "schema.log").exists()
+        assert (tmp_path / "system_schema_tables.log").exists()
+        assert (tmp_path / "system_truncated.log").exists()
+        assert (tmp_path / "system_tablets.log").exists()
+        assert (tmp_path / "schema_with_internals.log").exists()
+
+    def test_save_schema_node_not_ready(self, tmp_path):
+        """Test that save_schema handles nodes that are not ready."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_node_not_ready")
+        tester.logdir = str(tmp_path)
+
+        # Mock db_cluster with a node that's not ready
+        mock_node = MagicMock()
+        mock_node.name = "test_node_not_ready"
+        mock_node._is_node_ready_run_scylla_commands.return_value = False
+
+        tester.db_cluster = MagicMock()
+        tester.db_cluster.nodes = [mock_node]
+
+        # Run save_schema
+        tester.save_schema()
+
+        # Verify run_cqlsh was not called on the not-ready node
+        assert not mock_node.run_cqlsh.called
+
+    def test_save_schema_only_uses_first_live_node(self, tmp_path):
+        """Test that save_schema only queries the first live node."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_first_node")
+        tester.logdir = str(tmp_path)
+
+        # Mock db_cluster with multiple nodes
+        mock_nodes = []
+        for i in range(3):
+            mock_node = MagicMock()
+            mock_node.name = f"test_node_{i}"
+            mock_node._is_node_ready_run_scylla_commands.return_value = True
+
+            mock_result = MagicMock()
+            mock_result.stdout = f"Output from node {i}"
+            mock_node.run_cqlsh.return_value = mock_result
+
+            mock_nodes.append(mock_node)
+
+        tester.db_cluster = MagicMock()
+        tester.db_cluster.nodes = mock_nodes
+
+        # Run save_schema
+        tester.save_schema()
+
+        # Verify only the first node was queried
+        assert mock_nodes[0].run_cqlsh.called
+        assert not mock_nodes[1].run_cqlsh.called
+        assert not mock_nodes[2].run_cqlsh.called
