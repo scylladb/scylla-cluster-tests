@@ -1,0 +1,12 @@
+test_duration: 150
+n_db_nodes: '3 3'
+region_name: 'eu-west-1 us-east-1'
+n_loaders: '1 1'
+
+prepare_write_cmd: "cassandra-stress write cl=LOCAL_QUORUM n=10000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=100 -pop seq=1..10000000"
+
+stress_before_migration: "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=5 -connection-count=5 -consistency-level=local_quorum -rows-per-request=10 -timeout=30s -validate-data"
+
+stress_cmd: "cassandra-stress mixed 'ratio(write=1,read=9)' cl=LOCAL_QUORUM duration=90m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 -pop seq=1..10000000"
+
+user_prefix: 'platform-migration-multidc'

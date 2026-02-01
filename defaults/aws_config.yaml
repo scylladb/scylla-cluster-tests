@@ -19,6 +19,7 @@ ami_monitor_user: 'ubuntu'
 aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'
 
 ami_id_db_scylla: ''
+ami_id_db_scylla_target: ''
 ami_id_db_oracle: ''
 
 ami_id_vector_store: ''
