@@ -202,7 +202,7 @@ class BaseMonitoringEntity(BaseLogEntity):
         # Skip for docker backend as monitoring stack is often not configured
         if backend == "docker":
             LOGGER.info("Skipping %s collection for docker backend - monitoring stack not configured",
-                       self.__class__.__name__)
+                        self.__class__.__name__)
             return True
         return False
 
