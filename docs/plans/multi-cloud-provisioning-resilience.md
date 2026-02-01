@@ -41,6 +41,74 @@ Two AWS-specific provisioning features need to be extended to GCE, Azure, and OC
 7. Provide comprehensive test coverage
 8. Design implementation to be ready for OCI backend when cluster implementation is complete
 
+## Single-Node Limitation for Zone and Region Fallback
+
+### Why n_db_nodes=1 is Required
+
+Both zone fallback and region fallback features are restricted to single-node database setups (`n_db_nodes=1`). This limitation is enforced through configuration validation and serves several important purposes:
+
+#### 1. Preventing Mixed Availability Zone Configurations
+
+When zone fallback is enabled, the provisioning system tries different availability zones sequentially. With multi-node clusters, this could result in database nodes spread across different availability zones within the same region, which creates several problems:
+
+- **Inconsistent Network Latency**: Nodes in different AZs experience varying network latencies, affecting replication performance and consistency
+- **Unpredictable Failure Domains**: Mixed-AZ setups make it difficult to reason about failure scenarios and recovery procedures
+- **Testing Complexity**: Tests would need to account for cross-AZ network behavior, making results harder to interpret
+
+#### 2. Preventing Split-Region Clusters
+
+When region fallback is enabled, provisioning may succeed in a different region than originally intended. With multi-node clusters, this could result in nodes split across different geographic regions, which is highly problematic:
+
+- **High Cross-Region Latency**: Inter-region network latency (50-200ms+) severely impacts cluster performance and can cause consistency issues
+- **Data Transfer Costs**: Cross-region data transfer incurs significant charges on all cloud providers, making tests unnecessarily expensive
+- **Compliance and Data Residency**: Nodes in different regions may violate data locality requirements or compliance constraints
+- **Unpredictable Behavior**: Split-region clusters exhibit fundamentally different performance characteristics, invalidating test results
+
+#### 3. Cost Management
+
+Fallback features are designed for test resilience, not production deployment patterns:
+
+- **Regional Pricing Differences**: Instance pricing varies significantly between regions (e.g., US vs EU regions can differ by 20-30%)
+- **Data Transfer Costs**: As noted above, cross-region data transfer can be expensive, especially for database workloads
+- **Unexpected Cost Spikes**: Without the single-node limitation, tests could accidentally provision expensive multi-region setups
+
+#### 4. Simplified Test Semantics
+
+Single-node setups with fallback provide clear, predictable behavior:
+
+- **Clear Intent**: The test just needs *a* database node somewhere, not a specific topology
+- **Reproducible Results**: Performance and behavior are consistent regardless of which zone/region succeeded
+- **Easier Debugging**: Logs and metrics come from a single, well-defined location
+
+#### 5. Functional Simplicity
+
+The fallback logic itself is simpler with single nodes:
+
+- **No Coordination**: Don't need to ensure all nodes end up in the same zone/region
+- **No Partial Failures**: Either provisioning succeeds completely in one location or fails
+- **Cleaner Rollback**: If provisioning fails, no partial cluster state to clean up
+
+### Use Cases for Fallback with n_db_nodes=1
+
+The single-node fallback features are ideal for:
+
+- **Artifact Testing**: Testing new OS images, Scylla packages, or database versions where you just need *a* working node
+- **Basic Functional Tests**: Tests that verify features work but don't require multi-node cluster behavior
+- **CI/CD Resilience**: Ensuring test pipelines don't fail due to temporary capacity constraints in specific zones/regions
+- **Cost-Optimized Testing**: Trying cheaper regions first, falling back to more expensive regions only if necessary
+
+### Multi-Node Cluster Provisioning
+
+For multi-node clusters, the recommended approach is:
+
+1. **Explicitly specify zone/region**: Configure the exact zone and region where you want the cluster
+2. **Retry logic at test level**: If provisioning fails, the entire test can be retried with a different configuration
+3. **Use spot-to-ondemand fallback**: This works with multi-node clusters and provides resilience against spot instance unavailability
+
+### Documentation Note
+
+This limitation and rationale will be included in the feature documentation (`docs/FALLBACK_FEATURES.md`) to ensure users understand why the constraint exists and how to use the features effectively.
+
 ## Implementation Paths
 
 There are two distinct code paths for creating database nodes that need to be aligned and tested:
