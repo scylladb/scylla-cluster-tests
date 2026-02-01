@@ -188,24 +188,6 @@ class BaseLogEntity:
 
 
 class BaseMonitoringEntity(BaseLogEntity):
-    def should_skip_for_backend(self) -> bool:
-        """Check if monitoring data collection should be skipped for the current backend.
-
-        Docker backend typically doesn't have monitoring stack properly configured,
-        especially in artifacts tests where n_monitor_nodes is 0. Attempting to collect
-        monitoring logs in such cases wastes time with retries and connection failures.
-
-        Returns:
-            bool: True if collection should be skipped, False otherwise.
-        """
-        backend = self._params.get("cluster_backend", "")
-        # Skip for docker backend as monitoring stack is often not configured
-        if backend == "docker":
-            LOGGER.info("Skipping %s collection for docker backend - monitoring stack not configured",
-                        self.__class__.__name__)
-            return True
-        return False
-
     def get_monitoring_base_dir(self, node):
         # Avoid cyclic dependencies
         if hasattr(node, "parent_cluster") and node.parent_cluster:
@@ -444,7 +426,10 @@ class PrometheusSnapshots(BaseMonitoringEntity):
         self.monitoring_data_dir = os.path.join(base_dir, self.monitoring_data_dir_name)
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None) -> Optional[str]:
-        if self.should_skip_for_backend():
+        # Skip for docker backend - monitoring stack is typically not configured in docker tests
+        # (e.g., artifacts tests have n_monitor_nodes=0), causing wasted retry attempts
+        if self._params.get("cluster_backend", "") == "docker":
+            LOGGER.info("Skipping Prometheus snapshot collection for docker backend - monitoring stack not configured")
             return None
         self.setup_monitor_data_dir(node)
         if remote_snapshot_archive := self.get_prometheus_snapshot_remote(node):
@@ -529,7 +514,10 @@ class MonitoringStack(BaseMonitoringEntity):
         return next((dashboard for dashboard in dashboards if title in dashboard["title"]), None)
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
-        if self.should_skip_for_backend():
+        # Skip for docker backend - monitoring stack is typically not configured in docker tests
+        # (e.g., artifacts tests have n_monitor_nodes=0), causing wasted retry attempts
+        if self._params.get("cluster_backend", "") == "docker":
+            LOGGER.info("Skipping monitoring stack collection for docker backend - monitoring stack not configured")
             return None
         local_archive = self.get_monitoring_data_stack(node, local_dst)
         if not local_archive:
@@ -642,7 +630,10 @@ class GrafanaScreenShot(GrafanaEntity):
             return []
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
-        if self.should_skip_for_backend():
+        # Skip for docker backend - monitoring stack is typically not configured in docker tests
+        # (e.g., artifacts tests have n_monitor_nodes=0), causing wasted retry attempts
+        if self._params.get("cluster_backend", "") == "docker":
+            LOGGER.info("Skipping Grafana screenshot collection for docker backend - monitoring stack not configured")
             return []
         node.logdir = local_dst
         os.makedirs(local_dst, exist_ok=True)
