@@ -263,15 +263,12 @@ def safe_split_keyspace_table(keyspace_table: Union[str, list]) -> Tuple[str, st
     if "." not in keyspace_table:
         raise ValueError(f"keyspace_table must contain a dot separator, got: {keyspace_table}")
 
-    parts = keyspace_table.split(".", 1)
-    if len(parts) != 2:
-        raise ValueError(f"keyspace_table must be in 'keyspace.table' format, got: {keyspace_table}")
-
-    keyspace, table = parts
+    keyspace, table = keyspace_table.split(".", 1)
     if not keyspace or not table:
         raise ValueError(f"keyspace and table cannot be empty, got: {keyspace_table}")
 
     return keyspace, table
+
 
 
 class NemesisFlags:

@@ -76,4 +76,9 @@ class TestSafeSplitKeyspaceTable:
     def test_list_with_nested_list(self):
         """Test when keyspace_table is a list containing another list."""
         with pytest.raises(ValueError, match="keyspace_table must be a string"):
+            safe_split_keyspace_table([["keyspace.table"]])
+
+    def test_list_with_empty_nested_list(self):
+        """Test when keyspace_table is a list containing an empty list."""
+        with pytest.raises(ValueError, match="keyspace_table must be a string"):
             safe_split_keyspace_table([[]])
