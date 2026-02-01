@@ -420,6 +420,15 @@ def pytest_runtest_logreport(report: pytest.TestReport):
 _test_start_times = {}
 
 
+def _get_test_elapsed_time(test_name: str) -> float:
+    """Get elapsed time for a test, returns 0.0 if test not tracked."""
+    start_time = _test_start_times.get(test_name)
+    if start_time is None:
+        logging.warning(f"Test start time not found for {test_name}, elapsed time will be 0.0")
+        return 0.0
+    return time.time() - start_time
+
+
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_setup(item):
     """Hook called before each test setup phase."""
@@ -440,7 +449,7 @@ def pytest_runtest_call(item):
     
     # Log when test call phase starts for integration tests
     if "integration" in [marker.name for marker in item.iter_markers()]:
-        elapsed = time.time() - _test_start_times.get(test_name, time.time())
+        elapsed = _get_test_elapsed_time(test_name)
         logging.info(f"[INTEGRATION TEST CALL] {test_name} (setup took {elapsed:.2f}s)")
     
     yield
@@ -453,7 +462,7 @@ def pytest_runtest_teardown(item):
     
     # Log when teardown starts for integration tests
     if "integration" in [marker.name for marker in item.iter_markers()]:
-        elapsed = time.time() - _test_start_times.get(test_name, time.time())
+        elapsed = _get_test_elapsed_time(test_name)
         logging.info(f"[INTEGRATION TEST TEARDOWN] {test_name} (total runtime so far: {elapsed:.2f}s)")
     
     yield
@@ -471,10 +480,10 @@ def pytest_runtest_makereport(item, call):
     if "integration" in [marker.name for marker in item.iter_markers()]:
         if report.when == "call":
             status = "PASSED" if report.passed else "FAILED" if report.failed else "SKIPPED"
-            elapsed = time.time() - _test_start_times.get(test_name, time.time())
+            elapsed = _get_test_elapsed_time(test_name)
             logging.info(f"[INTEGRATION TEST {status}] {test_name} (duration: {elapsed:.2f}s)")
         elif report.when == "teardown" and test_name in _test_start_times:
-            total_elapsed = time.time() - _test_start_times[test_name]
+            total_elapsed = _get_test_elapsed_time(test_name)
             logging.info(f"[INTEGRATION TEST COMPLETE] {test_name} (total time: {total_elapsed:.2f}s)")
             # Clean up tracking
             del _test_start_times[test_name]

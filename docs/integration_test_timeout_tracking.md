@@ -68,11 +68,11 @@ Added pytest hooks in `unit_tests/conftest.py` to track and log integration test
 ## Example Output
 
 ```
-INFO     root:conftest.py:428 [INTEGRATION TEST START] unit_tests/test_gemini_thread.py::test_01_gemini_thread
-INFO     root:conftest.py:438 [INTEGRATION TEST CALL] unit_tests/test_gemini_thread.py::test_01_gemini_thread (setup took 15.34s)
-INFO     root:conftest.py:448 [INTEGRATION TEST TEARDOWN] unit_tests/test_gemini_thread.py::test_01_gemini_thread (total runtime so far: 125.67s)
-INFO     root:conftest.py:461 [INTEGRATION TEST PASSED] unit_tests/test_gemini_thread.py::test_01_gemini_thread (duration: 110.33s)
-INFO     root:conftest.py:464 [INTEGRATION TEST COMPLETE] unit_tests/test_gemini_thread.py::test_01_gemini_thread (total time: 125.67s)
+INFO [INTEGRATION TEST START] unit_tests/test_gemini_thread.py::test_01_gemini_thread
+INFO [INTEGRATION TEST CALL] unit_tests/test_gemini_thread.py::test_01_gemini_thread (setup took 15.34s)
+INFO [INTEGRATION TEST TEARDOWN] unit_tests/test_gemini_thread.py::test_01_gemini_thread (total runtime so far: 125.67s)
+INFO [INTEGRATION TEST PASSED] unit_tests/test_gemini_thread.py::test_01_gemini_thread (duration: 110.33s)
+INFO [INTEGRATION TEST COMPLETE] unit_tests/test_gemini_thread.py::test_01_gemini_thread (total time: 125.67s)
 ```
 
 If a test times out after 1 hour:
