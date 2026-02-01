@@ -1136,6 +1136,12 @@ class SCTConfiguration(dict):
             help="AWS image type of the oracle node",
         ),
         dict(
+            name="instance_type_db_target",
+            env="SCT_INSTANCE_TYPE_DB_TARGET",
+            type=str,
+            help="Target AWS instance type for platform migration (e.g., i8g.2xlarge for ARM)",
+        ),
+        dict(
             name="instance_type_runner",
             env="SCT_INSTANCE_TYPE_RUNNER",
             type=str,
@@ -1862,6 +1868,18 @@ class SCTConfiguration(dict):
                     You can specify everything but the -node parameter, which is going to
                     be provided by the test suite infrastructure.
                     multiple commands can passed as a list""",
+        ),
+        dict(
+            name="stress_before_migration",
+            env="SCT_STRESS_BEFORE_MIGRATION",
+            type=str,
+            help="Stress command to write data for post-migration validation",
+        ),
+        dict(
+            name="verify_stress_after_migration",
+            env="SCT_VERIFY_STRESS_AFTER_MIGRATION",
+            type=str,
+            help="Stress command to verify data after migration",
         ),
         dict(
             name="stress_cmd_no_mv",
@@ -3322,6 +3340,39 @@ class SCTConfiguration(dict):
                 raise ValueError(
                     "'scylla_version' can't used together with 'ami_id_db_scylla', 'gce_image_db' or with 'scylla_repo'"
                 )
+
+            # auto-discover target image for platform migration
+            self.target_db_image_ids = []
+            if self.get("instance_type_db_target"):
+                if self.get("cluster_backend") == "aws":
+                    target_ami_list = []
+                    for region in region_names:
+                        target_arch = get_arch_from_instance_type(
+                            self.get("instance_type_db_target"), region_name=region
+                        )
+                        try:
+                            ami = (
+                                get_branched_ami(scylla_version=scylla_version, region_name=region, arch=target_arch)[0]
+                                if ":" in scylla_version
+                                else get_scylla_ami_versions(
+                                    version=scylla_version, region_name=region, arch=target_arch
+                                )[0]
+                            )
+                        except Exception as ex:  # noqa: BLE001
+                            raise ValueError(
+                                f"Target AMI for scylla_version='{scylla_version}' not found in {region} "
+                                f"arch={target_arch} (for instance_type_db_target)"
+                            ) from ex
+                        self.log.debug(
+                            "Found target AMI %s(%s) for scylla_version='%s' arch=%s in %s",
+                            ami.name,
+                            ami.image_id,
+                            scylla_version,
+                            target_arch,
+                            region,
+                        )
+                        target_ami_list.append(ami)
+                    self.target_db_image_ids = [ami.image_id for ami in target_ami_list]
 
         # 6.1) handle oracle_scylla_version if exists
         if (oracle_scylla_version := self.get("oracle_scylla_version")) and self.get("db_type") == "mixed_scylla":
