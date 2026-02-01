@@ -418,15 +418,25 @@ def pytest_runtest_logreport(report: pytest.TestReport):
 
 # Track test execution timing for integration tests
 _test_start_times = {}
+_test_call_start_times = {}
 
 
 def _get_test_elapsed_time(test_name: str) -> float:
-    """Get elapsed time for a test, returns 0.0 if test not tracked."""
+    """Get elapsed time for a test since setup started, returns 0.0 if test not tracked."""
     start_time = _test_start_times.get(test_name)
     if start_time is None:
         logging.warning(f"Test start time not found for {test_name}, elapsed time will be 0.0")
         return 0.0
     return time.time() - start_time
+
+
+def _get_test_call_duration(test_name: str) -> float:
+    """Get duration of test call phase only, returns 0.0 if test not tracked."""
+    call_start = _test_call_start_times.get(test_name)
+    if call_start is None:
+        logging.warning(f"Test call start time not found for {test_name}, duration will be 0.0")
+        return 0.0
+    return time.time() - call_start
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
@@ -446,6 +456,9 @@ def pytest_runtest_setup(item):
 def pytest_runtest_call(item):
     """Hook called during test execution phase."""
     test_name = item.nodeid
+    
+    # Record call phase start time
+    _test_call_start_times[test_name] = time.time()
     
     # Log when test call phase starts for integration tests
     if "integration" in [marker.name for marker in item.iter_markers()]:
@@ -480,10 +493,13 @@ def pytest_runtest_makereport(item, call):
     if "integration" in [marker.name for marker in item.iter_markers()]:
         if report.when == "call":
             status = "PASSED" if report.passed else "FAILED" if report.failed else "SKIPPED"
-            elapsed = _get_test_elapsed_time(test_name)
-            logging.info(f"[INTEGRATION TEST {status}] {test_name} (duration: {elapsed:.2f}s)")
-        elif report.when == "teardown" and test_name in _test_start_times:
-            total_elapsed = _get_test_elapsed_time(test_name)
-            logging.info(f"[INTEGRATION TEST COMPLETE] {test_name} (total time: {total_elapsed:.2f}s)")
-            # Clean up tracking
-            del _test_start_times[test_name]
+            call_duration = _get_test_call_duration(test_name)
+            logging.info(f"[INTEGRATION TEST {status}] {test_name} (call duration: {call_duration:.2f}s)")
+        elif report.when == "teardown":
+            if test_name in _test_start_times:
+                total_elapsed = _get_test_elapsed_time(test_name)
+                logging.info(f"[INTEGRATION TEST COMPLETE] {test_name} (total time: {total_elapsed:.2f}s)")
+                # Clean up tracking
+                del _test_start_times[test_name]
+            if test_name in _test_call_start_times:
+                del _test_call_start_times[test_name]

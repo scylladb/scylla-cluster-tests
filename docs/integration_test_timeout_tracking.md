@@ -71,7 +71,7 @@ Added pytest hooks in `unit_tests/conftest.py` to track and log integration test
 INFO [INTEGRATION TEST START] unit_tests/test_gemini_thread.py::test_01_gemini_thread
 INFO [INTEGRATION TEST CALL] unit_tests/test_gemini_thread.py::test_01_gemini_thread (setup took 15.34s)
 INFO [INTEGRATION TEST TEARDOWN] unit_tests/test_gemini_thread.py::test_01_gemini_thread (total runtime so far: 125.67s)
-INFO [INTEGRATION TEST PASSED] unit_tests/test_gemini_thread.py::test_01_gemini_thread (duration: 110.33s)
+INFO [INTEGRATION TEST PASSED] unit_tests/test_gemini_thread.py::test_01_gemini_thread (call duration: 110.33s)
 INFO [INTEGRATION TEST COMPLETE] unit_tests/test_gemini_thread.py::test_01_gemini_thread (total time: 125.67s)
 ```
 
@@ -83,6 +83,8 @@ ERROR   pytest_timeout: Test exceeded timeout of 3600 seconds
 ## Usage
 
 The feature is automatically active for all tests marked with `pytest.mark.integration`. No code changes are needed in individual test files.
+
+**Note on Parallel Execution**: The timing dictionaries (`_test_start_times` and `_test_call_start_times`) are accessed per-worker in pytest-xdist. Each worker process has its own copy of these dictionaries, so there are no race conditions during parallel test execution. However, if you see warnings about missing start times, it may indicate an issue with the test execution flow.
 
 To disable timeout for a specific test (not recommended):
 ```python
