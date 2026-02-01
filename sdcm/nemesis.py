@@ -2402,6 +2402,18 @@ class NemesisRunner:
                 'This nemesis expects "max_partitions_in_test_table" sub-parameter of data_validation to be set'
             )
 
+        # Check if there are enough non-validated partitions available for deletion
+        # This nemesis requires partitions outside the validation range to operate
+        partitions_attrs = self.tester.partitions_attrs
+        if partitions_attrs.partition_range_with_data_validation:
+            min_required_partitions = self.num_deletions_factor
+            if partitions_attrs.non_validated_partitions < min_required_partitions:
+                raise UnsupportedNemesis(
+                    f"This nemesis requires at least {min_required_partitions} non-validated partitions, "
+                    f"but only {partitions_attrs.non_validated_partitions} are available. "
+                    f"Consider increasing 'max_partitions_in_test_table' or adjusting 'partition_range_with_data_validation'."
+                )
+
     def choose_partitions_for_delete(
         self, partitions_amount, ks_cf, with_clustering_key_data=False, exclude_partitions=None
     ):
