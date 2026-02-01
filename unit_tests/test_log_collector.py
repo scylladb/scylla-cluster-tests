@@ -12,6 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 import uuid
+from unittest.mock import Mock
 
 import pytest
 
@@ -21,6 +22,9 @@ from sdcm.logcollector import (
     PythonSCTLogCollector,
     SchemaLogCollector,
     FailureStatisticsCollector,
+    PrometheusSnapshots,
+    MonitoringStack,
+    GrafanaScreenShot,
 )
 from sdcm.provision import provisioner_factory
 from unit_tests.lib.fake_resources import prepare_fake_region
@@ -152,8 +156,6 @@ def test_failure_statistics_collector_does_not_raise_when_no_files(tmp_path):
 
 def test_monitoring_entities_skip_for_docker_backend():
     """Test that monitoring entities skip collection for docker backend."""
-    from sdcm.logcollector import PrometheusSnapshots, MonitoringStack, GrafanaScreenShot
-    
     # Test with docker backend - should skip
     docker_params = {"cluster_backend": "docker"}
     
@@ -172,8 +174,6 @@ def test_monitoring_entities_skip_for_docker_backend():
 
 def test_monitoring_entities_do_not_skip_for_other_backends():
     """Test that monitoring entities do not skip collection for non-docker backends."""
-    from sdcm.logcollector import PrometheusSnapshots, MonitoringStack, GrafanaScreenShot
-    
     # Test with various non-docker backends - should not skip
     for backend in ["aws", "gce", "azure", "baremetal", "k8s-eks", "k8s-gke"]:
         backend_params = {"cluster_backend": backend}
@@ -193,9 +193,6 @@ def test_monitoring_entities_do_not_skip_for_other_backends():
 
 def test_monitoring_entities_collect_returns_early_for_docker():
     """Test that collect methods return early for docker backend without attempting collection."""
-    from sdcm.logcollector import PrometheusSnapshots, MonitoringStack, GrafanaScreenShot
-    from unittest.mock import Mock
-    
     docker_params = {"cluster_backend": "docker"}
     mock_node = Mock()
     
