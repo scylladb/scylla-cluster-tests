@@ -5201,31 +5201,39 @@ class NemesisRunner:
             )
 
     def _add_new_node_in_new_dc(self, is_zero_node=False) -> BaseNode:
-        add_node_func_args = {
-            "count": 1,
-            "dc_idx": 0,
-            "enable_auto_bootstrap": True,
-            "disruption_name": self.current_disruption,
-            **({"is_zero_node": is_zero_node} if is_zero_node else {}),
-        }
-        new_node = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(self.cluster.add_nodes)(
-            **add_node_func_args
-        )[0]
-        with new_node.remote_scylla_yaml() as scylla_yml:
-            scylla_yml.rpc_address = new_node.ip_address
-            scylla_yml.seed_provider = [
-                SeedProvider(
-                    class_name="org.apache.cassandra.locator.SimpleSeedProvider",
-                    parameters=[{"seeds": self.tester.db_cluster.seed_nodes_addresses}],
-                )
-            ]
+        # Define callback to configure DC settings before node starts
+        def configure_new_dc(node: BaseNode):
+            """Configure node for new datacenter before Scylla starts"""
+            with node.remote_scylla_yaml() as scylla_yml:
+                scylla_yml.rpc_address = node.ip_address
+                scylla_yml.seed_provider = [
+                    SeedProvider(
+                        class_name="org.apache.cassandra.locator.SimpleSeedProvider",
+                        parameters=[{"seeds": self.tester.db_cluster.seed_nodes_addresses}],
+                    )
+                ]
+            
             endpoint_snitch = self.cluster.params.get("endpoint_snitch") or ""
             if endpoint_snitch.endswith("GossipingPropertyFileSnitch"):
                 rackdc_value = {"dc": "add_remove_nemesis_dc"}
             else:
                 rackdc_value = {"dc_suffix": "_nemesis_dc"}
-        with new_node.remote_cassandra_rackdc_properties() as properties_file:
-            properties_file.update(**rackdc_value)
+            
+            with node.remote_cassandra_rackdc_properties() as properties_file:
+                properties_file.update(**rackdc_value)
+        
+        add_node_func_args = {
+            "count": 1,
+            "dc_idx": 0,
+            "enable_auto_bootstrap": True,
+            "disruption_name": self.current_disruption,
+            "config_callback": configure_new_dc,  # Configure before startup - no restart needed!
+            **({"is_zero_node": is_zero_node} if is_zero_node else {}),
+        }
+        new_node = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(self.cluster.add_nodes)(
+            **add_node_func_args
+        )[0]
+        # wait_for_init() will call node_setup(), which executes the callback after config_setup()
         self.cluster.wait_for_init(node_list=[new_node], timeout=900, check_node_health=False)
         new_node.wait_node_fully_start()
         self.monitoring_set.reconfigure_scylla_monitoring()
