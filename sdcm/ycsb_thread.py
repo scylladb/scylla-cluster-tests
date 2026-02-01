@@ -24,12 +24,14 @@ from textwrap import dedent
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.remote import FailuresWatcher
 from sdcm.reporting.tooling_reporter import YcsbVersionReporter
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import EventPeriod
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.utils import alternator
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.common import generate_random_string
-from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 LOGGER = logging.getLogger(__name__)
@@ -460,24 +462,31 @@ class YcsbStressThread(DockerBasedStressThread):
         log_file_name = os.path.join(loader.logdir, "ycsb-l%s-c%s-%s.log" % (loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug("ycsb-stress local log: %s", log_file_name)
 
-        def raise_event_callback(sentinel, line):
-            if line:
-                YcsbStressEvent.error(
-                    node=cmd_runner_name,
-                    stress_cmd=stress_cmd,
-                    errors=[
-                        line,
-                    ],
-                ).publish()
-
         LOGGER.debug("running: %s", stress_cmd)
         stress_cmd = stress_cmd.replace("bin/ycsb", "bin/ycsb.sh")
         node_cmd = f"cd /usr/local/share/scylla-ycsb && {stress_cmd}"
 
-        YcsbStressEvent.start(node=cmd_runner_name, stress_cmd=stress_cmd).publish()
+        ycsb_event = YcsbStressEvent(node=cmd_runner_name, stress_cmd=stress_cmd, log_file_name=log_file_name)
+
+        def raise_event_callback(sentinel, line):
+            if not line:
+                return
+            # Report each error line as it shows up, instead of waiting for the stress command to end,
+            # and tie it to the stress load it came from by reusing its event_id.
+            error_event = YcsbStressEvent(
+                node=cmd_runner_name,
+                stress_cmd=stress_cmd,
+                log_file_name=log_file_name,
+                severity=Severity.ERROR,
+                errors=[line],
+            )
+            error_event.event_id = ycsb_event.event_id
+            error_event.period_type = EventPeriod.INFORMATIONAL.value
+            error_event.publish()
+
+        ycsb_event.begin_event()
 
         result = {}
-        ycsb_failure_event = ycsb_finish_event = None
         LOGGER.debug(f"starting YCSB stress command: {node_cmd}")
         with YcsbStatsPublisher(loader, loader_idx, ycsb_log_filename=log_file_name):
             try:
@@ -500,24 +509,12 @@ class YcsbStressThread(DockerBasedStressThread):
                 LOGGER.debug(f"YCSB stress command finished: {result}")
             except Exception as exc:
                 LOGGER.exception(f"YCSB stress command failed: {exc}")
-                errors_str = format_stress_cmd_error(exc)
-                ycsb_failure_event = YcsbStressEvent.failure(
-                    node=cmd_runner_name,
-                    stress_cmd=self.stress_cmd,
-                    log_file_name=log_file_name,
-                    errors=[
-                        errors_str,
-                    ],
-                )
-                ycsb_failure_event.publish()
+                self.configure_event_on_failure(stress_event=ycsb_event, exc=exc)
                 raise
             finally:
                 LOGGER.debug("YCSB stress command finished, cleaning up")
-                ycsb_finish_event = YcsbStressEvent.finish(
-                    node=cmd_runner_name, stress_cmd=stress_cmd, log_file_name=log_file_name
-                )
-                ycsb_finish_event.publish()
+                ycsb_event.end_event()
                 if self.params["use_hdrhistogram"]:
                     self._terminate_hdr_loggers(contextes, loader_idx, cpu_idx)
         LOGGER.debug("YCSB stress command done")
-        return loader, result, ycsb_failure_event or ycsb_finish_event
+        return loader, result, ycsb_event

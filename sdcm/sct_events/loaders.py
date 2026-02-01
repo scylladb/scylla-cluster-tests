@@ -105,21 +105,10 @@ class CassandraHarryEvent(StressEvent, abstract=True):
 CassandraHarryEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR, timeout=Severity.ERROR)
 
 
-class BaseYcsbStressEvent(StressEvent, abstract=True):
-    pass
+class YcsbStressEvent(StressEvent): ...
 
 
-class YcsbStressEvent(BaseYcsbStressEvent, abstract=True):
-    failure: Type[StressEventProtocol]
-    error: Type[StressEventProtocol]
-    start: Type[StressEventProtocol]
-    finish: Type[StressEventProtocol]
-
-
-YcsbStressEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR)
-
-
-class CDCReaderStressEvent(BaseYcsbStressEvent, abstract=True):
+class CDCReaderStressEvent(StressEvent, abstract=True):
     failure: Type[StressEventProtocol]
     error: Type[StressEventProtocol]
     start: Type[StressEventProtocol]

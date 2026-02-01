@@ -23,6 +23,7 @@ from sdcm.exceptions import UnsupportedNemesis, KillNemesis
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CoreDumpEvent, TestFrameworkEvent, SoftTimeoutEvent
+from sdcm.sct_events.base import EventPeriod
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
@@ -280,47 +281,51 @@ class TestSctEvents(RealEventsTest):
 
         assert "error that shouldn't be lowered" in log_content
 
+    YCSB_ERROR_LINE = (
+        "237951 [Thread-47] ERROR site.ycsb.db.DynamoDBClient"
+        " -com.amazonaws.AmazonServiceException: Internal server error:"
+        " exceptions::unavailable_exception (Cannot achieve consistency"
+        " level for cl LOCAL_ONE. Requires 1, alive 0) (Service: AmazonDynamoDBv2;"
+        " Status Code: 500; Error Code: Internal Server Error; Request ID: null)"
+    )
+    YCSB_NODE = "Node alternator-3h-silence--loader-node-bb90aa05-2 [34.251.153.122 | 10.0.220.55] (seed: False)"
+
+    @staticmethod
+    def _publish_ycsb_load(error_line):
+        """Mimic what YcsbStressThread publishes: begin/end around per-error-line events sharing the event_id."""
+        ycsb_event = YcsbStressEvent(node=TestSctEvents.YCSB_NODE, stress_cmd="ycsb")
+        ycsb_event.begin_event()
+        error_event = YcsbStressEvent(
+            node=TestSctEvents.YCSB_NODE, stress_cmd="ycsb", severity=Severity.ERROR, errors=[error_line]
+        )
+        error_event.event_id = ycsb_event.event_id
+        error_event.period_type = EventPeriod.INFORMATIONAL.value
+        error_event.publish()
+        ycsb_event.end_event()
+
     def test_ycsb_filter(self):
-        with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
+        with self.wait_for_n_events(self.get_events_logger(), count=6, timeout=5):
             with EventsFilter(
                 event_class=YcsbStressEvent, regex=".*Internal server error: exceptions::unavailable_exception.*"
             ):
-                YcsbStressEvent.error(
-                    node="Node alternator-3h-silence--loader-node-bb90aa05-2"
-                    " [34.251.153.122 | 10.0.220.55] (seed: False)",
-                    stress_cmd="ycsb",
-                    errors=[
-                        "237951 [Thread-47] ERROR site.ycsb.db.DynamoDBClient"
-                        " -com.amazonaws.AmazonServiceException: Internal server error:"
-                        " exceptions::unavailable_exception (Cannot achieve consistency"
-                        " level for cl LOCAL_ONE. Requires 1, alive 0) (Service: AmazonDynamoDBv2;"
-                        " Status Code: 500; Error Code: Internal Server Error; Request ID: null)"
-                    ],
-                ).publish()
+                self._publish_ycsb_load(self.YCSB_ERROR_LINE)
                 TestFrameworkEvent(source="", source_method="").publish()
 
         log_content = self.get_event_log_file("events.log")
 
         assert "TestFrameworkEvent" in log_content
-        assert "YcsbStressEvent" not in log_content
+        # the error event is filtered out, the begin/end of the stress load are kept
+        assert "YcsbStressEvent Severity.ERROR" not in log_content
+        assert "YcsbStressEvent Severity.NORMAL) period_type=begin" in log_content
+        assert "YcsbStressEvent Severity.NORMAL) period_type=end" in log_content
 
-        with self.wait_for_n_events(self.get_events_logger(), count=1):
-            YcsbStressEvent.error(
-                node="Node alternator-3h-silence--loader-node-bb90aa05-2 [34.251.153.122 | 10.0.220.55] (seed: False)",
-                stress_cmd="ycsb",
-                errors=[
-                    "237951 [Thread-47] ERROR site.ycsb.db.DynamoDBClient"
-                    " -com.amazonaws.AmazonServiceException: Internal server error:"
-                    " exceptions::unavailable_exception (Cannot achieve consistency"
-                    " level for cl LOCAL_ONE. Requires 1, alive 0) (Service: AmazonDynamoDBv2;"
-                    " Status Code: 500; Error Code: Internal Server Error; Request ID: null)"
-                ],
-            ).publish()
+        with self.wait_for_n_events(self.get_events_logger(), count=3):
+            self._publish_ycsb_load(self.YCSB_ERROR_LINE)
 
         log_content = self.get_event_log_file("events.log")
 
         assert "TestFrameworkEvent" in log_content
-        assert "YcsbStressEvent" in log_content
+        assert "YcsbStressEvent Severity.ERROR" in log_content
 
     def test_filter_repair(self):
         failed_repaired_line = (

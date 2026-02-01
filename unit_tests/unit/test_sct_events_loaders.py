@@ -15,6 +15,7 @@ import pickle
 
 from itertools import chain
 
+import pytest
 from invoke.runners import Result
 
 from sdcm.sct_events import Severity
@@ -261,40 +262,54 @@ class TestScyllaBenchEvent:
         assert scylla_bench_event == pickle.loads(pickle.dumps(scylla_bench_event))
 
 
-class TestYcsbStressEvent:
-    def test_subevents(self):
-        assert issubclass(YcsbStressEvent.failure, YcsbStressEvent)
-        assert issubclass(YcsbStressEvent.error, YcsbStressEvent)
-        assert not hasattr(YcsbStressEvent, "timeout")
-        assert issubclass(YcsbStressEvent.start, YcsbStressEvent)
-        assert issubclass(YcsbStressEvent.finish, YcsbStressEvent)
+@pytest.mark.parametrize("event_class", [YcsbStressEvent])
+class TestConvertedStressEvents:
+    """Stress events that moved from `.start()`/`.finish()` subevents to the continuous event pattern."""
 
-    def test_without_errors(self):
-        event = YcsbStressEvent.error(node=[], stress_cmd="c-s", log_file_name="1.log")
-        assert event.severity == Severity.ERROR
-        assert event.node == "[]"
-        assert event.stress_cmd == "c-s"
-        assert event.log_file_name == "1.log"
-        assert not event.errors
-        event.event_id = "68067fe2-4c9e-421c-97b5-12db8d7ba71d"
+    @staticmethod
+    def _make_event(event_class):
+        event = event_class(node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False)
+        event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
+        return event
+
+    @staticmethod
+    def _assert_begin_event(event_class, begin_event):
+        begin_event.event_timestamp = begin_event.begin_timestamp = 1623596860.1202102
+        assert str(begin_event) == (
+            f"({event_class.__name__} Severity.NORMAL) period_type=begin "
+            "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd"
+        )
+        assert begin_event.event_timestamp == 1623596860.1202102
+        assert begin_event.timestamp == 1623596860.1202102
+        assert begin_event == pickle.loads(pickle.dumps(begin_event))
+
+    def test_continuous_event_without_error(self, event_class):
+        event = self._make_event(event_class)
+        self._assert_begin_event(event_class, event.begin_event())
+
+        event.end_event()
+        event.event_timestamp = event.end_timestamp = 1623596861.1202102
         assert str(event) == (
-            "(YcsbStressEvent Severity.ERROR) period_type=not-set "
-            "event_id=68067fe2-4c9e-421c-97b5-12db8d7ba71d: type=error node=[]\nstress_cmd=c-s"
+            f"({event_class.__name__} Severity.NORMAL) period_type=end "
+            "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=1s: "
+            "node=node\nstress_cmd=stress_cmd"
         )
         assert event == pickle.loads(pickle.dumps(event))
 
-    def test_with_errors(self):
-        event = YcsbStressEvent.failure(node="node1", errors=["e1", "e2"])
-        assert event.severity == Severity.CRITICAL
-        assert event.node == "node1"
-        assert event.stress_cmd is None
-        assert event.log_file_name is None
-        assert event.errors == ["e1", "e2"]
-        event.event_id = "225676a7-ddd1-4f4d-bae8-1cf5b35d0955"
+    def test_continuous_event_with_error(self, event_class):
+        event = self._make_event(event_class)
+        self._assert_begin_event(event_class, event.begin_event())
+
+        event.severity = Severity.ERROR
+        event.add_error(["Stress command completed with bad status 1"])
+
+        event.end_event()
+        event.end_timestamp = event.event_timestamp = 1623596960.1202102
         assert str(event) == (
-            "(YcsbStressEvent Severity.CRITICAL) period_type=not-set "
-            "event_id=225676a7-ddd1-4f4d-bae8-1cf5b35d0955:"
-            " type=failure node=node1\nerrors:\n\ne1\ne2"
+            f"({event_class.__name__} Severity.ERROR) period_type=end "
+            "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=1m40s: "
+            "node=node\nstress_cmd=stress_cmd\nerrors:"
+            "\n\nStress command completed with bad status 1"
         )
         assert event == pickle.loads(pickle.dumps(event))
 
