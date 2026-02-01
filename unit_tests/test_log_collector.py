@@ -12,6 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 import uuid
+from unittest.mock import Mock
 
 import pytest
 
@@ -21,6 +22,9 @@ from sdcm.logcollector import (
     PythonSCTLogCollector,
     SchemaLogCollector,
     FailureStatisticsCollector,
+    PrometheusSnapshots,
+    MonitoringStack,
+    GrafanaScreenShot,
 )
 from sdcm.provision import provisioner_factory
 from unit_tests.lib.fake_resources import prepare_fake_region
@@ -152,9 +156,6 @@ def test_failure_statistics_collector_does_not_raise_when_no_files(tmp_path):
 
 def test_monitoring_entities_skip_for_docker_backend(tmp_path):
     """Test that monitoring entities skip collection for docker backend."""
-    from unittest.mock import Mock
-    from sdcm.logcollector import PrometheusSnapshots, MonitoringStack, GrafanaScreenShot
-
     docker_params = {"cluster_backend": "docker"}
     mock_node = Mock()
     test_dir = str(tmp_path / "test")
