@@ -64,12 +64,12 @@ class DummyLongevityTest(LongevityTest):
         return [
             {
                 "stress_cmd": f"cassandra-stress user profile={fake_profile_path} 'ops(insert=1)' cl=QUORUM n=1495501 -rate threads=1",
-                "profile": fake_profile_path
+                "profile": fake_profile_path,
             },
             {
                 "stress_cmd": f"cassandra-stress user profile={fake_profile_path} 'ops(read1=1)' cl=QUORUM n=747748 -rate threads=1",
-                "profile": fake_profile_path
-            }
+                "profile": fake_profile_path,
+            },
         ]
 
     def init_resources(self):
