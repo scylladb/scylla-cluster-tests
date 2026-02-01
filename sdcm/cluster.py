@@ -4007,7 +4007,9 @@ class BaseCluster:
                 storage_dir=os.path.join(self.logdir, "collected_logs"),
                 params=self.params,
             ).collect_logs()
-            self.test_config.argus_client().submit_sct_logs([LogLink(log_name=node.name, log_link=log_links[0])])
+            argus_client = self.test_config.argus_client()
+            if not isinstance(argus_client, MagicMock):
+                argus_client.submit_sct_logs([LogLink(log_name=node.name, log_link=log_links[0])])
         except Exception as exc:  # noqa: BLE001
             self.log.error("Failed to collect logs for node %s: %s", node.name, exc)
         with DbNodeLogger(self.nodes, "terminate node", target_node=node):
