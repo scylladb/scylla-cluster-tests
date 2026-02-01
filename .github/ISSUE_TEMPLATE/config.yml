@@ -1,5 +1,8 @@
 ﻿blank_issues_enabled: false  # Disables blank issue creation
 contact_links:
-  - name: " Press to open an issue in Jira."
-    url: https://scylladb.atlassian.net/browse/SCT
+  - name: " Press to open bugs in Jira."
+    url: https://scylladb.atlassian.net/secure/CreateIssue.jspa?pid=10781&issuetype=10010
+    about: "Opening issues is not allowed in this Github repository."
+  - name: " Press to open tasks in Jira."
+    url: https://scylladb.atlassian.net/secure/CreateIssue.jspa?pid=10781&issuetype=10011
     about: "Opening issues is not allowed in this Github repository."
