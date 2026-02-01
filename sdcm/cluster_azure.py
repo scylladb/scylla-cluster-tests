@@ -87,14 +87,15 @@ class AzureNode(cluster.BaseNode):
         self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
 
         # Start kernel panic monitoring - use public property
-        self.kernel_panic_checker = AzureKernelPanicChecker(
-            node=self,
-            vm_name=self._instance.name,
-            region=self.region,
-            resource_group=self._instance._provisioner.resource_group_name
-        )
-        self.kernel_panic_checker.start()
-        LOGGER.info("Started kernel panic monitoring for node %s (VM: %s)", self.name, self._instance.name)
+        if self.test_config.get("enable_kernel_panic_checker"):
+            self.kernel_panic_checker = AzureKernelPanicChecker(
+                node=self,
+                vm_name=self._instance.name,
+                region=self.region,
+                resource_group=self._instance._provisioner.resource_group_name
+            )
+            self.kernel_panic_checker.start()
+            LOGGER.info("Started kernel panic monitoring for node %s (VM: %s)", self.name, self._instance.name)
 
     def wait_for_cloud_init(self):
         pass  # azure for it, on resources creation

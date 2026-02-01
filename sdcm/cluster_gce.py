@@ -127,14 +127,15 @@ class GCENode(cluster.BaseNode):
         super().init()
 
         # Start kernel panic monitoring
-        self.kernel_panic_checker = GCPKernelPanicChecker(
-            node=self,
-            instance_name=self._instance.name,
-            project=self.project,
-            zone=self.zone
-        )
-        self.kernel_panic_checker.start()
-        LOGGER.info("Started kernel panic monitoring for node %s (instance: %s)", self.name, self._instance.name)
+        if self.test_config.get("enable_kernel_panic_checker"):
+            self.kernel_panic_checker = GCPKernelPanicChecker(
+                node=self,
+                instance_name=self._instance.name,
+                project=self.project,
+                zone=self.zone
+            )
+            self.kernel_panic_checker.start()
+            LOGGER.info("Started kernel panic monitoring for node %s (instance: %s)", self.name, self._instance.name)
 
     def wait_for_cloud_init(self):
         if self.remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:

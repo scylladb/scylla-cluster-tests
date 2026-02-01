@@ -664,13 +664,14 @@ class AWSNode(cluster.BaseNode):
                 self._is_zero_token_node = True
 
         # Start kernel panic monitoring
-        self.kernel_panic_checker = AWSKernelPanicChecker(
-            node=self,
-            instance_id=self._instance.id,
-            region=self._ec2_service.meta.client.meta.region_name
-        )
-        self.kernel_panic_checker.start()
-        LOGGER.info("Started kernel panic monitoring for node %s (instance: %s)", self.name, self._instance.id)
+        if self.test_config.get("enable_kernel_panic_checker"):
+            self.kernel_panic_checker = AWSKernelPanicChecker(
+                node=self,
+                instance_id=self._instance.id,
+                region=self._ec2_service.meta.client.meta.region_name
+            )
+            self.kernel_panic_checker.start()
+            LOGGER.info("Started kernel panic monitoring for node %s (instance: %s)", self.name, self._instance.id)
 
     def wait_for_cloud_init(self):
         if self.remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:

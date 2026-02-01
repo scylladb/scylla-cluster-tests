@@ -816,6 +816,14 @@ class SCTConfiguration(dict):
             help="""Turn on sct profiling""",
         ),
         dict(
+            name="enable_kernel_panic_checker",
+            env="SCT_ENABLE_KERNEL_PANIC_CHECKER",
+            type=boolean,
+            help="""Enable automatic kernel panic detection for cloud instances. When enabled, monitors 
+            instance console output (AWS EC2, GCE serial port, Azure boot diagnostics) for kernel panic 
+            indicators and publishes KernelPanicEvent when detected.""",
+        ),
+        dict(
             name="ssh_transport",
             env="SSH_TRANSPORT",
             type=str,
