@@ -235,7 +235,7 @@ def target_all_nodes(func: Callable) -> Callable:
     return func
 
 
-def safe_split_keyspace_table(keyspace_table: Union[str, list]) -> Tuple[str, str]:
+def safe_split_keyspace_table(keyspace_table: Union[str, List[str]]) -> Tuple[str, str]:
     """
     Safely split a keyspace.table string into keyspace and table components.
 
@@ -268,7 +268,6 @@ def safe_split_keyspace_table(keyspace_table: Union[str, list]) -> Tuple[str, st
         raise ValueError(f"keyspace and table cannot be empty, got: {keyspace_table}")
 
     return keyspace, table
-
 
 
 class NemesisFlags:
@@ -589,7 +588,7 @@ class NemesisRunner:
         if ks_cf_list := self.cluster.get_non_system_ks_cf_list(
             db_node=self.target_node, filter_empty_tables=filter_empty_tables
         ):
-            return random.choice(ks_cf_list).split(".")
+            return safe_split_keyspace_table(random.choice(ks_cf_list))
         else:
             return None, None
 
@@ -5153,7 +5152,7 @@ class NemesisRunner:
         if not ks_tables_with_cdc:
             raise UnsupportedNemesis("CDC is not enabled on any table. Skipping")
 
-        ks, table = random.choice(ks_tables_with_cdc).split(".")
+        ks, table = safe_split_keyspace_table(random.choice(ks_tables_with_cdc))
 
         self.log.debug(f"Get table {ks}.{table} cdc extension state")
         with self.cluster.cql_connection_patient(node=self.target_node) as session:
@@ -5179,7 +5178,7 @@ class NemesisRunner:
             self.log.warning("CDC is not enabled on any table. Skipping")
             raise UnsupportedNemesis("CDC is not enabled on any table. Skipping")
 
-        ks, table = random.choice(ks_tables_with_cdc).split(".")
+        ks, table = safe_split_keyspace_table(random.choice(ks_tables_with_cdc))
         self._run_cdc_stressor_tool(ks, table)
 
     def _run_cdc_stressor_tool(self, ks, table):
@@ -5627,7 +5626,7 @@ class NemesisRunner:
             ks_cf_list = self.cluster.get_non_system_ks_cf_list(self.target_node, filter_out_mv=True)
             if not ks_cf_list:
                 raise UnsupportedNemesis("No table found to create index on")
-            ks, cf = random.choice(ks_cf_list).split(".")
+            ks, cf = safe_split_keyspace_table(random.choice(ks_cf_list))
             column = get_random_column_name(
                 session, ks, cf, filter_out_static_columns=True, filter_out_column_types=["counter"]
             )
@@ -5693,7 +5692,7 @@ class NemesisRunner:
             )
             if not ks_cfs:
                 raise UnsupportedNemesis("Non-system keyspace and table are not found. nemesis can't be run")
-            ks_name, base_table_name = random.choice(ks_cfs).split(".")
+            ks_name, base_table_name = safe_split_keyspace_table(random.choice(ks_cfs))
             view_name = f"{base_table_name}_view"
             with ignore_raft_topology_cmd_failing():
                 self.target_node.stop_scylla()
@@ -6166,7 +6165,7 @@ class NemesisRunner:
         with self.node_allocator.run_nemesis(
             node_list=self.cluster.nodes, nemesis_label="Verification node for MV"
         ) as working_node:
-            ks_name, base_table_name = random.choice(ks_cfs).split(".")
+            ks_name, base_table_name = safe_split_keyspace_table(random.choice(ks_cfs))
             view_name = f"{base_table_name}_view_{str(uuid4())[:8]}"
             with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
                 try:
