@@ -773,6 +773,652 @@ class SCTConfiguration(dict):
             If reuse_cluster is set it should hold test_id of the cluster that will be reused.
             `reuse_cluster: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71`
          """,
+<<<<<<< HEAD
+||||||| parent of 953c01248 (feature(platform-migration): add test for x86 to ARM cluster migration)
+    )
+    nemesis_filter_seeds: MultitenantValue(BooleanOrList) = SctField(
+        description="""If true runs the nemesis only on non seed nodes""",
+    )
+
+    # Stress Commands
+    stress_cmd: MultitenantValue(StringOrList) = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. multiple commands can passed as a list",
+    )
+    gemini_schema_url: String = SctField(
+        description="Url of the schema/configuration the gemini tool would use",
+    )
+    gemini_cmd: String = SctField(
+        description="gemini command to run (for now used only in GeminiTest)",
+    )
+    gemini_seed: int = SctField(
+        description="Seed number for gemini command",
+    )
+    gemini_log_cql_statements: Boolean = SctField(
+        description="Log CQL statements to file",
+    )
+    gemini_table_options: list = SctField(
+        description="table options for created table. example: ['cdc={'enabled': true}'], ['cdc={'enabled': true}', 'compaction={'class': 'IncrementalCompactionStrategy'}']",
+    )
+    run_gemini_in_rolling_upgrade: Boolean = SctField(
+        description="Enable running Gemini workload during rolling upgrade test. Default is false.",
+    )
+    # AWS config options
+    instance_type_loader: String = SctField(
+        description="AWS image type of the loader node",
+    )
+    instance_type_monitor: String = SctField(
+        description="AWS image type of the monitor node",
+    )
+    instance_type_db: String = SctField(
+        description="AWS image type of the db node",
+    )
+    instance_type_db_oracle: String = SctField(
+        description="AWS image type of the oracle node",
+    )
+    instance_type_runner: String = SctField(
+        description="instance type of the sct-runner node",
+    )
+    region_name: StringOrList = SctField(
+        description="AWS regions to use",
+        appendable=False,
+    )
+    use_placement_group: Boolean = SctField(
+        description="if true, create 'cluster' placement group for test case "
+        "for low-latency network performance achievement",
+    )
+    ami_id_db_scylla: String = SctField(
+        description="AMS AMI id to use for scylla db node",
+    )
+    ami_id_loader: String = SctField(
+        description="AMS AMI id to use for loader node",
+    )
+    ami_id_monitor: String = SctField(
+        description="AMS AMI id to use for monitor node",
+    )
+    ami_id_db_cassandra: String = SctField(
+        description="AMS AMI id to use for cassandra node",
+    )
+    ami_id_db_oracle: String = SctField(
+        description="AMS AMI id to use for oracle node",
+    )
+    ami_id_vector_store: String = SctField(
+        description="AMS AMI id to use for vector store node",
+    )
+    instance_type_vector_store: String = SctField(
+        description="AWS/GCP cloud provider instance type for Vector Store nodes",
+    )
+    root_disk_size_db: int = SctField(
+        description="",
+    )
+    root_disk_size_monitor: int = SctField(
+        description="",
+    )
+    root_disk_size_loader: int = SctField(
+        description="",
+    )
+    root_disk_size_runner: int = SctField(
+        description="root disk size in Gb for sct-runner",
+    )
+    ami_db_scylla_user: String = SctField(
+        description="",
+    )
+    ami_monitor_user: String = SctField(
+        description="",
+    )
+    ami_loader_user: String = SctField(
+        description="",
+    )
+    ami_db_cassandra_user: String = SctField(
+        description="",
+    )
+    ami_vector_store_user: String = SctField(
+        description="",
+    )
+    spot_max_price: float = SctField(
+        description="The max percentage of the on demand price we set for spot/fleet instances",
+    )
+    extra_network_interface: Boolean = SctField(
+        description="if true, create extra network interface on each node",
+    )
+    aws_instance_profile_name_db: String = SctField(
+        description="This is the name of the instance profile to set on all db instances",
+    )
+    aws_instance_profile_name_loader: String = SctField(
+        description="This is the name of the instance profile to set on all loader instances",
+    )
+    backup_bucket_backend: String = SctField(
+        description="the backend to be used for backup (e.g., 's3', 'gcs' or 'azure')",
+    )
+    backup_bucket_location: StringOrList = SctField(
+        description="the bucket name to be used for backup (e.g., 'manager-backup-tests')",
+    )
+    backup_bucket_region: String = SctField(
+        description="the AWS region of a bucket to be used for backup (e.g., 'eu-west-1')",
+    )
+    use_prepared_loaders: Boolean = SctField(
+        description="If True, we use prepared VMs for loader (instead of using docker images)",
+    )
+    scylla_d_overrides_files: StringOrList = SctField(
+        description="list of files that should upload to /etc/scylla.d/ directory to override scylla config files",
+        appendable=True,
+    )
+    gce_project: String = SctField(
+        description="gcp project name to use",
+    )
+    gce_datacenter: String = SctField(
+        description="Supported regions: us-east1, us-east4, us-west1, us-central1. Specifying just the region "
+        "(e.g., us-east1) means the zone will be selected automatically, or you can mention the zone "
+        "explicitly (e.g., us-east1-b)",
+        appendable=False,
+    )
+    gce_network: String = SctField(
+        description="gce network to use",
+    )
+    gce_image_db: String = SctField(
+        description="gce image to use for db nodes",
+    )
+    gce_image_monitor: String = SctField(
+        description="gce image to use for monitor nodes",
+    )
+    scylla_network_config: list = SctField(
+        description="""Configure Scylla networking with single or multiple NIC/IP combinations.
+              It must be defined for listen_address and rpc_address. For each address mandatory parameters are:
+              - address: listen_address/rpc_address/broadcast_rpc_address/broadcast_address/test_communication
+              - ip_type: ipv4 or ipv6
+              - public: false or true
+              - nic: number of NIC. 0, 1
+              Supported for AWS only meanwhile""",
+    )
+    gce_image_loader: String = SctField(
+        description="Google Compute Engine image to use for loader nodes",
+    )
+    gce_image_username: String = SctField(
+        description="Username for the Google Compute Engine image",
+    )
+    gce_instance_type_loader: String = SctField(
+        description="Instance type for loader nodes in Google Compute Engine",
+    )
+    gce_root_disk_type_loader: String = SctField(
+        description="Root disk type for loader nodes in Google Compute Engine",
+    )
+    gce_n_local_ssd_disk_loader: int = SctField(
+        description="Number of local SSD disks for loader nodes in Google Compute Engine",
+    )
+    gce_instance_type_monitor: String = SctField(
+        description="Instance type for monitor nodes in Google Compute Engine",
+    )
+    gce_root_disk_type_monitor: String = SctField(
+        description="Root disk type for monitor nodes in Google Compute Engine",
+    )
+    validate_large_collections: Boolean = SctField(
+        description="Flag to validate large collections in the database",
+    )
+    run_commit_log_check_thread: Boolean = SctField(
+        description="Flag to run a thread that checks commit logs",
+    )
+    teardown_validators: DictOrStr = SctField(
+        description="Validators to use during teardown phase",
+    )
+    use_capacity_reservation: Boolean = SctField(
+        description="Flag to use capacity reservation for instances",
+    )
+    use_dedicated_host: Boolean = SctField(
+        description="Flag to allocate dedicated hosts for the instances for the entire duration of the test run (AWS only)",
+    )
+    aws_dedicated_host_ids: StringOrList = SctField(
+        description="List of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)",
+    )
+    post_behavior_dedicated_host: Literal["keep", "destroy"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the dedicated hosts at the end of the test.
+
+        'destroy' - Destroy hosts (default)
+        'keep' - Keep hosts allocated
+        """,
+    )
+    bisect_start_date: String = SctField(
+        description="Start date for bisecting test runs to find regressions",
+    )
+    bisect_end_date: String = SctField(
+        description="End date for bisecting test runs to find regressions",
+    )
+    kafka_backend: Literal["localstack", "vm", "msk"] | None = SctField(
+        description="Type of Kafka backend to use",
+    )
+    kafka_connectors: list[SctKafkaConfiguration] = SctField(
+        description="Kafka connectors to use",
+    )
+    run_scylla_doctor: Boolean = SctField(
+        description="Flag to run Scylla Doctor tool",
+    )
+    scylla_doctor_version: String = SctField(
+        description="""Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.9')
+                to hardcode the version, or leave empty to use the latest available version. For stability,
+                artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.""",
+    )
+    skip_test_stages: DictOrStr = SctField(
+        description="Skip selected stages of a test scenario",
+    )
+    use_zero_nodes: Boolean = SctField(
+        description="If True, enable support in SCT of zero nodes (configuration, nemesis)",
+    )
+    n_db_zero_token_nodes: IntOrList = SctField(
+        description="Number of zero token nodes in cluster. Value should be set as '0 1 1' "
+        "for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions",
+    )
+    zero_token_instance_type_db: String = SctField(
+        description="Instance type for zero token node",
+    )
+    sct_aws_account_id: String = SctField(
+        description="AWS account id on behalf of which the test is run",
+    )
+    latency_decorator_error_thresholds: DictOrStr = SctField(
+        description="Error thresholds for latency decorator. "
+        "Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}",
+    )
+    workload_name: String = SctField(
+        description="Workload name, can be: write|read|mixed|unset. "
+        "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true). "
+        "If unset, workload is taken from test name.",
+    )
+    adaptive_timeout_store_metrics: Boolean = SctField(
+        description="Store adaptive timeout metrics in Argus. Disabled for performance tests only.",
+    )
+
+    # Google Compute Engine options
+    gce_n_local_ssd_disk_monitor: int = SctField(
+        description="Number of local SSD disks for monitor nodes in Google Compute Engine",
+    )
+    gce_instance_type_db: String = SctField(
+        description="Instance type for database nodes in Google Compute Engine",
+    )
+    gce_root_disk_type_db: String = SctField(
+        description="Root disk type for database nodes in Google Compute Engine",
+    )
+    gce_n_local_ssd_disk_db: int = SctField(
+        description="Number of local SSD disks for database nodes in Google Compute Engine",
+    )
+    gce_pd_standard_disk_size_db: int = SctField(
+        description="The size of the standard persistent disk in GB used for GCE database nodes",
+    )
+    gce_pd_ssd_disk_size_db: int = SctField(
+        description="",
+    )
+    gce_setup_hybrid_raid: Boolean = SctField(
+        description="If True, SCT configures a hybrid RAID of NVMEs and an SSD for scylla's data",
+    )
+    gce_pd_ssd_disk_size_loader: int = SctField(
+        description="",
+    )
+    gce_pd_ssd_disk_size_monitor: int = SctField(
+        description="",
+    )
+
+    # azure options
+    azure_region_name: StringOrList = SctField(
+        description="Azure region(s) where the resources will be deployed. Supports single or multiple regions.",
+        appendable=False,
+    )
+    azure_instance_type_loader: String = SctField(
+        description="The Azure virtual machine size to be used for loader nodes.",
+    )
+    azure_instance_type_monitor: String = SctField(
+        description="The Azure virtual machine size to be used for monitor nodes.",
+    )
+    azure_instance_type_db: String = SctField(
+        description="The Azure virtual machine size to be used for database nodes.",
+    )
+    azure_instance_type_db_oracle: String = SctField(
+        description="The Azure virtual machine size to be used for Oracle database nodes.",
+    )
+    azure_image_db: String = SctField(
+        description="The Azure image to be used for database nodes.",
+    )
+    azure_image_monitor: String = SctField(
+        description="The Azure image to be used for monitor nodes.",
+    )
+    azure_image_loader: String = SctField(
+        description="The Azure image to be used for loader nodes.",
+    )
+    azure_image_username: String = SctField(
+        description="The username for the Azure image.",
+    )
+
+    # Oracle Cloud (OCI) options
+    oci_region_name: StringOrList = SctField(
+        description="OCI region where the resources will be deployed",
+        appendable=False,
+    )
+    oci_instance_type_loader: String = SctField(
+        description=(
+            "Oracle Cloud instance shape to use for loader node(s). "
+            "Usage of flex shapes allows setting of the ocpus, memory. "
+            "Format is following: <shape-name>:<ocpus>:<ram>"
+=======
+    )
+    nemesis_filter_seeds: MultitenantValue(BooleanOrList) = SctField(
+        description="""If true runs the nemesis only on non seed nodes""",
+    )
+
+    # Stress Commands
+    stress_cmd: MultitenantValue(StringOrList) = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. multiple commands can passed as a list",
+    )
+    gemini_schema_url: String = SctField(
+        description="Url of the schema/configuration the gemini tool would use",
+    )
+    gemini_cmd: String = SctField(
+        description="gemini command to run (for now used only in GeminiTest)",
+    )
+    gemini_seed: int = SctField(
+        description="Seed number for gemini command",
+    )
+    gemini_log_cql_statements: Boolean = SctField(
+        description="Log CQL statements to file",
+    )
+    gemini_table_options: list = SctField(
+        description="table options for created table. example: ['cdc={'enabled': true}'], ['cdc={'enabled': true}', 'compaction={'class': 'IncrementalCompactionStrategy'}']",
+    )
+    run_gemini_in_rolling_upgrade: Boolean = SctField(
+        description="Enable running Gemini workload during rolling upgrade test. Default is false.",
+    )
+    # AWS config options
+    instance_type_loader: String = SctField(
+        description="AWS image type of the loader node",
+    )
+    instance_type_monitor: String = SctField(
+        description="AWS image type of the monitor node",
+    )
+    instance_type_db: String = SctField(
+        description="AWS image type of the db node",
+    )
+    instance_type_db_oracle: String = SctField(
+        description="AWS image type of the oracle node",
+    )
+    instance_type_db_target: String = SctField(
+        description="Target AWS instance type for platform migration (e.g., i8g.2xlarge for ARM)",
+    )
+    target_db_image_ids: Annotated[list[str], IgnoredType] = Field(default=[], exclude=True)
+    instance_type_runner: String = SctField(
+        description="instance type of the sct-runner node",
+    )
+    region_name: StringOrList = SctField(
+        description="AWS regions to use",
+        appendable=False,
+    )
+    use_placement_group: Boolean = SctField(
+        description="if true, create 'cluster' placement group for test case "
+        "for low-latency network performance achievement",
+    )
+    ami_id_db_scylla: String = SctField(
+        description="AMS AMI id to use for scylla db node",
+    )
+    ami_id_loader: String = SctField(
+        description="AMS AMI id to use for loader node",
+    )
+    ami_id_monitor: String = SctField(
+        description="AMS AMI id to use for monitor node",
+    )
+    ami_id_db_cassandra: String = SctField(
+        description="AMS AMI id to use for cassandra node",
+    )
+    ami_id_db_oracle: String = SctField(
+        description="AMS AMI id to use for oracle node",
+    )
+    ami_id_vector_store: String = SctField(
+        description="AMS AMI id to use for vector store node",
+    )
+    instance_type_vector_store: String = SctField(
+        description="AWS/GCP cloud provider instance type for Vector Store nodes",
+    )
+    root_disk_size_db: int = SctField(
+        description="",
+    )
+    root_disk_size_monitor: int = SctField(
+        description="",
+    )
+    root_disk_size_loader: int = SctField(
+        description="",
+    )
+    root_disk_size_runner: int = SctField(
+        description="root disk size in Gb for sct-runner",
+    )
+    ami_db_scylla_user: String = SctField(
+        description="",
+    )
+    ami_monitor_user: String = SctField(
+        description="",
+    )
+    ami_loader_user: String = SctField(
+        description="",
+    )
+    ami_db_cassandra_user: String = SctField(
+        description="",
+    )
+    ami_vector_store_user: String = SctField(
+        description="",
+    )
+    spot_max_price: float = SctField(
+        description="The max percentage of the on demand price we set for spot/fleet instances",
+    )
+    extra_network_interface: Boolean = SctField(
+        description="if true, create extra network interface on each node",
+    )
+    aws_instance_profile_name_db: String = SctField(
+        description="This is the name of the instance profile to set on all db instances",
+    )
+    aws_instance_profile_name_loader: String = SctField(
+        description="This is the name of the instance profile to set on all loader instances",
+    )
+    backup_bucket_backend: String = SctField(
+        description="the backend to be used for backup (e.g., 's3', 'gcs' or 'azure')",
+    )
+    backup_bucket_location: StringOrList = SctField(
+        description="the bucket name to be used for backup (e.g., 'manager-backup-tests')",
+    )
+    backup_bucket_region: String = SctField(
+        description="the AWS region of a bucket to be used for backup (e.g., 'eu-west-1')",
+    )
+    use_prepared_loaders: Boolean = SctField(
+        description="If True, we use prepared VMs for loader (instead of using docker images)",
+    )
+    scylla_d_overrides_files: StringOrList = SctField(
+        description="list of files that should upload to /etc/scylla.d/ directory to override scylla config files",
+        appendable=True,
+    )
+    gce_project: String = SctField(
+        description="gcp project name to use",
+    )
+    gce_datacenter: String = SctField(
+        description="Supported regions: us-east1, us-east4, us-west1, us-central1. Specifying just the region "
+        "(e.g., us-east1) means the zone will be selected automatically, or you can mention the zone "
+        "explicitly (e.g., us-east1-b)",
+        appendable=False,
+    )
+    gce_network: String = SctField(
+        description="gce network to use",
+    )
+    gce_image_db: String = SctField(
+        description="gce image to use for db nodes",
+    )
+    gce_image_monitor: String = SctField(
+        description="gce image to use for monitor nodes",
+    )
+    scylla_network_config: list = SctField(
+        description="""Configure Scylla networking with single or multiple NIC/IP combinations.
+              It must be defined for listen_address and rpc_address. For each address mandatory parameters are:
+              - address: listen_address/rpc_address/broadcast_rpc_address/broadcast_address/test_communication
+              - ip_type: ipv4 or ipv6
+              - public: false or true
+              - nic: number of NIC. 0, 1
+              Supported for AWS only meanwhile""",
+    )
+    gce_image_loader: String = SctField(
+        description="Google Compute Engine image to use for loader nodes",
+    )
+    gce_image_username: String = SctField(
+        description="Username for the Google Compute Engine image",
+    )
+    gce_instance_type_loader: String = SctField(
+        description="Instance type for loader nodes in Google Compute Engine",
+    )
+    gce_root_disk_type_loader: String = SctField(
+        description="Root disk type for loader nodes in Google Compute Engine",
+    )
+    gce_n_local_ssd_disk_loader: int = SctField(
+        description="Number of local SSD disks for loader nodes in Google Compute Engine",
+    )
+    gce_instance_type_monitor: String = SctField(
+        description="Instance type for monitor nodes in Google Compute Engine",
+    )
+    gce_root_disk_type_monitor: String = SctField(
+        description="Root disk type for monitor nodes in Google Compute Engine",
+    )
+    validate_large_collections: Boolean = SctField(
+        description="Flag to validate large collections in the database",
+    )
+    run_commit_log_check_thread: Boolean = SctField(
+        description="Flag to run a thread that checks commit logs",
+    )
+    teardown_validators: DictOrStr = SctField(
+        description="Validators to use during teardown phase",
+    )
+    use_capacity_reservation: Boolean = SctField(
+        description="Flag to use capacity reservation for instances",
+    )
+    use_dedicated_host: Boolean = SctField(
+        description="Flag to allocate dedicated hosts for the instances for the entire duration of the test run (AWS only)",
+    )
+    aws_dedicated_host_ids: StringOrList = SctField(
+        description="List of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)",
+    )
+    post_behavior_dedicated_host: Literal["keep", "destroy"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the dedicated hosts at the end of the test.
+
+        'destroy' - Destroy hosts (default)
+        'keep' - Keep hosts allocated
+        """,
+    )
+    bisect_start_date: String = SctField(
+        description="Start date for bisecting test runs to find regressions",
+    )
+    bisect_end_date: String = SctField(
+        description="End date for bisecting test runs to find regressions",
+    )
+    kafka_backend: Literal["localstack", "vm", "msk"] | None = SctField(
+        description="Type of Kafka backend to use",
+    )
+    kafka_connectors: list[SctKafkaConfiguration] = SctField(
+        description="Kafka connectors to use",
+    )
+    run_scylla_doctor: Boolean = SctField(
+        description="Flag to run Scylla Doctor tool",
+    )
+    scylla_doctor_version: String = SctField(
+        description="""Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.9')
+                to hardcode the version, or leave empty to use the latest available version. For stability,
+                artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.""",
+    )
+    skip_test_stages: DictOrStr = SctField(
+        description="Skip selected stages of a test scenario",
+    )
+    use_zero_nodes: Boolean = SctField(
+        description="If True, enable support in SCT of zero nodes (configuration, nemesis)",
+    )
+    n_db_zero_token_nodes: IntOrList = SctField(
+        description="Number of zero token nodes in cluster. Value should be set as '0 1 1' "
+        "for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions",
+    )
+    zero_token_instance_type_db: String = SctField(
+        description="Instance type for zero token node",
+    )
+    sct_aws_account_id: String = SctField(
+        description="AWS account id on behalf of which the test is run",
+    )
+    latency_decorator_error_thresholds: DictOrStr = SctField(
+        description="Error thresholds for latency decorator. "
+        "Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}",
+    )
+    workload_name: String = SctField(
+        description="Workload name, can be: write|read|mixed|unset. "
+        "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true). "
+        "If unset, workload is taken from test name.",
+    )
+    adaptive_timeout_store_metrics: Boolean = SctField(
+        description="Store adaptive timeout metrics in Argus. Disabled for performance tests only.",
+    )
+
+    # Google Compute Engine options
+    gce_n_local_ssd_disk_monitor: int = SctField(
+        description="Number of local SSD disks for monitor nodes in Google Compute Engine",
+    )
+    gce_instance_type_db: String = SctField(
+        description="Instance type for database nodes in Google Compute Engine",
+    )
+    gce_root_disk_type_db: String = SctField(
+        description="Root disk type for database nodes in Google Compute Engine",
+    )
+    gce_n_local_ssd_disk_db: int = SctField(
+        description="Number of local SSD disks for database nodes in Google Compute Engine",
+    )
+    gce_pd_standard_disk_size_db: int = SctField(
+        description="The size of the standard persistent disk in GB used for GCE database nodes",
+    )
+    gce_pd_ssd_disk_size_db: int = SctField(
+        description="",
+    )
+    gce_setup_hybrid_raid: Boolean = SctField(
+        description="If True, SCT configures a hybrid RAID of NVMEs and an SSD for scylla's data",
+    )
+    gce_pd_ssd_disk_size_loader: int = SctField(
+        description="",
+    )
+    gce_pd_ssd_disk_size_monitor: int = SctField(
+        description="",
+    )
+
+    # azure options
+    azure_region_name: StringOrList = SctField(
+        description="Azure region(s) where the resources will be deployed. Supports single or multiple regions.",
+        appendable=False,
+    )
+    azure_instance_type_loader: String = SctField(
+        description="The Azure virtual machine size to be used for loader nodes.",
+    )
+    azure_instance_type_monitor: String = SctField(
+        description="The Azure virtual machine size to be used for monitor nodes.",
+    )
+    azure_instance_type_db: String = SctField(
+        description="The Azure virtual machine size to be used for database nodes.",
+    )
+    azure_instance_type_db_oracle: String = SctField(
+        description="The Azure virtual machine size to be used for Oracle database nodes.",
+    )
+    azure_image_db: String = SctField(
+        description="The Azure image to be used for database nodes.",
+    )
+    azure_image_monitor: String = SctField(
+        description="The Azure image to be used for monitor nodes.",
+    )
+    azure_image_loader: String = SctField(
+        description="The Azure image to be used for loader nodes.",
+    )
+    azure_image_username: String = SctField(
+        description="The username for the Azure image.",
+    )
+
+    # Oracle Cloud (OCI) options
+    oci_region_name: StringOrList = SctField(
+        description="OCI region where the resources will be deployed",
+        appendable=False,
+    )
+    oci_instance_type_loader: String = SctField(
+        description=(
+            "Oracle Cloud instance shape to use for loader node(s). "
+            "Usage of flex shapes allows setting of the ocpus, memory. "
+            "Format is following: <shape-name>:<ocpus>:<ram>"
+>>>>>>> 953c01248 (feature(platform-migration): add test for x86 to ARM cluster migration)
         ),
         dict(
             name="test_id",
@@ -1731,6 +2377,674 @@ class SCTConfiguration(dict):
             You can specify everything but the -node parameter, which is going to
             be provided by the test suite infrastructure.
             multiple commands can passed as a list""",
+<<<<<<< HEAD
+||||||| parent of 953c01248 (feature(platform-migration): add test for x86 to ARM cluster migration)
+    )
+    prepare_write_cmd: MultitenantValue(StringOrList) = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    stress_cmd_no_mv: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    stress_cmd_no_mv_profile: StringOrList = SctField(
+        description="",
+    )
+    cs_user_profiles: StringOrList = SctField(
+        description="cassandra-stress user-profiles list. Executed in test step",
+    )
+    prepare_cs_user_profiles: StringOrList = SctField(
+        description="cassandra-stress user-profiles list. Executed in prepare step",
+    )
+    cs_duration: String = SctField(
+        description="",
+    )
+    cs_debug: Boolean = SctField(
+        description="enable debug for cassandra-stress",
+    )
+    stress_cmd_mv: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    prepare_stress_cmd: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    perf_gradual_threads: DictOrStr = SctField(
+        description="Threads amount of stress load for gradual performance test per sub-test. "
+        "Example: {'read': 100, 'write': [200, 300], 'mixed': 300}",
+    )
+    perf_gradual_throttle_steps: DictOrStr = SctField(
+        description="Used for gradual performance test. Define throttle for load step in ops. "
+        "Example: {'read': ['100000', '150000'], 'mixed': ['300']}",
+    )
+    perf_gradual_step_duration: DictOrStr = SctField(
+        description="Step duration of c-s load for gradual performance test per sub-test. "
+        "Example: {'read': '30m', 'write': None, 'mixed': '30m'}",
+    )
+
+    # PerformanceRegressionLWTTest
+    stress_cmd_lwt_i: StringOrList = SctField(
+        description="Stress command for LWT performance test for INSERT baseline",
+    )
+    stress_cmd_lwt_d: StringOrList = SctField(
+        description="Stress command for LWT performance test for DELETE baseline",
+    )
+    stress_cmd_lwt_u: StringOrList = SctField(
+        description="Stress command for LWT performance test for UPDATE baseline",
+    )
+    stress_cmd_lwt_ine: StringOrList = SctField(
+        description="Stress command for LWT performance test for INSERT with IF NOT EXISTS",
+    )
+    stress_cmd_lwt_uc: StringOrList = SctField(
+        description="Stress command for LWT performance test for UPDATE with IF <condition>",
+    )
+    stress_cmd_lwt_ue: StringOrList = SctField(
+        description="Stress command for LWT performance test for UPDATE with IF EXISTS",
+    )
+
+    stress_cmd_lwt_de: StringOrList = SctField(
+        description="Stress command for LWT performance test for DELETE with IF EXISTS",
+    )
+    stress_cmd_lwt_dc: StringOrList = SctField(
+        description="Stress command for LWT performance test for DELETE with IF <condition>",
+    )
+    stress_cmd_lwt_mixed: StringOrList = SctField(
+        description="Stress command for LWT performance test for mixed lwt load",
+    )
+    stress_cmd_lwt_mixed_baseline: StringOrList = SctField(
+        description="Stress command for LWT performance test for mixed lwt load baseline",
+    )
+
+    # RefreshTest
+    skip_download: Boolean = SctField(description="")
+    sstable_file: String = SctField(description="")
+    sstable_url: String = SctField(description="")
+    sstable_md5: String = SctField(description="")
+    flush_times: int = SctField(description="")
+    flush_period: int = SctField(description="")
+
+    # UpgradeTest
+    new_scylla_repo: String = SctField(
+        description="URL to the Scylla repository for new versions.",
+    )
+    new_version: String = SctField(
+        description="Assign new upgrade version, use it to upgrade to specific minor release. eg: 3.0.1",
+    )
+    target_upgrade_version: String = SctField(description="The target version to upgrade Scylla to.")
+    disable_raft: Boolean = SctField(
+        description="Flag to disable Raft consensus for LWT operations.",
+    )
+    enable_tablets_on_upgrade: Boolean = SctField(
+        description="By default, the tablets feature is disabled. With this parameter, created for the upgrade test, the tablets feature will only be enabled after the upgrade",
+    )
+    enable_views_with_tablets_on_upgrade: Boolean = SctField(
+        description="Enables creating materialized views in keyspaces using tablets by adding an experimental feature."
+        "It should not be used when upgrading to versions before 2025.1 and it should be used for upgrades"
+        "where we create such views.",
+    )
+    upgrade_node_packages: String = SctField(description="Specifies the packages to be upgraded on the node.")
+    upgrade_node_system: Boolean = SctField(
+        description="Upgrade system packages on nodes before upgrading Scylla. Enabled by default.",
+    )
+    stress_cmd_1: StringOrList = SctField(
+        description="Primary stress command to be executed.",
+    )
+    stress_cmd_complex_prepare: StringOrList = SctField(
+        description="Stress command for complex preparation steps.",
+    )
+    prepare_write_stress: StringOrList = SctField(
+        description="Stress command to prepare write operations.",
+    )
+    stress_cmd_read_10m: StringOrList = SctField(
+        description="Stress command to perform read operations for 10 minutes.",
+    )
+    stress_cmd_read_cl_one: StringOrList = SctField(
+        description="Stress command to perform read operations with consistency level ONE.",
+    )
+    stress_cmd_read_60m: StringOrList = SctField(
+        description="Stress command to perform read operations for 60 minutes.",
+    )
+    stress_cmd_complex_verify_read: StringOrList = SctField(
+        description="Stress command to verify complex read operations.",
+    )
+    stress_cmd_complex_verify_more: StringOrList = SctField(
+        description="Additional stress command to verify complex operations.",
+    )
+    write_stress_during_entire_test: StringOrList = SctField(
+        description="Stress command to perform write operations throughout the entire test.",
+    )
+    verify_data_after_entire_test: StringOrList = SctField(
+        description="Stress command to verify data integrity after the entire test.",
+    )
+    stress_cmd_read_cl_quorum: StringOrList = SctField(
+        description="Stress command to perform read operations with consistency level QUORUM.",
+    )
+    verify_stress_after_cluster_upgrade: StringOrList = SctField(
+        description="""cassandra-stress commands.
+        You can specify everything but the -node parameter, which is going to
+        be provided by the test suite infrastructure.
+        multiple commands can passed as a list""",
+    )
+    stress_cmd_complex_verify_delete: StringOrList = SctField(
+        description="""cassandra-stress commands.
+        You can specify everything but the -node parameter, which is going to
+        be provided by the test suite infrastructure.
+        multiple commands can passed as a list""",
+    )
+    scylla_encryption_options: String = SctField(
+        description="options will be used for enable encryption at-rest for tables",
+    )
+    kms_key_rotation_interval: int = SctField(
+        description="The time interval in minutes which gets waited before the KMS key rotation happens."
+        " Applied when the AWS KMS service is configured to be used.",
+    )
+    enable_kms_key_rotation: Boolean = SctField(
+        description="Allows to disable KMS keys rotation. Applicable to AWS, GCP, and Azure backends.",
+    )
+    enterprise_disable_kms: Boolean = SctField(
+        description="An escape hatch to disable KMS for enterprise run, when needed. We enable KMS by default since if we use Scylla 2023.1.3 and up",
+    )
+    logs_transport: Literal["ssh", "docker", "syslog-ng", "vector"] = SctField(
+        description="How to transport logs: syslog-ng, ssh or docker",
+    )
+    collect_logs: Boolean = SctField(
+        description="Collect logs from instances and sct runner",
+    )
+    use_scylla_doctor_on_failure: Boolean = SctField(
+        description="Run scylla-doctor on test failure to collect additional diagnostics",
+    )
+    execute_post_behavior: Boolean = SctField(
+        description="Run post behavior actions in sct teardown step",
+    )
+    post_behavior_db_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+            Failure/post test behavior, i.e. what to do with the db cloud instances at the end of the test.
+
+            'destroy' - Destroy instances and credentials (default)
+            'keep' - Keep instances running and leave credentials alone
+            'keep-on-failure' - Keep instances if testrun failed
+         """,
+    )
+    post_behavior_loader_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+            Failure/post test behavior, i.e. what to do with the loader cloud instances at the end of the test.
+
+            'destroy' - Destroy instances and credentials (default)
+            'keep' - Keep instances running and leave credentials alone
+            'keep-on-failure' - Keep instances if testrun failed
+         """,
+    )
+    post_behavior_monitor_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+            Failure/post test behavior, i.e. what to do with the monitor cloud instances at the end of the test.
+         """,
+    )
+    post_behavior_k8s_cluster: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the k8s cluster at the end of the test.
+
+        'destroy' - Destroy k8s cluster and credentials (default)
+        'keep' - Keep k8s cluster running and leave credentials alone
+        'keep-on-failure' - Keep k8s cluster if testrun failed
+        """,
+    )
+    post_behavior_vector_store_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the vector store cloud instances at the end of the test.
+
+        'destroy' - Destroy instances and credentials (default)
+        'keep' - Keep instances running and leave credentials alone
+        'keep-on-failure' - Keep instances if testrun failed
+        """,
+    )
+    internode_compression: String = SctField(description="Scylla option: internode_compression.")
+    internode_encryption: String = SctField(
+        description="Scylla sub option of server_encryption_options: internode_encryption.",
+    )
+    jmx_heap_memory: int = SctField(
+        description="The total size of the memory allocated to JMX. Values in MB, so for 1GB enter 1024(MB).",
+    )
+
+    loader_swap_size: int = SctField(
+        description="The size of the swap file for the loaders. Its size in bytes calculated by x * 1MB",
+    )
+    monitor_swap_size: int = SctField(
+        description="The size of the swap file for the monitors. Its size in bytes calculated by x * 1MB",
+    )
+    append_scylla_setup_args: String = SctField(
+        description="More arguments to append to scylla_setup command line",
+    )
+    use_preinstalled_scylla: Boolean = SctField(
+        description="Don't install/update ScyllaDB on DB nodes",
+    )
+    stress_cdclog_reader_cmd: String = SctField(
+        description="""cdc-stressor command to read cdc_log table.
+                       You can specify everything but the -node, -keyspace, -table parameter, which is going to
+                       be provided by the test suite infrastructure.
+                       Multiple commands can be passed as a list.""",
+    )
+    store_cdclog_reader_stats_in_es: Boolean = SctField(
+        description="Add cdclog reader stats to ES for future performance result calculating",
+    )
+    stop_test_on_stress_failure: Boolean = SctField(
+        description="""If set to True the test will be stopped immediately when stress command failed.
+                       When set to False the test will continue to run even when there are errors in the
+                       stress process""",
+    )
+    stress_cdc_log_reader_batching_enable: Boolean = SctField(
+        description="""retrieving data from multiple streams in one poll""",
+    )
+    use_legacy_cluster_init: Boolean = SctField(
+        description="""Use legacy cluster initialization with autobootsrap disabled and parallel node setup""",
+    )
+    availability_zone: String = SctField(
+        description="""Availability zone to use. Specify multiple (comma separated) to deploy resources to multi az (works on AWS).
+              "Same for multi-region scenario.""",
+    )
+    aws_fallback_to_next_availability_zone: Boolean = SctField(
+        description="Try all availability zones one by one in order to maximize the chances of getting the requested instance capacity.",
+    )
+    num_nodes_to_rollback: int = SctField(
+        description="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade",
+    )
+    upgrade_sstables: Boolean = SctField(
+        description="Whether to upgrade sstables as part of upgrade_node or not",
+    )
+    enable_truncate_checks_on_node_upgrade: Boolean = SctField(
+        description="Enables or disables truncate checks on each node upgrade and rollback",
+    )
+    stress_before_upgrade: StringOrList = SctField(
+        description="Stress command to be run before upgrade (prepare stage)",
+    )
+    stress_during_entire_upgrade: StringOrList = SctField(
+        description="Stress command to be run during the upgrade - user should take care for suitable duration",
+    )
+    stress_after_cluster_upgrade: StringOrList = SctField(
+        description="Stress command to be run after full upgrade - usually used to read the dataset for verification",
+    )
+
+    # Jepsen test.
+    jepsen_scylla_repo: String = SctField(
+        description="Link to the git repository with Jepsen Scylla tests",
+    )
+    jepsen_test_cmd: StringOrList = SctField(
+        description="Jepsen test command (e.g., 'test-all')",
+    )
+    jepsen_test_count: int = SctField(description="Possible number of reruns of single Jepsen test command")
+    jepsen_test_run_policy: Literal["most", "any", "all"] = SctField(
+        description="""
+        Jepsen test run policy (i.e., what we want to consider as passed for a single test)
+
+        'most' - most test runs are passed
+        'any'  - one pass is enough
+        'all'  - all test runs should pass
+        """,
+    )
+    max_events_severities: StringOrList = SctField(
+        default=[],
+        description="Limit severity level for event types",
+    )
+    scylla_rsyslog_setup: Boolean = SctField(
+        description="Configure rsyslog on Scylla nodes to send logs to monitoring nodes",
+    )
+    events_limit_in_email: int = SctField(
+        description="Limit number events in email reports",
+    )
+    data_volume_disk_num: int = SctField(
+        description="""Number of additional data volumes attached to instances
+         if data_volume_disk_num > 0, then data volumes (ebs on aws) will be
+         used for scylla data directory""",
+    )
+    data_volume_disk_type: Literal[
+        # AWS
+        "gp2",
+        "gp3",
+        "io2",
+        "io3",
+        "",
+        # OCI
+        "lower_cost",
+        "balanced",
+        "higher_performance",
+        "ultra",
+    ] = SctField(
+        description=(
+            "Type of additional volumes. AWS: gp2|gp3|io2|io3. OCI: lower_cost|balanced|higher_performance|ultra"
+=======
+    )
+    prepare_write_cmd: MultitenantValue(StringOrList) = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    stress_before_migration: String = SctField(
+        description="Stress command to write data for post-migration validation",
+    )
+    verify_stress_after_migration: String = SctField(
+        description="Stress command to verify data after migration",
+    )
+    stress_cmd_no_mv: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    stress_cmd_no_mv_profile: StringOrList = SctField(
+        description="",
+    )
+    cs_user_profiles: StringOrList = SctField(
+        description="cassandra-stress user-profiles list. Executed in test step",
+    )
+    prepare_cs_user_profiles: StringOrList = SctField(
+        description="cassandra-stress user-profiles list. Executed in prepare step",
+    )
+    cs_duration: String = SctField(
+        description="",
+    )
+    cs_debug: Boolean = SctField(
+        description="enable debug for cassandra-stress",
+    )
+    stress_cmd_mv: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    prepare_stress_cmd: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    perf_gradual_threads: DictOrStr = SctField(
+        description="Threads amount of stress load for gradual performance test per sub-test. "
+        "Example: {'read': 100, 'write': [200, 300], 'mixed': 300}",
+    )
+    perf_gradual_throttle_steps: DictOrStr = SctField(
+        description="Used for gradual performance test. Define throttle for load step in ops. "
+        "Example: {'read': ['100000', '150000'], 'mixed': ['300']}",
+    )
+    perf_gradual_step_duration: DictOrStr = SctField(
+        description="Step duration of c-s load for gradual performance test per sub-test. "
+        "Example: {'read': '30m', 'write': None, 'mixed': '30m'}",
+    )
+
+    # PerformanceRegressionLWTTest
+    stress_cmd_lwt_i: StringOrList = SctField(
+        description="Stress command for LWT performance test for INSERT baseline",
+    )
+    stress_cmd_lwt_d: StringOrList = SctField(
+        description="Stress command for LWT performance test for DELETE baseline",
+    )
+    stress_cmd_lwt_u: StringOrList = SctField(
+        description="Stress command for LWT performance test for UPDATE baseline",
+    )
+    stress_cmd_lwt_ine: StringOrList = SctField(
+        description="Stress command for LWT performance test for INSERT with IF NOT EXISTS",
+    )
+    stress_cmd_lwt_uc: StringOrList = SctField(
+        description="Stress command for LWT performance test for UPDATE with IF <condition>",
+    )
+    stress_cmd_lwt_ue: StringOrList = SctField(
+        description="Stress command for LWT performance test for UPDATE with IF EXISTS",
+    )
+
+    stress_cmd_lwt_de: StringOrList = SctField(
+        description="Stress command for LWT performance test for DELETE with IF EXISTS",
+    )
+    stress_cmd_lwt_dc: StringOrList = SctField(
+        description="Stress command for LWT performance test for DELETE with IF <condition>",
+    )
+    stress_cmd_lwt_mixed: StringOrList = SctField(
+        description="Stress command for LWT performance test for mixed lwt load",
+    )
+    stress_cmd_lwt_mixed_baseline: StringOrList = SctField(
+        description="Stress command for LWT performance test for mixed lwt load baseline",
+    )
+
+    # RefreshTest
+    skip_download: Boolean = SctField(description="")
+    sstable_file: String = SctField(description="")
+    sstable_url: String = SctField(description="")
+    sstable_md5: String = SctField(description="")
+    flush_times: int = SctField(description="")
+    flush_period: int = SctField(description="")
+
+    # UpgradeTest
+    new_scylla_repo: String = SctField(
+        description="URL to the Scylla repository for new versions.",
+    )
+    new_version: String = SctField(
+        description="Assign new upgrade version, use it to upgrade to specific minor release. eg: 3.0.1",
+    )
+    target_upgrade_version: String = SctField(description="The target version to upgrade Scylla to.")
+    disable_raft: Boolean = SctField(
+        description="Flag to disable Raft consensus for LWT operations.",
+    )
+    enable_tablets_on_upgrade: Boolean = SctField(
+        description="By default, the tablets feature is disabled. With this parameter, created for the upgrade test, the tablets feature will only be enabled after the upgrade",
+    )
+    enable_views_with_tablets_on_upgrade: Boolean = SctField(
+        description="Enables creating materialized views in keyspaces using tablets by adding an experimental feature."
+        "It should not be used when upgrading to versions before 2025.1 and it should be used for upgrades"
+        "where we create such views.",
+    )
+    upgrade_node_packages: String = SctField(description="Specifies the packages to be upgraded on the node.")
+    upgrade_node_system: Boolean = SctField(
+        description="Upgrade system packages on nodes before upgrading Scylla. Enabled by default.",
+    )
+    stress_cmd_1: StringOrList = SctField(
+        description="Primary stress command to be executed.",
+    )
+    stress_cmd_complex_prepare: StringOrList = SctField(
+        description="Stress command for complex preparation steps.",
+    )
+    prepare_write_stress: StringOrList = SctField(
+        description="Stress command to prepare write operations.",
+    )
+    stress_cmd_read_10m: StringOrList = SctField(
+        description="Stress command to perform read operations for 10 minutes.",
+    )
+    stress_cmd_read_cl_one: StringOrList = SctField(
+        description="Stress command to perform read operations with consistency level ONE.",
+    )
+    stress_cmd_read_60m: StringOrList = SctField(
+        description="Stress command to perform read operations for 60 minutes.",
+    )
+    stress_cmd_complex_verify_read: StringOrList = SctField(
+        description="Stress command to verify complex read operations.",
+    )
+    stress_cmd_complex_verify_more: StringOrList = SctField(
+        description="Additional stress command to verify complex operations.",
+    )
+    write_stress_during_entire_test: StringOrList = SctField(
+        description="Stress command to perform write operations throughout the entire test.",
+    )
+    verify_data_after_entire_test: StringOrList = SctField(
+        description="Stress command to verify data integrity after the entire test.",
+    )
+    stress_cmd_read_cl_quorum: StringOrList = SctField(
+        description="Stress command to perform read operations with consistency level QUORUM.",
+    )
+    verify_stress_after_cluster_upgrade: StringOrList = SctField(
+        description="""cassandra-stress commands.
+        You can specify everything but the -node parameter, which is going to
+        be provided by the test suite infrastructure.
+        multiple commands can passed as a list""",
+    )
+    stress_cmd_complex_verify_delete: StringOrList = SctField(
+        description="""cassandra-stress commands.
+        You can specify everything but the -node parameter, which is going to
+        be provided by the test suite infrastructure.
+        multiple commands can passed as a list""",
+    )
+    scylla_encryption_options: String = SctField(
+        description="options will be used for enable encryption at-rest for tables",
+    )
+    kms_key_rotation_interval: int = SctField(
+        description="The time interval in minutes which gets waited before the KMS key rotation happens."
+        " Applied when the AWS KMS service is configured to be used.",
+    )
+    enable_kms_key_rotation: Boolean = SctField(
+        description="Allows to disable KMS keys rotation. Applicable to AWS, GCP, and Azure backends.",
+    )
+    enterprise_disable_kms: Boolean = SctField(
+        description="An escape hatch to disable KMS for enterprise run, when needed. We enable KMS by default since if we use Scylla 2023.1.3 and up",
+    )
+    logs_transport: Literal["ssh", "docker", "syslog-ng", "vector"] = SctField(
+        description="How to transport logs: syslog-ng, ssh or docker",
+    )
+    collect_logs: Boolean = SctField(
+        description="Collect logs from instances and sct runner",
+    )
+    use_scylla_doctor_on_failure: Boolean = SctField(
+        description="Run scylla-doctor on test failure to collect additional diagnostics",
+    )
+    execute_post_behavior: Boolean = SctField(
+        description="Run post behavior actions in sct teardown step",
+    )
+    post_behavior_db_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+            Failure/post test behavior, i.e. what to do with the db cloud instances at the end of the test.
+
+            'destroy' - Destroy instances and credentials (default)
+            'keep' - Keep instances running and leave credentials alone
+            'keep-on-failure' - Keep instances if testrun failed
+         """,
+    )
+    post_behavior_loader_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+            Failure/post test behavior, i.e. what to do with the loader cloud instances at the end of the test.
+
+            'destroy' - Destroy instances and credentials (default)
+            'keep' - Keep instances running and leave credentials alone
+            'keep-on-failure' - Keep instances if testrun failed
+         """,
+    )
+    post_behavior_monitor_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+            Failure/post test behavior, i.e. what to do with the monitor cloud instances at the end of the test.
+         """,
+    )
+    post_behavior_k8s_cluster: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the k8s cluster at the end of the test.
+
+        'destroy' - Destroy k8s cluster and credentials (default)
+        'keep' - Keep k8s cluster running and leave credentials alone
+        'keep-on-failure' - Keep k8s cluster if testrun failed
+        """,
+    )
+    post_behavior_vector_store_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the vector store cloud instances at the end of the test.
+
+        'destroy' - Destroy instances and credentials (default)
+        'keep' - Keep instances running and leave credentials alone
+        'keep-on-failure' - Keep instances if testrun failed
+        """,
+    )
+    internode_compression: String = SctField(description="Scylla option: internode_compression.")
+    internode_encryption: String = SctField(
+        description="Scylla sub option of server_encryption_options: internode_encryption.",
+    )
+    jmx_heap_memory: int = SctField(
+        description="The total size of the memory allocated to JMX. Values in MB, so for 1GB enter 1024(MB).",
+    )
+
+    loader_swap_size: int = SctField(
+        description="The size of the swap file for the loaders. Its size in bytes calculated by x * 1MB",
+    )
+    monitor_swap_size: int = SctField(
+        description="The size of the swap file for the monitors. Its size in bytes calculated by x * 1MB",
+    )
+    append_scylla_setup_args: String = SctField(
+        description="More arguments to append to scylla_setup command line",
+    )
+    use_preinstalled_scylla: Boolean = SctField(
+        description="Don't install/update ScyllaDB on DB nodes",
+    )
+    stress_cdclog_reader_cmd: String = SctField(
+        description="""cdc-stressor command to read cdc_log table.
+                       You can specify everything but the -node, -keyspace, -table parameter, which is going to
+                       be provided by the test suite infrastructure.
+                       Multiple commands can be passed as a list.""",
+    )
+    store_cdclog_reader_stats_in_es: Boolean = SctField(
+        description="Add cdclog reader stats to ES for future performance result calculating",
+    )
+    stop_test_on_stress_failure: Boolean = SctField(
+        description="""If set to True the test will be stopped immediately when stress command failed.
+                       When set to False the test will continue to run even when there are errors in the
+                       stress process""",
+    )
+    stress_cdc_log_reader_batching_enable: Boolean = SctField(
+        description="""retrieving data from multiple streams in one poll""",
+    )
+    use_legacy_cluster_init: Boolean = SctField(
+        description="""Use legacy cluster initialization with autobootsrap disabled and parallel node setup""",
+    )
+    availability_zone: String = SctField(
+        description="""Availability zone to use. Specify multiple (comma separated) to deploy resources to multi az (works on AWS).
+              "Same for multi-region scenario.""",
+    )
+    aws_fallback_to_next_availability_zone: Boolean = SctField(
+        description="Try all availability zones one by one in order to maximize the chances of getting the requested instance capacity.",
+    )
+    num_nodes_to_rollback: int = SctField(
+        description="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade",
+    )
+    upgrade_sstables: Boolean = SctField(
+        description="Whether to upgrade sstables as part of upgrade_node or not",
+    )
+    enable_truncate_checks_on_node_upgrade: Boolean = SctField(
+        description="Enables or disables truncate checks on each node upgrade and rollback",
+    )
+    stress_before_upgrade: StringOrList = SctField(
+        description="Stress command to be run before upgrade (prepare stage)",
+    )
+    stress_during_entire_upgrade: StringOrList = SctField(
+        description="Stress command to be run during the upgrade - user should take care for suitable duration",
+    )
+    stress_after_cluster_upgrade: StringOrList = SctField(
+        description="Stress command to be run after full upgrade - usually used to read the dataset for verification",
+    )
+
+    # Jepsen test.
+    jepsen_scylla_repo: String = SctField(
+        description="Link to the git repository with Jepsen Scylla tests",
+    )
+    jepsen_test_cmd: StringOrList = SctField(
+        description="Jepsen test command (e.g., 'test-all')",
+    )
+    jepsen_test_count: int = SctField(description="Possible number of reruns of single Jepsen test command")
+    jepsen_test_run_policy: Literal["most", "any", "all"] = SctField(
+        description="""
+        Jepsen test run policy (i.e., what we want to consider as passed for a single test)
+
+        'most' - most test runs are passed
+        'any'  - one pass is enough
+        'all'  - all test runs should pass
+        """,
+    )
+    max_events_severities: StringOrList = SctField(
+        default=[],
+        description="Limit severity level for event types",
+    )
+    scylla_rsyslog_setup: Boolean = SctField(
+        description="Configure rsyslog on Scylla nodes to send logs to monitoring nodes",
+    )
+    events_limit_in_email: int = SctField(
+        description="Limit number events in email reports",
+    )
+    data_volume_disk_num: int = SctField(
+        description="""Number of additional data volumes attached to instances
+         if data_volume_disk_num > 0, then data volumes (ebs on aws) will be
+         used for scylla data directory""",
+    )
+    data_volume_disk_type: Literal[
+        # AWS
+        "gp2",
+        "gp3",
+        "io2",
+        "io3",
+        "",
+        # OCI
+        "lower_cost",
+        "balanced",
+        "higher_performance",
+        "ultra",
+    ] = SctField(
+        description=(
+            "Type of additional volumes. AWS: gp2|gp3|io2|io3. OCI: lower_cost|balanced|higher_performance|ultra"
+>>>>>>> 953c01248 (feature(platform-migration): add test for x86 to ARM cluster migration)
         ),
         dict(
             name="user_profile_table_count",
@@ -3322,6 +4636,39 @@ class SCTConfiguration(dict):
                 raise ValueError(
                     "'scylla_version' can't used together with 'ami_id_db_scylla', 'gce_image_db' or with 'scylla_repo'"
                 )
+
+            # auto-discover target image for platform migration
+            self.target_db_image_ids = []
+            if self.get("instance_type_db_target"):
+                if self.get("cluster_backend") == "aws":
+                    target_ami_list = []
+                    for region in region_names:
+                        target_arch = get_arch_from_instance_type(
+                            self.get("instance_type_db_target"), region_name=region
+                        )
+                        try:
+                            ami = (
+                                get_branched_ami(scylla_version=scylla_version, region_name=region, arch=target_arch)[0]
+                                if ":" in scylla_version
+                                else get_scylla_ami_versions(
+                                    version=scylla_version, region_name=region, arch=target_arch
+                                )[0]
+                            )
+                        except Exception as ex:  # noqa: BLE001
+                            raise ValueError(
+                                f"Target AMI for scylla_version='{scylla_version}' not found in {region} "
+                                f"arch={target_arch} (for instance_type_db_target)"
+                            ) from ex
+                        self.log.debug(
+                            "Found target AMI %s(%s) for scylla_version='%s' arch=%s in %s",
+                            ami.name,
+                            ami.image_id,
+                            scylla_version,
+                            target_arch,
+                            region,
+                        )
+                        target_ami_list.append(ami)
+                    self.target_db_image_ids = [ami.image_id for ami in target_ami_list]
 
         # 6.1) handle oracle_scylla_version if exists
         if (oracle_scylla_version := self.get("oracle_scylla_version")) and self.get("db_type") == "mixed_scylla":
