@@ -1,5 +1,6 @@
 """Unit tests for nemesis utility functions."""
 
+import logging
 import pytest
 
 from sdcm.nemesis import safe_split_keyspace_table
@@ -28,7 +29,6 @@ class TestSafeSplitKeyspaceTable:
 
     def test_list_with_valid_string(self, caplog):
         """Test when keyspace_table is a list containing a valid string - logs warning."""
-        import logging
         with caplog.at_level(logging.WARNING):
             keyspace, table = safe_split_keyspace_table(["keyspace.table"])
             assert keyspace == "keyspace"
@@ -44,7 +44,6 @@ class TestSafeSplitKeyspaceTable:
 
     def test_list_with_multiple_items(self, caplog):
         """Test when keyspace_table is a list with multiple items - should use first and log warning."""
-        import logging
         with caplog.at_level(logging.WARNING):
             keyspace, table = safe_split_keyspace_table(["ks1.table1", "ks2.table2"])
             assert keyspace == "ks1"
