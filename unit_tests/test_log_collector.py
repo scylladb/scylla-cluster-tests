@@ -191,26 +191,27 @@ def test_monitoring_entities_do_not_skip_for_other_backends():
         assert grafana_entity.should_skip_for_backend() is False, f"Should not skip for {backend}"
 
 
-def test_monitoring_entities_collect_returns_early_for_docker():
+def test_monitoring_entities_collect_returns_early_for_docker(tmp_path):
     """Test that collect methods return early for docker backend without attempting collection."""
     docker_params = {"cluster_backend": "docker"}
     mock_node = Mock()
+    test_dir = str(tmp_path / "test")
 
     # PrometheusSnapshots should return None
     prometheus_entity = PrometheusSnapshots(name="test_prometheus")
     prometheus_entity.set_params(docker_params)
-    result = prometheus_entity.collect(mock_node, "/tmp/test", None, None)
+    result = prometheus_entity.collect(mock_node, test_dir, None, None)
     assert result is None
 
     # MonitoringStack should return None
     monitoring_entity = MonitoringStack(name="test_monitoring")
     monitoring_entity.set_params(docker_params)
-    result = monitoring_entity.collect(mock_node, "/tmp/test", None, None)
+    result = monitoring_entity.collect(mock_node, test_dir, None, None)
     assert result is None
 
     # GrafanaScreenShot should return empty list
     grafana_entity = GrafanaScreenShot(name="test_grafana")
     grafana_entity.set_params(docker_params)
-    result = grafana_entity.collect(mock_node, "/tmp/test", None, None)
+    result = grafana_entity.collect(mock_node, test_dir, None, None)
     assert result == []
 
