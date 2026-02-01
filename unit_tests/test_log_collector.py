@@ -158,15 +158,15 @@ def test_monitoring_entities_skip_for_docker_backend():
     """Test that monitoring entities skip collection for docker backend."""
     # Test with docker backend - should skip
     docker_params = {"cluster_backend": "docker"}
-    
+
     prometheus_entity = PrometheusSnapshots(name="test_prometheus")
     prometheus_entity.set_params(docker_params)
     assert prometheus_entity.should_skip_for_backend() is True
-    
+
     monitoring_entity = MonitoringStack(name="test_monitoring")
     monitoring_entity.set_params(docker_params)
     assert monitoring_entity.should_skip_for_backend() is True
-    
+
     grafana_entity = GrafanaScreenShot(name="test_grafana")
     grafana_entity.set_params(docker_params)
     assert grafana_entity.should_skip_for_backend() is True
@@ -177,15 +177,15 @@ def test_monitoring_entities_do_not_skip_for_other_backends():
     # Test with various non-docker backends - should not skip
     for backend in ["aws", "gce", "azure", "baremetal", "k8s-eks", "k8s-gke"]:
         backend_params = {"cluster_backend": backend}
-        
+
         prometheus_entity = PrometheusSnapshots(name="test_prometheus")
         prometheus_entity.set_params(backend_params)
         assert prometheus_entity.should_skip_for_backend() is False, f"Should not skip for {backend}"
-        
+
         monitoring_entity = MonitoringStack(name="test_monitoring")
         monitoring_entity.set_params(backend_params)
         assert monitoring_entity.should_skip_for_backend() is False, f"Should not skip for {backend}"
-        
+
         grafana_entity = GrafanaScreenShot(name="test_grafana")
         grafana_entity.set_params(backend_params)
         assert grafana_entity.should_skip_for_backend() is False, f"Should not skip for {backend}"
@@ -195,19 +195,19 @@ def test_monitoring_entities_collect_returns_early_for_docker():
     """Test that collect methods return early for docker backend without attempting collection."""
     docker_params = {"cluster_backend": "docker"}
     mock_node = Mock()
-    
+
     # PrometheusSnapshots should return None
     prometheus_entity = PrometheusSnapshots(name="test_prometheus")
     prometheus_entity.set_params(docker_params)
     result = prometheus_entity.collect(mock_node, "/tmp/test", None, None)
     assert result is None
-    
+
     # MonitoringStack should return None
     monitoring_entity = MonitoringStack(name="test_monitoring")
     monitoring_entity.set_params(docker_params)
     result = monitoring_entity.collect(mock_node, "/tmp/test", None, None)
     assert result is None
-    
+
     # GrafanaScreenShot should return empty list
     grafana_entity = GrafanaScreenShot(name="test_grafana")
     grafana_entity.set_params(docker_params)
