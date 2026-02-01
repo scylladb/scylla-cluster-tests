@@ -148,9 +148,9 @@ class AWSCluster(cluster.BaseCluster):
         return None
 
     def _create_on_demand_instances(
-        self, count, interfaces, ec2_user_data, dc_idx=0, instance_type=None, is_zero_node=False
+        self, count, interfaces, ec2_user_data, dc_idx=0, instance_type=None, is_zero_node=False, ami_id=None
     ):
-        ami_id = self._ec2_ami_id[dc_idx]
+        ami_id = ami_id or self._ec2_ami_id[dc_idx]
         self.log.debug(f"Creating {count} on-demand instances using AMI id '{ami_id}'... ")
         params = dict(
             ImageId=ami_id,
@@ -190,13 +190,13 @@ class AWSCluster(cluster.BaseCluster):
         return instances
 
     def _create_spot_instances(
-        self, count, interfaces, ec2_user_data="", dc_idx=0, instance_type=None, is_zero_node=False
+        self, count, interfaces, ec2_user_data="", dc_idx=0, instance_type=None, is_zero_node=False, ami_id=None
     ):
         ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx])
         subnet_info = ec2.get_subnet_info(interfaces[0]["SubnetId"])
         spot_params = dict(
             instance_type=instance_type or self._ec2_instance_type,
-            image_id=self._ec2_ami_id[dc_idx],
+            image_id=ami_id or self._ec2_ami_id[dc_idx],
             region_name=subnet_info["AvailabilityZone"],
             network_if=interfaces,
             key_pair=self._credentials[dc_idx].key_pair_name,
@@ -232,7 +232,9 @@ class AWSCluster(cluster.BaseCluster):
 
         return instances
 
-    def _create_instances(self, count, ec2_user_data="", dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False):
+    def _create_instances(
+        self, count, ec2_user_data="", dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False, ami_id=None
+    ):
         if not count:  # EC2 API fails if we request zero instances.
             return []
 
@@ -263,24 +265,50 @@ class AWSCluster(cluster.BaseCluster):
         self.log.info(f"Create {self.instance_provision} instance(s)")
         if self.instance_provision == "mixed":
             instances = self._create_mixed_instances(
-                count, interfaces, ec2_user_data, dc_idx, instance_type=instance_type, is_zero_node=is_zero_node
+                count,
+                interfaces,
+                ec2_user_data,
+                dc_idx,
+                instance_type=instance_type,
+                is_zero_node=is_zero_node,
+                ami_id=ami_id,
             )
         elif self.instance_provision == INSTANCE_PROVISION_ON_DEMAND:
             instances = self._create_on_demand_instances(
-                count, interfaces, ec2_user_data, dc_idx, instance_type=instance_type, is_zero_node=is_zero_node
+                count,
+                interfaces,
+                ec2_user_data,
+                dc_idx,
+                instance_type=instance_type,
+                is_zero_node=is_zero_node,
+                ami_id=ami_id,
             )
         elif self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
             instances = self._create_spot_instances(
-                count, interfaces, ec2_user_data, dc_idx, instance_type=instance_type, is_zero_node=is_zero_node
+                count,
+                interfaces,
+                ec2_user_data,
+                dc_idx,
+                instance_type=instance_type,
+                is_zero_node=is_zero_node,
+                ami_id=ami_id,
             )
         else:
             instances = self.fallback_provision_type(
-                count, interfaces, ec2_user_data, dc_idx, instance_type=instance_type, is_zero_node=is_zero_node
+                count,
+                interfaces,
+                ec2_user_data,
+                dc_idx,
+                instance_type=instance_type,
+                is_zero_node=is_zero_node,
+                ami_id=ami_id,
             )
 
         return instances
 
-    def fallback_provision_type(self, count, interfaces, ec2_user_data, dc_idx, instance_type=None, is_zero_node=False):
+    def fallback_provision_type(
+        self, count, interfaces, ec2_user_data, dc_idx, instance_type=None, is_zero_node=False, ami_id=None
+    ):
         instances = None
 
         if self.instance_provision.lower() == "spot" or (
@@ -300,11 +328,23 @@ class AWSCluster(cluster.BaseCluster):
                 self.log.info(f"Create {instances_provision_type} instance(s)")
                 if instances_provision_type == INSTANCE_PROVISION_ON_DEMAND:
                     instances = self._create_on_demand_instances(
-                        count, interfaces, ec2_user_data, dc_idx, instance_type=instance_type, is_zero_node=is_zero_node
+                        count,
+                        interfaces,
+                        ec2_user_data,
+                        dc_idx,
+                        instance_type=instance_type,
+                        is_zero_node=is_zero_node,
+                        ami_id=ami_id,
                     )
                 else:
                     instances = self._create_spot_instances(
-                        count, interfaces, ec2_user_data, dc_idx, instance_type=instance_type, is_zero_node=is_zero_node
+                        count,
+                        interfaces,
+                        ec2_user_data,
+                        dc_idx,
+                        instance_type=instance_type,
+                        is_zero_node=is_zero_node,
+                        ami_id=ami_id,
                     )
                 break
             except (CreateSpotInstancesError, botocore.exceptions.ClientError) as cl_ex:
@@ -327,7 +367,9 @@ class AWSCluster(cluster.BaseCluster):
             return True
         return False
 
-    def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx, instance_type=None, is_zero_node=False):
+    def _create_mixed_instances(
+        self, count, interfaces, ec2_user_data, dc_idx, instance_type=None, is_zero_node=False, ami_id=None
+    ):
         instances = []
         max_num_on_demand = 2
         if isinstance(self, (ScyllaAWSCluster, CassandraAWSCluster)):
@@ -357,6 +399,7 @@ class AWSCluster(cluster.BaseCluster):
                         dc_idx,
                         instance_type=instance_type,
                         is_zero_node=is_zero_node,
+                        ami_id=ami_id,
                     )
                 )
             if count_on_demand > 0:
@@ -369,6 +412,7 @@ class AWSCluster(cluster.BaseCluster):
                         dc_idx,
                         instance_type=instance_type,
                         is_zero_node=is_zero_node,
+                        ami_id=ami_id,
                     )
                 )
             self.instance_provision = "mixed"
@@ -432,14 +476,22 @@ class AWSCluster(cluster.BaseCluster):
                 ec2_user_data += " --bootstrap false "
         return ec2_user_data
 
-    def _create_or_find_instances(self, count, ec2_user_data, dc_idx, az_idx=0, instance_type=None, is_zero_node=False):
+    def _create_or_find_instances(
+        self, count, ec2_user_data, dc_idx, az_idx=0, instance_type=None, is_zero_node=False, ami_id=None
+    ):
         is_rack_simulated = self.params.get("simulated_racks")
         # find if nodes in given az already exist
         # skip node.rack comparison if racks are simulated to prevent issue when rack was removed
         nodes = [node for node in self.nodes if node.dc_idx == dc_idx and (node.rack == az_idx or is_rack_simulated)]
         if nodes:
             return self._create_instances(
-                count, ec2_user_data, dc_idx, az_idx, instance_type=instance_type, is_zero_node=is_zero_node
+                count,
+                ec2_user_data,
+                dc_idx,
+                az_idx,
+                instance_type=instance_type,
+                is_zero_node=is_zero_node,
+                ami_id=ami_id,
             )
         if self.test_config.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx, az_idx)
@@ -451,7 +503,7 @@ class AWSCluster(cluster.BaseCluster):
             return instances
         self.log.info("Found no provisioned instances. Provision them.")
         return self._create_instances(
-            count, ec2_user_data, dc_idx, az_idx, instance_type=instance_type, is_zero_node=is_zero_node
+            count, ec2_user_data, dc_idx, az_idx, instance_type=instance_type, is_zero_node=is_zero_node, ami_id=ami_id
         )
 
     @mark_new_nodes_as_running_nemesis
@@ -464,6 +516,7 @@ class AWSCluster(cluster.BaseCluster):
         enable_auto_bootstrap=False,
         instance_type=None,
         is_zero_node=False,
+        image_id=None,
     ):
         if not count:
             return []
@@ -493,6 +546,7 @@ class AWSCluster(cluster.BaseCluster):
                     az_idx=rack_idx,
                     instance_type=instance_type,
                     is_zero_node=is_zero_node,
+                    ami_id=image_id,
                 )
             )
         for node_index, instance in enumerate(instances):

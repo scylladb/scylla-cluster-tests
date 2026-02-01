@@ -1,0 +1,30 @@
+test_duration: 480
+
+instance_type_db: 'i7i.2xlarge'
+instance_type_db_target: 'i8g.2xlarge'
+n_db_nodes: 6
+n_loaders: 2
+instance_type_loader: 'c7i.4xlarge'
+n_monitor_nodes: 1
+
+prepare_write_cmd: [
+  "cassandra-stress write cl=ONE n=900000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=300 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..900000000",
+  "cassandra-stress write cl=ONE n=900000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=300 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=900000001..1800000000"
+]
+
+stress_before_migration: "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=5 -connection-count=5 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data"
+
+stress_cmd: [
+  "cassandra-stress mixed 'ratio(write=1,read=9)' cl=QUORUM duration=420m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1800000000",
+  "cassandra-stress mixed 'ratio(write=1,read=9)' cl=QUORUM duration=420m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1800000000"
+]
+
+verify_stress_after_migration: "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=20 -connection-count=20 -consistency-level=one -rows-per-request=100 -timeout=30s -validate-data"
+
+append_scylla_yaml:
+  stream_throughput_outbound_megabits_per_sec: 800
+
+round_robin: true
+nemesis_class_name: 'NoOpMonkey'
+user_prefix: 'platform-migration'
+use_preinstalled_scylla: true
