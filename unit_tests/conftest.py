@@ -421,6 +421,14 @@ _test_start_times = {}
 _test_call_start_times = {}
 
 
+def pytest_collection_modifyitems(items):
+    """Apply timeout only to integration tests."""
+    for item in items:
+        if "integration" in [marker.name for marker in item.iter_markers()]:
+            # Add timeout marker to integration tests (1 hour, thread-based)
+            item.add_marker(pytest.mark.timeout(3600, method="thread"))
+
+
 def _get_test_elapsed_time(test_name: str) -> float:
     """Get elapsed time for a test since setup started, returns 0.0 if test not tracked."""
     start_time = _test_start_times.get(test_name)
