@@ -190,18 +190,18 @@ class BaseLogEntity:
 class BaseMonitoringEntity(BaseLogEntity):
     def should_skip_for_backend(self) -> bool:
         """Check if monitoring data collection should be skipped for the current backend.
-        
+
         Docker backend typically doesn't have monitoring stack properly configured,
         especially in artifacts tests where n_monitor_nodes is 0. Attempting to collect
         monitoring logs in such cases wastes time with retries and connection failures.
-        
+
         Returns:
             bool: True if collection should be skipped, False otherwise.
         """
         backend = self._params.get("cluster_backend", "")
         # Skip for docker backend as monitoring stack is often not configured
         if backend == "docker":
-            LOGGER.info("Skipping %s collection for docker backend - monitoring stack not configured", 
+            LOGGER.info("Skipping %s collection for docker backend - monitoring stack not configured",
                        self.__class__.__name__)
             return True
         return False
