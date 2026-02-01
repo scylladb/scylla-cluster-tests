@@ -26,22 +26,31 @@ class TestSafeSplitKeyspaceTable:
         assert keyspace == "keyspace"
         assert table == "table.with.dots"
 
-    def test_list_with_valid_string(self):
-        """Test when keyspace_table is a list containing a valid string."""
-        keyspace, table = safe_split_keyspace_table(["keyspace.table"])
-        assert keyspace == "keyspace"
-        assert table == "table"
+    def test_list_with_valid_string(self, caplog):
+        """Test when keyspace_table is a list containing a valid string - logs warning."""
+        import logging
+        with caplog.at_level(logging.WARNING):
+            keyspace, table = safe_split_keyspace_table(["keyspace.table"])
+            assert keyspace == "keyspace"
+            assert table == "table"
+            # Verify warning was logged
+            assert "keyspace_table is a list instead of string" in caplog.text
+            assert "using first element" in caplog.text
 
     def test_empty_list(self):
         """Test when keyspace_table is an empty list - should raise ValueError."""
         with pytest.raises(ValueError, match="keyspace_table is an empty list"):
             safe_split_keyspace_table([])
 
-    def test_list_with_multiple_items(self):
-        """Test when keyspace_table is a list with multiple items - should use first."""
-        keyspace, table = safe_split_keyspace_table(["ks1.table1", "ks2.table2"])
-        assert keyspace == "ks1"
-        assert table == "table1"
+    def test_list_with_multiple_items(self, caplog):
+        """Test when keyspace_table is a list with multiple items - should use first and log warning."""
+        import logging
+        with caplog.at_level(logging.WARNING):
+            keyspace, table = safe_split_keyspace_table(["ks1.table1", "ks2.table2"])
+            assert keyspace == "ks1"
+            assert table == "table1"
+            # Verify warning was logged
+            assert "keyspace_table is a list instead of string" in caplog.text
 
     def test_invalid_type(self):
         """Test when keyspace_table is not a string or list."""

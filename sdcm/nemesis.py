@@ -239,21 +239,32 @@ def safe_split_keyspace_table(keyspace_table: Union[str, List[str]]) -> Tuple[st
     """
     Safely split a keyspace.table string into keyspace and table components.
 
-    Handles cases where keyspace_table might unexpectedly be a list instead of a string,
-    which can occur due to race conditions or data inconsistencies in get_non_system_ks_cf_list.
+    This function handles edge cases where keyspace_table might unexpectedly be a list
+    instead of a string. While this shouldn't happen in normal operation, it can occur
+    due to race conditions or data inconsistencies in get_non_system_ks_cf_list when
+    the cluster state changes during list retrieval.
 
     Args:
-        keyspace_table: Either a "keyspace.table" string or a list (which shouldn't happen but we handle it)
+        keyspace_table: A "keyspace.table" string. If a list is provided (which indicates
+            an upstream bug or race condition), the first element will be used and a warning
+            will be logged. Empty lists will raise a ValueError.
 
     Returns:
         Tuple of (keyspace, table)
 
     Raises:
-        ValueError: If keyspace_table is invalid (empty list, missing delimiter, etc.)
+        ValueError: If keyspace_table is invalid (empty list, non-string type, missing
+            delimiter, or empty keyspace/table components)
     """
     if isinstance(keyspace_table, list):
         if not keyspace_table:
             raise ValueError("keyspace_table is an empty list, expected 'keyspace.table' string")
+        # Log warning when list is encountered - this indicates an upstream issue
+        LOGGER.warning(
+            "keyspace_table is a list instead of string - using first element. "
+            "This may indicate a race condition or bug in get_non_system_ks_cf_list. "
+            f"List contents: {keyspace_table}"
+        )
         # If it's a list, try to use the first element
         keyspace_table = keyspace_table[0]
 
