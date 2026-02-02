@@ -6408,7 +6408,7 @@ def disrupt_method_wrapper(method, caller_obj: NemesisBaseClass, is_exclusive=Fa
         finally:
             # Store nemesis event to track skip status for health checks
             # Must be in finally block to ensure it's always executed, even if exceptions occur
-            args[0].last_nemesis_event = nemesis_event
+            runner.last_nemesis_event = nemesis_event
 
             if is_exclusive:
                 # NOTE: sleep the nemesis interval here because the next one is already
