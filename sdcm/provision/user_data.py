@@ -83,7 +83,7 @@ class UserDataBuilder:
                                         apt:
                                           conf: |
                                             Acquire::Retries "60";
-                                            DPkg::Lock::Timeout "60";
+                                            DPkg::Lock::Timeout "300";
                                      """)
         )
 
