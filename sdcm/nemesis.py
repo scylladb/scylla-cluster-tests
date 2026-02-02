@@ -2070,18 +2070,6 @@ class Nemesis:
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
             self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
 
-    def rebuild_or_repair(self, target_node, reason=""):
-        """
-        Runs rebuild on Vnodes and repair on tablets, as rebuild is not supported for tablets
-        https://github.com/scylladb/scylladb/issues/17575
-        """
-        if is_tablets_feature_enabled(target_node):
-            with self.action_log_scope(f"Run repair (instead of rebuild) on {self.target_node.name}, reason: {reason}"):
-                self.run_repair()
-        else:
-            with self.action_log_scope(f"Run rebuild on {self.target_node.name}, reason: {reason}"):
-                self.repair_nodetool_rebuild()
-
     def nodetool_cleanup_on_all_nodes_parallel(self):
         # Inner disrupt function for ParallelObject
         def _nodetool_cleanup(node):
@@ -4363,9 +4351,14 @@ class Nemesis:
                 self.action_log_scope("Reboot node during decommission streaming", target=self.target_node.name),
             ):
                 ParallelObject(objects=[trigger, watcher], timeout=full_operations_timeout).call_objects()
-            target_node = decommission_post_action() or self.target_node
-            target_node.wait_node_fully_start()
-            self.rebuild_or_repair(target_node, "After decomission streaming")
+            if new_node := decommission_post_action():
+                new_node.wait_node_fully_start()
+                with self.action_log_scope("New node rebuild", target=new_node.name):
+                    new_node.run_nodetool("rebuild", long_running=True, retry=0)
+            else:
+                self.target_node.wait_node_fully_start()
+                with self.action_log_scope("Run rebuild", target=self.target_node.name):
+                    self.target_node.run_nodetool(sub_cmd="rebuild", long_running=True, retry=0)
 
     def start_and_interrupt_repair_streaming(self):
         """
@@ -4399,7 +4392,9 @@ class Nemesis:
 
         self.target_node.wait_node_fully_start()
 
-        self.rebuild_or_repair(self.target_node, reason="After destroy")
+        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
+            with self.action_log_scope("Rebuild data after destroy", target=self.target_node.name):
+                self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
 
     def start_and_interrupt_rebuild_streaming(self):
         """
