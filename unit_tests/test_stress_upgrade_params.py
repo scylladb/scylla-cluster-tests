@@ -34,11 +34,11 @@ def test_stress_before_upgrade_parameter_exists():
     assert "stress_before_upgrade" in [param["name"] for param in conf.config_options]
 
 
-def test_stress_during_upgrade_parameter_exists():
-    """Test that stress_during_upgrade parameter is defined."""
+def test_large_partition_stress_during_upgrade_parameter_exists():
+    """Test that large_partition_stress_during_upgrade parameter is defined."""
     conf = sct_config.SCTConfiguration()
     # Parameter should exist and be accessible via get()
-    assert "stress_during_upgrade" in [param["name"] for param in conf.config_options]
+    assert "large_partition_stress_during_upgrade" in [param["name"] for param in conf.config_options]
 
 
 def test_stress_before_upgrade_from_env(monkeypatch):
@@ -49,23 +49,23 @@ def test_stress_before_upgrade_from_env(monkeypatch):
     assert conf.get("stress_before_upgrade") == test_cmd
 
 
-def test_stress_during_upgrade_from_env(monkeypatch):
-    """Test that stress_during_upgrade can be set from environment variable."""
+def test_large_partition_stress_during_upgrade_from_env(monkeypatch):
+    """Test that large_partition_stress_during_upgrade can be set from environment variable."""
     test_cmd = "cassandra-stress write cl=QUORUM n=1000000"
-    monkeypatch.setenv("SCT_STRESS_DURING_UPGRADE", test_cmd)
+    monkeypatch.setenv("SCT_LARGE_PARTITION_STRESS_DURING_UPGRADE", test_cmd)
     conf = sct_config.SCTConfiguration()
-    assert conf.get("stress_during_upgrade") == test_cmd
+    assert conf.get("large_partition_stress_during_upgrade") == test_cmd
 
 
 def test_both_stress_parameters_can_coexist(monkeypatch):
-    """Test that both stress_before_upgrade and stress_during_upgrade can be set simultaneously."""
+    """Test that both stress_before_upgrade and large_partition_stress_during_upgrade can be set simultaneously."""
     before_cmd = "cassandra-stress write cl=ALL n=1000000"
     during_cmd = "cassandra-stress write cl=QUORUM n=2000000"
     monkeypatch.setenv("SCT_STRESS_BEFORE_UPGRADE", before_cmd)
-    monkeypatch.setenv("SCT_STRESS_DURING_UPGRADE", during_cmd)
+    monkeypatch.setenv("SCT_LARGE_PARTITION_STRESS_DURING_UPGRADE", during_cmd)
     conf = sct_config.SCTConfiguration()
     assert conf.get("stress_before_upgrade") == before_cmd
-    assert conf.get("stress_during_upgrade") == during_cmd
+    assert conf.get("large_partition_stress_during_upgrade") == during_cmd
 
 
 def test_stress_parameters_independent():
@@ -73,7 +73,7 @@ def test_stress_parameters_independent():
     conf = sct_config.SCTConfiguration()
     # When not set, both should return None or empty
     before = conf.get("stress_before_upgrade")
-    during = conf.get("stress_during_upgrade")
+    during = conf.get("large_partition_stress_during_upgrade")
     # They should be independent (both None or both empty, but not the same object)
     assert before is None or before == ""
     assert during is None or during == ""

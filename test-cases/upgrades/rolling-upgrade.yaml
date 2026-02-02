@@ -16,10 +16,10 @@ stress_cmd_complex_verify_delete: cassandra-stress user no-warmup profile=/tmp/c
 # This guarantees we can validate data later without ambiguity about whether issues
 # occurred during preload or during the test itself.
 stress_before_upgrade: scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=5 -connection-count=5 -consistency-level=all -rows-per-request=10 -timeout=30s -validate-data
-# Workload that runs DURING rolling upgrade while nodes are being upgraded.
+# Large partition workload that runs DURING rolling upgrade while nodes are being upgraded.
 # Uses CL=QUORUM (NOT CL=ALL) because not all nodes may be available during upgrade.
-# This tests cluster behavior under load during the upgrade process.
-stress_during_upgrade: scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=5 -connection-count=5 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data
+# This tests cluster behavior with large partitions under load during the upgrade process.
+large_partition_stress_during_upgrade: scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=5 -connection-count=5 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data
 stress_after_cluster_upgrade: scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=20 -connection-count=20 -consistency-level=one -rows-per-request=100 -timeout=30s -validate-data
 
 n_db_nodes: 6
