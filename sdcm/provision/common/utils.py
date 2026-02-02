@@ -258,23 +258,33 @@ def install_syslogng_service():
 def install_vector_service():
     return dedent("""\
         # install repo
-        for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+        for n in 2 4 6 8 10 10 10 10; do # cloud-init is running it with set +o braceexpand
             if bash -c "$(curl -L https://setup.vector.dev)"; then
-                break
+                if yum --help 2>/dev/null 1>&2; then
+                    if yum list vector >/dev/null 2>&1; then
+                        break
+                    fi
+                elif apt-get --help 2>/dev/null 1>&2; then
+                    if apt-cache show vector >/dev/null 2>&1; then
+                        break
+                    fi
+                else
+                    break
+                fi
             fi
             sleep $(backoff $n)
         done
 
         # install vector
         if yum --help 2>/dev/null 1>&2 ; then
-            for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+            for n in 2 4 6 8 10 10 10 10; do # cloud-init is running it with set +o braceexpand
                 if yum install -y vector; then
                     break
                 fi
                 sleep $(backoff $n)
             done
         elif apt-get --help 2>/dev/null 1>&2 ; then
-            for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+            for n in 2 4 6 8 10 10 10 10; do # cloud-init is running it with set +o braceexpand
                 DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=300 -y vector || true
                 if dpkg-query --show vector ; then
                     break
