@@ -5160,20 +5160,11 @@ class BaseScyllaCluster:
         info_res = yaml.safe_load(proper_yaml_output)
         return info_res
 
-    def check_cluster_health(self, last_nemesis_event=None):
+    def check_cluster_health(self):
         # Task 1443: ClusterHealthCheck is bottle neck in scale test and create a lot of noise in 5000 tables test.
         # Disable it
         if not self.params.get("cluster_health_check"):
             self.log.debug("Cluster health check disabled")
-            return
-
-        # Skip health check if previous nemesis was skipped
-        if last_nemesis_event and last_nemesis_event.is_skipped:
-            self.log.info(
-                "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
-                last_nemesis_event.nemesis_name,
-                last_nemesis_event.skip_reason,
-            )
             return
 
         with ClusterHealthValidatorEvent() as chc_event:

@@ -6270,7 +6270,15 @@ def disrupt_method_wrapper(method, caller_obj: NemesisBaseClass, is_exclusive=Fa
                     # NOTE: exclusive nemesis will wait before the end of all other ones
                     time.sleep(10)
 
-            runner.cluster.check_cluster_health(last_nemesis_event=args[0].last_nemesis_event)
+            # Skip health check if previous nemesis was skipped
+            if args[0].last_nemesis_event and args[0].last_nemesis_event.is_skipped:
+                runner.log.info(
+                    "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
+                    args[0].last_nemesis_event.nemesis_name,
+                    args[0].last_nemesis_event.skip_reason,
+                )
+            else:
+                runner.cluster.check_cluster_health()
             num_data_nodes_before = len(runner.cluster.data_nodes)
             num_zero_nodes_before = len(runner.cluster.zero_nodes)
             start_time = time.time()

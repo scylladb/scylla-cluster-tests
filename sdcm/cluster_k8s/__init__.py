@@ -3215,10 +3215,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
         self.wait_for_pods_readiness(len(self.nodes), len(self.nodes))
 
-    def check_cluster_health(self, last_nemesis_event=None):
+    def check_cluster_health(self):
         if self.params.get("k8s_deploy_monitoring"):
             self.check_kubernetes_monitoring_health()
-        super().check_cluster_health(last_nemesis_event=last_nemesis_event)
+        super().check_cluster_health()
 
     def check_kubernetes_monitoring_health(self) -> bool:
         # TODO: add grafana checks
