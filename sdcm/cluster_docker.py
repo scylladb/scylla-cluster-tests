@@ -851,7 +851,7 @@ class DockerManagerNode(DockerNode):
         return "manager"
 
 
-class ManagerSetDocker(cluster.BaseCluster, DockerCluster):
+class ManagerSetDocker(DockerCluster, cluster.BaseCluster):
     """Set of Scylla Manager nodes (typically just one)"""
 
     def __init__(
