@@ -1,1 +1,7 @@
-5f838425d88c5d135a18be7542f73ddca10b824f
+# This file lists commits that should be ignored by 'git blame'.
+# This is useful for commits that only involve code formatting.
+# Each line should contain a single commit hash.
+# Run `git config blame.ignoreRevsFile .git-blame-ignore-revs` to enable.
+
+# reformat using ruff (https://github.com/scylladb/scylla-cluster-tests/pull/11291)
+3de51c6d52ca6e8282989d19153d2d206a9cb93f
