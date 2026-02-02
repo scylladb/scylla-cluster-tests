@@ -6336,6 +6336,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
                     time.sleep(10)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
             args[0].cluster.check_cluster_health()
             num_data_nodes_before = len(args[0].cluster.data_nodes)
             num_zero_nodes_before = len(args[0].cluster.zero_nodes)
@@ -6345,6 +6346,19 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
             num_zero_nodes_before = len(runner.cluster.zero_nodes)
 =======
             runner.cluster.check_cluster_health(last_nemesis_event=args[0].last_nemesis_event)
+||||||| parent of ec0a8efd2 (refactor: move skip logic from check_cluster_health to caller)
+            runner.cluster.check_cluster_health(last_nemesis_event=args[0].last_nemesis_event)
+=======
+            # Skip health check if previous nemesis was skipped
+            if args[0].last_nemesis_event and args[0].last_nemesis_event.is_skipped:
+                runner.log.info(
+                    "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
+                    args[0].last_nemesis_event.nemesis_name,
+                    args[0].last_nemesis_event.skip_reason,
+                )
+            else:
+                runner.cluster.check_cluster_health()
+>>>>>>> ec0a8efd2 (refactor: move skip logic from check_cluster_health to caller)
             num_data_nodes_before = len(runner.cluster.data_nodes)
             num_zero_nodes_before = len(runner.cluster.zero_nodes)
 >>>>>>> c15ddf3b1 (feature(health-check): implement Phase 1 - skip health check when previous nemesis was skipped)
