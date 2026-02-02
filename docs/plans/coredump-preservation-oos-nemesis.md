@@ -67,28 +67,33 @@ None - coredumps are simply lost during out-of-space tests.
 ## 4. Implementation Phases
 
 ### Phase 1: Add Runtime Coredump Location Switching
-**Description:** Implement helper functions to dynamically switch coredump location between data partition and root filesystem.
+**Description:** Implement a context manager to dynamically switch coredump location between data partition and root filesystem.
 
 **Definition of Done:**
-- [ ] Create `switch_coredump_to_root()` function in `sdcm/utils/common.py`
-  - Unmounts `/var/lib/systemd/coredump` if bind-mounted
-  - Ensures coredumps are written to root partition
-  - Returns previous mount state for restoration
-- [ ] Create `restore_coredump_mount()` function in `sdcm/utils/common.py`
-  - Restores bind mount to `/var/lib/scylla/coredump` if it was previously active
-  - Handles errors gracefully
-- [ ] Both functions work idempotently (safe to call multiple times)
+- [ ] Create `coredump_to_root()` context manager in `sdcm/utils/context_managers.py`
+  - On entry: Unmounts `/var/lib/systemd/coredump` if bind-mounted
+  - Ensures coredumps are written to root partition during context
+  - On exit: Restores bind mount to previous state
+  - Handles errors gracefully with proper cleanup
+- [ ] Context manager works idempotently (safe to call multiple times)
 - [ ] Add logging for all mount/unmount operations
 
 **Implementation Details:**
 
 ```python
-def switch_coredump_to_root(target_node) -> Dict[str, Any]:
+@contextmanager
+def coredump_to_root(target_node):
     """
-    Switch coredump storage to root filesystem.
+    Context manager to temporarily switch coredump storage to root filesystem.
     
-    Returns:
-        Dict with mount state information for restoration
+    Usage:
+        with coredump_to_root(node):
+            # Coredumps are written to root partition
+            reach_enospc_on_node(target_node=node)
+        # Bind mount is automatically restored
+    
+    Args:
+        target_node: The node to switch coredump location on
     """
     # Check if bind mount exists
     mount_info = target_node.remoter.run(
@@ -100,38 +105,36 @@ def switch_coredump_to_root(target_node) -> Dict[str, Any]:
     
     if was_mounted:
         # Unmount the bind mount
+        target_node.log.info("Switching coredump storage to root filesystem")
         target_node.remoter.sudo("systemctl stop var-lib-systemd-coredump.mount")
         target_node.remoter.sudo("systemctl disable var-lib-systemd-coredump.mount")
         # Wait for unmount to complete
         time.sleep(5)
     
-    return {"was_mounted": was_mounted}
-
-def restore_coredump_mount(target_node, mount_state: Dict[str, Any]):
-    """
-    Restore coredump mount to previous state.
-    """
-    if mount_state.get("was_mounted"):
-        # Re-enable and start the mount
-        target_node.remoter.sudo("systemctl enable var-lib-systemd-coredump.mount")
-        target_node.remoter.sudo("systemctl start var-lib-systemd-coredump.mount")
-        time.sleep(5)
+    try:
+        yield
+    finally:
+        # Restore bind mount if it was previously active
+        if was_mounted:
+            target_node.log.info("Restoring coredump storage to data partition")
+            target_node.remoter.sudo("systemctl enable var-lib-systemd-coredump.mount")
+            target_node.remoter.sudo("systemctl start var-lib-systemd-coredump.mount")
+            time.sleep(5)
 ```
 
 **Dependencies:** None
 
 **Deliverables:**
-- Two new functions in `sdcm/utils/common.py`
-- Unit tests for both functions
+- Context manager in `sdcm/utils/context_managers.py`
+- Unit tests for the context manager
 
 ### Phase 2: Integrate with Out-of-Space Nemesis
-**Description:** Modify the out-of-space nemesis to use runtime coredump switching.
+**Description:** Modify the out-of-space nemesis to use runtime coredump switching via context manager.
 
 **Definition of Done:**
 - [ ] Modify `disrupt_nodetool_enospc()` in `sdcm/nemesis.py`
-  - Call `switch_coredump_to_root()` before filling disk
-  - Call `restore_coredump_mount()` after cleaning disk
-  - Handle exceptions to ensure restoration happens
+  - Use `coredump_to_root()` context manager around disk fill operations
+  - Automatic restoration on context exit
 - [ ] Add similar logic to `disrupt_end_of_quota_nemesis()` (line 1848)
 - [ ] Add logging for coredump location switches
 - [ ] Test with manual nemesis execution
@@ -143,15 +146,17 @@ def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
     # ... existing code ...
     
     for node in nodes:
-        # Switch coredump to root filesystem before filling disk
-        mount_state = switch_coredump_to_root(node)
-        
-        try:
+        with coredump_to_root(node):
+            # Coredumps are now written to root partition
             with ignore_no_space_errors(node=node):
                 if self._is_it_on_kubernetes():
                     self._k8s_fake_enospc_error(node)
                 else:
-                    # ... existing enospc logic ...
+                    result = node.remoter.run("cat /proc/mounts")
+                    if "/var/lib/scylla" not in result.stdout:
+                        self.log.error("Scylla doesn't use an individual storage, skip enospc test")
+                        continue
+
                     try:
                         with DbNodeLogger(self.cluster.nodes, "fill disk space", target_node=node):
                             self.actions_log.info(f"Filling disk space to reach enospc error on {node.name}")
@@ -160,9 +165,7 @@ def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
                         with DbNodeLogger(self.cluster.nodes, "clean disk space", target_node=node):
                             self.actions_log.info(f"Cleaning disk space with scylla restart on {node.name}")
                             clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
-        finally:
-            # Always restore mount state, even if nemesis fails
-            restore_coredump_mount(node, mount_state)
+        # Bind mount is automatically restored here
 ```
 
 **Dependencies:** Phase 1
@@ -204,15 +207,16 @@ def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
 
 **Test Scenarios:**
 1. **Unit Tests:**
-   - `test_switch_coredump_to_root()` - verify unmount logic
-   - `test_restore_coredump_mount()` - verify restore logic
-   - `test_idempotency()` - verify safe to call multiple times
+   - `test_coredump_to_root_context_manager()` - verify mount/unmount cycle
+   - `test_coredump_to_root_exception_handling()` - verify restoration on failure
+   - `test_coredump_to_root_idempotency()` - verify safe to call multiple times
+   - `test_coredump_to_root_no_mount()` - verify behavior when bind mount doesn't exist
 
 2. **Integration Tests:**
    - Run `longevity_oos_test.py` with docker backend
    - Inject SIGQUIT during disk-full phase
-   - Verify coredump is successfully saved
-   - Verify mount is restored after nemesis
+   - Verify coredump is successfully saved to root partition
+   - Verify bind mount is restored after nemesis completes
 
 3. **Regression Tests:**
    - Run non-OOS longevity test
@@ -229,11 +233,12 @@ def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
 ## 5. Testing Requirements
 
 ### Unit Tests (Phase 1)
-**File:** `unit_tests/test_utils_common.py` (new or existing)
-- Test `switch_coredump_to_root()` with mock node
-- Test `restore_coredump_mount()` with mock node
-- Test exception handling in both functions
-- Test idempotency
+**File:** `unit_tests/test_context_managers.py` (new or existing)
+- Test `coredump_to_root()` context manager with mock node
+- Test successful entry and exit (mount/unmount cycle)
+- Test exception handling - ensure restoration on failure
+- Test idempotency (safe when called multiple times)
+- Test when bind mount doesn't exist (no-op scenario)
 
 ### Integration Tests (Phase 2, 4)
 **Test Environment:** Docker backend (fastest iteration)
