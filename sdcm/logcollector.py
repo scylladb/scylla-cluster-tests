@@ -426,8 +426,11 @@ class PrometheusSnapshots(BaseMonitoringEntity):
         self.monitoring_data_dir = os.path.join(base_dir, self.monitoring_data_dir_name)
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None) -> Optional[str]:
+        # Skip if no monitor nodes configured - no point collecting monitoring data
+        if self._params.get("n_monitor_nodes", 0) == 0:
+            LOGGER.info("Skipping Prometheus snapshot collection - no monitor nodes configured (n_monitor_nodes=0)")
+            return None
         # Skip for docker backend - monitoring stack is typically not configured in docker tests
-        # (e.g., artifacts tests have n_monitor_nodes=0), causing wasted retry attempts
         if self._params.get("cluster_backend", "") == "docker":
             LOGGER.info("Skipping Prometheus snapshot collection for docker backend - monitoring stack not configured")
             return None
@@ -514,8 +517,11 @@ class MonitoringStack(BaseMonitoringEntity):
         return next((dashboard for dashboard in dashboards if title in dashboard["title"]), None)
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
+        # Skip if no monitor nodes configured - no point collecting monitoring data
+        if self._params.get("n_monitor_nodes", 0) == 0:
+            LOGGER.info("Skipping monitoring stack collection - no monitor nodes configured (n_monitor_nodes=0)")
+            return None
         # Skip for docker backend - monitoring stack is typically not configured in docker tests
-        # (e.g., artifacts tests have n_monitor_nodes=0), causing wasted retry attempts
         if self._params.get("cluster_backend", "") == "docker":
             LOGGER.info("Skipping monitoring stack collection for docker backend - monitoring stack not configured")
             return None
@@ -630,8 +636,11 @@ class GrafanaScreenShot(GrafanaEntity):
             return []
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
+        # Skip if no monitor nodes configured - no point collecting monitoring data
+        if self._params.get("n_monitor_nodes", 0) == 0:
+            LOGGER.info("Skipping Grafana screenshot collection - no monitor nodes configured (n_monitor_nodes=0)")
+            return []
         # Skip for docker backend - monitoring stack is typically not configured in docker tests
-        # (e.g., artifacts tests have n_monitor_nodes=0), causing wasted retry attempts
         if self._params.get("cluster_backend", "") == "docker":
             LOGGER.info("Skipping Grafana screenshot collection for docker backend - monitoring stack not configured")
             return []

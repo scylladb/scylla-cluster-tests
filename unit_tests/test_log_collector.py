@@ -156,7 +156,7 @@ def test_failure_statistics_collector_does_not_raise_when_no_files(tmp_path):
 
 def test_monitoring_entities_skip_for_docker_backend(tmp_path):
     """Test that monitoring entities skip collection for docker backend."""
-    docker_params = {"cluster_backend": "docker"}
+    docker_params = {"cluster_backend": "docker", "n_monitor_nodes": 1}  # Has monitor nodes
     mock_node = Mock()
     test_dir = str(tmp_path / "test")
 
@@ -177,3 +177,30 @@ def test_monitoring_entities_skip_for_docker_backend(tmp_path):
     grafana_entity.set_params(docker_params)
     result = grafana_entity.collect(mock_node, test_dir, None, None)
     assert result == []
+
+
+def test_monitoring_entities_skip_when_no_monitor_nodes(tmp_path):
+    """Test that monitoring entities skip collection when n_monitor_nodes=0."""
+    # Test with various backends - all should skip when n_monitor_nodes=0
+    for backend in ["aws", "gce", "azure", "docker"]:
+        params = {"cluster_backend": backend, "n_monitor_nodes": 0}
+        mock_node = Mock()
+        test_dir = str(tmp_path / backend)
+
+        # PrometheusSnapshots should return None when no monitor nodes
+        prometheus_entity = PrometheusSnapshots(name="test_prometheus")
+        prometheus_entity.set_params(params)
+        result = prometheus_entity.collect(mock_node, test_dir, None, None)
+        assert result is None, f"PrometheusSnapshots should skip for {backend} with n_monitor_nodes=0"
+
+        # MonitoringStack should return None when no monitor nodes
+        monitoring_entity = MonitoringStack(name="test_monitoring")
+        monitoring_entity.set_params(params)
+        result = monitoring_entity.collect(mock_node, test_dir, None, None)
+        assert result is None, f"MonitoringStack should skip for {backend} with n_monitor_nodes=0"
+
+        # GrafanaScreenShot should return empty list when no monitor nodes
+        grafana_entity = GrafanaScreenShot(name="test_grafana")
+        grafana_entity.set_params(params)
+        result = grafana_entity.collect(mock_node, test_dir, None, None)
+        assert result == [], f"GrafanaScreenShot should skip for {backend} with n_monitor_nodes=0"
