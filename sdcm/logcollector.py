@@ -430,7 +430,8 @@ class PrometheusSnapshots(BaseMonitoringEntity):
         if self._params.get("n_monitor_nodes", 0) == 0:
             LOGGER.info("Skipping Prometheus snapshot collection - no monitor nodes configured (n_monitor_nodes=0)")
             return None
-        # Skip for docker backend - monitoring stack is typically not configured in docker tests
+        # Skip for docker backend - docker tests run monitoring locally without proper Prometheus setup
+        # even when n_monitor_nodes > 0, making snapshot collection fail with connection errors
         if self._params.get("cluster_backend", "") == "docker":
             LOGGER.info("Skipping Prometheus snapshot collection for docker backend - monitoring stack not configured")
             return None
@@ -521,7 +522,8 @@ class MonitoringStack(BaseMonitoringEntity):
         if self._params.get("n_monitor_nodes", 0) == 0:
             LOGGER.info("Skipping monitoring stack collection - no monitor nodes configured (n_monitor_nodes=0)")
             return None
-        # Skip for docker backend - monitoring stack is typically not configured in docker tests
+        # Skip for docker backend - docker tests run monitoring locally without proper setup
+        # even when n_monitor_nodes > 0, making stack collection unreliable
         if self._params.get("cluster_backend", "") == "docker":
             LOGGER.info("Skipping monitoring stack collection for docker backend - monitoring stack not configured")
             return None
@@ -640,7 +642,8 @@ class GrafanaScreenShot(GrafanaEntity):
         if self._params.get("n_monitor_nodes", 0) == 0:
             LOGGER.info("Skipping Grafana screenshot collection - no monitor nodes configured (n_monitor_nodes=0)")
             return []
-        # Skip for docker backend - monitoring stack is typically not configured in docker tests
+        # Skip for docker backend - docker tests run monitoring locally without proper Grafana setup
+        # even when n_monitor_nodes > 0, making screenshot collection fail
         if self._params.get("cluster_backend", "") == "docker":
             LOGGER.info("Skipping Grafana screenshot collection for docker backend - monitoring stack not configured")
             return []
