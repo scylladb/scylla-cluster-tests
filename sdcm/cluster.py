@@ -6473,7 +6473,7 @@ class BaseMonitorSet:
             }
 
             # Function to install Docker and Python basics on Debian/Ubuntu
-            install_debian() {
+            install_debian_pkgs() {
                 echo "Detected Debian/Ubuntu system..."
 
                 # 1. Wait for apt lock and update existing list of packages
@@ -6482,49 +6482,17 @@ class BaseMonitorSet:
 
                 # 2. Install Docker prerequisites and basic Python
                 apt-get install -y \\
-                    ca-certificates \\
                     curl \\
-                    gnupg \\
-                    lsb-release \\
                     python3 \\
-                    python3-pip \\
-                    unzip \\
-                    wget
-
-                # 3. Add Docker official GPG key
-                # Detect distro first for proper URL
-                DISTRO=$(lsb_release -is | tr "[:upper:]" "[:lower:]")
-                mkdir -p /etc/apt/keyrings
-                rm -f /etc/apt/keyrings/docker.gpg
-                curl -fsSL https://download.docker.com/linux/$DISTRO/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-                # 4. Set up the repository
-                CODENAME=$(lsb_release -cs)
-                ARCH=$(dpkg --print-architecture)
-                echo "deb [arch=$ARCH signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$DISTRO $CODENAME stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-                # 5. Update package index again
-                wait_for_apt_lock
-                apt-get update
-
-                # 6. Install Docker Engine
-                apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+                    python3-pip
             }
 
             # Function to install Docker and Python basics on CentOS/RHEL/Fedora
-            install_centos() {
+            install_centos_pkgs() {
                 echo "Detected CentOS/RHEL system..."
 
-                # 1. Install yum-utils and basic Python
-                yum install -y yum-utils python3 python3-pip unzip wget
-
-                # 2. Add the Docker repository
-                yum-config-manager \\
-                    --add-repo \\
-                    https://download.docker.com/linux/centos/docker-ce.repo
-
-                # 3. Install Docker Engine
-                yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+                # 1. Install basic python
+                yum install -y python3 python3-pip curl
             }
 
             # Function to manage Pip and install libraries
@@ -6552,27 +6520,20 @@ class BaseMonitorSet:
                     exit 1
                 fi
             }
-
-            # Function to start and enable Docker service
-            start_docker() {
-                echo "Starting Docker service..."
-                systemctl start docker
-                systemctl enable docker
-
-                echo "--------------------------------------------------"
-                echo "Installation Complete!"
-                echo "Docker version: $(docker --version)"
-                echo "Pip version: $(pip3 --version)"
-                echo "--------------------------------------------------"
+            install_docker() {
+                curl -fsSL https://get.docker.com -o get-docker.sh
+                bash get-docker.sh
             }
 
             # Main execution logic
             if [ -f /etc/debian_version ]; then
-                install_debian
+                install_debian_pkgs
+                install_docker
                 install_python_libs
                 start_docker
             elif [ -f /etc/redhat-release ]; then
-                install_centos
+                install_centos_pkgs
+                install_docker
                 install_python_libs
                 start_docker
             else
