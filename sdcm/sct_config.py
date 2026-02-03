@@ -57,6 +57,7 @@ from sdcm.utils.common import (
     get_scylla_gce_images_versions,
     convert_name_to_ami_if_needed,
     get_sct_root_path,
+    get_vector_store_ami_versions,
 )
 from sdcm.utils.operations_thread import ConfigParams
 from sdcm.utils.version_utils import (
@@ -378,7 +379,32 @@ Boolean = Annotated[bool, BeforeValidator(_boolean)]
 
 
 class SctField(FieldInfo):
-    """Custom field class for SCT configuration fields."""
+    """Custom field class for SCT configuration fields.
+
+    This class extends Pydantic's FieldInfo to support SCT-specific metadata.
+
+    Args:
+        *args: Positional arguments passed to Pydantic FieldInfo
+        **kwargs: Keyword arguments including:
+            - description (str): Field description for documentation
+            - default: Default value for the field
+            - appendable (bool): Whether this field supports the '++' append syntax
+                                 in configuration files. When True, values can be
+                                 appended using '++value' for strings or ['++', 'value']
+                                 for lists. Some types (String, StringOrList) are
+                                 appendable by default. Other types like version strings
+                                 or region names should set appendable=False.
+                                 See merge_dicts_append_strings() for implementation.
+            - Other Pydantic Field parameters (validation_alias, etc.)
+
+    Example:
+        ```python
+        my_field: str = SctField(
+            description="Example field",
+            appendable=True,  # Allow ++append syntax
+        )
+        ```
+    """
 
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("default", None)
@@ -2498,7 +2524,7 @@ class SCTConfiguration(BaseModel):
                             )[0]
                     except Exception as ex:  # noqa: BLE001
                         raise ValueError(
-                            f"AMIs for oracle_scylla_version='{scylla_version}' not found in {region} arch={aws_arch}"
+                            f"AMIs for oracle_scylla_version='{oracle_scylla_version}' not found in {region} arch={aws_arch}"
                         ) from ex
 
                     self.log.debug(
@@ -2508,6 +2534,26 @@ class SCTConfiguration(BaseModel):
                 self["ami_id_db_oracle"] = " ".join(ami.image_id for ami in ami_list)
             else:
                 raise ValueError("'oracle_scylla_version' and 'ami_id_db_oracle' can't used together")
+
+        # 6.2) handle vector_store_version if exists
+        if vs_version := self.get("vector_store_version"):
+            if self.get("ami_id_vector_store"):
+                raise ValueError("'vector_store_version' can't be used together with 'ami_id_vector_store'")
+            if self.get("cluster_backend") == "aws":
+                ami_list = []
+                for region in region_names:
+                    aws_arch = get_arch_from_instance_type(self.get("instance_type_vector_store"), region_name=region)
+                    try:
+                        ami = get_vector_store_ami_versions(version=vs_version, region_name=region, arch=aws_arch)[0]
+                    except Exception as ex:  # noqa: BLE001
+                        raise ValueError(
+                            f"AMIs for vs_version='{vs_version}' not found in {region} arch={aws_arch}"
+                        ) from ex
+                    self.log.debug(
+                        "Found AMI %s(%s) for vs_version='%s' in %s", ami.name, ami.image_id, vs_version, region
+                    )
+                    ami_list.append(ami)
+                self["ami_id_vector_store"] = " ".join(ami.image_id for ami in ami_list)
 
         # 7) support lookup of repos for upgrade test
         new_scylla_version = self.get("new_version")
@@ -2826,6 +2872,14 @@ class SCTConfiguration(BaseModel):
         return anyconfig.load(list(default_config_files)).get(key, None)
 
     def _load_environment_variables(self):
+        """Load configuration from environment variables.
+
+        Custom implementation instead of Pydantic's BaseSettings because we need:
+        1. Control over the order in which env vars are applied (after defaults, before config files)
+        2. Support for appendable fields with '++' syntax via SCT_<FIELD>++<INDEX> pattern
+        3. Custom validators (BeforeValidator) to be applied during env var parsing
+        4. Backwards compatibility with existing SCT_* environment variable naming
+        """
         environment_vars = {}
         for field_name, field in self.model_fields.items():
             if field.exclude or is_ignored_field(field):
@@ -3357,7 +3411,6 @@ class SCTConfiguration(BaseModel):
         if backend in ("aws", "gce", "baremetal"):
             repos_to_validate.extend(
                 [
-                    "new_scylla_repo",
                     "scylla_repo_m",
                     "scylla_mgmt_address",
                     "scylla_mgmt_agent_address",
