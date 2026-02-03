@@ -231,6 +231,11 @@ class AzureProvisioner(Provisioner):
             name += f"-{self._az}"
         return name
 
+    @property
+    def resource_group_name(self):
+        """Public property to access resource group name."""
+        return self._resource_group_name
+
     def _vm_to_instance(self, v_m: VirtualMachine) -> VmInstance:
         pub_address = self._ip_provider.get(v_m.name).ip_address
         nic = self._nic_provider.get(v_m.name)
