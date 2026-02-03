@@ -5209,7 +5209,7 @@ class NemesisRunner:
                 scylla_yml.seed_provider = [
                     SeedProvider(
                         class_name="org.apache.cassandra.locator.SimpleSeedProvider",
-                        parameters=[{"seeds": self.tester.db_cluster.seed_nodes_addresses}],
+                        parameters=[{"seeds": ",".join(self.tester.db_cluster.seed_nodes_addresses)}],
                     )
                 ]
             
