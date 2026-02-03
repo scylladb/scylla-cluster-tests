@@ -3615,13 +3615,16 @@ class SCTConfiguration(dict):
 
         # Derive mgmt_docker_image from manager version for Docker backend if not explicitly set
         if key == "mgmt_docker_image" and super().get("cluster_backend") == "docker":
-            if not ret_val or ret_val == "":
+            if not ret_val:
                 # Build image name from scylla_mgmt_agent_version or manager_version
+                # scylla_mgmt_agent_version is typically full semver (e.g., "3.8.0")
+                # manager_version is major.minor only (e.g., "3.8")
                 agent_version = super().get("scylla_mgmt_agent_version")
                 if agent_version:
                     ret_val = f"scylladb/scylla-manager:{agent_version}"
                 else:
-                    # Fallback to manager_version with .0 suffix
+                    # Fallback: append .0 to manager_version for Docker image tag
+                    # (manager_version "3.8" becomes image tag "3.8.0")
                     manager_version = super().get("manager_version")
                     if manager_version:
                         ret_val = f"scylladb/scylla-manager:{manager_version}.0"
