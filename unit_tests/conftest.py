@@ -17,6 +17,7 @@ import collections
 import shutil
 import subprocess
 import uuid
+import time
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import SimpleNamespace
@@ -413,3 +414,100 @@ def pytest_runtest_logreport(report: pytest.TestReport):
     if report.when == "call" and getattr(report, "context", None):
         if report.failed:
             SUBTESTS_FAILURES[report.nodeid].append(report)
+
+
+# Track test execution timing for integration tests
+_test_start_times = {}
+_test_call_start_times = {}
+
+
+def pytest_collection_modifyitems(items):
+    """Apply timeout only to integration tests."""
+    for item in items:
+        if "integration" in [marker.name for marker in item.iter_markers()]:
+            # Add timeout marker to integration tests (1 hour, thread-based)
+            item.add_marker(pytest.mark.timeout(3600, method="thread"))
+
+
+def _get_test_elapsed_time(test_name: str) -> float:
+    """Get elapsed time for a test since setup started, returns 0.0 if test not tracked."""
+    start_time = _test_start_times.get(test_name)
+    if start_time is None:
+        logging.warning(f"Test start time not found for {test_name}, elapsed time will be 0.0")
+        return 0.0
+    return time.time() - start_time
+
+
+def _get_test_call_duration(test_name: str) -> float:
+    """Get duration of test call phase only, returns 0.0 if test not tracked."""
+    call_start = _test_call_start_times.get(test_name)
+    if call_start is None:
+        logging.warning(f"Test call start time not found for {test_name}, duration will be 0.0")
+        return 0.0
+    return time.time() - call_start
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_setup(item):
+    """Hook called before each test setup phase."""
+    test_name = item.nodeid
+    _test_start_times[test_name] = time.time()
+    
+    # Log test start for integration tests
+    if "integration" in [marker.name for marker in item.iter_markers()]:
+        logging.info(f"[INTEGRATION TEST START] {test_name}")
+    
+    yield
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_call(item):
+    """Hook called during test execution phase."""
+    test_name = item.nodeid
+    
+    # Record call phase start time
+    _test_call_start_times[test_name] = time.time()
+    
+    # Log when test call phase starts for integration tests
+    if "integration" in [marker.name for marker in item.iter_markers()]:
+        elapsed = _get_test_elapsed_time(test_name)
+        logging.info(f"[INTEGRATION TEST CALL] {test_name} (setup took {elapsed:.2f}s)")
+    
+    yield
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_teardown(item):
+    """Hook called during test teardown phase."""
+    test_name = item.nodeid
+    
+    # Log when teardown starts for integration tests
+    if "integration" in [marker.name for marker in item.iter_markers()]:
+        elapsed = _get_test_elapsed_time(test_name)
+        logging.info(f"[INTEGRATION TEST TEARDOWN] {test_name} (total runtime so far: {elapsed:.2f}s)")
+    
+    yield
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Hook called after each test phase to create the test report."""
+    outcome = yield
+    report = outcome.get_result()
+    
+    test_name = item.nodeid
+    
+    # Log completion for integration tests
+    if "integration" in [marker.name for marker in item.iter_markers()]:
+        if report.when == "call":
+            status = "PASSED" if report.passed else "FAILED" if report.failed else "SKIPPED"
+            call_duration = _get_test_call_duration(test_name)
+            logging.info(f"[INTEGRATION TEST {status}] {test_name} (call duration: {call_duration:.2f}s)")
+        elif report.when == "teardown":
+            if test_name in _test_start_times:
+                total_elapsed = _get_test_elapsed_time(test_name)
+                logging.info(f"[INTEGRATION TEST COMPLETE] {test_name} (total time: {total_elapsed:.2f}s)")
+                # Clean up tracking
+                del _test_start_times[test_name]
+            if test_name in _test_call_start_times:
+                del _test_call_start_times[test_name]
