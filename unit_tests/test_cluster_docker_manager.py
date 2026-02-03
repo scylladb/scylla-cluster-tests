@@ -202,6 +202,7 @@ class TestScyllaDockerClusterManager:
 
                 cluster = ScyllaDockerCluster(params=mock_params)
                 cluster.params = mock_params
+                cluster.log = Mock()  # Mock the log attribute
 
                 cluster._init_manager_node()
 
@@ -221,6 +222,7 @@ class TestScyllaDockerClusterManager:
             with patch("sdcm.cluster_docker.ManagerSetDocker") as mock_manager_set_class:
                 cluster = ScyllaDockerCluster(params=params)
                 cluster.params = params
+                cluster.log = Mock()  # Mock the log attribute
 
                 cluster._init_manager_node()
 
@@ -258,6 +260,7 @@ class TestScyllaDockerClusterManager:
         with patch("sdcm.cluster_docker.DockerCluster.__init__"):
             with patch("sdcm.cluster_docker.DockerCluster.destroy") as mock_super_destroy:
                 cluster = ScyllaDockerCluster(params=mock_params)
+                cluster.log = Mock()  # Mock the log attribute
                 mock_manager_node = Mock()
                 cluster.manager_node = mock_manager_node
                 cluster.vector_store_cluster = None
