@@ -4,4 +4,3 @@ use_preinstalled_scylla: true
 docker_image: ''
 scylla_linux_distro: 'centos'
 print_kernel_callstack: false
-mgmt_docker_image: 'scylladb/scylla-manager:3.8.0'
