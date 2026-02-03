@@ -299,6 +299,8 @@ When writing or updating documentation in this repository, follow these standard
 
 ### Configuration Parameters
 
+For detailed information about the SCT configuration system, see [docs/sct-configuration.md](docs/sct-configuration.md).
+
 When documenting configuration parameters:
 - **Type**: Specify the parameter type (str, int, bool, list, dict)
 - **Default value**: Always include the default value
@@ -307,15 +309,18 @@ When documenting configuration parameters:
 
 **Example**:
 ```python
-cluster_health_check_parallel_workers: int = 5
-"""Number of parallel workers for health checks.
+cluster_health_check_parallel_workers: int = SctField(
+    description="""
+        Number of parallel workers for health checks.
 
-Type: int
-Default: 5
-Valid range: 1-10 (max recommended: 10)
-Example: cluster_health_check_parallel_workers: 10
-"""
+        Default: 5
+        Valid range: 1-10 (max recommended: 10)
+        Example: cluster_health_check_parallel_workers: 10
+    """,
+)
 ```
+
+For adding new configuration options, follow the guide in [docs/sct-configuration.md](docs/sct-configuration.md#adding-new-configuration-options).
 
 ### Code Comments
 
