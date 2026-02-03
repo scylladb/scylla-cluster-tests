@@ -889,6 +889,7 @@ class ScyllaLogCollector(LogCollector):
         FileLog(name="schema.log", search_locally=True, collect_from_parent=True),
         FileLog(name="system_schema_tables.log", search_locally=True, collect_from_parent=True),
         FileLog(name="system_truncated.log", search_locally=True, collect_from_parent=True),
+        FileLog(name="system_compaction_history.log", search_locally=True, collect_from_parent=True),
         FileLog(name="schema_with_internals.log", search_locally=True, collect_from_parent=True),
         CommandLog(name="cpu_info", command="cat /proc/cpuinfo"),
         CommandLog(name="mem_info", command="cat /proc/meminfo"),

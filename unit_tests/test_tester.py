@@ -561,6 +561,7 @@ class TestSaveSchema:
         assert "select JSON * from system_schema.tables" in cqlsh_calls
         assert "select JSON * from system.truncated" in cqlsh_calls
         assert "select JSON * from system.tablets" in cqlsh_calls
+        assert "select JSON * from system.compaction_history" in cqlsh_calls
         assert "desc schema with internals" in cqlsh_calls
 
         # Verify files were created
@@ -568,6 +569,7 @@ class TestSaveSchema:
         assert (tmp_path / "system_schema_tables.log").exists()
         assert (tmp_path / "system_truncated.log").exists()
         assert (tmp_path / "system_tablets.log").exists()
+        assert (tmp_path / "system_compaction_history.log").exists()
         assert (tmp_path / "schema_with_internals.log").exists()
 
     def test_save_schema_node_not_ready(self, tmp_path):
