@@ -15,7 +15,6 @@
 
 import unittest
 from unittest.mock import MagicMock, patch
-import pytest
 
 from sdcm import sct_config
 from sdcm.cluster import BaseNode
@@ -72,10 +71,10 @@ class TestArgusDisabled(unittest.TestCase):
 
     def test_update_shards_in_argus_when_disabled(self):
         """Test that update_shards_in_argus doesn't make API calls when Argus is disabled."""
-        self.node.scylla_shards = 4
-
-        # Call the method
-        self.node.update_shards_in_argus()
+        # Mock the scylla_shards property since DummyNode doesn't have a setter
+        with patch.object(type(self.node), 'scylla_shards', new_callable=lambda: property(lambda self: 4)):
+            # Call the method
+            self.node.update_shards_in_argus()
 
         # Verify that no API methods were called
         self.disabled_argus_client.update_shards_for_resource.assert_not_called()
@@ -98,4 +97,4 @@ class TestArgusDisabled(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    unittest.main()
