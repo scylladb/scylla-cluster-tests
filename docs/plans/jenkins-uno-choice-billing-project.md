@@ -88,13 +88,12 @@ The `GetBillingProjectTag()` function derives billing project from JOB_NAME or G
 **Implementation Details:**
 The function will:
 1. Use Jenkins GitHub credentials to authenticate
-2. Fetch a specific file (e.g., `billing-projects.txt` or `billing-projects.json`) from the finops repository
-3. Parse the file to extract billing project names
+2. Fetch `notebooks/projects/projects.yaml` from the finops repository
+3. Parse the YAML file to extract project names from the `projects` array
 4. Return an Active Choices Reactive Parameter or Active Choices Parameter
 5. Include error handling with fallback to a default list
 
 **Open Questions:**
-- What is the exact file path and format in the finops repository that contains billing projects? (Needs Investigation)
 - What credentials ID should be used for GitHub authentication? (Likely 'qa-github-token' or similar)
 - Should this be a static list or reactive parameter based on other selections?
 
@@ -329,36 +328,21 @@ The Uno-Choice plugin uses specific parameter types. Example implementation:
 ]
 ```
 
-### Expected finops Repository Structure (To Be Confirmed)
+### Expected finops Repository Structure
 
-Needs investigation, but likely one of:
+The finops repository contains billing projects at `notebooks/projects/projects.yaml` with the following format:
 
-1. **Simple text file:**
-   ```
-   # finops/billing-projects.txt
-   project-alpha
-   project-beta
-   project-gamma
-   ```
+```yaml
+projects:
+  - name: "project-alpha"
+    more_props: whatever
+  - name: "project-beta"
+    more_props: whatever
+  - name: "project-gamma"
+    more_props: whatever
+```
 
-2. **JSON file:**
-   ```json
-   {
-     "billing_projects": [
-       "project-alpha",
-       "project-beta",
-       "project-gamma"
-     ]
-   }
-   ```
-
-3. **YAML file:**
-   ```yaml
-   billing_projects:
-     - project-alpha
-     - project-beta
-     - project-gamma
-   ```
+**Implementation Note:** The parser should extract only the `name` field from each project in the `projects` array, ignoring all other properties.
 
 ### GitHub API Access Pattern
 
@@ -367,10 +351,16 @@ Needs investigation, but likely one of:
 withCredentials([string(credentialsId: 'github-token-id', variable: 'GITHUB_TOKEN')]) {
     def response = sh(
         script: "curl -H 'Authorization: token ${GITHUB_TOKEN}' " +
-                "https://api.github.com/repos/scylladb/finops/contents/billing-projects.txt",
+                "https://api.github.com/repos/scylladb/finops/contents/notebooks/projects/projects.yaml",
         returnStdout: true
     ).trim()
-    // Parse response and extract content
+    // Parse response JSON and decode base64 content
+    // Then parse YAML to extract project names
+    def content = readJSON(text: response).content
+    def decodedContent = new String(content.decodeBase64())
+    def projects = readYaml(text: decodedContent)
+    def billingProjects = projects.projects.collect { it.name }
+    return billingProjects
 }
 ```
 
