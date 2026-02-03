@@ -28,7 +28,9 @@ class ArgusSCTClient(ArgusClient):
         SUBMIT_EVENTS = "/sct/$id/events/submit"
         SUBMIT_EVENT = "/sct/$id/event/submit"
         SUBMIT_JUNIT_REPORT = "/sct/$id/junit/submit"
+        SUBMIT_STRESS_CMD = "/sct/$id//stress_cmd/submit"
         SUBMIT_EMAIL = "/testrun/report/email"
+        SUBMIT_CONFIG = "/$id/config/submit"
 
     def __init__(self, run_id: UUID, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None,
                  timeout: int = 60, max_retries: int = 3) -> None:
@@ -122,6 +124,22 @@ class ArgusSCTClient(ArgusClient):
             body={
                 **self.generic_body,
                 "packages": [asdict(p) for p in packages],
+            }
+        )
+        self.check_response(response)
+
+    def add_stress_command(self, command: str, log_name: str, loader_name: str) -> None:
+        """
+            Submits stress command information to be viewed inside Argus.
+        """
+        response = self.post(
+            endpoint=self.Routes.SUBMIT_STRESS_CMD,
+            location_params={"id": str(self.run_id)},
+            body={
+                **self.generic_body,
+                "cmd": command,
+                "log_name": log_name,
+                "loader_name": loader_name,
             }
         )
         self.check_response(response)
@@ -260,7 +278,8 @@ class ArgusSCTClient(ArgusClient):
         self.check_response(response)
 
     def submit_nemesis(self, name: str, class_name: str, start_time: int,
-                       target_name: str, target_ip: str, target_shards: int) -> None:
+                       target_name: str, target_ip: str, target_shards: int,
+                       description: str | None = None) -> None:
         """
             Submits a nemesis record. Should then be finalized by
             .finalize_nemesis method on nemesis completion.
@@ -277,6 +296,7 @@ class ArgusSCTClient(ArgusClient):
                     "node_name": target_name,
                     "node_ip": target_ip,
                     "node_shards": target_shards,
+                    "description": description,
                 }
             }
         )
@@ -334,3 +354,19 @@ class ArgusSCTClient(ArgusClient):
                 "content": str(base64.encodebytes(bytes(raw_content, encoding="utf-8")), encoding="utf-8")
             }
         )
+        self.check_response(response)
+
+    def sct_submit_config(self, name: str, content: str) -> None:
+        """
+            Submit a config file.
+        """
+        response = self.post(
+            endpoint=self.Routes.SUBMIT_CONFIG,
+            location_params={"id": str(self.run_id)},
+            body={
+                **self.generic_body,
+                "name": name,
+                "content": str(base64.encodebytes(bytes(content, encoding="utf-8")), encoding="utf-8")
+            }
+        )
+        self.check_response(response)
