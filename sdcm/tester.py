@@ -30,7 +30,7 @@ import unittest.mock
 from pathlib import Path
 from typing import NamedTuple, Optional, Union, List, Dict, Any
 from uuid import uuid4
-from functools import wraps, cache
+from functools import partial, wraps, cache
 import threading
 import signal
 import json
@@ -103,6 +103,7 @@ from sdcm.teardown_validators import teardown_validators_list
 from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
 from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
+from sdcm.utils.argus import report_scylla_yaml_to_argus
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import (
@@ -435,6 +436,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 backend=self.params.get("cluster_backend"),
             )
             self.log.info("sct_runner info in Argus TestRun is updated")
+            self.test_config.argus_client().sct_submit_config(name="sct_config", content=json.dumps(dict(self.params)))
+            self.log.info("Submitted SCTConfiguration to Argus.")
         except ArgusClientError:
             self.log.error("Failed to submit data to Argus", exc_info=True)
 
@@ -1284,6 +1287,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 executor.submit(self.argus_collect_packages),
                 executor.submit(self.argus_get_scylla_version),
                 executor.submit(self.argus_collect_manager_version),
+                executor.submit(partial(report_scylla_yaml_to_argus, self)),
             ]
 
             for db_cluster in self.db_clusters_multitenant:
