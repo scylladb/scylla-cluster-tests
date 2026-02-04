@@ -17,12 +17,14 @@ import os
 import time
 import contextlib
 from typing import Any
+
 from sdcm.loader import CqlStressCassandraStressExporter, CqlStressHDRExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, cql_stress_transport_str
 from sdcm.reporting.tooling_reporter import CqlStressCassandraStressVersionReporter
 from sdcm.sct_events.loaders import CQL_STRESS_CS_ERROR_EVENTS_PATTERNS, CqlStressCassandraStressEvent
 from sdcm.stress_thread import CassandraStressThread
+from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread, SoftTimeoutContext
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
@@ -202,6 +204,12 @@ class CqlStressCassandraStressThread(CassandraStressThread):
         except Exception:  # noqa: BLE001
             LOGGER.info("Failed to collect cql-stress-cassandra-stress version information", exc_info=True)
         result = None
+        report_stress_command(
+            client=loader.parent_cluster.test_config.argus_client(),
+            stress_cmd=stress_cmd,
+            log_path=log_file_name,
+            loader_name=loader.name,
+        )
         with (
             cleanup_context,
             CqlStressCassandraStressExporter(
