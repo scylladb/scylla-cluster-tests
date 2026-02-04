@@ -21,6 +21,7 @@ from sdcm.loader import CqlStressCassandraStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events.loaders import CQL_STRESS_CS_ERROR_EVENTS_PATTERNS, CqlStressCassandraStressEvent
 from sdcm.stress_thread import CassandraStressThread
+from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread, SoftTimeoutContext
 from sdcm.utils.docker_remote import RemoteDocker
 
@@ -172,6 +173,12 @@ class CqlStressCassandraStressThread(CassandraStressThread):
         node_cmd = f"echo {tag}; {node_cmd}"
 
         result = None
+        report_stress_command(
+            client=loader.parent_cluster.test_config.argus_client(),
+            stress_cmd=stress_cmd,
+            log_path=log_file_name,
+            loader_name=loader.name,
+        )
         with (
             cleanup_context,
             CqlStressCassandraStressExporter(
