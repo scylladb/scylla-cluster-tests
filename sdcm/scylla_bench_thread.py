@@ -24,6 +24,7 @@ from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
 from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
+from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
@@ -241,6 +242,12 @@ class ScyllaBenchThread(DockerBasedStressThread):
 
         log_file_name = os.path.join(loader.logdir, f"scylla-bench-l{loader_idx}-{uuid.uuid4()}.log")
         stress_cmd = self.create_stress_cmd(stress_cmd, loader, cmd_runner)
+        report_stress_command(
+            client=loader.parent_cluster.test_config.argus_client(),
+            stress_cmd=stress_cmd,
+            log_path=log_file_name,
+            loader_name=loader.name,
+        )
         with (
             ScyllaBenchStressExporter(
                 instance_name=cmd_runner_name,
