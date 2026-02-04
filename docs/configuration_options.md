@@ -3840,6 +3840,15 @@ Dictionary of VPC peering parameters for private connectivity between<br>SCT inf
 **type:** dict_or_str
 
 
+## **xcloud_scaling_config** / SCT_XCLOUD_SCALING_CONFIG
+
+Scaling policy configuration. The payload should follow the following structure:<br><br>{<br>"InstanceFamilies": ["i8g"],<br>"Mode": "xcloud",<br>"Policies": {<br>"Storage": {"Min": 0, "TargetUtilization": 0.8},<br>"VCPU": {"Min": 0}<br>}<br>}<br><br>- InstanceFamilies(list): instance families to use for scaling (e.g., ["i4i", "i8g"])<br>- Mode(str): scaling mode, always "xcloud"<br>- Policies(dict): scaling policies with the following keys:<br>- Storage(dict):<br>- Min(int): minimum storage in TB to maintain<br>- TargetUtilization(float): target storage utilization from 0.7 to 0.9 with 0.05 step<br>- VCPU(dict):<br>- Min(int): minimum number of virtual CPUs to maintain<br><br>For more details, see `scaling` parameter description in Cloud REST API documentation:<br>https://cloud.docs.scylladb.com/stable/api.html#tag/Cluster/operation/createCluster
+
+**default:** N/A
+
+**type:** dict_or_str
+
+
 ## **n_vector_store_nodes** / SCT_N_VECTOR_STORE_NODES
 
 Number of vector store nodes (0 = VS is disabled)

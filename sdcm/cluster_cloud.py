@@ -633,6 +633,8 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self.vector_store_cluster = None
         self.manager_node = None
 
+        self.xcloud_scaling_config = params.get("xcloud_scaling_config")
+
         cluster_prefix = "db-cluster"
         node_prefix = "db-node"
 
@@ -939,10 +941,16 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self.log.info("%s installation completed (request %s)", request_type, request_id)
 
     def _prepare_cluster_config(self, node_count: int, instance_type: str) -> dict[str, Any]:
-        instance_type_name = instance_type or self.params.cloud_provider_params.get("instance_type_db")
-        instance_id = self._api_client.get_instance_id_by_name(
-            cloud_provider_id=self.provider_id, region_id=self.region_id, instance_type_name=instance_type_name
-        )
+        if self.xcloud_scaling_config:
+            node_count = 0
+            instance_id = 0
+            tablets_mode = "enforced"
+        else:
+            instance_type_name = instance_type or self.params.cloud_provider_params.get("instance_type_db")
+            instance_id = self._api_client.get_instance_id_by_name(
+                cloud_provider_id=self.provider_id, region_id=self.region_id, instance_type_name=instance_type_name
+            )
+            tablets_mode = None
 
         allowed_ips = [format_ip_with_cidr(self._api_client.client_ip)]
         allowed_ips.extend(format_ip_with_cidr(ip) for ip in self._allowed_ips)
@@ -1014,8 +1022,9 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             "encryption_at_rest": None,
             "maintenance_windows": [],
             "prom_proxy": True,
-            "scaling": {},
+            "scaling": self.xcloud_scaling_config,
             "vector_search": vs_config,
+            "tablets": tablets_mode,
         }
 
     def _get_cluster_diagnostic_info(self) -> tuple[str, str]:
