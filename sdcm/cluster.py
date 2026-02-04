@@ -3497,6 +3497,13 @@ class BaseNode(AutoSshContainerMixin):
         self.remoter.sudo("systemctl stop firewalld", ignore_status=True)
         self.remoter.sudo("systemctl disable firewalld", ignore_status=True)
 
+    def upgrade_ssh_packages(self) -> None:
+        """
+        Upgrade `openssl` and `openssh` together on RHEL-like distros to avoid
+        potential `sshd` crashes caused by version mismatches between the packages.
+        """
+        self.remoter.sudo("yum update -y openssl openssh-server openssh-clients", ignore_status=True, retry=3)
+
     def log_message(self, message: str, level: str = "info") -> None:
         try:
             self.remoter.run(
@@ -5289,6 +5296,7 @@ class BaseScyllaCluster:
 
         if node.distro.is_rhel_like:
             node.disable_firewall()
+            node.upgrade_ssh_packages()
 
         if self.params.get("logs_transport") == "ssh":
             node.install_package("python3")
@@ -6130,6 +6138,7 @@ class BaseMonitorSet:
 
         if node.distro.is_rhel_like:
             node.disable_firewall()
+            node.upgrade_ssh_packages()
 
         node.disable_daily_triggered_services()
         # update repo cache and system after system is up
