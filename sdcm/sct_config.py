@@ -2718,6 +2718,33 @@ class SCTConfiguration(dict):
                 cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)""",
         ),
         dict(
+            name="xcloud_scaling_config",
+            env="SCT_XCLOUD_SCALING_CONFIG",
+            type=dict_or_str,
+            help="""Scaling policy configuration. The payload should follow the following structure:
+
+            {
+                "InstanceFamilies": ["i8g"],
+                "Mode": "xcloud",
+                "Policies": {
+                    "Storage": {"Min": 0, "TargetUtilization": 0.8},
+                    "VCPU": {"Min": 0}
+                }
+            }
+
+            - InstanceFamilies(list): instance families to use for scaling (e.g., ["i4i", "i8g"])
+            - Mode(str): scaling mode, always "xcloud"
+            - Policies(dict): scaling policies with the following keys:
+                - Storage(dict):
+                    - Min(int): minimum storage in TB to maintain
+                    - TargetUtilization(float): target storage utilization from 0.7 to 0.9 with 0.05 step
+                - VCPU(dict):
+                    - Min(int): minimum number of virtual CPUs to maintain
+
+            For more details, see `scaling` parameter description in Cloud REST API documentation:
+            https://cloud.docs.scylladb.com/stable/api.html#tag/Cluster/operation/createCluster""",
+        ),
+        dict(
             name="n_vector_store_nodes",
             env="SCT_N_VECTOR_STORE_NODES",
             type=int,
@@ -2950,8 +2977,17 @@ class SCTConfiguration(dict):
     }
 
     xcloud_per_provider_required_params = {
-        "aws": ["region_name", "instance_type_db"],
-        "gce": ["gce_datacenter", "gce_instance_type_db"],
+        # There are two types of Cloud clusters available - Standard and XCloud
+        # For XCloud clusters, the scaling policy (xcloud_scaling_config) includes instance type,
+        # so it won't be provided in the params
+        "standard": {
+            "aws": ["region_name", "instance_type_db"],
+            "gce": ["gce_datacenter", "gce_instance_type_db"],
+        },
+        "xcloud": {
+            "aws": ["region_name"],
+            "gce": ["gce_datacenter"],
+        },
     }
 
     stress_cmd_params = [
@@ -3902,7 +3938,8 @@ class SCTConfiguration(dict):
             if backend in ("aws", "gce") and self.get("db_type") == "cloud_scylla":
                 backend += "-siren"
             if backend == "xcloud":
-                self.backend_required_params[backend] += self.xcloud_per_provider_required_params[
+                cloud_cluster_type = "xcloud" if self.get("xcloud_scaling_config") else "standard"
+                self.backend_required_params[backend] += self.xcloud_per_provider_required_params[cloud_cluster_type][
                     self.get("xcloud_provider")
                 ]
             if backend == "aws" and self.get("n_vector_store_nodes") > 0:
@@ -4380,21 +4417,24 @@ class SCTConfiguration(dict):
                 f"Supported regions for '{cloud_provider}': {', '.join(supported_regions)}"
             )
 
-        # validate if instance types are supported in the selected region
         region_id = cloud_api_client.get_region_id_by_name(cloud_provider_id=provider_id, region_name=region_name)
-        supported_instances = [
-            i["externalId"]
-            for i in cloud_api_client.get_instance_types(cloud_provider_id=provider_id, region_id=region_id)[
-                "instances"
+
+        # DB instance type is not provided for XCloud cluster - it's defined by Scylla Cloud based on scaling config
+        if not self.get("xcloud_scaling_config"):
+            # validate if instance types are supported in the selected region
+            supported_instances = [
+                i["externalId"]
+                for i in cloud_api_client.get_instance_types(cloud_provider_id=provider_id, region_id=region_id)[
+                    "instances"
+                ]
             ]
-        ]
-        db_instance_type = self.get("instance_type_db" if cloud_provider == "aws" else "gce_instance_type_db")
-        if db_instance_type not in supported_instances:
-            raise ValueError(
-                f"Database instance type '{db_instance_type}' is not supported in region '{region_name}' for "
-                f"cloud provider '{cloud_provider}'.\n"
-                f"Supported instance types: {', '.join(supported_instances)}"
-            )
+            db_instance_type = self.get("instance_type_db" if cloud_provider == "aws" else "gce_instance_type_db")
+            if db_instance_type not in supported_instances:
+                raise ValueError(
+                    f"Database instance type '{db_instance_type}' is not supported in region '{region_name}' for "
+                    f"cloud provider '{cloud_provider}'.\n"
+                    f"Supported instance types: {', '.join(supported_instances)}"
+                )
 
         rf = self.get("xcloud_replication_factor")
         n_nodes = int(self.get("n_db_nodes"))

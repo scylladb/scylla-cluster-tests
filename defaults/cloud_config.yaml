@@ -11,3 +11,5 @@ xcloud_vpc_peering:
   enabled: true
   cidr_pool_base: '172.31.0.0/16'
   cidr_subnet_size: 24
+
+xcloud_scaling_config: {}
