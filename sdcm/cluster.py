@@ -1163,7 +1163,10 @@ class BaseNode(AutoSshContainerMixin):
 
         Use it for localhost connections (e.g., cqlsh)
         """
+        # Use network_interfaces if available (AWS backend), otherwise fallback to cluster params
         if self.network_interfaces and self.network_interfaces[0].use_dns_names:
+            return self.private_dns_name
+        elif not self.network_interfaces and self.parent_cluster and self.parent_cluster.params.get("use_dns_names"):
             return self.private_dns_name
         return self.ip_address
 
