@@ -89,10 +89,10 @@ class GCENode(cluster.BaseNode):
         rack: int = 0,
         gce_project: str = None,
     ):
-        name = gce_instance_name(node_prefix=node_prefix, dc_idx=dc_idx, node_index=node_index)
+        self._instance = gce_instance
+        name = self._instance.name
         self.node_index = node_index
         self.project = gce_project
-        self._instance = gce_instance
         self._instance_type = gce_instance.machine_type.split("/")[-1]
         self._gce_service = gce_service
         self._gce_logging_client = GceLoggingClient(instance_name=name, zone=self.zone)
