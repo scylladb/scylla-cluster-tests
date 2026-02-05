@@ -13,11 +13,11 @@
 
 """GCE region definition builder for SCT provisioning."""
 
-from typing import Dict, List
+from typing import Dict, List, Any
 
 from sdcm.sct_provision.common.types import NodeTypeType
 from sdcm.sct_provision.region_definition_builder import ConfigParamsMap, DefinitionBuilder
-from sdcm.utils.gce_utils import gce_instance_name
+from sdcm.utils.gce_utils import gce_instance_name, get_gce_service_accounts
 
 # Configuration parameter mappings for different node types
 db_map = ConfigParamsMap(
@@ -74,3 +74,11 @@ class GceDefinitionBuilder(DefinitionBuilder):
         """
         node_prefix = f"{user_prefix}-{node_type_short}-node-{short_test_id}"
         return gce_instance_name(node_prefix=node_prefix, dc_idx=dc_idx, node_index=index)
+
+    def get_provisioner_config(self) -> Dict[str, Any]:
+        """Return GCE-specific provisioner configuration."""
+        return {"network_name": self.params.get("gce_network")}
+
+    def get_service_accounts(self):
+        """Return GCE service accounts for instance creation."""
+        return get_gce_service_accounts()

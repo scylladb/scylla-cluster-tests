@@ -82,10 +82,10 @@ def provision_sct_resources(params: SCTConfiguration, test_config: TestConfig, *
     pricing_model = PricingModel(params.get("instance_provision"))
     provision_fallback_on_demand = params.get("instance_provision_fallback_on_demand")
     for request in definitions_per_region:
-        # Add backend-specific configuration
+        # Merge backend-specific configuration with provided provisioner config
         backend_config = dict(provisioner_config)
-        if request.backend == "gce":
-            backend_config["network_name"] = params.get("gce_network")
+        if request.provisioner_config:
+            backend_config.update(request.provisioner_config)
 
         provisioner = provisioner_factory.create_provisioner(
             backend=request.backend,

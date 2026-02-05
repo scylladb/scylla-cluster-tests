@@ -569,6 +569,26 @@ class GCECluster(cluster.BaseCluster):
                         return instance
         return None
 
+    @retrying(
+        n=20,
+        sleep_time=30,
+        allowed_exceptions=(CreateGCENodeError,),
+        message="Waiting for GCE instance to be available and in RUNNING state...",
+        raise_on_exceeded=True,
+    )
+    def _get_instance_with_retry(self, name: str, dc_idx: int) -> compute_v1.Instance:
+        """Fetch GCE instance by name with retry logic.
+
+        The provisioner may take some time to create the instance and bring it to RUNNING state,
+        so we retry until the instance is found and ready.
+        """
+        instance = self._get_instances_by_name(name=name, dc_idx=dc_idx)
+        if not instance:
+            raise CreateGCENodeError(f"Instance {name} not found")
+        if instance.status != "RUNNING":
+            raise CreateGCENodeError(f"Instance {name} is not in RUNNING state: {instance.status}")
+        return instance
+
     def _get_instances(self, dc_idx: int) -> list[compute_v1.Instance]:
         test_id = self.test_config.test_id()
         if not test_id:
@@ -637,14 +657,11 @@ class GCECluster(cluster.BaseCluster):
                 count, instance_dc, enable_auto_bootstrap, instance_type=instance_type
             )
             # The provisioner returns VmInstance objects, but GCENode expects compute_v1.Instance.
-            # Fetch the native GCE instances by name to ensure proper node initialization.
+            # Fetch the native GCE instances by name with retry to ensure they are in RUNNING state.
             instances = []
             for vm in provisioned_vms:
-                gce_instance = self._get_instances_by_name(name=vm.name, dc_idx=instance_dc)
-                if gce_instance:
-                    instances.append(gce_instance)
-                else:
-                    raise CreateGCENodeError(f"Failed to find GCE instance for provisioned VM: {vm.name}")
+                gce_instance = self._get_instance_with_retry(name=vm.name, dc_idx=instance_dc)
+                instances.append(gce_instance)
 
         self.log.debug("instances: %s", instances)
         if instances:

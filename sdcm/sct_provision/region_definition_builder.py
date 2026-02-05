@@ -13,7 +13,7 @@
 import abc
 from dataclasses import dataclass
 from functools import cache
-from typing import List, Dict, Type
+from typing import List, Dict, Type, Any
 from pathlib import Path
 
 from sdcm.keystore import KeyStore, SSHKey
@@ -21,7 +21,6 @@ from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.types import NodeTypeType
-from sdcm.utils.gce_utils import get_gce_service_accounts
 
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 from sdcm.sct_provision.user_data_objects.apt_daily_triggers import DisableAptTriggersUserDataObject
@@ -46,6 +45,7 @@ class RegionDefinition:
     region: str
     availability_zone: str
     definitions: List[InstanceDefinition]
+    provisioner_config: Dict[str, Any] = None
 
 
 @dataclass
@@ -82,6 +82,21 @@ class DefinitionBuilder(abc.ABC):
     def instance_name(self, user_prefix, node_type_short, short_test_id, region, index, dc_idx: int = 0):
         return f"{user_prefix}-{node_type_short}-node-{short_test_id}-{region}-{index}".lower()
 
+    def get_provisioner_config(self) -> Dict[str, Any]:
+        """Return backend-specific provisioner configuration.
+
+        Override this method in backend-specific builders to provide
+        custom provisioner configuration parameters.
+        """
+        return {}
+
+    def get_service_accounts(self):
+        """Return service accounts for instance creation.
+
+        Override this method in backend-specific builders.
+        """
+        return None
+
     def build_instance_definition(
         self, region: str, node_type: NodeTypeType, index: int, dc_idx: int = 0, instance_type: str = None
     ) -> InstanceDefinition:
@@ -113,7 +128,7 @@ class DefinitionBuilder(abc.ABC):
             ssh_key=self._get_ssh_key(),
             user_data=user_data,
             use_public_ip=use_public_ip,
-            service_accounts=get_gce_service_accounts() if self.BACKEND == "gce" else None,
+            service_accounts=self.get_service_accounts(),
         )
 
     def build_region_definition(
@@ -145,6 +160,7 @@ class DefinitionBuilder(abc.ABC):
             region=region,
             availability_zone=availability_zone,
             definitions=definitions,
+            provisioner_config=self.get_provisioner_config(),
         )
 
     def build_all_region_definitions(self) -> List[RegionDefinition]:
