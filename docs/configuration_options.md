@@ -604,7 +604,7 @@ A local directory of rpms to install a custom version on top of<br>the scylla in
 
 The port of scylla management
 
-**default:** branch-4.13
+**default:** branch-4.14
 
 **type:** str (appendable)
 
