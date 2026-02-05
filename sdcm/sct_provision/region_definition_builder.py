@@ -79,8 +79,23 @@ class DefinitionBuilder(abc.ABC):
     def regions(self) -> List[str]:
         return self.params.get(self.REGION_MAP)
 
-    def instance_name(self, user_prefix, node_type_short, short_test_id, region, index, dc_idx: int = 0):
-        return f"{user_prefix}-{node_type_short}-node-{short_test_id}-{region}-{index}".lower()
+    @abc.abstractmethod
+    def instance_name(self, user_prefix, node_type_short, short_test_id, region, index, dc_idx: int = 0) -> str:
+        """Generate instance name for the given parameters.
+
+        Each backend should implement its own naming convention.
+
+        Args:
+            user_prefix: User prefix from configuration
+            node_type_short: Short node type (db, loader, monitor)
+            short_test_id: Shortened test ID (first 8 characters)
+            region: Target region name
+            index: Instance index number
+            dc_idx: Datacenter index (default: 0)
+
+        Returns:
+            Formatted instance name string
+        """
 
     def get_provisioner_config(self) -> Dict[str, Any]:
         """Return backend-specific provisioner configuration.
