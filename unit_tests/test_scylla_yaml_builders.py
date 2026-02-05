@@ -469,6 +469,7 @@ class DummyNode(BaseNode):
                 device_index=0,
                 device_name="eth0",
                 mac_address="",
+                use_dns_names=False,
             ),
             NetworkInterface(
                 ipv4_public_address=None,
@@ -480,6 +481,7 @@ class DummyNode(BaseNode):
                 device_index=1,
                 device_name="eth1",
                 mac_address="",
+                use_dns_names=False,
             ),
         ]
 

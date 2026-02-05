@@ -622,6 +622,7 @@ class AWSNode(cluster.BaseNode):
                     device_index=interface.attachment["DeviceIndex"],
                     device_name=devices[interface.mac_address] if devices else "",
                     mac_address=interface.mac_address,
+                    use_dns_names=self.use_dns_names,
                 )
             )
         # Order interfaces by device_index (set primary interface first)

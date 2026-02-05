@@ -328,7 +328,6 @@ class BaseNode(AutoSshContainerMixin):
 
         self.remoter: Optional[RemoteCmdRunnerBase] = None
 
-        self._use_dns_names: bool = parent_cluster.params.get("use_dns_names") if parent_cluster else False
         self._spot_monitoring_thread = None
         self._journal_thread = None
         self._docker_log_process = None
@@ -1158,13 +1157,18 @@ class BaseNode(AutoSshContainerMixin):
         """
         return self.external_address
 
+    @cached_property
+    def use_dns_names(self) -> bool:
+        """Return whether this node should use DNS names instead of IP addresses."""
+        return bool(self.parent_cluster and self.parent_cluster.params.get("use_dns_names"))
+
     @property
     def scylla_listen_address(self) -> str:
         """The address the Scylla is bound.
 
         Use it for localhost connections (e.g., cqlsh)
         """
-        if self._use_dns_names:
+        if self.use_dns_names:
             return self.private_dns_name
         return self.ip_address
 
@@ -4879,7 +4883,7 @@ class BaseScyllaCluster:
 
     @property
     def seed_nodes_addresses(self):
-        if self.params.get("use_dns_names"):
+        if self.nodes and self.nodes[0].use_dns_names:
             seed_nodes_addresses = [node.private_dns_name for node in self.nodes if node.is_seed]
         else:
             seed_nodes_addresses = [node.ip_address for node in self.nodes if node.is_seed]
