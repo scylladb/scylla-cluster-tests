@@ -2251,7 +2251,7 @@ class BaseScyllaPodContainer(BasePodContainer):
                 device_index=0,
                 device_name="eth0",
                 mac_address="",
-                use_dns_names=self.parent_cluster.params.get("use_dns_names") if self.parent_cluster else False,
+                use_dns_names=self.parent_cluster.params.get("use_dns_names", False) if self.parent_cluster else False,
             )
         ]
         return interfaces
