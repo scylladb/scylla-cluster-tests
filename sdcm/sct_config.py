@@ -920,12 +920,6 @@ class SCTConfiguration(dict):
             "/master/docs/alternator/alternator.md#write-isolation-policies for more details",
         ),
         dict(
-            name="alternator_use_dns_routing",
-            env="SCT_ALTERNATOR_USE_DNS_ROUTING",
-            type=boolean,
-            help="If true, spawn a docker with a dns server for the ycsb loader to point to",
-        ),
-        dict(
             name="alternator_test_table",
             env="SCT_ALTERNATOR_TEST_TABLE",
             type=dict,

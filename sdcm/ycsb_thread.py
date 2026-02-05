@@ -144,7 +144,8 @@ class YcsbStressThread(DockerBasedStressThread):
     def _hdr_files_directory_on_loaders_node(self, loader_idx, cpu_idx):
         return f"{self._hdr_main_dir_on_loaders_node()}/{loader_idx}/{cpu_idx}"
 
-    def copy_template(self, cmd_runner, loader_name, memo={}):  # noqa: B006
+    def copy_template(self, cmd_runner, loader, memo={}):  # noqa: B006
+        loader_name = loader.name
         if loader_name in memo:
             return None
         web_protocol = "http"
@@ -152,13 +153,8 @@ class YcsbStressThread(DockerBasedStressThread):
         if is_kubernetes:
             target_address = self.node_list[0].k8s_lb_dns_name
             web_protocol = "http" + ("s" if self.params.get("alternator_port") == 8043 else "")
-        elif self.params.get("alternator_use_dns_routing"):
-            target_address = "alternator"
-        else:  # noqa: PLR5501
-            if hasattr(self.node_list[0], "parent_cluster"):
-                target_address = self.node_list[0].parent_cluster.get_node().cql_address
-            else:
-                target_address = self.node_list[0].cql_address
+        else:
+            target_address = self.db_node_to_query(loader)
 
         if "dynamodb" in self.stress_cmd:
             dynamodb_teample = dedent(
@@ -187,19 +183,32 @@ class YcsbStressThread(DockerBasedStressThread):
                     dynamodb.primaryKey = {alternator.consts.HASH_KEY_NAME}
                     dynamodb.primaryKeyType = {alternator.enums.YCSBSchemaTypes.HASH_SCHEMA.value}
                 """)
+            access_key = self.params.get("alternator_access_key_id")
             if self.params.get("alternator_enforce_authorization"):
-                aws_credentials_content = dedent(f"""
-                    accessKey = {self.params.get("alternator_access_key_id")}
-                    secretKey = {alternator.api.Alternator.get_salted_hash(node=self.node_list[0], username=self.params.get("alternator_access_key_id"))}
-                """)
+                secret_key = alternator.api.Alternator.get_salted_hash(node=self.node_list[0], username=access_key)
             else:
-                aws_credentials_content = dedent(f"""
-                    accessKey = {self.params.get("alternator_access_key_id")}
-                    secretKey = {self.params.get("alternator_secret_access_key")}
-                """)
+                secret_key = self.params.get("alternator_secret_access_key")
+
+            aws_credentials_content = dedent(f"""
+                accessKey = {access_key}
+                secretKey = {secret_key}
+            """)
+
+            loader_dc = getattr(loader, "datacenter", "")
+            loader_rack = getattr(loader, "rack", "")
 
             with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as tmp_file:
                 tmp_file.write(dynamodb_teample)
+                tmp_file.write(
+                    dedent(f"""
+                    dynamodb.alternator.datacenter = {loader_dc}
+                    dynamodb.alternator.rack = {loader_rack}
+                    dynamodb.debug = false
+                    dynamodb.alternator.loadbalancing = true
+                    dynamodb.virtualThreads = true
+                    dynamodb.alternator.trustAllCertificates = true
+                """)
+                )
                 tmp_file.flush()
                 cmd_runner.send_files(tmp_file.name, os.path.join("/tmp", "dynamodb.properties"))
 
@@ -335,30 +344,12 @@ class YcsbStressThread(DockerBasedStressThread):
         if "k8s" in self.params.get("cluster_backend"):
             cmd_runner = loader.remoter
             cmd_runner_name = loader.name
-            if self.params.get("alternator_use_dns_routing"):
-                LOGGER.info(
-                    "Ignoring the 'alternator_use_dns_routing' option running on K8S,"
-                    " because it is always used in this case."
-                )
         else:
-            alternator_port = self.params.get("alternator_port")
-            dns_cmd = f"python3 /dns_server.py {self.db_node_to_query(loader)} {alternator_port}"
-            dns_image = self.params.get("stress_image.alternator-dns")
-            dns_options, cpu_options = "", ""
+            cpu_options = ""
             if self.stress_num > 1:
                 cpu_options = f'--cpuset-cpus="{cpu_idx}"'
-            if self.params.get("alternator_use_dns_routing"):
-                dns = RemoteDocker(
-                    loader,
-                    dns_image,
-                    command_line=dns_cmd,
-                    extra_docker_opts=f"--label shell_marker={self.shell_marker}",
-                    docker_network=self.params.get("docker_network"),
-                )
-                dns_options += f"--dns {dns.internal_ip_address} --dns-option use-vc"
-            extra_docker_opts = (
-                f"{dns_options} {cpu_options} --entrypoint /bin/bash --label shell_marker={self.shell_marker}"
-            )
+
+            extra_docker_opts = f"{cpu_options} --entrypoint /bin/bash --label shell_marker={self.shell_marker}"
             if self.params["use_hdrhistogram"]:
                 hdr_files_directory = self._prepare_directory_for_hdr_files_on_loader_node(loader_idx, cpu_idx)
                 extra_docker_opts += f" -v {hdr_files_directory}:{self._hdr_files_directory_inside_ycsb_container(loader_idx, cpu_idx)}:z"
@@ -372,7 +363,7 @@ class YcsbStressThread(DockerBasedStressThread):
             )
             cmd_runner_name = str(loader)
 
-        self.copy_template(cmd_runner, loader.name)
+        self.copy_template(cmd_runner, loader)
         stress_cmd = self.build_stress_cmd(loader_idx, cpu_idx)
 
         if not os.path.exists(loader.logdir):
