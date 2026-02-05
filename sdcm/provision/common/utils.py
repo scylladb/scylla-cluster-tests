@@ -268,7 +268,7 @@ def install_vector_service():
         for n in 2 4 6 8 10 10 10 10; do # cloud-init is running it with set +o braceexpand
             if bash -c "$(curl -L https://setup.vector.dev)"; then
                 if yum --help 2>/dev/null 1>&2; then
-                    if yum list vector >/dev/null 2>&1; then
+                    if yum -y list vector >/dev/null 2>&1; then
                         break
                     fi
                 elif apt-get --help 2>/dev/null 1>&2; then
