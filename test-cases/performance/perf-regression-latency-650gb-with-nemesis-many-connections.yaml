@@ -1,0 +1,43 @@
+test_duration: 840
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..162500000",
+                    "cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=162500000..325000000",
+                    "cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=325000000..487500000",
+                    "cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=487500000..650000000"]
+
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=2850m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=3000 cql3 native -rate 'threads=3000 fixed=10166/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,9750000)' "
+stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=3000 cql3 native -rate 'threads=3000 fixed=5160/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,9750000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=3000 cql3 native -rate 'threads=3000 fixed=4375/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,6500000)' "
+
+n_db_nodes: 3
+n_loaders: 8
+
+instance_type_loader: 'c7i.xlarge'
+instance_type_monitor: 't3.large'
+instance_type_db: 'i8g.2xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: 'NemesisSequenceWithReboot'
+nemesis_interval: 30
+nemesis_sequence_sleep_between_ops: 10
+
+user_prefix: 'perf-latency-nemesis'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: true
+backtrace_stall_decoding: false
+
+store_perf_results: false
+email_recipients: [""]
+use_prepared_loaders: false
+use_hdrhistogram: true
+use_placement_group: true
+use_capacity_reservation: true
+email_subject_postfix: 'latency during operations'
+parallel_node_operations: false  # doing this to align the measurement
+cluster_health_check: false
+hinted_handoff: 'enabled'
+
+adaptive_timeout_store_metrics: false

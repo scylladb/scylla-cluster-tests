@@ -958,6 +958,22 @@ NemesisSequence:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
+NemesisSequenceWithReboot:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  enospc: false
+  free_tier_set: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
 NoCorruptRepairMonkey:
   config_changes: false
   delete_rows: false
