@@ -33,6 +33,7 @@ from sdcm.utils.gce_utils import (
     get_gce_compute_instances_client,
     wait_for_extended_operation,
     gce_set_labels,
+    get_gce_service_accounts,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -279,8 +280,9 @@ class VirtualMachineProvider:
             instance.tags.items = network_tags
 
         # Add service accounts for KMS/API access
-        if definition.service_accounts:
-            instance.service_accounts = [compute_v1.ServiceAccount(**sa) for sa in definition.service_accounts]
+        service_accounts = get_gce_service_accounts()
+        if service_accounts:
+            instance.service_accounts = [compute_v1.ServiceAccount(**sa) for sa in service_accounts]
 
         # Create the instance
         request = compute_v1.InsertInstanceRequest()

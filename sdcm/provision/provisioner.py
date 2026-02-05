@@ -54,7 +54,6 @@ class InstanceDefinition:
         default_factory=list, repr=False
     )  # None when no cloud-init use at all
     use_public_ip: bool = False
-    service_accounts: List[Dict[str, any]] | None = None  # GCE service accounts for KMS/API access
 
 
 class ProvisionError(Exception):

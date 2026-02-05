@@ -90,13 +90,6 @@ class DefinitionBuilder(abc.ABC):
         """
         return {}
 
-    def get_service_accounts(self):
-        """Return service accounts for instance creation.
-
-        Override this method in backend-specific builders.
-        """
-        return None
-
     def build_instance_definition(
         self, region: str, node_type: NodeTypeType, index: int, dc_idx: int = 0, instance_type: str = None
     ) -> InstanceDefinition:
@@ -106,7 +99,6 @@ class DefinitionBuilder(abc.ABC):
         node_type_short = "db" if "db" in node_type else node_type
         short_test_id = self.test_config.test_id()[:8]
         name = self.instance_name(user_prefix, node_type_short, short_test_id, region, index, dc_idx)
-        # name = f"{user_prefix}-{node_type_short}-node-{short_test_id}-{region}-{index}".lower()
         action = self.params.get(f"post_behavior_{node_type_short}_nodes")
         tags = common_tags | {
             "NodeType": node_type,
@@ -128,7 +120,6 @@ class DefinitionBuilder(abc.ABC):
             ssh_key=self._get_ssh_key(),
             user_data=user_data,
             use_public_ip=use_public_ip,
-            service_accounts=self.get_service_accounts(),
         )
 
     def build_region_definition(

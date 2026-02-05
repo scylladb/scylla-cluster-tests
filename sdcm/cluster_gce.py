@@ -313,7 +313,6 @@ class GCECluster(cluster.BaseCluster):
         add_disks=None,
         params=None,
         node_type=None,
-        service_accounts=None,
         add_nodes=True,
     ):
         self.provisioners: List[GceProvisioner] = provisioners
@@ -334,7 +333,6 @@ class GCECluster(cluster.BaseCluster):
         LOGGER.debug("GCE zones used: %s", self._gce_zone_names)
         self._gce_n_local_ssd = int(gce_n_local_ssd) if gce_n_local_ssd else 0
         self._add_disks = add_disks
-        self._service_accounts = service_accounts
         # the full node prefix will contain unique uuid, so use this for search of existing nodes
         self._node_prefix = node_prefix.lower()
         self._definition_builder = region_definition_builder.get_builder(params, test_config=self.test_config)
@@ -479,7 +477,6 @@ class GCECluster(cluster.BaseCluster):
                 "ssh-keys": f"{username}:{key_type} {public_key} {username}",
             },
             spot=spot,
-            service_accounts=self._service_accounts,
             network_tags=network_tags,
         )
         instance = self._create_node_with_retries(name=name, dc_idx=dc_idx, create_node_params=create_node_params)
@@ -698,7 +695,6 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
         add_disks=None,
         params=None,
         gce_datacenter=None,
-        service_accounts=None,
     ):
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "db-cluster")
@@ -720,10 +716,8 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
             params=params,
             gce_region_names=gce_datacenter,
             node_type="scylla-db",
-            service_accounts=service_accounts,
             provisioners=provisioners,
         )
-        LOGGER.info("Service accounts used: %s", service_accounts)
         self.version = "2.1"
 
     @staticmethod
@@ -752,7 +746,6 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
         add_disks=None,
         params=None,
         gce_datacenter=None,
-        service_accounts=None,  # pylint: disable=unused-argument
     ):
         node_prefix = cluster.prepend_user_prefix(user_prefix, "loader-node")
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "loader-set")
@@ -800,7 +793,6 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
         gce_datacenter=None,
         add_nodes=True,
         monitor_id=None,
-        service_accounts=None,  # pylint: disable=unused-argument
     ):
         node_prefix = cluster.prepend_user_prefix(user_prefix, "monitor-node")
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "monitor-set")

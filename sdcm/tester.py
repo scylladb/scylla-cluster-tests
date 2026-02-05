@@ -200,7 +200,7 @@ from sdcm.send_email import build_reporter, save_email_data_to_file
 from sdcm.utils import alternator
 from sdcm.utils.profiler import ProfilerFactory
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER
-from sdcm.utils.gce_utils import get_gce_compute_instances_client, get_gce_service_accounts
+from sdcm.utils.gce_utils import get_gce_compute_instances_client
 from sdcm.utils.auth_context import temp_authenticator
 from sdcm.keystore import KeyStore
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
@@ -1555,7 +1555,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         gce_image = self.params.get("gce_image_db").strip()
         user_prefix = self.params.get("user_prefix")
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get("user_credentials_path")))
-        service_accounts = get_gce_service_accounts()
         cluster_additional_disks = {
             "pd-ssd": self.params.get("gce_pd_ssd_disk_size_db"),
             "pd-standard": self.params.get("gce_pd_standard_disk_size_db"),
@@ -1593,7 +1592,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 gce_instance_type=db_info["type"],
                 gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_db"),
                 n_nodes=db_info["n_nodes"],
-                service_accounts=service_accounts,
                 add_disks=cluster_additional_disks,
                 provisioners=provisioners,
                 **common_params,
