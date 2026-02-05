@@ -293,7 +293,7 @@ class NemesisRunner:
         self.current_disruption = None
         self.duration_list = []
         self.error_list = []
-        self.interval = 60 * self.tester.params.get("nemesis_interval")  # convert from min to sec
+        self.interval = kwargs.get("nemesis_interval", None) or self.tester.params.get("nemesis_interval")
         self.start_time = time.time()
         self.stats = {}
         self.nemesis_selector = nemesis_selector
@@ -332,6 +332,15 @@ class NemesisRunner:
         self.node_allocator: NemesisNodeAllocator = self.tester.nemesis_allocator
 
         self.log.debug("Instantiated %s nemesis with %d seed", self.__class__.__name__, self.nemesis_seed)
+
+    @property
+    def interval(self):
+        return self._interval
+
+    @interval.setter
+    def interval(self, value):
+        interval = value[0] if isinstance(value, list) else value
+        self._interval = interval * 60  # convert from min to sec
 
     def _init_num_deletions_factor(self):
         # num_deletions_factor is a numeric divisor. It's a factor by which the available-partitions-for-deletion
