@@ -285,6 +285,34 @@ class TestYcsbStressEvent(unittest.TestCase):
         self.assertTrue(issubclass(YcsbStressEvent.start, YcsbStressEvent))
         self.assertTrue(issubclass(YcsbStressEvent.finish, YcsbStressEvent))
 
+    def test_continuous_event_without_error(self):
+        begin_event_timestamp = 1623596860.1202102
+        ycsb_event = YcsbStressEvent(
+            node="node", stress_cmd="stress_cmd", log_file_name="log_file_name", publish_event=False
+        )
+        ycsb_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
+        begin_event = ycsb_event.begin_event()
+        begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
+        self.assertEqual(
+            str(begin_event),
+            "(YcsbStressEvent Severity.NORMAL) period_type=begin "
+            "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd",
+        )
+        self.assertEqual(begin_event.event_timestamp, begin_event_timestamp)
+        self.assertEqual(begin_event.timestamp, begin_event_timestamp)
+        self.assertEqual(begin_event, pickle.loads(pickle.dumps(begin_event)))
+
+        ycsb_event.end_event()
+        ycsb_event.event_timestamp = ycsb_event.end_timestamp = 1623596861.1202102
+        self.assertEqual(
+            str(ycsb_event),
+            "(YcsbStressEvent Severity.NORMAL) period_type=end "
+            "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=1s: "
+            "node=node\nstress_cmd=stress_cmd",
+        )
+        ycsb_event.log_file_name = "log_file_name"
+        self.assertEqual(ycsb_event, pickle.loads(pickle.dumps(ycsb_event)))
+
     def test_without_errors(self):
         event = YcsbStressEvent.error(node=[], stress_cmd="c-s", log_file_name="1.log")
         self.assertEqual(event.severity, Severity.ERROR)
