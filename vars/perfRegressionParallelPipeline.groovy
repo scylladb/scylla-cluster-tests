@@ -40,6 +40,7 @@ def call(Map pipelineParams) {
             // ScyllaDB Configuration
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 6 options)')
             string(defaultValue: '', description: 'AMI ID for ScyllaDB', name: 'scylla_ami_id')
+            string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
             string(defaultValue: '',
                    description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
                    name: 'scylla_version')
@@ -57,6 +58,22 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'cloud path for RPMs, s3:// or gs://',
                    name: 'update_db_packages')
+
+            // Manager Configuration
+            separator(name: 'MANAGER_CONFIG', sectionHeader: 'Manager Configuration')
+            string(defaultValue: "${pipelineParams.get('manager_version', '')}",
+                   description: 'master_latest|3.8|3.7',
+                   name: 'manager_version')
+
+            string(defaultValue: '',
+                   description: 'If empty - the default manager version will be taken',
+                   name: 'scylla_mgmt_address')
+
+            string(defaultValue: '', description: 'Version of Management Agent', name: 'scylla_mgmt_agent_version')
+
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_address', '')}",
+                   description: 'If empty - the default scylla manager agent repo will be taken',
+                   name: 'scylla_mgmt_agent_address')
 
             // Provisioning Configuration
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
