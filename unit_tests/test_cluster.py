@@ -41,7 +41,7 @@ from sdcm.utils.common import (
     parse_nodetool_listsnapshots,
 )
 from sdcm.utils.distro import Distro
-from sdcm.utils.nemesis_utils.indexes import get_column_names
+from sdcm.nemesis.utils.indexes import get_column_names
 from sdcm.utils.version_utils import ComparableScyllaVersion
 from sdcm.remote import LocalCmdRunner
 from unit_tests.dummy_remote import DummyRemote, LocalNode

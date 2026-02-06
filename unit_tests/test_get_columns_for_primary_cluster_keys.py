@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from sdcm.utils.nemesis_utils.indexes import get_column_names
+from sdcm.nemesis.utils.indexes import get_column_names
 
 
 @pytest.fixture

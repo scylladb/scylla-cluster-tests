@@ -9,8 +9,8 @@ import pytest
 import random
 
 from sdcm.cluster import BaseNode
-from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS
-from sdcm.utils.nemesis_utils.node_allocator import (
+from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS
+from sdcm.nemesis.utils.node_allocator import (
     NemesisNodeAllocator,
     NemesisNodeAllocationError,
     AllNodesRunNemesisError,
