@@ -245,6 +245,7 @@ class NemesisFlags:
     networking: bool = False  # flag that signal that nemesis interact with nemesis,
     # i.e switch off/on network interface, network issues
     kubernetes: bool = False  # flag that signal that nemesis run with k8s cluster
+    xcloud: bool = False  # flag that signal that nemesis can run with xcloud backend (Scylla Cloud)
     limited: bool = False  # flag that signal that nemesis are belong to limited set of nemesises
     schema_changes: bool = False
     config_changes: bool = False
@@ -6502,6 +6503,7 @@ class AddRemoveRackNemesis(NemesisBaseClass):
 class StopWaitStartMonkey(NemesisBaseClass):
     disruptive = True
     kubernetes = True
+    xcloud = True
     limited = True
     zero_node_changes = True
 
@@ -6513,6 +6515,7 @@ class StopWaitStartMonkey(NemesisBaseClass):
 class StopStartMonkey(NemesisBaseClass):
     disruptive = True
     kubernetes = True
+    xcloud = True
     limited = True
 
     def disrupt(self):
@@ -6588,6 +6591,7 @@ class HardRebootNodeMonkey(NemesisBaseClass):
 class SoftRebootNodeMonkey(NemesisBaseClass):
     disruptive = True
     kubernetes = True
+    xcloud = True
     limited = True
     free_tier_set = True
 
@@ -6617,6 +6621,7 @@ class CorruptThenRepairMonkey(NemesisBaseClass):
 class CorruptThenRebuildMonkey(NemesisBaseClass):
     disruptive = True
     kubernetes = True
+    xcloud = True
 
     def disrupt(self):
         self.runner.disrupt_destroy_data_then_rebuild()
@@ -6650,6 +6655,7 @@ class DecommissionSeedNode(NemesisBaseClass):
 class NoCorruptRepairMonkey(NemesisBaseClass):
     disruptive = False
     kubernetes = True
+    xcloud = True
     limited = True
 
     def disrupt(self):
@@ -6659,6 +6665,7 @@ class NoCorruptRepairMonkey(NemesisBaseClass):
 class MajorCompactionMonkey(NemesisBaseClass):
     disruptive = False
     kubernetes = True
+    xcloud = True
     limited = True
 
     def disrupt(self):
@@ -6706,6 +6713,7 @@ class RemoveServiceLevelMonkey(NemesisBaseClass):
 class EnospcMonkey(NemesisBaseClass):
     disruptive = True
     kubernetes = True
+    xcloud = True
     limited = True
     enospc = True
 
@@ -6717,6 +6725,7 @@ class EnospcMonkey(NemesisBaseClass):
 class EnospcAllNodesMonkey(NemesisBaseClass):
     disruptive = True
     kubernetes = True
+    xcloud = True
     enospc = True
 
     def disrupt(self):
@@ -6727,6 +6736,7 @@ class EnospcAllNodesMonkey(NemesisBaseClass):
 class NodeToolCleanupMonkey(NemesisBaseClass):
     disruptive = False
     kubernetes = True
+    xcloud = True
     limited = True
 
     def disrupt(self):
@@ -6736,6 +6746,7 @@ class NodeToolCleanupMonkey(NemesisBaseClass):
 class TruncateMonkey(NemesisBaseClass):
     disruptive = False
     kubernetes = True
+    xcloud = True
     limited = True
     free_tier_set = True
 
@@ -6746,6 +6757,7 @@ class TruncateMonkey(NemesisBaseClass):
 class TruncateLargeParititionMonkey(NemesisBaseClass):
     disruptive = False
     kubernetes = True
+    xcloud = True
     free_tier_set = True
 
     def disrupt(self):
@@ -6755,6 +6767,7 @@ class TruncateLargeParititionMonkey(NemesisBaseClass):
 class DeleteByPartitionsMonkey(NemesisBaseClass):
     disruptive = False
     kubernetes = True
+    xcloud = True
     free_tier_set = True
     delete_rows = True
 
@@ -6765,6 +6778,7 @@ class DeleteByPartitionsMonkey(NemesisBaseClass):
 class DeleteByRowsRangeMonkey(NemesisBaseClass):
     disruptive = False
     kubernetes = True
+    xcloud = True
     free_tier_set = True
     delete_rows = True
 
@@ -6775,6 +6789,7 @@ class DeleteByRowsRangeMonkey(NemesisBaseClass):
 class DeleteOverlappingRowRangesMonkey(NemesisBaseClass):
     disruptive = False
     kubernetes = True
+    xcloud = True
     free_tier_set = True
     delete_rows = True
 
@@ -6892,6 +6907,7 @@ class AddDropColumnMonkey(NemesisBaseClass):
     disruptive = False
     networking = False
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -6902,6 +6918,7 @@ class AddDropColumnMonkey(NemesisBaseClass):
 
 class ToggleTableIcsMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     schema_changes = True
     free_tier_set = True
 
@@ -6911,6 +6928,7 @@ class ToggleTableIcsMonkey(NemesisBaseClass):
 
 class ToggleGcModeMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     disruptive = False
     schema_changes = True
     free_tier_set = True
@@ -6946,6 +6964,7 @@ class MgmtRestore(NemesisBaseClass):
     manager_operation = True
     disruptive = True
     kubernetes = True
+    xcloud = True
     limited = True
     supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
 
@@ -7094,6 +7113,7 @@ class OperatorNodetoolFlushAndReshard(NemesisBaseClass):
 class ScyllaKillMonkey(NemesisBaseClass):
     disruptive = True
     kubernetes = True
+    xcloud = True
     free_tier_set = True
 
     def disrupt(self):
@@ -7104,6 +7124,7 @@ class ScyllaKillMonkey(NemesisBaseClass):
 class ValidateHintedHandoffShortDowntime(NemesisBaseClass):
     disruptive = True
     kubernetes = True
+    xcloud = True
     free_tier_set = True
 
     def disrupt(self):
@@ -7114,6 +7135,7 @@ class ValidateHintedHandoffShortDowntime(NemesisBaseClass):
 class SnapshotOperations(NemesisBaseClass):
     disruptive = False
     kubernetes = True
+    xcloud = True
     limited = True
 
     def disrupt(self):
@@ -7133,6 +7155,7 @@ class NodeRestartWithResharding(NemesisBaseClass):
 class ClusterRollingRestart(NemesisBaseClass):
     disruptive = True
     kubernetes = True
+    xcloud = True
     free_tier_set = True
 
     def disrupt(self):
@@ -7153,6 +7176,7 @@ class RollingRestartConfigChangeInternodeCompression(NemesisBaseClass):
 class ClusterRollingRestartRandomOrder(NemesisBaseClass):
     disruptive = True
     kubernetes = True
+    xcloud = True
     free_tier_set = True
 
     def disrupt(self):
@@ -7171,6 +7195,7 @@ class SwitchBetweenPasswordAuthAndSaslauthdAuth(NemesisBaseClass):
 class TopPartitions(NemesisBaseClass):
     disruptive = False
     kubernetes = True
+    xcloud = True
     limited = True
 
     def disrupt(self):
@@ -7533,6 +7558,7 @@ class BootstrapStreamingErrorNemesis(NemesisBaseClass):
 class DisableBinaryGossipExecuteMajorCompaction(NemesisBaseClass):
     disruptive = True
     kubernetes = True
+    xcloud = True
 
     def disrupt(self):
         self.runner.disrupt_disable_binary_gossip_execute_major_compaction()
@@ -7606,6 +7632,7 @@ class ModifyTableTwcsWindowSizeMonkey(NemesisBaseClass):
 
 class ModifyTableCommentMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7617,6 +7644,7 @@ class ModifyTableCommentMonkey(NemesisBaseClass):
 
 class ModifyTableGcGraceTimeMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7628,6 +7656,7 @@ class ModifyTableGcGraceTimeMonkey(NemesisBaseClass):
 
 class ModifyTableCachingMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7639,6 +7668,7 @@ class ModifyTableCachingMonkey(NemesisBaseClass):
 
 class ModifyTableBloomFilterFpChanceMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7650,6 +7680,7 @@ class ModifyTableBloomFilterFpChanceMonkey(NemesisBaseClass):
 
 class ModifyTableCompactionMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7661,6 +7692,7 @@ class ModifyTableCompactionMonkey(NemesisBaseClass):
 
 class ModifyTableCompressionMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7672,6 +7704,7 @@ class ModifyTableCompressionMonkey(NemesisBaseClass):
 
 class ModifyTableCrcCheckChanceMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7683,6 +7716,7 @@ class ModifyTableCrcCheckChanceMonkey(NemesisBaseClass):
 
 class ModifyTableDclocalReadRepairChanceMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7694,6 +7728,7 @@ class ModifyTableDclocalReadRepairChanceMonkey(NemesisBaseClass):
 
 class ModifyTableDefaultTimeToLiveMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7705,6 +7740,7 @@ class ModifyTableDefaultTimeToLiveMonkey(NemesisBaseClass):
 
 class ModifyTableMaxIndexIntervalMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7716,6 +7752,7 @@ class ModifyTableMaxIndexIntervalMonkey(NemesisBaseClass):
 
 class ModifyTableMinIndexIntervalMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7727,6 +7764,7 @@ class ModifyTableMinIndexIntervalMonkey(NemesisBaseClass):
 
 class ModifyTableMemtableFlushPeriodInMsMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7738,6 +7776,7 @@ class ModifyTableMemtableFlushPeriodInMsMonkey(NemesisBaseClass):
 
 class ModifyTableReadRepairChanceMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
@@ -7749,6 +7788,7 @@ class ModifyTableReadRepairChanceMonkey(NemesisBaseClass):
 
 class ModifyTableSpeculativeRetryMonkey(NemesisBaseClass):
     kubernetes = True
+    xcloud = True
     limited = True
     schema_changes = True
     free_tier_set = True
