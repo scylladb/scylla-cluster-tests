@@ -2822,7 +2822,7 @@ class SCTConfiguration(dict):
             "azure_region_name",
         ],
         "docker": ["user_credentials_path", "scylla_version"],
-        "baremetal": ["s3_baremetal_config", "db_nodes_private_ip", "db_nodes_public_ip", "user_credentials_path"],
+        "baremetal": ["s3_baremetal_config", "user_credentials_path"],
         "aws-siren": [
             "user_prefix",
             "instance_type_loader",
@@ -3962,8 +3962,6 @@ class SCTConfiguration(dict):
             options_must_exist += ["azure_image_db"]
         elif backend == "docker":
             options_must_exist += ["docker_image"]
-        elif backend == "baremetal":
-            options_must_exist += ["db_nodes_public_ip"]
         elif "k8s" in backend or backend == "xcloud":
             options_must_exist += ["scylla_version"]
 

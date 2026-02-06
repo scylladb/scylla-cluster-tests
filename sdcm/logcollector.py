@@ -70,6 +70,7 @@ from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
 from sdcm.localhost import LocalHost
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.utils.aws_ssm_runner import SSMCommandRunner
+from sdcm.keystore import KeyStore
 from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2_Failure
 
 LOGGER = logging.getLogger(__name__)
@@ -1852,6 +1853,73 @@ class Collector:
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Failed to add Manager node for log collection: %s", exc)
 
+    def get_baremetal_instances_by_testid(self):
+        """Get baremetal instances from the baremetal config file.
+
+        Baremetal nodes are statically configured via a JSON config file
+        retrieved from S3 via KeyStore. This method reads the config and
+        creates CollectingNode instances for db_nodes, loader_nodes, and monitor_nodes.
+        """
+        s3_baremetal_config = self.params.get("s3_baremetal_config")
+        if not s3_baremetal_config:
+            LOGGER.warning("No s3_baremetal_config parameter found, cannot collect baremetal logs")
+            return
+
+        try:
+            baremetal_info = KeyStore().get_baremetal_config(s3_baremetal_config)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error("Failed to get baremetal config from KeyStore: %s", exc)
+            return
+
+        user_credentials_path = self.params.get("user_credentials_path")
+        ip_type = ssh_connection_ip_type(self.params)
+
+        node_types = {
+            "db_nodes": ("db_cluster", "scylla-db"),
+            "loader_nodes": ("loader_set", "loader"),
+            "monitor_nodes": ("monitor_set", "monitor"),
+        }
+
+        for config_key, (attr, node_tag) in node_types.items():
+            node_config = baremetal_info.get(config_key, {})
+            ssh_username = node_config.get("username", "root")
+            node_list = node_config.get("node_list", [])
+
+            for idx, node_info in enumerate(node_list):
+                public_ip = node_info.get("public_ip")
+                private_ip = node_info.get("private_ip")
+                hostname = public_ip if ip_type == "public" else private_ip
+
+                if not hostname:
+                    LOGGER.warning("No %s IP found for baremetal node %s-%d, skipping", ip_type, config_key, idx)
+                    continue
+
+                node_name = f"{node_tag}-node-{self.test_id[:8]}-{idx}"
+                ssh_login_info = {
+                    "hostname": hostname,
+                    "user": ssh_username,
+                    "key_file": user_credentials_path,
+                }
+
+                collecting_node = CollectingNode(
+                    name=node_name,
+                    ssh_login_info=ssh_login_info,
+                    instance=None,
+                    global_ip=public_ip or private_ip,
+                    tags={
+                        **self.tags,
+                        "NodeType": node_tag,
+                    },
+                )
+                getattr(self, attr).append(collecting_node)
+
+        LOGGER.info(
+            "Baremetal log collection: found %d db nodes, %d loader nodes, %d monitor nodes",
+            len(self.db_cluster),
+            len(self.loader_set),
+            len(self.monitor_set),
+        )
+
     def get_running_cluster_sets(self, backend):
         if backend in ("aws", "aws-siren", "k8s-eks"):
             self.get_aws_instances_by_testid()
@@ -1861,6 +1929,8 @@ class Collector:
             self.get_docker_instances_by_testid()
         elif backend == "xcloud":
             self.get_xcloud_instances_by_testid()
+        elif backend == "baremetal":
+            self.get_baremetal_instances_by_testid()
         else:
             self.create_collecting_nodes()
 
