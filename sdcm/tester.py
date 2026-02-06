@@ -452,9 +452,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.timeout_thread = None
         self.email_reporter = build_reporter(self.__class__.__name__, self.params.get("email_recipients"), self.logdir)
 
-        self.init_argus_run()
-        self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
-        PythonDriverReporter(argus_client=self.test_config.argus_client()).report()
         self.localhost = self._init_localhost()
 
         if self.params.get("logs_transport") == "syslog-ng":
@@ -472,6 +469,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             log_dir=self.logdir, _registry=getattr(self, "_registry", None) or self.events_processes_registry
         )
         enable_default_filters(sct_config=self.params)
+        self.init_argus_run()
+        self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
+        PythonDriverReporter(argus_client=self.test_config.argus_client()).report()
 
         self.skip_test_stages = defaultdict(lambda: False, self.params.get("skip_test_stages") or {})
 
