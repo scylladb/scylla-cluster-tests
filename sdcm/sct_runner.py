@@ -887,9 +887,10 @@ class GceSctRunner(SctRunner):
     SCT_NETWORK = "qa-vpc"
 
     def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration):
-        availability_zone = availability_zone or params.get("availability_zone") or random_zone(region_name)
+        # GCE zones are always randomly selected from available zones in the region
+        # The availability_zone parameter is AWS-specific and should be ignored for GCE
+        availability_zone = random_zone(region_name)
         assert availability_zone, "Availability zone is required for GCE"
-        availability_zone = availability_zone.split(",")[0]  # in case multiple AZs are given, take the first one
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
 
         super().__init__(region_name=region_name, availability_zone=availability_zone, params=params)

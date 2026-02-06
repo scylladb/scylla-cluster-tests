@@ -309,9 +309,10 @@ class GCECluster(cluster.BaseCluster):
         self._credentials = credentials
         self._gce_instance_type = gce_instance_type
         self._gce_image_username = gce_image_username
-        availability_zone = self.params.get("availability_zone")
+        # GCE zones are always randomly selected from available zones in the region
+        # The availability_zone parameter is AWS-specific and should be ignored for GCE
         self._gce_zone_names: list[str] = [
-            f"{region}-{availability_zone or random_zone(region)}" for region in gce_region_names
+            f"{region}-{random_zone(region)}" for region in gce_region_names
         ]
         # Keep this print out for debugging purposes: validate that zones are correctly set
         LOGGER.debug("GCE zones used: %s", self._gce_zone_names)
