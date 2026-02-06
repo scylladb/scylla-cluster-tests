@@ -311,8 +311,8 @@ class GCECluster(cluster.BaseCluster):
         self._gce_instance_type = gce_instance_type
         self._gce_image_username = gce_image_username
         
-        # Get availability_zone from params
-        provided_zone = self.params.get("availability_zone")
+        # Get availability_zone from params (use parameter directly, not self.params which isn't set yet)
+        provided_zone = params.get("availability_zone") if params else None
         
         # Handle comma-separated zones by taking the first one
         if provided_zone and ',' in provided_zone:
