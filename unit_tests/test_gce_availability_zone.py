@@ -13,7 +13,6 @@
 
 """Test that GCE correctly ignores availability_zone parameter and uses random_zone."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from sdcm.sct_runner import GceSctRunner
