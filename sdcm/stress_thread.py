@@ -145,6 +145,8 @@ class CassandraStressThread(DockerBasedStressThread):
                 self.hdr_tags.append(f"WRITE-{tag_suffix}")
             elif "read=" in stress_cmd:
                 self.hdr_tags.append(f"READ-{tag_suffix}")
+            elif any(op in stress_cmd for op in ["update", "delete", "select", "read", "write"]):
+                self.hdr_tags.extend([f"WRITE-{tag_suffix}", f"READ-{tag_suffix}"])
             else:
                 raise ValueError(
                     "Cannot detect supported stress operation type from the stress command with user profile: %s",
