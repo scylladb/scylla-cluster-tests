@@ -183,7 +183,12 @@ class TestGceClusterAvailabilityZone:
         mock_gce_service = (MagicMock(), {"project_id": "test-project"})
 
         # Create cluster instance (we'll only test the __init__ logic)
-        with patch.object(ScyllaGCECluster, "_node_startup"):
+        # Patch methods that are called during initialization
+        with (
+            patch("sdcm.cluster_gce.TestConfig"),
+            patch.object(ScyllaGCECluster, "init_log_directory"),
+            patch("sdcm.cluster.ScyllaClusterBenchmarkManager"),
+        ):
             cluster = ScyllaGCECluster(
                 gce_image="test-image",
                 gce_image_type="test-type",
@@ -227,7 +232,12 @@ class TestGceClusterAvailabilityZone:
         mock_gce_service = (MagicMock(), {"project_id": "test-project"})
 
         # Create cluster instance
-        with patch.object(ScyllaGCECluster, "_node_startup"):
+        # Patch methods that are called during initialization
+        with (
+            patch("sdcm.cluster_gce.TestConfig"),
+            patch.object(ScyllaGCECluster, "init_log_directory"),
+            patch("sdcm.cluster.ScyllaClusterBenchmarkManager"),
+        ):
             cluster = ScyllaGCECluster(
                 gce_image="test-image",
                 gce_image_type="test-type",
