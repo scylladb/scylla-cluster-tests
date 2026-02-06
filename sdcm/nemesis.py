@@ -41,7 +41,6 @@ from uuid import uuid4
 from cassandra import ConsistencyLevel, InvalidRequest
 from cassandra.query import SimpleStatement
 from invoke import UnexpectedExit
-from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.common.enums import NemesisStatus
 from sdcm.mgmt.cli import BackupTask
 from sdcm.nemesis_registry import NemesisRegistry
@@ -75,7 +74,6 @@ from sdcm.mgmt.common import TaskStatus, ScyllaManagerError, get_persistent_snap
 from sdcm.mgmt.backup import run_manager_backup
 from sdcm.mgmt.argus_report import report_manager_backup_results_to_argus
 from sdcm.mgmt.helpers import get_dc_name_from_ks_statement, get_schema_create_statements_from_snapshot
-from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.provision.helpers.certificate import update_certificate, TLSAssets
@@ -322,7 +320,6 @@ class NemesisRunner:
             # TODO: issue https://github.com/scylladb/scylla/issues/6074. Waiting for dev conclusions
             "cqlstress_lwt_example": "*",  # Ignore LWT user-profile tables
         }
-        self.es_publisher = NemesisElasticSearchPublisher(self.tester)
         self._init_num_deletions_factor()
         self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
         self.hdr_tags = []
@@ -339,7 +336,9 @@ class NemesisRunner:
         # of partitions to delete. We prefer not to delete "too many" partitions at once in a single nemesis.
         # In case 'stress_cmd' has a write-mode and partitions are rewritten, then it is OK to delete all,
         # (so this factor is set to - 1)
-        # Example usage: partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.num_deletions_factor
+        # Example usage:
+        # partitions_amount=self.tester.partitions_attrs.non_validated_partitions
+        # // self.num_deletions_factor
         self.num_deletions_factor = 5
         if stress_cmds := self.cluster.params.get("stress_cmd"):
             if not isinstance(stress_cmds, list):
@@ -365,10 +364,6 @@ class NemesisRunner:
         self.stats[disrupt][key[status]].append(data)
         self.stats[disrupt]["cnt"] += 1
         self.log.debug("Update nemesis info with: %s", data)
-        if self.tester.create_stats:
-            self.tester.update({"nemesis": self.stats})
-        if self.es_publisher:
-            self.es_publisher.publish(disrupt_name=disrupt, status=status, data=data)
 
     def publish_event(self, disrupt, status=True, data=None):
         if not data:
@@ -425,7 +420,6 @@ class NemesisRunner:
 
     @raise_event_on_failure
     def run(self, interval=None, cycles_count: int = -1):
-        self.es_publisher.create_es_connection()
         if interval:
             self.interval = interval * 60
         self.log.info("Interval: %s s", self.interval)
@@ -2550,7 +2544,8 @@ class NemesisRunner:
     def delete_half_partition(self, ks_cf):
         self.log.debug("Delete by range - half of partition")
 
-        # Select half of partitions because we need available partitions in the next step: delete_range_in_few_partitions module
+        # Select half of partitions because we need available partitions in the
+        # next step: delete_range_in_few_partitions module
         partitions_amount = self.tester.partitions_attrs.non_validated_partitions / 2
         self.log.debug("delete_half_partition.partitions_amount: %s", partitions_amount)
         partitions_for_delete = self.choose_partitions_for_delete(
@@ -2767,7 +2762,9 @@ class NemesisRunner:
 
         # This nemesis can not be run on table with RF = 1:
         #   ConfigurationException: tombstone_gc option with mode = repair not supported for table with RF one or local replication strategy
-        # We do not run tests with local strategy ({'class': 'org.apache.cassandra.locator.LocalStrategy'}), so I do not add this filter
+        # We do not run tests with local strategy ({'class':
+        # 'org.apache.cassandra.locator.LocalStrategy'}), so I do not add this
+        # filter
         if not (
             all_ks_cfs := self.cluster.get_non_system_ks_cf_list(
                 db_node=self.target_node, filter_func=self.cluster.is_ks_rf_one
@@ -3612,7 +3609,8 @@ class NemesisRunner:
         ks_cf = self.cluster.get_any_ks_cf_list(
             db_node=self.target_node, filter_empty_tables=False, filter_func=filter_func
         )
-        # remove quotes from keyspace or column family, since output of `nodetool listsnapshots` isn't returning them quoted
+        # remove quotes from keyspace or column family, since output of `nodetool
+        # listsnapshots` isn't returning them quoted
         ks_cf = [k_c.replace('"', "") for k_c in ks_cf]
         keyspace_table = []
         if len(snapshot_params) > 1:
@@ -3901,7 +3899,10 @@ class NemesisRunner:
         ]
         if rate_limit:
             list_of_tc_options.append(
-                ("NetworkRandomInterruption_{}_limit".format(rate_limit), "--rate {}".format(rate_limit))
+                (
+                    "NetworkRandomInterruption_{}_limit".format(rate_limit),
+                    "--rate {}".format(rate_limit),
+                )
             )
 
         option_name, selected_option = random.choice(list_of_tc_options)
@@ -5940,7 +5941,9 @@ class NemesisRunner:
                 coordinator_node = get_topology_coordinator_node(verification_node)
             if coordinator_node != self.target_node and coordinator_node.running_nemesis:
                 raise UnsupportedNemesis(
-                    f"Coordinator node is busy with {coordinator_node.running_nemesis}, Coordinator node was restarted: {num_of_restart}"
+                    f"Coordinator node is busy with {
+                        coordinator_node.running_nemesis
+                    }, Coordinator node was restarted: {num_of_restart}"
                 )
             elif coordinator_node != self.target_node:
                 self.switch_target_node(coordinator_node)
@@ -6360,16 +6363,8 @@ def disrupt_method_wrapper(method, caller_obj: NemesisBaseClass, is_exclusive=Fa
                     disrupt = runner.base_disruption_name
                     del log_info["operation"]
 
-                    try:  # So that the nemesis thread won't stop due to elasticsearch failure
-                        runner.update_stats(disrupt, status, log_info)
-                    except ElasticSearchConnectionTimeout as err:
-                        runner.log.warning(
-                            f"Connection timed out when attempting to update elasticsearch statistics:\n{err}"
-                        )
-                    except Exception as err:  # noqa: BLE001
-                        runner.log.warning(
-                            f"Unexpected error when attempting to update elasticsearch statistics:\n{err}"
-                        )
+                    runner.update_stats(disrupt, status, log_info)
+
                     runner.log.info(f"log_info: {log_info}")
                     nemesis_event.duration = time_elapsed
 
@@ -7186,7 +7181,8 @@ class RandomInterruptionNetworkMonkey(NemesisBaseClass):
     additional_configs = ["configurations/network_config/two_interfaces.yaml"]
     # TODO: this definition should be removed when network configuration new mechanism will be supported by all backends.
     #  Now "ip_ssh_connections" is not supported for AWS and it is ignored.
-    #  Test communication address (ip_ssh_connections) is defined as "public" for the relevant pipelines in "two_interfaces.yaml"
+    # Test communication address (ip_ssh_connections) is defined as "public"
+    # for the relevant pipelines in "two_interfaces.yaml"
     additional_params = {"ip_ssh_connections": "public"}
 
     def disrupt(self):
@@ -7202,7 +7198,8 @@ class BlockNetworkMonkey(NemesisBaseClass):
     additional_configs = ["configurations/network_config/two_interfaces.yaml"]
     # TODO: this definition should be removed when network configuration new mechanism will be supported by all backends.
     #  Now "ip_ssh_connections" is not supported for AWS and it is ignored.
-    #  Test communication address (ip_ssh_connections) is defined as "public" for the relevant pipelines in "two_interfaces.yaml"
+    # Test communication address (ip_ssh_connections) is defined as "public"
+    # for the relevant pipelines in "two_interfaces.yaml"
     additional_params = {"ip_ssh_connections": "public"}
 
     def disrupt(self):
@@ -7245,7 +7242,8 @@ class StopStartInterfacesNetworkMonkey(NemesisBaseClass):
     additional_configs = ["configurations/network_config/two_interfaces.yaml"]
     # TODO: this definition should be removed when network configuration new mechanism will be supported by all backends.
     #  Now "ip_ssh_connections" is not supported for AWS and it is ignored.
-    #  Test communication address (ip_ssh_connections) is defined as "public" for the relevant pipelines in "two_interfaces.yaml"
+    # Test communication address (ip_ssh_connections) is defined as "public"
+    # for the relevant pipelines in "two_interfaces.yaml"
     additional_params = {"ip_ssh_connections": "public"}
 
     def disrupt(self):

@@ -31,7 +31,6 @@ append_scylla_args: '--stream_io_throughput_mb_per_sec 458 --blocked-reactor-not
 backtrace_decoding: true
 backtrace_stall_decoding: false
 
-store_perf_results: false
 use_prepared_loaders: false
 use_placement_group: true
 use_capacity_reservation: false

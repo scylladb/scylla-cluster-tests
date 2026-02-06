@@ -50,7 +50,6 @@ backtrace_decoding: true
 backtrace_stall_decoding: false
 print_kernel_callstack: false
 
-store_perf_results: true
 use_mgmt: false
 email_recipients: ['scylla-perf-results@scylladb.com']
 

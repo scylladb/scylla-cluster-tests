@@ -6,7 +6,6 @@ stress_duration: 60
 gce_instance_type_db: 'n2-highmem-32'
 gce_instance_type_loader: 'e2-highcpu-32'
 
-store_perf_results: false
 use_prepared_loaders: false
 use_hdrhistogram: true
 
