@@ -1472,6 +1472,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         list_class_name = self.params.get("nemesis_class_name")
         nemesis_selectors = self.params.get("nemesis_selector")
         nemesis_seeds = self.params.get("nemesis_seed")
+        nemesis_intervals = self.params.get("nemesis_interval")
 
         if nemesis_selectors and isinstance(nemesis_selectors, str):
             nemesis_selectors = [nemesis_selectors]
@@ -1481,6 +1482,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             nemesis_seeds = [nemesis_seeds]
         if nemesis_seeds and isinstance(nemesis_seeds, str):
             nemesis_seeds = [int(seed) for seed in nemesis_seeds.split()]
+        if nemesis_intervals and isinstance(nemesis_intervals, int):
+            nemesis_intervals = [nemesis_intervals]
 
         nemesis_class_names = []
         for i, klass in enumerate(list_class_name.split(" ")):
@@ -1508,6 +1511,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     "nemesis": getattr(nemesis, nemesis_name),
                     "nemesis_selector": nemesis_selector,
                     "nemesis_seed": int(nemesis_seeds[i % len(nemesis_seeds)]) if nemesis_seeds else None,
+                    "nemesis_interval": nemesis_intervals[i % len(nemesis_intervals)] if nemesis_intervals else None,
                 }
             )
 

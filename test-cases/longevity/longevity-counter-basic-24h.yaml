@@ -1,0 +1,72 @@
+test_duration: 420
+
+latte_schema_parameters:
+  lwt: 'false'
+  cdc: 'false'
+  mv: 'false'
+  use_counter: 'true'
+  ks_name: 'base_keyspace'
+  table_name: 'base_table'
+  mv_name: 'mv_mv'
+
+stress_cmd:
+  - >-
+    latte run -f "update_or_delete_by_cycle_with_counter" --consistency=QUORUM
+    --concurrency 1 --threads=100 --rate=10000 --duration=360m --tag update-or-delete-by-cycle1
+    --request-timeout=900s --retry-number=50 --retry-interval=1s,60s
+    -P offset=0 -P rows=10000000 -P rows_per_partition=1
+    -P update_cycles=5 -P read_cycles=10 -P delete_cycles=5
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f "update_or_delete_by_cycle_with_counter" --consistency=QUORUM
+    --concurrency 10 --threads=1 --rate=10000 --duration=360m --tag update-or-delete-by-cycle2
+    --request-timeout=900s --retry-number=50 --retry-interval=1s,60s
+    -P offset=100000000 -P rows=10000000 -P rows_per_partition=1
+    -P update_cycles=5 -P read_cycles=10 -P delete_cycles=5
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f "update_or_delete_by_cycle_with_counter" --consistency=QUORUM
+    --concurrency 10 --threads=1 --rate=10000 --duration=360m --tag update-or-delete-by-cycle3
+    --request-timeout=900s --retry-number=50 --retry-interval=1s,60s
+    -P offset=200000000 -P rows=10000000 -P rows_per_partition=1
+    -P update_cycles=5 -P read_cycles=10 -P delete_cycles=5
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f "update_or_delete_by_cycle_with_counter" --consistency=QUORUM
+    --concurrency 10 --threads=1 --rate=10000 --duration=360m --tag update-or-delete-by-cycle4
+    --request-timeout=900s --retry-number=50 --retry-interval=1s,60s
+    -P offset=300000000 -P rows=10000000 -P rows_per_partition=1
+    -P update_cycles=5 -P read_cycles=10 -P delete_cycles=5
+    data_dir/latte/tablet_split_merge_load.rn
+
+n_db_nodes: 6
+simulated_racks: 3
+n_loaders: 2
+round_robin: true
+
+instance_type_db: 'i4i.2xlarge'
+gce_instance_type_db: 'n2-highmem-8'
+gce_n_local_ssd_disk_db: 8
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: ["schema_changes and not disruptive"]
+nemesis_seed: '021'
+nemesis_during_prepare: false
+space_node_threshold: 64424
+
+user_prefix: 'longevity-mv-24h'
+
+use_preinstalled_scylla: true
+
+experimental_features:
+  - views-with-tablets
+
+append_scylla_yaml:
+  rf_rack_valid_keyspaces: true
+  target_tablet_size_in_bytes: 1073741824
+
+
+append_scylla_args: '--logger-log-level table=debug'
