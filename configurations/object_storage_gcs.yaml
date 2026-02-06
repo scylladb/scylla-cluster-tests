@@ -1,0 +1,5 @@
+append_scylla_yaml:
+  auto_snapshot: false
+  object_storage_endpoints:
+    - name: https://storage.googleapis.com
+      type: gs
