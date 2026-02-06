@@ -274,9 +274,10 @@ class ScyllaCloudAPIClient:
         jump_start: bool,
         encryption_at_rest: dict | None,
         maintenance_windows: list[dict],
-        scaling: dict[str, str],
+        scaling: dict[str, Any],
         prom_proxy: bool,
         vector_search: dict | None,
+        tablets: str | None,
     ) -> dict[str, Any]:
         """
         Create cluster-create request.
@@ -303,6 +304,7 @@ class ScyllaCloudAPIClient:
         :param scaling: scaling configuration
         :param prom_proxy: whether to enable Prometheus proxy for the cluster (default: False)
         :param vector_search: Vector Search configuration
+        :param tablets: tablets configuration, should be set to "enforced" for XCloud cluster
 
         :return: created cluster details
         """
@@ -329,6 +331,7 @@ class ScyllaCloudAPIClient:
             scaling=scaling,
             promProxy=prom_proxy,
             vectorSearch=vector_search,
+            tablets=tablets,
         )
         return self._parse_response_data(response)
 
