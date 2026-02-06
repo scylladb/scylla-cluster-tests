@@ -9,23 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  check_org_membership:
-    runs-on: ubuntu-latest
-    outputs:
-      isTeamMember: ${{ steps.teamAffiliation.outputs.isTeamMember }}
-    steps:
-      - name: Check user for team affiliation
-        uses: tspascoal/get-user-teams-membership@v3
-        if: github.event.pull_request.user.login != 'renovate[bot]'
-        id: teamAffiliation
-        with:
-          GITHUB_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
-          username: ${{ github.event.pull_request.user.login }}
-          team: 'dev'
-
   update_ignore_revs:
-    needs: check_org_membership
-    if: ( github.event.pull_request.user.login == 'renovate[bot]' || needs.check_org_membership.outputs.isTeamMember == 'true' ) && contains(github.event.pull_request.labels.*.name, 'Formatting')
+    if: contains(github.event.pull_request.labels.*.name, 'Formatting')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
