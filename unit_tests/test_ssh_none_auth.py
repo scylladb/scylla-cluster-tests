@@ -12,9 +12,9 @@
 # Copyright (c) 2025 ScyllaDB
 
 import os
+import socket
 import subprocess
 import time
-import socket
 from pathlib import Path
 
 import pytest

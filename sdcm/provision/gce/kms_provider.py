@@ -2,8 +2,9 @@ import logging
 from dataclasses import dataclass
 
 from google.cloud.exceptions import GoogleCloudError
-from sdcm.utils.gcp_kms import GcpKms
+
 from sdcm.keystore import KeyStore
+from sdcm.utils.gcp_kms import GcpKms
 
 LOGGER = logging.getLogger(__name__)
 

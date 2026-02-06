@@ -11,31 +11,30 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import builtins
+import contextlib
+import logging
 import os
 import re
 import time
-import builtins
-import logging
-import contextlib
 from enum import Enum
 from itertools import chain
 
-from sdcm.loader import ScyllaBenchStressExporter, ScyllaBenchHDRExporter
+from sdcm.loader import ScyllaBenchHDRExporter, ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
 from sdcm.reporting.tooling_reporter import ScyllaBenchVersionReporter
 from sdcm.sct_events import Severity
 from sdcm.sct_events.loaders import (
-    ScyllaBenchEvent,
     SCYLLA_BENCH_ERROR_EVENTS_PATTERNS,
     SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS,
+    ScyllaBenchEvent,
 )
-from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.stress_thread import DockerBasedStressThread
+from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 from sdcm.wait import wait_for
-
 
 LOGGER = logging.getLogger(__name__)
 

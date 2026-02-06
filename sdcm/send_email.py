@@ -11,26 +11,26 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import smtplib
-import os.path
-import subprocess
-import logging
-import tempfile
-import json
 import copy
+import json
+import logging
+import os.path
+import smtplib
+import subprocess
+import tempfile
 import traceback
-from typing import Optional, Sequence, Tuple
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from functools import cached_property
+from typing import Optional, Sequence, Tuple
 
 import jinja2
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.common import list_instances_gce, list_instances_aws, list_resources_docker, format_timestamp
-from sdcm.utils.gce_utils import gce_public_addresses
+from sdcm.utils.common import format_timestamp, list_instances_aws, list_instances_gce, list_resources_docker
 from sdcm.utils.docker_utils import get_ip_address_of_container
+from sdcm.utils.gce_utils import gce_public_addresses
 
 LOGGER = logging.getLogger(__name__)
 

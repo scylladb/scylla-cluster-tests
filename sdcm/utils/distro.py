@@ -13,6 +13,7 @@
 
 import enum
 import logging
+
 from sdcm.utils.decorators import static_init
 
 LOGGER = logging.getLogger(__name__)

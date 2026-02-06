@@ -12,17 +12,17 @@
 # Copyright (c) 2025 ScyllaDB
 
 import unittest
-from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
 
 from sdcm.sct_runner import (
-    list_sct_runners,
-    clean_sct_runners,
-    SctRunnerInfo,
     AwsSctRunner,
-    GceSctRunner,
     AzureSctRunner,
+    GceSctRunner,
     OciSctRunner,
+    SctRunnerInfo,
+    clean_sct_runners,
+    list_sct_runners,
 )
 
 

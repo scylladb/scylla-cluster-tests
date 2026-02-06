@@ -1,14 +1,14 @@
 #!/usr/bin/env python
-import sys
-import os.path
 import datetime
 import logging.config
+import os.path
+import sys
 from collections import OrderedDict
+
+from elasticsearch import Elasticsearch
 
 import argus
 from argus.client.sct.client import ArgusSCTClient
-from elasticsearch import Elasticsearch
-
 from sdcm.argus_results import send_result_to_argus
 from sdcm.keystore import KeyStore
 

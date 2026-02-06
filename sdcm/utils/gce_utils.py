@@ -11,26 +11,25 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import re
 import json
-import random
 import logging
+import os
+import random
+import re
 import time
 import uuid
 from functools import cached_property
 from typing import Any, List, Literal
 
-from google.oauth2 import service_account
-from google.cloud import compute_v1
-from google.cloud.compute_v1 import Image
-from google.cloud import storage
 from google.api_core.extended_operation import ExtendedOperation
+from google.cloud import compute_v1, storage
+from google.cloud.compute_v1 import Image
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 from sdcm.provision.provisioner import VmArch
+from sdcm.utils.docker_utils import Container, ContainerManager, DockerException
 
 # NOTE: we cannot use neither 'slim' nor 'alpine' versions because we need the 'beta' component be installed.
 GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:437.0.1"

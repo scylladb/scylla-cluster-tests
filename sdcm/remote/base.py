@@ -11,19 +11,19 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, List, Callable
-from abc import abstractmethod, ABCMeta
-from datetime import datetime
-import shlex
 import logging
-import re
 import os
+import re
+import shlex
 import subprocess
+from abc import ABCMeta, abstractmethod
+from datetime import datetime
 from textwrap import dedent
+from typing import Callable, List, Optional
 
-from invoke.watchers import StreamWatcher, Responder
-from invoke.runners import Result
 from fabric import Connection
+from invoke.runners import Result
+from invoke.watchers import Responder, StreamWatcher
 
 
 class OutputCheckError(Exception):

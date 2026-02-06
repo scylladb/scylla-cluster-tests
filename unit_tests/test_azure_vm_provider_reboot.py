@@ -1,11 +1,11 @@
-from uuid import uuid4
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
+from sdcm.provision import AzureProvisioner
 from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
 from sdcm.sct_runner import AzureSctRunner
-from sdcm.provision import AzureProvisioner
 from sdcm.utils.decorators import retrying
 
 

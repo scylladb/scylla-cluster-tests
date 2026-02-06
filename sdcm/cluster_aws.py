@@ -32,10 +32,11 @@ import yaml
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import EC2ServiceResource
 
-from sdcm import ec2_client, cluster, wait
+from sdcm import cluster, ec2_client, wait
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
+from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.provision.network_configuration import (
     NetworkInterface,
     ScyllaNetworkConfiguration,
@@ -44,14 +45,12 @@ from sdcm.provision.network_configuration import (
     ssh_connection_ip_type,
 )
 from sdcm.provision.scylla_yaml import SeedProvider
-from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
-from sdcm.sct_provision.aws.cluster import PlacementGroup
-
-from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
+from sdcm.remote import NETWORK_EXCEPTIONS, LocalCmdRunner, shell_script_cmd
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
+from sdcm.sct_provision.aws.cluster import PlacementGroup
+from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, tags_as_ec2_tags
 from sdcm.utils.common import list_instances_aws
 from sdcm.utils.decorators import retrying
 from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis

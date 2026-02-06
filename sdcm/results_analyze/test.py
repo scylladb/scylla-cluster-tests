@@ -11,16 +11,16 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import logging
 import re
 import typing
 from datetime import datetime
-import logging
 
 from sdcm.es import ES
 from test_lib.utils import get_class_by_path
-from .base import ClassBase, __DEFAULT__
-from .metrics import ScyllaTestMetrics
 
+from .base import __DEFAULT__, ClassBase
+from .metrics import ScyllaTestMetrics
 
 LOGGER = logging.getLogger(__name__)
 

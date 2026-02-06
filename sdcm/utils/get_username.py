@@ -11,8 +11,8 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import getpass
+import os
 import subprocess
 
 

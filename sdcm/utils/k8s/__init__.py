@@ -13,38 +13,38 @@
 
 
 import abc
+import contextlib
 import json
-import os
-import time
-import queue
 import logging
+import multiprocessing
+import os
+import queue
 import re
 import threading
-import multiprocessing
-import contextlib
-from tempfile import NamedTemporaryFile
-from typing import Iterator, Optional, Union, Callable, List
+import time
 from functools import cached_property, partialmethod
 from pathlib import Path
+from tempfile import NamedTemporaryFile
+from typing import Callable, Iterator, List, Optional, Union
 
 import kubernetes as k8s
 import yaml
 from paramiko.config import invoke
-from urllib3.util.retry import Retry
 from urllib3.exceptions import (
     IncompleteRead,
     ProtocolError,
     ReadTimeoutError,
 )
+from urllib3.util.retry import Retry
 
-from sdcm.log import SDCMAdapter
 from sdcm import sct_abs_path
+from sdcm.log import SDCMAdapter
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.common import walk_thru_data
-from sdcm.utils.decorators import timeout as timeout_decor, retrying
-from sdcm.utils.docker_utils import ContainerManager, Container
+from sdcm.utils.decorators import retrying
+from sdcm.utils.decorators import timeout as timeout_decor
+from sdcm.utils.docker_utils import Container, ContainerManager
 from sdcm.wait import wait_for
-
 
 KUBECTL_BIN = "kubectl"
 HELM_IMAGE = "alpine/helm:3.8.0"

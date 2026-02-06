@@ -17,7 +17,6 @@ from ssh2.exceptions import SocketRecvError
 
 from .result import Result
 
-
 __all__ = (
     "AuthenticationException",
     "UnknownHostException",

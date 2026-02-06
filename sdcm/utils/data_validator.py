@@ -132,19 +132,17 @@
 #     running stress.
 #
 import json
+import logging
 import os
 import re
-import logging
 import uuid
 from typing import NamedTuple, Optional
 
 from sdcm.sct_events import Severity
+from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.test_config import TestConfig
 from sdcm.utils.database_query_utils import fetch_all_rows
-
 from sdcm.utils.user_profile import get_profile_content
-from sdcm.sct_events.health import DataValidatorEvent
-
 
 LOGGER = logging.getLogger(__name__)
 

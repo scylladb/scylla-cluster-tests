@@ -11,13 +11,13 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
-import logging
 import itertools
+import logging
 
 from botocore.exceptions import ClientError
 
-from sdcm.utils.aws_region import AwsRegion
 from sdcm.sct_config import SCTConfiguration
+from sdcm.utils.aws_region import AwsRegion
 
 LOG = logging.getLogger(__name__)
 

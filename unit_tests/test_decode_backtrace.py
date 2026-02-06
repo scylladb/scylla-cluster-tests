@@ -11,21 +11,20 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import json
-from multiprocessing import Queue
+import os
 import unittest
 from functools import cached_property
+from multiprocessing import Queue
 
 import pytest
 
 from sdcm.cluster import TestConfig
 from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
-
 from unit_tests.dummy_remote import DummyRemote
-from unit_tests.test_utils_common import DummyNode
 from unit_tests.lib.events_utils import EventsUtilsMixin
+from unit_tests.test_utils_common import DummyNode
 
 
 class DecodeDummyNode(DummyNode):

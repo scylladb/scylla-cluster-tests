@@ -15,14 +15,13 @@ import json
 import os
 import shutil
 import subprocess
-
 from pathlib import Path
-from typing import List, Any, Dict
+from typing import Any, Dict, List
 
-from azure.core.exceptions import ResourceNotFoundError, AzureError, ODataV4Error, _HttpResponseCommonAPI
-from azure.mgmt.network.models import NetworkSecurityGroup, Subnet, PublicIPAddress, NetworkInterface, VirtualNetwork
+from azure.core.exceptions import AzureError, ODataV4Error, ResourceNotFoundError, _HttpResponseCommonAPI
+from azure.mgmt.compute.models import Image, InstanceViewStatus, RunCommandResult, VirtualMachine
+from azure.mgmt.network.models import NetworkInterface, NetworkSecurityGroup, PublicIPAddress, Subnet, VirtualNetwork
 from azure.mgmt.resource.resources.models import ResourceGroup
-from azure.mgmt.compute.models import VirtualMachine, Image, InstanceViewStatus, RunCommandResult
 
 
 def snake_case_to_camel_case(string):
