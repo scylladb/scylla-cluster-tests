@@ -215,6 +215,8 @@ class ScyllaYaml(BaseModel):
     auth_superuser_name: str = "cassandra"
     auth_superuser_salted_password: str = "$6$x7IFjiX5VCpvNiFk$2IfjTvSyGL7zerpV.wbY7mJjaRCrJ/68dtT3UpT.sSmNYz1bPjtn3mH.kJKFvaZ2T4SbVeBijjmwGjcb83LlV/"  # "cassandra"
 
+    maintenance_socket: str = "ignore"
+
     authenticator: (
         Literal[
             "org.apache.cassandra.auth.PasswordAuthenticator",
