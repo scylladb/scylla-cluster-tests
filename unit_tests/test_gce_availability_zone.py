@@ -185,7 +185,7 @@ class TestGceClusterAvailabilityZone:
         # Create cluster instance (we'll only test the __init__ logic)
         # Patch methods that are called during initialization
         with (
-            patch("sdcm.cluster_gce.TestConfig"),
+            patch("sdcm.cluster.TestConfig"),
             patch.object(ScyllaGCECluster, "init_log_directory"),
             patch("sdcm.cluster.ScyllaClusterBenchmarkManager"),
         ):
@@ -234,7 +234,7 @@ class TestGceClusterAvailabilityZone:
         # Create cluster instance
         # Patch methods that are called during initialization
         with (
-            patch("sdcm.cluster_gce.TestConfig"),
+            patch("sdcm.cluster.TestConfig"),
             patch.object(ScyllaGCECluster, "init_log_directory"),
             patch("sdcm.cluster.ScyllaClusterBenchmarkManager"),
         ):
