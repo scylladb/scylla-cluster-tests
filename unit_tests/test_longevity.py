@@ -8,7 +8,6 @@ from longevity_test import LongevityTest
 from sdcm.cluster import NoMonitorSet
 from sdcm.sct_events import events_processes
 from unit_tests.test_utils_common import DummyDbCluster, DummyNode
-from unit_tests.test_cluster import DummyDbCluster
 
 
 LongevityTest.__test__ = False
@@ -23,7 +22,7 @@ def fixture_mock_calls():
     events_processes._EVENTS_PROCESSES = None
 
 
-@pytest.mark.sct_config(files="test-cases/features/elasticity/longevity-elasticity-many-small-tables.yaml")
+@pytest.mark.sct_config(files="unit_tests/test_configs/longevity-elasticity-unit-test.yaml")
 class DummyLongevityTest(LongevityTest):
     __test__ = True
     test_custom_time = None
@@ -55,6 +54,23 @@ class DummyLongevityTest(LongevityTest):
 
     def _pre_create_templated_user_schema(self, *args, **kwargs):
         pass
+
+    def create_templated_user_stress_params(self, idx, cs_profile):
+        """Mock implementation that avoids creating 500 temporary files on disk."""
+        # Return fake stress params without file I/O
+        # The unit test only validates batch processing logic, not file creation
+        # The real YAML has 2 commands (insert and read), so we return 2 to match
+        fake_profile_path = f"/tmp/mock_profile_table{idx}.yaml"
+        return [
+            {
+                "stress_cmd": f"cassandra-stress user profile={fake_profile_path} 'ops(insert=1)' cl=QUORUM n=1495501 -rate threads=1",
+                "profile": fake_profile_path,
+            },
+            {
+                "stress_cmd": f"cassandra-stress user profile={fake_profile_path} 'ops(read1=1)' cl=QUORUM n=747748 -rate threads=1",
+                "profile": fake_profile_path,
+            },
+        ]
 
     def init_resources(self):
         node = DummyNode(name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla-test"))
