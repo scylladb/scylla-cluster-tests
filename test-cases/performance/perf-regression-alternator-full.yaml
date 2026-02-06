@@ -82,7 +82,7 @@ backtrace_stall_decoding: false
 
 store_perf_results: true
 email_recipients: []  # TODO: Re-enable email notifications by setting to ['alternator-perf-results@scylladb.com'] once the email template issue is resolved.
-
+argus_email_report_template: email_report_performance.yaml
 
 latency_decorator_error_thresholds:
   write:

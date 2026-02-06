@@ -4,6 +4,7 @@ import org.jenkinsci.plugins.workflow.support.steps.build.RunWrapper
 
 def call(Map params, RunWrapper currentBuild){
     def start_time = currentBuild.startTimeInMillis.intdiv(1000)
+    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def test_status = currentBuild.currentResult
     if (test_status) {
         test_status = "--test-status " + test_status
@@ -20,6 +21,7 @@ def call(Map params, RunWrapper currentBuild){
     env
     echo "Start send email ..."
     RUNNER_IP=\$(cat sct_runner_ip||echo "")
+    export SCT_CONFIG_FILES=${test_config}
 
     if [[ -z "${email_recipients}" ]]; then
         echo "Email was not sent because no recipient addresses were provided"
