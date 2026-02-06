@@ -25,7 +25,7 @@ test_duration: 800
 
 
 pre_create_keyspace: ["CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};",
-                      "CREATE TABLE keyspace1.standard2 (key blob, c0 blob, c1 blob, c2 blob, c3 blob, c4 blob, PRIMARY KEY (key))  WITH compaction = {'class': 'LeveledCompactionStrategy'};",
+                      "CREATE TABLE keyspace1.standard2 (key blob, c0 blob, c1 blob, c2 blob, c3 blob, c4 blob, PRIMARY KEY (key))  WITH compaction = {'class': 'LeveledCompactionStrategy'} AND compression = {'chunk_length_in_kb': '64', 'sstable_compression': 'org.apache.cassandra.io.compress.ZstdCompressor'};",
                       "CREATE ROLE IF NOT EXISTS stress_user1 WITH LOGIN = true AND PASSWORD = 'stress_user1' AND SUPERUSER = false;",
                       "CREATE ROLE IF NOT EXISTS stress_user2 WITH LOGIN = true AND PASSWORD = 'stress_user2' AND SUPERUSER = false;",
                       "CREATE ROLE IF NOT EXISTS stress_user3 WITH LOGIN = true AND PASSWORD = 'stress_user3' AND SUPERUSER = false;",
