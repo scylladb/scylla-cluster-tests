@@ -347,14 +347,22 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
 
 
 @pytest.fixture(autouse=True)
-def fake_remoter():
-    """Ensure all tests use FakeRemoter instead of real SSH remoters.
+def fake_remoter(request):
+    """Ensure all non-integration tests use FakeRemoter instead of real SSH remoters.
 
     This is autouse to prevent any test from accidentally creating real SSH
     connections which could interfere with parallel test execution.
+
+    Integration tests (marked with @pytest.mark.integration) are excluded from
+    this fixture and can use real SSH connections.
     """
+    # Skip this fixture for integration tests
+    if "integration" in request.keywords:
+        yield
+        return
+
     RemoteCmdRunnerBase.set_default_remoter_class(FakeRemoter)
-    return FakeRemoter
+    yield FakeRemoter
 
 
 @pytest.fixture(scope="session", autouse=True)
