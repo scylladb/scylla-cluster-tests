@@ -11,8 +11,36 @@ The full list of supported, unsupported or failing nemeses (due to know issues) 
 ## Monitoring stack is on the Docker host machine
 SCT does not support creating a dedicated monitoring node when using the Docker backend. As a result, the monitoring stack is installed directly on the host machine, not on a dedicated Docker instance.
 
-## Scylla-manager is not installed
-SCT installs Scylla-manager on a monitoring node, which is not supported in the Docker backend. Therefore, Scylla-manager is not installed when using this backend.
+## Scylla-manager support
+Starting from this implementation, SCT supports running Scylla-manager on the Docker backend in a dedicated container.
+
+### How it works
+When `use_mgmt: true` is set in the test configuration, SCT will:
+1. Create a separate Docker container for Scylla-manager using the `mgmt_docker_image` parameter
+2. Initialize the manager node independently from the monitoring stack
+3. Install and configure Scylla-manager agent on DB nodes
+4. Enable manager operations and tests to run locally
+
+### Configuration
+To enable Scylla-manager on Docker backend, add the following to your test configuration:
+
+```yaml
+use_mgmt: true
+mgmt_docker_image: 'scylladb/scylla-manager:3.8.0'  # Optional, defaults to this value
+```
+
+### Example usage
+```bash
+# Run a manager test locally with Docker backend
+export SCT_CLUSTER_BACKEND=docker
+export SCT_USE_MGMT=true
+hydra run-test manager_test.ManagerUpgradeTest.test_upgrade --backend docker
+```
+
+### Limitations
+- Manager runs in its own container, separate from the monitoring stack
+- Only single manager node is supported (same as other backends)
+- Manager container requires Docker socket access for operations
 
 ## Starting DB node instances with specific resources footprint
 By default, Scylla on containerized DB instances is started with the following CPU and RAM configuration:

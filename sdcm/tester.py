@@ -1930,6 +1930,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 node_key_file=self.credentials[0].key_file,
             )
 
+        # Initialize manager node if use_mgmt is enabled
+        if self.params.get("use_mgmt"):
+            self.db_cluster._init_manager_node()
+
         self.loaders = cluster_docker.LoaderSetDocker(
             n_nodes=self.params.get("n_loaders"), **container_node_params, **common_params
         )
