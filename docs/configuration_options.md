@@ -1221,6 +1221,15 @@ AWS image type of the oracle node
 **type:** str (appendable)
 
 
+## **instance_type_db_target** / SCT_INSTANCE_TYPE_DB_TARGET
+
+Target AWS instance type for platform migration (e.g., i8g.2xlarge for ARM)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **instance_type_runner** / SCT_INSTANCE_TYPE_RUNNER
 
 instance type of the sct-runner node
@@ -1269,6 +1278,15 @@ AWS subnet ids to use
 ## **ami_id_db_scylla** / SCT_AMI_ID_DB_SCYLLA
 
 AMS AMI id to use for scylla db node
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **ami_id_db_scylla_target** / SCT_AMI_ID_DB_SCYLLA_TARGET
+
+Target AMI for platform migration. Auto-discovered based on instance_type_db_target if not provided.
 
 **default:** N/A
 
