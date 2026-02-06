@@ -11,6 +11,8 @@
 #
 # Copyright (c) 2021 ScyllaDB
 from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.provision.oci.provisioner import OciProvisioner
 from sdcm.provision.provisioner import provisioner_factory
 
 provisioner_factory.register_provisioner(backend="azure", provisioner_class=AzureProvisioner)
+provisioner_factory.register_provisioner(backend="oci", provisioner_class=OciProvisioner)
