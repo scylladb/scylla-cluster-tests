@@ -122,8 +122,17 @@ For more details on xcloud backend, see [xcloud backend documentation](./docs/xc
 
 You can specify a specific scylla version by:
 ```bash
+# Simple version (release)
 export SCT_SCYLLA_VERSION=2025.1
+
+# Branch version (nightly)
+export SCT_SCYLLA_VERSION=master:latest
+
+# Full version tag (specific build with commit hash)
+export SCT_SCYLLA_VERSION=2024.2.5-0.20250221.cb9e2a54ae6d-1
 ```
+
+For detailed information on full version tag support, see `docs/full-version-tag-usage.md`
 
 For debugging a standard nemesis setup you can simply use a default nemesis setup.
 Use the yaml files as in https://github.com/scylladb/scylla-cluster-tests/blob/master/jenkins-pipelines/oss/nemesis/longevity-5gb-1h-AbortRepairMonkey-docker.jenkinsfile:

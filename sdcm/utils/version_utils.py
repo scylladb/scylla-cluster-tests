@@ -31,7 +31,7 @@ from botocore.client import Config
 from sdcm.utils.repo_parser import Parser
 
 from sdcm.remote import LOCALRUNNER
-from sdcm.utils.common import DEFAULT_AWS_REGION
+from sdcm.utils.aws_utils import DEFAULT_AWS_REGION
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events.system import ScyllaRepoEvent
 from sdcm.utils.decorators import retrying
@@ -71,7 +71,9 @@ SEMVER_REGEX = re.compile(
 
 SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
 ARGUS_VERSION_RE = re.compile(r"((?P<short>[\w.~]+)(-(0\.)?(?P<date>[0-9]{8,8})?\.(?P<commit>\w+).*)?)")
-SCYLLA_VERSION_GROUPED_RE = re.compile(r"(?P<version>[\w.~]+)-(?P<build>0|rc\d)?\.?(?P<date>[\d]+)\.(?P<commit_id>\w+)")
+SCYLLA_VERSION_GROUPED_RE = re.compile(
+    r"(?P<version>[\w.~]+(?:-(?:dev|enterprise))?)[-~](?:(?P<build>0|rc\d+)\.)?(?P<date>[\d]{8})\.(?P<commit_id>[a-f0-9]+)"
+)
 SSTABLE_FORMAT_VERSION_REGEX = re.compile(r"Feature (.*)_SSTABLE_FORMAT is enabled")
 ENABLED_SSTABLE_FORMAT_VERSION_REGEXP = re.compile(r"(.*)_SSTABLE_FORMAT")
 PRIMARY_XML_REGEX = re.compile(r'="(.*?primary.xml.(gz|zst)?)".*')
@@ -517,6 +519,11 @@ def get_scylla_docker_repo_from_version(scylla_version: str):  # noqa: PLR0911
     """
     Get scylla docker repo based scylla version.
 
+    Supports various version formats:
+    - Simple versions: "5.2.1", "2024.2.0"
+    - Branch versions: "latest", "master:latest", "enterprise:latest"
+    - Full version tags: "2024.2.5-0.20250221.cb9e2a54ae6d-1", "2026.1.0~dev-0.20260119.4cde34f6f20b"
+
     :param scylla_version: scylla version string
     :param docker_image: docker image name
 
@@ -528,6 +535,22 @@ def get_scylla_docker_repo_from_version(scylla_version: str):  # noqa: PLR0911
         return "scylladb/scylla-nightly"
     elif scylla_version in ("enterprise", "enterprise:latest"):
         return "scylladb/scylla-enterprise-nightly"
+
+    # Check if this is a full version tag (e.g., "2024.2.5-0.20250221.cb9e2a54ae6d-1")
+    # Full version tags are always non-release versions and go to nightly repos
+    if full_version_tag := parse_scylla_version_tag(scylla_version):
+        # Extract base version to determine enterprise vs non-enterprise
+        base_version = full_version_tag.base_version
+        try:
+            comparable_version = ComparableScyllaVersion(base_version)
+            if comparable_version <= "6.2.99" or comparable_version >= "2025.1.0~dev":
+                return "scylladb/scylla-nightly"
+            elif "6.2.99" < comparable_version < "2025.1.0~dev":
+                return "scylladb/scylla-enterprise-nightly"
+        except ValueError:
+            # If we can't parse the base version, default to scylla-nightly
+            return "scylladb/scylla-nightly"
+
     # should be a semver then, but fail fast if not
     try:
         comparable_version = ComparableScyllaVersion(scylla_version)
@@ -714,6 +737,86 @@ def get_git_tag_from_helm_chart_version(chart_version: str) -> str:
     else:
         raise ValueError(f"Got wrong chart version: {chart_version}")
     return git_tag
+
+
+class FullVersionTag(namedtuple("FullVersionTag", ["base_version", "build", "date", "commit_id", "full_tag"])):
+    """Represents a parsed full version tag.
+
+    Full version tags have the structure:
+        <base_version>-<build>.<date>.<commit_id>[optional-suffix]
+
+    Examples:
+        - 2024.2.5-0.20250221.cb9e2a54ae6d-1
+        - 5.2.0-dev-0.20220829.67c91e8bcd61
+        - 4.6.4-0.20220718.b60f14601-1
+
+    Attributes:
+        base_version: The version number (e.g., "2024.2.5", "5.2.0-dev")
+        build: The build number or release candidate (e.g., "0", "rc1")
+        date: The build date in YYYYMMDD format (e.g., "20250221")
+        commit_id: The git commit ID (e.g., "cb9e2a54ae6d")
+        full_tag: The complete original version tag string
+    """
+
+    @classmethod
+    def parse(cls, version_tag: str) -> Optional["FullVersionTag"]:
+        """Parse a full version tag string.
+
+        Args:
+            version_tag: Version tag string to parse
+
+        Returns:
+            FullVersionTag instance if the tag matches the expected format, None otherwise
+
+        Examples:
+            >>> tag = FullVersionTag.parse("2024.2.5-0.20250221.cb9e2a54ae6d-1")
+            >>> tag.base_version
+            '2024.2.5'
+            >>> tag.build
+            '0'
+            >>> tag.date
+            '20250221'
+            >>> tag.commit_id
+            'cb9e2a54ae6d'
+        """
+        match = SCYLLA_VERSION_GROUPED_RE.match(version_tag)
+        if not match:
+            return None
+
+        groups = match.groupdict()
+        if not bool(groups.get("version") and groups.get("date") and groups.get("commit_id")):
+            return None
+
+        return cls(
+            base_version=groups.get("version"),
+            build=groups.get("build") or "",
+            date=groups.get("date"),
+            commit_id=groups.get("commit_id"),
+            full_tag=version_tag,
+        )
+
+
+def parse_scylla_version_tag(version_tag: str) -> Optional[FullVersionTag]:
+    """Parse a Scylla version tag into its components.
+
+    This function parses full version tags that include build metadata like:
+    - 2024.2.5-0.20250221.cb9e2a54ae6d-1
+    - 5.2.0-dev-0.20220829.67c91e8bcd61
+    - 4.6.4-0.20220718.b60f14601-1
+
+    Args:
+        version_tag: The version tag string to parse
+
+    Returns:
+        FullVersionTag instance if parsing succeeds, None if the tag doesn't match the format
+
+    Examples:
+        >>> tag = parse_scylla_version_tag("2024.2.5-0.20250221.cb9e2a54ae6d-1")
+        >>> if tag:
+        ...     print(f"Base: {tag.base_version}, Commit: {tag.commit_id}")
+        Base: 2024.2.5, Commit: cb9e2a54ae6d
+    """
+    return FullVersionTag.parse(version_tag)
 
 
 class MethodVersionNotFound(Exception):
