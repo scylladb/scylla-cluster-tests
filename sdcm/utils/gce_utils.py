@@ -74,6 +74,20 @@ SUPPORTED_PROJECTS = {"gcp-sct-project-1", "gcp-local-ssd-latency"} | {
 }
 
 
+def is_valid_zone_for_region(region: str, zone: str) -> bool:
+    """Check if the given zone letter is valid for the specified GCE region.
+    
+    Args:
+        region: GCE region name (e.g., 'us-east1')
+        zone: Single letter zone identifier (e.g., 'a', 'b', 'c')
+    
+    Returns:
+        True if the zone is valid for the region, False otherwise
+    """
+    supported_zones = SUPPORTED_REGIONS.get(region)
+    return bool(supported_zones and zone in supported_zones)
+
+
 def random_zone(region: str) -> str:
     availability_zones = SUPPORTED_REGIONS.get(region, None)
     if not availability_zones:

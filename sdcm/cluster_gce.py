@@ -38,6 +38,7 @@ from sdcm.utils.gce_utils import (
     gce_private_addresses,
     gce_public_addresses,
     random_zone,
+    is_valid_zone_for_region,
     gce_set_labels,
 )
 from sdcm.wait import exponential_retry
@@ -309,11 +310,23 @@ class GCECluster(cluster.BaseCluster):
         self._credentials = credentials
         self._gce_instance_type = gce_instance_type
         self._gce_image_username = gce_image_username
-        # GCE zones are always randomly selected from available zones in the region
-        # The availability_zone parameter is AWS-specific and should be ignored for GCE
-        self._gce_zone_names: list[str] = [
-            f"{region}-{random_zone(region)}" for region in gce_region_names
-        ]
+        
+        # Get availability_zone from params
+        provided_zone = self.params.get("availability_zone")
+        
+        # Handle comma-separated zones by taking the first one
+        if provided_zone and ',' in provided_zone:
+            provided_zone = provided_zone.split(',')[0].strip()
+        
+        # For each region, use the provided zone if valid, otherwise use random_zone()
+        self._gce_zone_names: list[str] = []
+        for region in gce_region_names:
+            if provided_zone and is_valid_zone_for_region(region, provided_zone):
+                zone = provided_zone
+            else:
+                zone = random_zone(region)
+            self._gce_zone_names.append(f"{region}-{zone}")
+        
         # Keep this print out for debugging purposes: validate that zones are correctly set
         LOGGER.debug("GCE zones used: %s", self._gce_zone_names)
         self._gce_n_local_ssd = int(gce_n_local_ssd) if gce_n_local_ssd else 0
