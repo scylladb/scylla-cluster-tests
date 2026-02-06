@@ -13,6 +13,7 @@ disrupt_abort_repair:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_add_drop_column:
   config_changes: false
@@ -29,6 +30,7 @@ disrupt_add_drop_column:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_add_remove_dc:
   config_changes: false
@@ -45,6 +47,7 @@ disrupt_add_remove_dc:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_add_remove_mv:
   config_changes: false
@@ -61,6 +64,7 @@ disrupt_add_remove_mv:
   sla: false
   supports_high_disk_utilization: false
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_bootstrap_streaming_error:
   config_changes: false
@@ -77,6 +81,7 @@ disrupt_bootstrap_streaming_error:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_corrupt_then_scrub:
   config_changes: false
@@ -93,6 +98,7 @@ disrupt_corrupt_then_scrub:
   sla: false
   supports_high_disk_utilization: false
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_create_index:
   config_changes: false
@@ -109,6 +115,7 @@ disrupt_create_index:
   sla: false
   supports_high_disk_utilization: false
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_decommission_streaming_err:
   config_changes: false
@@ -125,6 +132,7 @@ disrupt_decommission_streaming_err:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_delete_10_full_partitions:
   config_changes: false
@@ -141,6 +149,7 @@ disrupt_delete_10_full_partitions:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_delete_by_rows_range:
   config_changes: false
@@ -157,6 +166,7 @@ disrupt_delete_by_rows_range:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_delete_overlapping_row_ranges:
   config_changes: false
@@ -173,6 +183,7 @@ disrupt_delete_overlapping_row_ranges:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_destroy_data_then_rebuild:
   config_changes: false
@@ -189,6 +200,7 @@ disrupt_destroy_data_then_rebuild:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_destroy_data_then_repair:
   config_changes: false
@@ -205,6 +217,7 @@ disrupt_destroy_data_then_repair:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_disable_binary_gossip_execute_major_compaction:
   config_changes: false
@@ -221,6 +234,7 @@ disrupt_disable_binary_gossip_execute_major_compaction:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_disable_enable_ldap_authorization:
   config_changes: false
@@ -237,6 +251,7 @@ disrupt_disable_enable_ldap_authorization:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node:
   config_changes: false
@@ -253,6 +268,7 @@ disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_drain_kubernetes_node_then_replace_scylla_node:
   config_changes: false
@@ -269,6 +285,7 @@ disrupt_drain_kubernetes_node_then_replace_scylla_node:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation:
   config_changes: false
@@ -285,6 +302,7 @@ disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation:
   config_changes: false
@@ -301,6 +319,7 @@ disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_end_of_quota_nemesis:
   config_changes: true
@@ -317,6 +336,7 @@ disrupt_end_of_quota_nemesis:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_grow_shrink_cluster:
   config_changes: false
@@ -333,6 +353,7 @@ disrupt_grow_shrink_cluster:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_grow_shrink_new_rack:
   config_changes: true
@@ -349,6 +370,7 @@ disrupt_grow_shrink_new_rack:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_grow_shrink_zero_nodes:
   config_changes: false
@@ -365,6 +387,7 @@ disrupt_grow_shrink_zero_nodes:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: true
 disrupt_hard_reboot_node:
   config_changes: false
@@ -381,6 +404,7 @@ disrupt_hard_reboot_node:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_hot_reloading_internode_certificate:
   config_changes: true
@@ -397,6 +421,7 @@ disrupt_hot_reloading_internode_certificate:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_increase_shares_by_attach_another_sl_during_load:
   config_changes: false
@@ -413,6 +438,7 @@ disrupt_increase_shares_by_attach_another_sl_during_load:
   sla: true
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_kill_mv_building_coordinator:
   config_changes: false
@@ -429,6 +455,7 @@ disrupt_kill_mv_building_coordinator:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_kill_scylla:
   config_changes: false
@@ -445,6 +472,7 @@ disrupt_kill_scylla:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_ldap_connection_toggle:
   config_changes: false
@@ -461,6 +489,7 @@ disrupt_ldap_connection_toggle:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_load_and_stream:
   config_changes: false
@@ -477,6 +506,7 @@ disrupt_load_and_stream:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_major_compaction:
   config_changes: false
@@ -493,6 +523,7 @@ disrupt_major_compaction:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_manager_backup:
   config_changes: false
@@ -509,6 +540,7 @@ disrupt_manager_backup:
   sla: false
   supports_high_disk_utilization: false
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_maximum_allowed_sls_with_max_shares_during_load:
   config_changes: false
@@ -525,6 +557,7 @@ disrupt_maximum_allowed_sls_with_max_shares_during_load:
   sla: true
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_memory_stress:
   config_changes: false
@@ -541,6 +574,7 @@ disrupt_memory_stress:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_mgmt_backup:
   config_changes: false
@@ -557,6 +591,7 @@ disrupt_mgmt_backup:
   sla: false
   supports_high_disk_utilization: false
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_mgmt_backup_specific_keyspaces:
   config_changes: false
@@ -573,6 +608,7 @@ disrupt_mgmt_backup_specific_keyspaces:
   sla: false
   supports_high_disk_utilization: false
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_mgmt_corrupt_then_repair:
   config_changes: false
@@ -589,6 +625,7 @@ disrupt_mgmt_corrupt_then_repair:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_mgmt_repair_cli:
   config_changes: false
@@ -605,6 +642,7 @@ disrupt_mgmt_repair_cli:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_mgmt_restore:
   config_changes: false
@@ -621,6 +659,7 @@ disrupt_mgmt_restore:
   sla: false
   supports_high_disk_utilization: false
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_bloom_filter_fp_chance:
   config_changes: false
@@ -637,6 +676,7 @@ disrupt_modify_table_bloom_filter_fp_chance:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_caching:
   config_changes: false
@@ -653,6 +693,7 @@ disrupt_modify_table_caching:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_comment:
   config_changes: false
@@ -669,6 +710,7 @@ disrupt_modify_table_comment:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_compaction:
   config_changes: false
@@ -685,6 +727,7 @@ disrupt_modify_table_compaction:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_compression:
   config_changes: false
@@ -701,6 +744,7 @@ disrupt_modify_table_compression:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_crc_check_chance:
   config_changes: false
@@ -717,6 +761,7 @@ disrupt_modify_table_crc_check_chance:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_dclocal_read_repair_chance:
   config_changes: false
@@ -733,6 +778,7 @@ disrupt_modify_table_dclocal_read_repair_chance:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_default_time_to_live:
   config_changes: false
@@ -749,6 +795,7 @@ disrupt_modify_table_default_time_to_live:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_gc_grace_time:
   config_changes: false
@@ -765,6 +812,7 @@ disrupt_modify_table_gc_grace_time:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_max_index_interval:
   config_changes: false
@@ -781,6 +829,7 @@ disrupt_modify_table_max_index_interval:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_memtable_flush_period_in_ms:
   config_changes: false
@@ -797,6 +846,7 @@ disrupt_modify_table_memtable_flush_period_in_ms:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_min_index_interval:
   config_changes: false
@@ -813,6 +863,7 @@ disrupt_modify_table_min_index_interval:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_read_repair_chance:
   config_changes: false
@@ -829,6 +880,7 @@ disrupt_modify_table_read_repair_chance:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_speculative_retry:
   config_changes: false
@@ -845,6 +897,7 @@ disrupt_modify_table_speculative_retry:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_modify_table_twcs_window_size:
   config_changes: false
@@ -861,6 +914,7 @@ disrupt_modify_table_twcs_window_size:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_multiple_hard_reboot_node:
   config_changes: false
@@ -877,6 +931,7 @@ disrupt_multiple_hard_reboot_node:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_network_block:
   config_changes: false
@@ -893,6 +948,7 @@ disrupt_network_block:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_network_random_interruptions:
   config_changes: false
@@ -909,6 +965,7 @@ disrupt_network_random_interruptions:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_network_reject_inter_node_communication:
   config_changes: false
@@ -925,6 +982,7 @@ disrupt_network_reject_inter_node_communication:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_network_reject_node_exporter:
   config_changes: false
@@ -941,6 +999,7 @@ disrupt_network_reject_node_exporter:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_network_reject_thrift:
   config_changes: false
@@ -957,6 +1016,7 @@ disrupt_network_reject_thrift:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_network_start_stop_interface:
   config_changes: false
@@ -973,6 +1033,7 @@ disrupt_network_start_stop_interface:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_no_corrupt_repair:
   config_changes: false
@@ -989,6 +1050,7 @@ disrupt_no_corrupt_repair:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_nodetool_cleanup:
   config_changes: false
@@ -1005,6 +1067,7 @@ disrupt_nodetool_cleanup:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_nodetool_decommission:
   config_changes: false
@@ -1021,6 +1084,7 @@ disrupt_nodetool_decommission:
   sla: false
   supports_high_disk_utilization: false
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_nodetool_drain:
   config_changes: false
@@ -1037,6 +1101,7 @@ disrupt_nodetool_drain:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_nodetool_enospc:
   config_changes: false
@@ -1053,6 +1118,7 @@ disrupt_nodetool_enospc:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_nodetool_flush_and_reshard_on_kubernetes:
   config_changes: false
@@ -1069,6 +1135,7 @@ disrupt_nodetool_flush_and_reshard_on_kubernetes:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_nodetool_refresh:
   config_changes: false
@@ -1085,6 +1152,7 @@ disrupt_nodetool_refresh:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_nodetool_seed_decommission:
   config_changes: false
@@ -1101,6 +1169,7 @@ disrupt_nodetool_seed_decommission:
   sla: false
   supports_high_disk_utilization: false
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_rebuild_streaming_err:
   config_changes: false
@@ -1117,6 +1186,7 @@ disrupt_rebuild_streaming_err:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_refuse_connection_with_block_scylla_ports_on_banned_node:
   config_changes: false
@@ -1133,6 +1203,7 @@ disrupt_refuse_connection_with_block_scylla_ports_on_banned_node:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node:
   config_changes: false
@@ -1149,6 +1220,7 @@ disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_remove_node_then_add_node:
   config_changes: false
@@ -1165,6 +1237,7 @@ disrupt_remove_node_then_add_node:
   sla: false
   supports_high_disk_utilization: false
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_remove_service_level_while_load:
   config_changes: false
@@ -1181,6 +1254,7 @@ disrupt_remove_service_level_while_load:
   sla: true
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_repair_streaming_err:
   config_changes: false
@@ -1197,6 +1271,7 @@ disrupt_repair_streaming_err:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_replace_scylla_node_on_kubernetes:
   config_changes: false
@@ -1213,6 +1288,7 @@ disrupt_replace_scylla_node_on_kubernetes:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_replace_service_level_using_detach_during_load:
   config_changes: false
@@ -1229,6 +1305,7 @@ disrupt_replace_service_level_using_detach_during_load:
   sla: true
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_replace_service_level_using_drop_during_load:
   config_changes: false
@@ -1245,6 +1322,7 @@ disrupt_replace_service_level_using_drop_during_load:
   sla: true
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_resetlocalschema:
   config_changes: true
@@ -1261,6 +1339,7 @@ disrupt_resetlocalschema:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_restart_then_repair_node:
   config_changes: false
@@ -1277,6 +1356,7 @@ disrupt_restart_then_repair_node:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_restart_with_resharding:
   config_changes: true
@@ -1293,6 +1373,7 @@ disrupt_restart_with_resharding:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_rolling_config_change_internode_compression:
   config_changes: true
@@ -1310,6 +1391,7 @@ disrupt_rolling_config_change_internode_compression:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_rolling_restart_cluster:
   config_changes: false
@@ -1326,6 +1408,7 @@ disrupt_rolling_restart_cluster:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_run_cdcstressor_tool:
   config_changes: false
@@ -1342,6 +1425,7 @@ disrupt_run_cdcstressor_tool:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_run_unique_sequence:
   config_changes: false
@@ -1358,6 +1442,7 @@ disrupt_run_unique_sequence:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_serial_restart_elected_topology_coordinator:
   config_changes: false
@@ -1374,6 +1459,7 @@ disrupt_serial_restart_elected_topology_coordinator:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: true
+  xcloud: false
   zero_node_changes: false
 disrupt_show_toppartitions:
   config_changes: false
@@ -1390,6 +1476,7 @@ disrupt_show_toppartitions:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_sla_decrease_shares_during_load:
   config_changes: false
@@ -1406,6 +1493,7 @@ disrupt_sla_decrease_shares_during_load:
   sla: true
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_sla_increase_shares_during_load:
   config_changes: false
@@ -1422,6 +1510,7 @@ disrupt_sla_increase_shares_during_load:
   sla: true
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_snapshot_operations:
   config_changes: false
@@ -1438,6 +1527,7 @@ disrupt_snapshot_operations:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_soft_reboot_node:
   config_changes: false
@@ -1454,6 +1544,7 @@ disrupt_soft_reboot_node:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_start_stop_cleanup_compaction:
   config_changes: false
@@ -1470,6 +1561,7 @@ disrupt_start_stop_cleanup_compaction:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_start_stop_major_compaction:
   config_changes: false
@@ -1486,6 +1578,7 @@ disrupt_start_stop_major_compaction:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_start_stop_scrub_compaction:
   config_changes: false
@@ -1502,6 +1595,7 @@ disrupt_start_stop_scrub_compaction:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_start_stop_validation_compaction:
   config_changes: false
@@ -1518,6 +1612,7 @@ disrupt_start_stop_validation_compaction:
   sla: false
   supports_high_disk_utilization: false
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_stop_start_scylla_server:
   config_changes: false
@@ -1534,6 +1629,7 @@ disrupt_stop_start_scylla_server:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_stop_wait_start_scylla_server:
   config_changes: false
@@ -1550,6 +1646,7 @@ disrupt_stop_wait_start_scylla_server:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: true
 disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back:
   config_changes: true
@@ -1566,6 +1663,7 @@ disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_ba
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_terminate_and_replace_node:
   config_changes: false
@@ -1582,6 +1680,7 @@ disrupt_terminate_and_replace_node:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: true
+  xcloud: false
   zero_node_changes: true
 disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node:
   config_changes: false
@@ -1598,6 +1697,7 @@ disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_terminate_kubernetes_host_then_replace_scylla_node:
   config_changes: false
@@ -1614,6 +1714,7 @@ disrupt_terminate_kubernetes_host_then_replace_scylla_node:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_toggle_audit_syslog:
   config_changes: true
@@ -1630,6 +1731,7 @@ disrupt_toggle_audit_syslog:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_toggle_cdc_feature_properties_on_table:
   config_changes: true
@@ -1646,6 +1748,7 @@ disrupt_toggle_cdc_feature_properties_on_table:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: false
   zero_node_changes: false
 disrupt_toggle_table_gc_mode:
   config_changes: false
@@ -1662,6 +1765,7 @@ disrupt_toggle_table_gc_mode:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_toggle_table_ics:
   config_changes: false
@@ -1678,6 +1782,7 @@ disrupt_toggle_table_ics:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_truncate:
   config_changes: false
@@ -1694,6 +1799,7 @@ disrupt_truncate:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_truncate_large_partition:
   config_changes: false
@@ -1710,6 +1816,7 @@ disrupt_truncate_large_partition:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
 disrupt_validate_hh_short_downtime:
   config_changes: false
@@ -1726,4 +1833,5 @@ disrupt_validate_hh_short_downtime:
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
+  xcloud: true
   zero_node_changes: false
