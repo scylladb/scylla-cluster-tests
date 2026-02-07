@@ -88,6 +88,7 @@ from sdcm.utils.gce_utils import (
     disk_from_image,
     wait_for_extended_operation,
     random_zone,
+    is_valid_zone_for_region,
     gce_set_labels,
     gce_public_addresses,
 )
@@ -887,9 +888,22 @@ class GceSctRunner(SctRunner):
     SCT_NETWORK = "qa-vpc"
 
     def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration):
-        availability_zone = availability_zone or params.get("availability_zone") or random_zone(region_name)
+        # Validate and use availability_zone if it's valid for the region
+        # Otherwise, fall back to random_zone()
+        provided_zone = availability_zone or params.get("availability_zone")
+        
+        # Handle comma-separated zones (e.g., 'a,b,c') by taking the first one
+        if provided_zone and ',' in provided_zone:
+            provided_zone = provided_zone.split(',')[0].strip()
+        
+        # Validate the zone against SUPPORTED_REGIONS for this region
+        if provided_zone and is_valid_zone_for_region(region_name, provided_zone):
+            availability_zone = provided_zone
+        else:
+            # Zone is invalid or not provided, use random selection
+            availability_zone = random_zone(region_name)
+        
         assert availability_zone, "Availability zone is required for GCE"
-        availability_zone = availability_zone.split(",")[0]  # in case multiple AZs are given, take the first one
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
 
         super().__init__(region_name=region_name, availability_zone=availability_zone, params=params)

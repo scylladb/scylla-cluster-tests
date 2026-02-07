@@ -75,6 +75,7 @@ from sdcm.utils.gce_utils import (
     get_gce_image_tags,
     get_gce_compute_machine_types_client,
     gce_check_if_machine_type_supported,
+    get_available_zones_for_region,
 )
 from sdcm.utils.azure_utils import (
     azure_check_instance_type_available,
@@ -3930,7 +3931,7 @@ class SCTConfiguration(dict):
                 case "gce":
                     machine_types_client, info = get_gce_compute_machine_types_client()
                     for datacenter in self.gce_datacenters:
-                        for zone in GCE_SUPPORTED_REGIONS.get(datacenter):
+                        for zone in get_available_zones_for_region(datacenter, project=info["project_id"]):
                             _zone = f"{datacenter}-{zone}"
                             assert gce_check_if_machine_type_supported(
                                 machine_types_client, instance_type, project=info["project_id"], zone=_zone
