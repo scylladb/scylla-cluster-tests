@@ -18,7 +18,7 @@ gce_instance_type_db: 'n2-highmem-2'
 gce_instance_type_loader: 'e2-standard-2'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: "not disruptive and schema_changes"
+nemesis_selector: "not disruptive and xcloud"
 nemesis_seed: '111'
 nemesis_interval: 5
 
