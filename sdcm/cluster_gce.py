@@ -14,6 +14,7 @@
 import os
 import re
 import time
+import random
 import logging
 from typing import Dict, Any, ParamSpec, TypeVar
 from textwrap import dedent
@@ -39,6 +40,7 @@ from sdcm.utils.gce_utils import (
     gce_public_addresses,
     random_zone,
     is_valid_zone_for_region,
+    SUPPORTED_REGIONS,
     gce_set_labels,
 )
 from sdcm.wait import exponential_retry
@@ -319,12 +321,29 @@ class GCECluster(cluster.BaseCluster):
             provided_zone = provided_zone.split(',')[0].strip()
         
         # For each region, use the provided zone if valid, otherwise use random_zone()
+        # When randomizing, ensure unique zones across regions
         self._gce_zone_names: list[str] = []
+        used_zones = set()  # Track zones to ensure uniqueness across regions
+        
         for region in gce_region_names:
             if provided_zone and is_valid_zone_for_region(region, provided_zone):
                 zone = provided_zone
             else:
-                zone = random_zone(region)
+                # Get available zones for this region
+                available_zones = list(SUPPORTED_REGIONS.get(region, ""))
+                if not available_zones:
+                    raise Exception(f"Unsupported region: {region}")
+                
+                # Filter out already-used zones to ensure uniqueness
+                unused_zones = [z for z in available_zones if z not in used_zones]
+                
+                # If all zones are used, fall back to all available zones
+                if not unused_zones:
+                    unused_zones = available_zones
+                
+                zone = random.choice(unused_zones)
+                used_zones.add(zone)
+            
             self._gce_zone_names.append(f"{region}-{zone}")
         
         # Keep this print out for debugging purposes: validate that zones are correctly set

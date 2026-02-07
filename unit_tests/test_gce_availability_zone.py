@@ -213,13 +213,14 @@ class TestGceClusterAvailabilityZone:
             f"Expected: {expected_zones}, Got: {cluster._gce_zone_names}"
         )
 
-    @patch("sdcm.cluster_gce.random_zone")
-    def test_gce_cluster_uses_random_for_invalid_zone(self, mock_random_zone):
-        """Test that GCE cluster uses random_zone for invalid zone from params."""
+    @patch("sdcm.cluster_gce.random.choice")
+    def test_gce_cluster_uses_random_for_invalid_zone(self, mock_random_choice):
+        """Test that GCE cluster uses random selection for invalid zone from params."""
         from sdcm.cluster_gce import ScyllaGCECluster
 
-        # Setup mock to return valid zones
-        mock_random_zone.side_effect = ["d", "a", "b"]
+        # Setup mock to return valid zones - will be called for us-east1 only
+        # us-east1 has zones 'c' and 'd', we'll return 'd'
+        mock_random_choice.return_value = "d"
 
         # Create mock params with invalid availability_zone for the regions
         mock_params = MagicMock(spec=SCTConfiguration)
@@ -252,13 +253,72 @@ class TestGceClusterAvailabilityZone:
                 add_nodes=False,
             )
 
-        # Verify that random_zone was called for us-east1 (where 'a' is invalid)
+        # Verify that random.choice was called for us-east1 (where 'a' is invalid)
         # but NOT for us-east4 and us-west1 (where 'a' is valid)
-        assert mock_random_zone.call_count == 1, "random_zone should be called only for us-east1"
+        assert mock_random_choice.call_count == 1, "random.choice should be called only for us-east1"
         
         # Verify the zones: us-east1 gets random 'd', us-east4 and us-west1 use 'a'
         expected_zones = ["us-east1-d", "us-east4-a", "us-west1-a"]
         assert cluster._gce_zone_names == expected_zones, (
             f"Cluster should use random for invalid zone, valid for others. "
+            f"Expected: {expected_zones}, Got: {cluster._gce_zone_names}"
+        )
+
+    @patch("sdcm.cluster_gce.random.choice")
+    def test_gce_cluster_uses_unique_zones_when_randomizing(self, mock_random_choice):
+        """Test that GCE cluster selects unique zones when randomizing for multiple regions."""
+        from sdcm.cluster_gce import ScyllaGCECluster
+
+        # Setup mock to return different zones each time
+        # First call: for us-east4, choose from ['a', 'b', 'c'] -> 'a'
+        # Second call: for us-west1, choose from ['b', 'c'] (excluding 'a') -> 'b'
+        mock_random_choice.side_effect = ["a", "b"]
+
+        # Create mock params without availability_zone (so all will be randomized)
+        mock_params = MagicMock(spec=SCTConfiguration)
+        mock_params.get.side_effect = lambda key: {
+            "cluster_backend": "gce",
+        }.get(key)
+
+        # Mock GCE service
+        mock_gce_service = (MagicMock(), {"project_id": "test-project"})
+
+        # Create cluster instance
+        # Patch methods that are called during initialization
+        with (
+            patch("sdcm.cluster.TestConfig"),
+            patch.object(ScyllaGCECluster, "init_log_directory"),
+            patch("sdcm.cluster.ScyllaClusterBenchmarkManager"),
+        ):
+            cluster = ScyllaGCECluster(
+                gce_image="test-image",
+                gce_image_type="test-type",
+                gce_image_size=10,
+                gce_network="test-network",
+                gce_service=mock_gce_service,
+                credentials=MagicMock(),
+                gce_region_names=["us-east4", "us-west1"],
+                params=mock_params,
+                cluster_uuid="test-uuid",
+                n_nodes=0,
+                add_nodes=False,
+            )
+
+        # Verify random.choice was called twice
+        assert mock_random_choice.call_count == 2, "random.choice should be called for both regions"
+        
+        # Verify that different zones were selected
+        # First call should have all zones ['a', 'b', 'c']
+        # Second call should have zones excluding 'a': ['b', 'c']
+        first_call_zones = mock_random_choice.call_args_list[0][0][0]
+        second_call_zones = mock_random_choice.call_args_list[1][0][0]
+        
+        assert 'a' in first_call_zones, "First call should have all zones including 'a'"
+        assert 'a' not in second_call_zones, "Second call should exclude already-used zone 'a'"
+        
+        # Verify the final zones are unique
+        expected_zones = ["us-east4-a", "us-west1-b"]
+        assert cluster._gce_zone_names == expected_zones, (
+            f"Cluster should use unique zones. "
             f"Expected: {expected_zones}, Got: {cluster._gce_zone_names}"
         )
