@@ -40,7 +40,7 @@ from sdcm.utils.gce_utils import (
     gce_public_addresses,
     random_zone,
     is_valid_zone_for_region,
-    SUPPORTED_REGIONS,
+    get_available_zones_for_region,
     gce_set_labels,
 )
 from sdcm.wait import exponential_retry
@@ -329,10 +329,10 @@ class GCECluster(cluster.BaseCluster):
             if provided_zone and is_valid_zone_for_region(region, provided_zone):
                 zone = provided_zone
             else:
-                # Get available zones for this region
-                available_zones = list(SUPPORTED_REGIONS.get(region, ""))
+                # Get available zones for this region from GCP API
+                available_zones = get_available_zones_for_region(region)
                 if not available_zones:
-                    raise Exception(f"Unsupported region: {region}")
+                    raise Exception(f"No zones available for region: {region}")
                 
                 # Filter out already-used zones to ensure uniqueness
                 unused_zones = [z for z in available_zones if z not in used_zones]

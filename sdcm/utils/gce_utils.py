@@ -59,19 +59,96 @@ def vmarch_to_gcp(arch: VmArch) -> str:
 
 
 # The keys are the region name, the value is the available zones, which will be used for random.choice()
-SUPPORTED_REGIONS = {
+# NOTE: This dict is now primarily used for zone filtering (e.g., excluding problematic zones)
+# and for identifying supported regions for Jenkins infrastructure deployment.
+# Zone selection uses dynamic GCP API calls with these filters applied.
+ZONE_FILTER_PER_REGION = {
     # us-east1 zones: b, c, and d. Details: https://cloud.google.com/compute/docs/regions-zones#locations
-    # Currently choose only zones c and d as zone b frequently fails allocating resources.
-    "us-east1": "cd",
-    "us-east4": "abc",
-    "us-west1": "abc",
-    "us-central1": "a",
+    # Currently exclude zone b as it frequently fails allocating resources.
+    "us-east1": {"exclude": ["b"]},
+    "us-east4": {"exclude": []},
+    "us-west1": {"exclude": []},
+    "us-central1": {"exclude": []},
 }
+
+# Regions supported for SCT infrastructure deployment
+SUPPORTED_REGIONS = ["us-east1", "us-east4", "us-west1", "us-central1"]
 
 
 SUPPORTED_PROJECTS = {"gcp-sct-project-1", "gcp-local-ssd-latency"} | {
     os.environ.get("SCT_GCE_PROJECT", "gcp-sct-project-1")
 }
+
+
+def get_gce_compute_zones_client() -> tuple[compute_v1.ZonesClient, dict]:
+    """Get GCE Zones client for querying available zones."""
+    info = KeyStore().get_gcp_credentials()
+    credentials = service_account.Credentials.from_service_account_info(info)
+    return compute_v1.ZonesClient(credentials=credentials), info
+
+
+def get_available_zones_for_region(region: str, project: str = None) -> list[str]:
+    """Get available zones for a region from GCP API, with filtering applied.
+    
+    Args:
+        region: GCE region name (e.g., 'us-east1')
+        project: GCP project ID (optional, will use credentials default if not provided)
+    
+    Returns:
+        List of zone letters available for the region (e.g., ['c', 'd'])
+    
+    Raises:
+        Exception: If the region is not supported or API call fails
+    """
+    if region not in ZONE_FILTER_PER_REGION:
+        raise Exception(f"Unsupported region: {region}. Supported regions: {list(ZONE_FILTER_PER_REGION.keys())}")
+    
+    try:
+        zones_client, info = get_gce_compute_zones_client()
+        if project is None:
+            project = info["project_id"]
+        
+        # List all zones in the project
+        zones_list = zones_client.list(project=project)
+        
+        # Filter zones that belong to this region
+        region_zones = []
+        for zone in zones_list:
+            # Zone name format: us-east1-a, us-east1-b, etc.
+            if zone.name.startswith(f"{region}-"):
+                # Extract the zone letter (last character)
+                zone_letter = zone.name.split("-")[-1]
+                region_zones.append(zone_letter)
+        
+        # Apply filtering based on ZONE_FILTER_PER_REGION
+        filter_config = ZONE_FILTER_PER_REGION.get(region, {})
+        excluded_zones = filter_config.get("exclude", [])
+        
+        # Filter out excluded zones
+        available_zones = [z for z in region_zones if z not in excluded_zones]
+        
+        if not available_zones:
+            LOGGER.warning(f"No available zones found for region {region} after filtering. Using unfiltered zones.")
+            available_zones = region_zones
+        
+        return sorted(available_zones)
+    
+    except Exception as exc:
+        LOGGER.warning(f"Failed to get zones from GCP API for region {region}: {exc}. Falling back to cached zones.")
+        # Fallback: reconstruct from filter config
+        # Assume common zone letters and apply exclusions
+        common_zones = ['a', 'b', 'c', 'd', 'e', 'f']
+        filter_config = ZONE_FILTER_PER_REGION.get(region, {})
+        excluded_zones = filter_config.get("exclude", [])
+        fallback_zones = [z for z in common_zones if z not in excluded_zones]
+        # For known regions, use specific fallback
+        if region == "us-east1":
+            fallback_zones = ['c', 'd']
+        elif region in ["us-east4", "us-west1"]:
+            fallback_zones = ['a', 'b', 'c']
+        elif region == "us-central1":
+            fallback_zones = ['a']
+        return fallback_zones
 
 
 def is_valid_zone_for_region(region: str, zone: str) -> bool:
@@ -84,15 +161,30 @@ def is_valid_zone_for_region(region: str, zone: str) -> bool:
     Returns:
         True if the zone is valid for the region, False otherwise
     """
-    supported_zones = SUPPORTED_REGIONS.get(region)
-    return bool(supported_zones and zone in supported_zones)
+    try:
+        available_zones = get_available_zones_for_region(region)
+        return zone in available_zones
+    except Exception:
+        # Fallback to False if we can't determine
+        return False
 
 
 def random_zone(region: str) -> str:
-    availability_zones = SUPPORTED_REGIONS.get(region, None)
+    """Get a random zone letter for the given region.
+    
+    Args:
+        region: GCE region name (e.g., 'us-east1')
+    
+    Returns:
+        Random zone letter (e.g., 'c')
+    
+    Raises:
+        Exception: If no zones are available for the region
+    """
+    availability_zones = get_available_zones_for_region(region)
     if not availability_zones:
-        raise Exception(f"Unsupported region: {region}")
-    return f"{random.choice(availability_zones)}"
+        raise Exception(f"No zones available for region: {region}")
+    return random.choice(availability_zones)
 
 
 def get_gce_compute_instances_client() -> tuple[compute_v1.InstancesClient, dict]:

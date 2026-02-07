@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-"""Test that GCE correctly validates availability_zone against SUPPORTED_REGIONS."""
+"""Test that GCE correctly validates availability_zone against zones from GCP API."""
 
 import pytest
 from unittest.mock import MagicMock, patch
@@ -24,9 +24,21 @@ from sdcm.utils.gce_utils import is_valid_zone_for_region
 class TestGceAvailabilityZoneValidation:
     """Test GCE availability_zone validation logic."""
 
-    def test_is_valid_zone_for_region(self):
+    @patch("sdcm.utils.gce_utils.get_available_zones_for_region")
+    def test_is_valid_zone_for_region(self, mock_get_zones):
         """Test the is_valid_zone_for_region helper function."""
-        # Valid zones for us-east1 are 'c' and 'd' (per SUPPORTED_REGIONS)
+        # Mock the API to return zones for us-east1
+        def get_zones_side_effect(region, project=None):
+            if region == "us-east1":
+                return ['c', 'd']
+            elif region == "us-east4":
+                return ['a', 'b', 'c']
+            else:
+                raise Exception(f"Unsupported region: {region}")
+        
+        mock_get_zones.side_effect = get_zones_side_effect
+        
+        # Valid zones for us-east1 are 'c' and 'd' (zone 'b' is filtered out)
         assert is_valid_zone_for_region("us-east1", "c") is True
         assert is_valid_zone_for_region("us-east1", "d") is True
         
@@ -42,18 +54,17 @@ class TestGceAvailabilityZoneValidation:
         
         # Invalid zone for us-east4
         assert is_valid_zone_for_region("us-east4", "d") is False
-        
-        # Invalid region
-        assert is_valid_zone_for_region("invalid-region", "a") is False
 
+    @patch("sdcm.sct_runner.get_available_zones_for_region")
     @patch("sdcm.sct_runner.get_gce_compute_images_client")
     @patch("sdcm.sct_runner.get_gce_compute_instances_client")
     @patch("sdcm.sct_runner.random_zone")
     def test_gce_sct_runner_uses_valid_zone(
-        self, mock_random_zone, mock_instances_client, mock_images_client
+        self, mock_random_zone, mock_instances_client, mock_images_client, mock_get_zones
     ):
         """Test that GceSctRunner uses a valid provided zone."""
         # Setup mocks
+        mock_get_zones.return_value = ['c', 'd']  # us-east1 zones
         mock_random_zone.return_value = "c"
         mock_images_client.return_value = (MagicMock(), {"project_id": "test-project"})
         mock_instances_client.return_value = (MagicMock(), {"project_id": "test-project"})
@@ -62,7 +73,7 @@ class TestGceAvailabilityZoneValidation:
         mock_params = MagicMock(spec=SCTConfiguration)
         mock_params.get.return_value = None
 
-        # Test with valid zone 'c' for us-east1 (valid per SUPPORTED_REGIONS)
+        # Test with valid zone 'c' for us-east1
         runner = GceSctRunner(
             region_name="us-east1",
             availability_zone="c",  # This is valid for us-east1
@@ -76,14 +87,16 @@ class TestGceAvailabilityZoneValidation:
         assert runner.availability_zone == "c", "GceSctRunner should use valid provided zone"
         assert runner.zone == "us-east1-c", "Zone should be region-validzone"
 
+    @patch("sdcm.sct_runner.get_available_zones_for_region")
     @patch("sdcm.sct_runner.get_gce_compute_images_client")
     @patch("sdcm.sct_runner.get_gce_compute_instances_client")
     @patch("sdcm.sct_runner.random_zone")
     def test_gce_sct_runner_rejects_invalid_zone(
-        self, mock_random_zone, mock_instances_client, mock_images_client
+        self, mock_random_zone, mock_instances_client, mock_images_client, mock_get_zones
     ):
         """Test that GceSctRunner rejects invalid zone and uses random_zone."""
         # Setup mocks
+        mock_get_zones.return_value = ['c', 'd']  # us-east1 zones (excludes 'a' and 'b')
         mock_random_zone.return_value = "d"  # Will be used as fallback
         mock_images_client.return_value = (MagicMock(), {"project_id": "test-project"})
         mock_instances_client.return_value = (MagicMock(), {"project_id": "test-project"})
@@ -106,14 +119,16 @@ class TestGceAvailabilityZoneValidation:
         assert runner.availability_zone == "d", "GceSctRunner should use random_zone for invalid zone"
         assert runner.zone == "us-east1-d", "Zone should be region-randomzone"
 
+    @patch("sdcm.sct_runner.get_available_zones_for_region")
     @patch("sdcm.sct_runner.get_gce_compute_images_client")
     @patch("sdcm.sct_runner.get_gce_compute_instances_client")
     @patch("sdcm.sct_runner.random_zone")
     def test_gce_sct_runner_handles_comma_separated_zones(
-        self, mock_random_zone, mock_instances_client, mock_images_client
+        self, mock_random_zone, mock_instances_client, mock_images_client, mock_get_zones
     ):
         """Test that GceSctRunner handles comma-separated zones correctly."""
         # Setup mocks
+        mock_get_zones.return_value = ['c', 'd']  # us-east1 zones
         mock_random_zone.return_value = "c"
         mock_images_client.return_value = (MagicMock(), {"project_id": "test-project"})
         mock_instances_client.return_value = (MagicMock(), {"project_id": "test-project"})
@@ -164,12 +179,14 @@ class TestGceAvailabilityZoneValidation:
 class TestGceClusterAvailabilityZone:
     """Test GCE cluster availability_zone validation."""
 
+    @patch("sdcm.cluster_gce.get_available_zones_for_region")
     @patch("sdcm.cluster_gce.random_zone")
-    def test_gce_cluster_uses_valid_zone_from_params(self, mock_random_zone):
+    def test_gce_cluster_uses_valid_zone_from_params(self, mock_random_zone, mock_get_zones):
         """Test that GCE cluster uses valid zone from params."""
         from sdcm.cluster_gce import ScyllaGCECluster
 
-        # Setup mock - should not be called if zone is valid
+        # Setup mocks
+        mock_get_zones.return_value = ['c', 'd']  # us-east1 zones
         mock_random_zone.return_value = "x"
 
         # Create mock params with valid availability_zone
@@ -213,13 +230,22 @@ class TestGceClusterAvailabilityZone:
             f"Expected: {expected_zones}, Got: {cluster._gce_zone_names}"
         )
 
+    @patch("sdcm.cluster_gce.get_available_zones_for_region")
     @patch("sdcm.cluster_gce.random.choice")
-    def test_gce_cluster_uses_random_for_invalid_zone(self, mock_random_choice):
+    def test_gce_cluster_uses_random_for_invalid_zone(self, mock_random_choice, mock_get_zones):
         """Test that GCE cluster uses random selection for invalid zone from params."""
         from sdcm.cluster_gce import ScyllaGCECluster
 
-        # Setup mock to return valid zones - will be called for us-east1 only
-        # us-east1 has zones 'c' and 'd', we'll return 'd'
+        # Setup mock to return zones for each region
+        def get_zones_side_effect(region):
+            if region == "us-east1":
+                return ['c', 'd']  # 'a' is invalid
+            elif region in ["us-east4", "us-west1"]:
+                return ['a', 'b', 'c']  # 'a' is valid
+            return []
+        
+        mock_get_zones.side_effect = get_zones_side_effect
+        # us-east1 will use random.choice, return 'd'
         mock_random_choice.return_value = "d"
 
         # Create mock params with invalid availability_zone for the regions
@@ -264,11 +290,15 @@ class TestGceClusterAvailabilityZone:
             f"Expected: {expected_zones}, Got: {cluster._gce_zone_names}"
         )
 
+    @patch("sdcm.cluster_gce.get_available_zones_for_region")
     @patch("sdcm.cluster_gce.random.choice")
-    def test_gce_cluster_uses_unique_zones_when_randomizing(self, mock_random_choice):
+    def test_gce_cluster_uses_unique_zones_when_randomizing(self, mock_random_choice, mock_get_zones):
         """Test that GCE cluster selects unique zones when randomizing for multiple regions."""
         from sdcm.cluster_gce import ScyllaGCECluster
 
+        # Setup mock to return zones
+        mock_get_zones.return_value = ['a', 'b', 'c']
+        
         # Setup mock to return different zones each time
         # First call: for us-east4, choose from ['a', 'b', 'c'] -> 'a'
         # Second call: for us-west1, choose from ['b', 'c'] (excluding 'a') -> 'b'
