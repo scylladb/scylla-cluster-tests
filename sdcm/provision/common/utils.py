@@ -259,7 +259,7 @@ def install_vector_service():
     return dedent("""\
         # install repo
         for n in 2 4 6 8 10 10 10 10; do # cloud-init is running it with set +o braceexpand
-            if bash -c "$(curl -L https://setup.vector.dev)"; then
+            if bash -c "$(curl -L --retry 5 --retry-max-time 300 https://setup.vector.dev)"; then
                 if yum --help 2>/dev/null 1>&2; then
                     if yum -y list vector >/dev/null 2>&1; then
                         break
