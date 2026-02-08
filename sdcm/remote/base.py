@@ -196,6 +196,7 @@ class CommandRunner(metaclass=ABCMeta):
             "ssh_exchange_identification: Connection closed by remote host",
             "No existing session",
             "timed out",
+            "Unable to connect to port 22",
         )
         for exception_str in exceptions:
             if exception_str in err_str:
