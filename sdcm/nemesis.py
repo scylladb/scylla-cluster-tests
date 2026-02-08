@@ -298,7 +298,6 @@ class NemesisRunner:
         self.start_time = time.time()
         self.stats = {}
         self.nemesis_selector = nemesis_selector
-        self.last_nemesis_event = None  # Track last nemesis event for this nemesis instance
         # NOTE: 'cluster_index' is set in K8S multitenant case
         if hasattr(self.tester, "cluster_index"):
             tenant_short_name = f"db{self.tester.cluster_index}"
@@ -6272,7 +6271,7 @@ def disrupt_method_wrapper(method, caller_obj: NemesisBaseClass, is_exclusive=Fa
                     # NOTE: exclusive nemesis will wait before the end of all other ones
                     time.sleep(10)
 
-            runner.cluster.check_cluster_health(last_nemesis_event=args[0].last_nemesis_event)
+            runner.cluster.check_cluster_health()
             num_data_nodes_before = len(runner.cluster.data_nodes)
             num_zero_nodes_before = len(runner.cluster.zero_nodes)
             start_time = time.time()
@@ -6408,10 +6407,6 @@ def disrupt_method_wrapper(method, caller_obj: NemesisBaseClass, is_exclusive=Fa
             # TODO: Temporary print. Will be removed later
             data_validation_prints(runner)
         finally:
-            # Store nemesis event to track skip status for health checks
-            # Must be in finally block to ensure it's always executed, even if exceptions occur
-            args[0].last_nemesis_event = nemesis_event
-
             if is_exclusive:
                 # NOTE: sleep the nemesis interval here because the next one is already
                 #       ready to start right after the lock gets released.
