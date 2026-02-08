@@ -266,7 +266,7 @@ def install_vector_service():
     return dedent("""\
         # install repo
         for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
-            if bash -c "$(curl -L https://setup.vector.dev)"; then
+            if bash -c "$(curl -L --retry 5 --retry-max-time 300 https://setup.vector.dev)"; then
                 break
             fi
             sleep $(backoff $n)
