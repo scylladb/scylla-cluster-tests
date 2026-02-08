@@ -312,19 +312,19 @@ class GCECluster(cluster.BaseCluster):
         self._credentials = credentials
         self._gce_instance_type = gce_instance_type
         self._gce_image_username = gce_image_username
-        
+
         # Get availability_zone from params (use parameter directly, not self.params which isn't set yet)
         provided_zone = params.get("availability_zone") if params else None
-        
+
         # Handle comma-separated zones by taking the first one
         if provided_zone and ',' in provided_zone:
             provided_zone = provided_zone.split(',')[0].strip()
-        
-        # For each region, use the provided zone if valid, otherwise use random_zone()
+
+        # For each region, use the provided zone if valid, otherwise select randomly from available zones
         # When randomizing, ensure unique zones across regions
         self._gce_zone_names: list[str] = []
         used_zones = set()  # Track zones to ensure uniqueness across regions
-        
+
         for region in gce_region_names:
             if provided_zone and is_valid_zone_for_region(region, provided_zone):
                 zone = provided_zone
@@ -333,19 +333,19 @@ class GCECluster(cluster.BaseCluster):
                 available_zones = get_available_zones_for_region(region)
                 if not available_zones:
                     raise Exception(f"No zones available for region: {region}")
-                
+
                 # Filter out already-used zones to ensure uniqueness
                 unused_zones = [z for z in available_zones if z not in used_zones]
-                
+
                 # If all zones are used, fall back to all available zones
                 if not unused_zones:
                     unused_zones = available_zones
-                
+
                 zone = random.choice(unused_zones)
                 used_zones.add(zone)
-            
+
             self._gce_zone_names.append(f"{region}-{zone}")
-        
+
         # Keep this print out for debugging purposes: validate that zones are correctly set
         LOGGER.debug("GCE zones used: %s", self._gce_zone_names)
         self._gce_n_local_ssd = int(gce_n_local_ssd) if gce_n_local_ssd else 0

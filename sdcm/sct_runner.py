@@ -889,20 +889,20 @@ class GceSctRunner(SctRunner):
 
     def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration):
         # Validate and use availability_zone if it's valid for the region
-        # Otherwise, fall back to random_zone()
+        # Otherwise, fall back to random selection from available zones
         provided_zone = availability_zone or params.get("availability_zone")
-        
+
         # Handle comma-separated zones (e.g., 'a,b,c') by taking the first one
         if provided_zone and ',' in provided_zone:
             provided_zone = provided_zone.split(',')[0].strip()
-        
-        # Validate the zone against SUPPORTED_REGIONS for this region
+
+        # Validate the zone against available zones from GCP API for this region
         if provided_zone and is_valid_zone_for_region(region_name, provided_zone):
             availability_zone = provided_zone
         else:
             # Zone is invalid or not provided, use random selection
             availability_zone = random_zone(region_name)
-        
+
         assert availability_zone, "Availability zone is required for GCE"
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
 

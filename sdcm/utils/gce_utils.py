@@ -89,28 +89,28 @@ def get_gce_compute_zones_client() -> tuple[compute_v1.ZonesClient, dict]:
 
 def get_available_zones_for_region(region: str, project: str = None) -> list[str]:
     """Get available zones for a region from GCP API, with filtering applied.
-    
+
     Args:
         region: GCE region name (e.g., 'us-east1')
         project: GCP project ID (optional, will use credentials default if not provided)
-    
+
     Returns:
         List of zone letters available for the region (e.g., ['c', 'd'])
-    
+
     Raises:
         Exception: If the region is not supported or API call fails
     """
     if region not in ZONE_FILTER_PER_REGION:
         raise Exception(f"Unsupported region: {region}. Supported regions: {list(ZONE_FILTER_PER_REGION.keys())}")
-    
+
     try:
         zones_client, info = get_gce_compute_zones_client()
         if project is None:
             project = info["project_id"]
-        
+
         # List all zones in the project
         zones_list = zones_client.list(project=project)
-        
+
         # Filter zones that belong to this region
         region_zones = []
         for zone in zones_list:
@@ -119,20 +119,20 @@ def get_available_zones_for_region(region: str, project: str = None) -> list[str
                 # Extract the zone letter (last character)
                 zone_letter = zone.name.split("-")[-1]
                 region_zones.append(zone_letter)
-        
+
         # Apply filtering based on ZONE_FILTER_PER_REGION
         filter_config = ZONE_FILTER_PER_REGION.get(region, {})
         excluded_zones = filter_config.get("exclude", [])
-        
+
         # Filter out excluded zones
         available_zones = [z for z in region_zones if z not in excluded_zones]
-        
+
         if not available_zones:
             LOGGER.warning(f"No available zones found for region {region} after filtering. Using unfiltered zones.")
             available_zones = region_zones
-        
+
         return sorted(available_zones)
-    
+
     except Exception as exc:
         LOGGER.warning(f"Failed to get zones from GCP API for region {region}: {exc}. Falling back to cached zones.")
         # Fallback: reconstruct from filter config
@@ -153,11 +153,11 @@ def get_available_zones_for_region(region: str, project: str = None) -> list[str
 
 def is_valid_zone_for_region(region: str, zone: str) -> bool:
     """Check if the given zone letter is valid for the specified GCE region.
-    
+
     Args:
         region: GCE region name (e.g., 'us-east1')
         zone: Single letter zone identifier (e.g., 'a', 'b', 'c')
-    
+
     Returns:
         True if the zone is valid for the region, False otherwise
     """
@@ -171,13 +171,13 @@ def is_valid_zone_for_region(region: str, zone: str) -> bool:
 
 def random_zone(region: str) -> str:
     """Get a random zone letter for the given region.
-    
+
     Args:
         region: GCE region name (e.g., 'us-east1')
-    
+
     Returns:
         Random zone letter (e.g., 'c')
-    
+
     Raises:
         Exception: If no zones are available for the region
     """
