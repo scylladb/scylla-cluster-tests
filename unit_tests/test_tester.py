@@ -552,8 +552,9 @@ class TestSaveSchema:
         tester.db_cluster = MagicMock()
         tester.db_cluster.nodes = [mock_node]
 
-        # Mock the upload_system_table_to_s3 function
-        with patch('sdcm.tester.upload_system_table_to_s3') as mock_upload:
+        # Mock the upload_system_table_to_s3 function and argus_collect_logs
+        with patch('sdcm.tester.upload_system_table_to_s3') as mock_upload, \
+             patch.object(tester, 'argus_collect_logs') as mock_argus_logs:
             mock_upload.return_value = "https://s3.amazonaws.com/test-bucket/test.json.zst"
             
             # Run save_schema
@@ -564,6 +565,9 @@ class TestSaveSchema:
             call_args = mock_upload.call_args
             assert call_args[1]['node'] == mock_node
             assert call_args[1]['table_name'] == "system.compaction_history"
+
+            # Verify argus_collect_logs was called with the S3 link
+            mock_argus_logs.assert_called_once_with({"system.compaction_history": "https://s3.amazonaws.com/test-bucket/test.json.zst"})
 
         # Verify run_cqlsh was called with expected commands (but NOT for compaction_history)
         cqlsh_calls = [call[0][0] for call in mock_node.run_cqlsh.call_args_list]

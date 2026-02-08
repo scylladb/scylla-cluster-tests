@@ -3782,7 +3782,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 node=node, cmd="select JSON * from system.tablets", log_file="system_tablets.log"
             )
             # Upload system.compaction_history directly to S3 to avoid loading large data into memory
-            upload_system_table_to_s3(node=node, table_name="system.compaction_history", test_id=self.test_config.test_id())
+            s3_link = upload_system_table_to_s3(node=node, table_name="system.compaction_history", test_id=self.test_config.test_id())
+            if s3_link:
+                # Report to Argus for visibility
+                self.argus_collect_logs({"system.compaction_history": s3_link})
             self.save_cqlsh_output_in_file(
                 node=node, cmd="desc schema with internals", log_file="schema_with_internals.log"
             )
