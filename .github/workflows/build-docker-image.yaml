@@ -21,13 +21,7 @@ jobs:
     steps:
       - name: Check user for team affiliation
         uses: tspascoal/get-user-teams-membership@v3
-<<<<<<< HEAD
-        if: github.event.pull_request.user.login != 'renovate[bot]'
-||||||| parent of a7417223b (fix(ci): skip team membership check for all bot users in GitHub Actions workflows)
-        if: github.event.pull_request.user.login != 'renovate[bot]' && github.event.pull_request.user.login != 'Copilot'
-=======
         if: github.event.pull_request.user.type != 'Bot'
->>>>>>> a7417223b (fix(ci): skip team membership check for all bot users in GitHub Actions workflows)
         id: teamAffiliation
         with:
           GITHUB_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
@@ -36,13 +30,7 @@ jobs:
 
   build_image:
     needs: check_org_membership
-<<<<<<< HEAD
-    if: ( github.event.pull_request.user.login == 'renovate[bot]' || needs.check_org_membership.outputs.isTeamMember == 'true' ) && contains(github.event.pull_request.labels.*.name, 'New Hydra Version')
-||||||| parent of a7417223b (fix(ci): skip team membership check for all bot users in GitHub Actions workflows)
-    if: ( github.event.pull_request.user.login == 'renovate[bot]' || github.event.pull_request.user.login == 'Copilot' || needs.check_org_membership.outputs.isTeamMember == 'true' ) && contains(github.event.pull_request.labels.*.name, 'New Hydra Version')
-=======
     if: ( github.event.pull_request.user.type == 'Bot' || needs.check_org_membership.outputs.isTeamMember == 'true' ) && contains(github.event.pull_request.labels.*.name, 'New Hydra Version')
->>>>>>> a7417223b (fix(ci): skip team membership check for all bot users in GitHub Actions workflows)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
