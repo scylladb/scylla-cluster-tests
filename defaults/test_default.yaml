@@ -21,6 +21,9 @@ append_scylla_setup_args: ''
 append_scylla_node_exporter_args: ''
 append_scylla_yaml:
   rf_rack_valid_keyspaces: true
+  sstable_compression_user_table_options:
+    sstable_compression: 'ZstdCompressor'
+
 experimental_features: []
 
 db_nodes_shards_selection: 'default'

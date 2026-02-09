@@ -1018,7 +1018,7 @@ More arguments to append to oracle command line
 
 More configuration to append to /etc/scylla/scylla.yaml
 
-**default:** {'rf_rack_valid_keyspaces': True}
+**default:** {'rf_rack_valid_keyspaces': True, 'sstable_compression_user_table_options': {'sstable_compression': 'ZstdCompressor'}}
 
 **type:** dict_or_str
 
