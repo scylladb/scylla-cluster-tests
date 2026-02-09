@@ -219,3 +219,299 @@ class TestScyllaCloudClusterDiagnostics:
             "Original error: Wait for cluster ready: timeout - 600 seconds",
         ]
         assert all(msg in error_message for msg in expected_messages)
+<<<<<<< HEAD
+||||||| parent of 7f23fcc38 (fix(xcloud): wait for cloud service installations in correct order)
+
+
+class TestScyllaCloudClusterUpdateName:
+    """Test suite for ScyllaCloudCluster.update_cluster_name method."""
+
+    @pytest.fixture
+    def mock_api_client(self):
+        """Create a mock API client."""
+        return MagicMock(get_current_account_id=MagicMock(return_value=123))
+
+    @pytest.fixture
+    def mock_cluster(self, mock_api_client):
+        """Create a mock ScyllaCloudCluster instance."""
+        with (
+            patch("sdcm.cluster_cloud.TestConfig"),
+            patch.object(ScyllaCloudCluster, "init_log_directory"),
+            patch("sdcm.cluster.ScyllaClusterBenchmarkManager"),
+        ):
+            params = SCTConfiguration()
+            params.update(
+                {
+                    "xcloud_provider": "aws",
+                    "xcloud_vpc_peering": {"enabled": False},
+                    "n_vector_store_nodes": 0,
+                    "region_name": "us-east-1",
+                }
+            )
+            cluster = ScyllaCloudCluster(
+                cloud_api_client=mock_api_client, user_prefix="test", n_nodes=0, params=params, add_nodes=False
+            )
+            cluster._cluster_id = 456
+            cluster.log = MagicMock()
+            return cluster
+
+    def test_update_cluster_name_success(self, mock_cluster, mock_api_client):
+        """Test successful cluster name update."""
+        mock_cluster.name = "old-cluster-name"
+
+        mock_cluster.update_cluster_name("new-cluster-name")
+        mock_api_client.update_cluster_name.assert_called_once_with(
+            account_id=123, cluster_id=456, new_name="new-cluster-name"
+        )
+
+        assert mock_cluster.name == "new-cluster-name"
+        mock_cluster.log.info.assert_any_call(
+            "Updating cluster name from '%s' to '%s'", "old-cluster-name", "new-cluster-name"
+        )
+        mock_cluster.log.info.assert_any_call("Cluster name updated successfully to '%s'", "new-cluster-name")
+
+    def test_update_cluster_name_no_cluster_id(self, mock_cluster):
+        mock_cluster._cluster_id = None
+        with pytest.raises(ScyllaCloudError, match="Cannot update cluster name: cluster ID is not set"):
+            mock_cluster.update_cluster_name("new-name")
+
+    def test_update_cluster_name_exceeds_max_length(self, mock_cluster):
+        with pytest.raises(ValueError, match="Cluster name exceeds maximum length of 63 characters"):
+            mock_cluster.update_cluster_name("a" * 64)
+
+
+class TestApplyKeepTag:
+    @pytest.mark.parametrize(
+        "input_name,hours,expected",
+        [
+            ("test-user-abc12345-keep-004h", 24, "test-user-abc12345-keep-024h"),
+            ("test-user-abc12345-keep-004h", CLOUD_KEEP_ALIVE_HOURS, "test-user-abc12345-keep-072h"),
+            ("test-user-abc12345", 24, "test-user-abc12345-keep-024h"),
+            ("test-abc12345-keep-100h", 6, "test-abc12345-keep-006h"),
+        ],
+    )
+    def test_apply_keep_tag_to_name(self, input_name, hours, expected):
+        assert apply_keep_tag_to_name(input_name, hours) == expected
+
+
+class TestScyllaCloudClusterUpdateKeepTag:
+    @pytest.fixture
+    def mock_cluster(self):
+        mock_api_client = MagicMock(get_current_account_id=MagicMock(return_value=123))
+        with (
+            patch("sdcm.cluster_cloud.TestConfig"),
+            patch.object(ScyllaCloudCluster, "init_log_directory"),
+            patch("sdcm.cluster.ScyllaClusterBenchmarkManager"),
+        ):
+            params = SCTConfiguration()
+            params.update(
+                {
+                    "xcloud_provider": "aws",
+                    "xcloud_vpc_peering": {"enabled": False},
+                    "n_vector_store_nodes": 0,
+                    "region_name": "us-east-1",
+                }
+            )
+            cluster = ScyllaCloudCluster(
+                cloud_api_client=mock_api_client, user_prefix="test", n_nodes=0, params=params, add_nodes=False
+            )
+            cluster._cluster_id = 456
+            cluster.name = "test-user-abc12345-keep-004h"
+            cluster.log = MagicMock()
+            return cluster
+
+    def test_set_keep_alive_updates_cluster_name(self, mock_cluster):
+        assert mock_cluster._set_keep_alive() is True
+        assert mock_cluster.name == "test-user-abc12345-keep-072h"
+
+    def test_set_keep_duration_updates_cluster_name(self, mock_cluster):
+        mock_cluster._set_keep_duration(24)
+        assert mock_cluster.name == "test-user-abc12345-keep-024h"
+
+    def test_keep_methods_skip_api_call_if_name_unchanged(self, mock_cluster):
+        mock_cluster.name = "test-user-abc12345-keep-024h"
+        mock_cluster._set_keep_duration(24)
+        assert mock_cluster.name == "test-user-abc12345-keep-024h"
+=======
+
+
+class TestScyllaCloudClusterUpdateName:
+    """Test suite for ScyllaCloudCluster.update_cluster_name method."""
+
+    @pytest.fixture
+    def mock_api_client(self):
+        """Create a mock API client."""
+        return MagicMock(get_current_account_id=MagicMock(return_value=123))
+
+    @pytest.fixture
+    def mock_cluster(self, mock_api_client):
+        """Create a mock ScyllaCloudCluster instance."""
+        with (
+            patch("sdcm.cluster_cloud.TestConfig"),
+            patch.object(ScyllaCloudCluster, "init_log_directory"),
+            patch("sdcm.cluster.ScyllaClusterBenchmarkManager"),
+        ):
+            params = SCTConfiguration()
+            params.update(
+                {
+                    "xcloud_provider": "aws",
+                    "xcloud_vpc_peering": {"enabled": False},
+                    "n_vector_store_nodes": 0,
+                    "region_name": "us-east-1",
+                }
+            )
+            cluster = ScyllaCloudCluster(
+                cloud_api_client=mock_api_client, user_prefix="test", n_nodes=0, params=params, add_nodes=False
+            )
+            cluster._cluster_id = 456
+            cluster.log = MagicMock()
+            return cluster
+
+    def test_update_cluster_name_success(self, mock_cluster, mock_api_client):
+        """Test successful cluster name update."""
+        mock_cluster.name = "old-cluster-name"
+
+        mock_cluster.update_cluster_name("new-cluster-name")
+        mock_api_client.update_cluster_name.assert_called_once_with(
+            account_id=123, cluster_id=456, new_name="new-cluster-name"
+        )
+
+        assert mock_cluster.name == "new-cluster-name"
+        mock_cluster.log.info.assert_any_call(
+            "Updating cluster name from '%s' to '%s'", "old-cluster-name", "new-cluster-name"
+        )
+        mock_cluster.log.info.assert_any_call("Cluster name updated successfully to '%s'", "new-cluster-name")
+
+    def test_update_cluster_name_no_cluster_id(self, mock_cluster):
+        mock_cluster._cluster_id = None
+        with pytest.raises(ScyllaCloudError, match="Cannot update cluster name: cluster ID is not set"):
+            mock_cluster.update_cluster_name("new-name")
+
+    def test_update_cluster_name_exceeds_max_length(self, mock_cluster):
+        with pytest.raises(ValueError, match="Cluster name exceeds maximum length of 63 characters"):
+            mock_cluster.update_cluster_name("a" * 64)
+
+
+class TestApplyKeepTag:
+    @pytest.mark.parametrize(
+        "input_name,hours,expected",
+        [
+            ("test-user-abc12345-keep-004h", 24, "test-user-abc12345-keep-024h"),
+            ("test-user-abc12345-keep-004h", CLOUD_KEEP_ALIVE_HOURS, "test-user-abc12345-keep-072h"),
+            ("test-user-abc12345", 24, "test-user-abc12345-keep-024h"),
+            ("test-abc12345-keep-100h", 6, "test-abc12345-keep-006h"),
+        ],
+    )
+    def test_apply_keep_tag_to_name(self, input_name, hours, expected):
+        assert apply_keep_tag_to_name(input_name, hours) == expected
+
+
+class TestScyllaCloudClusterUpdateKeepTag:
+    @pytest.fixture
+    def mock_cluster(self):
+        mock_api_client = MagicMock(get_current_account_id=MagicMock(return_value=123))
+        with (
+            patch("sdcm.cluster_cloud.TestConfig"),
+            patch.object(ScyllaCloudCluster, "init_log_directory"),
+            patch("sdcm.cluster.ScyllaClusterBenchmarkManager"),
+        ):
+            params = SCTConfiguration()
+            params.update(
+                {
+                    "xcloud_provider": "aws",
+                    "xcloud_vpc_peering": {"enabled": False},
+                    "n_vector_store_nodes": 0,
+                    "region_name": "us-east-1",
+                }
+            )
+            cluster = ScyllaCloudCluster(
+                cloud_api_client=mock_api_client, user_prefix="test", n_nodes=0, params=params, add_nodes=False
+            )
+            cluster._cluster_id = 456
+            cluster.name = "test-user-abc12345-keep-004h"
+            cluster.log = MagicMock()
+            return cluster
+
+    def test_set_keep_alive_updates_cluster_name(self, mock_cluster):
+        assert mock_cluster._set_keep_alive() is True
+        assert mock_cluster.name == "test-user-abc12345-keep-072h"
+
+    def test_set_keep_duration_updates_cluster_name(self, mock_cluster):
+        mock_cluster._set_keep_duration(24)
+        assert mock_cluster.name == "test-user-abc12345-keep-024h"
+
+    def test_keep_methods_skip_api_call_if_name_unchanged(self, mock_cluster):
+        mock_cluster.name = "test-user-abc12345-keep-024h"
+        mock_cluster._set_keep_duration(24)
+        assert mock_cluster.name == "test-user-abc12345-keep-024h"
+
+
+class TestCloudServiceInstallationOrdering:
+    """Test suite for _wait_for_cloud_service_installations."""
+
+    @pytest.fixture
+    def mock_cluster(self):
+        mock = MagicMock()
+        mock._account_id = 123
+        mock._cluster_id = 456
+        mock.log = MagicMock()
+        mock._api_client = MagicMock()
+
+        mock._wait_for_cloud_service_installations = lambda: ScyllaCloudCluster._wait_for_cloud_services(mock)
+        mock._get_pending_service_requests = lambda *args, **kwargs: ScyllaCloudCluster._get_pending_service_requests(
+            mock, *args, **kwargs
+        )
+        mock._wait_for_cloud_request_completed = MagicMock()
+        return mock
+
+    def test_manager_in_progress_vs_queued(self, mock_cluster):
+        """When Manager is IN_PROGRESS and VS is QUEUED, wait for Manager first."""
+        mock_cluster._api_client.get_cluster_requests.return_value = [
+            {"id": 1, "requestType": "INSTALL_MANAGER", "status": "IN_PROGRESS"},
+            {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "QUEUED"},
+        ]
+
+        mock_cluster._wait_for_cloud_service_installations()
+
+        calls = mock_cluster._wait_for_cloud_request_completed.call_args_list
+        assert len(calls) == 2
+        assert calls[0] == ((), {"request_id": 1, "request_type": "INSTALL_MANAGER"})
+        assert calls[1] == ((), {"request_id": 2, "request_type": "INSTALL_VECTOR_SEARCH"})
+
+    def test_vs_in_progress_manager_queued(self, mock_cluster):
+        """When VS is IN_PROGRESS and Manager is QUEUED, wait for VS first."""
+        mock_cluster._api_client.get_cluster_requests.return_value = [
+            {"id": 1, "requestType": "INSTALL_MANAGER", "status": "QUEUED"},
+            {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "IN_PROGRESS"},
+        ]
+
+        mock_cluster._wait_for_cloud_service_installations()
+
+        calls = mock_cluster._wait_for_cloud_request_completed.call_args_list
+        assert len(calls) == 2
+        assert calls[0] == ((), {"request_id": 2, "request_type": "INSTALL_VECTOR_SEARCH"})
+        assert calls[1] == ((), {"request_id": 1, "request_type": "INSTALL_MANAGER"})
+
+    def test_one_already_completed(self, mock_cluster):
+        """When one service is already COMPLETED, only wait for the other."""
+        mock_cluster._api_client.get_cluster_requests.return_value = [
+            {"id": 1, "requestType": "INSTALL_MANAGER", "status": "COMPLETED"},
+            {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "IN_PROGRESS"},
+        ]
+
+        mock_cluster._wait_for_cloud_service_installations()
+
+        calls = mock_cluster._wait_for_cloud_request_completed.call_args_list
+        assert len(calls) == 1
+        assert calls[0] == ((), {"request_id": 2, "request_type": "INSTALL_VECTOR_SEARCH"})
+
+    def test_both_already_completed(self, mock_cluster):
+        """When both services are already COMPLETED, no waiting needed."""
+        mock_cluster._api_client.get_cluster_requests.return_value = [
+            {"id": 1, "requestType": "INSTALL_MANAGER", "status": "COMPLETED"},
+            {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "COMPLETED"},
+        ]
+
+        mock_cluster._wait_for_cloud_service_installations()
+        mock_cluster._wait_for_cloud_request_completed.assert_not_called()
+>>>>>>> 7f23fcc38 (fix(xcloud): wait for cloud service installations in correct order)
