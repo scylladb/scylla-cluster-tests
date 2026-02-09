@@ -5,12 +5,13 @@ from datetime import datetime
 from functools import cached_property
 from pathlib import Path
 from textwrap import dedent
+from time import sleep
 
 import boto3
 import yaml
 from invoke import exceptions
 
-from sdcm.mgmt import TaskStatus
+from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
 from sdcm.mgmt.cli import ScyllaManagerTool
 from sdcm import mgmt
 from sdcm.exceptions import FilesNotCorrupted
@@ -689,6 +690,14 @@ class ManagerTestFunctionsMixIn(
         return email_data
 
     @cached_property
+    def db_node(self):
+        return self.db_cluster.nodes[0]
+
+    @cached_property
+    def manager_node(self):
+        return self.monitors.nodes[0]
+
+    @cached_property
     def locations(self) -> list[str]:
         backend = self.params.get("backup_bucket_backend")
         region = next(iter(self.params.region_names), "")
@@ -875,3 +884,33 @@ class ManagerTestFunctionsMixIn(
             repair_task.wait_for_percentage(next_percentage_block)
         repair_task.wait_and_get_final_status(step=30)
         InfoEvent(message="Repair ended").publish()
+
+    def upgrade_scylla_manager(
+        self, pre_upgrade_manager_version, target_upgrade_server_version, target_upgrade_agent_version
+    ):
+        self.log.debug("Stopping manager server")
+        self.manager_node.remoter.sudo("systemctl stop scylla-manager")
+
+        self.log.debug("Stopping manager agents")
+        for node in self.db_cluster.nodes:
+            node.remoter.sudo("systemctl stop scylla-manager-agent")
+
+        self.log.debug("Upgrading manager server")
+        self.manager_node.upgrade_mgmt(target_upgrade_server_version, start_manager_after_upgrade=False)
+
+        self.log.debug("Upgrading and starting manager agents")
+        for node in self.db_cluster.nodes:
+            node.upgrade_manager_agent(target_upgrade_agent_version)
+
+        self.log.debug("Starting manager server")
+        self.manager_node.remoter.sudo("systemctl start scylla-manager")
+        time_to_sleep = 30
+        self.log.debug("Sleep %s seconds, waiting for manager service ready to respond", time_to_sleep)
+        sleep(time_to_sleep)
+
+        self.log.debug("Comparing the new manager versions")
+        manager_tool = get_scylla_manager_tool(manager_node=self.manager_node)
+        new_manager_version = manager_tool.sctool.version
+        assert new_manager_version != pre_upgrade_manager_version, (
+            "Manager failed to upgrade - previous and new versions are the same. Test failed!"
+        )
