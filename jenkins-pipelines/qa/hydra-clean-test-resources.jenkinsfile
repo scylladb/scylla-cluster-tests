@@ -20,6 +20,12 @@ pipeline {
         string(defaultValue: 'aws',
                description: 'resources backend',
                name: 'backend')
+        string(defaultValue: '',
+               description: 'Cloud provider for xcloud backend (aws, gce). Required when backend=xcloud.',
+               name: 'xcloud_provider')
+        string(defaultValue: '',
+               description: 'Scylla Cloud environment (lab, staging, prod). Required when backend=xcloud.',
+               name: 'xcloud_env')
     }
     options {
         timestamps()
@@ -41,6 +47,12 @@ pipeline {
                             export SCT_REGION_NAME=
                             export SCT_GCE_DATACENTER=
                             export SCT_AZURE_REGION_NAME=
+
+                            if [[ "${params.backend}" == "xcloud" ]] ; then
+                                export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
+                                export SCT_XCLOUD_ENV="${params.xcloud_env}"
+                            fi
+
                             ./docker/env/hydra.sh clean-resources --backend ${params.backend} --test-id ${params.test_id}
                         """
                    }
