@@ -124,7 +124,7 @@ class GceBuilder:
             ),
         )
         res.raise_for_status()
-        logging.info(res.text)
+        LOGGER.info(res.text)
         assert not res.text
 
     @staticmethod

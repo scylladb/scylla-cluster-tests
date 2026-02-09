@@ -11,7 +11,7 @@ from hdrh.log import HistogramLogReader
 
 from sdcm.utils.decorators import log_run_info
 
-LOGGER = logging.getLogger(__file__)
+LOGGER = logging.getLogger(__name__)
 
 TIME_INTERVAL = 600
 PERCENTILES = [50, 90, 95, 99, 99.9, 99.99, 99.999]

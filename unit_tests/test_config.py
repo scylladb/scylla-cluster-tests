@@ -22,6 +22,8 @@ from sdcm import sct_config
 from sdcm.utils.common import get_latest_scylla_release
 from sdcm.utils.aws_utils import get_ssm_ami
 
+
+LOGGER = logging.getLogger(__name__)
 RPM_URL = (
     "https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/"
     "9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1"
@@ -59,7 +61,7 @@ def fixture_env(monkeypatch):
 
 
 def test_01_dump_config(conf):
-    logging.debug(conf.dump_config())
+    LOGGER.debug(conf.dump_config())
 
 
 def test_02_verify_config(conf):
@@ -68,11 +70,11 @@ def test_02_verify_config(conf):
 
 
 def test_03_dump_help_config_yaml(conf):
-    logging.debug(conf.dump_help_config_yaml())
+    LOGGER.debug(conf.dump_help_config_yaml())
 
 
 def test_03_dump_help_config_markdown(conf):
-    logging.debug(conf.dump_help_config_markdown())
+    LOGGER.debug(conf.dump_help_config_markdown())
 
 
 @pytest.mark.integration

@@ -22,6 +22,9 @@ from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
 from sdcm.utils.common import get_data_dir_path
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 class DummyOutput:
     def __init__(self, stdout):
         self.stdout = stdout
@@ -31,7 +34,7 @@ class DummyOutput:
 class DummyRemote:
     @staticmethod
     def run(*args, **kwargs):
-        logging.info(args, kwargs)
+        LOGGER.info(args, kwargs)
         return DummyOutput(args[0])
 
     @staticmethod

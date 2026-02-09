@@ -939,17 +939,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def prepare_kms_host(self) -> None:  # noqa: PLR0911
         if self.params.get("cluster_backend") != "aws":
-            logging.debug("Skip configuring AWS KMS, test is not running on AWS")
+            TEST_LOG.debug("Skip configuring AWS KMS, test is not running on AWS")
             return
         if self.params.get("enterprise_disable_kms"):
-            logging.debug("Skip configuring AWS KMS, `enterprise_disable_kms` is set in the config")
+            TEST_LOG.debug("Skip configuring AWS KMS, `enterprise_disable_kms` is set in the config")
             return
         if self.params.get("db_type") == "mixed_scylla":
-            logging.debug("Skip configuring AWS KMS, test uses mixed scylla versions")
+            TEST_LOG.debug("Skip configuring AWS KMS, test uses mixed scylla versions")
             return
 
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options")):
-            logging.debug(
+            TEST_LOG.debug(
                 "Configuring AWS KMS: `scylla_encryption_options` is not set in the config, using default values"
             )
             self.params["scylla_encryption_options"] = (
@@ -996,18 +996,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def prepare_azure_kms(self) -> None:  # noqa: PLR0911
         if self.params.get("cluster_backend") != "azure":
-            logging.debug("Skip configuring Azure KMS, test is not running on Azure")
+            TEST_LOG.debug("Skip configuring Azure KMS, test is not running on Azure")
             return
         if self.params.get("enterprise_disable_kms"):
-            logging.debug("Skip configuring Azure KMS, `enterprise_disable_kms` is set in the config")
+            TEST_LOG.debug("Skip configuring Azure KMS, `enterprise_disable_kms` is set in the config")
             return
         if self.params.get("db_type") == "mixed_scylla":
-            logging.debug("Skip configuring Azure KMS, test uses mixed scylla versions")
+            TEST_LOG.debug("Skip configuring Azure KMS, test uses mixed scylla versions")
             return
         try:
             scylla_version = ComparableScyllaVersion(self.params.scylla_version)
             if not (scylla_version >= "2025.4.0~dev"):
-                logging.debug(f"Skip configuring Azure KMS, Scylla version {scylla_version} does not support KMS")
+                TEST_LOG.debug(f"Skip configuring Azure KMS, Scylla version {scylla_version} does not support KMS")
                 return
         except ValueError as e:
             InfoEvent(
@@ -1016,7 +1016,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             ).publish()
 
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options")):
-            logging.debug(
+            TEST_LOG.debug(
                 "Configuring Azure KMS:`scylla_encryption_options` is not set in the config, using default values"
             )
             self.params["scylla_encryption_options"] = (
@@ -1055,17 +1055,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def prepare_gcp_kms(self) -> None:  # noqa: PLR0911
         if self.params.get("cluster_backend") != "gce":
-            logging.debug("Skip configuring GCP KMS, test is not running on GCE")
+            TEST_LOG.debug("Skip configuring GCP KMS, test is not running on GCE")
             return
         if self.params.get("enterprise_disable_kms"):
-            logging.debug("Skip configuring GCP KMS, `enterprise_disable_kms` is set in the config")
+            TEST_LOG.debug("Skip configuring GCP KMS, `enterprise_disable_kms` is set in the config")
             return
         if self.params.get("db_type") == "mixed_scylla":
-            logging.debug("Skip configuring GCP KMS, test uses mixed scylla versions")
+            TEST_LOG.debug("Skip configuring GCP KMS, test uses mixed scylla versions")
             return
 
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options")):
-            logging.debug(
+            TEST_LOG.debug(
                 "Configuring GCP KMS: `scylla_encryption_options` is not set in the config, using default values"
             )
             self.params["scylla_encryption_options"] = (
@@ -3868,9 +3868,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         self._check_alive_routines_and_report_them()
         self._check_if_db_log_time_consistency_looks_good()
-        logging.debug("Threads and processes at the end of the test:")
+        TEST_LOG.debug("Threads and processes at the end of the test:")
         for t in threading.enumerate():
-            logging.debug(f"Active thread: {t.name} (id={t.ident}, daemon={t.daemon}, repr={repr(t)})")
+            TEST_LOG.debug(f"Active thread: {t.name} (id={t.ident}, daemon={t.daemon}, repr={repr(t)})")
 
     @silence()
     def _check_if_db_log_time_consistency_looks_good(self):
@@ -3881,9 +3881,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 looks_good = False
                 break
         if looks_good:
-            logging.info("DB logs time consistency is perfect")
+            TEST_LOG.info("DB logs time consistency is perfect")
         else:
-            logging.error(
+            TEST_LOG.error(
                 "DB logs time consistency is NOT perfect, details:\n%s", yaml.safe_dump(result, sort_keys=False)
             )
 
@@ -3891,7 +3891,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         threads_alive = self.show_alive_threads()
         processes_alive = self.show_alive_processes()
         if processes_alive or threads_alive:
-            logging.error("Please check %s log to see them", self.left_processes_log)
+            TEST_LOG.error("Please check %s log to see them", self.left_processes_log)
 
     def _get_test_result_event(self) -> TestResultEvent:
         return TestResultEvent(

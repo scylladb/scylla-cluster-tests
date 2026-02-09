@@ -899,7 +899,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         values.set("image.repository", new_docker_image.split("/")[0].strip() or "scylladb")
 
         # NOTE: Set operator_image_tag even if it is empty, we need to redefine base operator image
-        values.set("image.tag", new_docker_image.split(":")[-1].strip())
+        values.set("image.tag", new_docker_image.rsplit(":")[-1].strip())
 
         # Upgrade Scylla Operator using Helm chart
         self.log.debug(
