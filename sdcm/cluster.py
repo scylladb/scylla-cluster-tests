@@ -1582,7 +1582,7 @@ class BaseNode(AutoSshContainerMixin):
             keyspace_available,
             timeout=600,
             step=60,
-            text="Waiting until keyspace {} is available".format(keyspace),
+            text=f"Waiting until keyspace {keyspace} is available",
             throw_exc=False,
         )
         # Don't need NodetoolEvent when waiting for space_node_threshold before start the nemesis, not publish it
@@ -1875,7 +1875,7 @@ class BaseNode(AutoSshContainerMixin):
         :rtype: {str}
         """
         final_scylla_debug_file = os.path.join("/tmp", f"debug_{build_id}")
-        res = self.remoter.run("test -f {}".format(final_scylla_debug_file), ignore_status=True, verbose=False)
+        res = self.remoter.run(f"test -f {final_scylla_debug_file}", ignore_status=True, verbose=False)
         if res.exited == 0:
             return final_scylla_debug_file
         db_nodes = self.parent_cluster.targets["db_cluster"].nodes
@@ -1926,7 +1926,7 @@ class BaseNode(AutoSshContainerMixin):
         :returns: result of bactrace
         :rtype: {str}
         """
-        return self.remoter.run("addr2line -Cpife {0} {1}".format(scylla_debug_file, raw_backtrace), verbose=True)
+        return self.remoter.run(f"addr2line -Cpife {scylla_debug_file} {raw_backtrace}", verbose=True)
 
     def get_scylla_build_id(self) -> Optional[str]:
         for scylla_executable in (
@@ -2397,12 +2397,12 @@ class BaseNode(AutoSshContainerMixin):
                 self.install_epel()
             self.remoter.run("sudo yum remove -y abrt")  # https://docs.scylladb.com/operating-scylla/admin/#core-dumps
             version = f"-{scylla_version}*" if scylla_version else ""
-            self.remoter.run("sudo yum install -y {}{}".format(self.scylla_pkg(), version))
+            self.remoter.run(f"sudo yum install -y {self.scylla_pkg()}{version}")
         elif self.distro.is_sles15:
             self.remoter.sudo("SUSEConnect --product sle-module-legacy/15.3/x86_64")
             self.remoter.sudo("SUSEConnect --product sle-module-python2/15.3/x86_64")
             version = f"-{scylla_version}" if scylla_version else ""
-            self.remoter.sudo("zypper install -y {}{}".format(self.scylla_pkg(), version))
+            self.remoter.sudo(f"zypper install -y {self.scylla_pkg()}{version}")
         else:
             if self.distro.is_debian11 or self.distro.is_debian12:
                 self.install_package(package_name="software-properties-common")
@@ -2585,7 +2585,7 @@ class BaseNode(AutoSshContainerMixin):
         """
         patt = (r"nvme*n*", r"nvme\d+n\d+") if nvme else (r"sd[b-z]", r"sd\w+")
         result = self.remoter.run(f"ls /dev/{patt[0]}", ignore_status=True)
-        disks = re.findall(r"/dev/{}".format(patt[1]), result.stdout)
+        disks = re.findall(rf"/dev/{patt[1]}", result.stdout)
         # filter out the used disk, the free disk doesn't have partition.
         disks = [i for i in disks if disks.count(i) == 1]
         assert disks, "Failed to find disks!"
@@ -2600,7 +2600,7 @@ class BaseNode(AutoSshContainerMixin):
                 self._kernel_version = "unknown"
             else:
                 self._kernel_version = res.stdout.strip()
-            self.log.info("Found kernel version: {}".format(self._kernel_version))
+            self.log.info(f"Found kernel version: {self._kernel_version}")
         return self._kernel_version
 
     def increase_jmx_heap_memory(self, jmx_memory):
@@ -3082,7 +3082,7 @@ class BaseNode(AutoSshContainerMixin):
                     collect_diagnostic_data(self)
                     self.generate_coredump_file(node_name=self.name, message=message)
 
-                nodetool_event.add_error([f"{error_message}{str(details)}"])
+                nodetool_event.add_error([f"{error_message}{details!s}"])
                 nodetool_event.full_traceback = traceback.format_exc()
 
                 if warning_event_on_exception and isinstance(details, warning_event_on_exception):
@@ -3260,17 +3260,11 @@ class BaseNode(AutoSshContainerMixin):
         """cqlsh [options] [host [port]]"""
         credentials = self.parent_cluster.get_db_auth()
         auth_params = "-u {} -p '{}'".format(*credentials) if credentials else ""
-        use_keyspace = "--keyspace {}".format(keyspace) if keyspace else ""
+        use_keyspace = f"--keyspace {keyspace}" if keyspace else ""
         ssl_params = "--ssl" if self.parent_cluster.params.get("client_encrypt") else ""
         options = (
-            "--no-color {auth_params} {use_keyspace} --request-timeout={timeout} "
-            "--connect-timeout={connect_timeout} {ssl_params}".format(
-                auth_params=auth_params,
-                use_keyspace=use_keyspace,
-                timeout=timeout,
-                connect_timeout=connect_timeout,
-                ssl_params=ssl_params,
-            )
+            f"--no-color {auth_params} {use_keyspace} --request-timeout={timeout} "
+            f"--connect-timeout={connect_timeout} {ssl_params}"
         )
 
         # cqlsh uses rpc_address/broadcast_rps_address.
@@ -3327,10 +3321,10 @@ class BaseNode(AutoSshContainerMixin):
             self.remoter.send_files(src=tmp_file.name, dst=startup_script_remote_path)
 
         cmds = dedent(
+            f"""
+                chmod +x {startup_script_remote_path}
+                {startup_script_remote_path}
             """
-                chmod +x {0}
-                {0}
-            """.format(startup_script_remote_path)
         )
 
         result = self.remoter.run("sudo bash -ce '%s'" % cmds)
@@ -3752,7 +3746,7 @@ class BaseCluster:
             # get_node_ips_param should be defined in child
             self._node_public_ips = self.params.get(self.get_node_ips_param(public_ip=True)) or []
             self._node_private_ips = self.params.get(self.get_node_ips_param(public_ip=False)) or []
-            self.log.debug("Node public IPs: {}, private IPs: {}".format(self._node_public_ips, self._node_private_ips))
+            self.log.debug(f"Node public IPs: {self._node_public_ips}, private IPs: {self._node_private_ips}")
 
         # NOTE: following is needed in case of K8S where we init multiple DB clusters first
         #       and only then we add nodes to it calling code in parallel.
@@ -3779,7 +3773,7 @@ class BaseCluster:
                     rack = None if self.params.get("simulated_racks") else az_index
                     self.add_nodes(nodes_per_az[az_index], rack=rack, enable_auto_bootstrap=self.auto_bootstrap)
             else:
-                raise ValueError("Unsupported type: {}".format(type(n_nodes)))
+                raise ValueError(f"Unsupported type: {type(n_nodes)}")
             self.run_node_benchmarks()
         self.coredumps = {}
         super().__init__()
@@ -3918,7 +3912,7 @@ class BaseCluster:
                 if node.n_coredumps > 0:
                     self.coredumps[node.name] = node.n_coredumps
             except Exception as ex:
-                self.log.exception("Unable to get coredump status from node {node}: {ex}".format(node=node, ex=ex))
+                self.log.exception(f"Unable to get coredump status from node {node}: {ex}")
 
     def node_setup(self, node, verbose=False, timeout=3600):
         raise NotImplementedError("Derived class must implement 'node_setup' method!")
@@ -4901,9 +4895,7 @@ class BaseScyllaCluster:
             yaml_seeds_ips = node.extract_seeds_from_scylla_yaml()
             for ip in yaml_seeds_ips:
                 assert ip in self.seed_nodes_addresses, (
-                    "Wrong seed IP {act_ip} in the scylla.yaml on the {node_name} node. Expected {exp_ips}".format(
-                        node_name=node.name, exp_ips=self.seed_nodes_addresses, act_ip=ip
-                    )
+                    f"Wrong seed IP {ip} in the scylla.yaml on the {node.name} node. Expected {self.seed_nodes_addresses}"
                 )
 
     @contextlib.contextmanager
@@ -6437,10 +6429,10 @@ class BaseMonitorSet:
 
         tunnel = {"addr": port, "proto": "http", "name": "sct", "bind_tls": False}
         res = requests.post("http://localhost:4040/api/tunnels", json=tunnel)
-        assert res.ok, "failed to add a ngrok tunnel [{}, {}]".format(res, res.text)
+        assert res.ok, f"failed to add a ngrok tunnel [{res}, {res.text}]"
         ngrok_address = res.json()["public_url"].replace("http://", "")
 
-        return "{}:80".format(ngrok_address)
+        return f"{ngrok_address}:80"
 
     def set_local_sct_ip(self):
         ngrok_name = self.params.get("sct_ngrok_name")
@@ -6534,7 +6526,7 @@ class BaseMonitorSet:
                 cat /etc/debian_version
             """)
         else:
-            raise ValueError("Unsupported Distribution type: {}".format(str(node.distro)))
+            raise ValueError(f"Unsupported Distribution type: {node.distro!s}")
 
         node_exporter_setup = NodeExporterSetup()
         node_exporter_setup.install(node)
@@ -6548,16 +6540,16 @@ class BaseMonitorSet:
 
     def download_scylla_monitoring(self, node):
         install_script = dedent(
-            """
-            rm -rf {0.monitor_install_path_base}
-            mkdir -p {0.monitor_install_path_base}
-            cd {0.monitor_install_path_base}
-            wget https://github.com/scylladb/scylla-monitoring/archive/{0.monitor_branch}.zip
-            rm -rf ./tmp {0.monitor_install_path} 2>/dev/null
-            unzip {0.monitor_branch}.zip -d ./tmp
-            mv ./tmp/scylla-monitoring-{0.monitor_branch}/ {0.monitor_install_path}
+            f"""
+            rm -rf {self.monitor_install_path_base}
+            mkdir -p {self.monitor_install_path_base}
+            cd {self.monitor_install_path_base}
+            wget https://github.com/scylladb/scylla-monitoring/archive/{self.monitor_branch}.zip
+            rm -rf ./tmp {self.monitor_install_path} 2>/dev/null
+            unzip {self.monitor_branch}.zip -d ./tmp
+            mv ./tmp/scylla-monitoring-{self.monitor_branch}/ {self.monitor_install_path}
             rm -rf ./tmp 2>/dev/null
-        """.format(self)
+        """
         )
         node.remoter.run("bash -ce '%s'" % install_script)
         if node.distro.is_ubuntu:
@@ -6872,7 +6864,7 @@ class BaseMonitorSet:
             full_yaml_string += f"  - {prometheus_target}\n"
 
         node.remoter.run(
-            f"echo '{str(full_yaml_string)}' > {self.monitor_install_path}/prometheus/scylla_manager_servers.yml"
+            f"echo '{full_yaml_string!s}' > {self.monitor_install_path}/prometheus/scylla_manager_servers.yml"
         )
         # Writing directly to the yaml in the conf dir results in permission denied
         node.remoter.run(
@@ -6921,16 +6913,14 @@ class BaseMonitorSet:
 
     def save_monitoring_version(self, node):
         node.remoter.run(
-            'echo "{0.monitor_branch}:{0.monitoring_version}" > \
-            {0.monitor_install_path}/monitor_version'.format(self),
+            f'echo "{self.monitor_branch}:{self.monitoring_version}" > \
+            {self.monitor_install_path}/monitor_version',
             ignore_status=True,
         )
 
     def add_sct_dashboards_to_grafana(self, node):
         def _register_grafana_json(json_filename):
-            url = "'http://{0}:{1.grafana_port}/api/dashboards/db'".format(
-                normalize_ipv6_url(node.external_address), self
-            )
+            url = f"'http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}/api/dashboards/db'"
             result = LOCALRUNNER.run(
                 'curl -g -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' % (url, json_filename)
             )
@@ -6947,7 +6937,7 @@ class BaseMonitorSet:
     def save_sct_dashboards_config(self, node):
         sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, "sct_monitoring_addons")
 
-        node.remoter.run("mkdir -p {}".format(sct_monitoring_addons_dir), ignore_status=True)
+        node.remoter.run(f"mkdir -p {sct_monitoring_addons_dir}", ignore_status=True)
         node.remoter.send_files(src=self.sct_dashboard_json_file, dst=sct_monitoring_addons_dir)
 
     def update_default_time_range(self, start_timestamp: float, end_timestamp: float) -> None:
@@ -7036,7 +7026,7 @@ class BaseMonitorSet:
         )
         screenshot_files = screenshot_collector.collect(node, self.logdir)
         for screenshot in screenshot_files:
-            s3_path = "{test_id}/{date}".format(test_id=self.test_config.test_id(), date=date_time)
+            s3_path = f"{self.test_config.test_id()}/{date_time}"
             screenshot_links.append(S3Storage().upload_file(screenshot, s3_path))
 
         return screenshot_links
@@ -7049,7 +7039,7 @@ class BaseMonitorSet:
             annotations = self.get_grafana_annotations(self.nodes[0])
             if annotations:
                 annotations_url = S3Storage().generate_url("annotations.json", self.monitor_id)
-                self.log.info("Uploading 'annotations.json' to {s3_url}".format(s3_url=annotations_url))
+                self.log.info(f"Uploading 'annotations.json' to {annotations_url}")
                 response = requests.put(
                     annotations_url, data=annotations, headers={"Content-type": "application/json; charset=utf-8"}
                 )

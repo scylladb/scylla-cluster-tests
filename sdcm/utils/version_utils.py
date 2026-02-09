@@ -789,9 +789,7 @@ class scylla_versions:
                 except ValueError as exc:
                     LOGGER.warning("Failed to parse '%s' scylla version: %s", scylla_version, exc)
             raise MethodVersionNotFound(
-                "Method '{}' with version '{}' is not supported in '{}'!".format(
-                    func.__name__, scylla_version, cls_self.__class__.__name__
-                )
+                f"Method '{func.__name__}' with version '{scylla_version}' is not supported in '{cls_self.__class__.__name__}'!"
             )
 
         return inner
@@ -844,24 +842,22 @@ def get_s3_scylla_repos_mapping(dist_type="centos", dist_version=None):
                 )
 
     elif dist_type in ("ubuntu", "debian"):
-        response = s3_client.list_objects(Bucket=bucket, Prefix="deb/{}/".format(dist_type), Delimiter="/")
+        response = s3_client.list_objects(Bucket=bucket, Prefix=f"deb/{dist_type}/", Delimiter="/")
         for repo_file in response["Contents"]:
             filename = os.path.basename(repo_file["Key"])
 
             # only if path look like 'deb/debian/scylla-3.0-jessie.list', we deem it formal one
             repo_regex = re.compile(r"\d+\.\d\.list")
             if filename.startswith("scylla-") and (
-                filename.endswith("-{}.list".format(dist_version)) or repo_regex.search(filename)
+                filename.endswith(f"-{dist_version}.list") or repo_regex.search(filename)
             ):
-                version_prefix = (
-                    filename.replace("-{}.list".format(dist_version), "").replace(".list", "").split("-")[-1]
-                )
+                version_prefix = filename.replace(f"-{dist_version}.list", "").replace(".list", "").split("-")[-1]
                 _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)][version_prefix] = (
                     "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=repo_file["Key"])
                 )
 
     else:
-        raise NotImplementedError("[{}] is not yet supported".format(dist_type))
+        raise NotImplementedError(f"[{dist_type}] is not yet supported")
     return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
 
 

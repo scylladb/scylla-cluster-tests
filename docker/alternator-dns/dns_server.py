@@ -26,8 +26,8 @@ def livenodes_update():
         # Contact one of the already known nodes by random, to fetch a new
         # list of known nodes.
         ip = random.choice(livenodes)
-        url = "http://{}:{}/localnodes".format(ip, alternator_port)
-        print("updating livenodes from {}".format(url))
+        url = f"http://{ip}:{alternator_port}/localnodes"
+        print(f"updating livenodes from {url}")
         try:
             nodes = urllib.request.urlopen(url, None, 1.0).read().decode("ascii")
             a = [x.strip('"').rstrip('"') for x in nodes.strip("[").rstrip("]").split(",")]
@@ -58,7 +58,7 @@ class Resolver:
 
         if qname == "alternator":
             ip = random.choice(livenodes)
-            reply.add_answer(*dnslib.RR.fromZone("{} 4 A {}".format(qname, ip)))
+            reply.add_answer(*dnslib.RR.fromZone(f"{qname} 4 A {ip}"))
 
         # Otherwise proxy
         if not reply.rr:

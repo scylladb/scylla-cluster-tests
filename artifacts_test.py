@@ -332,7 +332,7 @@ class ArtifactsTest(ClusterTester):
             scylla_encryption_options = self.params.get("scylla_encryption_options")
             self.log.debug("Pre Creating Schema for c-s with %s keyspaces", keyspace_num)
             for i in range(1, keyspace_num + 1):
-                keyspace_name = "keyspace{}".format(i)
+                keyspace_name = f"keyspace{i}"
                 self.create_keyspace(keyspace_name=keyspace_name, replication_factor=replication_factor)
                 self.log.debug("%s Created", keyspace_name)
                 col_num = 5

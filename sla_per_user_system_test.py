@@ -1027,7 +1027,7 @@ class SlaPerUserTest(LongevityTest):
         self.assertTrue(latency_99_for_mixed_workload, msg="Not received cassandra-stress for mixed workload")
 
         grafana_screenshots = self.monitors.get_grafana_screenshots_from_all_monitors(test_start_time=test_start_time)
-        self.log.debug("GRAFANA SCREENSHOTS: {}".format(grafana_screenshots))
+        self.log.debug(f"GRAFANA SCREENSHOTS: {grafana_screenshots}")
 
         # Compare latency of two runs
         self.log.debug("Test results:\n---------------------\n")
@@ -1044,9 +1044,9 @@ class SlaPerUserTest(LongevityTest):
         result_print_str = "\nTest results:\n---------------------\n"
         result_print_str += "\nWorkload                  |      Latency 99%"
         result_print_str += "\n========================= | ================="
-        result_print_str += "\nLatency only              |      {}".format(latency_99_latency_workload)
-        result_print_str += "\nLatency and throughput    |      {}".format(latency_99_mixed_workload)
+        result_print_str += f"\nLatency only              |      {latency_99_latency_workload}"
+        result_print_str += f"\nLatency and throughput    |      {latency_99_mixed_workload}"
         result_print_str += "\n------------------------- | -----------------"
-        result_print_str += "\nLatency 99 is {} in {}%".format(latency_change, deviation)
+        result_print_str += f"\nLatency 99 is {latency_change} in {deviation}%"
 
         return latency_99_latency_workload, latency_99_mixed_workload, result_print_str

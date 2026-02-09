@@ -969,16 +969,14 @@ class NemesisRunner:
             file_name_template = re.search(r"([^-]+-[^-]+)-", file_name).group(1)
         except Exception as error:  # noqa: BLE001
             self.log.debug(
-                'File name "{file_name}" is not as expected for Scylla data files. '
-                'Search files for "{ks_cf_for_destroy}" table'.format(
-                    file_name=file_name, ks_cf_for_destroy=ks_cf_for_destroy
-                )
+                f'File name "{file_name}" is not as expected for Scylla data files. '
+                f'Search files for "{ks_cf_for_destroy}" table'
             )
-            self.log.debug("Error: {}".format(error))
+            self.log.debug(f"Error: {error}")
             return ""
 
         file_for_destroy = one_file.replace(file_name, file_name_template + "-*")
-        self.log.debug("Selected files for destroy: {}".format(file_for_destroy))
+        self.log.debug(f"Selected files for destroy: {file_for_destroy}")
         return file_for_destroy
 
     @retrying(n=10, allowed_exceptions=(NoKeyspaceFound, NoFilesFoundToDestroy))
@@ -994,7 +992,7 @@ class NemesisRunner:
         )
         if files.stderr:
             raise NoFilesFoundToDestroy(
-                "Failed to get data files for destroy in {}. Error: {}".format(ks_cf_for_destroy, files.stderr)
+                f"Failed to get data files for destroy in {ks_cf_for_destroy}. Error: {files.stderr}"
             )
 
         for one_file in files.stdout.split():
@@ -1004,14 +1002,14 @@ class NemesisRunner:
             if not (file_for_destroy := self.replace_full_file_name_to_prefix(one_file, ks_cf_for_destroy)):
                 continue
 
-            self.log.debug("Selected files for destroy: {}".format(file_for_destroy))
+            self.log.debug(f"Selected files for destroy: {file_for_destroy}")
             if file_for_destroy:
                 if return_one_file:
                     break
                 all_files.append(file_for_destroy)
 
         if not file_for_destroy:
-            raise NoFilesFoundToDestroy("Data file for destroy is not found in {}".format(ks_cf_for_destroy))
+            raise NoFilesFoundToDestroy(f"Data file for destroy is not found in {ks_cf_for_destroy}")
 
         return file_for_destroy if return_one_file else all_files
 
@@ -1077,13 +1075,11 @@ class NemesisRunner:
                 ):
                     result = self.target_node.remoter.sudo("rm -f %s" % file_group_for_destroy)
                 if result.stderr:
-                    raise FilesNotCorrupted(
-                        "Files were not removed. The nemesis can't be run. Error: {}".format(result)
-                    )
+                    raise FilesNotCorrupted(f"Files were not removed. The nemesis can't be run. Error: {result}")
                 all_files_to_destroy.remove(file_for_destroy)
                 sstables_amount_to_destroy -= 1
                 destroyed_files += 1
-                self.log.debug("Files {} were destroyed".format(file_for_destroy))
+                self.log.debug(f"Files {file_for_destroy} were destroyed")
             self.actions_log.info(f"removed {destroyed_files} files in tables: {tables} on {self.target_node.name}")
 
         finally:
@@ -1826,7 +1822,7 @@ class NemesisRunner:
             )
         if all_nodes:
             nodes = self.cluster.data_nodes
-            InfoEvent("Enospc test on {}".format([n.name for n in nodes])).publish()
+            InfoEvent(f"Enospc test on {[n.name for n in nodes]}").publish()
         else:
             nodes = [self.target_node]
 
@@ -2062,7 +2058,7 @@ class NemesisRunner:
                 if task_final_status != TaskStatus.ERROR_FINAL:
                     mgr_task.stop()
                 raise ScyllaManagerError(
-                    f"Task: {mgr_task.id} final status is: {str(task_final_status)}.\nTask progress string: "
+                    f"Task: {mgr_task.id} final status is: {task_final_status!s}.\nTask progress string: "
                     f"{progress_full_string}"
                 )
             self.actions_log.info(
@@ -2230,9 +2226,7 @@ class NemesisRunner:
                 "Non-system keyspace and table are not found. ModifyTableProperties nemesis can't be run"
             )
 
-        cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(
-            keyspace_table=keyspace_table, name=name, val=val
-        )
+        cmd = f"ALTER TABLE {keyspace_table} WITH {name} = {val};"
         self.actions_log.info(f"Modify table property on {keyspace_table}: {name} = {val}")
         with self.cluster.cql_connection_patient(self.target_node) as session:
             session.execute(cmd)
@@ -2328,8 +2322,8 @@ class NemesisRunner:
                 session.default_consistency_level = consistency_level
                 session.execute(cmd)
         except Exception as exc:  # noqa: BLE001
-            self.log.debug(f"Add/Remove Column Nemesis: CQL query '{cmd}' execution has failed with error '{str(exc)}'")
-            self.actions_log.info(f"Failed to add/drop column: {str(exc)}")
+            self.log.debug(f"Add/Remove Column Nemesis: CQL query '{cmd}' execution has failed with error '{exc!s}'")
+            self.actions_log.info(f"Failed to add/drop column: {exc!s}")
             return False
         return True
 
@@ -2834,7 +2828,7 @@ class NemesisRunner:
         cmd = alter_command_prefix + " {keyspace_table} WITH compaction = {new_compaction_strategy_as_dict};".format(
             **locals()
         )
-        self.log.debug("Toggle table ICS query to execute: {}".format(cmd))
+        self.log.debug(f"Toggle table ICS query to execute: {cmd}")
         self.actions_log.info(
             f"Toggle table ICS for {keyspace_table} table"
             f" from {cur_compaction_strategy.value} to {new_compaction_strategy.value}"
@@ -3813,7 +3807,7 @@ class NemesisRunner:
             max_limit = int(round(avg_kbps_per_node * 0.70))
             rate_limit_suffix = "kbps"
 
-        return "{}{}".format(random.randrange(min_limit, max_limit), rate_limit_suffix)
+        return f"{random.randrange(min_limit, max_limit)}{rate_limit_suffix}"
 
     def _disrupt_network_random_interruptions_k8s(self, list_of_timeout_options):
         interruptions = ["delay", "loss", "corrupt"]
@@ -3891,20 +3885,18 @@ class NemesisRunner:
         delay_in_secs = random.randrange(1, 30)
 
         list_of_tc_options = [
-            ("NetworkRandomInterruption_{}pct_loss".format(loss_percentage), "--loss {}%".format(loss_percentage)),
+            (f"NetworkRandomInterruption_{loss_percentage}pct_loss", f"--loss {loss_percentage}%"),
             (
-                "NetworkRandomInterruption_{}pct_corrupt".format(corrupt_percentage),
-                "--corrupt {}%".format(corrupt_percentage),
+                f"NetworkRandomInterruption_{corrupt_percentage}pct_corrupt",
+                f"--corrupt {corrupt_percentage}%",
             ),
             (
-                "NetworkRandomInterruption_{}sec_delay".format(delay_in_secs),
-                "--delay {}s --delay-distro 500ms".format(delay_in_secs),
+                f"NetworkRandomInterruption_{delay_in_secs}sec_delay",
+                f"--delay {delay_in_secs}s --delay-distro 500ms",
             ),
         ]
         if rate_limit:
-            list_of_tc_options.append(
-                ("NetworkRandomInterruption_{}_limit".format(rate_limit), "--rate {}".format(rate_limit))
-            )
+            list_of_tc_options.append((f"NetworkRandomInterruption_{rate_limit}_limit", f"--rate {rate_limit}"))
 
         option_name, selected_option = random.choice(list_of_tc_options)
         wait_time = random.choice(list_of_timeout_options)
@@ -4069,13 +4061,11 @@ class NemesisRunner:
             removenode_reject_msg = r"Rejected removenode operation.*the node being removed is alive"
             with self.node_allocator.run_nemesis(nemesis_label="RemoveNodeAddNode") as rnd_node:
                 self.log.info(
-                    "Running removenode command on {}, Removing node with the following host_id: {}".format(
-                        rnd_node.ip_address, host_id
-                    )
+                    f"Running removenode command on {rnd_node.ip_address}, Removing node with the following host_id: {host_id}"
                 )
                 with adaptive_timeout(Operations.REMOVE_NODE, rnd_node, timeout=HOUR_IN_SEC * 48):
                     res = rnd_node.run_nodetool(
-                        "removenode {}".format(host_id), ignore_status=True, verbose=True, long_running=True, retry=0
+                        f"removenode {host_id}", ignore_status=True, verbose=True, long_running=True, retry=0
                     )
                 if res.failed and re.match(removenode_reject_msg, res.stdout + res.stderr):
                     raise Exception(f"Removenode was rejected {res.stdout}\n{res.stderr}")
@@ -4113,7 +4103,7 @@ class NemesisRunner:
         removed_node_status = self.cluster.get_node_status_dictionary(
             ip_address=node_to_remove.ip_address, verification_node=verification_node
         )
-        assert removed_node_status is None, "Node was not removed properly (Node status:{})".format(removed_node_status)
+        assert removed_node_status is None, f"Node was not removed properly (Node status:{removed_node_status})"
 
         # full cluster repair
         # Repairing will result in a best effort repair due to the terminated node,
@@ -4309,8 +4299,7 @@ class NemesisRunner:
             except Exception as exc:  # noqa: BLE001
                 cmd_executed[cmd_num] = False
                 self.log.error(
-                    f"{name}: failed to execute start command "
-                    f"{cmd} on node {node} due to the following error: {str(exc)}"
+                    f"{name}: failed to execute start command {cmd} on node {node} due to the following error: {exc!s}"
                 )
         if not cmd_executed:
             return
@@ -4320,7 +4309,7 @@ class NemesisRunner:
             except Exception as exc:  # noqa: BLE001
                 self.log.debug(
                     f"{name}: failed to execute cleanup command "
-                    f"{cmd} on node {node} due to the following error: {str(exc)}"
+                    f"{cmd} on node {node} due to the following error: {exc!s}"
                 )
 
     @decorate_with_context(
@@ -4593,10 +4582,10 @@ class NemesisRunner:
 
         # Corrupt data file
         data_file_pattern = self._choose_file_for_destroy(ks_cfs)
-        res = self.target_node.remoter.run("sudo find {}-Data.db".format(data_file_pattern))
+        res = self.target_node.remoter.run(f"sudo find {data_file_pattern}-Data.db")
         for sstable_file in res.stdout.split():
-            self.target_node.remoter.run("sudo dd if=/dev/urandom of={} count=1024".format(sstable_file))
-            self.log.debug("File {} was corrupted by dd".format(sstable_file))
+            self.target_node.remoter.run(f"sudo dd if=/dev/urandom of={sstable_file} count=1024")
+            self.log.debug(f"File {sstable_file} was corrupted by dd")
 
     def disrupt_corrupt_then_scrub(self):
         """
@@ -4670,7 +4659,7 @@ class NemesisRunner:
                     self.decommission_nodes([node])
         except Exception as exc:  # noqa: BLE001
             InfoEvent(
-                f"FinishEvent - ShrinkCluster failed decommissioning a node {self.target_node} with error {str(exc)}"
+                f"FinishEvent - ShrinkCluster failed decommissioning a node {self.target_node} with error {exc!s}"
             ).publish()
 
     @latency_calculator_decorator(legend="Doubling cluster load")
@@ -6298,7 +6287,7 @@ def disrupt_method_wrapper(method, caller_obj: NemesisBaseClass, is_exclusive=Fa
             runner.set_target_node(current_disruption=current_disruption)
             start_msg = (
                 f"Started disruption {method_name} ({runner.base_disruption_name} nemesis) on the target node "
-                f"'{str(runner.target_node)}'"
+                f"'{runner.target_node!s}'"
             )
             runner.log.debug("{start_symbol} {msg} {start_symbol}".format(start_symbol=">" * 12, msg=start_msg))
             for nodes_set in (runner.cluster, runner.loaders):

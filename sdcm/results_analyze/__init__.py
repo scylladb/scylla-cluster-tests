@@ -73,7 +73,7 @@ class BaseResultsAnalyzer:
         :return: test results in json format
         """
         if not self._es.exists(index=self._es_index, id=test_id):
-            self.log.error("Test results not found: {}".format(test_id))
+            self.log.error(f"Test results not found: {test_id}")
             return None
         return self._es.get(index=self._es_index, id=test_id)
 
@@ -177,7 +177,7 @@ class BaseResultsAnalyzer:
 
     def send_email(self, subject, content, html=True, files=()):
         if self._email_recipients:
-            self.log.debug("Send email to {}".format(self._email_recipients))
+            self.log.debug(f"Send email to {self._email_recipients}")
             email = Email()
             email.send(subject, content, html=html, recipients=self._email_recipients, files=files)
         else:
@@ -249,9 +249,7 @@ class BaseResultsAnalyzer:
                 }
             except TypeError:
                 self.log.exception(
-                    "Failed to compare {} results: {} vs {}, version {}".format(
-                        param, src[param], dst[param], version_dst
-                    )
+                    f"Failed to compare {param} results: {src[param]} vs {dst[param]}, version {version_dst}"
                 )
         return cmp_res
 
@@ -521,7 +519,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         subject = (
             f"{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results "
             f"({email_subject_postfix} {dataset_size}) -"
-            f" {test_name} - {test_version} - {str(test_start_time)}"
+            f" {test_name} - {test_version} - {test_start_time!s}"
         )
         best_results_per_nemesis = self._get_best_per_nemesis_for_each_version(doc, is_gce)
         self._compare_current_best_results_average(data, best_results_per_nemesis)
@@ -602,7 +600,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
         # get test res
         doc = self.get_test_by_id(test_id)
         if not doc:
-            self.log.error("Cannot find test by id: {}!".format(test_id))
+            self.log.error(f"Cannot find test by id: {test_id}!")
             return False
 
         test_stats = self._test_stats(doc)
@@ -612,13 +610,13 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
         es_base_path = "hits.hits"
         es_source_path = es_base_path + "._source"
         filter_path = [
-            ".".join([es_base_path, "_id"]),
-            ".".join([es_source_path, "results", "throughput"]),
-            ".".join([es_source_path, "versions"]),
+            f"{es_base_path}._id",
+            f"{es_source_path}.results.throughput",
+            f"{es_source_path}.versions",
         ]
 
         for stat in stats.keys():  # Add all requested specific-stats to be retrieved from ES DB.
-            stat_path = ".".join([es_source_path, stat])
+            stat_path = f"{es_source_path}.{stat}"
             filter_path.append(stat_path)
 
         tests_filtered = self._es.search(
@@ -626,10 +624,10 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
             size=self._limit,
             filter_path=filter_path,
         )
-        self.log.debug("Filtered tests found are: {}".format(tests_filtered))
+        self.log.debug(f"Filtered tests found are: {tests_filtered}")
 
         if not tests_filtered:
-            self.log.info("Cannot find tests with the same parameters as {}".format(test_id))
+            self.log.info(f"Cannot find tests with the same parameters as {test_id}")
             return False
         cur_test_version = None
         tested_params = stats.keys()
@@ -655,7 +653,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
                 continue
             version_info = tag_row["_source"]["versions"]["scylla-server"]
             version = version_info["version"]
-            self.log.debug("version_info={} version={}".format(version_info, version))
+            self.log.debug(f"version_info={version_info} version={version}")
 
             if tag_row["_id"] == test_id:  # save the current test values
                 cur_test_version = version
@@ -682,7 +680,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
                         else:
                             group_by_version[version][param].append(tag_row["_source"][param])
 
-            self.log.debug("group_by_version={}".format(group_by_version))
+            self.log.debug(f"group_by_version={group_by_version}")
 
         if not cur_test_version:
             raise ValueError("Could not retrieve current test details from database")
@@ -693,21 +691,17 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
                 param_avg = sum(list_param_stats) / float(len(list_param_stats))
                 deviation_limit = param_avg * allowed_deviation
                 self.log.info(
-                    "Performance result for: {} is: {}. (average statistics deviation limit is: {}".format(
-                        param, cur_test_param_result, deviation_limit
-                    )
+                    f"Performance result for: {param} is: {cur_test_param_result}. (average statistics deviation limit is: {deviation_limit}"
                 )
                 for version, group in group_by_version.items():
                     if param in group:
                         list_param_results = group[param]
                         version_avg = sum(list_param_results) / float(len(list_param_results))
                         self.log.info(
-                            "Performance average of {} results for: {} on version: {} is: {}".format(
-                                len(list_param_results), param, version, version_avg
-                            )
+                            f"Performance average of {len(list_param_results)} results for: {param} on version: {version} is: {version_avg}"
                         )
                 assert float(cur_test_param_result) < deviation_limit, (
-                    "Current test performance for: {} exceeds allowed deviation ({})".format(param, deviation_limit)
+                    f"Current test performance for: {param} exceeds allowed deviation ({deviation_limit})"
                 )
         return True
 
@@ -810,9 +804,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                 }
             except TypeError:
                 self.log.exception(
-                    "Failed to compare {} results: {} vs {}, version {}".format(
-                        param, src[param], dst[param], version_dst
-                    )
+                    f"Failed to compare {param} results: {src[param]} vs {dst[param]}, version {version_dst}"
                 )
         return cmp_res
 
@@ -936,7 +928,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         for version, group in group_by_version.items():
             if version == test_version and not group_by_version[test_version]["tests"]:
-                self.log.info("No previous tests in the current version {} to compare".format(test_version))
+                self.log.info(f"No previous tests in the current version {test_version} to compare")
                 continue
             cmp_res = self.cmp(test_stats, group["stats_best"], version, group["best_test_id"])
             latest_version_test = group["tests"].peekitem(index=-1)[1]
@@ -991,7 +983,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         )
         if email_subject_postfix:
             subject += f" - {email_subject_postfix}"
-        subject += f" - {str(test_start_time)}"
+        subject += f" - {test_start_time!s}"
 
         if ycsb:
             if ycsb_engine := ycsb.get("raw_cmd", "").split():
@@ -1002,9 +994,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     ycsb_engine = ycsb_engine[index + 1]
                 else:
                     ycsb_engine = "N/A"
-            subject = (
-                f"YCSB({ycsb_engine}) Performance Regression - {test_name} - {test_version} - {str(test_start_time)}"
-            )
+            subject = f"YCSB({ycsb_engine}) Performance Regression - {test_name} - {test_version} - {test_start_time!s}"
         if ebs:
             subject = f"{subject} (ebs volume type {ebs_type})"
 
@@ -1180,7 +1170,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             cmp_res = {}
             for sub_type, tests in group.items():
                 if not tests["tests"]:
-                    self.log.info("No previous tests in the current version {} to compare".format(test_version))
+                    self.log.info(f"No previous tests in the current version {test_version} to compare")
                     continue
                 if sub_type not in current_tests:
                     continue
@@ -1223,12 +1213,12 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         if ycsb:
             subject = (
                 f"{self._get_email_tags(doc, is_gce)} (Alternator) Performance Regression - {test_name} - {test_version} - "
-                f"{str(test_start_time)}"
+                f"{test_start_time!s}"
             )
         else:
             subject = (
                 f"{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results - {test_name}"
-                f" - {test_version} - {str(test_start_time)}"
+                f" - {test_version} - {test_start_time!s}"
             )
 
         template = "results_performance_baseline.html"
@@ -1240,7 +1230,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         if rp_main_test:
             rp_main_test = rp_main_test[0]
         if not rp_main_test or not rp_main_test.is_valid():
-            self.log.error("Cannot find main_test by id: {}!".format(test_id))
+            self.log.error(f"Cannot find main_test by id: {test_id}!")
             return None
         return rp_main_test
 
@@ -1408,8 +1398,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         if subject is None:
             subject = (
-                "Performance Regression Compare Results - {test.test_name} - "
-                "{test.software.scylla_server_any.version.as_string}".format(test=rp_main_test)
+                f"Performance Regression Compare Results - {rp_main_test.test_name} - "
+                f"{rp_main_test.software.scylla_server_any.version.as_string}"
             )
         else:
             subject = subject.format(test=rp_main_test)

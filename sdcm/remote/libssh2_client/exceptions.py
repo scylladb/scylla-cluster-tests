@@ -129,7 +129,7 @@ class Failure(Exception):
         template = "<{}: cmd={!r}{}>"
         rest = ""
         if kwargs:
-            rest = " " + " ".join("{}={}".format(key, value) for key, value in kwargs.items())
+            rest = " " + " ".join(f"{key}={value}" for key, value in kwargs.items())
         return template.format(self.__class__.__name__, self.result.command, rest)
 
 

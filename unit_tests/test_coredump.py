@@ -117,7 +117,7 @@ class CoredumpExportTestBase(unittest.TestCase):
                 self.assertEqual(expected_coredump_list, result_coredump_list)
             except Exception as exc:  # noqa: BLE001
                 raise AssertionError(
-                    f"Got unexpected results for {coredump_status}: {str(result_coredump_list)}\n{str(exc)}"
+                    f"Got unexpected results for {coredump_status}: {result_coredump_list!s}\n{exc!s}"
                 ) from exc
 
 

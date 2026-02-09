@@ -450,14 +450,14 @@ class DatabaseOperations(ClusterTester):
         the compression postfix will be used in the name, otherwise numeric index (keyspace1)
         """
         if ks_number > 1:
-            return ["{}{}".format(ks_prefix, i) for i in range(1, ks_number + 1)]
+            return [f"{ks_prefix}{i}" for i in range(1, ks_number + 1)]
         else:
             stress_cmd = self.params.get("stress_read_cmd")
             if "compression" in stress_cmd:
                 compression_postfix = re.search("compression=(.*)Compressor", stress_cmd).group(1)
-                keyspace_name = "{}_{}".format(ks_prefix, compression_postfix.lower())
+                keyspace_name = f"{ks_prefix}_{compression_postfix.lower()}"
             else:
-                keyspace_name = "{}{}".format(ks_prefix, ks_number)
+                keyspace_name = f"{ks_prefix}{ks_number}"
             return [keyspace_name]
 
     def get_table_id(self, node, table_name, keyspace_name=None, remove_hyphen=True):
@@ -479,11 +479,11 @@ class DatabaseOperations(ClusterTester):
         return base_id
 
     def create_keyspace_and_basic_table(self, keyspace_name, table_name="example_table", replication_factor=1):
-        self.log.info("creating keyspace {}".format(keyspace_name))
+        self.log.info(f"creating keyspace {keyspace_name}")
         keyspace_existence = self.create_keyspace(keyspace_name, replication_factor)
         assert keyspace_existence, "keyspace creation failed"
         # Keyspaces without tables won't appear in the repair, so the must have one
-        self.log.info("creating the table {} in the keyspace {}".format(table_name, keyspace_name))
+        self.log.info(f"creating the table {table_name} in the keyspace {keyspace_name}")
         self.create_table(table_name, keyspace_name=keyspace_name)
 
     def create_ks_and_tables(self, num_ks, num_table):
@@ -516,14 +516,12 @@ class DatabaseOperations(ClusterTester):
             result = db_node.remoter.sudo(f"rm -rf {directoy_path}")
             if result.stderr:
                 raise FilesNotCorrupted(
-                    "Files were not corrupted. CorruptThenRepair nemesis can't be run. Error: {}".format(result)
+                    f"Files were not corrupted. CorruptThenRepair nemesis can't be run. Error: {result}"
                 )
             if directory_size_result.stdout:
                 directory_size = directory_size_result.stdout[: directory_size_result.stdout.find("\t")]
                 self.log.debug(
-                    "Removed the directory of keyspace {} from node {}\nThe size of the directory is {}".format(
-                        keyspace_name, db_node, directory_size
-                    )
+                    f"Removed the directory of keyspace {keyspace_name} from node {db_node}\nThe size of the directory is {directory_size}"
                 )
 
         finally:
@@ -547,7 +545,7 @@ class DatabaseOperations(ClusterTester):
         # We can't shut down node 1 since it's the default contact point of the stress command, and we have no way
         # of changing that. As such, we skip it.
         for node in self.db_cluster.nodes[1:]:
-            self.log.info("inserting {} rows to every node except {}".format(num_of_rows_per_insertion, node.name))
+            self.log.info(f"inserting {num_of_rows_per_insertion} rows to every node except {node.name}")
             end_of_range = start_of_range + num_of_rows_per_insertion - 1
             node.stop_scylla_server(verify_up=False, verify_down=True)
             stress_thread = self.run_stress_thread(
@@ -556,7 +554,7 @@ class DatabaseOperations(ClusterTester):
                 )
             )
             time.sleep(15)
-            self.log.info("load={}".format(stress_thread.get_results()))
+            self.log.info(f"load={stress_thread.get_results()}")
             node.start_scylla_server(verify_up=True, verify_down=False)
             start_of_range = end_of_range + 1
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:

@@ -154,7 +154,7 @@ def int_or_space_separated_ints(value):
         except Exception:  # noqa: BLE001
             pass
 
-    raise ValueError("{} isn't int or list".format(value))
+    raise ValueError(f"{value} isn't int or list")
 
 
 def dict_or_str(value):
@@ -174,7 +174,7 @@ def dict_or_str(value):
     if isinstance(value, dict):
         return value
 
-    raise ValueError('"{}" isn\'t a dict'.format(value))
+    raise ValueError(f'"{value}" isn\'t a dict')
 
 
 def dict_or_str_or_pydantic(value):
@@ -187,7 +187,7 @@ def dict_or_str_or_pydantic(value):
     if isinstance(value, (dict, BaseModel)):
         return value
 
-    raise ValueError('"{}" isn\'t a dict, str or Pydantic model'.format(value))
+    raise ValueError(f'"{value}" isn\'t a dict, str or Pydantic model')
 
 
 def boolean(value):
@@ -196,7 +196,7 @@ def boolean(value):
     elif isinstance(value, str):
         return bool(strtobool(value))
     else:
-        raise ValueError("{} isn't a boolean".format(type(value)))
+        raise ValueError(f"{type(value)} isn't a boolean")
 
 
 def is_config_option_appendable(option_name: str) -> bool:
@@ -3106,7 +3106,7 @@ class SCTConfiguration(dict):
                         if key not in self.keys():
                             self[key] = value
                         elif len(self[key].split()) < len(region_names):
-                            self[key] += " {}".format(value)
+                            self[key] += f" {value}"
             else:
                 for region in region_names:
                     if region not in self.aws_supported_regions:
@@ -3305,7 +3305,7 @@ class SCTConfiguration(dict):
         user_prefix = self.get("user_prefix") or getpass.getuser()
         prefix_max_len = 35
         if version_tag != user_prefix:
-            user_prefix = "{}-{}".format(user_prefix, version_tag)
+            user_prefix = f"{user_prefix}-{version_tag}"
         if self.get("cluster_backend") == "azure":
             # for Azure need to shorten it more due longer region names
             prefix_max_len -= 2
@@ -3366,10 +3366,10 @@ class SCTConfiguration(dict):
                 except json.decoder.JSONDecodeError as exp:
                     raise ValueError(
                         f"each item of run_fullscan list: {run_fullscan_params}, "
-                        f"item {param}, must be JSON but got error: {repr(exp)}"
+                        f"item {param}, must be JSON but got error: {exp!r}"
                     ) from exp
                 except TypeError as exp:
-                    raise ValueError(f" Got error: {repr(exp)}, on item '{param}'") from exp
+                    raise ValueError(f" Got error: {exp!r}, on item '{param}'") from exp
 
         # 15 Force endpoint_snitch to GossipingPropertyFileSnitch if using simulated_regions or simulated_racks
         num_of_db_nodes = sum([int(i) for i in str(self.get("n_db_nodes") or 0).split(" ")])
@@ -3858,7 +3858,7 @@ class SCTConfiguration(dict):
         env_keys = {o.split(".")[0] for o in os.environ if o.startswith("SCT_")}
         unknown_env_keys = env_keys.difference(config_keys)
         if unknown_env_keys:
-            output = ["{}={}".format(key, os.environ.get(key)) for key in unknown_env_keys]
+            output = [f"{key}={os.environ.get(key)}" for key in unknown_env_keys]
             raise ValueError("Unsupported environment variables were used:\n\t - {}".format("\n\t - ".join(output)))
 
         # check for unsupported configuration
@@ -3868,7 +3868,7 @@ class SCTConfiguration(dict):
         if unsupported_option:
             res = "Unsupported config option/s found:\n"
             for option in unsupported_option:
-                res += "\t * '{}: {}'\n".format(option, self[option])
+                res += f"\t * '{option}: {self[option]}'\n"
             raise ValueError(res)
 
     def _validate_sct_variable_values(self):
@@ -3889,7 +3889,7 @@ class SCTConfiguration(dict):
             else:
                 region_count[opt] = 1
         if not all(region_count[current_region_param_name] == x for x in region_count.values()):
-            raise ValueError("not all multi region values are equal: \n\t{}".format(region_count))
+            raise ValueError(f"not all multi region values are equal: \n\t{region_count}")
 
     def _validate_seeds_number(self):
         seeds_num = self.get("seeds_num")
@@ -3948,7 +3948,7 @@ class SCTConfiguration(dict):
                 )
             self._check_backend_defaults(backend, self.backend_required_params[backend])
         else:
-            raise ValueError("Unsupported backend [{}]".format(backend))
+            raise ValueError(f"Unsupported backend [{backend}]")
 
     def _check_backend_defaults(self, backend, required_params):
         opts = [o for o in self.config_options if o["name"] in required_params]
@@ -4313,7 +4313,7 @@ class SCTConfiguration(dict):
         ret = ""
         for opt in cls.config_options:
             if opt["help"]:
-                help_text = "\n".join("# {}".format(l.strip()) for l in opt["help"].splitlines() if l.strip()) + "\n"
+                help_text = "\n".join(f"# {l.strip()}" for l in opt["help"].splitlines() if l.strip()) + "\n"
             else:
                 help_text = ""
             default = defaults.get(opt["name"], None)

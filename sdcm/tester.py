@@ -1522,7 +1522,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             elif isinstance(n_loader_nodes, str):
                 loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
-                self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
+                self.fail(f"Unsupported parameter type: {type(n_loader_nodes)}")
         if loader_info["type"] is None:
             loader_info["type"] = self.params.get("gce_instance_type_loader")
         if loader_info["disk_type"] is None:
@@ -1538,12 +1538,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             elif isinstance(n_db_nodes, str):  # latest type to support multiple datacenters
                 db_info["n_nodes"] = [int(n) for n in n_db_nodes.split()]
             else:
-                self.fail("Unsupported parameter type: {}".format(type(n_db_nodes)))
+                self.fail(f"Unsupported parameter type: {type(n_db_nodes)}")
         cpu = self.params.get("gce_instance_type_cpu_db")
         # unit is GB
         mem = self.params.get("gce_instance_type_mem_db")
         if cpu and mem:
-            db_info["type"] = "custom-{}-{}-ext".format(cpu, int(mem) * 1024)
+            db_info["type"] = f"custom-{cpu}-{int(mem) * 1024}-ext"
         if db_info["type"] is None:
             db_info["type"] = self.params.get("gce_instance_type_db")
         if db_info["disk_type"] is None:
@@ -1664,7 +1664,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             elif isinstance(n_db_nodes, str):  # latest type to support multiple datacenters
                 db_info["n_nodes"] = [int(n) for n in n_db_nodes.split()]
             else:
-                self.fail("Unsupported parameter type: {}".format(type(n_db_nodes)))
+                self.fail(f"Unsupported parameter type: {type(n_db_nodes)}")
         db_info["type"] = self.params.get("azure_instance_type_db")
         if loader_info["n_nodes"] is None:
             n_loader_nodes = self.params.get("n_loaders")
@@ -1673,7 +1673,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
                 loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
-                self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
+                self.fail(f"Unsupported parameter type: {type(n_loader_nodes)}")
         azure_image = self.params.get("azure_image_db").strip()
         user_prefix = self.params.get("user_prefix")
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get("user_credentials_path")))
@@ -1731,7 +1731,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
                 loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
-                self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
+                self.fail(f"Unsupported parameter type: {type(n_loader_nodes)}")
         if loader_info["type"] is None:
             loader_info["type"] = self.params.get("instance_type_loader")
         if loader_info["disk_size"] is None:
@@ -2338,7 +2338,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             elif isinstance(n_db_nodes, str):
                 db_info["n_nodes"] = [int(n) for n in n_db_nodes.split()]
             else:
-                self.fail("Unsupported parameter type: {}".format(type(n_db_nodes)))
+                self.fail(f"Unsupported parameter type: {type(n_db_nodes)}")
 
         if loader_info["n_nodes"] is None:
             n_loader_nodes = self.params.get("n_loaders")
@@ -2347,7 +2347,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             elif isinstance(n_loader_nodes, str):
                 loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
-                self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
+                self.fail(f"Unsupported parameter type: {type(n_loader_nodes)}")
 
         # create loaders first as their IPs should be allowed in Scylla Cloud cluster
         cloud_provider = self.params.get("xcloud_provider").lower()
@@ -3104,7 +3104,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return keyspace_name.lower() in keyspace_list
 
     def wait_validate_keyspace_existence(self, session, keyspace_name, timeout=180, step=5):
-        text = 'waiting for the keyspace "{}" to be created in the cluster'.format(keyspace_name)
+        text = f'waiting for the keyspace "{keyspace_name}" to be created in the cluster'
         does_keyspace_exist = wait.wait_for(
             func=self.is_keyspace_in_cluster,
             step=step,
@@ -3141,7 +3141,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.actions_log.info(f"Keyspace {keyspace_name} created with statement: {cmd}")
 
         if execution_result:
-            self.log.debug("keyspace creation result: {}".format(execution_result.response_future))
+            self.log.debug(f"keyspace creation result: {execution_result.response_future}")
         with self.db_cluster.cql_connection_patient(validation_node) as session:
             does_keyspace_exist = self.wait_validate_keyspace_existence(session, keyspace_name)
         return does_keyspace_exist
@@ -3204,7 +3204,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             query = "%s AND scylla_encryption_options=%s" % (query, scylla_encryption_options)
         if compact_storage:
             query += " AND COMPACT STORAGE"
-        self.log.debug("CQL query to execute: {}".format(query))
+        self.log.debug(f"CQL query to execute: {query}")
         with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0], keyspace=keyspace_name) as session:
             session.execute(query)
         self.actions_log.info(f"Created {name} table with statement: {query}")
@@ -3213,22 +3213,22 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def truncate_cf(self, ks_name: str, table_name: str, session: Session, truncate_timeout_sec: int | None = None):
         try:
             timeout = f" USING TIMEOUT {truncate_timeout_sec}s" if truncate_timeout_sec else ""
-            session.execute("TRUNCATE TABLE {0}.{1}{2}".format(ks_name, table_name, timeout))
+            session.execute(f"TRUNCATE TABLE {ks_name}.{table_name}{timeout}")
         except Exception as ex:  # noqa: BLE001
-            self.log.debug("Failed to truncate base table {0}.{1}. Error: {2}".format(ks_name, table_name, str(ex)))
+            self.log.debug(f"Failed to truncate base table {ks_name}.{table_name}. Error: {ex!s}")
 
     def _wait_for_view(self, scylla_cluster, session, key_space, view):
-        self.log.debug("Waiting for view {}.{} to finish building...".format(key_space, view))
+        self.log.debug(f"Waiting for view {key_space}.{view} to finish building...")
 
         def _view_build_finished(live_nodes_amount):
             result = self.rows_to_list(
                 session.execute(
                     "SELECT status FROM system_distributed.view_build_status WHERE "
-                    "keyspace_name='{0}' "
-                    "AND view_name='{1}'".format(key_space, view)
+                    f"keyspace_name='{key_space}' "
+                    f"AND view_name='{view}'"
                 )
             )
-            self.log.debug("View build status result: {}".format(result))
+            self.log.debug(f"View build status result: {result}")
             return len([status for status in result if status[0] == "SUCCESS"]) >= live_nodes_amount
 
         attempts = 20
@@ -3245,24 +3245,24 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             time.sleep(3)
             attempts -= 1
 
-        raise Exception("View {}.{} not built".format(key_space, view))
+        raise Exception(f"View {key_space}.{view} not built")
 
     def _wait_for_view_build_start(self, session, key_space, view, seconds_to_wait=20):
         def _check_build_started():
             result = self.rows_to_list(
                 session.execute(
                     "SELECT last_token FROM system.views_builds_in_progress "
-                    "WHERE keyspace_name='{0}' AND view_name='{1}'".format(key_space, view)
+                    f"WHERE keyspace_name='{key_space}' AND view_name='{view}'"
                 )
             )
-            self.log.debug("View build in progress: {}".format(result))
+            self.log.debug(f"View build in progress: {result}")
             return result != []
 
         self.log.debug("Ensure view building started.")
         start = time.time()
         while not _check_build_started():
             if time.time() - start > seconds_to_wait:
-                raise Exception("View building didn't start in {} seconds".format(seconds_to_wait))
+                raise Exception(f"View building didn't start in {seconds_to_wait} seconds")
 
     @staticmethod
     def rows_to_list(rows):
@@ -3306,7 +3306,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             src_view,
             src_keyspace,
         )
-        self.log.debug("Start create table with statement: {}".format(create_statement))
+        self.log.debug(f"Start create table with statement: {create_statement}")
         if not self.create_table_as(
             node, src_keyspace, src_view, dest_keyspace, dest_table, create_statement, columns_list
         ):
@@ -3332,9 +3332,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         with self.db_cluster.cql_connection_patient(node) as session:
             result = rows_to_list(session.execute(create_statement))
             if result:
-                result = session.execute(
-                    "SELECT * FROM {keyspace}.{table} LIMIT 1".format(keyspace=src_keyspace, table=src_table)
-                )
+                result = session.execute(f"SELECT * FROM {src_keyspace}.{src_table} LIMIT 1")
 
                 primary_keys = []
                 # Create table with table/view structure
@@ -3358,10 +3356,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
                 for column in columns_list or result.column_names:
                     column_kind = session.execute(
-                        "select kind from system_schema.columns where keyspace_name='{ks}' "
-                        "and table_name='{name}' and column_name='{column}'".format(
-                            ks=src_keyspace, name=src_table, column=column
-                        )
+                        f"select kind from system_schema.columns where keyspace_name='{src_keyspace}' "
+                        f"and table_name='{src_table}' and column_name='{column}'"
                     )
                     if column_kind.current_rows[0].kind in ["partition_key", "clustering"]:
                         primary_keys.append(column)
@@ -3375,7 +3371,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     columns=", ".join(["%s %s" % (c[0], c[1]) for c in columns]),
                     pk=", ".join(primary_keys),
                 )
-                self.log.debug("Create new table with cql: {}".format(create_cql))
+                self.log.debug(f"Create new table with cql: {create_cql}")
                 session.execute(create_cql)
                 return True
             return False
@@ -3401,7 +3397,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 return False
 
             # TODO: Temporary function. Will be removed
-            self.log.debug("Rows in the {} MV before saving: {}".format(src_table, len(source_table_rows)))
+            self.log.debug(f"Rows in the {src_table} MV before saving: {len(source_table_rows)}")
 
             insert_statement = session.prepare(
                 "insert into {keyspace}.{name} ({columns}) values ({values})".format(
@@ -3459,12 +3455,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return True
 
     def get_tables_id_of_keyspace(self, session, keyspace_name):
-        query = "SELECT id FROM system_schema.tables WHERE keyspace_name='{}' ".format(keyspace_name)
+        query = f"SELECT id FROM system_schema.tables WHERE keyspace_name='{keyspace_name}' "
         table_id = self.rows_to_list(session.execute(query))
         return table_id[0]
 
     def get_tables_name_of_keyspace(self, session, keyspace_name):
-        query = "SELECT table_name FROM system_schema.tables WHERE keyspace_name='{}' ".format(keyspace_name)
+        query = f"SELECT table_name FROM system_schema.tables WHERE keyspace_name='{keyspace_name}' "
         table_id = self.rows_to_list(session.execute(query))
         return table_id[0]
 
@@ -3474,7 +3470,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return truncated_time
 
     def get_truncated_time_from_system_truncated(self, session, table_id):
-        query = "SELECT truncated_at FROM system.truncated WHERE table_uuid={}".format(table_id)
+        query = f"SELECT truncated_at FROM system.truncated WHERE table_uuid={table_id}"
         truncated_time = self.rows_to_list(session.execute(query))
         return truncated_time[0]
 
@@ -3526,7 +3522,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def get_nemesis_report(self, cluster):
         for current_nemesis in cluster.nemesis:
-            with silence(parent=self, name=f"get_nemesis_report(cluster={str(cluster)})"):
+            with silence(parent=self, name=f"get_nemesis_report(cluster={cluster!s})"):
                 current_nemesis.report()
 
     @silence()
@@ -3539,7 +3535,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         for node in cluster.nodes:
             node.stop_task_threads()
         for node in cluster.nodes:
-            with silence(parent=self, name=f"stop_resources_stop_tasks_threads(cluster={str(cluster)})"):
+            with silence(parent=self, name=f"stop_resources_stop_tasks_threads(cluster={cluster!s})"):
                 node.wait_till_tasks_threads_are_stopped()
 
     @silence()
@@ -3842,7 +3838,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         except Exception:  # noqa: BLE001
             pass
 
-        self.log.info("Test ID: {}".format(self.test_config.test_id()))
+        self.log.info(f"Test ID: {self.test_config.test_id()}")
 
     @pytest.fixture(scope="session", autouse=True)
     def configure_logging_fixture(self):
@@ -3870,7 +3866,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self._check_if_db_log_time_consistency_looks_good()
         logging.debug("Threads and processes at the end of the test:")
         for t in threading.enumerate():
-            logging.debug(f"Active thread: {t.name} (id={t.ident}, daemon={t.daemon}, repr={repr(t)})")
+            logging.debug(f"Active thread: {t.name} (id={t.ident}, daemon={t.daemon}, repr={t!r})")
 
     @silence()
     def _check_if_db_log_time_consistency_looks_good(self):
@@ -4053,9 +4049,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             )
         else:
             with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-                query = "ALTER TABLE {table} WITH scylla_encryption_options = {scylla_encryption_options};".format(
-                    table=table, scylla_encryption_options=scylla_encryption_options
-                )
+                query = f"ALTER TABLE {table} WITH scylla_encryption_options = {scylla_encryption_options};"
                 self.log.debug("enable encryption at-rest for table {table}, query:\n\t{query}".format(**locals()))
                 session.execute(query)
             if upgradesstables:
@@ -4088,15 +4082,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.db_cluster.wait_for_schema_agreement()
 
     def get_num_of_hint_files(self, node):
-        result = node.remoter.run(
-            "sudo find {0.scylla_hints_dir} -name *.log -type f| wc -l".format(self), verbose=True
-        )
+        result = node.remoter.run(f"sudo find {self.scylla_hints_dir} -name *.log -type f| wc -l", verbose=True)
         total_hint_files = int(result.stdout.strip())
         self.log.debug("Number of hint files on '%s': %s.", node.name, total_hint_files)
         return total_hint_files
 
     def get_num_shards(self, node):
-        result = node.remoter.run("sudo ls -1 {0.scylla_hints_dir}| wc -l".format(self), verbose=True)
+        result = node.remoter.run(f"sudo ls -1 {self.scylla_hints_dir}| wc -l", verbose=True)
         return int(result.stdout.strip())
 
     @retrying(n=3, sleep_time=15, allowed_exceptions=(AssertionError,))
@@ -4157,9 +4149,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     @retrying(n=60, sleep_time=60, allowed_exceptions=(AssertionError,))
     def wait_data_dir_reaching(self, size, node):
         query = (
-            '(sum(node_filesystem_size_bytes{{mountpoint="{0.scylla_dir}", '
-            'instance=~"{1.private_ip_address}"}})-sum(node_filesystem_avail_bytes{{mountpoint="{0.scylla_dir}", '
-            'instance=~"{1.private_ip_address}"}}))'.format(self, node)
+            f'(sum(node_filesystem_size_bytes{{mountpoint="{self.scylla_dir}", '
+            f'instance=~"{node.private_ip_address}"}})-sum(node_filesystem_avail_bytes{{mountpoint="{self.scylla_dir}", '
+            f'instance=~"{node.private_ip_address}"}}))'
         )
         res = self.prometheus_db.query(query=query, start=time.time(), end=time.time())
         assert res, "No results from Prometheus"
@@ -4509,17 +4501,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         )
 
     def stop_all_nodes_except_for(self, node):
-        self.log.debug("Stopping all nodes except for: {}".format(node.name))
+        self.log.debug(f"Stopping all nodes except for: {node.name}")
 
         for c_node in [n for n in self.db_cluster.nodes if n != node]:
-            self.log.debug("Stopping node: {}".format(c_node.name))
+            self.log.debug(f"Stopping node: {c_node.name}")
             c_node.stop_scylla_server()
 
     def start_all_nodes(self):
         self.log.debug("Starting all nodes")
         # restarting all nodes twice in order to pervent no-seed node issues
         for c_node in self.db_cluster.nodes * 2:
-            self.log.debug("Starting node: {} ({})".format(c_node.name, c_node.public_ip_address))
+            self.log.debug(f"Starting node: {c_node.name} ({c_node.public_ip_address})")
             c_node.start_scylla_server(verify_up=False)
             time.sleep(10)
         self.log.debug("Wait DB is up after all nodes were started")
@@ -4527,16 +4519,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             c_node.wait_db_up()
 
     def start_all_nodes_except_for(self, node):
-        self.log.debug("Starting all nodes except for: {}".format(node.name))
+        self.log.debug(f"Starting all nodes except for: {node.name}")
         node_list = [n for n in self.db_cluster.nodes if n != node]
 
         # Start down seed nodes first, if exists
         for c_node in [n for n in node_list if n.is_seed]:
-            self.log.debug("Starting seed node: {}".format(c_node.name))
+            self.log.debug(f"Starting seed node: {c_node.name}")
             c_node.start_scylla_server()
 
         for c_node in [n for n in node_list if not n.is_seed]:
-            self.log.debug("Starting non-seed node: {}".format(c_node.name))
+            self.log.debug(f"Starting non-seed node: {c_node.name}")
             c_node.start_scylla_server()
 
         node.wait_db_up()
@@ -4574,30 +4566,26 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         assert fs_size_res[0], "Could not resolve capacity query result."
         kb_size = 2**10
         mb_size = kb_size * 1024
-        self.log.debug("fs_size_res: {}".format(fs_size_res))
-        self.log.debug("used_capacity_query: {}".format(used_capacity_query))
+        self.log.debug(f"fs_size_res: {fs_size_res}")
+        self.log.debug(f"used_capacity_query: {used_capacity_query}")
 
         used_cap_res = self.prometheus_db.query(
             query=used_capacity_query, start=int(time.time()) - 5, end=int(time.time())
         )
-        self.log.debug("used_cap_res: {}".format(used_cap_res))
+        self.log.debug(f"used_cap_res: {used_cap_res}")
 
         assert used_cap_res, "No results from Prometheus"
         used_size_mb = float(used_cap_res[0]["values"][0][1]) / float(mb_size)
         used_size_gb = float(used_size_mb / 1024)
         self.log.debug(
-            "The used filesystem capacity on node {} is: {} MB/ {} GB".format(
-                node.public_ip_address, used_size_mb, used_size_gb
-            )
+            f"The used filesystem capacity on node {node.public_ip_address} is: {used_size_mb} MB/ {used_size_gb} GB"
         )
         return used_size_mb
 
     def print_nodes_used_capacity(self):
         for node in self.db_cluster.nodes:
             used_capacity = self.get_used_capacity(node=node)
-            self.log.debug(
-                "Node {} ({}) used capacity is: {}".format(node.name, node.private_ip_address, used_capacity)
-            )
+            self.log.debug(f"Node {node.name} ({node.private_ip_address}) used capacity is: {used_capacity}")
 
     def get_nemesises_stats(self):
         nemesis_stats = {}

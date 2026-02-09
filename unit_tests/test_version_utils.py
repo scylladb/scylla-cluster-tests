@@ -406,9 +406,10 @@ def test_scylla_versions_decorator_negative(scylla_version, method):
             )
             getattr(cls_instance, method)()
         except MethodVersionNotFound as exc:
-            assert "Method '{}' with version '{}' is not supported in '{}'!".format(
-                method, scylla_version, cls_instance.__class__.__name__
-            ) in str(exc)
+            assert (
+                f"Method '{method}' with version '{scylla_version}' is not supported in '{cls_instance.__class__.__name__}'!"
+                in str(exc)
+            )
         else:
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
 
@@ -426,9 +427,10 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_nodes():
                 cls_instance.nodes = []
             cls_instance.oss_method()
         except MethodVersionNotFound as exc:
-            assert "Method 'oss_method' with version 'n/a' is not supported in '{}'!".format(
-                cls_instance.__class__.__name__
-            ) in str(exc)
+            assert (
+                f"Method 'oss_method' with version 'n/a' is not supported in '{cls_instance.__class__.__name__}'!"
+                in str(exc)
+            )
         else:
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
 
@@ -446,9 +448,10 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_attr():
                 delattr(cls_instance.nodes[0], "scylla_version")
             cls_instance.oss_method()
         except MethodVersionNotFound as exc:
-            assert "Method 'oss_method' with version 'n/a' is not supported in '{}'!".format(
-                cls_instance.__class__.__name__
-            ) in str(exc)
+            assert (
+                f"Method 'oss_method' with version 'n/a' is not supported in '{cls_instance.__class__.__name__}'!"
+                in str(exc)
+            )
         else:
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
 

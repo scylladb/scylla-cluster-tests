@@ -13,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 
 def enable_quota_on_node(node):
     if not is_quota_enabled_on_node(node):
-        LOGGER.info("Enabling quota on node {}".format(node.name))
+        LOGGER.info(f"Enabling quota on node {node.name}")
         change_default_grub_cmd = (
             'sed -i s\'/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/'
             'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash rootflags=uquota,pquota"/\' '
@@ -28,14 +28,14 @@ def enable_quota_on_node(node):
         node.remoter.sudo(cmd=change_default_grub_cmd)
         node.remoter.sudo(cmd=mk_grub_cmd)
         node.remoter.sudo(cmd=enable_uquota_on_mount_cmd)
-        LOGGER.debug('Rebooting node: "{}"'.format(node.name))
+        LOGGER.debug(f'Rebooting node: "{node.name}"')
         node.reboot(hard=False)
         node.wait_node_fully_start()
 
 
 def is_quota_enabled_on_node(node):
     """Verify usrquota is enabled on scylla user."""
-    LOGGER.info("Verifying quota is configured on the node {}".format(node.name))
+    LOGGER.info(f"Verifying quota is configured on the node {node.name}")
     verify_usrquot_in_mount_cmd = "cat /proc/mounts | grep /var/lib/scylla | awk {'print $4'}"
     result = node.remoter.run(cmd=verify_usrquot_in_mount_cmd).stdout.strip()
     if "usrquota" not in result:
@@ -52,7 +52,7 @@ def get_currently_used_space_by_scylla_user(node) -> int:
 
 def get_quota_size_to_configure(node):
     used_space = get_currently_used_space_by_scylla_user(node)
-    LOGGER.debug("Currently used space by scylla user is: {}K".format(used_space))
+    LOGGER.debug(f"Currently used space by scylla user is: {used_space}K")
     return used_space + 3000000
 
 
@@ -65,7 +65,7 @@ def configure_quota_on_node_for_scylla_user_context(node):
     Remove quota configuration
     """
     quota_size = get_quota_size_to_configure(node)
-    LOGGER.info("Configuring quota for scylla user with quota size: {}K on node {}".format(quota_size, node))
+    LOGGER.info(f"Configuring quota for scylla user with quota size: {quota_size}K on node {node}")
     conf_quota_cmd = f"xfs_quota -x -c 'limit bsoft={quota_size}K bhard={quota_size}K scylla' /var/lib/scylla"
     node.remoter.sudo(conf_quota_cmd, verbose=True)
     verify_quota_is_configured_for_scylla_user(node)
@@ -85,9 +85,9 @@ def verify_quota_is_configured_for_scylla_user(node):
     if quota_value == "0":
         LOGGER.error("Failed to configure quota on user")
         raise QuotaConfigurationFailure(
-            "Quota was not configured for scylla user. The value for hard quota is: {}".format(quota_value)
+            f"Quota was not configured for scylla user. The value for hard quota is: {quota_value}"
         )
-    LOGGER.info("Quota was configured for scylla user with value: {}".format(quota_value))
+    LOGGER.info(f"Quota was configured for scylla user with value: {quota_value}")
 
 
 def remove_quota_configuration_from_scylla_user_on_node(node):
@@ -114,12 +114,10 @@ def write_data_to_reach_end_of_quota(node, quota_size):
             f"su - scylla -c 'fallocate -l {occupy_space_size}K /var/lib/scylla/occupy_90percent.{time.time()}'"
         )
         try:
-            LOGGER.debug("Cost 90% free space on /var/lib/scylla/ by {}".format(occupy_space_cmd))
+            LOGGER.debug(f"Cost 90% free space on /var/lib/scylla/ by {occupy_space_cmd}")
             node.remoter.sudo(occupy_space_cmd, Verbose=True)
         except Exception as exc:  # noqa: BLE001
-            LOGGER.warning(
-                "We should have reached the expected I/O error and quota has exceeded\nMessage: {}".format(str(exc))
-            )
+            LOGGER.warning(f"We should have reached the expected I/O error and quota has exceeded\nMessage: {exc!s}")
         return bool(list(quota_exceeded_appearances))
 
     try:

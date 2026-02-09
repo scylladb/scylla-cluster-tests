@@ -264,11 +264,11 @@ def create_sct_policy(  # noqa: PLR0915
 
     # Validate group name - OCI is strict about what's allowed in policy statements
     if not group_name or not isinstance(group_name, str):
-        print(f"ERROR: Invalid group name: {repr(group_name)}")
+        print(f"ERROR: Invalid group name: {group_name!r}")
         return None
 
     if any(c in group_name for c in ['"', "'", "\n", "\r", "\t"]):
-        print(f"ERROR: Group name contains invalid characters: {repr(group_name)}")
+        print(f"ERROR: Group name contains invalid characters: {group_name!r}")
         return None
 
     # Check for spaces in group name - if present, we need to use quotes
@@ -313,12 +313,12 @@ def create_sct_policy(  # noqa: PLR0915
 
     # Debug: print what we're about to send
     print("\nDebug - Policy details to send:")
-    print(f"  Group Name (as used in policy): {repr(group_ref)}")
+    print(f"  Group Name (as used in policy): {group_ref!r}")
     print(f"  Compartment ID: {compartment_id}")
     print(f"  Policy Name: {policy_name}")
     print(f"  Statements count: {len(policy_statements)}")
     for i, stmt in enumerate(policy_statements, 1):
-        print(f"    {i}. {repr(stmt)}")
+        print(f"    {i}. {stmt!r}")
 
     # Create or update policy with statements
     try:
@@ -330,7 +330,7 @@ def create_sct_policy(  # noqa: PLR0915
         )
         print("  Statements being sent:")
         for i, stmt in enumerate(clean_statements, 1):
-            print(f"    [{i}] {repr(stmt)}")
+            print(f"    [{i}] {stmt!r}")
 
         if existing_policy:
             # Update existing policy
@@ -374,7 +374,7 @@ def create_sct_policy(  # noqa: PLR0915
                 ]
 
                 print("\n  Retrying with fallback statement:")
-                print(f"    {repr(fallback_statements[0])}")
+                print(f"    {fallback_statements[0]!r}")
 
                 if existing_policy:
                     # Update with fallback statement
@@ -410,11 +410,11 @@ def create_sct_policy(  # noqa: PLR0915
         print(f"  Error message: {e}")
         print("\nDebug info - Policy statements that failed:")
         for i, stmt in enumerate(clean_statements, 1):
-            print(f"  [{i}] {repr(stmt)}")
+            print(f"  [{i}] {stmt!r}")
         print("\nRequest details:")
-        print(f"  Policy ID: {repr(existing_policy.id if existing_policy else 'N/A (new policy)')}")
-        print(f"  Compartment ID: {repr(compartment_id)}")
-        print(f"  Policy Name: {repr(policy_name)}")
+        print(f"  Policy ID: {(existing_policy.id if existing_policy else 'N/A (new policy)')!r}")
+        print(f"  Compartment ID: {compartment_id!r}")
+        print(f"  Policy Name: {policy_name!r}")
         print(f"  Statements count: {len(clean_statements)}")
 
         print("\n" + "=" * 70)

@@ -600,7 +600,7 @@ class Client:
                 except Exception as exc:  # noqa: BLE001
                     self.disconnect()
                     if perf_counter() > end_time:
-                        ex_msg = f"Failed to connect in {timeout} seconds, last error: ({type(exc).__name__}){str(exc)}"
+                        ex_msg = f"Failed to connect in {timeout} seconds, last error: ({type(exc).__name__}){exc!s}"
                         raise ConnectTimeout(ex_msg) from exc
             delay = next(delays_iter, delay)
             sleep(delay)

@@ -318,7 +318,7 @@ class UpgradeSchemaTest(ClusterTester):
         # upgrade all the nodes in random order
         for i in indexes:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
-            self.log.info("started upgrade node {0}".format(self.db_cluster.node_to_upgrade))
+            self.log.info(f"started upgrade node {self.db_cluster.node_to_upgrade}")
             self.db_cluster.add_nemesis(nemesis=UpgradeNemesisOneNode, tester_obj=self)
             self.db_cluster.start_nemesis(interval=15)
             # 15 minutes to upgrade 1 node
