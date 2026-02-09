@@ -1,13 +1,15 @@
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 import logging
-import datetime
 import yaml
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
+
+if TYPE_CHECKING:
+    from sdcm.mgmt.cli import ManagerTask
 
 from sdcm.utils.distro import Distro
 from sdcm.utils.common import get_sct_root_path
@@ -52,13 +54,81 @@ def duration_to_timedelta(duration_string):
         duration_string = duration_string[duration_string.find("m") + 1 :]
     if "s" in duration_string:
         total_seconds += int(duration_string[: duration_string.find("s")])
-    return datetime.timedelta(seconds=total_seconds)
+    return timedelta(seconds=total_seconds)
 
 
 def create_cron_list_from_timedelta(minutes=0, hours=0):
-    destined_time = datetime.datetime.now() + datetime.timedelta(hours=hours, minutes=minutes)
+    destined_time = datetime.now() + timedelta(hours=hours, minutes=minutes)
     cron_list = [str(destined_time.minute), str(destined_time.hour), "*", "*", "*"]
     return cron_list
+
+
+def calculate_task_end_time(start_time: str, duration: str) -> datetime:
+    """Calculate the end time of Manager task by adding a duration to a start time.
+
+    Args:
+        start_time: Start time in format "%d %b %y %H:%M:%S %Z" (e.g., "14 Jun 23 15:41:00 UTC")
+        duration: Duration string in format like "2d3h15m30s" where d=days, h=hours, m=minutes, s=seconds
+    """
+    duration = duration.strip().lower()
+
+    delta = duration_to_timedelta(duration_string=duration)
+
+    base_time = datetime.strptime(start_time, "%d %b %y %H:%M:%S %Z")
+    return base_time + delta
+
+
+class TaskRunDetails(BaseModel):
+    """Details of a Manager task run.
+
+    Attributes:
+        next_run: The datetime of the next scheduled run
+        latest_run_id: The ID of the latest run
+        start_time: The start time string from task history
+        end_time: The calculated end time as datetime
+        duration: The duration string (e.g., "2d3h15m30s")
+    """
+
+    next_run: datetime
+    latest_run_id: str
+    start_time: str
+    end_time: datetime
+    duration: str
+
+
+def get_task_run_details(task: "ManagerTask", wait: bool = True, timeout: int = 1000, step: int = 10) -> TaskRunDetails:
+    """Get details of the latest task run.
+
+    Args:
+        task: The manager task object to get details from
+        wait: Whether to wait for task completion before retrieving details
+        timeout: Maximum time to wait for task completion (seconds)
+        step: Poll interval when waiting (seconds)
+
+    Returns:
+        TaskRunDetails object containing task run details
+    """
+    if wait:
+        task.wait_and_get_final_status(timeout=timeout, step=step)
+
+    task_history = task.history
+    latest_run_id = task.latest_run_id
+    start_time = task.sctool.get_table_value(
+        parsed_table=task_history, column_name="start time", identifier=latest_run_id
+    )
+    next_run_time = datetime.strptime(task.next_run, "%d %b %y %H:%M:%S %Z")  # from `03 Feb 26 16:35:00 UTC`
+    duration = task.sctool.get_table_value(parsed_table=task_history, column_name="duration", identifier=latest_run_id)
+    end_time = calculate_task_end_time(duration=duration, start_time=start_time)
+
+    task_details = TaskRunDetails(
+        next_run=next_run_time,
+        latest_run_id=latest_run_id,
+        start_time=start_time,
+        end_time=end_time,
+        duration=duration,
+    )
+    LOGGER.debug("Task %s details: %s", task.id, task_details)
+    return task_details
 
 
 def get_manager_repo_from_defaults(manager_version, distro):
