@@ -599,7 +599,7 @@ class TestStatsMixin(Stats):
         setup_details = {}
         is_gce = self.params.get("cluster_backend") == "gce"
 
-        test_params = self.params.items()
+        test_params = self.params.model_dump()
 
         for key, value in test_params:
             if key in exclude_details or (isinstance(key, str) and key.startswith("stress_cmd")):
@@ -607,8 +607,8 @@ class TestStatsMixin(Stats):
             elif is_gce and key in ["instance_type_loader", "instance_type_monitor", "instance_type_db"]:
                 # exclude these params from gce run
                 continue
-            elif key == "n_db_nodes" and isinstance(value, str) and re.search(r"\s", value):  # multidc
-                setup_details["n_db_nodes"] = sum([int(i) for i in value.split()])
+            elif key == "n_db_nodes" and isinstance(value, (list, int)):  # multidc
+                setup_details["n_db_nodes"] = sum(value if isinstance(value, list) else [value])
             else:
                 setup_details[key] = value
 
