@@ -335,3 +335,73 @@ class TestScyllaCloudClusterUpdateKeepTag:
         mock_cluster.name = "test-user-abc12345-keep-024h"
         mock_cluster._set_keep_duration(24)
         assert mock_cluster.name == "test-user-abc12345-keep-024h"
+
+
+class TestCloudServiceInstallationOrdering:
+    """Test suite for _wait_for_cloud_service_installations."""
+
+    @pytest.fixture
+    def mock_cluster(self):
+        mock = MagicMock()
+        mock._account_id = 123
+        mock._cluster_id = 456
+        mock.log = MagicMock()
+        mock._api_client = MagicMock()
+
+        mock._wait_for_cloud_service_installations = lambda: ScyllaCloudCluster._wait_for_cloud_services(mock)
+        mock._get_pending_service_requests = lambda *args, **kwargs: ScyllaCloudCluster._get_pending_service_requests(
+            mock, *args, **kwargs
+        )
+        mock._wait_for_cloud_request_completed = MagicMock()
+        return mock
+
+    def test_manager_in_progress_vs_queued(self, mock_cluster):
+        """When Manager is IN_PROGRESS and VS is QUEUED, wait for Manager first."""
+        mock_cluster._api_client.get_cluster_requests.return_value = [
+            {"id": 1, "requestType": "INSTALL_MANAGER", "status": "IN_PROGRESS"},
+            {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "QUEUED"},
+        ]
+
+        mock_cluster._wait_for_cloud_service_installations()
+
+        calls = mock_cluster._wait_for_cloud_request_completed.call_args_list
+        assert len(calls) == 2
+        assert calls[0] == ((), {"request_id": 1, "request_type": "INSTALL_MANAGER"})
+        assert calls[1] == ((), {"request_id": 2, "request_type": "INSTALL_VECTOR_SEARCH"})
+
+    def test_vs_in_progress_manager_queued(self, mock_cluster):
+        """When VS is IN_PROGRESS and Manager is QUEUED, wait for VS first."""
+        mock_cluster._api_client.get_cluster_requests.return_value = [
+            {"id": 1, "requestType": "INSTALL_MANAGER", "status": "QUEUED"},
+            {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "IN_PROGRESS"},
+        ]
+
+        mock_cluster._wait_for_cloud_service_installations()
+
+        calls = mock_cluster._wait_for_cloud_request_completed.call_args_list
+        assert len(calls) == 2
+        assert calls[0] == ((), {"request_id": 2, "request_type": "INSTALL_VECTOR_SEARCH"})
+        assert calls[1] == ((), {"request_id": 1, "request_type": "INSTALL_MANAGER"})
+
+    def test_one_already_completed(self, mock_cluster):
+        """When one service is already COMPLETED, only wait for the other."""
+        mock_cluster._api_client.get_cluster_requests.return_value = [
+            {"id": 1, "requestType": "INSTALL_MANAGER", "status": "COMPLETED"},
+            {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "IN_PROGRESS"},
+        ]
+
+        mock_cluster._wait_for_cloud_service_installations()
+
+        calls = mock_cluster._wait_for_cloud_request_completed.call_args_list
+        assert len(calls) == 1
+        assert calls[0] == ((), {"request_id": 2, "request_type": "INSTALL_VECTOR_SEARCH"})
+
+    def test_both_already_completed(self, mock_cluster):
+        """When both services are already COMPLETED, no waiting needed."""
+        mock_cluster._api_client.get_cluster_requests.return_value = [
+            {"id": 1, "requestType": "INSTALL_MANAGER", "status": "COMPLETED"},
+            {"id": 2, "requestType": "INSTALL_VECTOR_SEARCH", "status": "COMPLETED"},
+        ]
+
+        mock_cluster._wait_for_cloud_service_installations()
+        mock_cluster._wait_for_cloud_request_completed.assert_not_called()
