@@ -5735,7 +5735,8 @@ class NemesisRunner:
             with self.action_log_scope(
                 f"Enable {store} audit on categories: {audit_config.categories} in {keyspaces_for_audit} keyspace"
             ):
-                audit.configure(audit_config)
+                with ignore_raft_topology_cmd_failing():
+                    audit.configure(audit_config)
             keyspace_name = keyspaces_for_audit[0]
             errors = []
             audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)
@@ -5779,14 +5780,16 @@ class NemesisRunner:
             LOGGER.error("Exception while testing full audit: %s", ex)
             audit_config.categories = ["DCL", "DDL", "AUTH", "ADMIN"]
             with self.action_log_scope(f"Reconfiguring audit with {audit_config.categories} categories"):
-                audit.configure(audit_config)
+                with ignore_raft_topology_cmd_failing():
+                    audit.configure(audit_config)
             raise
 
         InfoEvent("Reducing audit categories and setting back audited keyspaces").publish()
 
         audit_config.categories = ["DCL", "DDL", "AUTH", "ADMIN"]
         with self.action_log_scope(f"Reconfiguring audit with {audit_config.categories} categories"):
-            audit.configure(audit_config)
+            with ignore_raft_topology_cmd_failing():
+                audit.configure(audit_config)
         table_name = "audit_cf"
         audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)
         with self.cluster.cql_connection_patient(node=self.target_node) as session:
