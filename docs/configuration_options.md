@@ -1,4 +1,3 @@
-# scylla-cluster-tests configuration options
 
 #### Appending with environment variables or with config files
 * **strings:** can be appended with adding `++` at the beginning of the string:
@@ -931,6 +930,24 @@ If true, spawn a docker with a dns server for the ycsb loader to point to
 **default:** N/A
 
 **type:** boolean
+
+
+## **alternator_loadbalancing** / SCT_ALTERNATOR_LOADBALANCING
+
+If true, enable native load balancing for alternator
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **alternator_test_table** / SCT_ALTERNATOR_TEST_TABLE
+
+Dictionary of a test alternator table features:<br>name: str - the name of the table<br>lsi_name: str - the name of the local secondary index to create with a table<br>gsi_name: str - the name of the global secondary index to create with a table<br>tags: dict - the tags to apply to the created table<br>items: int - expected number of items in the table after prepare
+
+**default:** N/A
+
+**type:** dict
 
 
 ## **alternator_enforce_authorization** / SCT_ALTERNATOR_ENFORCE_AUTHORIZATION
