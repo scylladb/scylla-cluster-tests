@@ -927,6 +927,12 @@ class SCTConfiguration(dict):
             help="If true, spawn a docker with a dns server for the ycsb loader to point to",
         ),
         dict(
+            name="alternator_loadbalancing",
+            env="SCT_ALTERNATOR_LOADBALANCING",
+            type=boolean,
+            help="If true, enable native load balancing for alternator",
+        ),
+        dict(
             name="alternator_test_table",
             env="SCT_ALTERNATOR_TEST_TABLE",
             type=dict,
