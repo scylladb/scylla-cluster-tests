@@ -38,7 +38,7 @@ nemesis_interval: 30
 user_prefix: 'alternator-disable-enable-ttl'
 
 alternator_port: 8080
-alternator_use_dns_routing: true
+alternator_use_dns_routing: false
 docker_network: 'ycsb_net'
 
 alternator_enforce_authorization: true

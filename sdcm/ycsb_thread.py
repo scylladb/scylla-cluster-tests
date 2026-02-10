@@ -144,7 +144,8 @@ class YcsbStressThread(DockerBasedStressThread):
     def _hdr_files_directory_on_loaders_node(self, loader_idx, cpu_idx):
         return f"{self._hdr_main_dir_on_loaders_node()}/{loader_idx}/{cpu_idx}"
 
-    def copy_template(self, cmd_runner, loader_name, memo={}):  # noqa: B006
+    def copy_template(self, cmd_runner, loader, memo={}):  # noqa: B006
+        loader_name = loader.name
         if loader_name in memo:
             return None
         web_protocol = "http"
@@ -164,7 +165,6 @@ class YcsbStressThread(DockerBasedStressThread):
             dynamodb_teample = dedent(
                 """
                 measurementtype=hdrhistogram
-                dynamodb.awsCredentialsFile = /tmp/aws_dummy_credentials_file
                 dynamodb.endpoint = {0}://{1}:{2}
                 dynamodb.connectMax = 2500
                 requestdistribution = uniform
@@ -187,43 +187,35 @@ class YcsbStressThread(DockerBasedStressThread):
                     dynamodb.primaryKey = {alternator.consts.HASH_KEY_NAME}
                     dynamodb.primaryKeyType = {alternator.enums.YCSBSchemaTypes.HASH_SCHEMA.value}
                 """)
+            access_key = self.params.get("alternator_access_key_id")
             if self.params.get("alternator_enforce_authorization"):
-                aws_credentials_content = dedent(f"""
-                    accessKey = {self.params.get("alternator_access_key_id")}
-                    secretKey = {alternator.api.Alternator.get_salted_hash(node=self.node_list[0], username=self.params.get("alternator_access_key_id"))}
-                """)
+                secret_key = alternator.api.Alternator.get_salted_hash(node=self.node_list[0], username=access_key)
             else:
-                aws_credentials_content = dedent(f"""
-                    accessKey = {self.params.get("alternator_access_key_id")}
-                    secretKey = {self.params.get("alternator_secret_access_key")}
-                """)
+                secret_key = self.params.get("alternator_secret_access_key")
+
+            dns_loadbalancing = self.params.get("alternator_use_dns_routing")
+            native_loading = self.params.get("alternator_loadbalancing")
+            if dns_loadbalancing:
+                native_loading = False
+
+            alternator_port = self.params.get("alternator_port")
+            trustAllCerts = self.params.get("alternator_trust_all_certificates")
+
+            if not alternator_port:
+                alternator_port = -1
+            if not trustAllCerts:
+                trustAllCerts = True
+
+            # This is a workaround to make AWS SDK v2 Happy
+            # as it will fail if the credentials are not provided,
+            # even if the alternator is running in a mode that does not require authentication.
+            if access_key is None or access_key == "":
+                access_key = "test"
+            if secret_key is None or secret_key == "":
+                secret_key = "test"
 
             with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as tmp_file:
                 tmp_file.write(dynamodb_teample)
-<<<<<<< HEAD
-||||||| parent of acdd6bed5 (fix(alternator-dns): use json.loads to parse /localnodes response)
-                tmp_file.write(
-                    dedent(f"""
-                    dynamodb.debug = false
-                    dynamodb.alternator.port = {alternator_port}
-                    dynamodb.alternator.loadbalancing = {native_loading}
-                    dynamodb.virtualThreads = true
-                    dynamodb.alternator.trustAllCertificates = {trustAllCerts}
-                    dynamodb.awsAccessKey = {access_key}
-                    dynamodb.awsSecretKey = {secret_key}
-                """)
-                )
-                # Only write datacenter/rack when non-empty. Java's Properties.getProperty()
-                # returns "" for empty values (not null), so `datacenter != null` would be
-                # true for "", creating DatacenterScope.of("") which routes to a non-existent
-                # datacenter and causes all operations to fail.
-                loader_datacenter = getattr(loader, "datacenter", "")
-                loader_rack = getattr(loader, "rack", "")
-                if loader_datacenter:
-                    tmp_file.write(f"dynamodb.alternator.datacenter = {loader_datacenter}\n")
-                if loader_rack:
-                    tmp_file.write(f"dynamodb.alternator.rack = {loader_rack}\n")
-=======
                 tmp_file.write(
                     dedent(f"""
                     dynamodb.debug = false
@@ -247,14 +239,8 @@ class YcsbStressThread(DockerBasedStressThread):
                     tmp_file.write(f"dynamodb.alternator.datacenter = {loader_datacenter}\n")
                 if loader_rack:
                     tmp_file.write(f"dynamodb.alternator.rack = {loader_rack}\n")
->>>>>>> acdd6bed5 (fix(alternator-dns): use json.loads to parse /localnodes response)
                 tmp_file.flush()
                 cmd_runner.send_files(tmp_file.name, os.path.join("/tmp", "dynamodb.properties"))
-
-            with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as tmp_file:
-                tmp_file.write(aws_credentials_content)
-                tmp_file.flush()
-                cmd_runner.send_files(tmp_file.name, os.path.join("/tmp", "aws_dummy_credentials_file"))
             if is_kubernetes:
                 if web_protocol == "https":
                     if ca_bundle_path := getattr(self.node_list[0], "alternator_ca_bundle_path", None):
@@ -429,7 +415,7 @@ class YcsbStressThread(DockerBasedStressThread):
             )
             cmd_runner_name = str(loader)
 
-        self.copy_template(cmd_runner, loader.name)
+        self.copy_template(cmd_runner, loader)
         stress_cmd = self.build_stress_cmd(loader_idx, cpu_idx)
 
         if not os.path.exists(loader.logdir):
