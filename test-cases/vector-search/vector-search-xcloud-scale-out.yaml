@@ -1,0 +1,21 @@
+test_duration: 300
+
+prepare_write_cmd:
+  - >-
+    cassandra-stress write n=40000000 cl=QUORUM -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -mode cql3 native -rate threads=100 -col 'n=FIXED(10) size=FIXED(900)' -pop seq=1..40000000 -log interval=5
+
+#stress_cmd:
+#  - >-
+#    latte run --function validate_average_recall --connections 2 --rate 350 -P recall_validation_rate=350
+#    --duration 300s -P recall_validation_duration=300 data_dir/latte/vector_search/vector_search_recall.rn
+
+n_db_nodes: 3
+instance_type_loader: 'c6i.2xlarge'
+instance_type_db: 'i8g.large'
+gce_instance_type_loader: 'n2-highmem-2'
+gce_instance_type_db: 'n2-highmem-2'
+n_loaders: 1
+n_vector_store_nodes: 1
+
+user_prefix: 'vector-search-xcloud-scale-out'
