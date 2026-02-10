@@ -109,7 +109,7 @@ jobs:
         run: |
           git add .git-blame-ignore-revs
           git fetch origin master
-          pr_commits=$(git log origin/master..HEAD --pretty=format:"%h" | tr '\n' ' ')
+          pr_commits=$(echo "${{ needs.prepare.outputs.commits_b64 }}" | base64 --decode)
           git commit -m "chore(git-blame): add PR commits to ignore list" -m "Added commits: $pr_commits"
 
       - name: Push changes
