@@ -48,7 +48,7 @@ nemesis_interval: 10
 user_prefix: 'alternator-ttl-4-loaders-no-lwt-sisyphus'
 
 alternator_port: 8080
-alternator_use_dns_routing: true
+alternator_use_dns_routing: false
 docker_network: 'ycsb_net'
 
 alternator_enforce_authorization: true
