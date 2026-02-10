@@ -3907,8 +3907,32 @@ class Nemesis:
         else:
             host_id = remove_node_host_id
 
+<<<<<<< HEAD
         with ignore_ycsb_connection_refused(), self.action_log_scope("Terminate a node", target=node_to_remove.name):
             # node stop and make sure its "DN"
+||||||| parent of 6d1d3aa92 (fix(TerminateAndRemoveNodeMonkey): add ignore raft failing)
+        if SkipPerIssues("https://github.com/scylladb/scylladb/issues/21815", params=self.tester.params):
+            # TBD: To be removed after https://github.com/scylladb/scylladb/issues/21815 is resolved
+            ignore_stream_mutation_errors_due_to_issue = ignore_stream_mutation_fragments_errors
+        else:
+            ignore_stream_mutation_errors_due_to_issue = contextlib.nullcontext
+
+        with ignore_ycsb_connection_refused(), ignore_stream_mutation_errors_due_to_issue():
+            self.actions_log.info(f"Stop {node_to_remove.name} node and make sure is DN")
+=======
+        if SkipPerIssues("https://github.com/scylladb/scylladb/issues/21815", params=self.tester.params):
+            # TBD: To be removed after https://github.com/scylladb/scylladb/issues/21815 is resolved
+            ignore_stream_mutation_errors_due_to_issue = ignore_stream_mutation_fragments_errors
+        else:
+            ignore_stream_mutation_errors_due_to_issue = contextlib.nullcontext
+
+        with (
+            ignore_ycsb_connection_refused(),
+            ignore_stream_mutation_errors_due_to_issue(),
+            ignore_raft_topology_cmd_failing(),
+        ):
+            self.actions_log.info(f"Stop {node_to_remove.name} node and make sure is DN")
+>>>>>>> 6d1d3aa92 (fix(TerminateAndRemoveNodeMonkey): add ignore raft failing)
             node_to_remove.stop_scylla_server(verify_up=False, verify_down=True)
 
             # terminate node
