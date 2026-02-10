@@ -38,5 +38,9 @@ backup_bucket_backend: 'gcs'
 
 use_preinstalled_scylla: true
 
+# Disable scylla-doctor on GCE temporarily due to v1.8 bug - https://scylladb.atlassian.net/browse/DOCTOR-12
+# Re-enable once scylla-doctor fixes the issue
+run_scylla_doctor: false
+
 # we are using monitor images, see `gce_image_monitor`
 monitor_branch: null
