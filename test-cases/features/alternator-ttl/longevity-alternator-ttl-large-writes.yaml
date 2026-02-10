@@ -44,7 +44,7 @@ nemesis_during_prepare: false
 user_prefix: 'alternator-ttl-large-writes'
 
 alternator_port: 8080
-alternator_use_dns_routing: true
+alternator_use_dns_routing: false
 docker_network: 'ycsb_net'
 
 alternator_enforce_authorization: true
