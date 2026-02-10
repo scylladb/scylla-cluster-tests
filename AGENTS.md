@@ -43,14 +43,24 @@ uv run sct.py integration-tests
 
 ### Code Quality and Linting
 
+**REQUIRED:** All pre-commit checks must pass before committing code.
+
 ```bash
-# Run pre-commit checks (includes autopep8, ruff, and other linters)
+# Run pre-commit checks (includes ruff-format, ruff, uv-sort, and other linters)
 uv run sct.py pre-commit
 
 # Run specific linters
 ruff check --fix --preview .
-autopep8 -i -j 2 <file>
+ruff format .
 ```
+
+Pre-commit checks include:
+- Code formatting (ruff-format)
+- Linting (ruff with all enabled rules)
+- Dependency sorting (uv-sort)
+- YAML validation
+- Trailing whitespace removal
+- End-of-file fixes
 
 ### Running SCT
 
@@ -235,7 +245,10 @@ Nemesis are chaos operations that test database resilience. Common types:
 2. Run unit tests locally: `uv run sct.py unit-tests`
 3. Test with docker backend first: `--backend docker`
 4. Use cluster reuse for faster iteration
-5. Run pre-commit before commit, and after commit: `uv run sct.py pre-commit`
+5. **REQUIRED:** Run pre-commit checks before committing code: `uv run sct.py pre-commit`
+   - All pre-commit checks must pass before code can be committed
+   - Pre-commit runs formatting (ruff-format), linting (ruff), and other code quality checks
+   - If pre-commit modifies files, review the changes and re-run until all checks pass
 
 ### Debugging SCT Tests
 - Check logs in `~/sct-results/latest/`
