@@ -295,6 +295,7 @@ class Nemesis(NemesisFlags):
         self.start_time = time.time()
         self.stats = {}
         self.nemesis_selector = nemesis_selector
+        self.last_nemesis_event = None  # Track last nemesis event for this nemesis instance
         # NOTE: 'cluster_index' is set in K8S multitenant case
         if hasattr(self.tester, "cluster_index"):
             tenant_short_name = f"db{self.tester.cluster_index}"
@@ -6335,9 +6336,28 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
                     # NOTE: exclusive nemesis will wait before the end of all other ones
                     time.sleep(10)
 
+<<<<<<< HEAD
             args[0].cluster.check_cluster_health()
             num_data_nodes_before = len(args[0].cluster.data_nodes)
             num_zero_nodes_before = len(args[0].cluster.zero_nodes)
+||||||| parent of 08efaec5c (feat(health-check): skip health check when previous nemesis was skipped)
+            runner.cluster.check_cluster_health()
+            num_data_nodes_before = len(runner.cluster.data_nodes)
+            num_zero_nodes_before = len(runner.cluster.zero_nodes)
+=======
+            # Skip health check if previous nemesis was skipped to avoid wasting 2+ hours on large clusters
+            last_event = runner.last_nemesis_event
+            if last_event and last_event.is_skipped:
+                runner.log.info(
+                    "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
+                    last_event.nemesis_name,
+                    last_event.skip_reason,
+                )
+            else:
+                runner.cluster.check_cluster_health()
+            num_data_nodes_before = len(runner.cluster.data_nodes)
+            num_zero_nodes_before = len(runner.cluster.zero_nodes)
+>>>>>>> 08efaec5c (feat(health-check): skip health check when previous nemesis was skipped)
             start_time = time.time()
 
             current_disruption = unique_disruption_name(method_name)
@@ -6471,6 +6491,9 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
             # TODO: Temporary print. Will be removed later
             data_validation_prints(args=args)
         finally:
+            # Store nemesis event to track skip status for health checks
+            runner.last_nemesis_event = nemesis_event
+
             if is_exclusive:
                 # NOTE: sleep the nemesis interval here because the next one is already
                 #       ready to start right after the lock gets released.
