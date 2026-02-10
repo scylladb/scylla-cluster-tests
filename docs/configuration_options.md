@@ -933,6 +933,37 @@ If true, spawn a docker with a dns server for the ycsb loader to point to
 **type:** boolean
 
 
+<<<<<<< HEAD
+||||||| parent of 55e74319b (feature(ycsb): enable native YCSB loadbalancer)
+## **alternator_test_table** / SCT_ALTERNATOR_TEST_TABLE
+
+Dictionary of a test alternator table features:<br>name: str - the name of the table<br>lsi_name: str - the name of the local secondary index to create with a table<br>gsi_name: str - the name of the global secondary index to create with a table<br>tags: dict - the tags to apply to the created table<br>items: int - expected number of items in the table after prepare
+
+**default:** N/A
+
+**type:** dict
+
+
+=======
+## **alternator_loadbalancing** / SCT_ALTERNATOR_LOADBALANCING
+
+If true, enable native load balancing for alternator
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **alternator_test_table** / SCT_ALTERNATOR_TEST_TABLE
+
+Dictionary of a test alternator table features:<br>name: str - the name of the table<br>lsi_name: str - the name of the local secondary index to create with a table<br>gsi_name: str - the name of the global secondary index to create with a table<br>tags: dict - the tags to apply to the created table<br>items: int - expected number of items in the table after prepare
+
+**default:** N/A
+
+**type:** dict
+
+
+>>>>>>> 55e74319b (feature(ycsb): enable native YCSB loadbalancer)
 ## **alternator_enforce_authorization** / SCT_ALTERNATOR_ENFORCE_AUTHORIZATION
 
 If true, enable the authorization check in dynamodb api (alternator)
