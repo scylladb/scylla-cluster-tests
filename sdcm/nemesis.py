@@ -3949,11 +3949,12 @@ class Nemesis:
         else:
             host_id = remove_node_host_id
 
-        with ignore_ycsb_connection_refused(), self.action_log_scope("Terminate a node", target=node_to_remove.name):
-            # node stop and make sure its "DN"
+        with (
+            ignore_ycsb_connection_refused(),
+            self.action_log_scope("Terminate a node", target=node_to_remove.name),
+            ignore_raft_topology_cmd_failing(),
+        ):
             node_to_remove.stop_scylla_server(verify_up=False, verify_down=True)
-
-            # terminate node
             self._terminate_cluster_node(node_to_remove)
 
         wait_for(
