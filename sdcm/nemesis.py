@@ -4112,7 +4112,11 @@ class Nemesis(NemesisFlags):
         else:
             ignore_stream_mutation_errors_due_to_issue = contextlib.nullcontext
 
-        with ignore_ycsb_connection_refused(), ignore_stream_mutation_errors_due_to_issue():
+        with (
+            ignore_ycsb_connection_refused(),
+            ignore_stream_mutation_errors_due_to_issue(),
+            ignore_raft_topology_cmd_failing(),
+        ):
             self.actions_log.info(f"Stop {node_to_remove.name} node and make sure is DN")
             node_to_remove.stop_scylla_server(verify_up=False, verify_down=True)
             self._terminate_cluster_node(node_to_remove)
