@@ -74,7 +74,7 @@ def get_scylla_images_private_galleries(
         gallery_image_versions = azure_service.compute.gallery_image_versions.list_by_gallery_image(
             resource_group_name="SCYLLA-IMAGES",
             gallery_name="scylladb_dev",
-            gallery_image_name=branch,
+            gallery_image_name=f"{branch}-{vmarch_to_azure(arch)}",
         )
         for image in gallery_image_versions:
             if image.location != region_name or image.tags.get("name", "").startswith("debug-"):
@@ -105,8 +105,6 @@ def get_scylla_images_private_galleries(
 def get_scylla_images(
     scylla_version: str, region_name: str, arch: VmArch = VmArch.X86, azure_service: AzureService = AzureService()
 ) -> list[GalleryImageVersion]:
-    if arch != VmArch.X86:
-        LOGGER.warning("--arch option not implemented currently for Azure machine images.")
     version_bucket = scylla_version.split(":", 1)
     only_latest = False
     tags_to_search = {"arch": arch.value}
