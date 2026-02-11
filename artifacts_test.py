@@ -44,6 +44,7 @@ BACKENDS = {
     "aws": ["Ec2Snitch", "Ec2MultiRegionSnitch"],
     "gce": ["GoogleCloudSnitch"],
     "azure": ["AzureSnitch"],
+    "oci": ["GossipingPropertyFileSnitch", "SimpleSnitch"],
     "docker": ["GossipingPropertyFileSnitch", "SimpleSnitch"],
 }
 
@@ -360,7 +361,7 @@ class ArtifactsTest(ClusterTester):
             with self.logged_subtest("check ENA support"):
                 assert self.node.ena_support, "ENA support is not enabled"
 
-        if backend in ["gce", "aws", "azure"] and self.params.get("use_preinstalled_scylla"):
+        if backend in ("gce", "aws", "azure", "oci") and self.params.get("use_preinstalled_scylla"):
             with self.logged_subtest("check Scylla IO Params"):
                 try:
                     if self.node.db_node_instance_type in ["t3.micro"]:

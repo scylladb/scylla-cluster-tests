@@ -17,7 +17,7 @@ a list of config files that would be used
 
 ## **cluster_backend** / SCT_CLUSTER_BACKEND
 
-backend that will be used, aws/gce/azure/docker/xcloud
+backend that will be used, aws/gce/azure/oci/docker/xcloud
 
 **default:** N/A
 
@@ -1735,6 +1735,87 @@ Supported: eastus
 
 
 ## **azure_image_username** / SCT_AZURE_IMAGE_USERNAME
+
+
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_region_name** / SCT_OCI_REGION_NAME
+
+Oracle Cloud region to use
+
+**default:** N/A
+
+**type:** str_or_list_or_eval
+
+
+## **oci_instance_type_loader** / SCT_OCI_INSTANCE_TYPE_LOADER
+
+
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_instance_type_monitor** / SCT_OCI_INSTANCE_TYPE_MONITOR
+
+
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_instance_type_db** / SCT_OCI_INSTANCE_TYPE_DB
+
+
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_instance_type_db_oracle** / SCT_OCI_INSTANCE_TYPE_DB_ORACLE
+
+
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_image_db** / SCT_OCI_IMAGE_DB
+
+
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_image_monitor** / SCT_OCI_IMAGE_MONITOR
+
+
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_image_loader** / SCT_OCI_IMAGE_LOADER
+
+
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_image_username** / SCT_OCI_IMAGE_USERNAME
 
 
 

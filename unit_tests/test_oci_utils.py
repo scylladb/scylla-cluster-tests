@@ -21,34 +21,10 @@ from sdcm.utils.oci_utils import (
     filter_oci_by_tags,
     get_ubuntu_image_ocid,
     list_instances_oci,
-    oci_tags_to_dict,
     OciService,
     resolve_availability_domain,
     wait_for_instance_state,
 )
-
-
-# --- Tests for oci_tags_to_dict ---
-
-
-def test_oci_tags_to_dict_with_tags():
-    """Test with valid freeform tags."""
-    tags = {"NodeType": "sct-runner", "TestId": "test-123"}
-    result = oci_tags_to_dict(tags)
-    assert result == tags
-
-
-def test_oci_tags_to_dict_with_none():
-    """Test with None tags."""
-    result = oci_tags_to_dict(None)
-    assert result == {}
-
-
-def test_oci_tags_to_dict_with_empty_dict():
-    """Test with empty dict."""
-    result = oci_tags_to_dict({})
-    assert result == {}
-
 
 # --- Tests for filter_oci_by_tags ---
 

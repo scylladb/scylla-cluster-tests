@@ -35,9 +35,9 @@ from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.common import (
     deprecation,
     generate_random_string,
-    KeyBasedLock,
 )
 from sdcm.utils.decorators import retrying
+from sdcm.utils.lock_utils import KeyBasedLock
 from sdcm.wait import wait_for
 
 from .base import RetryableNetworkException

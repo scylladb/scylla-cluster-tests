@@ -1,0 +1,36 @@
+test_duration: 60
+
+user_prefix: 'vp-oci-debug'
+use_preinstalled_scylla: true
+
+n_db_nodes: 3
+
+# NOTE: non-dense shapes may be 'spot'
+# instance_provision: 'spot'
+# oci_instance_type_db: "VM.Standard3.Flex:4:32" # non-ssd flexible shape with 4 CPU cores and 32GB RAM
+# data_volume_disk_num: 1
+# data_volume_disk_type: "balanced"
+# data_volume_disk_size: 100
+
+# NOTE: Dense shapes can be only 'on_demand'
+instance_provision: 'on_demand'
+oci_instance_type_db: "VM.DenseIO.E5.Flex:8" # <shape-name>:<ocpus>:<ram>:<nvmes>
+
+# NOTE: Dense shapes exist only in AZ/AD-1, so use first one with simulated racks
+availability_zone: "a"
+simulated_racks: 3
+
+n_loaders: 1
+
+n_monitor_nodes: 1
+
+nemesis_class_name: SisyphusMonkey
+nemesis_selector: "not disruptive"
+nemesis_interval: 1
+
+round_robin: true
+stress_cmd:
+  - latte run --tag main-write --function write
+    --rate 5000 --duration 500000 -P row_count=470_000
+    --request-timeout 5 --retry-number 1 --retry-interval '500ms,5s'
+    data_dir/latte/latte_cs_alike.rn

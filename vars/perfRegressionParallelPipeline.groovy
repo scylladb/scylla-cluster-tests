@@ -5,7 +5,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 def base_versions_list = []
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
 
     pipeline {
         agent none
@@ -30,9 +30,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
-            string(defaultValue: "${pipelineParams.get('oci_region', 'us-ashburn-1')}",
+            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
                    description: 'Oracle Cloud Region',
-                   name: 'oci_region')
+                   name: 'oci_region_name')
             // ScyllaDB Configuration
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 6 options)')
             string(defaultValue: '', description: 'AMI ID for ScyllaDB', name: 'scylla_ami_id')
