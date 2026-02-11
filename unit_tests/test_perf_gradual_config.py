@@ -171,17 +171,17 @@ class TestPerfGradualThrottleStepsValidation:
             config.verify_configuration()
 
     def test_invalid_step_type(self):
-        """Test that step must be string or dict."""
+        """Test that step must be string, int, or dict."""
         config = SCTConfiguration()
         config.update(
             {
                 "perf_gradual_throttle_steps": {
-                    "read": [100000]  # integer instead of string or dict
+                    "read": [[100000]]  # list instead of string, int, or dict - actually invalid
                 },
                 "perf_gradual_threads": {"read": 100},
             }
         )
-        with pytest.raises(ValueError, match="each step must be either a string or dict"):
+        with pytest.raises(ValueError, match="each step must be a string, int, or dict"):
             config.verify_configuration()
 
     def test_rate_unthrottled_string(self):
