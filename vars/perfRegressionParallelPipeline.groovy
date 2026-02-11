@@ -127,8 +127,8 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
-            string(defaultValue: "${pipelineParams.get('billing_project', '')}",
-                   description: 'Billing project for the test run',
+            choice(choices: getBillingProjectChoices(),
+                   description: 'Billing project for the test run (dynamically fetched from finops repository)',
                    name: 'billing_project')
             string(defaultValue: "${pipelineParams.get('perf_extra_jobs_to_compare', '')}",
                    description: 'jobs to compare performance results with, for example if running in staging, '
