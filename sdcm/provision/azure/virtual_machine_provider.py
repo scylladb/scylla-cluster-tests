@@ -82,6 +82,11 @@ class VirtualMachineProvider:
                 "network_profile": {
                     "network_interfaces": [{"id": nic_id, "properties": {"deleteOption": "Detach"}}],
                 },
+                "diagnostics_profile": {
+                    "boot_diagnostics": {
+                        "enabled": True,
+                    }
+                },
             }
 
             if self._enable_azure_kms:

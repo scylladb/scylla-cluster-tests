@@ -23,6 +23,7 @@ from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
 from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
+from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.net import resolve_ip_to_dns
 
 LOGGER = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ class AzureNode(cluster.BaseNode):
         self._instance_type = azure_instance.instance_type
         name = f"{node_prefix}-{self.region}-{node_index}".lower()
         self.last_event_document_incarnation = -1
+        self.kernel_panic_checker = None
         ssh_login_info = {
             "hostname": None,
             "user": azure_instance.user_name,
@@ -83,6 +85,17 @@ class AzureNode(cluster.BaseNode):
         self.remoter.sudo("systemctl disable auditd", ignore_status=True)
         self.remoter.sudo("systemctl mask auditd", ignore_status=True)
         self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
+
+        # Start kernel panic monitoring - use public property
+        if self.test_config.get("enable_kernel_panic_checker"):
+            self.kernel_panic_checker = AzureKernelPanicChecker(
+                node=self,
+                vm_name=self._instance.name,
+                region=self.region,
+                resource_group=self._instance._provisioner.resource_group_name
+            )
+            self.kernel_panic_checker.start()
+            LOGGER.info("Started kernel panic monitoring for node %s (VM: %s)", self.name, self._instance.name)
 
     def wait_for_cloud_init(self):
         pass  # azure for it, on resources creation
@@ -162,6 +175,13 @@ class AzureNode(cluster.BaseNode):
         self._instance.reboot(wait=True, hard=True)
 
     def destroy(self):
+        # Stop kernel panic monitoring
+        if self.kernel_panic_checker:
+            LOGGER.info("Stopping kernel panic monitoring for node %s", self.name)
+            self.kernel_panic_checker.stop()
+            self.kernel_panic_checker.join(timeout=5)
+            self.kernel_panic_checker = None
+
         self.stop_task_threads()
         self.wait_till_tasks_threads_are_stopped()
         self._instance.terminate(wait=True)
@@ -413,3 +433,71 @@ class MonitorSetAzure(cluster.BaseMonitorSet, AzureCluster):
             node_type="monitor",
             region_names=region_names,
         )
+
+
+
+
+class AzureKernelPanicChecker(cluster.BaseKernelPanicChecker):
+    """Monitor Azure VM for kernel panics via boot diagnostics."""
+
+    def __init__(self, node, vm_name, region, resource_group):
+        super().__init__(node, provider_name="Azure")
+        self.vm_name = vm_name
+        self.region = region
+        self.resource_group = resource_group
+        self.compute_client = AzureService().compute
+
+    def _get_console_output(self) -> str:
+        """Get boot diagnostics output from Azure VM.
+        
+        Note: Azure implementation is simplified as boot diagnostics retrieval
+        varies by API version and requires Azure storage access.
+        """
+        # Handle potential VM termination race condition
+        try:
+            instance_view = self.compute_client.virtual_machines.instance_view(
+                resource_group_name=self.resource_group,
+                vm_name=self.vm_name
+            )
+        except Exception as exc:
+            # Check if VM was terminated (ResourceNotFoundError)
+            if "ResourceNotFoundError" in str(type(exc).__name__):
+                LOGGER.debug("[Azure] VM %s no longer exists, stopping monitoring", self.vm_name)
+                self._stop_event.set()
+                return ""
+            raise
+
+        # Get boot diagnostics console log
+        # Note: Boot diagnostics retrieval varies by Azure API version
+        # This is a simplified implementation
+        try:
+            boot_diagnostics = self.compute_client.virtual_machines.retrieve_boot_diagnostics_data(
+                resource_group_name=self.resource_group,
+                vm_name=self.vm_name
+            )
+            # The serial console log URL
+            if hasattr(boot_diagnostics, 'console_screenshot_blob_uri'):
+                # Get the serial log content (implementation would need Azure storage access)
+                # For now, return empty string as this is WIP
+                pass
+        except Exception as exc:
+            LOGGER.debug("[Azure] Error retrieving boot diagnostics for %s: %s", self.vm_name, exc)
+
+        # Check for kernel panic in available diagnostics
+        # This is simplified - real implementation would parse boot diagnostics
+        power_state = None
+        if hasattr(instance_view, 'statuses'):
+            for status in instance_view.statuses:
+                if status.code.startswith('PowerState/'):
+                    power_state = status.code.split('/')[-1]
+
+        # If VM is in a failed state, it might indicate a kernel panic
+        if power_state and power_state.lower() in ['stopped', 'deallocated']:
+            LOGGER.debug("[Azure] %s: power state = %s", self.vm_name, power_state)
+
+        # Return empty for now - Azure implementation is WIP
+        return ""
+
+    def _get_instance_identifier(self) -> str:
+        """Return the Azure VM name for logging."""
+        return f"VM {self.vm_name}"

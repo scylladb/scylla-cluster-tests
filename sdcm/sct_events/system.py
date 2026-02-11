@@ -138,6 +138,20 @@ class SpotTerminationEvent(InformationalEvent):
         return super().msgfmt + ": node={0.node} message={0.message}"
 
 
+class KernelPanicEvent(InformationalEvent):
+    """Published when a kernel panic is detected on a node."""
+
+    def __init__(self, node: Any, message: str):
+        super().__init__(severity=Severity.CRITICAL)
+
+        self.node = str(node)
+        self.message = message
+
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": node={0.node} message={0.message}"
+
+
 class ScyllaRepoEvent(InformationalEvent):
     def __init__(self, url: str, error: str):
         super().__init__(severity=Severity.WARNING)
