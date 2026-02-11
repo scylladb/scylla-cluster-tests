@@ -5723,7 +5723,20 @@ class Nemesis(NemesisFlags):
             tables=[],
         )
         try:
+<<<<<<< HEAD
             audit.configure(audit_config)
+||||||| parent of d5953c964 (fix(nemesis): suppress raft topology errors in toggle audit syslog nemesis)
+            with self.action_log_scope(
+                f"Enable {store} audit on categories: {audit_config.categories} in {keyspaces_for_audit} keyspace"
+            ):
+                audit.configure(audit_config)
+=======
+            with self.action_log_scope(
+                f"Enable {store} audit on categories: {audit_config.categories} in {keyspaces_for_audit} keyspace"
+            ):
+                with ignore_raft_topology_cmd_failing():
+                    audit.configure(audit_config)
+>>>>>>> d5953c964 (fix(nemesis): suppress raft topology errors in toggle audit syslog nemesis)
             keyspace_name = keyspaces_for_audit[0]
             errors = []
             audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)
@@ -5764,13 +5777,31 @@ class Nemesis(NemesisFlags):
         except Exception as ex:
             LOGGER.error("Exception while testing full audit: %s", ex)
             audit_config.categories = ["DCL", "DDL", "AUTH", "ADMIN"]
+<<<<<<< HEAD
             audit.configure(audit_config)
+||||||| parent of d5953c964 (fix(nemesis): suppress raft topology errors in toggle audit syslog nemesis)
+            with self.action_log_scope(f"Reconfiguring audit with {audit_config.categories} categories"):
+                audit.configure(audit_config)
+=======
+            with self.action_log_scope(f"Reconfiguring audit with {audit_config.categories} categories"):
+                with ignore_raft_topology_cmd_failing():
+                    audit.configure(audit_config)
+>>>>>>> d5953c964 (fix(nemesis): suppress raft topology errors in toggle audit syslog nemesis)
             raise
 
         InfoEvent("Reducing audit categories and setting back audited keyspaces").publish()
 
         audit_config.categories = ["DCL", "DDL", "AUTH", "ADMIN"]
+<<<<<<< HEAD
         audit.configure(audit_config)
+||||||| parent of d5953c964 (fix(nemesis): suppress raft topology errors in toggle audit syslog nemesis)
+        with self.action_log_scope(f"Reconfiguring audit with {audit_config.categories} categories"):
+            audit.configure(audit_config)
+=======
+        with self.action_log_scope(f"Reconfiguring audit with {audit_config.categories} categories"):
+            with ignore_raft_topology_cmd_failing():
+                audit.configure(audit_config)
+>>>>>>> d5953c964 (fix(nemesis): suppress raft topology errors in toggle audit syslog nemesis)
         table_name = "audit_cf"
         audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)
         with self.cluster.cql_connection_patient(node=self.target_node) as session:
