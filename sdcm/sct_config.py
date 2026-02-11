@@ -85,6 +85,8 @@ from sdcm.test_config import TestConfig
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
 from sdcm.mgmt.common import AgentBackupParameters
 
+LOGGER = logging.getLogger(__name__)
+
 
 def _str(value: str) -> str:
     if isinstance(value, str):
@@ -4079,7 +4081,7 @@ class SCTConfiguration(dict):
                 tags = get_gce_image_tags(image)
                 if "user_data_format_version" not in tags.keys():
                     # since older release aren't tagged, we default to 2 which was the version on the first gce images
-                    logging.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
+                    LOGGER.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
                 self["user_data_format_version"] = tags.get("user_data_format_version", "2")
 
         if backend == "azure":
@@ -4088,7 +4090,7 @@ class SCTConfiguration(dict):
                 tags = azure_utils.get_image_tags(image)
                 if "user_data_format_version" not in tags.keys():
                     # since older release aren't tagged, we default to 2 which was the version on the first gce images
-                    logging.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
+                    LOGGER.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
                 self["user_data_format_version"] = tags.get("user_data_format_version", "2")
 
         # For each Scylla repo file we will check that there is at least one valid URL through which to download a

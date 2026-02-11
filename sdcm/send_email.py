@@ -243,7 +243,7 @@ class BaseEmailReporter:
                 report_data, attachments_data = self.cut_report_data(report_data, attachments_data, reason=exc)
         # Sending prepared email
         if email is None:
-            self.log.error("Failed to prepare email", exc_info=True)
+            self.log.error("Failed to prepare email")
             return
         self.send_email(email)
 

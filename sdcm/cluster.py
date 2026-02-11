@@ -2432,7 +2432,7 @@ class BaseNode(AutoSshContainerMixin):
         """)
         result = self.remoter.run('bash -cxe "%s"' % package_version_cmds_v3, ignore_status=True)
         if not result.ok:
-            logging.info("v3 version of .relocatable_package_version does not detected, retry with v2 version")
+            LOGGER.info("v3 version of .relocatable_package_version does not detected, retry with v2 version")
             result = self.remoter.run('bash -cxe "%s"' % package_version_cmds_v2)
         package_version = packaging.version.parse(result.stdout.strip())
 
@@ -3787,7 +3787,7 @@ class BaseCluster:
     @lru_cache(maxsize=None)
     def get_keyspace_info(self, keyspace_name: str, db_node: BaseNode):
         replication_strategy = ReplicationStrategy.get(db_node, keyspace_name)
-        logging.debug("Replication strategy for keyspace %s: %s", keyspace_name, replication_strategy)
+        LOGGER.debug("Replication strategy for keyspace %s: %s", keyspace_name, replication_strategy)
         return replication_strategy
 
     def __str__(self):
@@ -5006,7 +5006,7 @@ class BaseScyllaCluster:
             node.remoter.send_files(new_scylla_bin, "/tmp/scylla", verbose=True)
 
             self._wait_for_preinstalled_scylla(node)
-            logging.info("unzipping any tar.gz rpms")
+            LOGGER.info("unzipping any tar.gz rpms")
             node.remoter.run("tar -xvf /tmp/scylla/*.tar.gz -C /tmp/scylla/", ignore_status=True, verbose=True)
 
             # replace the packages

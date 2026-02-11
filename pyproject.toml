@@ -94,6 +94,7 @@ lint.select = [
     "PIE",
     "B006", "B012",
     "PLW", # mainly for PLW0211
+    "LOG",  # flake8-logging rules
 ]
 lint.ignore = ["E501", "PLR2004"]
 
