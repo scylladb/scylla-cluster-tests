@@ -52,10 +52,10 @@ from paramiko import SSHException
 from tenacity import RetryError
 from invoke import Result
 from invoke.exceptions import UnexpectedExit, Failure
-from cassandra import ConsistencyLevel
+from cassandra import ConsistencyLevel, DriverException
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver
-from cassandra.cluster import NoHostAvailable
+from cassandra.cluster import NoHostAvailable, ConnectionShutdown
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
 from cassandra.query import SimpleStatement
@@ -4116,7 +4116,7 @@ class BaseCluster:
             verbose=verbose,
         )
 
-    @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
+    @retrying(n=30, sleep_time=10, allowed_exceptions=(NoHostAvailable, ConnectionShutdown, DriverException))
     def cql_connection_patient(
         self,
         node,
@@ -4153,12 +4153,17 @@ class BaseCluster:
         Raises:
         - Exception: If the timeout is exceeded and a connection cannot be established.
 
+        Note:
+        - Retries up to 30 times with 10 second intervals to handle transient connection issues (up to 5 minutes)
+        - Handles NoHostAvailable, ConnectionShutdown, and DriverException (e.g., bad file descriptor errors)
+        - See: https://github.com/scylladb/python-driver/issues/614
+
         """
         kwargs = locals()
         del kwargs["self"]
         return self.cql_connection(**kwargs)
 
-    @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
+    @retrying(n=30, sleep_time=10, allowed_exceptions=(NoHostAvailable, ConnectionShutdown, DriverException))
     def cql_connection_patient_exclusive(
         self,
         node,
@@ -4173,9 +4178,17 @@ class BaseCluster:
         verbose=True,
     ):
         """
-        Returns a connection after it stops throwing NoHostAvailables.
+        Returns a connection after it stops throwing NoHostAvailables or ConnectionShutdown exceptions.
 
-        If the timeout is exceeded, the exception is raised.
+        This method establishes an exclusive connection to a single node with retry logic
+        to handle transient connection failures, including the "Bad file descriptor" error.
+
+        Note:
+        - Retries up to 30 times with 10 second intervals to handle transient connection issues (up to 5 minutes)
+        - Handles NoHostAvailable, ConnectionShutdown, and DriverException
+        - See: https://github.com/scylladb/python-driver/issues/614
+
+        If the maximum number of retries is exceeded, the exception is raised.
         """
 
         kwargs = locals()
