@@ -20,7 +20,6 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.system import (
     StartupTestEvent,
     TestFrameworkEvent,
-    ElasticsearchEvent,
     SpotTerminationEvent,
     ScyllaRepoEvent,
     InfoEvent,
@@ -64,16 +63,6 @@ class TestSystemEvents(unittest.TestCase):
             "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e, source=s1.m1(args=('a1', 'a2'), "
             "kwargs={'k1': 'v1', 'k2': 'v2'})"
             " message=msg1\nexception=e1",
-        )
-        self.assertEqual(event, pickle.loads(pickle.dumps(event)))
-
-    def test_elasticsearch_event(self):
-        event = ElasticsearchEvent(doc_id="d1", error="e1")
-        event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
-        self.assertEqual(
-            str(event),
-            "(ElasticsearchEvent Severity.ERROR) period_type=one-time "
-            "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: doc_id=d1 error=e1",
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 

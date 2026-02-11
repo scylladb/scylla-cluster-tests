@@ -2174,13 +2174,6 @@ class SCTConfiguration(dict):
             help="The total size of the memory allocated to JMX. Values in MB, so for 1GB enter 1024(MB)",
         ),
         dict(
-            name="store_perf_results",
-            env="SCT_STORE_PERF_RESULTS",
-            type=boolean,
-            help="""A flag that indicates whether or not to gather the prometheus stats at the end of the run.
-                Intended to be used in performance testing""",
-        ),
-        dict(
             name="append_scylla_setup_args",
             env="SCT_APPEND_SCYLLA_SETUP_ARGS",
             type=str,

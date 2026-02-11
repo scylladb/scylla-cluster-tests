@@ -3111,15 +3111,6 @@ The total size of the memory allocated to JMX. Values in MB, so for 1GB enter 10
 **type:** int
 
 
-## **store_perf_results** / SCT_STORE_PERF_RESULTS
-
-A flag that indicates whether or not to gather the prometheus stats at the end of the run.<br>Intended to be used in performance testing
-
-**default:** N/A
-
-**type:** boolean
-
-
 ## **append_scylla_setup_args** / SCT_APPEND_SCYLLA_SETUP_ARGS
 
 More arguments to append to scylla_setup command line
