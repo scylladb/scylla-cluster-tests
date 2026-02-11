@@ -41,6 +41,20 @@ class Workload:
             # If only one thread count is provided, convert it to a list
             self.num_threads = [self.num_threads]
 
+        # Normalize throttle_steps to dict format for internal use
+        # Convert string/int steps to dict: '100000' -> {rate: '100000'}
+        normalized_steps = []
+        for step in self.throttle_steps:
+            if isinstance(step, dict):
+                normalized_steps.append(step)
+            elif isinstance(step, (str, int)):
+                # String or int throttle value - convert to dict with rate only
+                normalized_steps.append({"rate": str(step) if isinstance(step, int) else step})
+            else:
+                # Should not happen due to validation, but handle gracefully
+                normalized_steps.append({"rate": str(step)})
+        self.throttle_steps = normalized_steps
+
 
 def is_latte_command(stress_cmd: str) -> bool:
     return "latte " in stress_cmd and " run " in stress_cmd
@@ -311,16 +325,31 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             return latency_results
         return {step: {"step": step, "legend": "", "cycles": []}}
 
-    def run_step(self, stress_cmds, current_throttle, num_threads, step_duration):
+    def run_step(self, stress_cmds, step_params, step_duration):
+        """
+        Run a single stress step with parameters from step_params dict.
+
+        Args:
+            stress_cmds: List of stress command templates
+            step_params: Dict with step parameters (threads, concurrency, rate, throttle)
+            step_duration: Duration for this step
+        """
         results = []
         stress_queue = []
         for stress_cmd in stress_cmds:
             params = {"round_robin": True, "stats_aggregate_cmds": False}
-            stress_cmd_to_run = stress_cmd.replace("$threads", f"{num_threads}").replace(
-                "$throttle", f"{current_throttle}"
-            )
+            stress_cmd_to_run = stress_cmd
+
+            # Replace placeholders from step_params dict
+            if "threads" in step_params:
+                stress_cmd_to_run = stress_cmd_to_run.replace("$threads", str(step_params["threads"]))
+            if "concurrency" in step_params:
+                stress_cmd_to_run = stress_cmd_to_run.replace("$concurrency", str(step_params["concurrency"]))
+            if "throttle" in step_params:
+                stress_cmd_to_run = stress_cmd_to_run.replace("$throttle", step_params["throttle"])
             if step_duration is not None:
                 stress_cmd_to_run = stress_cmd_to_run.replace("$duration", step_duration)
+
             params.update({"stress_cmd": stress_cmd_to_run})
             # Run all stress commands
             self.log.debug("RUNNING stress cmd: %s", stress_cmd_to_run)
@@ -363,16 +392,21 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         - If all num_threads are the same, use throttle_step (with count if repeated).
         - If num_threads are unique per step, use '<throttle_step>_<num_threads>_threads'.
           If this combination repeats, append a count.
+
+        throttle_steps are now dicts, so we extract the 'rate' value for naming.
         """
         throttle_steps = workload.throttle_steps
         num_threads = workload.num_threads
 
+        # Extract rate values for step names (throttle_steps are now dicts)
+        step_rate_values = [step.get("rate", "unthrottled") for step in throttle_steps]
+
         if len(set(num_threads)) == 1:
             # All thread counts are the same, only add count for repeated steps
-            step_names = throttle_steps
+            step_names = step_rate_values
         else:
             # Each step has a unique thread count, use <throttle_step>_<num_threads>_threads
-            step_names = [f"{step}_{threads}_threads" for step, threads in zip(throttle_steps, num_threads)]
+            step_names = [f"{rate}_{threads}_threads" for rate, threads in zip(step_rate_values, num_threads)]
 
         total_counts = Counter(step_names)
 
@@ -396,11 +430,24 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         return workload
 
     @staticmethod
-    def current_throttle(throttle_step, num_loaders, stress_num, stress_cmd):
-        if throttle_step == "unthrottled":
+    def current_throttle(throttle_step_dict, num_loaders, stress_num, stress_cmd):
+        """
+        Generate throttle parameter from step dict.
+
+        Args:
+            throttle_step_dict: Dict with step parameters (must have 'rate' key)
+            num_loaders: Number of loader nodes
+            stress_num: Number of stress commands per loader
+            stress_cmd: Stress command to determine format
+
+        Returns:
+            str: Formatted throttle parameter for the stress command
+        """
+        rate = throttle_step_dict.get("rate", "unthrottled")
+        if rate == "unthrottled":
             return ""
 
-        throttle_value = int(int(throttle_step) // (num_loaders * stress_num))
+        throttle_value = int(int(rate) // (num_loaders * stress_num))
         if is_latte_command(stress_cmd):
             current_throttle = f"--rate={throttle_value}"
         elif stress_cmd.startswith("scylla-bench"):
@@ -417,7 +464,14 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
         if workload.cs_cmd_warm_up is not None:
             # Use the maximum thread count for warmup to ensure the cache is warmed up with the highest level of concurrency
-            self.warmup_cache(workload.cs_cmd_warm_up, max(workload.num_threads))
+            # Build warmup params dict
+            max_threads = max(workload.num_threads)
+            warmup_params = {"threads": max_threads}
+            # If any throttle step has concurrency, use max for warmup
+            concurrency_values = [step.get("concurrency") for step in workload.throttle_steps if "concurrency" in step]
+            if concurrency_values:
+                warmup_params["concurrency"] = max(concurrency_values)
+            self.warmup_cache(workload.cs_cmd_warm_up, warmup_params)
             # Wait for 4 minutes after warmup to let for all background processes to finish
             time.sleep(240)
 
@@ -427,15 +481,27 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         total_summary = {}
 
         sequential_steps = self.get_sequential_throttle_steps(workload)
-        for throttle_step, num_threads, current_throttle_step in zip(
+        for throttle_step_dict, num_threads, current_throttle_step in zip(
             workload.throttle_steps, workload.num_threads, sequential_steps
         ):
             self.prepare_schema(workload=workload)
 
+            # Build step_params dict from throttle_step_dict and num_threads
+            step_params = dict(throttle_step_dict)  # Copy the dict
+
+            # Add threads from num_threads if not already in step dict
+            if "threads" not in step_params:
+                step_params["threads"] = num_threads
+
+            # Generate throttle parameter from rate
+            step_params["throttle"] = self.current_throttle(
+                throttle_step_dict, num_loaders, stress_num, workload.cs_cmd_tmpl[0]
+            )
+
             self.log.info(
                 "Run cs command with rate: %s Kops; threads: %s; step name: %s",
-                throttle_step,
-                num_threads,
+                throttle_step_dict.get("rate", "unthrottled"),
+                step_params["threads"],
                 current_throttle_step,
             )
             run_step = (
@@ -445,8 +511,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             )(self.run_step)
             results, _ = run_step(
                 stress_cmds=workload.cs_cmd_tmpl,
-                current_throttle=self.current_throttle(throttle_step, num_loaders, stress_num, workload.cs_cmd_tmpl[0]),
-                num_threads=num_threads,
+                step_params=step_params,
                 step_duration=workload.step_duration,
             )
             self.log.debug("All c-s commands results collected and saved in Argus")
@@ -535,11 +600,25 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
         return status
 
-    def warmup_cache(self, stress_cmd_templ, num_threads):
+    def warmup_cache(self, stress_cmd_templ, params_dict):
+        """
+        Warm up cache with stress commands.
+
+        Args:
+            stress_cmd_templ: List of stress command templates
+            params_dict: Dict with parameters (threads, concurrency, etc.)
+        """
         stress_queue = []
         for stress_cmd in stress_cmd_templ:
             params = {"round_robin": True, "stats_aggregate_cmds": False}
-            stress_cmd_to_run = stress_cmd.replace("$threads", str(num_threads))
+            stress_cmd_to_run = stress_cmd
+
+            # Replace placeholders from params_dict
+            if "threads" in params_dict:
+                stress_cmd_to_run = stress_cmd_to_run.replace("$threads", str(params_dict["threads"]))
+            if "concurrency" in params_dict:
+                stress_cmd_to_run = stress_cmd_to_run.replace("$concurrency", str(params_dict["concurrency"]))
+
             params.update({"stress_cmd": stress_cmd_to_run})
             # Run all stress commands
             self.log.debug("RUNNING warm up stress cmd: %s", stress_cmd_to_run)

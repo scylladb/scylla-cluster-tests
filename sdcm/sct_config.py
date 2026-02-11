@@ -1864,7 +1864,12 @@ class SCTConfiguration(dict):
             name="perf_gradual_throttle_steps",
             env="SCT_PERF_GRADUAL_THROTTLE_STEPS",
             type=dict_or_str,
-            help="Used for gradual performance test. Define throttle for load step in ops. Example: {'read': ['100000', '150000'], 'mixed': ['300']}",
+            help="Used for gradual performance test. Define throttle for load step in ops. "
+            "Supports three formats: "
+            "1) String/int list (cassandra-stress): {'read': ['100000', '150000'], 'mixed': [100, 200]} "
+            "2) Dict list (latte/multi-param): {'read': [{'threads': 10, 'concurrency': 128, 'rate': '100000'}, ...]} "
+            "Dict format allows specifying threads, concurrency, and rate per step. "
+            "Integers are automatically converted to strings for backward compatibility.",
         ),
         dict(
             name="perf_gradual_step_duration",
@@ -3479,42 +3484,6 @@ class SCTConfiguration(dict):
                     "Config of zero token nodes is not equal config of data nodes for multi dc"
                 )
 
-        # 21 validate performance throughput parameters
-        if performance_throughput_params := self.get("perf_gradual_throttle_steps"):
-            for workload, params in performance_throughput_params.items():
-                if not isinstance(params, list):
-                    raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
-
-                if not (gradual_threads := self.get("perf_gradual_threads")):
-                    raise ValueError("perf_gradual_threads should be defined for performance throughput test")
-
-                if workload not in gradual_threads:
-                    raise ValueError(
-                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter"
-                    )
-
-                if not isinstance(gradual_threads[workload], list | int):
-                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
-
-                if isinstance(gradual_threads[workload], int):
-                    gradual_threads[workload] = [gradual_threads[workload]]
-
-                for thread_count in gradual_threads[workload]:
-                    if not isinstance(thread_count, int):
-                        raise ValueError(
-                            f"Invalid thread count type for '{workload}': {thread_count} "
-                            f"(type: {type(thread_count).__name__})"
-                        )
-
-                # The value of perf_gradual_threads[load] must be either:
-                #   - a single-element list (applied to all throttle steps) or integer
-                #   - a list with the same length as perf_gradual_throttle_steps[workload] (one thread count per step).
-                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
-                    raise ValueError(
-                        f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
-                        f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
-                    )
-
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
             self.log.debug("Using random cassandra-stress driver version: %s", self["c_s_driver_version"])
@@ -3823,6 +3792,105 @@ class SCTConfiguration(dict):
 
         if backtrace_decoding_disable_regex := self.get("backtrace_decoding_disable_regex"):
             re.compile(backtrace_decoding_disable_regex)
+
+        self._validate_perf_gradual_throttle_steps()
+
+    def _validate_perf_gradual_throttle_steps(self):
+        """Validate perf_gradual_throttle_steps configuration parameter."""
+        if not (performance_throughput_params := self.get("perf_gradual_throttle_steps")):
+            return
+
+        for workload, params in performance_throughput_params.items():
+            if not isinstance(params, list):
+                raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
+
+            # Validate each step - can be string, int (backward compatible), or dict (new format)
+            # Convert integers to strings for backward compatibility
+            for step_idx, step in enumerate(params):
+                if isinstance(step, int):
+                    # Integer format - convert to string for backward compatibility
+                    params[step_idx] = str(step)
+                elif isinstance(step, str):
+                    # String format for backward compatibility (cassandra-stress)
+                    continue
+                elif isinstance(step, dict):
+                    # Dict format for latte and other multi-parameter tools
+                    if not step:
+                        raise ValueError(
+                            f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                            f"dict must have at least one key (threads, concurrency, or rate)"
+                        )
+
+                    # Validate threads if present
+                    if "threads" in step:
+                        if not isinstance(step["threads"], int) or step["threads"] <= 0:
+                            raise ValueError(
+                                f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                                f"'threads' must be a positive integer, got {step['threads']}"
+                            )
+
+                    # Validate concurrency if present
+                    if "concurrency" in step:
+                        if not isinstance(step["concurrency"], int) or step["concurrency"] <= 0:
+                            raise ValueError(
+                                f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                                f"'concurrency' must be a positive integer, got {step['concurrency']}"
+                            )
+
+                    # Validate rate if present
+                    if "rate" in step:
+                        if not isinstance(step["rate"], str):
+                            raise ValueError(
+                                f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                                f"'rate' must be a string, got {type(step['rate']).__name__}"
+                            )
+                else:
+                    raise ValueError(
+                        f"perf_gradual_throttle_steps for {workload} step {step_idx}: "
+                        f"each step must be a string, int, or dict, got {type(step).__name__}"
+                    )
+
+            # Validate perf_gradual_threads if using string format or if dict steps don't have threads
+            # This maintains backward compatibility and allows fallback for dict steps without threads
+            has_dict_steps = any(isinstance(step, dict) for step in params)
+            all_dict_steps_have_threads = all(
+                isinstance(step, dict) and "threads" in step for step in params if isinstance(step, dict)
+            )
+
+            # Only require perf_gradual_threads if using string format or dict without threads
+            if not has_dict_steps or not all_dict_steps_have_threads:
+                if not (gradual_threads := self.get("perf_gradual_threads")):
+                    raise ValueError(
+                        "perf_gradual_threads should be defined when using string format "
+                        "or when dict steps don't specify threads"
+                    )
+
+                if workload not in gradual_threads:
+                    raise ValueError(
+                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter"
+                    )
+
+                if not isinstance(gradual_threads[workload], list | int):
+                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
+
+                if isinstance(gradual_threads[workload], int):
+                    gradual_threads[workload] = [gradual_threads[workload]]
+
+                for thread_count in gradual_threads[workload]:
+                    if not isinstance(thread_count, int):
+                        raise ValueError(
+                            f"Invalid thread count type for '{workload}': {thread_count} "
+                            f"(type: {type(thread_count).__name__})"
+                        )
+
+                # The value of perf_gradual_threads[load] must be either:
+                #   - a single-element list (applied to all throttle steps) or integer
+                #   - a list with the same length as perf_gradual_throttle_steps[workload] (one thread count per step).
+                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
+                    raise ValueError(
+                        f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
+                        f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
+                    )
 
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get("docker_image")
