@@ -1636,7 +1636,7 @@ class SCTConfiguration(dict):
             env="SCT_CLUSTER_HEALTH_CHECK_PARALLEL_WORKERS",
             type=int,
             help="""Number of parallel workers for health checks (Phase 2 optimization).
-                    Default: 5, max recommended: 10.
+                    Default: 5, maximum: 10 (enforced).
                     Higher values provide faster health checks but may increase cluster load.
                     Expected impact: 5 workers = ~80% time reduction, 10 workers = ~90% time reduction.
                     """,

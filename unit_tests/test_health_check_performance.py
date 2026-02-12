@@ -24,7 +24,7 @@ from unittest.mock import MagicMock
 import pytest
 
 
-# ruff: noqa: BLE001
+# ruff: noqa: BLE001, PLW0108
 
 
 class TestHealthCheckPerformance:

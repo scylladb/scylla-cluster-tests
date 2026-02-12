@@ -165,12 +165,16 @@ class TestParallelHealthCheckExecution:
     def test_parallel_execution_timing_improvement(self, mock_cluster, mock_nodes):
         """Test that parallel execution is faster than sequential for multiple nodes."""
         
+        def delayed_check():
+            """Simulated health check with 0.1s delay."""
+            time.sleep(0.1)
+        
         # Create nodes with simulated delay
         delay_nodes = []
         for i in range(10):
             node = MagicMock()
             node.name = f"node-{i}"
-            node.check_node_health = MagicMock(side_effect=lambda: time.sleep(0.1))
+            node.check_node_health = MagicMock(side_effect=delayed_check)
             delay_nodes.append(node)
         
         # Sequential execution
@@ -181,7 +185,7 @@ class TestParallelHealthCheckExecution:
         
         # Reset mocks
         for node in delay_nodes:
-            node.check_node_health = MagicMock(side_effect=lambda: time.sleep(0.1))
+            node.check_node_health = MagicMock(side_effect=delayed_check)
         
         # Parallel execution with 5 workers
         start = time.time()
