@@ -5219,8 +5219,52 @@ class BaseScyllaCluster:
             if self.nemesis_count == 1:
                 node_for_timeout = next((n for n in self.nodes if not n.running_nemesis), self.nodes[0])
                 with adaptive_timeout(Operations.HEALTHCHECK, node=node_for_timeout, timeout=len(self.nodes) * 30):
-                    for node in self.nodes:
-                        node.check_node_health()
+                    # Parallel health check execution
+                    parallel_workers = self.params.get("cluster_health_check_parallel_workers")
+                    # Limit parallel workers to prevent overwhelming Scylla APIs and connection pools.
+                    # Max 10 workers balances speed gains with cluster stability:
+                    # - Higher parallelism risks API rate limiting and connection exhaustion
+                    # - Testing shows diminishing returns beyond 10 workers (~90% reduction already achieved)
+                    # - Keeps connection count manageable (10 workers * N API calls per node)
+                    parallel_workers = max(1, min(parallel_workers, 10))
+
+                    if parallel_workers == 1 or len(self.nodes) == 1:
+                        # Sequential execution for single worker or single node
+                        for node in self.nodes:
+                            node.check_node_health()
+                    else:
+                        # Parallel execution
+                        self.log.debug(
+                            "Running health checks on %d nodes with %d parallel workers",
+                            len(self.nodes),
+                            parallel_workers,
+                        )
+                        failed_nodes = []
+                        with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
+                            futures = {executor.submit(node.check_node_health): node for node in self.nodes}
+                            for future in as_completed(futures):
+                                node = futures[future]
+                                try:
+                                    future.result()
+                                except Exception as exc:  # noqa: BLE001
+                                    failed_nodes.append((node, exc))
+                                    # Log and publish error event for visibility in Argus
+                                    self.log.error(
+                                        "Health check for node %s generated an exception: %s",
+                                        node.name,
+                                        exc,
+                                    )
+                                    ClusterHealthValidatorEvent.NodeStatus(
+                                        node=node,
+                                        error=f"Health check failed with exception: {exc}",
+                                        severity=Severity.ERROR,
+                                    ).publish()
+                        # Re-raise after all nodes checked so failures are not silently swallowed
+                        if failed_nodes:
+                            names = ", ".join(n.name for n, _ in failed_nodes)
+                            raise failed_nodes[0][1].__class__(
+                                f"Health check failed on {len(failed_nodes)} node(s): {names}"
+                            ) from failed_nodes[0][1]
             else:
                 chc_event.message = "Test runs with parallel nemesis. Nodes health checks are disabled."
                 return

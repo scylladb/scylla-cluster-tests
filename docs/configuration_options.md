@@ -2743,6 +2743,15 @@ Enable or disable starting cluster health checker for all nodes
 **type:** bool
 
 
+## **cluster_health_check_parallel_workers** / SCT_CLUSTER_HEALTH_CHECK_PARALLEL_WORKERS
+
+Number of parallel workers for health checks.<br>Default: 5, maximum: 10 (enforced).<br>Higher values provide faster health checks but may increase cluster load.<br>Expected impact: 5 workers = ~80% time reduction, 10 workers = ~90% time reduction.<br>See docs/plans/health-check-optimization.md for details.
+
+**default:** 5
+
+**type:** int
+
+
 ## **data_validation** / SCT_DATA_VALIDATION
 
 Specify the type of data validation to perform
