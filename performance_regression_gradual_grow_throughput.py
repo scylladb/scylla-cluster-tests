@@ -126,7 +126,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         if has_threads_in_steps:
             # At least some steps have threads defined
             # For steps without threads, use perf_gradual_threads as fallback
-            fallback_threads = self.params.get("perf_gradual_threads", {}).get(workload_type)
+            perf_gradual_threads = self.params.get("perf_gradual_threads")
+            fallback_threads = perf_gradual_threads[workload_type] if perf_gradual_threads else None
             
             return [
                 thread_count if thread_count is not None else fallback_threads
