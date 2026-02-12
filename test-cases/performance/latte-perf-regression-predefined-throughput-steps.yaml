@@ -1,0 +1,239 @@
+test_duration: 500
+
+# Define the commands to be used in the write-load test. The purpose of this command is to prepare the schema.
+prepare_stress_cmd: >-
+  latte schema
+  -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+  data_dir/latte/latte_cs_alike.rn
+
+# Prepare write commands: populate the database with initial data
+# Using 4 loaders, each writing ~162.5M rows (650M total)
+# CL=ALL for consistency during preparation, lower rate to avoid overload
+prepare_write_cmd:
+  - >-
+    latte run --function write --consistency ALL --duration 162500001
+    --threads 50 --concurrency 15 --rate 93750
+    --start-cycle 1 --end-cycle 162500001
+    -P row_count=650000004 -P offset=0
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency ALL --duration 162500001
+    --threads 50 --concurrency 15 --rate 93750
+    --start-cycle 162500002 --end-cycle 325000002
+    -P row_count=650000004 -P offset=162500001
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency ALL --duration 162500001
+    --threads 50 --concurrency 15 --rate 93750
+    --start-cycle 325000003 --end-cycle 487500003
+    -P row_count=650000004 -P offset=325000002
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency ALL --duration 162500001
+    --threads 50 --concurrency 15 --rate 93750
+    --start-cycle 487500004 --end-cycle 650000004
+    -P row_count=650000004 -P offset=487500003
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+
+# Write workload stress commands (CL=QUORUM, ~402M rows per loader, 1.6B total)
+stress_cmd_w:
+  - >-
+    latte run --function write --consistency QUORUM --duration 402653184
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 1 --end-cycle 402653184
+    -P row_count=1610612736 -P offset=0
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency QUORUM --duration 402653184
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 402653185 --end-cycle 805306368
+    -P row_count=1610612736 -P offset=402653184
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency QUORUM --duration 402653184
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 805306369 --end-cycle 1207959552
+    -P row_count=1610612736 -P offset=805306368
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --consistency QUORUM --duration 402653184
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 1207959553 --end-cycle 1610612736
+    -P row_count=1610612736 -P offset=1207959552
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+
+# Read workload stress commands (CL=QUORUM, working set: 5M rows per loader, 20M total)
+stress_cmd_r:
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 1 --end-cycle 5000000
+    -P row_count=20000000 -P offset=0
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 5000001 --end-cycle 10000000
+    -P row_count=20000000 -P offset=5000000
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 10000001 --end-cycle 15000000
+    -P row_count=20000000 -P offset=10000000
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 15000001 --end-cycle 20000000
+    -P row_count=20000000 -P offset=15000000
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+
+# Cache warmup commands (CL=ALL, read working set to load into cache)
+stress_cmd_cache_warmup:
+  - >-
+    latte run --function read --consistency ALL --duration 5000000
+    --threads $threads --concurrency $concurrency
+    --start-cycle 1 --end-cycle 5000000
+    -P row_count=20000000 -P offset=0
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency ALL --duration 5000000
+    --threads $threads --concurrency $concurrency
+    --start-cycle 5000001 --end-cycle 10000000
+    -P row_count=20000000 -P offset=5000000
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency ALL --duration 5000000
+    --threads $threads --concurrency $concurrency
+    --start-cycle 10000001 --end-cycle 15000000
+    -P row_count=20000000 -P offset=10000000
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency ALL --duration 5000000
+    --threads $threads --concurrency $concurrency
+    --start-cycle 15000001 --end-cycle 20000000
+    -P row_count=20000000 -P offset=15000000
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+
+# Mixed workload stress commands (CL=QUORUM, read/write mix on working set)
+stress_cmd_m:
+  - >-
+    latte run --function write:1,read:1 --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 1 --end-cycle 5000000
+    -P row_count=20000000 -P offset=0
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write:1,read:1 --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 5000001 --end-cycle 10000000
+    -P row_count=20000000 -P offset=5000000
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write:1,read:1 --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 10000001 --end-cycle 15000000
+    -P row_count=20000000 -P offset=10000000
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write:1,read:1 --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 15000001 --end-cycle 20000000
+    -P row_count=20000000 -P offset=15000000
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+
+# Read the entire data set to ensure disk only reads (650M rows total across 4 loaders)
+stress_cmd_read_disk:
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 1 --end-cycle 162500001
+    -P row_count=650000004 -P offset=0
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 162500002 --end-cycle 325000002
+    -P row_count=650000004 -P offset=162500001
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 325000003 --end-cycle 487500003
+    -P row_count=650000004 -P offset=325000002
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 487500004 --end-cycle 650000004
+    -P row_count=650000004 -P offset=487500003
+    -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
+    data_dir/latte/latte_cs_alike.rn
+
+# Latte schema parameters from latte_cs_alike.rn runescript
+# These match the parameters defined in the runescript
+latte_schema_parameters:
+  keyspace: 'keyspace1'
+  table: 'standard1'
+  replication_factor: 3
+  column_count: 1
+  column_size: 1024
+  speculative_retry: 'NONE'
+
+round_robin: true
+
+n_db_nodes: 3
+n_loaders: 4
+
+instance_type_db: 'i8g.4xlarge'
+instance_type_loader: 'c7i.8xlarge'
+instance_type_monitor: 't3.small'
+use_capacity_reservation: true
+nemesis_add_node_cnt: 0
+
+use_preinstalled_scylla: true
+
+user_prefix: 'latte-perf-regression-predefined-steps'
+
+backtrace_decoding: true
+backtrace_stall_decoding: false
+
+store_perf_results: false
+use_mgmt: false
+email_recipients: ['']
+
+custom_es_index: 'performancestatsv2'
+use_hdrhistogram: true
+
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+append_scylla_yaml:
+  auto_snapshot: false
+
+use_placement_group: true
+use_prepared_loaders: false
+
+adaptive_timeout_store_metrics: false
