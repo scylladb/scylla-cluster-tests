@@ -76,8 +76,14 @@ def test_add_sisyphus_with_filter_in_parallel_nemesis_run(tmp_path):
     tester._init_params()
     tester.db_cluster = Cluster(nodes=[Node(), Node()])
     tester.db_cluster.params = tester.params
-    tester.params["nemesis_class_name"] = "SisyphusMonkey:1 SisyphusMonkey:2"
-    tester.params["nemesis_selector"] = ["flag_common", "flag_common and not flag_c", "flag_c"]
+    tester.params["nemesis_class_name"] = "SisyphusMonkey:1 SisyphusMonkey:4"
+    tester.params["nemesis_selector"] = [
+        "flag_common",
+        "flag_common and not flag_c",
+        "flag_c",
+        "CustomNemesisC",
+        "CustomNemesisA or CustomNemesisC",
+    ]
     tester.params["nemesis_exclude_disabled"] = True
     tester.params["nemesis_multiply_factor"] = 1
 
@@ -85,7 +91,13 @@ def test_add_sisyphus_with_filter_in_parallel_nemesis_run(tmp_path):
 
     nemesises = tester.get_nemesis_class()
 
-    expected_selectors = ["flag_common", "flag_common and not flag_c", "flag_c"]
+    expected_selectors = [
+        "flag_common",
+        "flag_common and not flag_c",
+        "flag_c",
+        "CustomNemesisC",
+        "CustomNemesisA or CustomNemesisC",
+    ]
     for i, nemesis_settings in enumerate(nemesises):
         assert nemesis_settings["nemesis"] == SisyphusMonkey, (
             f"Wrong instance of nemesis class {nemesis_settings['nemesis']} expected SisyphusMonkey"
@@ -103,6 +115,8 @@ def test_add_sisyphus_with_filter_in_parallel_nemesis_run(tmp_path):
         {"CustomNemesisA", "CustomNemesisAD", "CustomNemesisC"},
         {"CustomNemesisA", "CustomNemesisAD"},
         {"CustomNemesisC"},
+        {"CustomNemesisC"},
+        {"CustomNemesisA", "CustomNemesisC"},
     ]
     for i, nem in enumerate(active_nemesis):
         assert {disrupt.__class__.__name__ for disrupt in nem.disruptions_list} == expected_methods[i]
