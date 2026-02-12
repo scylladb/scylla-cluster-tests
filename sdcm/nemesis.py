@@ -4003,16 +4003,17 @@ class Nemesis(NemesisFlags):
     def _disrupt_network_block_k8s(self, list_of_timeout_options):
         duration = f"{random.choice(list_of_timeout_options)}s"
         experiment = NetworkPacketLossExperiment(self.target_node, duration, probability=100)
-        with DbNodeLogger(
-            self.cluster.nodes,
-            "block network traffic",
-            target_node=self.target_node,
-            additional_info=f"for {duration}sec",
-        ):
-            experiment.start()
-        experiment.wait_until_finished()
-        time.sleep(15)
-        self.cluster.wait_all_nodes_un()
+        with ignore_raft_topology_cmd_failing():
+            with DbNodeLogger(
+                self.cluster.nodes,
+                "block network traffic",
+                target_node=self.target_node,
+                additional_info=f"for {duration}sec",
+            ):
+                experiment.start()
+            experiment.wait_until_finished()
+            time.sleep(15)
+            self.cluster.wait_all_nodes_un()
 
     @target_all_nodes
     def disrupt_network_block(self):
@@ -4042,7 +4043,7 @@ class Nemesis(NemesisFlags):
         wait_time = random.choice(list_of_timeout_options)
         self.log.debug("BlockNetwork: [%s] for %dsec", selected_option, wait_time)
         self.actions_log.info(f"Network block start on {self.target_node.name} node, wait_time: {wait_time}")
-        with context_manager:
+        with context_manager, ignore_raft_topology_cmd_failing():
             self.target_node.traffic_control(None)
             try:
                 with DbNodeLogger(
