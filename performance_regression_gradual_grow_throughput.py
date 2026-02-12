@@ -56,7 +56,18 @@ class Workload:
         self.throttle_steps = normalized_steps
 
 
-def is_latte_command(stress_cmd: str) -> bool:
+def is_latte_command(stress_cmd: Union[str, list]) -> bool:
+    """Check if stress command(s) use latte tool.
+    
+    Args:
+        stress_cmd: Single command string or list of command strings
+        
+    Returns:
+        True if any command contains 'latte ' and ' run ', False otherwise
+    """
+    if isinstance(stress_cmd, list):
+        # Check if any command in the list is a latte command
+        return any("latte " in cmd and " run " in cmd for cmd in stress_cmd if isinstance(cmd, str))
     return "latte " in stress_cmd and " run " in stress_cmd
 
 
@@ -84,6 +95,47 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 severity=Severity.CRITICAL,
             ).publish()
         return throttle_steps[workload_type]
+
+    def get_num_threads_for_workload(self, workload_type):
+        """
+        Get num_threads for a workload type.
+        
+        First tries to extract threads from perf_gradual_throttle_steps dict entries.
+        Falls back to perf_gradual_threads if throttle steps contain only rate values.
+        
+        Args:
+            workload_type: The workload type (read, write, mixed, etc.)
+            
+        Returns:
+            List of thread counts or single thread count
+        """
+        throttle_steps = self.throttle_steps(workload_type)
+        
+        # Check if any throttle step has threads defined (dict format)
+        threads_from_steps = []
+        has_threads_in_steps = False
+        
+        for step in throttle_steps:
+            if isinstance(step, dict) and "threads" in step:
+                threads_from_steps.append(step["threads"])
+                has_threads_in_steps = True
+            else:
+                # Step is string/int (rate only) - will need fallback
+                threads_from_steps.append(None)
+        
+        if has_threads_in_steps:
+            # At least some steps have threads defined
+            # For steps without threads, use perf_gradual_threads as fallback
+            perf_gradual_threads = self.params.get("perf_gradual_threads")
+            fallback_threads = perf_gradual_threads[workload_type] if perf_gradual_threads else None
+            
+            return [
+                thread_count if thread_count is not None else fallback_threads
+                for thread_count in threads_from_steps
+            ]
+        else:
+            # No steps have threads - use perf_gradual_threads parameter
+            return self.params["perf_gradual_threads"][workload_type]
 
     def step_duration(self, workload_type):
         step_duration = self.params["perf_gradual_step_duration"]
@@ -132,7 +184,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_m"),
             cs_cmd_warm_up=self.params.get("stress_cmd_cache_warmup"),
-            num_threads=self.params["perf_gradual_threads"][workload_type],
+            num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
             preload_data=True,
             drop_keyspace=False,
@@ -157,7 +209,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_w"),
             cs_cmd_warm_up=None,
-            num_threads=self.params["perf_gradual_threads"][workload_type],
+            num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
             preload_data=False,
             drop_keyspace=True,
@@ -182,7 +234,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_r"),
             cs_cmd_warm_up=self.params.get("stress_cmd_cache_warmup"),
-            num_threads=self.params["perf_gradual_threads"][workload_type],
+            num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
             preload_data=True,
             drop_keyspace=False,
@@ -207,7 +259,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_read_disk"),
             cs_cmd_warm_up=None,
-            num_threads=self.params["perf_gradual_threads"][workload_type],
+            num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
             preload_data=True,
             drop_keyspace=False,
