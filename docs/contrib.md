@@ -30,7 +30,8 @@ git config blame.ignoreRevsFile .git-blame-ignore-revs
 ```
 
 For PRs with formatting changes, add the `Formatting` label to your PR. This will trigger the automation that:
-- Extracts all commit SHAs from your PR
+- Extracts all format commit SHAs from your PR
+   - It only affects commits starting with `format`, e.g. `format: Add lint rules`
 - Adds them to `.git-blame-ignore-revs` with descriptive comments
 - Automatically commits and pushes the changes to your PR branch
 
