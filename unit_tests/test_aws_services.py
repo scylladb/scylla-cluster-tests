@@ -19,6 +19,7 @@ from sdcm.utils.common import get_scylla_ami_versions
 from sdcm.ec2_client import EC2ClientWrapper
 from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.utils.context_managers import environment
+from sdcm.utils.version_utils import parse_scylla_version_tag
 
 AWS_REGION = "us-east-1"
 
@@ -136,6 +137,46 @@ def test_04_get_scylla_ami_versions() -> None:
         "ami-760aaa0f",
         "ami-04c1efb7a7322d71e",
     }
+
+
+@pytest.mark.integration
+def test_04b_get_scylla_ami_versions_full_tag() -> None:
+    """Integration test that searches AWS AMIs by full version tag.
+
+    This test verifies that when a full version tag is used (e.g.,
+    2024.2.5-0.20250221.cb9e2a54ae6d-1), it can successfully find AMIs
+    with that exact scylla_version tag in AWS.
+
+    This test uses the mocked AWS infrastructure provided by moto,
+    which loads AMI data from mocked_ami_data.json.
+    """
+
+    # Full version tag that exists in mocked_ami_data.json
+    full_version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+
+    # Parse the tag to verify it's valid
+    tag = parse_scylla_version_tag(full_version_tag)
+    assert tag.full_tag == full_version_tag, "Full tag should be preserved"
+
+    # Search for AMIs with this full version tag
+    # This calls the mocked AWS API using the moto server
+    amis = get_scylla_ami_versions(region_name=AWS_REGION, version=full_version_tag)
+
+    # Verify we found at least one AMI
+    assert len(amis) > 0, f"Should find at least one AMI with version tag {full_version_tag}"
+
+    # Verify the AMI has the correct scylla_version tag
+    for ami in amis:
+        ami_tags = {tag_item["Key"]: tag_item["Value"] for tag_item in ami.tags}
+        scylla_version = ami_tags.get("scylla_version")
+        assert scylla_version == full_version_tag, (
+            f"AMI {ami.id} should have scylla_version tag matching {full_version_tag}, but got {scylla_version}"
+        )
+
+    # Verify the tag contains the expected components
+    assert tag.base_version in tag.full_tag
+    assert tag.date in tag.full_tag
+    assert tag.commit_id in tag.full_tag
 
 
 def test_05_ec2_client_spot(aws_region: AwsRegion) -> None:

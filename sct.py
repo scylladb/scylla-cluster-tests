@@ -28,7 +28,7 @@ import pprint
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial, reduce
-from typing import List
+from typing import List, Literal
 from uuid import UUID
 
 import pytest
@@ -130,7 +130,7 @@ from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
 from sdcm.utils.es_index import create_index, get_mapping
-from sdcm.utils.version_utils import get_s3_scylla_repos_mapping
+from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
@@ -820,8 +820,25 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
     show_default=True,
     help="architecture of the AMI",
 )
+<<<<<<< HEAD
+||||||| parent of bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
+@click.option("-o", "--output-format", type=str, default="table", help="")
+=======
+@click.option("-o", "--output-format", type=click.Choice(["table", "json"]), default="table", help="")
+>>>>>>> bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
 def list_images(  # noqa: PLR0912, PLR0914
+<<<<<<< HEAD
     cloud_provider: str, branch: str, version: str, regions: List[str], arch: str
+||||||| parent of bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
+    cloud_provider: str, branch: str, version: str, regions: List[str], arch: str, output_format: str = "table"
+=======
+    cloud_provider: str,
+    branch: str,
+    version: str,
+    regions: List[str],
+    arch: str,
+    output_format: Literal["table", "json"] = "table",
+>>>>>>> bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
 ):
     if len(regions) == 0:
         regions = [NemesisJobGenerator.BACKEND_TO_REGION[cloud_provider]]
@@ -830,13 +847,21 @@ def list_images(  # noqa: PLR0912, PLR0914
     # Convert arch string to VmArch enum using built-in enum value constructor
     arch_enum = VmArch(arch)
 
-    version_fields = ["Backend", "Name", "ImageId", "CreationDate"]
-    version_fields_with_tag_name = version_fields + ["NameTag"]
-    #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
-    branch_specific_fields = ["BuildId", "Arch", "ScyllaVersion"]
-    account_field = ["OwnerId"]
-    branch_fields = version_fields + branch_specific_fields
-    branch_fields_with_tag_name = version_fields_with_tag_name + branch_specific_fields + account_field
+    version_fields = ["Backend", "Name", "ImageId", "CreationDate", "ScyllaVersion"]
+    version_fields_aws = ["Backend", "Name", "ImageId", "CreationDate", "NameTag", "ScyllaVersion"]
+
+    branch_fields = ["Backend", "Name", "ImageId", "CreationDate", "BuildId", "Arch", "ScyllaVersion"]
+    branch_fields_aws = [
+        "Backend",
+        "Name",
+        "ImageId",
+        "CreationDate",
+        "NameTag",
+        "BuildId",
+        "Arch",
+        "ScyllaVersion",
+        "OwnerId",
+    ]
     if version and branch:
         click.echo("Use --version or --branch, not both.")
         return
@@ -847,12 +872,46 @@ def list_images(  # noqa: PLR0912, PLR0914
         if version is not None:
             match cloud_provider:
                 case "aws":
+<<<<<<< HEAD
                     rows = get_ami_images_versioned(region_name=region, arch=arch, version=version)
                     click.echo(
                         create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
                             title=f"AWS Machine Images by Version in region {region}"
+||||||| parent of 8e2944310 (feature(version-utils): implement scylla version lookup functionality)
+                    rows = get_ami_images_versioned(region_name=region, arch=arch_enum, version=version)
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
+                                title=f"AWS Machine Images by Version in region {region}"
+                            )
+=======
+                    rows = get_ami_images_versioned(region_name=region, arch=arch_enum, version=version)
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=rows, field_names=version_fields_aws).get_string(
+                                title=f"AWS Machine Images by Version in region {region}"
+                            )
+>>>>>>> 8e2944310 (feature(version-utils): implement scylla version lookup functionality)
                         )
+<<<<<<< HEAD
+<<<<<<< HEAD
                     )
+||||||| parent of 8e2944310 (feature(version-utils): implement scylla version lookup functionality)
+                    elif output_format == "text":
+                        ami_images_json = images_dict_in_json_format(
+                            rows=rows, field_names=version_fields_with_tag_name
+                        )
+                        click.echo(ami_images_json)
+=======
+                    elif output_format == "text":
+||||||| parent of bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
+                    elif output_format == "text":
+=======
+                    elif output_format == "json":
+>>>>>>> bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
+                        ami_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields_aws)
+                        click.echo(ami_images_json)
+>>>>>>> 8e2944310 (feature(version-utils): implement scylla version lookup functionality)
                 case "gce":
                     rows = get_gce_images_versioned(version=version)
 
@@ -862,6 +921,7 @@ def list_images(  # noqa: PLR0912, PLR0914
                         )
                     )
                 case "azure":
+<<<<<<< HEAD
                     azure_images = azure_utils.get_released_scylla_images(
                         scylla_version=version, region_name=region, arch=arch_enum
                     )
@@ -871,8 +931,86 @@ def list_images(  # noqa: PLR0912, PLR0914
                     click.echo(
                         create_pretty_table(rows=rows, field_names=version_fields).get_string(
                             title="Azure Machine Images by version"
-                        )
+||||||| parent of 13d934745 (feature(azure): implement Phase 4 - Azure full version tag support)
+                    azure_images = azure_utils.get_released_scylla_images(
+                        scylla_version=version, region_name=region, arch=arch_enum
                     )
+                    rows = []
+                    for image in azure_images:
+                        rows.append(["Azure", image.name, image.unique_id, "N/A"])
+
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="Azure Machine Images by version"
+                            )
+<<<<<<< HEAD
+=======
+||||||| parent of bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
+                        )
+                    elif output_format == "text":
+                        gce_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
+                        click.echo(gce_images_json)
+                case "azure":
+=======
+                        )
+                    elif output_format == "json":
+                        gce_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
+                        click.echo(gce_images_json)
+                case "azure":
+>>>>>>> bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
+                    # Check if this is a full version tag (e.g., "2026.1.0~dev-0.20260124.edda66886e94")
+                    if parse_scylla_version_tag(version):
+                        # Full version tag: use get_scylla_images for exact matching in private galleries
+                        azure_images = azure_utils.get_scylla_images(
+                            scylla_version=version, region_name=region, arch=arch_enum
+                        )
+                        rows = []
+                        for image in azure_images:
+                            rows.append(
+                                [
+                                    "Azure",
+                                    image.name,
+                                    image.id,
+                                    "N/A",
+                                    image.tags.get("scylla_version", "N/A"),
+                                ]
+                            )
+                    else:
+                        # Simple version: use get_released_scylla_images for community gallery
+                        azure_images = azure_utils.get_released_scylla_images(
+                            scylla_version=version, region_name=region, arch=arch_enum
+                        )
+                        rows = []
+                        for image in azure_images:
+                            rows.append(
+                                [
+                                    "Azure",
+                                    image.name,
+                                    image.unique_id,
+                                    "N/A",
+                                    image.artifact_tags.get("scylla_version", "N/A"),
+                                ]
+                            )
+
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="Azure Machine Images by version"
+                            )
+>>>>>>> 13d934745 (feature(azure): implement Phase 4 - Azure full version tag support)
+                        )
+<<<<<<< HEAD
+                    )
+||||||| parent of bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
+                    elif output_format == "text":
+                        azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
+                        click.echo(azure_images_json)
+=======
+                    elif output_format == "json":
+                        azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
+                        click.echo(azure_images_json)
+>>>>>>> bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
 
                 case _:
                     click.echo(f"Cloud provider {cloud_provider} is not supported")
@@ -883,32 +1021,104 @@ def list_images(  # noqa: PLR0912, PLR0914
 
             match cloud_provider:
                 case "aws":
+<<<<<<< HEAD
                     ami_images = get_ami_images(branch=branch, region=region, arch=arch)
                     click.echo(
                         create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
                             title=f"AMI Machine Images for {branch} in region {region}"
+||||||| parent of 8e2944310 (feature(version-utils): implement scylla version lookup functionality)
+                    ami_images = get_ami_images(branch=branch, region=region, arch=arch_enum)
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
+                                title=f"AMI Machine Images for {branch} in region {region}"
+                            )
+=======
+                    ami_images = get_ami_images(branch=branch, region=region, arch=arch_enum)
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=ami_images, field_names=branch_fields_aws).get_string(
+                                title=f"AMI Machine Images for {branch} in region {region}"
+                            )
+>>>>>>> 8e2944310 (feature(version-utils): implement scylla version lookup functionality)
                         )
+<<<<<<< HEAD
+<<<<<<< HEAD
                     )
+||||||| parent of 8e2944310 (feature(version-utils): implement scylla version lookup functionality)
+                    elif output_format == "text":
+                        ami_images_json = images_dict_in_json_format(
+                            rows=ami_images, field_names=branch_fields_with_tag_name
+                        )
+                        click.echo(ami_images_json)
+=======
+                    elif output_format == "text":
+||||||| parent of bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
+                    elif output_format == "text":
+=======
+                    elif output_format == "json":
+>>>>>>> bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
+                        ami_images_json = images_dict_in_json_format(rows=ami_images, field_names=branch_fields_aws)
+                        click.echo(ami_images_json)
+>>>>>>> 8e2944310 (feature(version-utils): implement scylla version lookup functionality)
                 case "gce":
                     gce_images = get_gce_images(branch=branch, arch=arch)
                     click.echo(
                         create_pretty_table(rows=gce_images, field_names=branch_fields).get_string(
                             title=f"GCE Machine Images for {branch}"
                         )
+<<<<<<< HEAD
                     )
+||||||| parent of bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
+                    elif output_format == "text":
+                        gce_images_json = images_dict_in_json_format(rows=gce_images, field_names=branch_fields)
+                        click.echo(gce_images_json)
+=======
+                    elif output_format == "json":
+                        gce_images_json = images_dict_in_json_format(rows=gce_images, field_names=branch_fields)
+                        click.echo(gce_images_json)
+>>>>>>> bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
                 case "azure":
                     azure_images = azure_utils.get_scylla_images(
                         scylla_version=branch, region_name=region, arch=arch_enum
                     )
                     rows = []
                     for image in azure_images:
+<<<<<<< HEAD
                         rows.append(["Azure", image.name, image.id, "N/A"])
                     click.echo(
                         create_pretty_table(rows=rows, field_names=version_fields).get_string(
                             title="Azure Machine Images by version"
+||||||| parent of 8e2944310 (feature(version-utils): implement scylla version lookup functionality)
+                        rows.append(["Azure", image.name, image.id, "N/A"])
+
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="Azure Machine Images by version"
+                            )
+=======
+                        rows.append(["Azure", image.name, image.id, "N/A", image.tags.get("scylla_version", "N/A")])
+
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="Azure Machine Images by version"
+                            )
+>>>>>>> 8e2944310 (feature(version-utils): implement scylla version lookup functionality)
                         )
+<<<<<<< HEAD
                     )
 
+||||||| parent of bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
+                    elif output_format == "text":
+                        azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
+                        click.echo(azure_images_json)
+=======
+                    elif output_format == "json":
+                        azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
+                        click.echo(azure_images_json)
+>>>>>>> bb9db255e (fix(cli): correct output format parameter from 'text' to 'json' in list-images command)
                 case _:
                     click.echo(f"Cloud provider {cloud_provider} is not supported")
 

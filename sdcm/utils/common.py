@@ -74,6 +74,7 @@ from sdcm.utils.aws_utils import (
     get_ssm_ami,
     get_by_owner_ami,
     vmarch_to_aws,
+    DEFAULT_AWS_REGION,
 )
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.ssh_agent import SSHAgent
@@ -95,10 +96,9 @@ from sdcm.utils.gce_utils import (
     get_gce_compute_regions_client,
     get_gce_storage_client,
 )
-
+from sdcm.utils.version_utils import parse_scylla_version_tag
 
 LOGGER = logging.getLogger("utils")
-DEFAULT_AWS_REGION = "eu-west-1"
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
 SCYLLA_AMI_OWNER_ID_LIST = ["797456418907", "158855661827"]
 SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
@@ -1093,6 +1093,7 @@ def filter_k8s_clusters_by_tags(
     return filter_gce_by_tags(tags_dict={k: v for k, v in tags_dict.items() if k != "NodeType"}, instances=clusters)
 
 
+<<<<<<< HEAD
 @lru_cache
 def get_scylla_ami_versions(region_name: str, arch: AwsArchType = "x86_64", version: str = None) -> list[EC2Image]:
     """Get the list of all the formal scylla ami from specific region."""
@@ -1100,10 +1101,60 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = "x86_64", vers
 
     if version and version != "all":
         scylla_version_filter = f"*{version.replace('enterprise-', '')}-*"
+||||||| parent of 2fd7bef3f (feature(aws): implement Phase 2 - AWS full version tag support)
+def _get_ami_versions(
+    region_name: str,
+    arch: AwsArchType,
+    version: str,
+    version_tag_name: str,
+    extra_filters: list | None = None,
+    version_processor_fn: Callable | None = None,
+) -> list[EC2Image]:
+    """Get AMI versions with configurable filters."""
+    version_filter = "*"
+    if version and version != "all":
+        version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
+=======
+def _get_ami_versions(
+    region_name: str,
+    arch: AwsArchType,
+    version: str,
+    version_tag_name: str,
+    extra_filters: list | None = None,
+    version_processor_fn: Callable | None = None,
+) -> list[EC2Image]:
+    """Get AMI versions with configurable filters."""
+<<<<<<< HEAD
+    # Import here to avoid circular dependency (common.py exports DEFAULT_AWS_REGION which version_utils.py needs)
+    from sdcm.utils.version_utils import parse_scylla_version_tag  # noqa: PLC0415
+>>>>>>> 2fd7bef3f (feature(aws): implement Phase 2 - AWS full version tag support)
+||||||| parent of 5082e61bc (refactor(utils): resolve circular dependency between common and version_utils)
+    # Import here to avoid circular dependency (common.py exports DEFAULT_AWS_REGION which version_utils.py needs)
+    from sdcm.utils.version_utils import parse_scylla_version_tag  # noqa: PLC0415
+=======
+>>>>>>> 5082e61bc (refactor(utils): resolve circular dependency between common and version_utils)
 
+<<<<<<< HEAD
         if len(version.split(".")) < 3:
             # if version is not exact version, we need to add the wildcard to the end, to catch all minor versions
             scylla_version_filter = f"*{version.replace('enterprise-', '')}*"
+||||||| parent of 2fd7bef3f (feature(aws): implement Phase 2 - AWS full version tag support)
+    version_filter = version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
+=======
+    version_filter = "*"
+
+    if version and version != "all":
+        # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
+        if parse_scylla_version_tag(version):
+            # For full version tags, use exact matching (no wildcards)
+            version_filter = f"{version}*"
+            extra_filters = []
+        else:
+            # For simple versions or other formats, use the existing logic
+            version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
+            # Apply wildcard replacement for simple versions
+            version_filter = version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
+>>>>>>> 2fd7bef3f (feature(aws): implement Phase 2 - AWS full version tag support)
 
     scylla_version_filter = scylla_version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
     ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
@@ -1143,18 +1194,31 @@ def get_scylla_gce_images_versions(
     #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
     # or you can see brief explanation here:
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
-    filters = "(family eq 'scylla(-enterprise)?')( labels.environment eq 'production' )"
+    filters = "(family eq 'scylla(-enterprise)?')"
     if version and version != "all":
-        filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
-        if "rc" not in version and len(version.split(".")) < 3:
-            filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
+        # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
+        if parse_scylla_version_tag(version):
+            # For full version tags, use the complete tag for exact matching
+            # GCE labels require dots to be replaced with dashes
+            normalized_version = version.replace(".", "-").replace("~", "-")
+            filters += f"(labels.scylla_version eq '{normalized_version}')"
         else:
             filters += "')"
+
+            filters += "(labels.environment eq 'production')"
+            # For simple versions, use the existing wildcard logic
+            filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
+            if "rc" not in version and len(version.split(".")) < 3:
+                filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
+            else:
+                filters += "')"
+
     if arch:
         if arch != VmArch.X86:
             #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
             LOGGER.warning("--arch option not implemented currently for GCE machine images.")
         filters += f" (architecture eq {vmarch_to_gcp(arch)})"
+
     images_client, _ = get_gce_compute_images_client()
     return sorted(
         images_client.list(ListImagesRequest(filter=filters, project=project)),
@@ -1435,7 +1499,7 @@ def get_ami_images(branch: str, region: str, arch: VmArch) -> list:
                 tags.get("Name"),
                 tags.get("build-id", tags.get("build_id", r"N\A"))[:6],
                 tags.get("arch"),
-                tags.get("ScyllaVersion"),
+                tags.get("scylla_version"),
                 ami.owner_id,
             ]
         )
@@ -1447,6 +1511,15 @@ def get_ec2_image_name_tag(ami: EC2Image) -> str:
     if ami.tags:
         for tag in ami.tags:
             if tag["Key"] == "Name":
+                return tag["Value"]
+    return ""
+
+
+def get_ec2_image_version_tag(ami: EC2Image) -> str:
+    """Get the scylla_version tag from an EC2 AMI."""
+    if ami.tags:
+        for tag in ami.tags:
+            if tag["Key"] == "scylla_version":
                 return tag["Value"]
     return ""
 
@@ -1513,14 +1586,14 @@ def convert_name_to_ami_if_needed(
 
 def get_ami_images_versioned(region_name: str, arch: VmArch, version: str) -> list[list[str]]:
     return [
-        ["AWS", ami.name, ami.image_id, ami.creation_date, get_ec2_image_name_tag(ami)]
+        ["AWS", ami.name, ami.image_id, ami.creation_date, get_ec2_image_name_tag(ami), get_ec2_image_version_tag(ami)]
         for ami in get_scylla_ami_versions(region_name=region_name, arch=vmarch_to_aws(arch), version=version)
     ]
 
 
 def get_gce_images_versioned(version: str = None, arch: VmArch = None) -> list[list[str]]:
     return [
-        ["GCE", image.name, image.self_link, image.creation_timestamp]
+        ["GCE", image.name, image.self_link, image.creation_timestamp, image.labels.get("scylla_version", "")]
         for image in get_scylla_gce_images_versions(version=version, arch=arch)
     ]
 
