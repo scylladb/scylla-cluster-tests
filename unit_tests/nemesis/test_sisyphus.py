@@ -110,6 +110,40 @@ def test_add_sisyphus_with_filter_in_parallel_nemesis_run(tmp_path):
 
 
 @pytest.mark.parametrize(
+    "nemesis_class_name, expected_error_match",
+    [
+        pytest.param(
+            "StopWaitStartMonkey",
+            "Basic non-runner nemesis can be used in the 'nemesis_selector' config option only.",
+            id="nemesis_base_class_not_runner",
+        ),
+        pytest.param(
+            "NemesisFlags",
+            "should be subclass of NemesisRunner",
+            id="not_nemesis_class_at_all",
+        ),
+    ],
+)
+def test_get_nemesis_class_validates_runner_subclass(tmp_path, nemesis_class_name, expected_error_match):
+    """
+    Tests that get_nemesis_class() raises ValueError when nemesis_class_name
+    refers to a NemesisBaseClass (single nemesis) or a non-NemesisRunner class
+    """
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path)
+    tester._init_params()
+    tester.db_cluster = Cluster(nodes=[Node(), Node()])
+    tester.db_cluster.params = tester.params
+    tester.params["nemesis_class_name"] = nemesis_class_name
+    tester.params["nemesis_exclude_disabled"] = True
+    tester.params["nemesis_multiply_factor"] = 1
+    tester.nemesis_allocator = NemesisNodeAllocator(tester)
+
+    with pytest.raises(ValueError, match=expected_error_match):
+        tester.get_nemesis_class()
+
+
+@pytest.mark.parametrize(
     "disruptions, expected_error",
     [
         pytest.param(["CustomNemesisA", "CustomNemesisAD"], None, id="valid_disruptions"),
