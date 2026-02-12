@@ -286,6 +286,7 @@ class AzureCluster(cluster.BaseCluster):
             definitions=definitions,
             pricing_model=pricing_model,
             fallback_on_demand=self.params.get("instance_provision_fallback_on_demand"),
+            params=self.params,
         )
 
     def get_node_ips_param(self, public_ip=True):
