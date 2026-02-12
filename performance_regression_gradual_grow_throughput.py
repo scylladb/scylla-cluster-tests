@@ -96,6 +96,46 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             ).publish()
         return throttle_steps[workload_type]
 
+    def get_num_threads_for_workload(self, workload_type):
+        """
+        Get num_threads for a workload type.
+        
+        First tries to extract threads from perf_gradual_throttle_steps dict entries.
+        Falls back to perf_gradual_threads if throttle steps contain only rate values.
+        
+        Args:
+            workload_type: The workload type (read, write, mixed, etc.)
+            
+        Returns:
+            List of thread counts or single thread count
+        """
+        throttle_steps = self.throttle_steps(workload_type)
+        
+        # Check if any throttle step has threads defined (dict format)
+        threads_from_steps = []
+        has_threads_in_steps = False
+        
+        for step in throttle_steps:
+            if isinstance(step, dict) and "threads" in step:
+                threads_from_steps.append(step["threads"])
+                has_threads_in_steps = True
+            else:
+                # Step is string/int (rate only) - will need fallback
+                threads_from_steps.append(None)
+        
+        if has_threads_in_steps:
+            # At least some steps have threads defined
+            # For steps without threads, use perf_gradual_threads as fallback
+            fallback_threads = self.params.get("perf_gradual_threads", {}).get(workload_type)
+            
+            return [
+                thread_count if thread_count is not None else fallback_threads
+                for thread_count in threads_from_steps
+            ]
+        else:
+            # No steps have threads - use perf_gradual_threads parameter
+            return self.params["perf_gradual_threads"][workload_type]
+
     def step_duration(self, workload_type):
         step_duration = self.params["perf_gradual_step_duration"]
         if workload_type not in step_duration:
@@ -143,7 +183,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_m"),
             cs_cmd_warm_up=self.params.get("stress_cmd_cache_warmup"),
-            num_threads=self.params["perf_gradual_threads"][workload_type],
+            num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
             preload_data=True,
             drop_keyspace=False,
@@ -168,7 +208,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_w"),
             cs_cmd_warm_up=None,
-            num_threads=self.params["perf_gradual_threads"][workload_type],
+            num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
             preload_data=False,
             drop_keyspace=True,
@@ -193,7 +233,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_r"),
             cs_cmd_warm_up=self.params.get("stress_cmd_cache_warmup"),
-            num_threads=self.params["perf_gradual_threads"][workload_type],
+            num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
             preload_data=True,
             drop_keyspace=False,
@@ -218,7 +258,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_read_disk"),
             cs_cmd_warm_up=None,
-            num_threads=self.params["perf_gradual_threads"][workload_type],
+            num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
             preload_data=True,
             drop_keyspace=False,
