@@ -15,9 +15,14 @@ Unit tests for Phase 2 health check optimization:
 Parallel execution of health checks to reduce time on large clusters.
 """
 
+import threading
 import time
-from unittest.mock import MagicMock, patch, call
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from unittest.mock import MagicMock
 import pytest
+
+
+# ruff: noqa: PLW0108, PLC0415, BLE001
 
 
 class TestParallelHealthCheckExecution:
@@ -101,7 +106,6 @@ class TestParallelHealthCheckExecution:
 
     def test_parallel_execution_completes_all_nodes(self, mock_cluster, mock_nodes):
         """Test that parallel execution checks all nodes."""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
         
         mock_cluster.params.get = MagicMock(side_effect=lambda key: {
             "cluster_health_check": True,
@@ -126,7 +130,6 @@ class TestParallelHealthCheckExecution:
 
     def test_parallel_execution_handles_node_failure(self, mock_cluster, mock_nodes):
         """Test that parallel execution handles individual node failures gracefully."""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
         
         mock_cluster.params.get = MagicMock(side_effect=lambda key: {
             "cluster_health_check": True,
@@ -161,7 +164,6 @@ class TestParallelHealthCheckExecution:
 
     def test_parallel_execution_timing_improvement(self, mock_cluster, mock_nodes):
         """Test that parallel execution is faster than sequential for multiple nodes."""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
         
         # Create nodes with simulated delay
         delay_nodes = []
@@ -218,8 +220,6 @@ class TestParallelHealthCheckExecution:
 
     def test_thread_safety_of_logging(self, mock_cluster, mock_nodes):
         """Test that logging from multiple threads is handled safely."""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        import threading
         
         mock_cluster.params.get = MagicMock(side_effect=lambda key: {
             "cluster_health_check": True,

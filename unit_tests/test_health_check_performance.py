@@ -17,11 +17,14 @@ This test corresponds to TC6 from health-check-optimization.md plan.
 Purpose: Measure and validate speed improvements from parallel execution.
 """
 
-import time
 import statistics
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from unittest.mock import MagicMock
 import pytest
+
+
+# ruff: noqa: BLE001
 
 
 class TestHealthCheckPerformance:
@@ -82,7 +85,7 @@ class TestHealthCheckPerformance:
                 for future in as_completed(futures):
                     try:
                         future.result()
-                    except Exception as exc:
+                    except Exception:
                         # Handle errors but continue
                         pass
         
