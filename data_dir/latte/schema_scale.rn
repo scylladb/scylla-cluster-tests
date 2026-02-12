@@ -12,6 +12,8 @@ const TABLE_COUNT_PER_KEYSPACE = latte::param!("table_count_per_keyspace", 100);
 const ENABLE_TABLETS = latte::param!("enable_tablets", false);
 const MIN_PER_SHARD_TABLET_COUNT = latte::param!("min_per_shard_tablet_count", 10.0); // default in Scylla
 const CREATE_INDEX = latte::param!("create_index", false);
+const CREATE_COLLOCATED_MV = latte::param!("create_collocated_mv", false);
+const CREATE_NOTCOLLOCATED_MV = latte::param!("create_notcollocated_mv", false);
 const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
 const COMPACTION_STRATEGY = latte::param!("compaction_strategy", "IncrementalCompactionStrategy");
 const SSTABLE_COMPRESSION = latte::param!("sstable_compression", "LZ4Compressor");
@@ -118,10 +120,28 @@ pub async fn prepare(db) {
             let p_stmt_select = `SELECT col_text, col_date, col_blob FROM ${ks}.${table} WHERE pk = :pk`;
             db.prepare(p_stmt_select_name, p_stmt_select).await?;
 
+            // Process 'select from collocated MV' prepared statement
+            let p_stmt_select_mv_colloc_name = "";
+            if CREATE_COLLOCATED_MV {
+                p_stmt_select_mv_colloc_name = `k${kpadding}${ks_i + 1}.${table}__select_mv_colloc`;
+                let p_stmt_select_mv_colloc = `SELECT pk, col_text FROM ${ks}.${table}_mv_colloc WHERE pk = :pk AND col_date = :col_date`;
+                db.prepare(p_stmt_select_mv_colloc_name, p_stmt_select_mv_colloc).await?;
+            }
+
+            // Process 'select from non-collocated MV' prepared statement
+            let p_stmt_select_mv_notcolloc_name = "";
+            if CREATE_NOTCOLLOCATED_MV {
+                p_stmt_select_mv_notcolloc_name = `k${kpadding}${ks_i + 1}.${table}__select_mv_notcolloc`;
+                let p_stmt_select_mv_notcolloc = `SELECT col_text, col_date, col_blob FROM ${ks}.${table}_mv_notcolloc WHERE col_blob = :col_blob AND pk = :pk`;
+                db.prepare(p_stmt_select_mv_notcolloc_name, p_stmt_select_mv_notcolloc).await?;
+            }
+
             // Keep mapping of prepared statements and keyspace.table values
             tables.push(#{
                 "INSERT": p_stmt_insert_name,
                 "SELECT": p_stmt_select_name,
+                "SELECT_MV_COLLOC": p_stmt_select_mv_colloc_name,
+                "SELECT_MV_NOTCOLLOC": p_stmt_select_mv_notcolloc_name,
                 "keyspace": ks,
                 "table": table,
             });
@@ -197,6 +217,24 @@ pub async fn create_schema(db, i) { // user fn to be run in a 'latte run -f ...'
     // Create indices
     if CREATE_INDEX {
         db.execute(`CREATE INDEX IF NOT EXISTS ${table}_index_on_col_text ON ${ks}.${table} (col_text)`).await?;
+    }
+
+    if CREATE_COLLOCATED_MV {
+        db.execute(`
+            CREATE MATERIALIZED VIEW IF NOT EXISTS ${ks}.${table}_mv_colloc AS
+                SELECT pk, col_text FROM ${ks}.${table}
+                WHERE pk IS NOT NULL AND col_date IS NOT NULL
+                PRIMARY KEY (pk, col_date)
+        `).await?;
+    }
+
+    if CREATE_NOTCOLLOCATED_MV {
+        db.execute(`
+            CREATE MATERIALIZED VIEW IF NOT EXISTS ${ks}.${table}_mv_notcolloc AS
+                SELECT * FROM ${ks}.${table}
+                WHERE pk IS NOT NULL AND col_blob IS NOT NULL
+                PRIMARY KEY (col_blob, pk)
+        `).await?;
     }
 }
 
@@ -307,6 +345,90 @@ pub async fn read(db, i) {
         let data = gen_data(idx, ks_index, t_index).await;
         for col_name in data.col_names {
             // TODO: make it be compatible with prep stmts which select non-all columns
+            let actual = rows.0.get(col_name).unwrap();
+            let expected = data.get(col_name).unwrap();
+            if actual != expected {
+                if col_name == "col_blob" {
+                    actual = format!("{a:?}", a=actual);
+                    expected = format!("{e:?}", e=expected);
+                }
+                db.signal_failure(
+                    `${row_err_info}, column '${col_name}'. ` +
+                    `Actual value is '${actual}', but expected is '${expected}'.`
+                ).await?;
+            }
+        }
+    }
+}
+
+pub async fn read_colloc_mv(db, i) {
+    assert!(CREATE_COLLOCATED_MV, "read_colloc_mv requires create_collocated_mv=true");
+    let ks_table_mapping_i = get_ks_table_mapping_i(db, i).await;
+    let ks_index = db.data.ks_table_mapping[ks_table_mapping_i][0];
+    let t_index = db.data.ks_table_mapping[ks_table_mapping_i][1];
+    // NOTE: each table getting queries after a table shift will get non-zero first row index.
+    //       It is ok because we care about the step increment value and not starting index.
+    let idx = get_idx(db, (i / TABLE_GROUP_SIZE)).await;
+
+    let pk = uuid(idx);
+    let data = gen_data(idx, ks_index, t_index).await;
+    let col_date =  data.get("col_date").unwrap();
+
+    if !DATA_VALIDATION {
+        db.execute_prepared(db.data.p_stmt[ks_index][t_index].SELECT_MV_COLLOC, [pk, col_date]).await?
+    } else {
+        let rows = db.execute_prepared_with_result(db.data.p_stmt[ks_index][t_index].SELECT_MV_COLLOC, [pk, col_date]).await?;
+        let rows_len = rows.len();
+        let row_err_info = (
+            `ks='${db.data.p_stmt[ks_index][t_index].keyspace}', ` +
+            `table='${db.data.p_stmt[ks_index][t_index].table}', pk='${pk}', col_date='${col_date}'`);
+        if rows_len != 1 {
+            // NOTE: may be false negative only if we didn't populate DB correctly.
+            db.signal_failure(
+                `Expected exactly 1 row. But got '${rows_len}'. ` + row_err_info
+            ).await?;
+        }
+
+        let actual = rows.0.get("col_text").unwrap();
+        let expected = data.get("col_text").unwrap();
+        if actual != expected {
+            db.signal_failure(
+                `${row_err_info}, column col_text. ` +
+                `Actual value is '${actual}', but expected is '${expected}'.`
+            ).await?;
+        }
+    }
+}
+
+pub async fn read_notcolloc_mv(db, i) {
+    assert!(CREATE_NOTCOLLOCATED_MV, "read_notcolloc_mv requires create_notcollocated_mv=true");
+    let ks_table_mapping_i = get_ks_table_mapping_i(db, i).await;
+    let ks_index = db.data.ks_table_mapping[ks_table_mapping_i][0];
+    let t_index = db.data.ks_table_mapping[ks_table_mapping_i][1];
+    // NOTE: each table getting queries after a table shift will get non-zero first row index.
+    //       It is ok because we care about the step increment value and not starting index.
+    let idx = get_idx(db, (i / TABLE_GROUP_SIZE)).await;
+
+    let pk = uuid(idx);
+    let data = gen_data(idx, ks_index, t_index).await;
+    let col_blob = data.get("col_blob").unwrap();
+
+    if !DATA_VALIDATION {
+        db.execute_prepared(db.data.p_stmt[ks_index][t_index].SELECT_MV_NOTCOLLOC, [col_blob, pk]).await?
+    } else {
+        let rows = db.execute_prepared_with_result(db.data.p_stmt[ks_index][t_index].SELECT_MV_NOTCOLLOC, [col_blob, pk]).await?;
+        let rows_len = rows.len();
+        let row_err_info = (
+            `ks='${db.data.p_stmt[ks_index][t_index].keyspace}', ` +
+            `table='${db.data.p_stmt[ks_index][t_index].table}', pk='${pk}', col_blob='${format!("{b:?}", b=col_blob)}'`);
+        if rows_len != 1 {
+            // NOTE: may be false negative only if we didn't populate DB correctly.
+            db.signal_failure(
+                `Expected exactly 1 row. But got '${rows_len}'. ` + row_err_info
+            ).await?;
+        }
+
+        for col_name in data.col_names {
             let actual = rows.0.get(col_name).unwrap();
             let expected = data.get(col_name).unwrap();
             if actual != expected {
