@@ -26,7 +26,7 @@ pytestmark = [
     pytest.mark.usefixtures("events"),
     pytest.mark.integration,
     pytest.mark.docker_scylla_args(
-        scylla_docker_image="scylladb/scylla-nightly:2025.4.0-dev-0.20250811.e14c5e3890de",
+        scylla_docker_image="scylladb/scylla:2025.4.3",
         vs_docker_image="scylladb/vector-store:latest",
     ),
     pytest.mark.xdist_group("docker_heavy"),
