@@ -538,7 +538,7 @@ class VectorStoreSetCloud(VectorStoreClusterMixin, cluster.BaseCluster):
         """Wait for Vector Search nodes to become active in all AZs"""
         self.log.info("Waiting for Vector Search nodes to be ready")
 
-        expected_nodes_per_az = int(self.parent_db_cluster.params.get("n_vector_store_nodes"))
+        expected_node_count = int(self.parent_db_cluster.params.get("n_vector_store_nodes"))
 
         def check_vs_nodes_status():
             try:
@@ -556,16 +556,15 @@ class VectorStoreSetCloud(VectorStoreClusterMixin, cluster.BaseCluster):
                     if node.get("status", "").upper() not in ("DELETED", "PENDING_DELETE")
                 ]
                 active_count = sum(node.get("status", "").upper() == "ACTIVE" for node in all_nodes)
-                expected_total_nodes = expected_nodes_per_az * len(availability_zones)
                 self.log.debug(
                     "VS nodes status: %d/%d active (expected %d nodes across %d AZs)",
                     active_count,
                     len(all_nodes),
-                    expected_total_nodes,
+                    expected_node_count,
                     len(availability_zones),
                 )
 
-                return len(all_nodes) == expected_total_nodes and active_count == expected_total_nodes
+                return len(all_nodes) == expected_node_count and active_count == expected_node_count
 
             except Exception as e:  # noqa: BLE001
                 self.log.debug("Error checking VS nodes status: %s", e)
@@ -983,7 +982,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
                     f"Available types: {', '.join(vs_instance_types.keys())}"
                 )
             vs_config = {
-                "defaultNodes": int(self.params.get("n_vector_store_nodes")),
+                "nodeCount": int(self.params.get("n_vector_store_nodes")),
                 "defaultInstanceTypeId": vs_instance_types[vs_instance_type_name],
             }
 
@@ -1220,10 +1219,13 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             or []
         )
         if vs_nodes:
-            vs_nodes_per_az = [
-                n for n in vs_nodes[0].get("nodes", []) if n.get("status") not in ("DELETED", "PENDING_DELETE")
+            all_vs_nodes = [
+                n
+                for az in vs_nodes
+                for n in az.get("nodes", [])
+                if n.get("status") not in ("DELETED", "PENDING_DELETE")
             ]
-            if vs_nodes_per_az and len(vs_nodes_per_az) != int(self.params.get("n_vector_store_nodes")):
+            if all_vs_nodes and len(all_vs_nodes) != int(self.params.get("n_vector_store_nodes")):
                 raise ScyllaCloudError(
                     "Vector Search node count mismatch. "
                     "Update 'n_vector_store_nodes' in test config or provision a new cluster."

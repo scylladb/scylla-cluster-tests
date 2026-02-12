@@ -445,7 +445,7 @@ class ScyllaCloudAPIClient:
         return self.request(
             "POST",
             f"/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search",
-            defaultNodes=number_of_nodes,
+            nodeCount=number_of_nodes,
             defaultInstanceTypeId=instance_type_id,
         )
 
