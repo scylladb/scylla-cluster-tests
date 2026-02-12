@@ -56,7 +56,18 @@ class Workload:
         self.throttle_steps = normalized_steps
 
 
-def is_latte_command(stress_cmd: str) -> bool:
+def is_latte_command(stress_cmd: Union[str, list]) -> bool:
+    """Check if stress command(s) use latte tool.
+    
+    Args:
+        stress_cmd: Single command string or list of command strings
+        
+    Returns:
+        True if any command contains 'latte ' and ' run ', False otherwise
+    """
+    if isinstance(stress_cmd, list):
+        # Check if any command in the list is a latte command
+        return any("latte " in cmd and " run " in cmd for cmd in stress_cmd if isinstance(cmd, str))
     return "latte " in stress_cmd and " run " in stress_cmd
 
 
