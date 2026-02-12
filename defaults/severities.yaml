@@ -5,6 +5,7 @@ ClusterHealthValidatorEvent.Group0TokenRingInconsistency: ERROR
 ClusterHealthValidatorEvent.NodeSchemaVersion: ERROR
 ClusterHealthValidatorEvent.NodesNemesis: WARNING
 ClusterHealthValidatorEvent.ScyllaCloudClusterServerDiagnostic: CRITICAL
+ClusterHealthValidatorEvent.ParallelHealthCheckFailure: ERROR
 ClusterHealthValidatorEvent: NORMAL
 DataValidatorEvent.DataValidator: ERROR
 DataValidatorEvent.ImmutableRowsValidator: ERROR
