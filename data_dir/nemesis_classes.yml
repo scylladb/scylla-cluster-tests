@@ -58,6 +58,7 @@
 - ModifyTableTwcsWindowSizeMonkey
 - MultipleHardRebootNodeMonkey
 - NemesisSequence
+- NemesisSequenceWithReboot
 - NoCorruptRepairMonkey
 - NodeRestartWithResharding
 - NodeTerminateAndReplace
