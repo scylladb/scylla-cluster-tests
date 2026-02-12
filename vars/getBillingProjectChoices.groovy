@@ -24,7 +24,7 @@ def call() {
             response = httpRequest(
                 url: apiUrl,
                 customHeaders: [
-                    [name: 'Authorization', value: "token ${GITHUB_TOKEN}", maskValue: true],
+                    [name: 'Authorization', value: 'token ' + GITHUB_TOKEN, maskValue: true],
                     [name: 'Accept', value: 'application/vnd.github.v3+json'],
                     [name: 'User-Agent', value: 'Jenkins-SCT']
                 ],
