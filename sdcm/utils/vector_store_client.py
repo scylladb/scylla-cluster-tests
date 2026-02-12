@@ -63,9 +63,13 @@ class VectorStoreClient:
         payload = {"embedding": embedding, "limit": limit}
         return self.request("POST", f"/api/v1/indexes/{keyspace}/{index}/ann", json=payload).json()
 
+    def get_index_status(self, keyspace: str, index: str) -> dict:
+        """Get status and vector count for a specific index"""
+        return self.request("GET", f"/api/v1/indexes/{keyspace}/{index}/status").json()
+
     def get_index_count(self, keyspace: str, index: str) -> int:
         """Get number of embeddings in a vector index"""
-        return self.request("GET", f"/api/v1/indexes/{keyspace}/{index}/count").json()
+        return self.get_index_status(keyspace, index)["count"]
 
     def wait_for_ready(self, timeout: int = 300, check_interval: int = 5) -> bool:
         """Wait for Vector Store to become ready (to have status SERVING or INDEXING_VECTORS)"""

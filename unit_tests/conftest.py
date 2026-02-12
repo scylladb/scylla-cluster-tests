@@ -265,9 +265,15 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
         yield None
         return
 
-    # restart the container to reload scylla.yaml config
     def reload_config_for_test():
-        docker_scylla.node.remoter.run(f"docker restart {docker_scylla.docker_id}")
+        result = subprocess.run(
+            ["docker", "exec", docker_scylla.docker_id, "sh", "-c", "kill -1 $(pgrep -x scylla)"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            logging.warning("Failed to send SIGHUP to Scylla process: %s", result.stderr)
 
     docker_scylla.reload_config = reload_config_for_test
 
@@ -322,20 +328,6 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
         for node in vector_store_cluster.nodes:
             if not node.wait_for_vector_store_ready():
                 raise RuntimeError(f"Vector Store service on {node.name} failed to start")
-
-        # restart scylla container to apply vector store URI changes
-        scylla_node = cluster.nodes[0]
-        restart_result = subprocess.run(
-            ["docker", "restart", scylla_node.docker_id], capture_output=True, text=True, check=False
-        )
-        if restart_result.returncode != 0:
-            raise RuntimeError(f"Container restart failed: {restart_result.stderr}")
-        wait.wait_for(
-            func=lambda: scylla_node.is_port_used(port=BaseNode.CQL_PORT, service_name="scylla-server"),
-            step=2,
-            timeout=60,
-            text="Waiting for Scylla container to restart",
-        )
 
         yield vector_store_cluster
 
