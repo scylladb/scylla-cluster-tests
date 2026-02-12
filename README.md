@@ -92,6 +92,50 @@ export SCT_SCYLLA_VERSION=5.2.1
 hydra run-test longevity_test.LongevityTest.test_custom_time --backend docker --config test-cases/PR-provision-test-docker.yaml
 ```
 
+#### Run test with ScyllaDB Cloud (xcloud) backend:
+```bash
+export SCT_SCYLLA_VERSION=2025.3.0
+export SCT_XCLOUD_PROVIDER=aws
+export SCT_XCLOUD_ENV=lab
+
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend xcloud --config test-cases/PR-provision-test.yaml
+```
+For more details on xcloud backend, see [xcloud backend documentation](./docs/xcloud-backend.md)
+
+You can specify a specific scylla version by:
+```bash
+# Simple version (release)
+export SCT_SCYLLA_VERSION=2025.1
+
+# Branch version (nightly)
+export SCT_SCYLLA_VERSION=master:latest
+
+# Full version tag (specific build with commit hash)
+export SCT_SCYLLA_VERSION=2024.2.5-0.20250221.cb9e2a54ae6d-1
+```
+
+For detailed information on full version tag support, see `docs/full-version-tag-usage.md`
+
+For debugging a standard nemesis setup you can simply use a default nemesis setup.
+Use the yaml files as in https://github.com/scylladb/scylla-cluster-tests/blob/master/jenkins-pipelines/oss/nemesis/longevity-5gb-1h-AbortRepairMonkey-docker.jenkinsfile:
+```bash
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend docker \
+-c configurations/nemesis/longevity-5gb-1h-nemesis.yaml \
+-c configurations/nemesis/AbortRepairMonkey.yaml \
+-c configurations/nemesis/additional_configs/docker_backend.yaml
+```
+For debugging a specific nemesis setup you can edit a nemesis class name to run.
+Change the relevant parameters and nemesis class name to the one you want to debug in test-cases/PR-provision-test-docker.yaml like below:
+```
+test_duration: 60
+stress_cmd: "cassandra-stress write cl=QUORUM duration=5m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) ' -mode cql3 native -rate threads=10 -pop seq=1..100000 -log interval=5"
+n_db_nodes: 4
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: 'DecommissionMonkey'
+nemesis_interval: 5
+```
+For more details on docker backend supported nemesis, please check [docker backend specifics](./docs/docker-backend-overview.md)
+```bash
 #### You can also enter the containerized SCT environment using:
 ```bash
 hydra bash
