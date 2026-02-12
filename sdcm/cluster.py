@@ -3169,7 +3169,7 @@ class BaseNode(AutoSshContainerMixin):
             ).publish()
         return nodes_status
 
-    @retrying(n=5, sleep_time=5, raise_on_exceeded=False)
+    @retrying(n=3, sleep_time=5, raise_on_exceeded=False)
     def get_peers_info(self):
         columns = (
             "peer",
@@ -3210,7 +3210,7 @@ class BaseNode(AutoSshContainerMixin):
             )
         return peers_details
 
-    @retrying(n=10, sleep_time=5, raise_on_exceeded=False)
+    @retrying(n=3, sleep_time=5, raise_on_exceeded=False)
     def get_gossip_info(self) -> dict[BaseNode, dict]:
         gossip_info = self.run_nodetool(
             "gossipinfo", verbose=False, warning_event_on_exception=(Exception,), publish_event=False
@@ -5192,8 +5192,34 @@ class BaseScyllaCluster:
             if self.nemesis_count == 1:
                 node_for_timeout = next((n for n in self.nodes if not n.running_nemesis), self.nodes[0])
                 with adaptive_timeout(Operations.HEALTHCHECK, node=node_for_timeout, timeout=len(self.nodes) * 30):
-                    for node in self.nodes:
-                        node.check_node_health()
+                    # Phase 2: Parallel health check execution
+                    parallel_workers = self.params.get("cluster_health_check_parallel_workers") or 5
+                    # Ensure parallel_workers is within reasonable bounds
+                    parallel_workers = max(1, min(parallel_workers, 10))
+                    
+                    if parallel_workers == 1 or len(self.nodes) == 1:
+                        # Sequential execution for single worker or single node
+                        for node in self.nodes:
+                            node.check_node_health()
+                    else:
+                        # Parallel execution
+                        self.log.debug(
+                            "Running health checks on %d nodes with %d parallel workers",
+                            len(self.nodes),
+                            parallel_workers
+                        )
+                        with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
+                            futures = {executor.submit(node.check_node_health): node for node in self.nodes}
+                            for future in as_completed(futures):
+                                node = futures[future]
+                                try:
+                                    future.result()
+                                except Exception as exc:  # noqa: BLE001
+                                    self.log.error(
+                                        "Health check for node %s generated an exception: %s",
+                                        node.name,
+                                        exc
+                                    )
             else:
                 chc_event.message = "Test runs with parallel nemesis. Nodes health checks are disabled."
                 return
