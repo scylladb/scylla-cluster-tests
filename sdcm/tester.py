@@ -1525,10 +1525,20 @@ class ClusterTester(unittest.TestCase):
                     nemesis_selector = nemesis_selectors[i % len(nemesis_class_names)]
                 except IndexError as details:
                     self.log.warning("Missing nemesis selector. use default. %s", details)
+            runner_clazz = getattr(nemesis, nemesis_name)
+            if not issubclass(runner_clazz, nemesis.NemesisRunner):
+                if issubclass(runner_clazz, nemesis.NemesisBaseClass):
+                    raise ValueError(
+                        "The 'nemesis_class_name' config option is allowed to store only nemesis classes "
+                        "which are 'NemesisRunner' class subclasses. "
+                        "Basic non-runner nemesis can be used in the 'nemesis_selector' config option only."
+                    )
+                else:
+                    raise ValueError(f"Nemesis class {runner_clazz} should be subclass of NemesisRunner.")
 
             nemesis_threads.append(
                 {
-                    "nemesis": getattr(nemesis, nemesis_name),
+                    "nemesis": runner_clazz,
                     "nemesis_selector": nemesis_selector,
                     "nemesis_seed": int(nemesis_seeds[i % len(nemesis_seeds)]) if nemesis_seeds else None,
                 }
