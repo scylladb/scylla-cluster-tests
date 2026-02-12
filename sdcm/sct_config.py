@@ -1514,6 +1514,10 @@ class SCTConfiguration(BaseModel):
     cluster_health_check: Boolean = SctField(
         description="Enable or disable starting cluster health checker for all nodes",
     )
+    cluster_health_check_parallel_workers: int = SctField(
+        description="Number of parallel workers for health checks. "
+        "Clamped to [1, 10] at runtime. Higher values reduce health check duration on large clusters.",
+    )
     data_validation: String = SctField(
         description="Specify the type of data validation to perform",
     )
