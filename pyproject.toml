@@ -1,3 +1,8 @@
+# Pin setuptools version for building dependencies to avoid compatibility issues.
+# Setuptools 75+ introduced breaking changes (removed pkg_resources) that affect many packages
+# including gimme-aws-creds and its dependencies (okta -> flatdict).
+# Reference: https://github.com/okta/okta-sdk-python/issues/496
+# See also: https://staturdays.com/2025/03/25/how-one-setuptools-release-broke-everything-and-what-we-can-learn-from-it/
 [project]
 name = 'scylla-cluster-tests'
 version = '0.1'
@@ -78,6 +83,12 @@ dev = [
 package = false
 # gimme-aws-creds does not work on Windows for Python 3.9+
 environments = ["sys_platform != 'win32'"]
+# Pin setuptools version for building dependencies to avoid compatibility issues.
+# Setuptools 75+ introduced breaking changes (removed pkg_resources) that affect many packages
+# including gimme-aws-creds and its dependencies (okta -> flatdict).
+# Reference: https://github.com/okta/okta-sdk-python/issues/496
+# See also: https://staturdays.com/2025/03/25/how-one-setuptools-release-broke-everything-and-what-we-can-learn-from-it/
+build-constraint-dependencies = ["setuptools>=65.0.0,<75"]
 
 [tool.uv.sources]
 ssh2-python = [
