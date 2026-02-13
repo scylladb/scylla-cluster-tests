@@ -1502,10 +1502,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     nemesis_selector = nemesis_selectors[i % len(nemesis_class_names)]
                 except IndexError as details:
                     self.log.warning("Missing nemesis selector. use default. %s", details)
+            runner_clazz = getattr(nemesis, nemesis_name)
+            if not issubclass(runner_clazz, nemesis.NemesisRunner):
+                if issubclass(runner_clazz, nemesis.NemesisBaseClass):
+                    raise ValueError(
+                        "You should not use nemesis_class_name to run single nemesis. Correct way is to use SisyphusMonkey with nemesis_selector parameter to specify which nemesis to run."
+                    )
+                else:
+                    raise ValueError(f"Nemesis class {runner_clazz} should be subclass of NemesisRunner.")
 
             nemesis_threads.append(
                 {
-                    "nemesis": getattr(nemesis, nemesis_name),
+                    "nemesis": runner_clazz,
                     "nemesis_selector": nemesis_selector,
                     "nemesis_seed": int(nemesis_seeds[i % len(nemesis_seeds)]) if nemesis_seeds else None,
                 }
