@@ -20,6 +20,7 @@ import contextlib
 from enum import Enum
 from itertools import chain
 
+
 from sdcm.loader import ScyllaBenchStressExporter, ScyllaBenchHDRExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
@@ -30,6 +31,7 @@ from sdcm.sct_events.loaders import (
     SCYLLA_BENCH_ERROR_EVENTS_PATTERNS,
     SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS,
 )
+from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
@@ -342,6 +344,12 @@ class ScyllaBenchThread(DockerBasedStressThread):
         else:
             hdrh_logger_context = contextlib.nullcontext()
 
+        report_stress_command(
+            client=loader.parent_cluster.test_config.argus_client(),
+            stress_cmd=stress_cmd,
+            log_path=log_file_name,
+            loader_name=loader.name,
+        )
         with (
             cleanup_context,
             ScyllaBenchStressExporter(

@@ -16,9 +16,11 @@ import uuid
 import time
 import logging
 
+
 from sdcm.loader import CassandraHarryStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events.loaders import CassandraHarryEvent, CASSANDRA_HARRY_ERROR_EVENTS_PATTERNS
+from sdcm.utils.argus import report_stress_command
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.stress.base import format_stress_cmd_error
@@ -87,6 +89,13 @@ class CassandraHarryThread(DockerBasedStressThread):
 
         result = {}
         harry_failure_event = harry_finish_event = None
+
+        report_stress_command(
+            client=loader.parent_cluster.test_config.argus_client(),
+            stress_cmd=f"{node_cmd} -node {ip}",
+            log_path=log_file_name,
+            loader_name=loader.name,
+        )
         with (
             CassandraHarryStressExporter(
                 instance_name=loader.ip_address,
