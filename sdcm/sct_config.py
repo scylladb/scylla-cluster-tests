@@ -112,6 +112,22 @@ def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:
     raise ValueError(f"{value} isn't a string or a list of strings.")
 
 
+def int_or_list(value: Union[int, List[int], List[List[int]]]) -> List[int]:
+    try:
+        value = ast.literal_eval(value)
+    except Exception:  # noqa: BLE001
+        pass
+    if isinstance(value, int):
+        return [value]
+    if isinstance(value, list):
+        for element in value:
+            if isinstance(element, int):
+                continue
+            raise ValueError(f"Found non-int ({type(element)}) element in the list: {value}")
+        return value
+    raise ValueError(f"{value} isn't an int or a list of ints.")
+
+
 def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
     """Convert an environment variable into a Python's list."""
 
@@ -1005,9 +1021,10 @@ class SCTConfiguration(dict):
         dict(
             name="nemesis_interval",
             env="SCT_NEMESIS_INTERVAL",
-            type=int,
+            type=int_or_list,
             k8s_multitenancy_supported=True,
             help="""Nemesis sleep interval to use if None provided specifically in the test""",
+            # is_k8s_multitenant_value=True,
         ),
         dict(
             name="nemesis_sequence_sleep_between_ops",
@@ -3048,6 +3065,10 @@ class SCTConfiguration(dict):
         "ca-central-1",
     ]
 
+    multitenant_list_params = [
+        "nemesis_interval",
+    ]
+
     def __init__(self):  # noqa: PLR0912, PLR0914, PLR0915
         super().__init__()
         self.scylla_version = None
@@ -3687,7 +3708,14 @@ class SCTConfiguration(dict):
     def _validate_value(self, opt):
         opt["is_k8s_multitenant_value"] = False
         try:
-            opt["type"](self.get(opt["name"]))
+            value = opt["type"](self.get(opt["name"]))
+            if (
+                isinstance(value, list)
+                and opt.get("k8s_multitenancy_supported")
+                and opt["name"] in self.multitenant_list_params
+            ):
+                opt["is_k8s_multitenant_value"] = True
+
         except Exception as ex:  # noqa: BLE001
             if not (
                 self.get("cluster_backend").startswith("k8s")
