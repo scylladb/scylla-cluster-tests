@@ -1155,13 +1155,40 @@ def get_scylla_gce_images_versions(
     #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
     # or you can see brief explanation here:
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
+<<<<<<< HEAD
     filters = "(family eq 'scylla(-enterprise)?')( labels.environment eq 'production' )"
+||||||| parent of 9aca5ca41 (fix(integration-test): fix version lookup for GCE image)
+    filters = "(family eq 'scylla(-enterprise)?')"
+=======
+    filters = "(family eq 'scylla(-enterprise)?')(labels.environment eq 'production')"
+>>>>>>> 9aca5ca41 (fix(integration-test): fix version lookup for GCE image)
     if version and version != "all":
         filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
         if "rc" not in version and len(version.split(".")) < 3:
             filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
         else:
+<<<<<<< HEAD
             filters += "')"
+||||||| parent of 9aca5ca41 (fix(integration-test): fix version lookup for GCE image)
+            filters += "')"
+
+            filters += "(labels.environment eq 'production')"
+            # For simple versions, use the existing wildcard logic
+            filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
+            if "rc" not in version and len(version.split(".")) < 3:
+                filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
+            else:
+                filters += "')"
+
+=======
+            # For simple versions, use the existing wildcard logic
+            filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
+            if "rc" not in version and len(version.split(".")) < 3:
+                filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
+            else:
+                filters += "')"
+
+>>>>>>> 9aca5ca41 (fix(integration-test): fix version lookup for GCE image)
     if arch:
         if arch != VmArch.X86:
             #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
