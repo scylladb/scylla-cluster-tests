@@ -45,5 +45,5 @@ space_node_threshold: 64424
 
 alternator_port: 8080
 dynamodb_primarykey_type: HASH_AND_RANGE
-alternator_use_dns_routing: true
+alternator_use_dns_routing: false
 docker_network: 'ycsb_net'
