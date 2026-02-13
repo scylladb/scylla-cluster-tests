@@ -934,7 +934,7 @@ class AWSNode(cluster.BaseNode):
                     "/opt/scylladb/scylla-machine-image/scylla_create_devices",
                 ):
                     if self.remoter.sudo(f"test -x {create_devices_file}", ignore_status=True).ok:
-                        self.remoter.sudo(create_devices_file)
+                        self.remoter.sudo(f"sh -c 'umask 022 && {create_devices_file}'")
                         break
                 else:
                     raise IOError("scylla_create_devices file isn't found")
