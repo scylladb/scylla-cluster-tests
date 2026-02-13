@@ -1169,7 +1169,7 @@ def get_scylla_gce_images_versions(
     #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
     # or you can see brief explanation here:
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
-    filters = "(family eq 'scylla(-enterprise)?')"
+    filters = "(family eq 'scylla(-enterprise)?')(labels.environment eq 'production')"
     if version and version != "all":
         # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
         if parse_scylla_version_tag(version):
@@ -1178,9 +1178,6 @@ def get_scylla_gce_images_versions(
             normalized_version = version.replace(".", "-").replace("~", "-")
             filters += f"(labels.scylla_version eq '{normalized_version}')"
         else:
-            filters += "')"
-
-            filters += "(labels.environment eq 'production')"
             # For simple versions, use the existing wildcard logic
             filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
             if "rc" not in version and len(version.split(".")) < 3:
