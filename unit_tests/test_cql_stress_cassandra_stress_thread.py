@@ -12,13 +12,13 @@
 # Copyright (c) 2023 ScyllaDB
 
 import re
+
 import pytest
 import requests
 
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
 from sdcm.utils.decorators import timeout
 from unit_tests.dummy_remote import LocalLoaderSetDummy
-
 
 pytestmark = [
     pytest.mark.usefixtures("events"),

@@ -3,9 +3,9 @@ import logging
 from functools import lru_cache
 
 from cassandra import __version__ as PYTHON_DRIVER_VERSION
+
 from argus.client.sct.client import ArgusSCTClient
 from argus.client.sct.types import Package
-
 from sdcm.remote.base import CommandRunner
 
 LOGGER = logging.getLogger(__name__)

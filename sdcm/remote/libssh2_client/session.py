@@ -15,10 +15,11 @@ from gc import collect as gc_collect
 from select import select
 from threading import Lock
 
-from ssh2.session import Session as LibSSH2Session, LIBSSH2_SESSION_BLOCK_INBOUND, LIBSSH2_SESSION_BLOCK_OUTBOUND
-from ssh2.exceptions import SocketRecvError
-from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN
 from ssh2.channel import Channel
+from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN
+from ssh2.exceptions import SocketRecvError
+from ssh2.session import LIBSSH2_SESSION_BLOCK_INBOUND, LIBSSH2_SESSION_BLOCK_OUTBOUND
+from ssh2.session import Session as LibSSH2Session
 
 from .timings import NullableTiming
 

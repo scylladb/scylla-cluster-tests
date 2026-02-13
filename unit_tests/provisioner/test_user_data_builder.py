@@ -13,7 +13,7 @@
 
 import yaml
 
-from sdcm.provision.user_data import UserDataObject, UserDataBuilder
+from sdcm.provision.user_data import UserDataBuilder, UserDataObject
 
 
 class ExampleUserDataObject(UserDataObject):

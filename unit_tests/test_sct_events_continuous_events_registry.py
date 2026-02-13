@@ -5,13 +5,13 @@ from typing import Generator
 import pytest
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEventRegistryException
+from sdcm.sct_events.continuous_event import ContinuousEventRegistryException, ContinuousEventsRegistry
 from sdcm.sct_events.database import (
-    get_pattern_to_event_to_func_mapping,
     CompactionEvent,
+    DatabaseLogEvent,
     IndexSpecialColumnErrorEvent,
     ScyllaServerStatusEvent,
-    DatabaseLogEvent,
+    get_pattern_to_event_to_func_mapping,
 )
 from sdcm.sct_events.loaders import GeminiStressEvent
 from sdcm.sct_events.nemesis import DisruptionEvent

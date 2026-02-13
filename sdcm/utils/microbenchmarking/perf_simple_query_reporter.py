@@ -1,7 +1,7 @@
-import os
 import json
+import os
 
-from sdcm.results_analyze import BaseResultsAnalyzer, collections, TestConfig
+from sdcm.results_analyze import BaseResultsAnalyzer, TestConfig, collections
 
 
 def keys_exists(element, *keys):

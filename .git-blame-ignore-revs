@@ -5,3 +5,6 @@
 
 # reformat using ruff (https://github.com/scylladb/scylla-cluster-tests/pull/11291)
 e298929269e4a73a270ad453820c1325c2b04b07
+
+# PR #13215: format: Add import rules for ruff
+80db64484eb98f8c971402cb37e255bc519bb0e4 # format: Add import rules for ruff

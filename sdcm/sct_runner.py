@@ -15,41 +15,39 @@
 from __future__ import annotations
 
 import base64
-import logging
-import string
-import random
-import tempfile
 import datetime
 import glob
+import logging
+import random
+import string
+import tempfile
+from abc import ABC, abstractmethod
 from contextlib import suppress
+from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
 from ipaddress import ip_network
 from itertools import chain
 from math import ceil
-from typing import TYPE_CHECKING
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from textwrap import dedent
 from pathlib import Path
+from textwrap import dedent
+from typing import TYPE_CHECKING
 
 import boto3
+import google.api_core.exceptions
+import oci
 import pytz
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
-from azure.mgmt.compute.models import GalleryImageVersion
-from azure.mgmt.compute.models import VirtualMachine
-from azure.mgmt.resource.resources.models import TagsPatchResource, TagsPatchOperation
-import google.api_core.exceptions
+from azure.mgmt.compute.models import GalleryImageVersion, VirtualMachine
+from azure.mgmt.resource.resources.models import TagsPatchOperation, TagsPatchResource
 from google.cloud import compute_v1
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import Instance
-import oci
-
 from oci.core.models import (
-    LaunchInstanceDetails,
-    CreateVnicDetails,
-    UpdateInstanceDetails,
     CreateImageDetails,
+    CreateVnicDetails,
+    LaunchInstanceDetails,
+    UpdateInstanceDetails,
 )
 
 try:
@@ -61,61 +59,61 @@ except ImportError:
         LaunchInstanceShapeConfig = None
 
 from sct_ssh import ssh_run_cmd
+from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE
 from sdcm.keystore import KeyStore
+from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance, provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
+from sdcm.test_config import TestConfig
+from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.aws_utils import (
+    EC2NetworkConfiguration,
+    ec2_ami_get_root_device_name,
+    ec2_instance_wait_public_ip,
+    tags_as_ec2_tags,
+)
+from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
+from sdcm.utils.azure_utils import AzureService, list_instances_azure
 from sdcm.utils.common import (
     aws_tags_to_dict,
+    convert_name_to_ami_if_needed,
     gce_meta_to_dict,
     list_instances_aws,
     list_instances_gce,
     str_to_bool,
-    convert_name_to_ami_if_needed,
 )
-from sdcm.utils.aws_utils import (
-    ec2_instance_wait_public_ip,
-    ec2_ami_get_root_device_name,
-    tags_as_ec2_tags,
-    EC2NetworkConfiguration,
-)
-from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.context_managers import environment
 from sdcm.utils.gce_utils import (
     SUPPORTED_PROJECTS,
+    create_instance,
+    disk_from_image,
+    gce_public_addresses,
+    gce_set_labels,
     get_gce_compute_addresses_client,
     get_gce_compute_images_client,
     get_gce_compute_instances_client,
-    create_instance,
-    disk_from_image,
-    wait_for_extended_operation,
     random_zone,
-    gce_set_labels,
-    gce_public_addresses,
+    wait_for_extended_operation,
 )
-from sdcm.utils.azure_utils import AzureService, list_instances_azure
-from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
 from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.oci_utils import (
+    copy_object_to_region,
+    create_bucket_if_missing,
+    export_image_to_object_storage,
     get_oci_compute_client,
     get_oci_network_client,
     get_oci_object_storage_client,
     get_oci_work_request_client,
+    get_ubuntu_image_ocid,
+    import_image_from_object_storage,
     list_instances_oci,
     oci_public_addresses,
-    wait_for_instance_state,
     wait_for_image_state,
-    get_ubuntu_image_ocid,
-    create_bucket_if_missing,
-    export_image_to_object_storage,
-    copy_object_to_region,
-    import_image_from_object_storage,
+    wait_for_instance_state,
 )
-from sdcm.utils.context_managers import environment
-from sdcm.test_config import TestConfig
-from sdcm.node_exporter_setup import NodeExporterSetup
-from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE
 
 if TYPE_CHECKING:
-    from typing import Optional, Any, Type
+    from typing import Any, Optional, Type
 
     from mypy_boto3_ec2.literals import InstanceTypeType
 

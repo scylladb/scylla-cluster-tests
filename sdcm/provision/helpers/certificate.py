@@ -21,12 +21,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from cryptography.hazmat.primitives import serialization, hashes
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization.pkcs12 import serialize_key_and_certificates
-from cryptography import x509
 from cryptography.x509.oid import NameOID
 
 from sdcm.remote import shell_script_cmd

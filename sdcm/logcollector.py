@@ -11,66 +11,67 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import json
-import re
-import time
-import shutil
-import fnmatch
-import logging
 import datetime
+import fnmatch
+import json
+import logging
+import os
+import re
+import shutil
 import tempfile
+import time
 import traceback
 from collections import OrderedDict
-from typing import Optional, Tuple, List
-from pathlib import Path
-from functools import cached_property
 from dataclasses import dataclass
+from functools import cached_property
+from pathlib import Path
+from typing import List, Optional, Tuple
 
 import requests
-from invoke.exceptions import UnexpectedExit, Failure as InvokeFailure
 from botocore.exceptions import ClientError
+from invoke.exceptions import Failure as InvokeFailure
+from invoke.exceptions import UnexpectedExit
 
 import sdcm.monitorstack.ui as monitoring_ui
+from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.db_stats import PrometheusDBStats
+from sdcm.localhost import LocalHost
 from sdcm.paths import (
-    SCYLLA_YAML_PATH,
-    SCYLLA_PROPERTIES_PATH,
     SCYLLA_MANAGER_AGENT_YAML_PATH,
     SCYLLA_MANAGER_YAML_PATH,
+    SCYLLA_PROPERTIES_PATH,
+    SCYLLA_YAML_PATH,
 )
 from sdcm.provision import provisioner_factory
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import ProvisionerError
-from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner
+from sdcm.remote import LocalCmdRunner, RemoteCmdRunnerBase
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
-from sdcm.db_stats import PrometheusDBStats
+from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2_Failure
 from sdcm.sct_events.events_device import EVENTS_LOG_DIR, RAW_EVENTS_LOG
 from sdcm.test_config import TestConfig
+from sdcm.utils.aws_ssm_runner import SSMCommandRunner
 from sdcm.utils.common import (
     S3Storage,
-    list_instances_aws,
-    list_instances_gce,
-    remove_files,
-    get_testrun_dir,
-    search_test_id_in_latest,
+    create_remote_storage_dir,
     filter_aws_instances_by_type,
     filter_gce_instances_by_type,
     get_sct_root_path,
+    get_testrun_dir,
+    list_instances_aws,
+    list_instances_gce,
     normalize_ipv6_url,
-    create_remote_storage_dir,
+    remove_files,
+    search_test_id_in_latest,
 )
-from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.context_managers import environment
-from sdcm.utils.distro import Distro
 from sdcm.utils.decorators import retrying
+from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
+from sdcm.utils.gce_utils import gce_private_addresses, gce_public_addresses
 from sdcm.utils.k8s import KubernetesOps
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
-from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
-from sdcm.localhost import LocalHost
-from sdcm.cloud_api_client import ScyllaCloudAPIClient
-from sdcm.utils.aws_ssm_runner import SSMCommandRunner
-from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2_Failure
 
 LOGGER = logging.getLogger(__name__)
 

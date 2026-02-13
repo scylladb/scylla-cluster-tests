@@ -20,35 +20,34 @@ from textwrap import dedent
 from typing import (
     Any,
     Callable,
-    List,
     Dict,
+    List,
     Optional,
     Sequence,
 )
 
 import boto3
 from botocore.exceptions import ClientError
-from mypy_boto3_ec2 import EC2ServiceResource, EC2Client
+from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Instance
 from mypy_boto3_ec2.type_defs import (
     InstanceTypeDef,
-    SpotFleetLaunchSpecificationTypeDef,
     RequestSpotLaunchSpecificationTypeDef,
+    SpotFleetLaunchSpecificationTypeDef,
     SpotFleetRequestConfigDataTypeDef,
     TagSpecificationTypeDef,
 )
 
 from sdcm.provision.aws.constants import (
-    SPOT_REQUEST_TIMEOUT,
-    SPOT_REQUEST_WAITING_TIME,
-    STATUS_FULFILLED,
-    SPOT_STATUS_UNEXPECTED_ERROR,
-    SPOT_PRICE_TOO_LOW,
     FLEET_LIMIT_EXCEEDED_ERROR,
     SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
+    SPOT_PRICE_TOO_LOW,
+    SPOT_REQUEST_TIMEOUT,
+    SPOT_REQUEST_WAITING_TIME,
+    SPOT_STATUS_UNEXPECTED_ERROR,
+    STATUS_FULFILLED,
 )
 from sdcm.provision.common.provisioner import TagsType
-
 
 LOGGER = logging.getLogger(__name__)
 

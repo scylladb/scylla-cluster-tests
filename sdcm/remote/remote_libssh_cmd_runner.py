@@ -12,23 +12,24 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
-import time
 import socket
+import time
 
-from .libssh2_client import Client as LibSSH2Client, Timings
+from .base import RetryableNetworkException
+from .libssh2_client import Client as LibSSH2Client
+from .libssh2_client import Timings
 from .libssh2_client.exceptions import (
     AuthenticationException,
-    UnknownHostException,
+    CommandTimedOut,
     ConnectError,
     FailedToReadCommandOutput,
-    CommandTimedOut,
     FailedToRunCommand,
+    Failure,
     OpenChannelTimeout,
     SocketRecvError,
     UnexpectedExit,
-    Failure,
+    UnknownHostException,
 )
-from .base import RetryableNetworkException
 from .remote_base import RemoteCmdRunnerBase
 
 

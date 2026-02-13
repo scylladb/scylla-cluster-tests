@@ -1,11 +1,11 @@
-from typing import NamedTuple, Callable
+from typing import Callable, NamedTuple
 
 from sdcm.cluster import BaseNode
 from sdcm.send_email import LongevityEmailReporter
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.tester import ClusterTester
-from sdcm.utils.udf import UDFS
 from sdcm.utils.uda import UDAS
+from sdcm.utils.udf import UDFS
 
 
 class UDVerification(NamedTuple):

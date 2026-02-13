@@ -16,17 +16,15 @@ import time
 from functools import cached_property
 from typing import Optional
 
-import googleapiclient.errors
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
 import google.api_core.exceptions
-from google.cloud import storage
-from google.cloud import compute_v1
+import googleapiclient.errors
+from google.cloud import compute_v1, storage
 from google.cloud.compute_v1 import Firewall
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.gce_utils import wait_for_extended_operation
-
 
 LOGGER = logging.getLogger(__name__)
 

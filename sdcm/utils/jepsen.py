@@ -11,14 +11,13 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import uuid
 import logging
-from typing import Optional
+import uuid
 from functools import cached_property
+from typing import Optional
 
-from sdcm.utils.common import list_logs_by_test_id, get_free_port
-from sdcm.utils.docker_utils import ContainerManager, Container, DockerException
-
+from sdcm.utils.common import get_free_port, list_logs_by_test_id
+from sdcm.utils.docker_utils import Container, ContainerManager, DockerException
 
 JEPSEN_IMAGE = "docker.io/scylladb/hydra-loaders:jepsen-20240729"
 JEPSEN_RESULTS_PORT = 8080

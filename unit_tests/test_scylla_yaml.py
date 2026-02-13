@@ -15,7 +15,7 @@ from pathlib import Path
 
 import yaml
 
-from sdcm.provision.scylla_yaml import ServerEncryptionOptions, ClientEncryptionOptions, SeedProvider, ScyllaYaml
+from sdcm.provision.scylla_yaml import ClientEncryptionOptions, ScyllaYaml, SeedProvider, ServerEncryptionOptions
 from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions
 
 

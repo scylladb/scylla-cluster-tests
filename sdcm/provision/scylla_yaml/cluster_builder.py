@@ -12,7 +12,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 from functools import cached_property
-from typing import Optional, Any, List
+from typing import Any, List, Optional
 
 from pydantic import Field, computed_field
 

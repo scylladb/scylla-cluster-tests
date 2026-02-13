@@ -11,17 +11,17 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
 import json
-import time
 import logging
-from typing import Type, Optional, List, Tuple, Any
+import re
+import time
+from typing import Any, List, Optional, Tuple, Type
 
 import dateutil.parser
 from invoke.runners import Result
 
-from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import LogEvent, LogEventProtocol, T_log_event, SctEvent
+from sdcm.sct_events import SctEventProtocol, Severity
+from sdcm.sct_events.base import LogEvent, LogEventProtocol, SctEvent, T_log_event
 from sdcm.sct_events.stress_events import BaseStressEvent, StressEvent, StressEventProtocol
 
 LOGGER = logging.getLogger(__name__)

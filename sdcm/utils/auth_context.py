@@ -1,6 +1,6 @@
 import logging
-
 from contextlib import contextmanager
+
 from sdcm.cluster import BaseNode
 
 VALID_AUTHENTICATORS = [

@@ -13,26 +13,26 @@
 
 from __future__ import annotations
 
+import fnmatch
 import json
+import logging
+import pickle
 import time
 import uuid
-import pickle
-import fnmatch
-import logging
-from enum import Enum
-from json import JSONEncoder
-from types import new_class
-from typing import Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable
-from keyword import iskeyword
-from weakref import proxy as weakproxy
 from datetime import datetime, timezone
-from functools import partialmethod, cached_property
+from enum import Enum
+from functools import cached_property, partialmethod
+from json import JSONEncoder
+from keyword import iskeyword
+from types import new_class
+from typing import Any, Callable, Dict, Generic, List, Optional, Protocol, Tuple, Type, TypeVar, runtime_checkable
+from weakref import proxy as weakproxy
 
-import yaml
 import dateutil.parser
+import yaml
 
 from sdcm import sct_abs_path
-from sdcm.sct_events import Severity, SctEventProtocol
+from sdcm.sct_events import SctEventProtocol, Severity
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
 
 DEFAULT_SEVERITIES = sct_abs_path("defaults/severities.yaml")

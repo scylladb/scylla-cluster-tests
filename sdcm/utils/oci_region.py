@@ -22,26 +22,26 @@ layer automation on top of these primitives.
 from __future__ import annotations
 
 import logging
-from ipaddress import ip_network
 from functools import cached_property
+from ipaddress import ip_network
 from typing import Optional
 
 import oci
 from oci.core.models import (
+    CreateInternetGatewayDetails,
+    CreateSecurityListDetails,
     CreateSubnetDetails,
     CreateVcnDetails,
-    CreateSecurityListDetails,
-    CreateInternetGatewayDetails,
-    UpdateRouteTableDetails,
-    RouteRule,
     EgressSecurityRule,
     IngressSecurityRule,
     PortRange,
+    RouteRule,
     TcpOptions,
+    UpdateRouteTableDetails,
 )
 from oci.identity.models import (
-    CreateTagNamespaceDetails,
     CreateTagDetails,
+    CreateTagNamespaceDetails,
 )
 
 from sdcm.utils.get_username import get_username

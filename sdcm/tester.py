@@ -10,165 +10,190 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-import shutil
 import configparser
 import importlib
-from collections import defaultdict
-from copy import deepcopy
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict
-
-import random
+import json
 import logging
 import os
+import random
 import re
+import shutil
+import signal
 import sys
+import threading
 import time
 import traceback
 import unittest
 import unittest.mock
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from copy import deepcopy
+from dataclasses import asdict
+from functools import cache, wraps
 from pathlib import Path
-from typing import NamedTuple, Optional, Union, List, Dict, Any
+from typing import Any, Dict, List, NamedTuple, Optional, Union
 from uuid import uuid4
-from functools import wraps, cache
-import threading
-import signal
-import json
 
 import botocore
-import yaml
 import pytest
-from invoke.exceptions import UnexpectedExit, Failure
-
-from cassandra.concurrent import execute_concurrent_with_args
+import yaml
 from cassandra import ConsistencyLevel
 from cassandra.cluster import Session
+from cassandra.concurrent import execute_concurrent_with_args
+from invoke.exceptions import Failure, UnexpectedExit
 
-from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
-from argus.client.sct.types import Package, EventsInfo, LogLink
+from argus.client.sct.client import ArgusSCTClient
+from argus.client.sct.types import EventsInfo, LogLink, Package
 from argus.common.enums import TestStatus
-from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
+from sdcm import cluster_baremetal, cluster_docker, cluster_k8s, db_stats, nemesis, wait
+from sdcm.cassandra_harry_thread import CassandraHarryThread
+from sdcm.cdclog_reader_thread import CDCLogReaderThread
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
-from sdcm.provision.azure.kms_provider import AzureKmsProvider
-from sdcm.provision.gce.kms_provider import GcpKmsProvider
 from sdcm.cluster import (
-    BaseCluster,
-    NoMonitorSet,
+    MINUTE_IN_SEC,
     SCYLLA_DIR,
-    TestConfig,
-    UserRemoteCredentials,
+    BaseCluster,
     BaseLoaderSet,
     BaseMonitorSet,
-    BaseScyllaCluster,
     BaseNode,
-    MINUTE_IN_SEC,
+    BaseScyllaCluster,
+    NoMonitorSet,
+    TestConfig,
+    UserRemoteCredentials,
 )
-from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
-from sdcm.cluster_gce import ScyllaGCECluster
-from sdcm.cluster_gce import LoaderSetGCE
-from sdcm.cluster_gce import MonitorSetGCE
-from sdcm.cluster_aws import CassandraAWSCluster
-from sdcm.cluster_aws import ScyllaAWSCluster
-from sdcm.cluster_aws import LoaderSetAWS
-from sdcm.cluster_aws import MonitorSetAWS
-from sdcm.cluster_aws import VectorStoreSetAWS
-from sdcm.cluster_k8s import mini_k8s, gke, eks
-from sdcm.cluster_k8s.eks import MonitorSetEKS
+from sdcm.cluster_aws import CassandraAWSCluster, LoaderSetAWS, MonitorSetAWS, ScyllaAWSCluster, VectorStoreSetAWS
+from sdcm.cluster_azure import LoaderSetAzure, MonitorSetAzure, ScyllaAzureCluster
 from sdcm.cluster_cloud import ScyllaCloudCluster
+from sdcm.cluster_gce import LoaderSetGCE, MonitorSetGCE, ScyllaGCECluster
+from sdcm.cluster_k8s import eks, gke, mini_k8s
+from sdcm.cluster_k8s.eks import MonitorSetEKS
+from sdcm.commit_log_check_thread import CommitLogCheckThread
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
-from sdcm.mgmt import get_scylla_manager_tool
-from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
+from sdcm.db_stats import PrometheusDBStats
+from sdcm.exceptions import TestFailedByEvents
+from sdcm.gemini_thread import GeminiStressThread
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
+from sdcm.kafka.kafka_consumer import KafkaCDCReaderThread
 from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
+from sdcm.kcl_thread import CompareTablesSizesThread, KclStressThread
+from sdcm.keystore import KeyStore
+from sdcm.logcollector import (
+    BaseSCTLogCollector,
+    KubernetesAPIServerLogCollector,
+    KubernetesLogCollector,
+    KubernetesMustGatherLogCollector,
+    LoaderLogCollector,
+    MonitorLogCollector,
+    PythonSCTLogCollector,
+    ScyllaLogCollector,
+    SirenManagerLogCollector,
+    VectorStoreLogCollector,
+)
+from sdcm.mgmt import get_scylla_manager_tool
+from sdcm.ndbench_thread import NdBenchStressThread
+from sdcm.nosql_thread import NoSQLBenchStressThread
+from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
+from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from sdcm.provision.azure.provisioner import AzureProvisioner
-from sdcm.provision.network_configuration import ssh_connection_ip_type
-from sdcm.provision.provisioner import provisioner_factory
+from sdcm.provision.gce.kms_provider import GcpKmsProvider
 from sdcm.provision.helpers.certificate import (
-    create_ca,
-    update_certificate,
-    cleanup_ssl_config,
+    CA_CERT_FILE,
     CLIENT_FACING_CERTFILE,
     CLIENT_FACING_KEYFILE,
-    CA_CERT_FILE,
     SCYLLA_SSL_CONF_DIR,
+    cleanup_ssl_config,
+    create_ca,
+    update_certificate,
 )
+from sdcm.provision.network_configuration import ssh_connection_ip_type
+from sdcm.provision.provisioner import provisioner_factory
+from sdcm.remote import LOCALRUNNER, RemoteCmdRunnerBase
 from sdcm.reporting.elastic_reporter import ElasticRunReporter
 from sdcm.reporting.tooling_reporter import PythonDriverReporter
+from sdcm.results_analyze import (
+    LatencyDuringOperationsPerformanceAnalyzer,
+    PerformanceResultsAnalyzer,
+    SpecifiedStatsPerformanceAnalyzer,
+)
 from sdcm.scan_operation_thread import ScanOperationThread
-from sdcm.nosql_thread import NoSQLBenchStressThread
+from sdcm.sct_config import init_and_verify_sct_config
+from sdcm.sct_events import Severity
+from sdcm.sct_events.events_analyzer import stop_events_analyzer
+from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
+from sdcm.sct_events.grafana import start_posting_grafana_annotations
+from sdcm.sct_events.setup import (
+    enable_default_filters,
+    enable_teardown_filters,
+    start_events_device,
+    stop_events_device,
+)
+from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent, TestTimeoutEvent
 from sdcm.scylla_bench_thread import ScyllaBenchThread
-from sdcm.cassandra_harry_thread import CassandraHarryThread
+from sdcm.send_email import build_reporter, save_email_data_to_file
+from sdcm.stress.latte_thread import LatteStressThread
+from sdcm.stress_thread import CassandraStressThread, get_timeout_from_stress_cmd
 from sdcm.teardown_validators import teardown_validators_list
 from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
+from sdcm.utils import alternator
 from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
+from sdcm.utils.auth_context import temp_authenticator
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import (
-    init_monitoring_info_from_params,
-    get_ec2_services,
-    get_common_params,
-    init_db_info_from_params,
     ec2_ami_get_root_device_name,
+    get_common_params,
+    get_ec2_services,
+    init_db_info_from_params,
+    init_monitoring_info_from_params,
 )
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import (
-    format_timestamp,
-    wait_ami_available,
+    change_default_password,
     download_dir_from_cloud,
+    download_encrypt_keys,
+    format_timestamp,
+    get_data_dir_path,
     get_post_behavior_actions,
     get_testrun_status,
-    download_encrypt_keys,
-    rows_to_list,
     make_threads_be_daemonic_by_default,
-    change_default_password,
     parse_python_thread_command,
-    get_data_dir_path,
+    rows_to_list,
+    wait_ami_available,
 )
-from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
+from sdcm.utils.decorators import log_run_info, measure_time, optional_stage, retrying
 from sdcm.utils.features import is_tablets_feature_enabled
+from sdcm.utils.gce_utils import get_gce_compute_instances_client
 from sdcm.utils.get_username import get_username
-from sdcm.utils.decorators import log_run_info, retrying, measure_time, optional_stage
-from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
+from sdcm.utils.git import clone_repo, get_git_commit_id, get_git_status_info
+from sdcm.utils.hdrhistogram import (
+    make_hdrhistogram_summary,
+    make_hdrhistogram_summary_by_interval,
+)
+from sdcm.utils.issues import SkipPerIssues
+from sdcm.utils.latency import analyze_hdr_percentiles, calculate_latency
 from sdcm.utils.ldap import (
-    LDAP_USERS,
+    LDAP_BASE_OBJECT,
     LDAP_PASSWORD,
     LDAP_ROLE,
-    LDAP_BASE_OBJECT,
+    LDAP_USERS,
     LdapConfigurationError,
     LdapServerType,
 )
 from sdcm.utils.log import configure_logging, handle_exception
-from sdcm.utils.issues import SkipPerIssues
-from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
-from sdcm.db_stats import PrometheusDBStats
-from sdcm.results_analyze import (
-    PerformanceResultsAnalyzer,
-    SpecifiedStatsPerformanceAnalyzer,
-    LatencyDuringOperationsPerformanceAnalyzer,
-)
-from sdcm.sct_config import init_and_verify_sct_config
-from sdcm.sct_events import Severity
-from sdcm.sct_events.setup import (
-    enable_teardown_filters,
-    start_events_device,
-    stop_events_device,
-    enable_default_filters,
-)
-from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent, TestTimeoutEvent
-from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
-from sdcm.sct_events.events_analyzer import stop_events_analyzer
-from sdcm.sct_events.grafana import start_posting_grafana_annotations
-from sdcm.stress_thread import CassandraStressThread, get_timeout_from_stress_cmd
-from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
+from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
 from sdcm.utils.net import get_my_ip, get_sct_runner_ip
 from sdcm.utils.operations_thread import ThreadParams
+from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.profiler import ProfilerFactory
+from sdcm.utils.raft.common import validate_raft_on_nodes
 from sdcm.utils.replication_strategy_utils import LocalReplicationStrategy, NetworkTopologyReplicationStrategy
+from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 from sdcm.utils.tablets.common import TabletsConfiguration
 from sdcm.utils.threads_and_processes_alive import (
     gather_live_processes_and_dump_to_file,
@@ -179,40 +204,7 @@ from sdcm.utils.version_utils import (
     get_relocatable_pkg_url,
 )
 from sdcm.ycsb_thread import YcsbStressThread
-from sdcm.ndbench_thread import NdBenchStressThread
-from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
-from sdcm.stress.latte_thread import LatteStressThread
-from sdcm.cdclog_reader_thread import CDCLogReaderThread
-from sdcm.logcollector import (
-    KubernetesAPIServerLogCollector,
-    KubernetesLogCollector,
-    KubernetesMustGatherLogCollector,
-    LoaderLogCollector,
-    MonitorLogCollector,
-    BaseSCTLogCollector,
-    PythonSCTLogCollector,
-    ScyllaLogCollector,
-    SirenManagerLogCollector,
-    VectorStoreLogCollector,
-)
-from sdcm.send_email import build_reporter, save_email_data_to_file
-from sdcm.utils import alternator
-from sdcm.utils.profiler import ProfilerFactory
-from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER
-from sdcm.utils.gce_utils import get_gce_compute_instances_client
-from sdcm.utils.auth_context import temp_authenticator
-from sdcm.keystore import KeyStore
-from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
-from sdcm.utils.hdrhistogram import (
-    make_hdrhistogram_summary,
-    make_hdrhistogram_summary_by_interval,
-)
-from sdcm.utils.raft.common import validate_raft_on_nodes
-from sdcm.commit_log_check_thread import CommitLogCheckThread
-from sdcm.kafka.kafka_consumer import KafkaCDCReaderThread
 from test_lib.compaction import CompactionStrategy
-from sdcm.exceptions import TestFailedByEvents
-from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:

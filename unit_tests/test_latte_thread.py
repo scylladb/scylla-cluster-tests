@@ -11,8 +11,9 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import pytest
 import re
+
+import pytest
 import requests
 
 from sdcm import sct_abs_path

@@ -1,9 +1,9 @@
-import subprocess
-
-import requests
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
+
+import requests
 
 
 def get_latest_tarball_url(package_name: str) -> tuple[str, str]:

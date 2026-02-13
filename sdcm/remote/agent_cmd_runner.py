@@ -18,20 +18,20 @@ import os
 import tarfile
 import threading
 import time
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
+
 from invoke.runners import Result
 from invoke.watchers import StreamWatcher
 
 from sdcm.remote.base import CommandRunner, RetryableNetworkException, RetryMixin
 from sdcm.utils.agent_client import (
+    AgentAPIError,
     AgentClient,
     AgentClientError,
     AgentConnectionError,
     AgentTimeoutError,
-    AgentAPIError,
 )
 from sdcm.utils.decorators import retrying
-
 
 LOGGER = logging.getLogger(__name__)
 

@@ -14,32 +14,31 @@
 from __future__ import annotations
 
 import logging
-import time
 import random
-from typing import NamedTuple, TYPE_CHECKING
+import time
 from functools import cached_property
 from itertools import chain
+from typing import TYPE_CHECKING, NamedTuple
 
+from azure.core.credentials import AzureNamedKeyCredential
+from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
 from azure.identity import ClientSecretCredential
 from azure.keyvault.keys import KeyClient
-from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachine
+from azure.mgmt.keyvault import KeyVaultManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource import ResourceManagementClient
-from azure.storage.blob import BlobServiceClient
-from azure.core.credentials import AzureNamedKeyCredential
-from azure.mgmt.keyvault import KeyVaultManagementClient
-from azure.mgmt.subscription import SubscriptionClient
 from azure.mgmt.resourcegraph import ResourceGraphClient
-from azure.mgmt.resourcegraph.models import QueryRequestOptions, QueryRequest
-from azure.core.exceptions import HttpResponseError
+from azure.mgmt.resourcegraph.models import QueryRequest, QueryRequestOptions
+from azure.mgmt.subscription import SubscriptionClient
+from azure.storage.blob import BlobServiceClient
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.metaclasses import Singleton
 
 if TYPE_CHECKING:
-    from typing import Optional, Callable, Iterator
+    from typing import Callable, Iterator, Optional
 
     from azure.core.credentials import TokenCredential
     from azure.mgmt.resource.resources.models import Resource

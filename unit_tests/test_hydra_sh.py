@@ -5,7 +5,7 @@ import re
 import tempfile
 import unittest
 from functools import cached_property
-from typing import Dict, Union, Tuple, Iterable, Sequence, List
+from typing import Dict, Iterable, List, Sequence, Tuple, Union
 
 import pytest
 from parameterized import parameterized

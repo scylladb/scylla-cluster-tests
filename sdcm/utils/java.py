@@ -2,7 +2,6 @@ import os
 
 from sdcm import sct_abs_path
 
-
 JAVA_DOCKER_IMAGE = "eclipse-temurin:25-jre-alpine"
 
 

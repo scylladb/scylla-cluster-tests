@@ -3,12 +3,11 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from azure.core.exceptions import AzureError, HttpResponseError
 
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
-from sdcm.provision.provisioner import ProvisionError, InstanceDefinition
+from sdcm.provision.provisioner import InstanceDefinition, ProvisionError
 
 
 @pytest.fixture

@@ -1,18 +1,18 @@
+import logging
 import re
 from datetime import datetime, timedelta
 from enum import Enum
-import logging
-import yaml
-from typing import Optional, TYPE_CHECKING
 from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 
+import yaml
 from pydantic import BaseModel, ConfigDict
 
 if TYPE_CHECKING:
     from sdcm.mgmt.cli import ManagerTask
 
-from sdcm.utils.distro import Distro
 from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.distro import Distro
 
 DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
 LOGGER = logging.getLogger(__name__)

@@ -13,8 +13,7 @@
 
 import unittest
 
-from sdcm.utils.scylla_args import ScyllaArgParser, ScyllaArgError
-
+from sdcm.utils.scylla_args import ScyllaArgError, ScyllaArgParser
 
 SCYLLA_HELP_EXAMPLE = """\
 Scylla version 4.0.0-0.20200505.d95aa77b62 with build-id c9cf14d33523aca01a1ba502a91eb9d400de9c34 starting ...

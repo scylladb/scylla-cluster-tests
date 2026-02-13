@@ -14,87 +14,85 @@
 
 from __future__ import absolute_import, annotations
 
-import itertools
-import json
-import os
-import logging
-import random
-import socket
-import time
+import concurrent.futures
+import copy
+import ctypes
 import datetime
 import errno
-import threading
-import select
-import shutil
-import copy
-import string
-import warnings
 import getpass
-import re
-import uuid
-import zipfile
+import hashlib
 import io
-import tempfile
-import ctypes
+import itertools
+import json
+import logging
+import os
+import random
+import re
+import select
 import shlex
-from typing import Iterable, List, Optional, Dict, Union, Literal, Any, Type, Callable
-from urllib.parse import urlparse, urljoin
-from unittest.mock import Mock
-from textwrap import dedent
+import shutil
+import socket
+import string
+import tempfile
+import threading
+import time
+import uuid
+import warnings
+import zipfile
+from collections import OrderedDict, defaultdict, namedtuple
 from contextlib import closing, contextmanager
 from functools import cached_property, lru_cache, singledispatch
-from collections import defaultdict, namedtuple
-import concurrent.futures
-import hashlib
 from pathlib import Path
-from collections import OrderedDict
+from textwrap import dedent
+from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Type, Union
+from unittest.mock import Mock
+from urllib.parse import urljoin, urlparse
 
-import requests
 import boto3
+import requests
 from botocore.exceptions import ClientError
-from mypy_boto3_s3 import S3Client, S3ServiceResource
+from google.cloud.compute_v1 import Image as GceImage
+from google.cloud.compute_v1 import ListImagesRequest
+from google.cloud.compute_v1.types import Instance as GceInstance
+from google.cloud.compute_v1.types import Metadata as GceMetadata
+from google.cloud.storage import Blob as GceBlob
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Image as EC2Image
-import docker
-from google.cloud.storage import Blob as GceBlob
-from google.cloud.compute_v1.types import Metadata as GceMetadata, Instance as GceInstance
-from google.cloud.compute_v1 import ListImagesRequest, Image as GceImage
+from mypy_boto3_s3 import S3Client, S3ServiceResource
 from packaging.version import Version
 from prettytable import PrettyTable
 
+import docker
+from sdcm import wait
+from sdcm.keystore import KeyStore
 from sdcm.provision.provisioner import VmArch
+from sdcm.remote import LocalCmdRunner, RemoteCmdRunnerBase
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.argus import create_proxy_argus_s3_url
 from sdcm.utils.aws_utils import (
+    DEFAULT_AWS_REGION,
     AwsArchType,
     EksClusterForCleaner,
+    get_by_owner_ami,
     get_scylla_images_ec2_resource,
     get_ssm_ami,
-    get_by_owner_ami,
     vmarch_to_aws,
-    DEFAULT_AWS_REGION,
 )
-from sdcm.utils.parallel_object import ParallelObject
-from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
-from sdcm import wait
-from sdcm.utils.ldap import DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, LdapServerType
-from sdcm.keystore import KeyStore
 from sdcm.utils.gce_utils import (
     GkeCleaner,
     gce_public_addresses,
-    vmarch_to_gcp,
-)
-from sdcm.remote import LocalCmdRunner
-from sdcm.remote import RemoteCmdRunnerBase
-from sdcm.utils.gce_utils import (
-    get_gce_compute_instances_client,
-    get_gce_compute_images_client,
     get_gce_compute_addresses_client,
+    get_gce_compute_images_client,
+    get_gce_compute_instances_client,
     get_gce_compute_regions_client,
     get_gce_storage_client,
+    vmarch_to_gcp,
 )
+from sdcm.utils.ldap import DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, LdapServerType
+from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.version_utils import parse_scylla_version_tag
 
 LOGGER = logging.getLogger("utils")
@@ -3069,7 +3067,7 @@ def download_and_unpack_logs(test_id: str, log_type: str, download_to: str = Non
         raise ValueError("%s not found in argus logs", log_type)
 
     LOGGER.debug("Unpacking loader logs...")
-    from sdcm.monitorstack import extract_file_from_tar_archive  # noqa: PLC0415 # avoid circular import
+    from sdcm.monitorstack.service import extract_file_from_tar_archive  # noqa: PLC0415 # avoid circular import
 
     hdr_folder = extract_file_from_tar_archive(pattern=log_type, archive=logs_file, extract_dir=tmp_dir)
     LOGGER.debug("%s logs unpacked to %s", log_type, hdr_folder[test_id])

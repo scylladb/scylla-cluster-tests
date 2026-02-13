@@ -17,7 +17,6 @@ import unittest
 
 from sdcm.utils.distro import Distro, DistroError
 
-
 DISTROS_OS_RELEASE = {
     "Debian 12": """\
 PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"

@@ -1,16 +1,16 @@
 from __future__ import absolute_import
-import unittest
-import os.path
-import subprocess
-import logging
-import pickle
-import tempfile
-import json
-import zipfile
+
 import hashlib
+import json
+import logging
+import os.path
+import pickle
+import subprocess
+import tempfile
+import unittest
+import zipfile
 
-from sdcm.microbenchmarking import MicroBenchmarkingResultsAnalyzer, LargeNumberOfDatasetsException, EmptyResultFolder
-
+from sdcm.microbenchmarking import EmptyResultFolder, LargeNumberOfDatasetsException, MicroBenchmarkingResultsAnalyzer
 
 LOGGER = logging.getLogger("microbenchmarking-tests")
 

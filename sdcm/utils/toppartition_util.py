@@ -1,10 +1,9 @@
-import random
 import logging
+import random
 import re
-
-from typing import List, Tuple
-from abc import abstractmethod, ABC
+from abc import ABC, abstractmethod
 from collections import OrderedDict
+from typing import List, Tuple
 
 LOGGER = logging.getLogger(__name__)
 

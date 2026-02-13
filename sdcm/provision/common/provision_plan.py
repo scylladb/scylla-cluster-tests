@@ -16,7 +16,7 @@ from typing import List
 
 from pydantic import BaseModel
 
-from sdcm.provision.common.provisioner import ProvisionParameters, InstanceProvisionerBase, InstanceParamsBase, TagsType
+from sdcm.provision.common.provisioner import InstanceParamsBase, InstanceProvisionerBase, ProvisionParameters, TagsType
 
 LOGGER = logging.getLogger(__name__)
 

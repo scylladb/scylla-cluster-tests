@@ -1,7 +1,6 @@
 import datetime
 import logging
 
-
 from sdcm.es import ES
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 

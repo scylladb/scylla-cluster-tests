@@ -16,7 +16,6 @@ import os
 import secrets
 from textwrap import dedent
 
-
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_AGENT_PORT = 16000

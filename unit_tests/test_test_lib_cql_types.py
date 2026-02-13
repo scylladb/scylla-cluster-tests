@@ -1,5 +1,6 @@
 import unittest
-from test_lib.cql_types import CQLTypeBuilder, NOT_EMBEDDABLE_COLUMN_TYPES, COLLECTION_COLUMN_TYPES, ALL_COLUMN_TYPES
+
+from test_lib.cql_types import ALL_COLUMN_TYPES, COLLECTION_COLUMN_TYPES, NOT_EMBEDDABLE_COLUMN_TYPES, CQLTypeBuilder
 
 
 class CQLColumnTypeTest(unittest.TestCase):

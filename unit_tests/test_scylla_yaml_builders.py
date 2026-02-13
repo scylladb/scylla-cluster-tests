@@ -22,15 +22,13 @@ from unittest.mock import patch
 import pytest
 from parameterized import parameterized
 
-from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
+from sdcm.cluster import BaseCluster, BaseNode, BaseScyllaCluster
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration, ssh_connection_ip_type
-from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder, ScyllaYamlClusterAttrBuilder, ScyllaYaml
+from sdcm.provision.scylla_yaml import ScyllaYaml, ScyllaYamlClusterAttrBuilder, ScyllaYamlNodeAttrBuilder
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase
 from sdcm.sct_config import SCTConfiguration
 from sdcm.test_config import TestConfig
-
 from sdcm.utils.distro import Distro
-
 
 __builtin__ = [].__class__.__module__
 

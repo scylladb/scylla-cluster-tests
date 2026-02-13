@@ -12,7 +12,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 import base64
-from typing import List, Optional, Literal, Any
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel
 

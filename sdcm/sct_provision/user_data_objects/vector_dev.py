@@ -13,9 +13,9 @@
 from dataclasses import dataclass
 
 from sdcm.provision.common.utils import (
+    configure_backoff_timeout,
     configure_vector_target_script,
     install_vector_service,
-    configure_backoff_timeout,
 )
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 

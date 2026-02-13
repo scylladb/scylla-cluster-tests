@@ -3,10 +3,9 @@ Utility functions related to network information
 """
 
 import ipaddress
-
+import logging
 import os
 import socket
-import logging
 
 import requests
 

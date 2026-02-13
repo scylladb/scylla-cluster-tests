@@ -26,12 +26,12 @@ import os
 from datetime import datetime, timezone
 
 from sdcm.utils.context_managers import environment
-from sdcm.utils.gce_utils import GkeCleaner, SUPPORTED_PROJECTS
+from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, GkeCleaner
 from utils.cloud_cleanup import (
-    should_keep,
-    get_keep_hours_from_tags,
     DEFAULT_KEEP_HOURS,
     LOGGER,
+    get_keep_hours_from_tags,
+    should_keep,
 )
 
 

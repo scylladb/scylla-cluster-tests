@@ -13,8 +13,9 @@
 #
 
 import time
-from sdcm.utils.profiler import ProfileableProcess as LibProfileableProcess, ProfileableThread as LibProfileableThread
 
+from sdcm.utils.profiler import ProfileableProcess as LibProfileableProcess
+from sdcm.utils.profiler import ProfileableThread as LibProfileableThread
 
 __all__ = [
     "LibProfileableProcessCustomClass",

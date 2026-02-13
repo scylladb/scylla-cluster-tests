@@ -1,6 +1,6 @@
-from contextlib import ExitStack, contextmanager
 import logging
 import re
+from contextlib import ExitStack, contextmanager
 from functools import partial
 
 from sdcm import wait
@@ -9,7 +9,7 @@ from sdcm.exceptions import WaitForTimeoutError
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
-from sdcm.sct_events.teardown_validators import ValidatorEvent, ScrubValidationErrorEvent
+from sdcm.sct_events.teardown_validators import ScrubValidationErrorEvent, ValidatorEvent
 from sdcm.teardown_validators.base import TeardownValidator
 from sdcm.utils.common import S3Storage
 from sdcm.utils.parallel_object import ParallelObject

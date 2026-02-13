@@ -21,8 +21,8 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import optional_stage
-from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.features import is_tablets_feature_enabled
+from sdcm.utils.issues import SkipPerIssues
 
 DEFAULT_USER = "cassandra"
 DEFAULT_USER_PASSWORD = "cassandra"

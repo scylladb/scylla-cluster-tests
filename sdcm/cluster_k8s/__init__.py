@@ -14,61 +14,71 @@
 
 from __future__ import annotations
 
-import os
-import re
 import abc
+import base64
+import contextlib
 import json
+import logging
 import math
+import os
+import random
+import re
 import shutil
 import tempfile
 import time
-import base64
-import random
-import logging
 import traceback
-import contextlib
-from pathlib import Path
 from copy import deepcopy
 from datetime import datetime
 from difflib import unified_diff
-from functools import cached_property, partialmethod, partial
+from functools import cached_property, partial, partialmethod
+from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from textwrap import dedent
 from threading import Lock, RLock
-from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Tuple, Callable
+from typing import Any, Callable, ContextManager, Dict, List, Optional, Tuple, Type, Union
 
-import yaml
-import kubernetes as k8s
-from kubernetes.client import exceptions as k8s_exceptions
-from kubernetes.client import V1ConfigMap
-from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
 import invoke
+import kubernetes as k8s
+import yaml
 from invoke.exceptions import CommandTimedOut
+from kubernetes.client import V1ConfigMap
+from kubernetes.client import exceptions as k8s_exceptions
+from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
 
-from sdcm import sct_abs_path, cluster
+import sdcm.utils.sstable.load_inventory as datasets
+from sdcm import cluster, sct_abs_path
 from sdcm.cluster import ClusterNodesNotReady
+from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
+from sdcm.coredump import CoredumpExportFileThread
+from sdcm.db_stats import PrometheusDBStats
+from sdcm.log import SDCMAdapter
+from sdcm.mgmt import AnyManagerCluster
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
-from sdcm.sct_config import init_and_verify_sct_config
-from sdcm.test_config import TestConfig
-from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm.remote.kubernetes_cmd_runner import (
     KubernetesCmdRunner,
     KubernetesPodRunner,
 )
-from sdcm.coredump import CoredumpExportFileThread
-from sdcm.log import SDCMAdapter
-from sdcm.mgmt import AnyManagerCluster
+from sdcm.sct_config import init_and_verify_sct_config
+from sdcm.sct_events.database import ScyllaYamlUpdateEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.sct_events.database import ScyllaYamlUpdateEvent
-import sdcm.utils.sstable.load_inventory as datasets
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.test_config import TestConfig
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.common import download_from_github, shorten_cluster_name, walk_thru_data
+from sdcm.utils.decorators import log_run_info, retrying
+from sdcm.utils.decorators import timeout as timeout_wrapper
 from sdcm.utils.docker_utils import get_docker_hub_credentials
 from sdcm.utils.k8s import (
+    JSON_PATCH_TYPE,
+    KUBECTL_TIMEOUT,
+    ApiCallRateLimiter,
+    HelmValues,
+    KubernetesOps,
+    ScyllaPodsIPChangeTrackerThread,
+    TokenUpdateThread,
     add_pool_node_affinity,
     convert_cpu_units_to_k8s_value,
     convert_cpu_value_from_k8s_to_units,
@@ -77,31 +87,20 @@ from sdcm.utils.k8s import (
     get_helm_pool_affinity_values,
     get_pool_affinity_modifiers,
     get_preferred_pod_anti_affinity_values,
-    ApiCallRateLimiter,
-    JSON_PATCH_TYPE,
-    KubernetesOps,
-    KUBECTL_TIMEOUT,
-    HelmValues,
-    ScyllaPodsIPChangeTrackerThread,
-    TokenUpdateThread,
 )
-from sdcm.utils.decorators import log_run_info, retrying
-from sdcm.utils.decorators import timeout as timeout_wrapper
 from sdcm.utils.k8s.chaos_mesh import ChaosMesh
 from sdcm.utils.remote_logger import (
-    get_system_logging_thread,
     CertManagerLogger,
-    ScyllaOperatorLogger,
-    KubectlClusterEventsLogger,
-    ScyllaManagerLogger,
-    KubernetesWrongSchedulingLogger,
     HaproxyIngressLogger,
+    KubectlClusterEventsLogger,
+    KubernetesWrongSchedulingLogger,
+    ScyllaManagerLogger,
+    ScyllaOperatorLogger,
+    get_system_logging_thread,
 )
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.version_utils import ComparableScyllaOperatorVersion, ComparableScyllaVersion
 from sdcm.wait import wait_for
-from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
-
 
 ANY_KUBERNETES_RESOURCE = Union[
     Resource,

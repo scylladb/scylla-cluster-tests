@@ -16,8 +16,8 @@ from unittest.mock import MagicMock
 
 import pytest
 import requests
-from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
+from cassandra.cluster import Cluster
 
 from sdcm.utils import alternator
 from sdcm.utils.decorators import timeout

@@ -13,18 +13,19 @@
 
 from __future__ import annotations
 
-import os
-import time
-import socket
 import logging
+import os
+import socket
 import subprocess
-from abc import abstractmethod, ABCMeta
+import time
+from abc import ABCMeta, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from functools import cached_property
-from threading import Lock, Thread, Event as ThreadEvent
-from typing import TYPE_CHECKING
 from textwrap import dedent
+from threading import Event as ThreadEvent
+from threading import Lock, Thread
+from typing import TYPE_CHECKING
 
 import kubernetes as k8s
 from dateutil.parser import isoparse
@@ -39,8 +40,8 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.loaders import HDRFileMissed
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.decorators import retrying
+from sdcm.utils.k8s import KubernetesOps
 
 if TYPE_CHECKING:
     from typing import Generator

@@ -15,12 +15,12 @@ from __future__ import annotations
 import logging
 import time
 import traceback
-from typing import Optional, List, Iterable, Any
+from typing import Any, Iterable, List, Optional
 
 from dateutil.relativedelta import relativedelta
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent, EventPeriod
+from sdcm.sct_events.base import EventPeriod, SctEvent
 from sdcm.utils.metaclasses import Singleton
 
 LOGGER = logging.getLogger(__name__)

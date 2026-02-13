@@ -16,18 +16,18 @@ from __future__ import absolute_import
 
 import os
 import unittest
-from unittest.mock import Mock, patch, mock_open, sentinel
 from collections import namedtuple
+from unittest.mock import Mock, mock_open, patch, sentinel
 
 from sdcm.utils.docker_utils import (
-    _Name,
+    ContainerAlreadyRegistered,
     ContainerManager,
     DockerException,
-    NotFound,
     ImageNotFound,
+    NotFound,
     NullResource,
     Retry,
-    ContainerAlreadyRegistered,
+    _Name,
 )
 
 build_args = {}

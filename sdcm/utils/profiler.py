@@ -12,17 +12,16 @@
 # Copyright (c) 2020 ScyllaDB
 #
 
-import os
-import threading
-import multiprocessing
-import pstats
-import cProfile
-import shutil
 import atexit
+import cProfile
 import marshal
+import multiprocessing
+import os
+import pstats
+import shutil
+import threading
 import time
 from typing import List
-
 
 TIMERS = {
     "perf": time.perf_counter,

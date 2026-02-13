@@ -12,16 +12,15 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
-import uuid
 import pprint
+import uuid
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
 
 from sdcm.sct_events.loaders import CDCReaderStressEvent
-from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.stress.base import DockerBasedStressThread, format_stress_cmd_error
 from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
-
+from sdcm.utils.docker_remote import RemoteDocker
 
 LOGGER = logging.getLogger(__name__)
 

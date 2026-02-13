@@ -25,19 +25,19 @@ Example:
 import argparse
 import json
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 try:
     import oci
     from oci.identity import IdentityClient
     from oci.identity.models import (
-        CreateUserDetails,
-        CreateGroupDetails,
         AddUserToGroupDetails,
-        CreatePolicyDetails,
-        UpdatePolicyDetails,
         CreateApiKeyDetails,
+        CreateGroupDetails,
+        CreatePolicyDetails,
+        CreateUserDetails,
+        UpdatePolicyDetails,
     )
 except ImportError:
     print("ERROR: OCI Python SDK not installed.")
@@ -46,9 +46,9 @@ except ImportError:
 
 # Import RSA from cryptography for key generation
 try:
-    from cryptography.hazmat.primitives.asymmetric import rsa
-    from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
 except ImportError:
     print("ERROR: cryptography library not installed.")
     print("Install it with: pip install cryptography")

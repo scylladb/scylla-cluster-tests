@@ -13,6 +13,7 @@
 
 import logging
 import unittest.mock
+
 import pytest
 
 from sdcm import sct_config

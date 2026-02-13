@@ -1,9 +1,8 @@
 from typing import Union
 
-from .common import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
-from .cli import ScyllaManagerToolRedhatLike, ScyllaManagerToolNonRedhat, ManagerCluster
-from .operator import ScyllaManagerToolOperator, OperatorManagerCluster
-
+from .cli import ManagerCluster, ScyllaManagerToolNonRedhat, ScyllaManagerToolRedhatLike
+from .common import HostRestStatus, HostSsl, HostStatus, ScyllaManagerError, TaskStatus
+from .operator import OperatorManagerCluster, ScyllaManagerToolOperator
 
 AnyManagerTool = Union[ScyllaManagerToolOperator, ScyllaManagerToolRedhatLike, ScyllaManagerToolNonRedhat]
 AnyManagerCluster = Union[OperatorManagerCluster, ManagerCluster]

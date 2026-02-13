@@ -12,18 +12,17 @@
 # Copyright (c) 2022 ScyllaDB
 
 import logging
-from typing import List, Any
-
+from typing import Any, List
 
 from sdcm.provision import provisioner_factory
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.provision.provisioner import (
-    PricingModel,
-    VmInstance,
-    ProvisionError,
-    Provisioner,
     InstanceDefinition,
     OperationPreemptedError,
+    PricingModel,
+    Provisioner,
+    ProvisionError,
+    VmInstance,
 )
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration

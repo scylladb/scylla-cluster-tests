@@ -14,15 +14,15 @@
 import logging
 from functools import cached_property
 
-import jenkins
-import click
 import boto3
 import botocore
+import click
+import jenkins
 import requests
 
-from sdcm.utils.aws_region import AwsRegion
-from sdcm.sct_runner import AwsSctRunner, AwsFipsSctRunner
 from sdcm.keystore import KeyStore
+from sdcm.sct_runner import AwsFipsSctRunner, AwsSctRunner
+from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.common import wait_ami_available
 
 LOGGER = logging.getLogger(__name__)

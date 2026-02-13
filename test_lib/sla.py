@@ -7,9 +7,9 @@ from typing import Optional
 
 from sdcm.utils.decorators import retrying
 from sdcm.utils.loader_utils import (
+    SERVICE_LEVEL_NAME_TEMPLATE,
     STRESS_ROLE_NAME_TEMPLATE,
     STRESS_ROLE_PASSWORD_TEMPLATE,
-    SERVICE_LEVEL_NAME_TEMPLATE,
 )
 
 LOGGER = logging.getLogger(__name__)

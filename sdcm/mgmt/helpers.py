@@ -6,7 +6,6 @@ from pathlib import Path
 
 from sdcm.utils.common import download_dir_from_cloud
 
-
 CREATE_KS_REPLICATION_BLOCK_PATTERN = re.compile(r"replication\s*=\s*({.*?})")
 REPLICATION_DICT_KEYS_PATTERN = re.compile(r"'([^']+)':")
 

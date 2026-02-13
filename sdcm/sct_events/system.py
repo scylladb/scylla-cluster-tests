@@ -14,11 +14,11 @@
 import re
 import sys
 import time
-from typing import Any, Optional, Sequence, Type, List, Tuple
 from traceback import format_stack
+from typing import Any, List, Optional, Sequence, Tuple, Type
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent, SystemEvent, InformationalEvent, LogEvent, LogEventProtocol
+from sdcm.sct_events.base import InformationalEvent, LogEvent, LogEventProtocol, SctEvent, SystemEvent
 from sdcm.sct_events.continuous_event import ContinuousEvent
 
 

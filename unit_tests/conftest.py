@@ -11,9 +11,9 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import logging
 import collections
+import logging
+import os
 import shutil
 import subprocess
 import uuid
@@ -27,19 +27,19 @@ ensure_start_method()
 
 import pytest
 
-from sdcm import wait, sct_config
-from sdcm.localhost import LocalHost
+from sdcm import sct_config, wait
 from sdcm.cluster import BaseNode
 from sdcm.cluster_docker import VectorStoreSetDocker
+from sdcm.localhost import LocalHost
 from sdcm.prometheus import start_metrics_server
 from sdcm.provision import provisioner_factory
 from sdcm.provision.helpers.certificate import (
-    create_ca,
-    create_certificate,
-    SCYLLA_SSL_CONF_DIR,
     CA_CERT_FILE,
     CA_KEY_FILE,
+    SCYLLA_SSL_CONF_DIR,
     TLSAssets,
+    create_ca,
+    create_certificate,
 )
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
@@ -48,14 +48,12 @@ from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_data_dir_path
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
-
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
+from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
 from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.lib.fake_provisioner import FakeProvisioner
 from unit_tests.lib.fake_region_definition_builder import FakeDefinitionBuilder
 from unit_tests.lib.fake_remoter import FakeRemoter
-from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
-
 
 pytest_plugins = ["pytester"]
 
