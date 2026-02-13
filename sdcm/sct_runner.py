@@ -732,7 +732,7 @@ class AwsSctRunner(SctRunner):
         unused = []
         for device in devices:
             dev = device.replace("/dev/", "")
-            if len(glob.glob("/sys/class/block/{dev}/{dev}*".format(dev=dev))) == 0:
+            if len(glob.glob(f"/sys/class/block/{dev}/{dev}*")) == 0:
                 unused.append(device)
         return unused
 

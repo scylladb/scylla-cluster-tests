@@ -433,9 +433,7 @@ def test_mgmt_repair(db_cluster, manager_version):
     mgr_task = mgr_cluster.create_repair_task()
     assert mgr_task, "Failed to create repair task"
     task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
-    assert task_final_status == TaskStatus.DONE, "Task: {} final status is: {}.".format(
-        mgr_task.id, str(mgr_task.status)
-    )
+    assert task_final_status == TaskStatus.DONE, f"Task: {mgr_task.id} final status is: {mgr_task.status!s}."
 
     mgr_cluster.delete_task(task=mgr_task)
 

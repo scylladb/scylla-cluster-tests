@@ -61,9 +61,7 @@ class AWSPricing:
             ],
             MaxResults=10,
         )
-        assert response["PriceList"], "failed to get price for {instance_type} in {region_name}".format(
-            region_name=region_name, instance_type=instance_type
-        )
+        assert response["PriceList"], f"failed to get price for {instance_type} in {region_name}"
         price = response["PriceList"][0]
         price_dimensions = next(iter(json.loads(price)["terms"]["OnDemand"].values()))["priceDimensions"]
         instance_price = next(iter(price_dimensions.values()))["pricePerUnit"]["USD"]

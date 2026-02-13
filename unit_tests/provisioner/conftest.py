@@ -61,7 +61,7 @@ def params(monkeypatch):
     )
     env_config = EnvConfig(
         SCT_CLUSTER_BACKEND="azure",
-        SCT_TEST_ID=f"{str(uuid.uuid4())}",
+        SCT_TEST_ID=f"{uuid.uuid4()!s}",
         SCT_CONFIG_FILES=f'["{Path(__file__).parent.absolute()}/azure_default_config.yaml"]',
         SCT_AZURE_REGION_NAME="['eastus', 'easteu']",
         SCT_N_DB_NODES="3 1",

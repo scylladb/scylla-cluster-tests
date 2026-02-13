@@ -29,7 +29,7 @@ from sdcm.utils import common
 
 @pytest.fixture(scope="session")
 def test_id():
-    return f"{str(uuid.uuid4())}"
+    return f"{uuid.uuid4()!s}"
 
 
 def test_create_collecting_nodes(test_id, tmp_path_factory):

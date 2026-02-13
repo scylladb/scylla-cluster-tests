@@ -174,7 +174,7 @@ class SCTDedicatedHosts:
             custom_filter = []
             if tags_dict:
                 custom_filter = [
-                    {"Name": "tag:{}".format(key), "Values": value if isinstance(value, list) else [value]}
+                    {"Name": f"tag:{key}", "Values": value if isinstance(value, list) else [value]}
                     for key, value in tags_dict.items()
                 ]
             response = client.describe_hosts(Filters=custom_filter)
@@ -192,7 +192,7 @@ class SCTDedicatedHosts:
             total_items = sum([len(value) for _, value in hosts.items()])
 
         if verbose:
-            LOGGER.info("Found total of {} instances.".format(total_items))
+            LOGGER.info(f"Found total of {total_items} instances.")
 
         return hosts
 

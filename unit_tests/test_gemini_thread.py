@@ -74,20 +74,7 @@ def test_01_gemini_thread(request, docker_scylla, params):
 def test_gemini_thread_without_cluster(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy(params=params)
     test_cluster = DBCluster([docker_scylla])
-    cmd = " ".join(
-        [
-            "--duration=1m",
-            "--warmup=0",
-            "--concurrency=5",
-            "--mode=write",
-            "--cql-features=basic",
-            "--max-mutation-retries=100",
-            "--max-mutation-retries-backoff=1s",
-            "--replication-strategy=\"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\"",
-            "--table-options=\"cdc = {'enabled': true, 'ttl': 0}\"",
-            "--use-server-timestamps=false",
-        ]
-    )
+    cmd = "--duration=1m --warmup=0 --concurrency=5 --mode=write --cql-features=basic --max-mutation-retries=100 --max-mutation-retries-backoff=1s --replication-strategy=\"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\" --table-options=\"cdc = {'enabled': true, 'ttl': 0}\" --use-server-timestamps=false"
 
     gemini_thread = GeminiStressThread(
         loaders=loader_set,

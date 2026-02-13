@@ -76,11 +76,11 @@ class DockerClient(docker.DockerClient):
     def __call__(self, cmd, timeout=10):
         deprecation("consider to use Docker Python module instead of using Docker CLI commands")
 
-        res = LOCALRUNNER.run("docker {}".format(cmd), ignore_status=True, timeout=timeout)
+        res = LOCALRUNNER.run(f"docker {cmd}", ignore_status=True, timeout=timeout)
         if res.exit_status:
             if "No such container:" in res.stderr:
                 raise NotFound(res.stderr)
-            raise DockerException("command: {}, error: {}, output: {}".format(cmd, res.stderr, res.stdout))
+            raise DockerException(f"command: {cmd}, error: {res.stderr}, output: {res.stdout}")
         return res
 
 

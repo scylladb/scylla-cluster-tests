@@ -69,7 +69,7 @@ class KclStressThread(DockerBasedStressThread):
         else:
             node_cmd = stress_cmd
 
-        node_cmd = "cd /hydra-kcl && {}".format(node_cmd)
+        node_cmd = f"cd /hydra-kcl && {node_cmd}"
 
         KclStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
 

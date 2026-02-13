@@ -224,11 +224,11 @@ class KeyStore:
             md5s.append(hashlib.md5(data))
 
         if len(md5s) == 1:
-            return '"{}"'.format(md5s[0].hexdigest())
+            return f'"{md5s[0].hexdigest()}"'
 
         digests = b"".join(m.digest() for m in md5s)
         digests_md5 = hashlib.md5(digests)
-        return '"{}-{}"'.format(digests_md5.hexdigest(), len(md5s))
+        return f'"{digests_md5.hexdigest()}-{len(md5s)}"'
 
     def get_obj_if_needed(self, key, local_path, permissions):
         """Downloads an object at key to file path, checking to see if an existing file matches the current hash"""

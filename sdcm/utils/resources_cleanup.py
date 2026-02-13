@@ -192,7 +192,7 @@ def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
             if node_type and node_type == "sct-runner":
                 LOGGER.info("Skipping Sct Runner instance '%s'", instance_id)
                 continue
-            LOGGER.info("Going to delete '{instance_id}' [name={name}] ".format(instance_id=instance_id, name=name))
+            LOGGER.info(f"Going to delete '{instance_id}' [name={name}] ")
             if not dry_run:
                 response = client.terminate_instances(InstanceIds=[instance_id])
                 argus_client = init_argus_client(tags_dict.get("TestId"))
@@ -580,7 +580,7 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
         client: EC2Client = boto3.client("ec2", region_name=region)
         for instance in instance_list:
             name = instance.get("GroupName")
-            LOGGER.info("Going to delete placement group '{name} ".format(name=name))
+            LOGGER.info(f"Going to delete placement group '{name} ")
             if not dry_run:
                 try:
                     response = client.delete_placement_group(GroupName=name)

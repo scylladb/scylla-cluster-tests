@@ -105,6 +105,9 @@ lint.select = [
     "PIE",
     "B006", "B012",
     "PLW", # mainly for PLW0211
+    "UP032",  # Replace .format() with f-string
+    "FLY002",  # Replace static join with f-string
+    "RUF010",  # Use f-string conversion flags (!s, !r, !a)
 ]
 lint.ignore = ["E501", "PLR2004"]
 

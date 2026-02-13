@@ -386,7 +386,7 @@ class FillDatabaseData(ClusterTester):
             ],
             "truncates": ["TRUNCATE limit_ranges_test"],
             "inserts": [
-                "INSERT INTO limit_ranges_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id, tld)
+                f"INSERT INTO limit_ranges_test (userid, url, time) VALUES ({_id}, 'http://foo.{tld}', 42)"
                 for _id in range(4)
                 for tld in ["com", "org", "net"]
             ],
@@ -411,7 +411,7 @@ class FillDatabaseData(ClusterTester):
             ],
             "truncates": ["TRUNCATE limit_multiget_test"],
             "inserts": [
-                "INSERT INTO limit_multiget_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id, tld)
+                f"INSERT INTO limit_multiget_test (userid, url, time) VALUES ({_id}, 'http://foo.{tld}', 42)"
                 for _id in range(100)
                 for tld in ["com", "org", "net"]
             ],
@@ -457,9 +457,7 @@ class FillDatabaseData(ClusterTester):
             ],
             "truncates": ["TRUNCATE limit_sparse_test"],
             "inserts": [
-                "INSERT INTO limit_sparse_test (userid, url, day, month, year) VALUES ({}, 'http://foo.{}', 1, 'jan', 2012)".format(
-                    _id, tld
-                )
+                f"INSERT INTO limit_sparse_test (userid, url, day, month, year) VALUES ({_id}, 'http://foo.{tld}', 1, 'jan', 2012)"
                 for _id in range(100)
                 for tld in ["com", "org", "net"]
             ],
@@ -857,9 +855,9 @@ class FillDatabaseData(ClusterTester):
             "results": [
                 [[x, x] for x in range(10)],
                 [[x, x] for x in range(9, -1, -1)],
-                [[x, y, "{}{}".format(x, y)] for x in range(10) for y in range(9, -1, -1)],
-                [[x, y, "{}{}".format(x, y)] for x in range(10) for y in range(9, -1, -1)],
-                [[x, y, "{}{}".format(x, y)] for x in range(9, -1, -1) for y in range(10)],
+                [[x, y, f"{x}{y}"] for x in range(10) for y in range(9, -1, -1)],
+                [[x, y, f"{x}{y}"] for x in range(10) for y in range(9, -1, -1)],
+                [[x, y, f"{x}{y}"] for x in range(9, -1, -1) for y in range(10)],
             ],
             "invalid_queries": [
                 "SELECT c1, c2, v FROM reversed_comparator_test2 WHERE k = 0 ORDER BY c1 ASC, c2 ASC",
@@ -2303,7 +2301,7 @@ class FillDatabaseData(ClusterTester):
             "truncates": ["TRUNCATE range_with_deletes_test"],
             "inserts": [f"INSERT INTO range_with_deletes_test(k, v) VALUES ({i}, {i})" for i in range(30)]
             + [f"DELETE FROM range_with_deletes_test WHERE k = {i}" for i in random.sample(range(30), 5)],
-            "queries": ["#LENGTH SELECT * FROM range_with_deletes_test LIMIT {}".format(15)],
+            "queries": [f"#LENGTH SELECT * FROM range_with_deletes_test LIMIT {15}"],
             "results": [15],
             "min_version": "",
             "max_version": "",
@@ -2963,11 +2961,9 @@ class FillDatabaseData(ClusterTester):
             "queries": [
                 [
                     [
-                        "INSERT INTO cas_simple_test (tkn, consumed) VALUES ({},FALSE);".format(k),
-                        "UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {} IF consumed = FALSE;".format(k),
-                        "UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {} IF consumed = FALSE;".format(
-                            k
-                        ).format(i),
+                        f"INSERT INTO cas_simple_test (tkn, consumed) VALUES ({k},FALSE);",
+                        f"UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {k} IF consumed = FALSE;",
+                        f"UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {k} IF consumed = FALSE;",
                     ]
                     for k in range(1, 10)
                 ][j][i]

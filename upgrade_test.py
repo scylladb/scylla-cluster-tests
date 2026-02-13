@@ -84,7 +84,7 @@ def truncate_entries(func):
                     self.actions_log.info("Finish truncate simple tables")
                 except cassandra.DriverException as details:
                     InfoEvent(
-                        message=f"Failed truncate simple tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
+                        message=f"Failed truncate simple tables. Error: {details!s}. Traceback: {traceback.format_exc()}",
                         severity=Severity.ERROR,
                     ).publish()
                 self.validate_truncated_entries_for_table(session=session, system_truncated=True)
@@ -207,14 +207,12 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 self.assertEqual(
                     str(count[0][0]),
                     "0",
-                    msg="Expected that there is no data in the table truncate_ks.{}, but found {} rows".format(
-                        table_name, count[0][0]
-                    ),
+                    msg=f"Expected that there is no data in the table truncate_ks.{table_name}, but found {count[0][0]} rows",
                 )
                 self.actions_log.info(f"Finish read data from {table_name} tables ")
             except Exception as details:  # noqa: BLE001
                 InfoEvent(
-                    message=f"Failed read data from {table_name} tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
+                    message=f"Failed read data from {table_name} tables. Error: {details!s}. Traceback: {traceback.format_exc()}",
                     severity=Severity.ERROR,
                 ).publish()
 
@@ -324,7 +322,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 new_is_enterprise = "scylla-enterprise" in result.stdout
 
             scylla_pkg = "scylla-enterprise" if new_is_enterprise else "scylla"
-            ver_suffix = r"\*{}".format(new_version) if new_version else ""
+            ver_suffix = rf"\*{new_version}" if new_version else ""
             scylla_pkg_ver = f"{scylla_pkg}{ver_suffix}"
 
             if orig_is_enterprise and ComparableScyllaVersion(
@@ -343,7 +341,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     scylla_pkg_ver += f" {scylla_pkg}-machine-image"
             with self.actions_log.action_scope("updating packages"):
                 if node.distro.is_rhel_like:
-                    node.remoter.run(r"sudo yum update {}\* -y".format(scylla_pkg_ver))
+                    node.remoter.run(rf"sudo yum update {scylla_pkg_ver}\* -y")
                 else:
                     node.remoter.sudo("apt-get update")
                     node.remoter.sudo(
@@ -525,13 +523,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     if sstable_version_regex.search(f)
                 }
 
-                assert len(sstable_versions) == 1, "expected all table format to be the same found {}".format(
-                    sstable_versions
-                )
+                assert len(sstable_versions) == 1, f"expected all table format to be the same found {sstable_versions}"
                 assert list(sstable_versions)[0] == self.expected_sstable_format_version, (
-                    "expected to format version to be '{}', found '{}'".format(
-                        self.expected_sstable_format_version, list(sstable_versions)[0]
-                    )
+                    f"expected to format version to be '{self.expected_sstable_format_version}', found '{list(sstable_versions)[0]}'"
                 )
             except Exception as ex:  # noqa: BLE001
                 self.log.warning(ex)
@@ -618,7 +612,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     # in base and this view is not backing a secondary index)
     # @staticmethod
     def search_for_idx_token_error_after_upgrade(self, node, step):
-        self.log.debug("Search for idx_token error. Step {}".format(step))
+        self.log.debug(f"Search for idx_token error. Step {step}")
         idx_token_error = list(
             node.follow_system_log(patterns=["Column idx_token doesn't exist"], start_from_beginning=True)
         )
@@ -829,7 +823,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if all(upgradesstables):
             self.actions_log.info("Upgrading sstables if new version is available")
             tables_upgraded = self.db_cluster.run_func_parallel(func=self.wait_for_sstable_upgrade)
-            assert all(tables_upgraded), "Failed to upgrade the sstable format {}".format(tables_upgraded)
+            assert all(tables_upgraded), f"Failed to upgrade the sstable format {tables_upgraded}"
 
         # Verify sstabledump / scylla sstable dump-data
         self.actions_log.info("Starting sstabledump to verify correctness of sstables")
@@ -1262,7 +1256,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         )
         InfoEvent(message="Step12 - Search for errors in scylla log").publish()
         for node in self.db_cluster.nodes:
-            self.search_for_idx_token_error_after_upgrade(node=node, step=f"{str(node)} after upgrade")
+            self.search_for_idx_token_error_after_upgrade(node=node, step=f"{node!s} after upgrade")
         InfoEvent(message="Step13 - Checking how many failed_to_load_scheme errors happened during the test").publish()
         error_factor = 3
         schema_load_error_num = self.count_log_errors(
@@ -1768,6 +1762,6 @@ class UpgradeCustomTest(UpgradeTest):
         if all(upgradesstables):
             InfoEvent(message="Upgrading sstables if new version is available").publish()
             tables_upgraded = self.db_cluster.run_func_parallel(func=self.wait_for_sstable_upgrade)
-            assert all(tables_upgraded), "Failed to upgrade the sstable format {}".format(tables_upgraded)
+            assert all(tables_upgraded), f"Failed to upgrade the sstable format {tables_upgraded}"
 
         InfoEvent(message="all nodes were upgraded, and last workaround is verified.").publish()

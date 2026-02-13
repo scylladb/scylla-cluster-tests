@@ -54,7 +54,7 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
     ) -> dict:
         doc = self.get_test_by_id(test_id)
         if not doc:
-            self.log.error("Cannot find test by id: {}!".format(test_id))
+            self.log.error(f"Cannot find test by id: {test_id}!")
             return False
 
         test_stats = self._get_perf_simple_query_result(doc)
@@ -71,11 +71,11 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
         es_base_path = "hits.hits"
         es_source_path = es_base_path + "._source"
         filter_path = [
-            ".".join([es_base_path, "_id"]),
-            ".".join([es_source_path, "results", "perf_simple_query_result"]),
-            ".".join([es_source_path, "setup_details", "instance_type_db"]),
-            ".".join([es_source_path, "test_details"]),
-            ".".join([es_source_path, "versions"]),
+            f"{es_base_path}._id",
+            f"{es_source_path}.results.perf_simple_query_result",
+            f"{es_source_path}.setup_details.instance_type_db",
+            f"{es_source_path}.test_details",
+            f"{es_source_path}.versions",
         ]
 
         tests_filtered = self._es.search(

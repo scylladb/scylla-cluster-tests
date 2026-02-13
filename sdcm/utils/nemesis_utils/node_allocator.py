@@ -143,7 +143,7 @@ class NemesisNodeAllocator(metaclass=Singleton):
                 dc_str = f"dc_idx={dc_idx}" if dc_idx is not None else ""
                 rack_str = f"rack={rack}" if rack is not None else ""
                 seed_str = f"is_seed={is_seed}" if is_seed is not DefaultValue else ""
-                filter_str = ", ".join([dc_str, rack_str, seed_str])
+                filter_str = f"{dc_str}, {rack_str}, {seed_str}"
                 reason = (
                     f"The following '{pool_type.value}' nodes are available for selection, but none of "
                     f"them match the specified criteria ({filter_str}).\n"

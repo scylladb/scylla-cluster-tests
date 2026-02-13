@@ -165,7 +165,7 @@ class CoredumpThreadBase(Thread):
             try:
                 core_info.process_retry += 1
                 if self.upload_retry_limit < core_info.process_retry:
-                    self.log.error(f"Maximum retry uploading is reached for core {str(core_info)}")
+                    self.log.error(f"Maximum retry uploading is reached for core {core_info!s}")
                     in_progress.remove(core_info)
                     completed.append(core_info)
                     continue
@@ -186,7 +186,7 @@ class CoredumpThreadBase(Thread):
         try:
             core_info.publish_event()
         except Exception as exc:  # noqa: BLE001
-            self.log.error(f"Failed to publish coredump event due to the: {str(exc)}")
+            self.log.error(f"Failed to publish coredump event due to the: {exc!s}")
 
     def extract_info_from_core_pids(
         self, new_cores: Optional[List[CoreDumpInfo]], exclude_cores: List[CoreDumpInfo]
@@ -236,7 +236,7 @@ class CoredumpThreadBase(Thread):
         if core_info.download_url:
             return False
         if not core_info.corefile:
-            self.log.error(f"{str(core_info)} has inaccessible corefile, can't upload it")
+            self.log.error(f"{core_info!s} has inaccessible corefile, can't upload it")
             return False
         try:
             self.log.debug(f"Start uploading file: {core_info.corefile}")
@@ -248,7 +248,7 @@ class CoredumpThreadBase(Thread):
             return True
         except Exception as exc:
             core_info.download_instructions = "failed to upload core"
-            self.log.error(f"Following error occurred during uploading coredump {core_info.corefile}: {str(exc)}")
+            self.log.error(f"Following error occurred during uploading coredump {core_info.corefile}: {exc!s}")
             raise
 
     @cached_property
@@ -529,7 +529,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                         raise ValueError(f"Date has unknown format: {timestring}")
                     event_timestamp = datetime.strptime(timestring, fmt).timestamp()
                 except Exception as exc:  # noqa: BLE001
-                    self.log.error(f"Failed to convert date '{line}' ({timestring}), due to error: {str(exc)}")
+                    self.log.error(f"Failed to convert date '{line}' ({timestring}), due to error: {exc!s}")
         core_info.update(
             executable=executable,
             command_line=command_line,

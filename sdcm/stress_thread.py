@@ -166,9 +166,9 @@ class CassandraStressThread(DockerBasedStressThread):
 
     def adjust_cmd_keyspace_name(self, stress_cmd, keyspace_idx):
         if self.keyspace_name:
-            stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(self.keyspace_name))
+            stress_cmd = stress_cmd.replace(" -schema ", f" -schema keyspace={self.keyspace_name} ")
         elif "keyspace=" not in stress_cmd:  # if keyspace is defined in the command respect that
-            stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace{} ".format(keyspace_idx))
+            stress_cmd = stress_cmd.replace(" -schema ", f" -schema keyspace=keyspace{keyspace_idx} ")
         return stress_cmd
 
     def adjust_cmd_compaction_strategy(self, stress_cmd):

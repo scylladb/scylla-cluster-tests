@@ -225,7 +225,7 @@ class PerftuneOutputChecker:
         for mask_value in mask_int_values:
             random_irq_int_value = random.randint(0, mask_value)
             # The irq_cpu_mask cannot be greater than the cpu_mask, since it is a part of it
-            new_mask_string = "{0:x}".format(random_irq_int_value)  # converting back to base 16
+            new_mask_string = f"{random_irq_int_value:x}"  # converting back to base 16
             padded_new_mask_string = f"0x{new_mask_string.rjust(8, '0')}"  # Padding
             new_masks.append(padded_new_mask_string)
         return ",".join(new_masks)

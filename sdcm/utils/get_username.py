@@ -60,7 +60,7 @@ def get_username() -> str:  # noqa: PLR0911
         return get_email_user(res.stdout)
 
     # We didn't find email, fallback to current user with unknown email user identifier
-    return "linux_user={}".format(current_linux_user)
+    return f"linux_user={current_linux_user}"
 
 
 if __name__ == "__main__":

@@ -101,7 +101,7 @@ class CDCReplicationTest(ClusterTester):
         self.test_replication(False, Mode.DELTA)
 
     def test_replication_gemini(self, mode: Mode) -> None:
-        self.log.info("Using gemini to generate workload. Mode: {}".format(mode.name))
+        self.log.info(f"Using gemini to generate workload. Mode: {mode.name}")
         self.test_replication(True, mode)
 
     def test_replication_gemini_delta(self) -> None:
@@ -187,14 +187,14 @@ class CDCReplicationTest(ClusterTester):
         # One more round would cause the nodes to run out of disk space.
         no_rounds = 9
         for rnd in range(no_rounds):
-            self.log.info("Starting round {}".format(rnd))
+            self.log.info(f"Starting round {rnd}")
 
             self.log.info("Starting nemesis")
             self.db_cluster.start_nemesis()
 
             self.log.info("Waiting for workload generation to finish (~30 minutes)...")
             stress_results = self.verify_gemini_results(queue=stress_thread)
-            self.log.info("gemini results: {}".format(stress_results))
+            self.log.info(f"gemini results: {stress_results}")
 
             self.log.info("Waiting for replicator to finish (sleeping 180s)...")
             time.sleep(180)
@@ -290,10 +290,10 @@ class CDCReplicationTest(ClusterTester):
         self.log.info("Waiting for stressor to finish...")
         if is_gemini_test:
             stress_results = self.verify_gemini_results(queue=stress_thread)
-            self.log.info("gemini results: {}".format(stress_results))
+            self.log.info(f"gemini results: {stress_results}")
         else:
             stress_results = stress_thread.get_results()
-            self.log.info("cassandra-stress results: {}".format(list(stress_results)))
+            self.log.info(f"cassandra-stress results: {list(stress_results)}")
 
         self.log.info("Waiting for replicator to finish (sleeping 60s)...")
         time.sleep(60)
@@ -347,7 +347,7 @@ class CDCReplicationTest(ClusterTester):
 
         migrate_ok = res.ok
         if not migrate_ok:
-            self.log.error("scylla-migrate command returned status {}".format(res.exit_status))
+            self.log.error(f"scylla-migrate command returned status {res.exit_status}")
         with open(migrate_log_dst_path, encoding="utf-8") as file:
             consistency_ok = "Consistency check OK.\n" in (line for line in file)
 
@@ -388,22 +388,16 @@ class CDCReplicationTest(ClusterTester):
         # We run the replicator in a tmux session so that remoter.run returns immediately
         # (the replicator will run in the background). We redirect the output to a log file for later extraction.
         replicator_script = dedent(
-            """
+            f"""
             (cat >runreplicator.sh && chmod +x runreplicator.sh && tmux new-session -d -s 'replicator' ./runreplicator.sh) <<'EOF'
             #!/bin/bash
 
-            java -cp replicator.jar com.scylladb.cdc.replicator.Main -k {} -t {} -s {} -d {} -cl one -m {} 2>&1 | tee cdc-replicator.log
+            java -cp replicator.jar com.scylladb.cdc.replicator.Main -k {self.KS_NAME} -t {self.TABLE_NAME} -s {self.db_cluster.nodes[0].external_address} -d {self.cs_db_cluster.nodes[0].external_address} -cl one -m {mode_str(mode)} 2>&1 | tee cdc-replicator.log
             EOF
-        """.format(
-                self.KS_NAME,
-                self.TABLE_NAME,
-                self.db_cluster.nodes[0].external_address,
-                self.cs_db_cluster.nodes[0].external_address,
-                mode_str(mode),
-            )
+        """
         )
 
-        self.log.info("Replicator script:\n{}".format(replicator_script))
+        self.log.info(f"Replicator script:\n{replicator_script}")
 
         self.log.info("Starting replicator.")
         res = self.loaders.nodes[0].remoter.run(cmd=replicator_script)

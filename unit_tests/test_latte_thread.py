@@ -86,7 +86,7 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
 
     @timeout(timeout=60)
     def check_metrics():
-        output = requests.get("http://{}/metrics".format(prom_address)).text
+        output = requests.get(f"http://{prom_address}/metrics").text
         assert "sct_latte_user_gauge" in output
 
         regex = re.compile(r"^sct_latte_user_gauge.*?([0-9\.]*?)$", re.MULTILINE)

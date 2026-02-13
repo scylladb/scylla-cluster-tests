@@ -152,7 +152,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
                 set_tags_on_instances(
                     region_name=provision_parameters.region_name,
                     instance_ids=[instance.instance_id],
-                    tags={"Name": "spot_fleet_{}_{}".format(instance.instance_id, ind)} | instance_tags,
+                    tags={"Name": f"spot_fleet_{instance.instance_id}_{ind}"} | instance_tags,
                 )
         return instances
 
@@ -232,7 +232,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
             set_tags_on_instances(
                 region_name=provision_parameters.region_name,
                 instance_ids=[instance_id],
-                tags={"Name": "spot_fleet_{}_{}".format(instance_id, ind)} | instance_tags,
+                tags={"Name": f"spot_fleet_{instance_id}_{ind}"} | instance_tags,
             )
         self._ec2_client(provision_parameters).cancel_spot_fleet_requests(
             SpotFleetRequestIds=[request_id], TerminateInstances=False
@@ -336,7 +336,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
             set_tags_on_instances(
                 region_name=provision_parameters.region_name,
                 instance_ids=[instance_id],
-                tags={"Name": "spot_{}_{}".format(instance_id, ind)} | instance_tags,
+                tags={"Name": f"spot_{instance_id}_{ind}"} | instance_tags,
             )
         self._ec2_client(provision_parameters).cancel_spot_instance_requests(SpotInstanceRequestIds=request_ids)
         return [

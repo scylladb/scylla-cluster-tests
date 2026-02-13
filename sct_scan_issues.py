@@ -66,7 +66,7 @@ def scan_issue_skips():
                 name = get_value(node.func)
                 if name == "SkipPerIssues":
                     args = [get_value(n) for n in node.args]
-                    click.secho(f"{file_path.name}:{node.lineno}: SkipPerIssues({repr(args)})", fg="green")
+                    click.secho(f"{file_path.name}:{node.lineno}: SkipPerIssues({args!r})", fg="green")
                     check = SkipPerIssues(*args[:1], params=params)
                     issues_opened = check.issues_opened()
 

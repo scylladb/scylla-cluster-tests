@@ -293,7 +293,7 @@ class FileLog(CommandLog):
                 full_path = os.path.join(root, f)
                 if except_patterns in full_path:
                     continue
-                if full_path.endswith(search_pattern) or fnmatch.fnmatch(full_path, "*{}".format(search_pattern)):
+                if full_path.endswith(search_pattern) or fnmatch.fnmatch(full_path, f"*{search_pattern}"):
                     if os.path.islink(full_path):
                         full_path = os.path.realpath(full_path)
                     local_files.append(full_path)
@@ -311,14 +311,14 @@ class FileLog(CommandLog):
 
     def _is_file_collected(self, local_dst):
         for collected_file in os.listdir(local_dst):
-            if self.name in collected_file or fnmatch.fnmatch(collected_file, "*{}".format(self.name)):
+            if self.name in collected_file or fnmatch.fnmatch(collected_file, f"*{self.name}"):
                 return True
         return False
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         os.makedirs(local_dst, exist_ok=True)
         if self.search_locally and local_search_path:
-            search_pattern = self.name if not node else "/".join([node.name, self.name])
+            search_pattern = self.name if not node else f"{node.name}/{self.name}"
             local_logfiles = self.find_local_files(local_search_path, search_pattern)
             for logfile in local_logfiles:
                 shutil.copy(src=logfile, dst=local_dst)
@@ -660,14 +660,12 @@ class LogCollector:
                 entity.set_params(self.params)
 
     def create_local_storage_dir(self, base_local_dir):
-        local_dir = os.path.join(
-            base_local_dir, self.current_run, "{}-{}".format(self.cluster_log_type, self.test_id[:8])
-        )
+        local_dir = os.path.join(base_local_dir, self.current_run, f"{self.cluster_log_type}-{self.test_id[:8]}")
         try:
             os.makedirs(local_dir, exist_ok=True)
         except OSError as details:
             if not os.path.exists(local_dir):
-                LOGGER.error("Folder is not created. {}".format(details))
+                LOGGER.error(f"Folder is not created. {details}")
                 raise
         return local_dir
 
@@ -678,17 +676,17 @@ class LogCollector:
 
         if ssh_connected := node.remoter.is_up():
             try:
-                result = node.remoter.run("mkdir -p {}".format(remote_dir), ignore_status=True)
+                result = node.remoter.run(f"mkdir -p {remote_dir}", ignore_status=True)
 
                 if result.exited > 0:
-                    LOGGER.error("Remote storing folder not created.\n{}".format(result))
+                    LOGGER.error(f"Remote storing folder not created.\n{result}")
                     remote_dir = self.node_remote_dir
 
             except (Libssh2_Failure, InvokeFailure) as details:
                 LOGGER.error("Error during creating remote directory %s", details)
         elif not ssh_connected and (ssm_runner := node.aws_ssm_runner):
             try:
-                ssm_result = ssm_runner.run("mkdir -p {}".format(remote_dir), ignore_status=True)
+                ssm_result = ssm_runner.run(f"mkdir -p {remote_dir}", ignore_status=True)
                 ok = ssm_result.ok
                 if not ok:
                     LOGGER.error("SSM command failed for instance %s: mkdir", node._instance.get("InstanceId"))

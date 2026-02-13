@@ -270,7 +270,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             )
             # Run all stress commands
             params.update(dict(stats_aggregate_cmds=False))
-            self.log.debug("RUNNING stress cmd: {}".format(stress_cmd))
+            self.log.debug(f"RUNNING stress cmd: {stress_cmd}")
             stress_queue.append(self.run_stress_thread(**params))
 
         for stress in stress_queue:

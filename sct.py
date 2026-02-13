@@ -1508,7 +1508,7 @@ def show_log(test_id, output_format, update_argus: bool):
         table.align = "l"
         for log in files:
             table.add_row([log["date"].strftime("%Y%m%d_%H%M%S"), log["type"], log["link"]])
-        click.echo(table.get_string(title="Log links for testrun with test id {}".format(test_id)))
+        click.echo(table.get_string(title=f"Log links for testrun with test id {test_id}"))
     elif output_format == "markdown":
         click.echo("\n## Logs\n")
         for log in files:
@@ -1533,7 +1533,7 @@ def show_log(test_id, output_format, update_argus: bool):
 def show_monitor(test_id, date_time, kill, cluster_name):
     add_file_logger()
 
-    click.echo("Search monitoring stack archive files for test id {} and restoring...".format(test_id))
+    click.echo(f"Search monitoring stack archive files for test id {test_id} and restoring...")
     containers = {}
     try:
         containers = restore_monitoring_stack(test_id, date_time)
@@ -1591,7 +1591,7 @@ def search_builder(test_id):
     for result in results:
         tbl.add_row([result["builder"]["name"], result["builder"]["public_ip"], result["path"]])
 
-    click.echo(tbl.get_string(title="Found builders for Test-id: {}".format(test_id)))
+    click.echo(tbl.get_string(title=f"Found builders for Test-id: {test_id}"))
 
 
 @investigate.command("show-events", help="Return content of file events_log/events for running job by test-id")
@@ -1866,7 +1866,7 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
                 [current_cluster_type, create_proxy_argus_s3_url(link).format(collector.test_id, link.split("/")[-1])]
             )
 
-    click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
+    click.echo(table.get_string(title=f"Collected logs by test-id: {collector.test_id}"))
     update_sct_runner_tags(backend=backend, test_id=collector.test_id, tags={"logs_collected": True})
 
     # Always send collected logs to Argus, even if there were collection errors

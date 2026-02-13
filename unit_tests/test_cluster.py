@@ -540,16 +540,12 @@ class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):
 
 class TestNodetoolStatus(unittest.TestCase):
     def test_can_get_nodetool_status_typical(self):
-        resp = "\n".join(
-            [
-                "Datacenter: eastus",
-                "==================",
-                "Status=Up/Down",
-                "|/ State=Normal/Leaving/Joining/Moving",
-                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
-                "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
-            ]
+        resp = (
+            "Datacenter: eastus\n==================\nStatus=Up/Down\n"
+            "|/ State=Normal/Leaving/Joining/Moving\n"
+            "--  Address   Load       Tokens       Owns    Host ID                               Rack\n"
+            "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\n"
+            "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a"
         )
         node = NodetoolDummyNode(resp=resp)
         db_cluster = DummyScyllaCluster([node])
@@ -579,16 +575,7 @@ class TestNodetoolStatus(unittest.TestCase):
 
     def test_can_get_nodetool_status_typical_with_one_space_after_host_id(self):
         """case for https://github.com/scylladb/scylla-cluster-tests/issues/7274"""
-        resp = "\n".join(
-            [
-                "Datacenter: datacenter1",
-                "=======================",
-                "Status=Up/Down",
-                "|/ State=Normal/Leaving/Joining/Moving",
-                "-- Address    Load      Tokens Owns Host ID                              Rack ",
-                "UN 172.17.0.2 202.92 KB 256    ?    7b8f86bf-c70c-4246-a273-146057e12431 rack1",
-            ]
-        )
+        resp = "Datacenter: datacenter1\n=======================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n-- Address    Load      Tokens Owns Host ID                              Rack \nUN 172.17.0.2 202.92 KB 256    ?    7b8f86bf-c70c-4246-a273-146057e12431 rack1"
         node = NodetoolDummyNode(resp=resp)
         db_cluster = DummyScyllaCluster([node])
 
@@ -608,23 +595,7 @@ class TestNodetoolStatus(unittest.TestCase):
         }
 
     def test_datacenter_name_per_region(self):
-        resp = "\n".join(
-            [
-                "Datacenter: eastus",
-                "==================",
-                "Status=Up/Down",
-                "|/ State=Normal/Leaving/Joining/Moving",
-                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
-                "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
-                "Datacenter: westus",
-                "==================",
-                "Status=Up/Down",
-                "|/ State=Normal/Leaving/Joining/Moving",
-                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                "UN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a",
-            ]
-        )
+        resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a\nDatacenter: westus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
         node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34")
         node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
         node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34")
@@ -638,23 +609,7 @@ class TestNodetoolStatus(unittest.TestCase):
         assert datacenter_name_per_region == {"east-us": "eastus"}
 
     def test_datacenter_name_per_region_when_region_doesnt_have_live_nodes(self):
-        resp = "\n".join(
-            [
-                "Datacenter: eastus",
-                "==================",
-                "Status=Up/Down",
-                "|/ State=Normal/Leaving/Joining/Moving",
-                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
-                "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
-                "Datacenter: westus",
-                "==================",
-                "Status=Up/Down",
-                "|/ State=Normal/Leaving/Joining/Moving",
-                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                "DN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a",
-            ]
-        )
+        resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a\nDatacenter: westus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nDN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
         node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34")
         node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
         node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34", db_up=False)
@@ -668,23 +623,7 @@ class TestNodetoolStatus(unittest.TestCase):
         assert datacenter_name_per_region == {}
 
     def test_datacenter_name_per_region_when_first_node_is_dn(self):
-        resp = "\n".join(
-            [
-                "Datacenter: eastus",
-                "==================",
-                "Status=Up/Down",
-                "|/ State=Normal/Leaving/Joining/Moving",
-                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                "DN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
-                "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
-                "Datacenter: westus",
-                "==================",
-                "Status=Up/Down",
-                "|/ State=Normal/Leaving/Joining/Moving",
-                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                "UN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a",
-            ]
-        )
+        resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nDN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a\nDatacenter: westus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
         node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34", db_up=False)
         node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
         node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34")
@@ -698,23 +637,7 @@ class TestNodetoolStatus(unittest.TestCase):
         assert datacenter_name_per_region == {"east-us": "eastus"}
 
     def test_get_rack_names_per_datacenter_and_rack_idx(self):
-        resp = "\n".join(
-            [
-                "Datacenter: eastus",
-                "==================",
-                "Status=Up/Down",
-                "|/ State=Normal/Leaving/Joining/Moving",
-                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
-                "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
-                "Datacenter: westus",
-                "==================",
-                "Status=Up/Down",
-                "|/ State=Normal/Leaving/Joining/Moving",
-                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                "UN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a",
-            ]
-        )
+        resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a\nUN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a\nDatacenter: westus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
         node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34", myrack=1)
         node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153", myrack=1)
         node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34", myrack=2)
@@ -736,17 +659,7 @@ class TestNodetoolStatus(unittest.TestCase):
         }
 
     def test_can_get_nodetool_status_ipv6(self):
-        resp = "\n".join(
-            [
-                "Datacenter: eu-north",
-                "====================",
-                "Status=Up/Down",
-                "|/ State=Normal/Leaving/Joining/Moving",
-                "--  Address                                 Load       Tokens       Owns    Host ID                Rack",
-                "UN  2a05:d016:cf8:de00:e07d:5832:c5c0:36a0  774 KB     256          ?       e2ed6943  1a",
-                "UN  2a05:d016:cf8:de00:339e:d0d:9446:1980   1.04 MB    256          ?       d67e8502  1a",
-            ]
-        )
+        resp = "Datacenter: eu-north\n====================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address                                 Load       Tokens       Owns    Host ID                Rack\nUN  2a05:d016:cf8:de00:e07d:5832:c5c0:36a0  774 KB     256          ?       e2ed6943  1a\nUN  2a05:d016:cf8:de00:339e:d0d:9446:1980   1.04 MB    256          ?       d67e8502  1a"
         node = NodetoolDummyNode(resp=resp)
         db_cluster = DummyScyllaCluster([node])
 
@@ -774,19 +687,7 @@ class TestNodetoolStatus(unittest.TestCase):
         }
 
     def test_can_get_nodetool_status_azure(self):
-        resp = "\n".join(
-            [
-                "Datacenter: eastus",
-                "==================",
-                "Status=Up/Down",
-                "|/ State=Normal/Leaving/Joining/Moving",
-                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                "UN  10.0.0.4  431 KB     256          ?       ed6af9a0-8c22-4813-ac9b-6fbeb462b687  ",
-                "UN  10.0.0.5  612 KB     256          ?       caa15869-cfb4-4229-85d7-0f4832986237  1",
-                "UN  10.0.0.6  806 KB     256          ?       3046ded9-ce17-4a3a-ac44-a3ada6916972  ",
-                "",
-            ]
-        )
+        resp = "Datacenter: eastus\n==================\nStatus=Up/Down\n|/ State=Normal/Leaving/Joining/Moving\n--  Address   Load       Tokens       Owns    Host ID                               Rack\nUN  10.0.0.4  431 KB     256          ?       ed6af9a0-8c22-4813-ac9b-6fbeb462b687  \nUN  10.0.0.5  612 KB     256          ?       caa15869-cfb4-4229-85d7-0f4832986237  1\nUN  10.0.0.6  806 KB     256          ?       3046ded9-ce17-4a3a-ac44-a3ada6916972  \n"
         node = NodetoolDummyNode(resp=resp)
         db_cluster = DummyScyllaCluster([node])
 
@@ -1258,17 +1159,7 @@ def test_exclusive_connection(docker_scylla, docker_scylla_2, params, events):
 class TestNodetool(unittest.TestCase):
     def test_describering_parsing(self):
         """Test "nodetool describering" output parsing"""
-        resp = "\n".join(
-            [
-                "Schema Version:00703362-03ed-3b41-afcb-ed34c1d1586c TokenRange:",
-                "TokenRange(start_token:-9193109213506951143, end_token:9202125676696964746, "
-                "endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], "
-                "endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])",
-                "TokenRange(start_token:9154793403047166459, end_token:9156354786201613199, "
-                "endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], "
-                "endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])",
-            ]
-        )
+        resp = "Schema Version:00703362-03ed-3b41-afcb-ed34c1d1586c TokenRange:\nTokenRange(start_token:-9193109213506951143, end_token:9202125676696964746, endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])\nTokenRange(start_token:9154793403047166459, end_token:9156354786201613199, endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])"
         node = NodetoolDummyNode(resp=resp)
         ranges = get_keyspace_partition_ranges(node=node, keyspace="")
         assert ranges == [

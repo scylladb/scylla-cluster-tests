@@ -10,7 +10,7 @@ def create_scylla_bench_table_query(compaction_strategy=None):
     """
 
     compaction_strategy_option = (
-        "AND compaction = {{'class': '{}'}};".format(compaction_strategy) if compaction_strategy else ""
+        f"AND compaction = {{'class': '{compaction_strategy}'}};" if compaction_strategy else ""
     )
     scylla_bench_table_query = (
         """

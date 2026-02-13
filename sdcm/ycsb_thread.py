@@ -392,7 +392,7 @@ class YcsbStressThread(DockerBasedStressThread):
 
         LOGGER.debug("running: %s", stress_cmd)
         stress_cmd = stress_cmd.replace("bin/ycsb", "bin/ycsb.sh")
-        node_cmd = "cd /usr/local/share/scylla-ycsb && {}".format(stress_cmd)
+        node_cmd = f"cd /usr/local/share/scylla-ycsb && {stress_cmd}"
 
         YcsbStressEvent.start(node=cmd_runner_name, stress_cmd=stress_cmd).publish()
 

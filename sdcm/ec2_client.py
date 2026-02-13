@@ -335,7 +335,7 @@ class EC2ClientWrapper:
 
         LOGGER.info("Spot instances: %s", instance_ids)
         for ind, instance_id in enumerate(instance_ids):
-            self.add_tags(instance_id, {"Name": "spot_{}_{}".format(instance_id, ind)})
+            self.add_tags(instance_id, {"Name": f"spot_{instance_id}_{ind}"})
 
         self._client.cancel_spot_instance_requests(SpotInstanceRequestIds=request_ids)
 
@@ -402,7 +402,7 @@ class EC2ClientWrapper:
 
         LOGGER.info("Spot instances: %s", instance_ids)
         for ind, instance_id in enumerate(instance_ids):
-            self.add_tags(instance_id, {"Name": "spot_fleet_{}_{}".format(instance_id, ind)})
+            self.add_tags(instance_id, {"Name": f"spot_fleet_{instance_id}_{ind}"})
 
         self._client.cancel_spot_fleet_requests(SpotFleetRequestIds=[request_id], TerminateInstances=False)
 

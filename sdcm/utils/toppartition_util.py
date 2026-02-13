@@ -84,15 +84,15 @@ class TopPartitionCmd(ABC):
         toppartition_result = self._parse_toppartitions_output(output)
         for _sampler in self._built_args["samplers"].split(","):
             sampler = _sampler.upper()
-            assert sampler in toppartition_result, "{} sampler not found in result".format(sampler)
+            assert sampler in toppartition_result, f"{sampler} sampler not found in result"
             assert toppartition_result[sampler]["toppartitions"] == self._built_args["toppartition"], (
-                "Wrong expected and actual top partitions number for {} sampler".format(sampler)
+                f"Wrong expected and actual top partitions number for {sampler} sampler"
             )
             assert toppartition_result[sampler]["capacity"] == self._built_args["capacity"], (
-                "Wrong expected and actual capacity number for {} sampler".format(sampler)
+                f"Wrong expected and actual capacity number for {sampler} sampler"
             )
             assert len(toppartition_result[sampler]["partitions"].keys()) <= int(self._built_args["toppartition"]), (
-                "Wrong number of requested and expected toppartitions for {} sampler".format(sampler)
+                f"Wrong number of requested and expected toppartitions for {sampler} sampler"
             )
 
     @abstractmethod
@@ -127,7 +127,7 @@ class NewApiTopPartitionCmd(TopPartitionCmd):
         except IndexError as details:
             LOGGER.error("Keyspace and ColumnFamily are not found %s.", self.ks_cf_list)
             LOGGER.debug("Error during choosing keyspace and column family %s", details)
-            raise Exception("Keyspace and ColumnFamily are not found. \n{}".format(details)) from IndexError
+            raise Exception(f"Keyspace and ColumnFamily are not found. \n{details}") from IndexError
 
         return filter_ks_cf
 
@@ -157,7 +157,7 @@ class OldApiTopPartitionCmd(TopPartitionCmd):
         except IndexError as details:
             LOGGER.error("Keyspace and ColumnFamily are not found %s.", self.ks_cf_list)
             LOGGER.debug("Error during choosing keyspace and column family %s", details)
-            raise Exception("Keyspace and ColumnFamily are not found. \n{}".format(details)) from IndexError
+            raise Exception(f"Keyspace and ColumnFamily are not found. \n{details}") from IndexError
 
     def get_cmd_args(self) -> str:
         return "{ks} {cf} {duration} -s {capacity} -k {toppartition} -a {samplers}".format(**self._built_args)

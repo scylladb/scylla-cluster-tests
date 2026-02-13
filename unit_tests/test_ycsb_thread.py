@@ -131,7 +131,7 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
 
     @timeout(timeout=60)
     def check_metrics():
-        output = requests.get("http://{}/metrics".format(prom_address)).text
+        output = requests.get(f"http://{prom_address}/metrics").text
         regex = re.compile(r"^sct_ycsb_update_gauge.*?([0-9\.]*?)$", re.MULTILINE)
         assert "sct_ycsb_read_gauge" in output
         assert "sct_ycsb_update_gauge" in output
@@ -188,7 +188,7 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
     # 4. wait for expected metrics to be available
     @timeout(timeout=120)
     def check_metrics():
-        output = requests.get("http://{}/metrics".format(prom_address)).text
+        output = requests.get(f"http://{prom_address}/metrics").text
         regex = re.compile(r"^sct_ycsb_verify_gauge.*?([0-9\.]*?)$", re.MULTILINE)
 
         assert "sct_ycsb_verify_gauge" in output
@@ -238,7 +238,7 @@ def test_03_cql(request, docker_scylla, prom_address, params):
 
     @timeout(timeout=60)
     def check_metrics():
-        output = requests.get("http://{}/metrics".format(prom_address)).text
+        output = requests.get(f"http://{prom_address}/metrics").text
         regex = re.compile(r"^sct_ycsb_read_gauge.*?([0-9\.]*?)$", re.MULTILINE)
         assert "sct_ycsb_read_gauge" in output
         assert "sct_ycsb_update_gauge" in output

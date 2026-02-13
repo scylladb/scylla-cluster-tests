@@ -37,7 +37,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
     @measure_time
     def _run_repair(self, node):
-        self.log.info("Running nodetool repair on {}".format(node.name))
+        self.log.info(f"Running nodetool repair on {node.name}")
         node.run_nodetool(sub_cmd="repair")
 
     def _pre_create_schema_large_scale(self, keyspace_num=1, scylla_encryption_options=None):
@@ -46,12 +46,12 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         cassandra-stress.
         """
 
-        self.log.debug("Pre Creating Schema for c-s with {} keyspaces".format(keyspace_num))
+        self.log.debug(f"Pre Creating Schema for c-s with {keyspace_num} keyspaces")
         for i in range(1, keyspace_num + 1):
-            keyspace_name = "keyspace{}".format(i)
+            keyspace_name = f"keyspace{i}"
             self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
-            self.log.debug("{} Created".format(keyspace_name))
-            table_name = "{}.standard1".format(keyspace_name)
+            self.log.debug(f"{keyspace_name} Created")
+            table_name = f"{keyspace_name}.standard1"
             self.create_table(
                 name=table_name,
                 key_type="blob",
@@ -63,8 +63,8 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
     def _update_cl_in_stress_cmd(self, str_stress_cmd, consistency_level):
         for param in str_stress_cmd.split():
             if param.startswith("cl="):
-                return str_stress_cmd.replace(param, "cl={}".format(consistency_level))
-        self.log.debug("Could not find a 'cl' parameter in stress command: {}".format(str_stress_cmd))
+                return str_stress_cmd.replace(param, f"cl={consistency_level}")
+        self.log.debug(f"Could not find a 'cl' parameter in stress command: {str_stress_cmd}")
         return str_stress_cmd
 
     @optional_stage("perf_preload_data")
@@ -97,7 +97,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
                     # Run all stress commands
                     params.update(dict(stats_aggregate_cmds=False))
-                    self.log.debug("RUNNING stress cmd: {}".format(stress_cmd))
+                    self.log.debug(f"RUNNING stress cmd: {stress_cmd}")
                     stress_queue.append(self.run_stress_thread(**params))
 
             # One stress cmd command
@@ -136,16 +136,16 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         yaml_file = "/etc/scylla/scylla.yaml"
         tmp_yaml_file = "/tmp/scylla.yaml"
         disable_hinted_handoff = dedent(
-            """
-                                                    grep -v hinted_handoff_enabled {0} > {1}
-                                                    echo hinted_handoff_enabled: false >> {1}
-                                                    cp -f {1} {0}
-                                                """.format(yaml_file, tmp_yaml_file)
+            f"""
+                                                    grep -v hinted_handoff_enabled {yaml_file} > {tmp_yaml_file}
+                                                    echo hinted_handoff_enabled: false >> {tmp_yaml_file}
+                                                    cp -f {tmp_yaml_file} {yaml_file}
+                                                """
         )
         for node in self.db_cluster.nodes:  # disable hinted handoff on all nodes
             node.remoter.run('sudo bash -cxe "%s"' % disable_hinted_handoff)
-            self.log.debug("Scylla YAML configuration read from: {} {} is:".format(node.public_ip_address, yaml_file))
-            node.remoter.run("sudo cat {}".format(yaml_file))
+            self.log.debug(f"Scylla YAML configuration read from: {node.public_ip_address} {yaml_file} is:")
+            node.remoter.run(f"sudo cat {yaml_file}")
 
             node.stop_scylla_server()
             node.start_scylla_server()
@@ -160,10 +160,10 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             session.execute(create_table_query)
 
     def _run_scylla_bench_on_single_node(self, node, stress_cmd):
-        self.log.info("Stopping all other nodes before updating {}".format(node.name))
+        self.log.info(f"Stopping all other nodes before updating {node.name}")
         self.stop_all_nodes_except_for(node=node)
-        self.log.info("Updating cluster data only for {}".format(node.name))
-        self.log.info("Run stress command of: {}".format(stress_cmd))
+        self.log.info(f"Updating cluster data only for {node.name}")
+        self.log.info(f"Run stress command of: {stress_cmd}")
         stress_queue = self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=True)
         self.get_stress_results_bench(queue=stress_queue)
         self.start_all_nodes()
@@ -183,37 +183,35 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         for node in self.db_cluster.nodes:
             used_capacity = self.get_used_capacity(node=node)
-            self.log.debug("Node {} initial used capacity is: {}".format(node.public_ip_address, used_capacity))
+            self.log.debug(f"Node {node.public_ip_address} initial used capacity is: {used_capacity}")
 
         self._disable_hinted_handoff()
 
-        self.log.info("Stopping node-3 ({}) before updating cluster data".format(node1.name))
+        self.log.info(f"Stopping node-3 ({node1.name}) before updating cluster data")
         node1.stop_scylla_server()
-        self.log.info("Updating cluster data when node3 ({}) is down".format(node1.name))
+        self.log.info(f"Updating cluster data when node3 ({node1.name}) is down")
         self.log.info("Starting c-s/s-b write workload")
         self.preload_data()
         self.wait_no_compactions_running()
 
-        self.log.info("Starting node-3 ({}) after updated cluster data".format(node1.name))
+        self.log.info(f"Starting node-3 ({node1.name}) after updated cluster data")
         node1.start_scylla_server()
 
         for node in self.db_cluster.nodes:
             used_capacity = self.get_used_capacity(node=node)
-            self.log.debug(
-                "Node {} used capacity after pre-load data is: {}".format(node.public_ip_address, used_capacity)
-            )
+            self.log.debug(f"Node {node.public_ip_address} used capacity after pre-load data is: {used_capacity}")
 
-        self.log.info("Run Repair on node: {} , 0% synced".format(node1.name))
+        self.log.info(f"Run Repair on node: {node1.name} , 0% synced")
         repair_time = self._run_repair(node=node1)[0]
-        self.log.info("Repair (0% synced) time on node: {} is: {}".format(node1.name, repair_time))
+        self.log.info(f"Repair (0% synced) time on node: {node1.name} is: {repair_time}")
 
         stats["repair_runtime_all_diff"] = repair_time
 
         self.wait_no_compactions_running()
 
-        self.log.info("Run Repair on node: {} , 100% synced".format(node1.name))
+        self.log.info(f"Run Repair on node: {node1.name} , 100% synced")
         repair_time = self._run_repair(node=node1)[0]
-        self.log.info("Repair (100% synced) time on node: {} is: {}".format(node1.name, repair_time))
+        self.log.info(f"Repair (100% synced) time on node: {node1.name} is: {repair_time}")
 
         stats["repair_runtime_no_diff"] = repair_time
         self.update_test_details(scylla_conf=True, extra_stats=stats)
@@ -239,16 +237,11 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self._disable_hinted_handoff()
         self.print_nodes_used_capacity()
         for node in [node1, node2, node3]:
-            self.log.info("Stopping all other nodes before updating {}".format(node.name))
+            self.log.info(f"Stopping all other nodes before updating {node.name}")
             self.stop_all_nodes_except_for(node=node)
-            self.log.info("Updating cluster data only for {}".format(node.name))
-            distinct_write_cmd = "{} -pop seq={}..{} -node {}".format(
-                base_distinct_write_cmd,
-                sequence_current_index + 1,
-                sequence_current_index + sequence_range,
-                node.private_ip_address,
-            )
-            self.log.info("Run stress command of: {}".format(distinct_write_cmd))
+            self.log.info(f"Updating cluster data only for {node.name}")
+            distinct_write_cmd = f"{base_distinct_write_cmd} -pop seq={sequence_current_index + 1}..{sequence_current_index + sequence_range} -node {node.private_ip_address}"
+            self.log.info(f"Run stress command of: {distinct_write_cmd}")
             stress_thread = self.run_stress_thread(stress_cmd=distinct_write_cmd, round_robin=True)
             self.verify_stress_thread(stress_thread)
             self.start_all_nodes()
@@ -265,13 +258,13 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.debug("Nodes total used capacity before starting repair is:")
         self.print_nodes_used_capacity()
 
-        self.log.info("Run Repair on node: {} , 99.8% synced".format(node3.name))
+        self.log.info(f"Run Repair on node: {node3.name} , 99.8% synced")
         repair_time = self._run_repair(node=node3)[0]
 
         self.log.debug("Nodes total used capacity after repair end is:")
         self.print_nodes_used_capacity()
 
-        self.log.info("Repair (99.8% synced) time on node: {} is: {}".format(node3.name, repair_time))
+        self.log.info(f"Repair (99.8% synced) time on node: {node3.name} is: {repair_time}")
 
         stats = {"repair_runtime_small_diff": repair_time}
 
@@ -284,15 +277,13 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
     ):
         n_loaders = int(self.params.get("n_loaders"))
         partitions_per_loader = partition_count // n_loaders
-        str_additional_args = "-partition-count={} -clustering-row-count={} -consistency-level={}".format(
-            partitions_per_loader, clustering_row_count, consistency_level
-        )
+        str_additional_args = f"-partition-count={partitions_per_loader} -clustering-row-count={clustering_row_count} -consistency-level={consistency_level}"
         write_queue = []
         offset = 0
         for _ in range(n_loaders):
-            str_offset = "-partition-offset {}".format(offset)
-            stress_cmd = " ".join([base_cmd, str_additional_args, str_offset])
-            self.log.debug("Scylla-bench stress command to execute: {}".format(stress_cmd))
+            str_offset = f"-partition-offset {offset}"
+            stress_cmd = f"{base_cmd} {str_additional_args} {str_offset}"
+            self.log.debug(f"Scylla-bench stress command to execute: {stress_cmd}")
             write_queue.append(
                 self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=True)
             )
@@ -332,13 +323,11 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self._wait_no_compactions_running()
 
         offset = 0  # per node increased with interval of: partition_count_per_node * clustering_row_count_per_node * 10
-        str_additional_args = "-partition-count={} -clustering-row-count={} -consistency-level=ALL".format(
-            partition_count_per_node, clustering_row_count_per_node
-        )
+        str_additional_args = f"-partition-count={partition_count_per_node} -clustering-row-count={clustering_row_count_per_node} -consistency-level=ALL"
 
         for node in self.db_cluster.nodes:
-            str_offset = "-partition-offset {}".format(offset)
-            stress_cmd = " ".join([scylla_bench_base_cmd, str_additional_args, str_offset])
+            str_offset = f"-partition-offset {offset}"
+            stress_cmd = f"{scylla_bench_base_cmd} {str_additional_args} {str_offset}"
             self._run_scylla_bench_on_single_node(node=node, stress_cmd=stress_cmd)
             offset += partition_count_per_node
 
@@ -346,13 +335,13 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.debug("Nodes total used capacity before starting repair is:")
         self.print_nodes_used_capacity()
 
-        self.log.info("Run Repair on node: {}".format(node3.name))
+        self.log.info(f"Run Repair on node: {node3.name}")
         repair_time = self._run_repair(node=node3)[0]
 
         self.log.debug("Nodes total used capacity after repair end is:")
         self.print_nodes_used_capacity()
 
-        self.log.info("Repair (with large partitions) time on node: {} is: {}".format(node3.name, repair_time))
+        self.log.info(f"Repair (with large partitions) time on node: {node3.name} is: {repair_time}")
 
         stats = {"repair_runtime_large_partitions": repair_time}
 
@@ -395,16 +384,16 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             params.update({"stress_cmd": stress_cmd})
             # Run stress command
             params.update(dict(stats_aggregate_cmds=False))
-            self.log.debug("RUNNING stress cmd: {}".format(stress_cmd))
+            self.log.debug(f"RUNNING stress cmd: {stress_cmd}")
             stress_queue.append(self.run_stress_thread(**params))
 
-        self.log.info("Run Repair on node: {} , during r/w load".format(node1.name))
+        self.log.info(f"Run Repair on node: {node1.name} , during r/w load")
         repair_time = self._run_repair(node=node1)[0]
 
         self.log.debug("Nodes total used capacity after repair end is:")
         self.print_nodes_used_capacity()
 
-        self.log.info("Repair (during r/w load) time on node: {} is: {}".format(node1.name, repair_time))
+        self.log.info(f"Repair (during r/w load) time on node: {node1.name} is: {repair_time}")
 
         stats = {"repair_runtime_during_load": repair_time}
 

@@ -160,7 +160,7 @@ class ManagerBackupTests(ManagerRestoreTests):
         self.log.info("starting test_backup_multiple_ks_tables")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         tables = self.create_ks_and_tables(10, 100)
-        self.log.debug("tables list = {}".format(tables))
+        self.log.debug(f"tables list = {tables}")
         # TODO: insert data to those tables
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
@@ -176,20 +176,20 @@ class ManagerBackupTests(ManagerRestoreTests):
         try:
             mgr_cluster.create_backup_task(location_list=[f"{location}/path_testing/" for location in self.locations])
         except ScyllaManagerError as error:
-            self.log.info("Expected to fail - error: {}".format(error))
+            self.log.info(f"Expected to fail - error: {error}")
         self.log.info("finishing test_backup_location_with_path")
 
     def test_backup_rate_limit(self):
         self.log.info("starting test_backup_rate_limit")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         rate_limit_list = [f"{dc}:{random.randint(15, 25)}" for dc in self.get_all_dcs_names()]
-        self.log.info("rate limit will be {}".format(rate_limit_list))
+        self.log.info(f"rate limit will be {rate_limit_list}")
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=rate_limit_list)
         task_status = backup_task.wait_and_get_final_status(timeout=18000)
         assert task_status == TaskStatus.DONE, (
             f"Task {backup_task.id} did not end successfully:\n{backup_task.detailed_progress}"
         )
-        self.log.info("backup task finished with status {}".format(task_status))
+        self.log.info(f"backup task finished with status {task_status}")
         # TODO: verify that the rate limit is as set in the cmd
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
         self.log.info("finishing test_backup_rate_limit")
@@ -452,7 +452,7 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         with self.subTest("test_intensity_and_parallel"):
             self._test_intensity_and_parallel(fault_multiple_nodes=fault_multiple_nodes)
         load_results = stress_read_thread.get_results()
-        self.log.info("load={}".format(load_results))
+        self.log.info(f"load={load_results}")
 
     def test_repair_multiple_keyspace_types(self):
         self.log.info("starting test_repair_multiple_keyspace_types")
@@ -465,26 +465,24 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         self.create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, replication_factor=0)
         repair_task = mgr_cluster.create_repair_task()
         task_final_status = repair_task.wait_and_get_final_status(timeout=7200)
-        assert task_final_status == TaskStatus.DONE, "Task: {} final status is: {}.".format(
-            repair_task.id, str(repair_task.status)
-        )
-        self.log.info("Task: {} is done.".format(repair_task.id))
-        self.log.debug("sctool version is : {}".format(manager_tool.sctool.version))
+        assert task_final_status == TaskStatus.DONE, f"Task: {repair_task.id} final status is: {repair_task.status!s}."
+        self.log.info(f"Task: {repair_task.id} is done.")
+        self.log.debug(f"sctool version is : {manager_tool.sctool.version}")
 
         expected_keyspaces_to_be_repaired = ["system_distributed", self.NETWORKSTRATEGY_KEYSPACE_NAME]
         if not self.db_cluster.nodes[0].raft.is_consistent_topology_changes_enabled:
             expected_keyspaces_to_be_repaired.append("system_auth")
-        self.log.debug("Keyspaces expected to be repaired: {}".format(expected_keyspaces_to_be_repaired))
+        self.log.debug(f"Keyspaces expected to be repaired: {expected_keyspaces_to_be_repaired}")
         per_keyspace_progress = repair_task.per_keyspace_progress
         self.log.info("Looking in the repair output for all of the required keyspaces")
         for keyspace_name in expected_keyspaces_to_be_repaired:
             keyspace_repair_percentage = per_keyspace_progress.get(keyspace_name, None)
-            assert keyspace_repair_percentage is not None, "The keyspace {} was not included in the repair!".format(
-                keyspace_name
+            assert keyspace_repair_percentage is not None, (
+                f"The keyspace {keyspace_name} was not included in the repair!"
             )
 
-            assert keyspace_repair_percentage == 100, "The repair of the keyspace {} stopped at {}%".format(
-                keyspace_name, keyspace_repair_percentage
+            assert keyspace_repair_percentage == 100, (
+                f"The repair of the keyspace {keyspace_name} stopped at {keyspace_repair_percentage}%"
             )
 
         localstrategy_keyspace_percentage = per_keyspace_progress.get(self.LOCALSTRATEGY_KEYSPACE_NAME, None)
@@ -516,7 +514,7 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         InfoEvent(message="Sleep ended - Starting tests").publish()
         self.create_repair_and_alter_it_with_repair_control()
         load_results = stress_read_thread.get_results()
-        self.log.info("load={}".format(load_results))
+        self.log.info(f"load={load_results}")
 
 
 class ManagerCRUDTests(ManagerTestFunctionsMixIn):
@@ -532,7 +530,7 @@ class ManagerCRUDTests(ManagerTestFunctionsMixIn):
         mgr_cluster = self.db_cluster.get_cluster_manager()
         # Test cluster attributes
         cluster_orig_name = mgr_cluster.name
-        mgr_cluster.update(name="{}_renamed".format(cluster_orig_name))
+        mgr_cluster.update(name=f"{cluster_orig_name}_renamed")
         assert mgr_cluster.name == cluster_orig_name + "_renamed", "Cluster name wasn't changed after update command"
         mgr_cluster.delete()
         mgr_cluster = manager_tool.add_cluster(
@@ -553,25 +551,23 @@ class ManagerHealthCheckTests(ManagerTestFunctionsMixIn):
             if host_data[1] != self.get_cluster_hosts_ip()[0]
         ][0]
         sleep = 40
-        self.log.debug("Sleep {} seconds, waiting for health-check task to run by schedule on first time".format(sleep))
+        self.log.debug(f"Sleep {sleep} seconds, waiting for health-check task to run by schedule on first time")
         time.sleep(sleep)
         healthcheck_task = mgr_cluster.get_healthcheck_task()
-        self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
+        self.log.debug(f"Health-check task history is: {healthcheck_task.history}")
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
             assert host_health.rest_status == HostRestStatus.UP, "Not all hosts REST status is 'UP'"
         # Check for sctool status change after scylla-server down
         other_host.stop_scylla_server()
-        self.log.debug("Health-check next run is: {}".format(healthcheck_task.next_run))
-        self.log.debug("Sleep {} seconds, waiting for health-check task to run after node down".format(sleep))
+        self.log.debug(f"Health-check next run is: {healthcheck_task.next_run}")
+        self.log.debug(f"Sleep {sleep} seconds, waiting for health-check task to run after node down")
         time.sleep(sleep)
         dict_host_health = mgr_cluster.get_hosts_health()
-        assert dict_host_health[other_host_ip].status == HostStatus.DOWN, "Host: {} status is not 'DOWN'".format(
-            other_host_ip
-        )
+        assert dict_host_health[other_host_ip].status == HostStatus.DOWN, f"Host: {other_host_ip} status is not 'DOWN'"
         assert dict_host_health[other_host_ip].rest_status == HostRestStatus.DOWN, (
-            "Host: {} REST status is not 'DOWN'".format(other_host_ip)
+            f"Host: {other_host_ip} REST status is not 'DOWN'"
         )
         other_host.start_scylla_server()
 
@@ -653,7 +649,7 @@ class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
 
         healthcheck_task = mgr_cluster.get_healthcheck_task()
         healthcheck_task.wait_for_status(list_status=[TaskStatus.DONE], step=5, timeout=240)
-        self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
+        self.log.debug(f"Health-check task history is: {healthcheck_task.history}")
 
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
@@ -680,7 +676,7 @@ class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
 class ManagerSuspendTests(ManagerTestFunctionsMixIn):
     def _test_suspend_and_resume_task_template(self, task_type):
         # task types: backup/repair
-        self.log.info("starting test_suspend_and_resume_{}".format(task_type))
+        self.log.info(f"starting test_suspend_and_resume_{task_type}")
         # re-add the cluster to make the backup task run from scratch, otherwise it may be very fast and
         # the test is not able to catch the required statuses
         mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
@@ -701,12 +697,12 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), (
             f"task {suspendable_task.id} failed to reach status {TaskStatus.DONE}"
         )
-        self.log.info("finishing test_suspend_and_resume_{}".format(task_type))
+        self.log.info(f"finishing test_suspend_and_resume_{task_type}")
 
     def _test_suspend_with_on_resume_start_tasks_flag_template(self, wait_for_duration):
         suspension_duration = 75
         test_name_filler = "after_duration_passed" if wait_for_duration else "before_duration_passed"
-        self.log.info("starting test_suspend_with_on_resume_start_tasks_flag_{}".format(test_name_filler))
+        self.log.info(f"starting test_suspend_with_on_resume_start_tasks_flag_{test_name_filler}")
         # re-add the cluster to make the backup task run from scratch, otherwise it may run very fast and
         # the test won't be able to catch the required statuses
         mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
@@ -742,7 +738,7 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
                 "After the cluster was resumed (while resuming BEFORE the suspend duration "
                 f"has passed), task {suspendable_task.id} failed to stay in status STOPPED after suspension time ended"
             )
-        self.log.info("finishing test_suspend_with_on_resume_start_tasks_flag_{}".format(test_name_filler))
+        self.log.info(f"finishing test_suspend_with_on_resume_start_tasks_flag_{test_name_filler}")
 
     def _test_suspend_and_resume_without_starting_tasks(self):
         self.log.info("starting test_suspend_and_resume_without_starting_tasks")
@@ -972,11 +968,11 @@ class ManagerRollbackTests(ManagerTestFunctionsMixIn):
         assert manager_from_version[0] != manager_tool.sctool.version[0], "Manager version not changed after upgrade."
         # verify all repair tasks exist
         for repair_task in repair_task_list:
-            self.log.debug("{} status: {}".format(repair_task.id, repair_task.status))
+            self.log.debug(f"{repair_task.id} status: {repair_task.status}")
 
         self.log.info("Running a new repair task after upgrade")
         repair_task = mgr_cluster.create_repair_task()
-        self.log.debug("{} status: {}".format(repair_task.id, repair_task.status))
+        self.log.debug(f"{repair_task.id} status: {repair_task.status}")
         self.log.info("finishing test_manager_upgrade")
 
     def test_manager_rollback_upgrade(self):

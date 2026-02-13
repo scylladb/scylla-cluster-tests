@@ -125,7 +125,7 @@ class TestCassandraStressExporter(unittest.TestCase):
         tmp_file.file.flush()
 
         time.sleep(2)
-        output = requests.get("http://{}/metrics".format(self.prom_address)).text
+        output = requests.get(f"http://{self.prom_address}/metrics").text
         assert (
             'sct_cassandra_stress_write_gauge{cassandra_stress_write="0",cpu_idx="0",instance="127.0.0.1",loader_idx="1",type="ops"} 70178.0'
             in output
@@ -162,7 +162,7 @@ class TestCassandraStressHDRExporter(unittest.TestCase):
         tmp_file.file.flush()
         time.sleep(2)
 
-        output = requests.get("http://{}/metrics".format(self.prom_address)).text
+        output = requests.get(f"http://{self.prom_address}/metrics").text
         expected_lines = output.split("\n")[-12:]
 
         assert (
@@ -191,7 +191,7 @@ class TestCassandraStressHDRExporter(unittest.TestCase):
         tmp_file.file.flush()
         time.sleep(2)
 
-        output = requests.get("http://{}/metrics".format(self.prom_address)).text
+        output = requests.get(f"http://{self.prom_address}/metrics").text
         expected_lines = output.split("\n")[-6:]
         assert (
             'collectd_cassandra_stress_hdr_write_gauge{cassandra_stress_hdr_write="WRITE",cpu_idx="0",instance="127.0.0.1",keyspace="",loader_idx="1",type="lat_perc_50"} 0.62'
@@ -215,7 +215,7 @@ class TestCassandraStressHDRExporter(unittest.TestCase):
         tmp_file.file.flush()
         time.sleep(2)
 
-        output = requests.get("http://{}/metrics".format(self.prom_address)).text
+        output = requests.get(f"http://{self.prom_address}/metrics").text
         expected_lines = output.split("\n")[-6:]
         assert (
             'collectd_cassandra_stress_hdr_read_gauge{cassandra_stress_hdr_read="READ",cpu_idx="0",instance="127.0.0.1",keyspace="",loader_idx="1",type="lat_perc_999"} 36.54'
@@ -244,7 +244,7 @@ class TestCassandraStressHDRExporter(unittest.TestCase):
         tmp_file.file.flush()
         time.sleep(2)
 
-        output = requests.get("http://{}/metrics".format(self.prom_address)).text
+        output = requests.get(f"http://{self.prom_address}/metrics").text
         expected_lines = output.split("\n")[-6:]
         logging.getLogger(__file__).info(output)
         logging.getLogger(__file__).info(expected_lines)

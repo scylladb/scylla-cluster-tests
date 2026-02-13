@@ -199,14 +199,14 @@ class TestRemoteCmdRunners(unittest.TestCase):
             result_bucket[attr_name] = attr_value
         assert expected_bucket == result_bucket, (
             f"\nRunning command:\n{stmt}\n"
-            f"With options: {str(kwargs)}\n"
+            f"With options: {kwargs!s}\n"
             f"Resulted in receiving {type(result).__name__}:\n"
             f"--------------- START ---------------\n"
-            f"{str(result)}\n"
+            f"{result!s}\n"
             f"--------------- END ---------------\n"
             f"While expect to get {type(expected).__name__}:\n"
             f"--------------- START ---------------\n"
-            f"{str(expected)}\n"
+            f"{expected!s}\n"
             f"--------------- END ---------------\n"
         )
 
