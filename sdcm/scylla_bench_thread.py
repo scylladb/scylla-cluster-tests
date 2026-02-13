@@ -172,11 +172,11 @@ class ScyllaBenchThread(DockerBasedStressThread):
         self.stop_test_on_failure = stop_test_on_failure
 
     def set_hdr_tags(self) -> list:
-        if self.sb_mode.lower() == "write":
+        if self.sb_mode.lower() in ("write", "counter_update"):
             return ["co-fixed"]
         elif self.sb_mode.lower() == "mixed":
             return ["co-fixed-write", "co-fixed-read"]
-        elif self.sb_mode.lower() == "read":
+        elif self.sb_mode.lower() in ("read", "counter_read", "scan"):
             return ["co-fixed"]
         else:
             raise ValueError(f"Unknown scylla-bench mode: {self.sb_mode}")
