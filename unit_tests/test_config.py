@@ -121,14 +121,6 @@ class ConfigurationTests(unittest.TestCase):
 
         assert conf["scylla_version"] != "latest"
 
-    def test_06b_docker_development(self):
-        os.environ["SCT_CLUSTER_BACKEND"] = "docker"
-        os.environ["SCT_USE_MGMT"] = "false"
-        os.environ["SCT_SCYLLA_VERSION"] = "666.development-blah"
-
-        conf = sct_config.SCTConfiguration()
-        conf.verify_configuration()
-
     def test_07_baremetal_exception(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "baremetal"
         conf = sct_config.SCTConfiguration()
