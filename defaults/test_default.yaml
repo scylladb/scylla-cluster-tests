@@ -195,7 +195,7 @@ gce_pd_standard_disk_size_db: 0
 install_mode: 'repo'  # install from scylla_repo
 run_db_node_benchmarks: false
 
-nemesis_multiply_factor: 6
+nemesis_multiply_factor: 2
 
 scylla_apt_keys:
   - '17723034C56D4B19'  # ScyllaDB Package Signing Key 2018 <security@scylladb.com>
