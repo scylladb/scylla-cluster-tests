@@ -13,25 +13,25 @@ prepare_stress_cmd: >-
 prepare_write_cmd:
   - >-
     latte run --function write --consistency ALL --duration 162500001
-    --threads 50 --concurrency 15 --rate 37500
+    --threads 50 --concurrency 15 --rate 93750
     --start-cycle 1 --end-cycle 162500001
     -P row_count=650000004 -P offset=0
     data_dir/latte/latte_cs_alike.rn
   - >-
     latte run --function write --consistency ALL --duration 162500001
-    --threads 50 --concurrency 15 --rate 37500
+    --threads 50 --concurrency 15 --rate 93750
     --start-cycle 162500002 --end-cycle 325000002
     -P row_count=650000004 -P offset=162500001
     data_dir/latte/latte_cs_alike.rn
   - >-
     latte run --function write --consistency ALL --duration 162500001
-    --threads 50 --concurrency 15 --rate 37500
+    --threads 50 --concurrency 15 --rate 93750
     --start-cycle 325000003 --end-cycle 487500003
     -P row_count=650000004 -P offset=325000002
     data_dir/latte/latte_cs_alike.rn
   - >-
     latte run --function write --consistency ALL --duration 162500001
-    --threads 50 --concurrency 15 --rate 37500
+    --threads 50 --concurrency 15 --rate 93750
     --start-cycle 487500004 --end-cycle 650000004
     -P row_count=650000004 -P offset=487500003
     data_dir/latte/latte_cs_alike.rn
