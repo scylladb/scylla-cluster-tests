@@ -7,10 +7,10 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
 
-    scylla_version: '2025.2',
+    scylla_version: '2025.3',
 
     // Upgrade from the previous minor release (the last one)
-    manager_version: '3.5',
+    manager_version: '3.7',
     target_manager_version: 'master_latest',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
