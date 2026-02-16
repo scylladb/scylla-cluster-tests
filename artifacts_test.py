@@ -44,6 +44,7 @@ BACKENDS = {
     "aws": ["Ec2Snitch", "Ec2MultiRegionSnitch"],
     "gce": ["GoogleCloudSnitch"],
     "azure": ["AzureSnitch"],
+    "oci": ["GossipingPropertyFileSnitch", "SimpleSnitch"],
     "docker": ["GossipingPropertyFileSnitch", "SimpleSnitch"],
 }
 
@@ -95,10 +96,11 @@ class ArtifactsTest(ClusterTester):
         self.log.debug("public_ip_address = %s", public_ip_address)
 
         # Validate public IP address
-        assert public_ip_address == row[2], (
-            f"Wrong IP address is saved in '{self.CHECK_VERSION_TABLE}' table: "
-            f"expected {self.node.public_ip_address}, got: {row[2]}"
-        )
+        if self.params.get("ip_ssh_connections") != "private":
+            assert public_ip_address == row[2], (
+                f"Wrong IP address is saved in '{self.CHECK_VERSION_TABLE}' table: "
+                f"expected {self.node.public_ip_address}, got: {row[2]}"
+            )
 
         # Validate reported node version
         assert row[1] == self.node.scylla_version, (
@@ -360,7 +362,7 @@ class ArtifactsTest(ClusterTester):
             with self.logged_subtest("check ENA support"):
                 assert self.node.ena_support, "ENA support is not enabled"
 
-        if backend in ["gce", "aws", "azure"] and self.params.get("use_preinstalled_scylla"):
+        if backend in ("gce", "aws", "azure", "oci") and self.params.get("use_preinstalled_scylla"):
             with self.logged_subtest("check Scylla IO Params"):
                 try:
                     if self.node.db_node_instance_type in ["t3.micro"]:
