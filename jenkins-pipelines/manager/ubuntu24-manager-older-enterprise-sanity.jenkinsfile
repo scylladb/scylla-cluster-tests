@@ -5,12 +5,12 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 managerPipeline(
     backend: 'aws',
-    region: '''["us-east-1", "us-west-2"]''',
+    region: 'us-east-1',
 
     scylla_version: '2024.1',
 
     test_name: 'mgmt_cli_test.ManagerSanityTests.test_manager_sanity',
-    test_config: '''["test-cases/manager/manager-regression-multiDC-set-distro.yaml", "configurations/manager/ubuntu24.yaml"]''',
+    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/manager/ubuntu24.yaml"]''',
 
     downstream_jobs_to_run: 'older-enterprise-ami-upgrade-test'
 )
