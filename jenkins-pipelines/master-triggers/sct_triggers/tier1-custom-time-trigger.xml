@@ -89,7 +89,7 @@ region=us-east-1</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../tier1/longevity-50gb-3days-test</projects>
+          <projects>../elasticity/job/elasticity-90-percent-with-nemesis-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
