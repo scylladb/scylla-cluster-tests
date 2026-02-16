@@ -9,7 +9,7 @@ managerPipeline(
     test_name: 'mgmt_cli_test.ManagerSanityTests.test_manager_sanity',
     test_config: 'test-cases/manager/manager-regression-singleDC-set-distro.yaml',
 
-    scylla_version: '2025.2',
+    scylla_version: '2025.3',
 
     downstream_jobs_to_run: 'ubuntu22-upgrade-test'
 )
