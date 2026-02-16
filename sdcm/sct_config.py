@@ -2054,13 +2054,11 @@ class SCTConfiguration(dict):
             " Applied when AWS KMS or Azure KMS service is configured to be used."
             " NOTE: Be aware that Azure Key rotations cost $1/rotation.",
         ),
-        # TODO: AWS KMS needs to support the enable_kms_key_rotation config option
         dict(
             name="enable_kms_key_rotation",
             env="SCT_ENABLE_KMS_KEY_ROTATION",
             type=boolean,
-            help="Allows to disable KMS keys rotation. Applicable to GCP and Azure backends. "
-            "In case of AWS backend its KMS keys will always be rotated as of now.",
+            help="Allows to disable KMS keys rotation. Applicable to AWS, GCP, and Azure backends.",
         ),
         dict(
             name="enterprise_disable_kms",

@@ -5383,6 +5383,8 @@ class BaseScyllaCluster:
     def start_kms_key_rotation_thread(self) -> None:
         if self.params.get("cluster_backend") != "aws":
             return None
+        if not self.params.get("enable_kms_key_rotation"):
+            return None
         kms_key_rotation_interval = self.params.get("kms_key_rotation_interval") or 60
         kms_key_alias_name = ""
         append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
