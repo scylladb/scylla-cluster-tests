@@ -71,7 +71,6 @@ nemesis_selector: ["topology_changes", "schema_changes and not disruptive"]
 nemesis_seed: '253 328'
 nemesis_interval: 10
 nemesis_during_prepare: false
-nemesis_multiply_factor: 18
 
 seeds_num: 3
 # disabled the round robin, to each command would run on every loader.
