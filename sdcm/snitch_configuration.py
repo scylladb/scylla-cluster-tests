@@ -59,5 +59,10 @@ class SnitchConfig:
 
         with self._node.remote_cassandra_rackdc_properties() as properties_file:
             for key, value in properties.items():
-                # in case when property is already set (e.g. it is forced by AddRemoveDc nemesis), skip setting it
-                properties_file.setdefault(key, value)
+                if hasattr(self._node, "query_oci_metadata"):
+                    # NOTE: OCI images have predefined properties file with real data for dc and rack.
+                    #       So, set it forcibly because defaulting will not have an effect.
+                    properties_file[key] = value
+                else:
+                    # in case when property is already set (e.g. it is forced by AddRemoveDc nemesis), skip setting it
+                    properties_file.setdefault(key, value)
