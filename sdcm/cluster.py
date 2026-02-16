@@ -5196,7 +5196,7 @@ class BaseScyllaCluster:
                     parallel_workers = self.params.get("cluster_health_check_parallel_workers") or 5
                     # Ensure parallel_workers is within reasonable bounds
                     parallel_workers = max(1, min(parallel_workers, 10))
-                    
+
                     if parallel_workers == 1 or len(self.nodes) == 1:
                         # Sequential execution for single worker or single node
                         for node in self.nodes:
@@ -5206,7 +5206,7 @@ class BaseScyllaCluster:
                         self.log.debug(
                             "Running health checks on %d nodes with %d parallel workers",
                             len(self.nodes),
-                            parallel_workers
+                            parallel_workers,
                         )
                         with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
                             futures = {executor.submit(node.check_node_health): node for node in self.nodes}
@@ -5218,7 +5218,7 @@ class BaseScyllaCluster:
                                     self.log.error(
                                         "Health check for node %s generated an exception: %s",
                                         node.name,
-                                        exc
+                                        exc,
                                     )
             else:
                 chc_event.message = "Test runs with parallel nemesis. Nodes health checks are disabled."
