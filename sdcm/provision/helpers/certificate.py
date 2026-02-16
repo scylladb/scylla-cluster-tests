@@ -31,6 +31,7 @@ from cryptography.x509.oid import NameOID
 
 from sdcm.remote import shell_script_cmd
 from sdcm.utils.common import get_data_dir_path
+from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager, DockerException
 
 if TYPE_CHECKING:
@@ -73,6 +74,7 @@ CLIENT_CERT_FILE = Path(get_data_dir_path("ssl_conf", TLSAssets.CLIENT_CERT))
 JKS_TRUSTSTORE_FILE = Path(get_data_dir_path("ssl_conf", TLSAssets.JKS_TRUSTSTORE))
 
 
+@retrying(n=3, sleep_time=10, allowed_exceptions=(Exception,), message="Retrying SSL certificate installation")
 def install_client_certificate(remoter, node_identifier):
     if remoter.run(f"ls {SCYLLA_SSL_CONF_DIR}", ignore_status=True).ok:
         return
@@ -93,6 +95,7 @@ def install_client_certificate(remoter, node_identifier):
     remoter.run('bash -cxe "%s"' % setup_script)
 
 
+@retrying(n=3, sleep_time=10, allowed_exceptions=(Exception,), message="Retrying encryption-at-rest files installation")
 def install_encryption_at_rest_files(remoter):
     if remoter.sudo("ls /etc/encrypt_conf/system_key_dir", ignore_status=True).ok:
         return
