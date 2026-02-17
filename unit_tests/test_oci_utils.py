@@ -165,51 +165,52 @@ def test_resolve_availability_domain_not_found(mock_get_ads):
 
 
 @patch("sdcm.utils.oci_utils.get_oci_compute_client")
-def test_get_ubuntu_image_ocid(mock_get_client):
+@patch("oci.pagination.list_call_get_all_results_generator")
+def test_get_ubuntu_image_ocid(mock_page_iterator, mock_get_client):
     """Test getting Ubuntu image OCID."""
     mock_client = MagicMock()
     mock_image = MagicMock()
     mock_image.id = "ocid1.image.oc1..ubuntu2404"
     mock_image.display_name = "Canonical-Ubuntu-24.04-2024.01.01-0"
-
-    mock_client.list_images.return_value.data = [mock_image]
+    mock_page_iterator.return_value = iter([mock_image])
     mock_get_client.return_value = (mock_client, {})
 
     result = get_ubuntu_image_ocid("compartment-id", region="us-ashburn-1")
 
     assert result == "ocid1.image.oc1..ubuntu2404"
-    mock_client.list_images.assert_called_once()
+    mock_page_iterator.assert_called_once()
 
 
 @patch("sdcm.utils.oci_utils.get_oci_compute_client")
-def test_get_ubuntu_image_ocid_filters_arm(mock_get_client):
+@patch("oci.pagination.list_call_get_all_results_generator")
+def test_get_ubuntu_image_ocid_filters_arm(mock_page_iterator, mock_get_client):
     """Test that ARM images are filtered out."""
     mock_client = MagicMock()
     mock_arm_image = MagicMock()
     mock_arm_image.id = "ocid1.image.oc1..ubuntu2404-aarch64"
     mock_arm_image.display_name = "Canonical-Ubuntu-24.04-aarch64-2024.01.01-0"
-
     mock_amd64_image = MagicMock()
     mock_amd64_image.id = "ocid1.image.oc1..ubuntu2404-amd64"
     mock_amd64_image.display_name = "Canonical-Ubuntu-24.04-2024.01.01-0"
-
-    mock_client.list_images.return_value.data = [mock_arm_image, mock_amd64_image]
+    mock_page_iterator.return_value = iter([mock_arm_image, mock_amd64_image])
     mock_get_client.return_value = (mock_client, {})
 
     result = get_ubuntu_image_ocid("compartment-id")
 
     assert result == "ocid1.image.oc1..ubuntu2404-amd64"
+    mock_page_iterator.assert_called_once()
 
 
 @patch("sdcm.utils.oci_utils.get_oci_compute_client")
-def test_get_ubuntu_image_ocid_not_found(mock_get_client):
+@patch("oci.pagination.list_call_get_all_results_generator")
+def test_get_ubuntu_image_ocid_not_found(mock_page_iterator, mock_get_client):
     """Test when no matching image is found."""
     mock_client = MagicMock()
-    mock_client.list_images.return_value.data = []
+    mock_page_iterator.return_value = iter([])
     mock_get_client.return_value = (mock_client, {})
-
     with pytest.raises(ValueError, match="No Ubuntu"):
         get_ubuntu_image_ocid("compartment-id")
+    mock_page_iterator.assert_called_once()
 
 
 # --- Tests for list_instances_oci ---
