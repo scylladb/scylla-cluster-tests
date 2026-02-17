@@ -576,12 +576,19 @@ class AWSNode(cluster.BaseNode):
 
     @cached_property
     def network_configuration(self):
-        # Output example:
-        #   0a:7b:18:de:f9:71: eth0
-        #   0a:7b:18:de:f9:72: eth1
-        ip_link_cmd = """ip -o link | awk '$2 != "lo:" {gsub(/:/,"",$2);print $17": " $2}'"""
-        network_config = self.remoter.run(ip_link_cmd).stdout.strip()
-        network_devices = yaml.safe_load(network_config)
+        network_devices = {}
+        if network_config_json := self.remoter.run("ip -j link", ignore_status=True).stdout.strip():
+            interfaces = json.loads(network_config_json)
+            network_devices = {
+                interface["address"]: interface["ifname"]
+                for interface in interfaces
+                if interface.get("ifname") != "lo" and interface.get("address")
+            }
+        if not network_devices:
+            # fallback to parsing ip link output in case json output is not supported
+            ip_link_cmd = """ip -o link | awk '$2 != "lo:" {gsub(/:/,"",$2);print $17": " $2}'"""
+            network_config = self.remoter.run(ip_link_cmd).stdout.strip()
+            network_devices = yaml.safe_load(network_config)
         self.log.debug("Node %s ethernets: %s", self.name, network_devices)
         return network_devices
 
