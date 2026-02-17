@@ -75,28 +75,28 @@ stress_cmd_w:
 stress_cmd_r:
   - >-
     latte run --function read --consistency QUORUM --duration $duration
-    --threads $threads --concurrency $concurrency $throttle -c 8
+    --threads $threads --concurrency $concurrency $throttle
     --start-cycle 1 --end-cycle 5000000
     -P row_count=20000000 -P offset=0
     -P column_count=1 -P column_size=1024
     data_dir/latte/latte_cs_alike.rn
   - >-
     latte run --function read --consistency QUORUM --duration $duration
-    --threads $threads --concurrency $concurrency $throttle -c 8
+    --threads $threads --concurrency $concurrency $throttle
     --start-cycle 5000001 --end-cycle 10000000
     -P row_count=20000000 -P offset=5000000
     -P column_count=1 -P column_size=1024
     data_dir/latte/latte_cs_alike.rn
   - >-
     latte run --function read --consistency QUORUM --duration $duration
-    --threads $threads --concurrency $concurrency $throttle -c 8
+    --threads $threads --concurrency $concurrency $throttle
     --start-cycle 10000001 --end-cycle 15000000
     -P row_count=20000000 -P offset=10000000
     -P column_count=1 -P column_size=1024
     data_dir/latte/latte_cs_alike.rn
   - >-
     latte run --function read --consistency QUORUM --duration $duration
-    --threads $threads --concurrency $concurrency $throttle -c 8
+    --threads $threads --concurrency $concurrency $throttle
     --start-cycle 15000001 --end-cycle 20000000
     -P row_count=20000000 -P offset=15000000
     -P column_count=1 -P column_size=1024
