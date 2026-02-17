@@ -257,11 +257,18 @@ class TestParallelHealthCheckExecution:
         # Execute in parallel
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(check_with_tracking, node): node for node in mock_cluster.nodes}
+            exceptions = []
             for future in as_completed(futures):
                 try:
                     future.result()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Record any unexpected exception from worker threads so the test can surface it.
+                    exceptions.append(exc)
+                    if hasattr(mock_cluster, "log"):
+                        mock_cluster.log.error("Exception in health check worker: %s", exc)
+
+        # Fail the test if any worker thread raised an exception
+        assert not exceptions, f"Exceptions occurred in health check workers: {exceptions}"
 
         # Verify multiple threads were used
         unique_threads = set(thread_ids)
