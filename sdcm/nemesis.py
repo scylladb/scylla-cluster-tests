@@ -6157,10 +6157,25 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
             args[0].log.debug(f"Data validator error: {err}")
 
     @wraps(method)
+<<<<<<< HEAD:sdcm/nemesis.py
     def wrapper(*args, **kwargs):  # noqa: PLR0914, PLR0915
         method_name = method.__name__
         target_pool_type = getattr(method, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
         nemesis_run_info_key = f"{id(args[0])}--{method_name}"
+||||||| parent of a3c67c044 (fix(nemesis): prevent UnboundLocalError in wrapper finally block):sdcm/nemesis/__init__.py
+    def wrapper(*args, **kwargs):  # noqa: PLR0914, PLR0915
+        method_name = method.__self__.__class__.__name__
+        target_pool_type = getattr(method.__self__, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
+        nemesis_run_info_key = f"{id(method)}--{method_name}"
+        runner = caller_obj.runner
+=======
+    def wrapper(*args, **kwargs):  # noqa: PLR0912, PLR0914, PLR0915
+        method_name = method.__self__.__class__.__name__
+        target_pool_type = getattr(method.__self__, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
+        nemesis_run_info_key = f"{id(method)}--{method_name}"
+        runner = caller_obj.runner
+        nemesis_event = None  # Initialize to None to avoid UnboundLocalError in finally block
+>>>>>>> a3c67c044 (fix(nemesis): prevent UnboundLocalError in wrapper finally block):sdcm/nemesis/__init__.py
         try:
             NEMESIS_LOCK.acquire()
             if not is_exclusive:
@@ -6312,6 +6327,18 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
             # TODO: Temporary print. Will be removed later
             data_validation_prints(args=args)
         finally:
+<<<<<<< HEAD:sdcm/nemesis.py
+||||||| parent of a3c67c044 (fix(nemesis): prevent UnboundLocalError in wrapper finally block):sdcm/nemesis/__init__.py
+            # Store nemesis event to track skip status for health checks
+            runner.last_nemesis_event = nemesis_event
+
+=======
+            # Store nemesis event to track skip status for health checks
+            # Only update if nemesis_event was created (i.e., we entered the with block)
+            if nemesis_event is not None:
+                runner.last_nemesis_event = nemesis_event
+
+>>>>>>> a3c67c044 (fix(nemesis): prevent UnboundLocalError in wrapper finally block):sdcm/nemesis/__init__.py
             if is_exclusive:
                 # NOTE: sleep the nemesis interval here because the next one is already
                 #       ready to start right after the lock gets released.
