@@ -53,3 +53,9 @@ class DisruptionEvent(ContinuousEvent):
         if self.is_skipped:
             return NemesisStatus.SKIPPED
         return NemesisStatus.SUCCEEDED
+
+    def add_simple_error(self, error: str, traceback: str):
+        """Allows adding single error with less lines"""
+        self.add_error([error])
+        self.full_traceback = traceback
+        self.severity = Severity.ERROR
