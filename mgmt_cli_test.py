@@ -634,14 +634,27 @@ class ManagerHealthCheckTests(ManagerTestFunctionsMixIn):
 
 
 class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
-    def _disable_client_encryption(self) -> None:
-        for node in self.db_cluster.nodes:
-            with node.remote_scylla_yaml() as scylla_yml:
-                scylla_yml.client_encryption_options.enabled = False
-            node.restart_scylla()
+    default_encryption_state: bool = None
+
+    def tearDown(self):
+        """The test changes the client encryption state of the cluster, and to not affect other tests,
+        it needs to change it back to the default state at the end of the test.
+        """
+        current_encryption_state = self.db_cluster.nodes[0].is_client_encrypt
+        if self.default_encryption_state != current_encryption_state:
+            if self.default_encryption_state:
+                self.db_cluster.enable_client_encrypt(create_certificates=False)
+            else:
+                self.db_cluster.disable_client_encrypt()
+        else:
+            self.log.debug("Client encryption state matches the default; no changes needed")
+
+        super().tearDown()
 
     def test_client_encryption(self):
         self.log.info("starting test_client_encryption")
+
+        self.default_encryption_state = self.params.get("client_encrypt")
 
         self.log.info("ENABLED client encryption checks")
         if not self.db_cluster.nodes[0].is_client_encrypt:
@@ -669,7 +682,7 @@ class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
             assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
 
         self.log.info("DISABLED client encryption checks")
-        self._disable_client_encryption()
+        self.db_cluster.disable_client_encrypt()
         # SM caches scylla nodes configuration and the healthcheck svc is independent on the cache updates.
         # Cache is being updated periodically, every 1 minute following the manager config for SCT.
         # We need to wait until SM is aware about the configuration change.
