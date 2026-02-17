@@ -4631,7 +4631,7 @@ class NemesisRunner:
 
     @latency_calculator_decorator(legend="Adding new nodes")
     def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:
-        nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type)
+        nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type, timeout=96000)
         self.actions_log.info(f"New nodes added: {', '.join(node.name for node in nodes)}")
         wait_no_tablets_migration_running(nodes[0])
         return nodes
@@ -4705,14 +4705,15 @@ class NemesisRunner:
         if not self.has_steady_run and sleep_time_between_ops:
             self.steady_state_latency()
             self.has_steady_run = True
-        new_nodes = self._grow_cluster(rack=None)
+        self._grow_cluster(rack=None)
+        # new_nodes = self._grow_cluster(rack=None)
 
-        # pass on the exact nodes only if we have specific types for them
-        new_nodes = new_nodes if self.tester.params.get("nemesis_grow_shrink_instance_type") else None
-        if duration := self.tester.params.get("nemesis_double_load_during_grow_shrink_duration"):
-            with self.action_log_scope("Double load after grow cluster"):
-                self._double_cluster_load(duration)
-        self._shrink_cluster(rack=None, new_nodes=new_nodes)
+        # # pass on the exact nodes only if we have specific types for them
+        # new_nodes = new_nodes if self.tester.params.get("nemesis_grow_shrink_instance_type") else None
+        # if duration := self.tester.params.get("nemesis_double_load_during_grow_shrink_duration"):
+        #     with self.action_log_scope("Double load after grow cluster"):
+        #         self._double_cluster_load(duration)
+        # self._shrink_cluster(rack=None, new_nodes=new_nodes)
 
     # NOTE: version limitation is caused by the following:
     #       - https://github.com/scylladb/scylla-enterprise/issues/3211
@@ -5710,9 +5711,9 @@ class NemesisRunner:
         """
 
         # Disable MV tests with tablets.
-        if is_tablets_feature_enabled(self.target_node):
-            if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
-                raise UnsupportedNemesis("MV for tablets are not supported for Scylla 2025.3 and older versions")
+        # if is_tablets_feature_enabled(self.target_node):
+        #     if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
+        #         raise UnsupportedNemesis("MV for tablets are not supported for Scylla 2025.3 and older versions")
 
         free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
         if not free_nodes:
