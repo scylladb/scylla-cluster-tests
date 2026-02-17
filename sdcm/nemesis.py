@@ -6330,10 +6330,11 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
             args[0].log.debug(f"Data validator error: {err}")
 
     @wraps(method)
-    def wrapper(*args, **kwargs):  # noqa: PLR0914, PLR0915
+    def wrapper(*args, **kwargs):  # noqa: PLR0914, PLR0915, PLR0912
         method_name = method.__name__
         target_pool_type = getattr(method, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
         nemesis_run_info_key = f"{id(args[0])}--{method_name}"
+        nemesis_event = None  # Initialize to None to avoid UnboundLocalError in finally block
         try:
             NEMESIS_LOCK.acquire()
             if not is_exclusive:
@@ -6490,7 +6491,9 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
             data_validation_prints(args=args)
         finally:
             # Store nemesis event to track skip status for health checks
-            args[0].last_nemesis_event = nemesis_event
+            # Only update if nemesis_event was created (i.e., we entered the with block)
+            if nemesis_event is not None:
+                args[0].last_nemesis_event = nemesis_event
 
             if is_exclusive:
                 # NOTE: sleep the nemesis interval here because the next one is already
