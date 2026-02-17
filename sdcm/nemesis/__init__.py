@@ -6184,67 +6184,72 @@ class NemesisRunner:
                 with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
                     drop_materialized_view(session, ks_name, view_name)
 
+    @contextlib.contextmanager
+    def argus_submit(self, nemesis_name: str, start_time: int | float, nemesis_event: DisruptionEvent):
+        argus_client = None
+        try:
+            argus_client = self.cluster.test_config.argus_client()
+            self.argus_client.submit_nemesis(
+                name=nemesis_name,
+                class_name=self.get_class_name(),
+                start_time=int(start_time),
+                target_name=self.target_node.name,
+                target_ip=self.target_node.public_ip_address,
+                target_shards=self.target_node.scylla_shards,
+            )
+        except Exception:
+            self.log.error("Error creating nemesis information in Argus", exc_info=True)
+        yield
 
-def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=False):  # noqa: PLR0915
+        if argus_client:
+            try:
+                match nemesis_event.nemesis_status:
+                    case NemesisStatus.FAILED:
+                        message = nemesis_event.full_traceback
+                    case NemesisStatus.SKIPPED:
+                        message = nemesis_event.skip_reason
+                    case _:
+                        message = ""
+                argus_client.finalize_nemesis(
+                    name=nemesis_name,
+                    start_time=start_time,
+                    status=nemesis_event.nemesis_status,
+                    message=message,
+                )
+            except Exception:
+                self.log.error("Error finalizing nemesis information in Argus", exc_info=True)
+
+    @contextlib.contextmanager
+    def verify_nodes(self):
+        num_data_nodes_before = len(self.cluster.data_nodes)
+        num_zero_nodes_before = len(self.cluster.zero_nodes)
+        yield
+        num_data_nodes_after = len(self.cluster.data_nodes)
+        num_zero_nodes_after = len(self.cluster.zero_nodes)
+        if num_data_nodes_before != num_data_nodes_after:
+            self.log.error(
+                "num data nodes before %s and data nodes after %s does not match"
+                % (num_data_nodes_before, num_data_nodes_after)
+            )
+        if self.cluster.params.get("use_zero_nodes") and num_zero_nodes_before != num_zero_nodes_after:
+            self.log.error(
+                "num zero nodes before %s and zero nodes after %s does not match"
+                % (num_zero_nodes_before, num_zero_nodes_after)
+            )
+
+    def log_on_all_nodes(self, msg):
+        self.log.debug("{start_symbol} {msg} {start_symbol}".format(start_symbol=">" * 12, msg=msg))
+        for nodes_set in (self.cluster, self.loaders):
+            nodes_set.log_message("{start_symbol} {msg} {start_symbol}".format(start_symbol="=" * 12, msg=msg))
+
+
+def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass"):  # noqa: PLR0915
     """
     Log time elapsed for method to run
 
     :param method: Remote method to wrap.
     :return: Wrapped method.
     """
-
-    def argus_create_nemesis_info(
-        nemesis: "NemesisRunner", class_name: str, method_name: str, start_time: int | float
-    ) -> bool:
-        try:
-            argus_client = nemesis.target_node.test_config.argus_client()
-            argus_client.submit_nemesis(
-                name=method_name,
-                class_name=class_name,
-                start_time=int(start_time),
-                target_name=nemesis.target_node.name,
-                target_ip=nemesis.target_node.public_ip_address,
-                target_shards=nemesis.target_node.scylla_shards,
-            )
-            return True
-        except Exception:
-            nemesis.log.error("Error creating nemesis information in Argus", exc_info=True)
-        return False
-
-    def argus_finalize_nemesis_info(
-        nemesis: "NemesisRunner", method_name: str, start_time: int, nemesis_event: DisruptionEvent
-    ):
-        if not isinstance(start_time, int):
-            start_time = int(start_time)
-        try:
-            argus_client = nemesis.cluster.test_config.argus_client()
-            if nemesis_event.severity == Severity.ERROR:
-                argus_client.finalize_nemesis(
-                    name=method_name,
-                    start_time=start_time,
-                    status=NemesisStatus.FAILED,
-                    message=nemesis_event.full_traceback,
-                )
-            elif nemesis_event.is_skipped:
-                argus_client.finalize_nemesis(
-                    name=method_name,
-                    start_time=start_time,
-                    status=NemesisStatus.SKIPPED,
-                    message=nemesis_event.skip_reason,
-                )
-            else:
-                argus_client.finalize_nemesis(
-                    name=method_name, start_time=start_time, status=NemesisStatus.SUCCEEDED, message=""
-                )
-        except Exception:
-            nemesis.log.error("Error finalizing nemesis information in Argus", exc_info=True)
-
-    def get_nemesis_status(nemesis_event: DisruptionEvent) -> str:
-        if nemesis_event.severity == Severity.ERROR:
-            return NemesisStatus.FAILED
-        if nemesis_event.is_skipped:
-            return NemesisStatus.SKIPPED
-        return NemesisStatus.SUCCEEDED
 
     def data_validation_prints(caller):
         try:
@@ -6279,23 +6284,15 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
                 )
             else:
                 runner.cluster.check_cluster_health()
-            num_data_nodes_before = len(runner.cluster.data_nodes)
-            num_zero_nodes_before = len(runner.cluster.zero_nodes)
             start_time = time.time()
 
             current_disruption = unique_disruption_name(method_name)
             runner.set_target_node_pool_type(target_pool_type)
             runner.set_target_node(current_disruption=current_disruption)
-            start_msg = (
-                f"Started disruption {method_name} ({runner.base_disruption_name} nemesis) on the target node "
-                f"'{str(runner.target_node)}'"
+            runner.log_on_all_nodes(
+                f"Started disruption {method_name} ({runner.base_disruption_name} nemesis) on the target node '{str(runner.target_node)}'"
             )
-            runner.log.debug("{start_symbol} {msg} {start_symbol}".format(start_symbol=">" * 12, msg=start_msg))
-            for nodes_set in (runner.cluster, runner.loaders):
-                nodes_set.log_message(
-                    "{start_symbol} {msg} {start_symbol}".format(start_symbol="=" * 12, msg=start_msg)
-                )
-            class_name = runner.get_class_name()
+
             result = None
             status = True
 
@@ -6315,10 +6312,9 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
                     nemesis_name=runner.base_disruption_name, node=runner.target_node, publish_event=True
                 ) as nemesis_event,
                 runner.actions_log.action_scope(f"Disruption {method_name} on {runner.target_node.name}"),
+                runner.argus_submit(nemesis_name=method_name, start_time=start_time, nemesis_event=nemesis_event),
+                runner.verify_nodes(),
             ):
-                nemesis_info = argus_create_nemesis_info(
-                    nemesis=runner, class_name=class_name, method_name=method_name, start_time=start_time
-                )
                 try:
                     result = method(*args, **kwargs)
                 except (UnsupportedNemesis, MethodVersionNotFound) as exp:
@@ -6368,36 +6364,10 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
                     runner.log.info(f"log_info: {log_info}")
                     nemesis_event.duration = time_elapsed
 
-                    if nemesis_info:
-                        argus_finalize_nemesis_info(
-                            nemesis=runner,
-                            method_name=method_name,
-                            start_time=int(start_time),
-                            nemesis_event=nemesis_event,
-                        )
-
-                    end_msg = (
-                        f"Finished disruption {method_name} ({runner.base_disruption_name} nemesis) with status "
-                        f"'{get_nemesis_status(nemesis_event)}'"
+                    runner.log_on_all_nodes(
+                        f"Finished disruption {method_name} ({runner.base_disruption_name} nemesis) with status '{nemesis_event.get_argus_nemesis_status()}'"
                     )
-                    runner.log.debug("{end_symbol} {msg} {end_symbol}".format(end_symbol="<" * 12, msg=end_msg))
-                    for nodes_set in (runner.cluster, runner.loaders):
-                        nodes_set.log_message(
-                            "{end_symbol} {msg} {end_symbol}".format(end_symbol="=" * 12, msg=end_msg)
-                        )
 
-            num_data_nodes_after = len(runner.cluster.data_nodes)
-            num_zero_nodes_after = len(runner.cluster.zero_nodes)
-            if num_data_nodes_before != num_data_nodes_after:
-                runner.log.error(
-                    "num data nodes before %s and data nodes after %s does not match"
-                    % (num_data_nodes_before, num_data_nodes_after)
-                )
-            if runner.cluster.params.get("use_zero_nodes") and num_zero_nodes_before != num_zero_nodes_after:
-                runner.log.error(
-                    "num zero nodes before %s and zero nodes after %s does not match"
-                    % (num_zero_nodes_before, num_zero_nodes_after)
-                )
             # TODO: Temporary print. Will be removed later
             data_validation_prints(runner)
         finally:
