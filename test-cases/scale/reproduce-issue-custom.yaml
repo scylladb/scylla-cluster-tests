@@ -32,25 +32,20 @@ root_disk_size_runner: 120
 
 round_robin: true
 
-# Phase 1: Create schema (6 keyspaces, 251 UDTs, 168 tables, 63 indexes, 16 MVs)
-# Uses latte schema mode which calls schema(db) function
+# Schema is created automatically by SCT before the first latte run command.
+# Schema parameters are passed via latte_schema_parameters.
+latte_schema_parameters:
+  replication_factor: 3
+  compaction_strategy: "IncrementalCompactionStrategy"
+  compression: "LZ4Compressor"
+  create_all_keyspaces: "true"
+
+# Phase 1: Populate all 130 tables (72 simple + 58 UDT) with initial data
 prepare_write_cmd:
   - >-
-    latte schema
-    --threads=1 --connections=1
-    --request-timeout 300
-    -P replication_factor=3
-    -P compaction_strategy="\"IncrementalCompactionStrategy\""
-    -P compression="\"LZ4Compressor\""
-    -P create_all_keyspaces=true
-    data_dir/latte/scylladb_682.rn
-
-# Phase 2: Populate all 130 tables (72 simple + 58 UDT) with initial data
-prepare_verify_cmd:
-  - >-
     latte run --tag populate -f populate_all
-    --threads=14 --concurrency=64 --connections=1
-    --warmup=0 --retries=10 --retry-interval=5s,10s --request-timeout 60 --sampling 5s
+    --threads=5 --concurrency=1 --connections=1 --rate=50 --consistency=LOCAL_QUORUM
+    --warmup=0 --retries=100 --retry-interval=5s,60s --request-timeout 600 --sampling 5s
     -d 1000000
     -P row_count_per_table=20000
     -P gauss_mean=0
@@ -65,7 +60,7 @@ stress_cmd:
   # Mixed CRUD workload across all 130 tables (write:2, read:5, update:1, delete:1)
   - >-
     latte run --tag mixed-crud -f write_all:2 -f read_all:5 -f update_all:1 -f delete_all:1
-    --threads=14 --concurrency=4 --connections=1
+    --threads=14 --concurrency=4 --connections=1 --consistency=LOCAL_QUORUM --rate=100
     --warmup=0 --retries=50 --retry-interval=1s,120s --request-timeout 300 --sampling 5s
     --validation-strategy=retry
     -d 36000s
@@ -78,7 +73,7 @@ stress_cmd:
   # Payment workflow simulation (3-table correlated writes: transactions → settlements → receipts)
   - >-
     latte run --tag payment-workflow -f payment_workflow:1 -f read_all:3
-    --threads=14 --concurrency=4 --connections=1
+    --threads=14 --concurrency=4 --connections=1 --consistency=LOCAL_QUORUM --rate=100
     --warmup=0 --retries=50 --retry-interval=1s,120s --request-timeout 300 --sampling 5s
     --validation-strategy=retry
     -d 36000s
@@ -92,7 +87,7 @@ stress_cmd:
   # 40 tables active at once, shifting by 5 tables every 10 seconds
   - >-
     latte run --tag windowed -f write_windowed:2 -f read_windowed:5 -f delete_windowed:1
-    --threads=14 --concurrency=4 --connections=1
+    --threads=14 --concurrency=4 --connections=1 --consistency=LOCAL_QUORUM --rate=100
     --warmup=0 --retries=50 --retry-interval=1s,120s --request-timeout 300 --sampling 5s
     --validation-strategy=retry
     -d 36000s
