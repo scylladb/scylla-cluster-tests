@@ -115,10 +115,18 @@ class GCENode(cluster.BaseNode):
     def is_gce() -> bool:
         return True
 
+    def _needs_public_ip(self) -> bool:
+        """Determine if this node needs a public IP address.
+        
+        Returns True if either intra-node communication uses public IPs or
+        SSH connections use public IPs.
+        """
+        return self.params.get("intra_node_comm_public") or ssh_connection_ip_type(self.params) == "public"
+
     def init(self):
         # Only wait for public IP if we're actually using public IPs for SSH connections
         # or if intra-node communication is public. Otherwise, wait for private IP.
-        if self.params.get("intra_node_comm_public") or ssh_connection_ip_type(self.params) == "public":
+        if self._needs_public_ip():
             self._wait_public_ip()
         else:
             self._wait_private_ip()
@@ -465,6 +473,7 @@ class GCECluster(cluster.BaseCluster):
         zone = self._gce_zone_names[dc_idx]
         network_tags = ["sct-network-only"]
         # Only request external access (public IP) if we're actually using public IPs
+        # Note: We use the node's _needs_public_ip logic here by creating a temporary check
         need_public_ip = self.params.get("intra_node_comm_public") or ssh_connection_ip_type(self.params) == "public"
         if need_public_ip:
             network_tags.append("sct-allow-public")
