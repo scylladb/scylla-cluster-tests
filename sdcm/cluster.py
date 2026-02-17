@@ -5534,6 +5534,14 @@ class BaseScyllaCluster:
         node.remoter.run(
             f"sed -ie 's/^rpc_address: .*/rpc_address: {node.ip_address}/g' {node.offline_install_dir}/etc/scylla/scylla.yaml"
         )
+        # Configure broadcast addresses so scylla-driver connects to the correct IP
+        # Without these, Scylla may advertise its public IP even when using private networking
+        node.remoter.run(
+            f"sed -ie 's/^# broadcast_address: .*/broadcast_address: {node.ip_address}/g' {node.offline_install_dir}/etc/scylla/scylla.yaml"
+        )
+        node.remoter.run(
+            f"sed -ie 's/^# broadcast_rpc_address: .*/broadcast_rpc_address: {node.ip_address}/g' {node.offline_install_dir}/etc/scylla/scylla.yaml"
+        )
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # noqa: PLR0912, PLR0914
         node.wait_ssh_up(verbose=verbose, timeout=timeout)

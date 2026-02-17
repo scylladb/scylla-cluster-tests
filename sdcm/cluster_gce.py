@@ -115,21 +115,8 @@ class GCENode(cluster.BaseNode):
     def is_gce() -> bool:
         return True
 
-    def _needs_public_ip(self) -> bool:
-        """Determine if this node needs a public IP address.
-        
-        Returns True if either intra-node communication uses public IPs or
-        SSH connections use public IPs.
-        """
-        return self.params.get("intra_node_comm_public") or ssh_connection_ip_type(self.params) == "public"
-
     def init(self):
-        # Only wait for public IP if we're actually using public IPs for SSH connections
-        # or if intra-node communication is public. Otherwise, wait for private IP.
-        if self._needs_public_ip():
-            self._wait_public_ip()
-        else:
-            self._wait_private_ip()
+        self._wait_public_ip()
 
         # sleep 10 seconds for waiting users are added to system
         # related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1121
@@ -186,27 +173,6 @@ class GCENode(cluster.BaseNode):
 
         ip_tuple = (gce_public_addresses(instance), gce_private_addresses(instance))
         return ip_tuple
-
-    @retrying(
-        n=90,
-        sleep_time=10,
-        allowed_exceptions=(AssertionError,),
-        message="Waiting for GCE instance to get public IP",
-    )
-    def _wait_public_ip(self):
-        """Wait for the GCE instance to be assigned a public IP address.
-        
-        Retries up to 90 times with 10 second intervals (15 minutes total).
-        Raises AssertionError if no public IP is assigned within timeout.
-        """
-        public_ips, _ = self._refresh_instance_state()
-        if not public_ips:
-            raise AssertionError(
-                f"GCE instance '{self._instance.name}' has no public IP address. "
-                f"This may be due to network configuration or project settings. "
-                f"Consider using ip_ssh_connections='private' if public IPs are not available."
-            )
-        self.log.debug("GCE instance '%s' got public IP: %s", self._instance.name, public_ips)
 
     @property
     def network_interfaces(self):
@@ -472,10 +438,7 @@ class GCECluster(cluster.BaseCluster):
         public_key, key_type = pub_key_from_private_key_file(self.params.get("user_credentials_path"))
         zone = self._gce_zone_names[dc_idx]
         network_tags = ["sct-network-only"]
-        # Only request external access (public IP) if we're actually using public IPs
-        # Note: We use the node's _needs_public_ip logic here by creating a temporary check
-        need_public_ip = self.params.get("intra_node_comm_public") or ssh_connection_ip_type(self.params) == "public"
-        if need_public_ip:
+        if self.params.get("intra_node_comm_public") or ssh_connection_ip_type(self.params) == "public":
             network_tags.append("sct-allow-public")
         create_node_params = dict(
             project_id=self.project,
@@ -484,7 +447,7 @@ class GCECluster(cluster.BaseCluster):
             instance_name=name,
             network_name=self._gce_network,
             disks=gce_disk_struct,
-            external_access=need_public_ip,
+            external_access=True,
             metadata={
                 **self.tags,
                 "Name": name,
