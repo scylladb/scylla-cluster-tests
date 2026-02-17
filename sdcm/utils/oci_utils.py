@@ -240,25 +240,34 @@ def get_ubuntu_image_ocid(compartment_id: str, region: str | None = None, versio
 
     # List images with Ubuntu filter
     # OCI provides official Ubuntu images from Canonical
-    images = compute_client.list_images(
+    images = oci.pagination.list_call_get_all_results_generator(
+        compute_client.list_images,
+        yield_mode="record",
         compartment_id=compartment_id,
         operating_system="Canonical Ubuntu",
         operating_system_version=version,
         sort_by="TIMECREATED",
         sort_order="DESC",
         lifecycle_state="AVAILABLE",
-    ).data
+    )
 
-    # Filter for amd64/x86_64 images (exclude ARM)
-    amd64_images = [
-        img for img in images if "aarch64" not in img.display_name.lower() and "arm" not in img.display_name.lower()
-    ]
-
+    amd64_images = []
+    while current_image := next(images, None):
+        current_image_name = current_image.display_name.lower()
+        # Filter for amd64/x86_64 images (exclude ARM)
+        if "aarch64" not in current_image_name and "arm" not in current_image_name:
+            amd64_images.append(current_image)
     if not amd64_images:
         raise ValueError(f"No Ubuntu {version} amd64 image found in region {region}")
 
     latest_image = amd64_images[0]
-    LOGGER.info("Found Ubuntu %s image: %s (OCID: %s)", version, latest_image.display_name, latest_image.id)
+    LOGGER.info(
+        "Found total images: %s. Pick latest Ubuntu %s image: %s (OCID: %s)",
+        len(amd64_images),
+        version,
+        latest_image.display_name,
+        latest_image.id,
+    )
     return latest_image.id
 
 
