@@ -222,7 +222,7 @@ NEMESIS_RUN_INFO = {}
 
 DISRUPT_POOL_PROPERTY_NAME = "target_pool"
 
-__all__ = []
+__all__ = ["DataValidatorEvent"]
 
 
 def target_data_nodes(func: Callable) -> Callable:
@@ -6250,22 +6250,6 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass"):  # noqa: PLR
     :return: Wrapped method.
     """
 
-    def data_validation_prints(caller):
-        try:
-            if hasattr(caller.tester, "data_validator") and caller.tester.data_validator:
-                if not (keyspace := caller.tester.data_validator.keyspace_name):
-                    DataValidatorEvent.DataValidator(
-                        severity=Severity.NORMAL, message="Failed fo get keyspace name. Data validator is disabled."
-                    ).publish()
-                    return
-
-                with caller.cluster.cql_connection_patient(caller.cluster.nodes[0], keyspace=keyspace) as session:
-                    caller.tester.data_validator.validate_range_not_expected_to_change(session, during_nemesis=True)
-                    caller.tester.data_validator.validate_range_expected_to_change(session, during_nemesis=True)
-                    caller.tester.data_validator.validate_deleted_rows(session, during_nemesis=True)
-        except Exception as err:  # noqa: BLE001
-            caller.log.debug(f"Data validator error: {err}")
-
     @wraps(method)
     def wrapper(*args, **kwargs):  # noqa: PLR0912, PLR0914, PLR0915
         method_name = method.__self__.__class__.__name__
@@ -6294,9 +6278,6 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass"):  # noqa: PLR
 
             result = None
 
-            # TODO: Temporary print. Will be removed later
-            data_validation_prints(runner)
-
             with (
                 DisruptionEvent(
                     nemesis_name=runner.base_disruption_name, node=runner.target_node, publish_event=True
@@ -6304,6 +6285,7 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass"):  # noqa: PLR
                 runner.actions_log.action_scope(f"Disruption {method_name} on {runner.target_node.name}"),
                 runner.argus_submit(nemesis_name=method_name, start_time=start_time, nemesis_event=nemesis_event),
                 runner.verify_nodes(),
+                runner.tester.run_nemesis_hooks(),
             ):
                 try:
                     result = method(*args, **kwargs)
@@ -6350,9 +6332,6 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass"):  # noqa: PLR
                     runner.log_on_all_nodes(
                         f"Finished disruption {method_name} ({runner.base_disruption_name} nemesis) with status '{nemesis_event.nemesis_status}'"
                     )
-
-            # TODO: Temporary print. Will be removed later
-            data_validation_prints(runner)
         finally:
             # Store nemesis event to track skip status for health checks
             if nemesis_event is not None:
