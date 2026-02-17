@@ -340,15 +340,21 @@ def filter_oci_by_tags(tags_dict: dict, instances: list[Instance], tag_namespace
     """
     if not tags_dict:
         return instances
-
-    filtered = []
+    filtered_instances = []
     for instance in instances:
         defined_tags = instance.defined_tags or {}
-        instance_tags = defined_tags.get(tag_namespace, {})
-
-        if all(instance_tags.get(k) == v for k, v in tags_dict.items()):
-            filtered.append(instance)
-    return filtered
+        tags = defined_tags.get(tag_namespace, {})
+        for tag_k, tag_v in tags_dict.items():
+            if tag_k not in tags:
+                break
+            if isinstance(tag_v, list):
+                if tags[tag_k] not in tag_v:
+                    break
+            elif tags[tag_k] != tag_v:
+                break
+        else:
+            filtered_instances.append(instance)
+    return filtered_instances
 
 
 def oci_public_addresses(
