@@ -6307,10 +6307,7 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
                 nodes_set.log_message(
                     "{start_symbol} {msg} {start_symbol}".format(start_symbol="=" * 12, msg=start_msg)
                 )
-
             class_name = runner.get_class_name()
-            if class_name.find("Chaos") < 0:
-                runner.metrics_srv.event_start(class_name)
             result = None
             status = True
 
@@ -6375,9 +6372,7 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
                     runner.operation_log.append(copy.deepcopy(log_info))
                     runner.log.debug("%s duration -> %s s", runner.base_disruption_name, time_elapsed)
 
-                    if class_name.find("Chaos") < 0:
-                        runner.metrics_srv.event_stop(class_name)
-                    disrupt = runner.base_disruption_name
+
                     del log_info["operation"]
 
                     runner.update_stats(disrupt, status, log_info)
