@@ -240,6 +240,9 @@ def target_all_nodes(func: Callable) -> Callable:
     return func
 
 
+DISRUPT_DEFAULT_POOL = NEMESIS_TARGET_POOLS.data_nodes
+
+
 class NemesisFlags:
     # nemesis flags:
     topology_changes: bool = False  # flag that signal that nemesis is changing cluster topology,
@@ -6253,91 +6256,84 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass"):  # noqa: PLR
     @wraps(method)
     def wrapper(*args, **kwargs):  # noqa: PLR0912, PLR0914, PLR0915
         method_name = method.__self__.__class__.__name__
-        target_pool_type = getattr(method.__self__, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
+        target_pool_type = getattr(method.__self__, DISRUPT_POOL_PROPERTY_NAME, DISRUPT_DEFAULT_POOL)
         runner = caller_obj.runner
-        nemesis_event = None  # Initialize to None to avoid UnboundLocalError in finally block
-        try:
-            # Skip health check if previous nemesis was skipped to avoid wasting 2+ hours on large clusters
-            last_event = runner.last_nemesis_event
-            if last_event and last_event.is_skipped:
-                runner.log.info(
-                    "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
-                    last_event.nemesis_name,
-                    last_event.skip_reason,
-                )
-            else:
-                runner.cluster.check_cluster_health()
-            start_time = time.time()
 
-            current_disruption = unique_disruption_name(method_name)
+        # Skip health check if previous nemesis was skipped to avoid wasting 2+ hours on large clusters
+        last_event = runner.last_nemesis_event
+        if last_event and last_event.is_skipped:
+            runner.log.info(
+                "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
+                last_event.nemesis_name,
+                last_event.skip_reason,
+            )
+        else:
+            runner.cluster.check_cluster_health()
+        start_time = time.time()
+
+        result = None
+
+        with (
+            DisruptionEvent(
+                nemesis_name=runner.base_disruption_name, node=runner.target_node, publish_event=True
+            ) as nemesis_event,
+            runner.actions_log.action_scope(f"Disruption {method_name} on {runner.target_node.name}"),
+            runner.argus_submit(nemesis_name=method_name, start_time=start_time, nemesis_event=nemesis_event),
+            runner.verify_nodes(),
+            runner.tester.run_nemesis_hooks(),
+        ):
             runner.set_target_node_pool_type(target_pool_type)
-            runner.set_target_node(current_disruption=current_disruption)
+            runner.set_target_node(current_disruption=unique_disruption_name(method_name))
             runner.log_on_all_nodes(
                 f"Started disruption {method_name} ({runner.base_disruption_name} nemesis) on the target node '{str(runner.target_node)}'"
             )
-
-            result = None
-
-            with (
-                DisruptionEvent(
-                    nemesis_name=runner.base_disruption_name, node=runner.target_node, publish_event=True
-                ) as nemesis_event,
-                runner.actions_log.action_scope(f"Disruption {method_name} on {runner.target_node.name}"),
-                runner.argus_submit(nemesis_name=method_name, start_time=start_time, nemesis_event=nemesis_event),
-                runner.verify_nodes(),
-                runner.tester.run_nemesis_hooks(),
-            ):
-                try:
-                    result = method(*args, **kwargs)
-                except (UnsupportedNemesis, MethodVersionNotFound) as exp:
-                    nemesis_event.skip(skip_reason=str(exp))
-                    raise
-                except KillNemesis:
-                    if runner.tester.get_event_summary().get("CRITICAL", 0):
-                        nemesis_event.add_simple_error("Killed by tearDown - test fail", traceback.format_exc())
-                    else:
-                        nemesis_event.skip(skip_reason="Killed by tearDown - test success")
-                    raise
-                except Exception as details:  # noqa: BLE001
-                    nemesis_event.add_simple_error(str(details), traceback.format_exc())
-                    runner.error_list.append(str(details))
-                    runner.log.error("Unhandled exception in method %s", method, exc_info=True)
-                finally:
-                    end_time = time.time()
-                    time_elapsed = int(end_time - start_time)
-                    nemesis_event.duration = time_elapsed
-
-                    # Build log_info once from nemesis_event — single source of truth
-                    log_info = {
-                        "start": int(start_time),
-                        "end": int(end_time),
-                        "duration": time_elapsed,
-                        "node": str(runner.target_node),
-                        "subtype": str(nemesis_event.nemesis_status.value),
-                    }
-                    status = True
-                    if nemesis_event.severity == Severity.ERROR:
-                        log_info["error"] = nemesis_event.errors[-1]
-                        log_info["full_traceback"] = nemesis_event.full_traceback
-                        status = False
-                    if nemesis_event.is_skipped:
-                        log_info["skip_reason"] = nemesis_event.skip_reason
-
-                    runner.duration_list.append(time_elapsed)
-                    runner.operation_log.append({"operation": runner.base_disruption_name, **log_info})
-                    runner.log.debug("%s duration -> %s s", runner.base_disruption_name, time_elapsed)
-                    runner.log.info("log_info: %s", log_info)
-                    runner.update_stats(runner.base_disruption_name, status, log_info)
-
-                    runner.log_on_all_nodes(
-                        f"Finished disruption {method_name} ({runner.base_disruption_name} nemesis) with status '{nemesis_event.nemesis_status}'"
-                    )
-        finally:
-            # Store nemesis event to track skip status for health checks
-            if nemesis_event is not None:
+            try:
+                result = method(*args, **kwargs)
+            except (UnsupportedNemesis, MethodVersionNotFound) as exp:
+                nemesis_event.skip(skip_reason=str(exp))
+                raise
+            except KillNemesis:
+                if runner.tester.get_event_summary().get("CRITICAL", 0):
+                    nemesis_event.add_simple_error("Killed by tearDown - test fail", traceback.format_exc())
+                else:
+                    nemesis_event.skip(skip_reason="Killed by tearDown - test success")
+                raise
+            except Exception as details:  # noqa: BLE001
+                nemesis_event.add_simple_error(str(details), traceback.format_exc())
+                runner.error_list.append(str(details))
+                runner.log.error("Unhandled exception in method %s", method, exc_info=True)
+            finally:
+                runner.set_target_node_pool_type(DISRUPT_DEFAULT_POOL)
                 runner.last_nemesis_event = nemesis_event
-            runner.set_target_node_pool_type(NEMESIS_TARGET_POOLS.data_nodes)
+                end_time = time.time()
+                time_elapsed = int(end_time - start_time)
+                nemesis_event.duration = time_elapsed
 
+                # Build log_info once from nemesis_event — single source of truth
+                log_info = {
+                    "start": int(start_time),
+                    "end": int(end_time),
+                    "duration": time_elapsed,
+                    "node": str(runner.target_node),
+                    "subtype": str(nemesis_event.nemesis_status.value),
+                }
+                status = True
+                if nemesis_event.severity == Severity.ERROR:
+                    log_info["error"] = nemesis_event.errors[-1]
+                    log_info["full_traceback"] = nemesis_event.full_traceback
+                    status = False
+                if nemesis_event.is_skipped:
+                    log_info["skip_reason"] = nemesis_event.skip_reason
+
+                runner.duration_list.append(time_elapsed)
+                runner.operation_log.append({"operation": runner.base_disruption_name, **log_info})
+                runner.log.debug("%s duration -> %s s", runner.base_disruption_name, time_elapsed)
+                runner.log.info("log_info: %s", log_info)
+                runner.update_stats(runner.base_disruption_name, status, log_info)
+
+                runner.log_on_all_nodes(
+                    f"Finished disruption {method_name} ({runner.base_disruption_name} nemesis) with status '{nemesis_event.nemesis_status}'"
+                )
         return result
 
     return wrapper
