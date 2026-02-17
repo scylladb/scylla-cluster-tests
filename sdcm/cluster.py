@@ -73,7 +73,6 @@ from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificate
 from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuilder
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.provision.helpers.certificate import (
-    create_ca,
     install_client_certificate,
     install_encryption_at_rest_files,
     create_certificate,
@@ -109,7 +108,6 @@ from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFound
 from sdcm.utils.gcp_kms import GcpKms
 from sdcm.provision.gce.kms_provider import GcpKmsProvider
 from google.cloud.exceptions import GoogleCloudError
-from sdcm.keystore import KeyStore
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.common import (
@@ -4959,38 +4957,6 @@ class BaseScyllaCluster:
                         node_name=node.name, exp_ips=self.seed_nodes_addresses, act_ip=ip
                     )
                 )
-
-    @contextlib.contextmanager
-    def patch_params(self) -> SCTConfiguration:
-        new_params, old_params = self.params.copy(), self.params
-        yield new_params
-        if new_params != old_params:
-            self.params = new_params
-            for node in self.nodes:
-                node.config_setup(append_scylla_args=self.get_scylla_args())
-                node.restart_scylla()
-
-    def enable_client_encrypt(self):
-        create_ca(self.test_config.tester_obj().localhost)
-        for node in self.nodes:
-            node.create_node_certificate(
-                cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
-                cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
-                csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR,
-            )
-            # Create client facing node certificate, for client-to-node communication
-            node.create_node_certificate(
-                node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY
-            )
-            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
-                shutil.copy(src, node.ssl_conf_dir)
-        self.log.debug("Enabling client encryption on nodes")
-        with self.patch_params() as params:
-            params["client_encrypt"] = True
-
-    def disable_client_encrypt(self):
-        with self.patch_params() as params:
-            params["client_encrypt"] = False
 
     def _update_db_binary(self, new_scylla_bin, node_list, start_service=True):
         self.log.debug("User requested to update DB binary...")
