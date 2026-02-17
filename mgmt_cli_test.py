@@ -14,6 +14,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 import random
+import shutil
 import threading
 import time
 from datetime import timedelta
@@ -34,7 +35,14 @@ from sdcm.mgmt.common import (
     get_backup_size,
     ObjectStorageUploadMode,
 )
-from sdcm.provision.helpers.certificate import TLSAssets
+from sdcm.provision.helpers.certificate import (
+    create_ca,
+    TLSAssets,
+    CA_CERT_FILE,
+    JKS_TRUSTSTORE_FILE,
+    SCYLLA_SSL_CONF_DIR,
+)
+from sdcm.provision.scylla_yaml.auxiliaries import ClientEncryptionOptions
 from sdcm.nemesis.monkey import MgmtRepair
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.alternator.table_setup import alternator_backuped_tables
@@ -634,18 +642,68 @@ class ManagerHealthCheckTests(ManagerTestFunctionsMixIn):
 
 
 class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
-    def _disable_client_encryption(self) -> None:
+    default_encryption_state: bool = None
+
+    def tearDown(self):
+        """The test changes the client encryption state of the cluster, and to not affect other tests,
+        it needs to change it back to the default state at the end of the test.
+        """
+        current_encryption_state = self.db_cluster.nodes[0].is_client_encrypt
+        if self.default_encryption_state != current_encryption_state:
+            if self.default_encryption_state:
+                self._switch_client_encryption(enabled=True)
+            else:
+                self._switch_client_encryption(enabled=False)
+        else:
+            self.log.debug("Client encryption state matches the default; no changes needed")
+
+        super().tearDown()
+
+    def enable_client_encryption(self) -> None:
+        create_ca(self.localhost)
+        for node in self.db_cluster.nodes:
+            ssl_dir = node.ssl_conf_dir
+            node.create_node_certificate(
+                cert_file=ssl_dir / TLSAssets.DB_CERT,
+                cert_key=ssl_dir / TLSAssets.DB_KEY,
+                csr_file=ssl_dir / TLSAssets.DB_CSR,
+            )
+            node.create_node_certificate(
+                cert_file=ssl_dir / TLSAssets.DB_CLIENT_FACING_CERT,
+                cert_key=ssl_dir / TLSAssets.DB_CLIENT_FACING_KEY,
+            )
+            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+                shutil.copy(src, ssl_dir)
+
+            node.remoter.sudo(f"mkdir -p {SCYLLA_SSL_CONF_DIR}")
+            node.remoter.send_files(src=f"{ssl_dir}/", dst="/tmp/ssl_conf_tmp/")
+            node.remoter.sudo(f"cp -r /tmp/ssl_conf_tmp/. {SCYLLA_SSL_CONF_DIR}/")
+            node.remoter.run("rm -rf /tmp/ssl_conf_tmp/")
+
         for node in self.db_cluster.nodes:
             with node.remote_scylla_yaml() as scylla_yml:
-                scylla_yml.client_encryption_options.enabled = False
+                scylla_yml.client_encryption_options = ClientEncryptionOptions(
+                    enabled=True,
+                    certificate=str(SCYLLA_SSL_CONF_DIR / TLSAssets.DB_CLIENT_FACING_CERT),
+                    keyfile=str(SCYLLA_SSL_CONF_DIR / TLSAssets.DB_CLIENT_FACING_KEY),
+                    truststore=str(SCYLLA_SSL_CONF_DIR / TLSAssets.CA_CERT),
+                )
+            node.restart_scylla()
+
+    def _switch_client_encryption(self, enabled: bool) -> None:
+        for node in self.db_cluster.nodes:
+            with node.remote_scylla_yaml() as scylla_yml:
+                scylla_yml.client_encryption_options.enabled = enabled
             node.restart_scylla()
 
     def test_client_encryption(self):
         self.log.info("starting test_client_encryption")
 
+        self.default_encryption_state = self.params.get("client_encrypt")
+
         self.log.info("ENABLED client encryption checks")
         if not self.db_cluster.nodes[0].is_client_encrypt:
-            self.db_cluster.enable_client_encrypt()
+            self.enable_client_encryption()
 
         manager_node = self.monitors.nodes[0]
 
@@ -669,7 +727,7 @@ class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
             assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
 
         self.log.info("DISABLED client encryption checks")
-        self._disable_client_encryption()
+        self._switch_client_encryption(enabled=False)
         # SM caches scylla nodes configuration and the healthcheck svc is independent on the cache updates.
         # Cache is being updated periodically, every 1 minute following the manager config for SCT.
         # We need to wait until SM is aware about the configuration change.
