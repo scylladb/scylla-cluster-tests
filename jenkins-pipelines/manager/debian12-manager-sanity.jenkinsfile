@@ -7,7 +7,7 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
     test_name: 'mgmt_cli_test.ManagerSanityTests.test_manager_sanity',
-    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/manager/debian12.yaml"]''',
+    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/manager/debian12.yaml", "configurations/disable_client_encrypt.yaml"]''',
 
     scylla_version: '2025.1',
 
