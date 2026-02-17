@@ -60,6 +60,12 @@ class ScyllaDoctor:
         [PerftuneSystemConfigurationCollector]
         ; perftune script requires root
         run = no
+        [ScyllaTablesCompressionInfoCollector]
+        ; skip until https://scylladb.atlassian.net/browse/DOCTOR-19 is figured out
+        run = no
+        [ScyllaTablesUsedDiskCollector]
+        ; skip until https://scylladb.atlassian.net/browse/DOCTOR-19 is figured out
+        run = no
     """)
 
     def __init__(self, node: BaseNode, test_config: TestConfig, offline_install=False):
