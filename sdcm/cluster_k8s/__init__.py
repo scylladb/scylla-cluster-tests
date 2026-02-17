@@ -2349,11 +2349,8 @@ class BaseScyllaPodContainer(BasePodContainer):
 
     def init(self) -> None:
         super().init()
-        if self.distro.is_rhel_like and not self.remoter.sudo("rpm -q iproute", ignore_status=True).ok:
-            # need this because of scylladb/scylla#7560
-            # Time to time 'yum install -y iproute' fails, let's download the package and install it afterwards
-            self.remoter.sudo("yum install --downloadonly iproute", retry=5)
-            self.remoter.sudo("yum install -y iproute")
+        if self.distro.is_rhel_like:
+            self.install_package(package_name="iproute")
         self.remoter.sudo("mkdir -p /var/lib/scylla/coredumps", ignore_status=True)
         self.scylla_network_configuration = ScyllaNetworkConfiguration(
             network_interfaces=self.network_interfaces, scylla_network_config=[]
