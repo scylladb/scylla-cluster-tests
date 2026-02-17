@@ -466,6 +466,27 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         except Exception:  # noqa: BLE001
             self.log.error("General Error submitting data to Argus", exc_info=True)
 
+    def pre_nemesis(self):
+        """Runs before nemesis execution"""
+
+    def post_nemesis(self):
+        """Runs after each nemesis execution"""
+
+    @contextlib.contextmanager
+    def run_nemesis_hooks(self):
+        """Runs hooks around nemesis invocation"""
+        try:
+            self.pre_nemesis()
+        except Exception:  # noqa: BLE001
+            self.log.error("pre_nemesis hook failed", exc_info=True)
+        try:
+            yield
+        finally:
+            try:
+                self.post_nemesis()
+            except Exception:  # noqa: BLE001
+                self.log.error("post_nemesis hook failed", exc_info=True)
+
     def start_argus_heartbeat_thread(self) -> threading.Event:
         def send_argus_heartbeat(client: ArgusSCTClient, stop_signal: threading.Event):
             if isinstance(client, ReplayOnlyArgusSCTClient):
