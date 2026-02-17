@@ -1039,13 +1039,19 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
         scylla_args = self.params.get("append_scylla_args")
 
+        version = self.params.get("scylla_version")
+        if version.startswith("master"):
+            tag = version.split(":", maxsplit=1)[1]
+        else:
+            tag = version
+
         return HelmValues(
             {
                 "nameOverride": "",
                 "fullnameOverride": cluster_name,
                 "scyllaImage": {
                     "repository": self.params.get("docker_image"),
-                    "tag": self.params.get("scylla_version"),
+                    "tag": tag,
                 },
                 "agentImage": {
                     "repository": "scylladb/scylla-manager-agent",
