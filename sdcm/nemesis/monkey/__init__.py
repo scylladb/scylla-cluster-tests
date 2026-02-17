@@ -467,7 +467,6 @@ class NodeTerminateAndReplace(NemesisBaseClass):
 class DrainKubernetesNodeThenReplaceScyllaNode(NemesisBaseClass):
     disruptive = True
     kubernetes = True
-    exclusive = True
 
     def disrupt(self):
         self.runner.disrupt_drain_kubernetes_node_then_replace_scylla_node()
@@ -476,7 +475,6 @@ class DrainKubernetesNodeThenReplaceScyllaNode(NemesisBaseClass):
 class TerminateKubernetesHostThenReplaceScyllaNode(NemesisBaseClass):
     disruptive = True
     kubernetes = True
-    exclusive = True
 
     def disrupt(self):
         self.runner.disrupt_terminate_kubernetes_host_then_replace_scylla_node()
@@ -485,7 +483,6 @@ class TerminateKubernetesHostThenReplaceScyllaNode(NemesisBaseClass):
 class DrainKubernetesNodeThenDecommissionAndAddScyllaNode(NemesisBaseClass):
     disruptive = True
     kubernetes = True
-    exclusive = True
 
     def disrupt(self):
         self.runner.disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node()
@@ -494,7 +491,6 @@ class DrainKubernetesNodeThenDecommissionAndAddScyllaNode(NemesisBaseClass):
 class TerminateKubernetesHostThenDecommissionAndAddScyllaNode(NemesisBaseClass):
     disruptive = True
     kubernetes = True
-    exclusive = True
 
     def disrupt(self):
         self.runner.disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node()
