@@ -34,7 +34,7 @@ from abc import ABC, abstractmethod
 from contextlib import ExitStack
 from datetime import timedelta
 from typing import Any, List, Optional, Callable, Dict, Union, Iterable, TYPE_CHECKING
-from functools import wraps, partial, cached_property
+from functools import partial, cached_property
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
@@ -422,8 +422,6 @@ class NemesisRunner:
             rack=rack,
             allow_only_last_node_in_rack=allow_only_last_node_in_rack,
         )
-        if current_disruption:
-            self.set_current_disruption(current_disruption)
         self.log.info("%s: target node selected by allocator - %s", disruption_name, self.target_node)
 
     @raise_event_on_failure
@@ -1093,16 +1091,8 @@ class NemesisRunner:
     def disrupt(self):
         raise NotImplementedError("Derived classes must implement disrupt()")
 
-    @property
-    def base_disruption_name(self) -> str:
-        return self.current_disruption.rsplit("-", 1)[0]
-
     def get_class_name(self):
         return self.__class__.__name__.replace("Monkey", "")
-
-    def set_current_disruption(self, label=None):
-        self.log.debug("Set current_disruption -> %s", label.split("-", 1)[0])
-        self.current_disruption = label
 
     def disrupt_destroy_data_then_repair(self):
         """repair at the beginning added to avoid c-s failure 'data wasn't validated'"""
@@ -1927,12 +1917,89 @@ class NemesisRunner:
     # Nemesis running code
     def execute_nemesis(self, nemesis: NemesisBaseClass):
         """Runs selected disrupt method"""
-        event_name = nemesis.__class__.__name__
-        self.metrics_srv.event_start(event_name)
-        try:
-            disrupt_method_wrapper(nemesis.disrupt, caller_obj=nemesis, is_exclusive=nemesis.exclusive)()
-        finally:
-            self.metrics_srv.event_stop(event_name)
+        assert nemesis.runner == self, "Nemesis needs to be initialized with the same runner that executes it"
+        class_name = nemesis.__class__.__name__
+        target_pool_type = getattr(nemesis, DISRUPT_POOL_PROPERTY_NAME, DISRUPT_DEFAULT_POOL)
+
+        # Skip health check if previous nemesis was skipped to avoid wasting 2+ hours on large clusters
+        last_event = self.last_nemesis_event
+        if last_event and last_event.is_skipped:
+            self.log.info(
+                "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
+                last_event.nemesis_name,
+                last_event.skip_reason,
+            )
+        else:
+            self.cluster.check_cluster_health()
+        start_time = time.time()
+
+        nemesis_event = None
+        self.current_disruption = unique_disruption_name(class_name)
+        disruption_name = self.current_disruption.rsplit("-", 1)[0]
+        raise_error = None
+        self.set_target_node_pool_type(target_pool_type)
+        self.set_target_node()
+        with (
+            DisruptionEvent(nemesis_name=disruption_name, node=self.target_node, publish_event=True) as nemesis_event,
+            self.actions_log.action_scope(f"Disruption {class_name} on {self.target_node.name}"),
+            self.argus_submit(nemesis_name=class_name, start_time=start_time, nemesis_event=nemesis_event),
+            self.verify_nodes(),
+            self.tester.run_nemesis_hooks(),
+            self.metrics_srv.event(class_name),
+        ):
+            self.log_on_all_nodes(
+                f"Started disruption {class_name} ({disruption_name} nemesis) on the target node '{str(self.target_node)}'"
+            )
+            try:
+                nemesis.disrupt()
+            except (UnsupportedNemesis, MethodVersionNotFound) as exp:
+                nemesis_event.skip(skip_reason=str(exp))
+                raise_error = exp
+            except KillNemesis as exp:
+                if self.tester.get_event_summary().get("CRITICAL", 0):
+                    nemesis_event.add_simple_error("Killed by tearDown - test fail", traceback.format_exc())
+                else:
+                    nemesis_event.skip(skip_reason="Killed by tearDown - test success")
+                raise_error = exp
+            except Exception as details:  # noqa: BLE001
+                nemesis_event.add_simple_error(str(details), traceback.format_exc())
+                self.error_list.append(str(details))
+                self.log.error("Unhandled exception in method %s", nemesis.disrupt, exc_info=True)
+            finally:
+                self.last_nemesis_event = nemesis_event
+                end_time = time.time()
+                time_elapsed = int(end_time - start_time)
+                nemesis_event.duration = time_elapsed
+
+                # Build log_info once from nemesis_event — single source of truth
+                log_info = {
+                    "start": int(start_time),
+                    "end": int(end_time),
+                    "duration": time_elapsed,
+                    "node": str(self.target_node),
+                    "subtype": str(nemesis_event.nemesis_status.value),
+                }
+                status = True
+                if nemesis_event.severity == Severity.ERROR:
+                    log_info["error"] = nemesis_event.errors[-1]
+                    log_info["full_traceback"] = nemesis_event.full_traceback
+                    status = False
+                if nemesis_event.is_skipped:
+                    log_info["skip_reason"] = nemesis_event.skip_reason
+
+                self.duration_list.append(time_elapsed)
+                self.operation_log.append({"operation": disruption_name, **log_info})
+                self.log.debug("%s duration -> %s s", disruption_name, time_elapsed)
+                self.log.info("log_info: %s", log_info)
+                self.update_stats(disruption_name, status, log_info)
+
+                self.log_on_all_nodes(
+                    f"Finished disruption {class_name} ({disruption_name} nemesis) with status '{nemesis_event.nemesis_status}'"
+                )
+                self.current_disruption = None
+        self.set_target_node_pool_type(DISRUPT_DEFAULT_POOL)
+        if raise_error:
+            raise raise_error
 
     def build_disruptions_by_selector(self, nemesis_selector: str | None = None):
         """
@@ -6191,7 +6258,7 @@ class NemesisRunner:
         argus_client = None
         try:
             argus_client = self.cluster.test_config.argus_client()
-            self.argus_client.submit_nemesis(
+            argus_client.submit_nemesis(
                 name=nemesis_name,
                 class_name=self.get_class_name(),
                 start_time=int(start_time),
@@ -6243,100 +6310,6 @@ class NemesisRunner:
         self.log.debug("{start_symbol} {msg} {start_symbol}".format(start_symbol=">" * 12, msg=msg))
         for nodes_set in (self.cluster, self.loaders):
             nodes_set.log_message("{start_symbol} {msg} {start_symbol}".format(start_symbol="=" * 12, msg=msg))
-
-
-def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass"):  # noqa: PLR0915
-    """
-    Log time elapsed for method to run
-
-    :param method: Remote method to wrap.
-    :return: Wrapped method.
-    """
-
-    @wraps(method)
-    def wrapper(*args, **kwargs):  # noqa: PLR0912, PLR0914, PLR0915
-        method_name = method.__self__.__class__.__name__
-        target_pool_type = getattr(method.__self__, DISRUPT_POOL_PROPERTY_NAME, DISRUPT_DEFAULT_POOL)
-        runner = caller_obj.runner
-
-        # Skip health check if previous nemesis was skipped to avoid wasting 2+ hours on large clusters
-        last_event = runner.last_nemesis_event
-        if last_event and last_event.is_skipped:
-            runner.log.info(
-                "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
-                last_event.nemesis_name,
-                last_event.skip_reason,
-            )
-        else:
-            runner.cluster.check_cluster_health()
-        start_time = time.time()
-
-        result = None
-
-        with (
-            DisruptionEvent(
-                nemesis_name=runner.base_disruption_name, node=runner.target_node, publish_event=True
-            ) as nemesis_event,
-            runner.actions_log.action_scope(f"Disruption {method_name} on {runner.target_node.name}"),
-            runner.argus_submit(nemesis_name=method_name, start_time=start_time, nemesis_event=nemesis_event),
-            runner.verify_nodes(),
-            runner.tester.run_nemesis_hooks(),
-        ):
-            runner.set_target_node_pool_type(target_pool_type)
-            runner.set_target_node(current_disruption=unique_disruption_name(method_name))
-            runner.log_on_all_nodes(
-                f"Started disruption {method_name} ({runner.base_disruption_name} nemesis) on the target node '{str(runner.target_node)}'"
-            )
-            try:
-                result = method(*args, **kwargs)
-            except (UnsupportedNemesis, MethodVersionNotFound) as exp:
-                nemesis_event.skip(skip_reason=str(exp))
-                raise
-            except KillNemesis:
-                if runner.tester.get_event_summary().get("CRITICAL", 0):
-                    nemesis_event.add_simple_error("Killed by tearDown - test fail", traceback.format_exc())
-                else:
-                    nemesis_event.skip(skip_reason="Killed by tearDown - test success")
-                raise
-            except Exception as details:  # noqa: BLE001
-                nemesis_event.add_simple_error(str(details), traceback.format_exc())
-                runner.error_list.append(str(details))
-                runner.log.error("Unhandled exception in method %s", method, exc_info=True)
-            finally:
-                runner.set_target_node_pool_type(DISRUPT_DEFAULT_POOL)
-                runner.last_nemesis_event = nemesis_event
-                end_time = time.time()
-                time_elapsed = int(end_time - start_time)
-                nemesis_event.duration = time_elapsed
-
-                # Build log_info once from nemesis_event — single source of truth
-                log_info = {
-                    "start": int(start_time),
-                    "end": int(end_time),
-                    "duration": time_elapsed,
-                    "node": str(runner.target_node),
-                    "subtype": str(nemesis_event.nemesis_status.value),
-                }
-                status = True
-                if nemesis_event.severity == Severity.ERROR:
-                    log_info["error"] = nemesis_event.errors[-1]
-                    log_info["full_traceback"] = nemesis_event.full_traceback
-                    status = False
-                if nemesis_event.is_skipped:
-                    log_info["skip_reason"] = nemesis_event.skip_reason
-
-                runner.duration_list.append(time_elapsed)
-                runner.operation_log.append({"operation": runner.base_disruption_name, **log_info})
-                runner.log.debug("%s duration -> %s s", runner.base_disruption_name, time_elapsed)
-                runner.log.info("log_info: %s", log_info)
-                runner.update_stats(runner.base_disruption_name, status, log_info)
-
-                runner.log_on_all_nodes(
-                    f"Finished disruption {method_name} ({runner.base_disruption_name} nemesis) with status '{nemesis_event.nemesis_status}'"
-                )
-        return result
-
-    return wrapper
 
 
 # Auto-discovery mechanism.
