@@ -191,10 +191,10 @@ class BucketOperations(ClusterTester):
 
         if cluster_backend == "aws":
             # extract region name from AWS_US_EAST_1:s3:scylla-cloud-backup-8072-7216-v5dn53 to us-east-1
-            return location.split(":", maxsplit=1)[0].split("_", 1)[1].replace("_", "-").lower()
+            return location.split(":")[0].split("_", 1)[1].replace("_", "-").lower()
         elif cluster_backend == "gce":
             # extract region name from GCE_US_EAST_1:gcs:scylla-cloud-backup-23-29-6q0i5q to us-east1
-            parts = location.split(":", maxsplit=1)[0].split("_")[1:]
+            parts = location.split(":")[0].split("_")[1:]
             assert len(parts) == 3, f"Can't extract region from location {location}"
             return f"{parts[0].lower()}-{parts[1].lower()}{parts[2]}"
         else:

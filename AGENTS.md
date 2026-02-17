@@ -268,6 +268,10 @@ Nemesis are chaos operations that test database resilience. Common types:
 Separate each group with a blank line.
 Within each group, sort imports alphabetically.
 
+**Logging convention:**
+- Use uppercase `LOGGER` for module-level loggers: `LOGGER = logging.getLogger(__name__)`
+- This ensures consistency across the codebase
+
 ### Unit Testing Guidelines
 
 **IMPORTANT: Use pytest style, NOT unittest.TestCase**
