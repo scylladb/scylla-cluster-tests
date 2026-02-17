@@ -651,22 +651,23 @@ class BaseNode(AutoSshContainerMixin):
 
     @property
     def db_node_instance_type(self) -> Optional[str]:
-        backend = self.parent_cluster.cluster_backend
+        backend, instance_type, params = self.parent_cluster.cluster_backend, None, self.parent_cluster.params
         if backend in ("aws", "aws-siren"):
             if self._is_zero_token_node:
-                return self.parent_cluster.params.get("zero_token_instance_type_db") or self.parent_cluster.params.get(
-                    "instance_type_db"
-                )
-            return self.parent_cluster.params.get("instance_type_db")
-        elif backend == "azure":
-            return self.parent_cluster.params.get("azure_instance_type_db")
+                instance_type = params.get("zero_token_instance_type_db") or params.get("instance_type_db")
+            else:
+                instance_type = params.get("instance_type_db")
         elif backend in ("gce", "gce-siren"):
-            return self.parent_cluster.params.get("gce_instance_type_db")
+            instance_type = params.get("gce_instance_type_db")
+        elif backend == "azure":
+            instance_type = params.get("azure_instance_type_db")
+        elif backend == "oci":
+            instance_type = params.get("oci_instance_type_db")
         elif backend == "docker":
-            return "docker"
+            instance_type = "docker"
         else:
-            self.log.warning("Unrecognized backend type, defaulting to 'Unknown' fordb instance type.")
-            return None
+            self.log.warning("Unrecognized backend type, defaulting to 'None' for db instance type.")
+        return instance_type
 
     @property
     def _proposed_scylla_yaml_properties(self) -> dict:
