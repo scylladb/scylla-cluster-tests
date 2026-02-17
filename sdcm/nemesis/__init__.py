@@ -17,7 +17,6 @@ Module containing logic for running disruptions on a test cluster
 """
 
 import contextlib
-import copy
 import datetime
 import importlib
 import inspect
@@ -6294,16 +6293,7 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass"):  # noqa: PLR
             )
 
             result = None
-            status = True
 
-            log_info = {
-                "operation": runner.base_disruption_name,
-                "start": int(start_time),
-                "end": 0,
-                "duration": 0,
-                "node": str(runner.target_node),
-                "subtype": "end",
-            }
             # TODO: Temporary print. Will be removed later
             data_validation_prints(runner)
 
@@ -6318,54 +6308,47 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass"):  # noqa: PLR
                 try:
                     result = method(*args, **kwargs)
                 except (UnsupportedNemesis, MethodVersionNotFound) as exp:
-                    skip_reason = str(exp)
-                    log_info.update({"subtype": "skipped", "skip_reason": skip_reason})
-                    nemesis_event.skip(skip_reason=skip_reason)
+                    nemesis_event.skip(skip_reason=str(exp))
                     raise
                 except KillNemesis:
                     if runner.tester.get_event_summary().get("CRITICAL", 0):
-                        error_sting = "Killed by tearDown - test fail"
-                        nemesis_event.add_error([error_sting])
-                        nemesis_event.full_traceback = traceback.format_exc()
-                        nemesis_event.severity = Severity.ERROR
-                        log_info.update({"error": error_sting, "full_traceback": traceback.format_exc()})
-                        status = False
+                        nemesis_event.add_simple_error("Killed by tearDown - test fail", traceback.format_exc())
                     else:
-                        skip_reason = "Killed by tearDown - test success"
-                        log_info.update({"subtype": "skipped", "skip_reason": skip_reason})
-                        nemesis_event.skip(skip_reason=skip_reason)
+                        nemesis_event.skip(skip_reason="Killed by tearDown - test success")
                     raise
                 except Exception as details:  # noqa: BLE001
-                    nemesis_event.add_error([str(details)])
-                    nemesis_event.full_traceback = traceback.format_exc()
-                    nemesis_event.severity = Severity.ERROR
+                    nemesis_event.add_simple_error(str(details), traceback.format_exc())
                     runner.error_list.append(str(details))
                     runner.log.error("Unhandled exception in method %s", method, exc_info=True)
-                    log_info.update({"error": str(details), "full_traceback": traceback.format_exc()})
-                    status = False
                 finally:
                     end_time = time.time()
                     time_elapsed = int(end_time - start_time)
-                    log_info.update(
-                        {
-                            "end": int(end_time),
-                            "duration": time_elapsed,
-                        }
-                    )
-                    runner.duration_list.append(time_elapsed)
-                    runner.operation_log.append(copy.deepcopy(log_info))
-                    runner.log.debug("%s duration -> %s s", runner.base_disruption_name, time_elapsed)
-
-
-                    del log_info["operation"]
-
-                    runner.update_stats(disrupt, status, log_info)
-
-                    runner.log.info(f"log_info: {log_info}")
                     nemesis_event.duration = time_elapsed
 
+                    # Build log_info once from nemesis_event — single source of truth
+                    log_info = {
+                        "start": int(start_time),
+                        "end": int(end_time),
+                        "duration": time_elapsed,
+                        "node": str(runner.target_node),
+                        "subtype": str(nemesis_event.nemesis_status.value),
+                    }
+                    status = True
+                    if nemesis_event.severity == Severity.ERROR:
+                        log_info["error"] = nemesis_event.errors[-1]
+                        log_info["full_traceback"] = nemesis_event.full_traceback
+                        status = False
+                    if nemesis_event.is_skipped:
+                        log_info["skip_reason"] = nemesis_event.skip_reason
+
+                    runner.duration_list.append(time_elapsed)
+                    runner.operation_log.append({"operation": runner.base_disruption_name, **log_info})
+                    runner.log.debug("%s duration -> %s s", runner.base_disruption_name, time_elapsed)
+                    runner.log.info("log_info: %s", log_info)
+                    runner.update_stats(runner.base_disruption_name, status, log_info)
+
                     runner.log_on_all_nodes(
-                        f"Finished disruption {method_name} ({runner.base_disruption_name} nemesis) with status '{nemesis_event.get_argus_nemesis_status()}'"
+                        f"Finished disruption {method_name} ({runner.base_disruption_name} nemesis) with status '{nemesis_event.nemesis_status}'"
                     )
 
             # TODO: Temporary print. Will be removed later
