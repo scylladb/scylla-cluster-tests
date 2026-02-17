@@ -44,7 +44,6 @@ from uuid import uuid4
 from cassandra import ConsistencyLevel, InvalidRequest
 from cassandra.query import SimpleStatement
 from invoke import UnexpectedExit
-from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.common.enums import NemesisStatus
 from sdcm.nemesis.registry import NemesisRegistry
 from sdcm.utils.action_logger import get_action_logger
@@ -365,29 +364,6 @@ class NemesisRunner:
     def use_nemesis_seed(self):
         if self.nemesis_seed:
             random.seed(self.nemesis_seed)
-
-    def update_stats(self, disrupt, status=True, data=None):
-        if not data:
-            data = {}
-        key = {True: "runs", False: "failures"}
-        if disrupt not in self.stats:
-            self.stats[disrupt] = {"runs": [], "failures": [], "cnt": 0}
-        self.stats[disrupt][key[status]].append(data)
-        self.stats[disrupt]["cnt"] += 1
-        self.log.debug("Update nemesis info with: %s", data)
-        if self.tester.create_stats:
-            self.tester.update({"nemesis": self.stats})
-        if self.es_publisher:
-            self.es_publisher.publish(disrupt_name=disrupt, status=status, data=data)
-
-    def publish_event(self, disrupt, status=True, data=None):
-        if not data:
-            data = {}
-        data["node"] = self.target_node
-        severity = Severity.NORMAL if status else Severity.ERROR
-        # get base name without unique suffix
-        disrupt_base_name = self.base_disruption_name if disrupt == self.current_disruption else disrupt
-        DisruptionEvent(nemesis_name=disrupt_base_name, severity=severity, **data).publish()
 
     def switch_target_node(self, node: BaseNode):
         self.node_allocator.switch_target_node(
@@ -6320,7 +6296,6 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
             if class_name.find("Chaos") < 0:
                 runner.metrics_srv.event_start(class_name)
             result = None
-            status = True
 
             log_info = {
                 "operation": runner.base_disruption_name,
@@ -6356,7 +6331,6 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
                         nemesis_event.full_traceback = traceback.format_exc()
                         nemesis_event.severity = Severity.ERROR
                         log_info.update({"error": error_sting, "full_traceback": traceback.format_exc()})
-                        status = False
                     else:
                         skip_reason = "Killed by tearDown - test success"
                         log_info.update({"subtype": "skipped", "skip_reason": skip_reason})
@@ -6369,7 +6343,6 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
                     runner.error_list.append(str(details))
                     runner.log.error("Unhandled exception in method %s", method, exc_info=True)
                     log_info.update({"error": str(details), "full_traceback": traceback.format_exc()})
-                    status = False
                 finally:
                     end_time = time.time()
                     time_elapsed = int(end_time - start_time)
@@ -6385,19 +6358,9 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
 
                     if class_name.find("Chaos") < 0:
                         runner.metrics_srv.event_stop(class_name)
-                    disrupt = runner.base_disruption_name
+
                     del log_info["operation"]
 
-                    try:  # So that the nemesis thread won't stop due to elasticsearch failure
-                        runner.update_stats(disrupt, status, log_info)
-                    except ElasticSearchConnectionTimeout as err:
-                        runner.log.warning(
-                            f"Connection timed out when attempting to update elasticsearch statistics:\n{err}"
-                        )
-                    except Exception as err:  # noqa: BLE001
-                        runner.log.warning(
-                            f"Unexpected error when attempting to update elasticsearch statistics:\n{err}"
-                        )
                     runner.log.info(f"log_info: {log_info}")
                     nemesis_event.duration = time_elapsed
 
