@@ -2429,7 +2429,7 @@ When true, start cluster health checker for all nodes
 
 ## **cluster_health_check_parallel_workers** / SCT_CLUSTER_HEALTH_CHECK_PARALLEL_WORKERS
 
-Number of parallel workers for health checks (Phase 2 optimization).<br>Default: 5, maximum: 10 (enforced).<br>Higher values provide faster health checks but may increase cluster load.<br>Expected impact: 5 workers = ~80% time reduction, 10 workers = ~90% time reduction.
+Number of parallel workers for health checks.<br>Default: 5, maximum: 10 (enforced).<br>Higher values provide faster health checks but may increase cluster load.<br>Expected impact: 5 workers = ~80% time reduction, 10 workers = ~90% time reduction.<br>See docs/plans/health-check-optimization.md for details.
 
 **default:** 5
 

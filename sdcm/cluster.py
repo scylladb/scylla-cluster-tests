@@ -2879,10 +2879,12 @@ class BaseNode(AutoSshContainerMixin):
                 )
                 collect_diagnostic_data(self)
                 wait.wait_for(
-                    func=lambda: self._service_cmd(
-                        service_name="scylla-server", cmd="is-active", timeout=timeout, ignore_status=True
-                    ).stdout.strip()
-                    == "inactive",
+                    func=lambda: (
+                        self._service_cmd(
+                            service_name="scylla-server", cmd="is-active", timeout=timeout, ignore_status=True
+                        ).stdout.strip()
+                        == "inactive"
+                    ),
                     step=60,
                     text="still waiting for scylla-server to stop",
                     timeout=900,
@@ -5194,7 +5196,11 @@ class BaseScyllaCluster:
                 with adaptive_timeout(Operations.HEALTHCHECK, node=node_for_timeout, timeout=len(self.nodes) * 30):
                     # Phase 2: Parallel health check execution
                     parallel_workers = self.params.get("cluster_health_check_parallel_workers") or 5
-                    # Ensure parallel_workers is within reasonable bounds
+                    # Limit parallel workers to prevent overwhelming Scylla APIs and connection pools.
+                    # Max 10 workers balances speed gains with cluster stability:
+                    # - Higher parallelism risks API rate limiting and connection exhaustion
+                    # - Testing shows diminishing returns beyond 10 workers (~90% reduction already achieved)
+                    # - Keeps connection count manageable (10 workers * N API calls per node)
                     parallel_workers = max(1, min(parallel_workers, 10))
 
                     if parallel_workers == 1 or len(self.nodes) == 1:
@@ -5215,11 +5221,17 @@ class BaseScyllaCluster:
                                 try:
                                     future.result()
                                 except Exception as exc:  # noqa: BLE001
+                                    # Log and publish error event for visibility in Argus
                                     self.log.error(
                                         "Health check for node %s generated an exception: %s",
                                         node.name,
                                         exc,
                                     )
+                                    ClusterHealthValidatorEvent.NodeStatus(
+                                        node=node,
+                                        error=f"Health check failed with exception: {exc}",
+                                        severity=Severity.ERROR,
+                                    ).publish()
             else:
                 chc_event.message = "Test runs with parallel nemesis. Nodes health checks are disabled."
                 return
@@ -6426,7 +6438,7 @@ class BaseMonitorSet:
         self.configure_overview_template(node)
         try:
             self.start_scylla_monitoring(node)
-        except (Failure, UnexpectedExit):
+        except Failure, UnexpectedExit:
             self.restart_scylla_monitoring()
         # The time will be used in url of Grafana monitor,
         # the data from this point to the end of test will
@@ -6637,7 +6649,7 @@ class BaseMonitorSet:
                 variable["current"]["value"] = "instance"
                 by_instance_option = next(opt for opt in variable["options"] if opt["text"] == "Instance")
                 by_instance_option["selected"] = True
-            except (StopIteration, KeyError):
+            except StopIteration, KeyError:
                 LOGGER.warning("Unable to change defaults for the template", exc_info=True)
 
             template["dashboard"]["annotations"] = sct_addon_template["annotations"]
