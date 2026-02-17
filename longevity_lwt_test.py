@@ -18,7 +18,6 @@
 
 import time
 import logging
-from unittest.mock import MagicMock
 
 from longevity_test import LongevityTest
 from sdcm.sct_events import Severity
@@ -67,8 +66,7 @@ class LWTLongevityTest(LongevityTest):
         # If we even will catch period when no nemesis are running, it may happen that the nemesis will start in the
         # middle of data validation and fail it
         if self.db_cluster.nemesis_count > 1:
-            self.data_validator = MagicMock()
-            self.data_validator.keyspace_name = None
+            self.data_validator = None
             DataValidatorEvent.DataValidator(
                 severity=Severity.NORMAL, message="Test runs with parallel nemesis. Data validator is disabled."
             ).publish()
@@ -102,18 +100,21 @@ class LWTLongevityTest(LongevityTest):
 
     def validate_data(self, during_nemesis=False):
         try:
-            node = self.db_cluster.nodes[0]
-            if not (keyspace := self.data_validator.keyspace_name):
-                DataValidatorEvent.DataValidator(
-                    severity=Severity.NORMAL, message="Failed fo get keyspace name. Data validator is disabled."
-                ).publish()
-                return
+            if self.data_validator:
+                node = self.db_cluster.nodes[0]
+                if not (keyspace := self.data_validator.keyspace_name):
+                    DataValidatorEvent.DataValidator(
+                        severity=Severity.NORMAL, message="Failed fo get keyspace name. Data validator is disabled."
+                    ).publish()
+                    return
 
-            with self.db_cluster.cql_connection_patient(node, keyspace=keyspace) as session:
-                self.data_validator.validate_range_not_expected_to_change(
-                    session=session, during_nemesis=during_nemesis
-                )
-                self.data_validator.validate_range_expected_to_change(session=session, during_nemesis=during_nemesis)
-                self.data_validator.validate_deleted_rows(session=session, during_nemesis=during_nemesis)
+                with self.db_cluster.cql_connection_patient(node, keyspace=keyspace) as session:
+                    self.data_validator.validate_range_not_expected_to_change(
+                        session=session, during_nemesis=during_nemesis
+                    )
+                    self.data_validator.validate_range_expected_to_change(
+                        session=session, during_nemesis=during_nemesis
+                    )
+                    self.data_validator.validate_deleted_rows(session=session, during_nemesis=during_nemesis)
         except Exception as err:  # noqa: BLE001
-            LOGGER.debug(f"Data validator error: {err}")
+            LOGGER.error(f"Data validator error: {err}")
