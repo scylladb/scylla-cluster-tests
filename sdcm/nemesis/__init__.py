@@ -268,8 +268,6 @@ class NemesisBaseClass(NemesisFlags, ABC):
     additional_configs: list[str] = None  # Configs required for running nemesis, used in job generation
     additional_params: dict[str, str] = None  # Parameters required for jenkins pipelines, used in job generation
 
-    exclusive: bool = False  # True, if the nemesis is exclusive, i.e. it should not run in parallel with other nemeses
-
     def __init__(self, runner: "NemesisRunner"):
         super().__init__()
         self.runner: "NemesisRunner" = runner
@@ -6268,19 +6266,9 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
     def wrapper(*args, **kwargs):  # noqa: PLR0912, PLR0914, PLR0915
         method_name = method.__self__.__class__.__name__
         target_pool_type = getattr(method.__self__, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
-        nemesis_run_info_key = f"{id(method)}--{method_name}"
         runner = caller_obj.runner
         nemesis_event = None  # Initialize to None to avoid UnboundLocalError in finally block
         try:
-            NEMESIS_LOCK.acquire()
-            if not is_exclusive:
-                NEMESIS_RUN_INFO[nemesis_run_info_key] = "Running"
-                NEMESIS_LOCK.release()
-            else:
-                while NEMESIS_RUN_INFO:
-                    # NOTE: exclusive nemesis will wait before the end of all other ones
-                    time.sleep(10)
-
             # Skip health check if previous nemesis was skipped to avoid wasting 2+ hours on large clusters
             last_event = runner.last_nemesis_event
             if last_event and last_event.is_skipped:
@@ -6414,22 +6402,8 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
             data_validation_prints(runner)
         finally:
             # Store nemesis event to track skip status for health checks
-            # Only update if nemesis_event was created (i.e., we entered the with block)
             if nemesis_event is not None:
                 runner.last_nemesis_event = nemesis_event
-
-            if is_exclusive:
-                # NOTE: sleep the nemesis interval here because the next one is already
-                #       ready to start right after the lock gets released.
-                if runner.tester.params.get("k8s_tenants_num") > 1:
-                    runner.log.debug("Exclusive nemesis: Sleep for '%s' seconds", runner.interval)
-                    time.sleep(runner.interval)
-                NEMESIS_LOCK.release()
-            else:
-                # NOTE: the key may be absent if a nemesis which waits for a lock release
-                #       gets killed/aborted. So, use safe 'pop' call with the default 'None' value.
-                NEMESIS_RUN_INFO.pop(nemesis_run_info_key, None)
-
             runner.set_target_node_pool_type(NEMESIS_TARGET_POOLS.data_nodes)
 
         return result
