@@ -117,3 +117,145 @@ If you want to run against some official ScyllaDB Docker image, you should go to
 ```sh
 SCT_SCYLLA_VERSION="<tag you've chose>" hydra run-test artifacts_test --backend docker --config test-cases/artifacts/docker.yaml
 ```
+
+# Scylla Doctor Version Management
+
+## Overview
+
+Artifact tests use Scylla Doctor to validate the health of deployed Scylla instances. To ensure stability and avoid P0 issues from new Scylla Doctor releases, the version is hardcoded in the configuration rather than always using the latest version.
+
+The configured version is used for both:
+- Offline installations (downloading from S3)
+- Package manager installations (apt/yum/dnf)
+
+## Current Configuration
+
+The Scylla Doctor version is configured in `defaults/test_default.yaml`:
+
+```yaml
+scylla_doctor_version: "1.9"
+```
+
+This version is used for all artifact tests by default.
+
+## Updating Scylla Doctor Version
+
+### When to Update
+
+- When a new Scylla Doctor version has been released with important fixes or features
+- After thorough validation that the new version works correctly with all test scenarios
+- When blocking issues in the current version require an upgrade
+
+### Update Process
+
+1. **Change the version in configuration:**
+
+   Edit `defaults/test_default.yaml` and update the version:
+   ```yaml
+   scylla_doctor_version: "1.10"  # Update to new version
+   ```
+
+2. **Run validation tests:**
+
+   You must run comprehensive artifact tests to verify the new version works correctly:
+
+   ```sh
+   # Test on different operating systems
+   hydra run-test artifacts_test --backend aws --config test-cases/artifacts/ami.yaml
+   hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos9.yaml
+   hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu2204.yaml
+   hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian12.yaml
+   hydra run-test artifacts_test --backend docker --config test-cases/artifacts/docker.yaml
+
+   # Test offline installations
+   hydra run-test artifacts_test --backend gce --config test-cases/artifacts/rocky9.yaml
+   ```
+
+3. **Verify the tests pass:**
+
+   All artifact tests must complete successfully with the new Scylla Doctor version. Pay special attention to:
+   - Scylla Doctor installation succeeds
+   - All collectors run without errors
+   - Vitals JSON file is generated correctly
+   - No new false-positive alerts are reported
+
+4. **Create a PR with the version update:**
+
+   Include in the PR description:
+   - The new Scylla Doctor version
+   - Test results showing successful validation
+   - Any known issues or workarounds for the new version
+   - Link to Scylla Doctor release notes if available
+
+### Backporting Version Updates
+
+If a version update needs to be backported to a stable branch:
+
+1. **Cherry-pick the commit to the target branch:**
+   ```sh
+   git checkout <stable-branch>
+   git cherry-pick <commit-hash>
+   ```
+
+2. **Run the same validation tests on the stable branch:**
+
+   Ensure the version works correctly with the Scylla versions tested on that branch.
+
+3. **Create a backport PR:**
+
+   Title the PR with `[<branch>] Backport: Update scylla-doctor to version X.Y`
+
+## Testing Checklist
+
+Before merging any Scylla Doctor version update, ensure:
+
+- [ ] Version updated in `defaults/test_default.yaml`
+- [ ] Artifact tests pass on at least 3 different operating systems (CentOS/Rocky, Ubuntu, Debian)
+- [ ] Docker artifact test passes
+- [ ] AMI artifact test passes on AWS
+- [ ] GCE image artifact test passes
+- [ ] Offline installation tests pass
+- [ ] No new false-positive alerts in test results
+- [ ] PR includes test results and validation summary
+
+## Troubleshooting
+
+### Package Not Found
+
+If you get an error like "Unable to find scylla-doctor package for version X.Y":
+
+1. Verify the version exists in S3 bucket: `downloads.scylladb.com/downloads/scylla-doctor/tar/`
+2. Check the exact version string format (e.g., "1.9" vs "1.9.0")
+3. Ensure you have AWS credentials configured for S3 access
+
+### Version Mismatch
+
+If the wrong version is being used:
+
+1. Check that `scylla_doctor_version` is set in your test configuration
+2. Verify the configuration is not overridden by environment variable `SCT_SCYLLA_DOCTOR_VERSION`
+3. Check the test logs for the actual version being downloaded
+
+### Collector Failures
+
+If new collectors fail in the updated version:
+
+1. Review the Scylla Doctor release notes for breaking changes
+2. Check if new collectors need to be disabled for certain test scenarios
+3. Update the `SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS` list in `utils/scylla_doctor.py` if needed
+
+## Override for Testing
+
+To test a specific Scylla Doctor version without changing defaults:
+
+```sh
+export SCT_SCYLLA_DOCTOR_VERSION="1.10"
+hydra run-test artifacts_test --backend docker --config test-cases/artifacts/docker.yaml
+```
+
+To use the latest available version (not recommended for production tests):
+
+```sh
+export SCT_SCYLLA_DOCTOR_VERSION=""
+hydra run-test artifacts_test --backend docker --config test-cases/artifacts/docker.yaml
+```

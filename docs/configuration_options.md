@@ -3651,6 +3651,15 @@ Run scylla-doctor in artifact tests
 **type:** boolean
 
 
+## **scylla_doctor_version** / SCT_SCYLLA_DOCTOR_VERSION
+
+Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.9')<br>to hardcode the version, or leave empty to use the latest available version. For stability,<br>artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.
+
+**default:** 1.9
+
+**type:** str (appendable)
+
+
 ## **skip_test_stages** / SCT_SKIP_TEST_STAGES
 
 Skip selected stages of a test scenario
