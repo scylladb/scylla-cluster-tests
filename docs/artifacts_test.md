@@ -160,6 +160,9 @@ This version is used for all artifact tests by default.
    You must run comprehensive artifact tests to verify the new version works correctly:
 
    ```sh
+   # Set Scylla version for testing
+   export SCT_SCYLLA_VERSION=master:latest
+
    # Test on different operating systems
    hydra run-test artifacts_test --backend aws --config test-cases/artifacts/ami.yaml
    hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos9.yaml
@@ -191,19 +194,28 @@ This version is used for all artifact tests by default.
 
 If a version update needs to be backported to a stable branch:
 
-1. **Cherry-pick the commit to the target branch:**
+1. **Tag the original PR for backporting:**
+
+   Add the appropriate backport label(s) to the original PR (e.g., `backport/branch-5.4`, `backport/branch-2024.2`).
+   The backport PR will be created automatically by the CI system.
+
+2. **Manual testing is required:**
+
+   Once the backport PR is created automatically, you must manually run validation tests on the stable branch to ensure the version works correctly with the Scylla versions tested on that branch.
+
    ```sh
-   git checkout <stable-branch>
-   git cherry-pick <commit-hash>
+   # Set appropriate Scylla version for the target branch
+   export SCT_SCYLLA_VERSION=<branch-version>:latest
+
+   # Run the same validation tests
+   hydra run-test artifacts_test --backend aws --config test-cases/artifacts/ami.yaml
+   hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos9.yaml
+   # ... (other test commands)
    ```
 
-2. **Run the same validation tests on the stable branch:**
+3. **Verify and merge the backport PR:**
 
-   Ensure the version works correctly with the Scylla versions tested on that branch.
-
-3. **Create a backport PR:**
-
-   Title the PR with `[<branch>] Backport: Update scylla-doctor to version X.Y`
+   After successful manual testing, review and merge the automatically created backport PR.
 
 ## Testing Checklist
 
@@ -241,8 +253,12 @@ If the wrong version is being used:
 If new collectors fail in the updated version:
 
 1. Review the Scylla Doctor release notes for breaking changes
-2. Check if new collectors need to be disabled for certain test scenarios
-3. Update the `SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS` list in `utils/scylla_doctor.py` if needed
+2. **Report JIRA issues** for any collectors that are not working properly
+   - Create issues in the scylla-doctor project describing the failure
+   - Include test logs and error messages
+   - Tag with appropriate priority and affected version
+3. **Do not disable collectors** - wait for the JIRA issues to be resolved before updating the scylla-doctor version
+4. Only proceed with the version update after all collector issues are fixed
 
 ## Override for Testing
 
