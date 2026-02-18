@@ -125,7 +125,7 @@ sinks:
         healthcheck: false
 EOF
 
-        systemctl kill -s HUP --kill-who=main vector.service
+        systemctl try-reload-or-restart vector.service
     """).format(host=host, port=port)
 
 
