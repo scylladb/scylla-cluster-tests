@@ -39,6 +39,8 @@ def fixture_alternator_api(params):
         dict(
             dynamodb_primarykey_type="HASH_AND_RANGE",
             alternator_port=ALTERNATOR_PORT,
+            alternator_loadbalancing=True,
+            alternator_use_dns_routing=False,
             alternator_enforce_authorization=True,
             alternator_access_key_id="alternator",
             alternator_secret_access_key="password",
