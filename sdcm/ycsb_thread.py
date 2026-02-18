@@ -198,6 +198,16 @@ class YcsbStressThread(DockerBasedStressThread):
             if dns_loadbalancing:
                 native_loading = False
 
+            if dns_loadbalancing == False and native_loading == False:
+                LOGGER.error(
+                    "Both 'alternator_use_dns_routing' and 'alternator_loadbalancing' options are set to False, "
+                    "alternator must use some form of load balancing to distribute the load between the nodes in the cluster "
+                    ", or alternator will not be able to start as it will look for DEFAULT AWS address"
+                )
+                raise ValueError(
+                    "One of the 'alternator_use_dns_routing' or 'alternator_loadbalancing' options must be set to True"
+                )
+
             alternator_port = self.params.get("alternator_port")
             trustAllCerts = self.params.get("alternator_trust_all_certificates")
 
