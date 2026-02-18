@@ -292,7 +292,7 @@ class TestConfig(metaclass=Singleton):
 
     @classmethod
     def configure_vector(cls, node):
-        ContainerManager.run_container(node, "vector", logdir=cls.logdir())
+        node.run_vector_container(logdir=cls.logdir())
         cls._link_running_syslog_logdir(node.vector_log_dir)
         port = node.vector_port
         LOGGER.info("vector listen on port %s (config: %s)", port, node.vector_confpath)

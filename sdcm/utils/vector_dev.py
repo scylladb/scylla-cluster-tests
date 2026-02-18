@@ -19,24 +19,29 @@ from pwd import getpwnam
 from tempfile import mkstemp
 from typing import Optional
 
+from docker.errors import APIError
+
 from sdcm.utils.docker_utils import ContainerManager
 
 VECTOR_DEV_IMAGE = "timberio/vector:0.46.1-alpine"
 VECTOR_DEV_PORT = 49153  # Non-root
-VECTOR_EXTERNAL_PORT = 15000  # Static external port for xcloud communication
+VECTOR_PORT_RANGE_START = 15000
+VECTOR_PORT_RANGE_END = 15099
 
 
 LOGGER = logging.getLogger(__name__)
 
 
 class VectorDevContainerMixin:
+    _vector_external_port = VECTOR_PORT_RANGE_START
+
     @cached_property
     def vector_confpath(self) -> str:
         return generate_vector_conf_file()
 
     @property
     def vector_port(self) -> Optional[int]:
-        return VECTOR_EXTERNAL_PORT
+        return self._vector_external_port
 
     @property
     def vector_log_dir(self) -> Optional[str]:
@@ -47,6 +52,27 @@ class VectorDevContainerMixin:
             container_name="vector",
             path_in_container="/var/log",
         )
+
+    def run_vector_container(self, logdir: str) -> None:
+        """Start Vector container (scanning the port range for conflict)"""
+        last_error = None
+        for port in range(VECTOR_PORT_RANGE_START, VECTOR_PORT_RANGE_END + 1):
+            self._vector_external_port = port
+            try:
+                ContainerManager.run_container(self, "vector", logdir=logdir)
+                return
+            except APIError as exc:
+                if "port is already allocated" not in str(exc):
+                    raise
+                LOGGER.warning("Port %d already in use, trying next port", port)
+                last_error = exc
+                try:
+                    ContainerManager.destroy_container(self, "vector")
+                except Exception:  # noqa: BLE001
+                    pass
+
+        if last_error:
+            raise last_error
 
     def vector_container_run_args(self, logdir: str) -> dict:
         basedir, logdir = os.path.split(logdir)
@@ -63,7 +89,7 @@ class VectorDevContainerMixin:
             "name": f"{self.name}-vector",
             "command": " -c /etc/vector/vector.yaml",
             "auto_remove": True,
-            "ports": {f"{VECTOR_DEV_PORT}/tcp": VECTOR_EXTERNAL_PORT},
+            "ports": {f"{VECTOR_DEV_PORT}/tcp": self.vector_port},
             "volumes": volumes,
             "environment": {
                 "PUID": getpwnam(username).pw_uid,

@@ -558,7 +558,7 @@ class AwsRegion:
                     },
                     {
                         "FromPort": 15000,
-                        "ToPort": 15000,
+                        "ToPort": 15099,
                         "IpProtocol": "tcp",
                         "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow Vector log transport for ALL"}],
                         "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow Vector log transport for ALL"}],

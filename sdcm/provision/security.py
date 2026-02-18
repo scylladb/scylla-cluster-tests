@@ -33,5 +33,5 @@ class ScyllaOpenPorts(Enum):
     MANAGER_HTTPS = 5443  # Scylla Manager HTTPS API
     MANAGER_AGENT_PROMETHEUS = 5090  # Scylla Manager Agent Prometheus API
     MANAGER_DEBUG = 5112  # Scylla Manager pprof Debug
-    VECTOR = 15000  # Vector log transport
+    VECTOR = "15000-15099"  # Vector log transport port range
     SCT_AGENT = 16000  # SCT agent HTTP API
