@@ -54,6 +54,9 @@ const TABLE_SHIFT_INTERVAL_S = latte::param!("table_shift_interval_s", 0);
 // CDC testing parameters
 const ENABLE_CDC_VERIFICATION = latte::param!("enable_cdc_verification", false);
 
+// Error handling: skip failed write queries and continue instead of retrying
+const SKIP_WRITE_ERRORS = latte::param!("skip_write_errors", false);
+
 // Table selection for testing
 const FOCUS_KEYSPACE = latte::param!("focus_keyspace", "pay");  // pay, pay_eu, pay_us, pay_euw1, pay_euc1, pay_use1
 const TABLE_SUBSET = latte::param!("table_subset", "all");  // all, simple, udt_heavy, cdc_enabled
@@ -1525,6 +1528,24 @@ pub async fn prepare(db) {
     prepare_table_windowing(db).await;
 }
 
+/// Safe execute wrapper for prepared statements.
+/// When SKIP_WRITE_ERRORS is true, errors are silently skipped.
+/// When false, errors are propagated normally (latte will retry).
+async fn safe_execute_prepared(db, stmt, values) {
+    let result = db.execute_prepared(stmt, values).await;
+    if !SKIP_WRITE_ERRORS {
+        result?;
+    }
+}
+
+/// Safe execute wrapper for CQL literal statements.
+async fn safe_execute(db, cql) {
+    let result = db.execute(cql).await;
+    if !SKIP_WRITE_ERRORS {
+        result?;
+    }
+}
+
 /// Populate tables with initial data. Distributes inserts across all simple tables evenly.
 /// Each call inserts one row into one table. Table is selected by: i % num_tables.
 /// Row index within the table is: i / num_tables.
@@ -1538,7 +1559,7 @@ pub async fn populate(db, i) {
 
     let table = db.data.simple_tables[table_idx];
     let values = gen_row_values(table, row_idx).await;
-    db.execute_prepared(table.insert, values).await?
+    safe_execute_prepared(db, table.insert, values).await
 }
 
 /// Write workload function. Inserts/upserts rows across simple tables.
@@ -1549,7 +1570,7 @@ pub async fn write(db, i) {
 
     let table = db.data.simple_tables[table_idx];
     let values = gen_row_values(table, row_idx).await;
-    db.execute_prepared(table.insert, values).await?
+    safe_execute_prepared(db, table.insert, values).await
 }
 
 /// Read workload function. Reads rows from simple tables using primary key lookups.
@@ -5243,7 +5264,7 @@ pub async fn populate_udt(db, i) {
     }
 
     let insert_cql = dispatch_udt_insert(table_idx, row_idx);
-    db.execute(insert_cql).await?
+    safe_execute(db, insert_cql).await
 }
 
 /// Write workload for UDT tables. Inserts/upserts rows using Gaussian distribution.
@@ -5252,7 +5273,7 @@ pub async fn write_udt(db, i) {
     let row_idx = get_partition_idx(db, i / db.data.num_udt_tables).await;
 
     let insert_cql = dispatch_udt_insert(table_idx, row_idx);
-    db.execute(insert_cql).await?
+    safe_execute(db, insert_cql).await
 }
 
 /// Read workload for UDT tables. Point reads by primary key.
@@ -5341,12 +5362,12 @@ pub async fn populate_all(db, i) {
         // Simple table - use prepared statement
         let table = db.data.simple_tables[table_idx];
         let values = gen_row_values(table, row_idx).await;
-        db.execute_prepared(table.insert, values).await?
+        safe_execute_prepared(db, table.insert, values).await
     } else {
         // UDT table - use CQL literal
         let udt_idx = table_idx - db.data.num_simple_tables;
         let insert_cql = dispatch_udt_insert(udt_idx, row_idx);
-        db.execute(insert_cql).await?
+        safe_execute(db, insert_cql).await
     }
 }
 
@@ -5359,11 +5380,11 @@ pub async fn write_all(db, i) {
     if table_idx < db.data.num_simple_tables {
         let table = db.data.simple_tables[table_idx];
         let values = gen_row_values(table, row_idx).await;
-        db.execute_prepared(table.insert, values).await?
+        safe_execute_prepared(db, table.insert, values).await
     } else {
         let udt_idx = table_idx - db.data.num_simple_tables;
         let insert_cql = dispatch_udt_insert(udt_idx, row_idx);
-        db.execute(insert_cql).await?
+        safe_execute(db, insert_cql).await
     }
 }
 
@@ -5555,7 +5576,7 @@ pub async fn delete(db, i) {
         key_i += 1;
     }
 
-    db.execute_prepared(table.del, key_values).await?
+    safe_execute_prepared(db, table.del, key_values).await
 }
 
 /// Update workload for simple tables. Updates the first non-key column.
@@ -5569,7 +5590,7 @@ pub async fn update(db, i) {
     if table.upd == "" {
         // No non-key columns to update, fall back to insert (upsert)
         let values = gen_row_values(table, row_idx).await;
-        db.execute_prepared(table.insert, values).await?
+        safe_execute_prepared(db, table.insert, values).await
     } else {
         // UPDATE table SET col = ? WHERE pk = ? AND ck = ?
         // Bind order: [new_value, pk1, pk2, ..., ck1, ck2, ...]
@@ -5589,7 +5610,7 @@ pub async fn update(db, i) {
             key_i += 1;
         }
 
-        db.execute_prepared(table.upd, update_values).await?
+        safe_execute_prepared(db, table.upd, update_values).await
     }
 }
 
@@ -5600,7 +5621,7 @@ pub async fn delete_udt(db, i) {
 
     let table_meta = db.data.udt_tables[table_idx];
     let del_cql = gen_udt_delete_cql(table_meta, table_idx, row_idx);
-    db.execute(del_cql).await?
+    safe_execute(db, del_cql).await
 }
 
 /// Update workload for UDT tables. Uses INSERT (upsert semantics in ScyllaDB).
@@ -5611,7 +5632,7 @@ pub async fn update_udt(db, i) {
     let row_idx = get_partition_idx(db, i / db.data.num_udt_tables).await;
 
     let insert_cql = dispatch_udt_insert(table_idx, row_idx);
-    db.execute(insert_cql).await?
+    safe_execute(db, insert_cql).await
 }
 
 /// Delete from all tables (simple + UDT)
@@ -5630,12 +5651,12 @@ pub async fn delete_all(db, i) {
             key_values.push(gen_value(table.col_types[key_i], seed).await);
             key_i += 1;
         }
-        db.execute_prepared(table.del, key_values).await?
+        safe_execute_prepared(db, table.del, key_values).await
     } else {
         let udt_idx = table_idx - db.data.num_simple_tables;
         let table_meta = db.data.udt_tables[udt_idx];
         let del_cql = gen_udt_delete_cql(table_meta, udt_idx, row_idx);
-        db.execute(del_cql).await?
+        safe_execute(db, del_cql).await
     }
 }
 
@@ -5649,7 +5670,7 @@ pub async fn update_all(db, i) {
         let table = db.data.simple_tables[table_idx];
         if table.upd == "" {
             let values = gen_row_values(table, row_idx).await;
-            db.execute_prepared(table.insert, values).await?
+            safe_execute_prepared(db, table.insert, values).await
         } else {
             let key_count = table.pk_count + table.ck_count;
             let update_values = [];
@@ -5662,12 +5683,12 @@ pub async fn update_all(db, i) {
                 update_values.push(gen_value(table.col_types[key_i], seed).await);
                 key_i += 1;
             }
-            db.execute_prepared(table.upd, update_values).await?
+            safe_execute_prepared(db, table.upd, update_values).await
         }
     } else {
         let udt_idx = table_idx - db.data.num_simple_tables;
         let insert_cql = dispatch_udt_insert(udt_idx, row_idx);
-        db.execute(insert_cql).await?
+        safe_execute(db, insert_cql).await
     }
 }
 
@@ -5680,11 +5701,11 @@ pub async fn write_windowed(db, i) {
     if table_idx < db.data.num_simple_tables {
         let table = db.data.simple_tables[table_idx];
         let values = gen_row_values(table, row_idx).await;
-        db.execute_prepared(table.insert, values).await?
+        safe_execute_prepared(db, table.insert, values).await
     } else {
         let udt_idx = table_idx - db.data.num_simple_tables;
         let insert_cql = dispatch_udt_insert(udt_idx, row_idx);
-        db.execute(insert_cql).await?
+        safe_execute(db, insert_cql).await
     }
 }
 
@@ -5726,12 +5747,12 @@ pub async fn delete_windowed(db, i) {
             key_values.push(gen_value(table.col_types[key_i], seed).await);
             key_i += 1;
         }
-        db.execute_prepared(table.del, key_values).await?
+        safe_execute_prepared(db, table.del, key_values).await
     } else {
         let udt_idx = table_idx - db.data.num_simple_tables;
         let table_meta = db.data.udt_tables[udt_idx];
         let del_cql = gen_udt_delete_cql(table_meta, udt_idx, row_idx);
-        db.execute(del_cql).await?
+        safe_execute(db, del_cql).await
     }
 }
 
@@ -5745,13 +5766,13 @@ pub async fn payment_workflow(db, i) {
 
     // Step 1: Create transaction
     let txn_cql = dispatch_udt_insert(49, seed);
-    db.execute(txn_cql).await?;
+    safe_execute(db, txn_cql).await;
 
     // Step 2: Create settlement
     let settle_cql = dispatch_udt_insert(40, seed);
-    db.execute(settle_cql).await?;
+    safe_execute(db, settle_cql).await;
 
     // Step 3: Create receipt
     let receipt_cql = dispatch_udt_insert(29, seed);
-    db.execute(receipt_cql).await?;
+    safe_execute(db, receipt_cql).await;
 }
