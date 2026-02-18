@@ -1516,9 +1516,269 @@ class SCTConfiguration(dict):
         dict(name="custom_es_index", env="SCT_CUSTOM_ES_INDEX", type=str,
              help="""Use custom ES index for storing test results"""),
 
+<<<<<<< HEAD
         dict(name="simulated_racks", env="SCT_SIMULATED_RACKS", type=int,
              help="""Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate racks.
              Provide number of racks to simulate."""),
+||||||| parent of 08844bed8 (feature(artifacts): add scylla_doctor_version config parameter)
+            'destroy' - Destroy hosts (default)
+            'keep' - Keep hosts allocated
+         """,
+            choices=("keep", "destroy"),
+        ),
+        dict(
+            name="bisect_start_date",
+            env="SCT_BISECT_START_DATE",
+            type=str,
+            help="""Scylla build date from which bisecting should start.
+              Setting this date enables bisection. Format: YYYY-MM-DD""",
+        ),
+        dict(
+            name="bisect_end_date",
+            env="SCT_BISECT_END_DATE",
+            type=str,
+            help="""Scylla build date until which bisecting should run. Format: YYYY-MM-DD""",
+        ),
+        dict(
+            name="kafka_backend",
+            env="SCT_KAFKA_BACKEND",
+            type=str,
+            help="Enable validation for large cells in system table and logs",
+            choices=(None, "localstack", "vm", "msk"),
+        ),
+        dict(
+            name="kafka_connectors",
+            env="SCT_KAFKA_CONNECTORS",
+            type=str_or_list_or_eval,
+            help="configuration for setup up kafka connectors",
+        ),
+        dict(
+            name="run_scylla_doctor",
+            env="SCT_RUN_SCYLLA_DOCTOR",
+            type=boolean,
+            help="Run scylla-doctor in artifact tests",
+        ),
+        dict(
+            name="skip_test_stages",
+            env="SCT_SKIP_TEST_STAGES",
+            type=dict_or_str,
+            help="""Skip selected stages of a test scenario""",
+        ),
+        dict(
+            name="use_zero_nodes",
+            env="SCT_USE_ZERO_NODES",
+            type=boolean,
+            help="If True, enable support in sct of zero nodes(configuration, nemesis)",
+        ),
+        dict(
+            name="n_db_zero_token_nodes",
+            env="SCT_N_DB_ZERO_TOKEN_NODES",
+            type=int_or_space_separated_ints,
+            help="""Number of zero token nodes in cluster. Value should be set as "0 1 1"
+               for multidc configuration in same manner as 'n_db_nodes' and should be equal
+               number of regions""",
+        ),
+        dict(
+            name="zero_token_instance_type_db",
+            env="SCT_ZERO_TOKEN_INSTANCE_TYPE_DB",
+            type=str,
+            help="""Instance type for zero token node""",
+        ),
+        dict(
+            name="sct_aws_account_id",
+            env="SCT_AWS_ACCOUNT_ID",
+            type=str,
+            help="AWS account id on behalf of which the test is run",
+        ),
+        dict(
+            name="latency_decorator_error_thresholds",
+            env="SCT_LATENCY_DECORATOR_ERROR_THRESHOLDS",
+            type=dict_or_str,
+            help="Error thresholds for latency decorator."
+            " Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}",
+        ),
+        dict(
+            name="workload_name",
+            env="SCT_WORKLOAD_NAME",
+            type=str,
+            help="Workload name, can be: write|read|mixed|unset."
+            "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true)."
+            "If unset, workload is taken from test name.",
+        ),
+        dict(
+            name="adaptive_timeout_store_metrics",
+            env="SCT_ADAPTIVE_TIMEOUT_STORE_METRICS",
+            type=boolean,
+            help="Store adaptive timeout metrics in Argus. Disabled for performance tests only.",
+        ),
+        dict(
+            name="xcloud_credentials_path",
+            env="SCT_XCLOUD_CREDENTIALS_PATH",
+            type=str,
+            help="Path to Scylla Cloud credentials file, if stored locally",
+        ),
+        dict(name="xcloud_env", env="SCT_XCLOUD_ENV", type=str, help="Scylla Cloud environment (e.g., lab)."),
+        dict(
+            name="xcloud_provider",
+            env="SCT_XCLOUD_PROVIDER",
+            type=str,
+            help="Cloud provider for Scylla Cloud deployment (aws, gce)",
+        ),
+        dict(
+            name="xcloud_replication_factor",
+            env="SCT_XCLOUD_REPLICATION_FACTOR",
+            type=int,
+            help="Replication factor for Scylla Cloud cluster",
+        ),
+        dict(
+            name="xcloud_vpc_peering",
+            env="SCT_XCLOUD_VPC_PEERING",
+            type=dict_or_str,
+            help="""Dictionary of VPC peering parameters for private connectivity between
+             SCT infrastructure and Scylla Cloud. The following parameters are used:
+                enabled: bool - indicates whether VPC peering is to be used
+                cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)
+                cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)""",
+        ),
+        dict(
+            name="xcloud_scaling_config",
+            env="SCT_XCLOUD_SCALING_CONFIG",
+            type=dict_or_str,
+            help="""Scaling policy configuration. The payload should follow the following structure:
+=======
+            'destroy' - Destroy hosts (default)
+            'keep' - Keep hosts allocated
+         """,
+            choices=("keep", "destroy"),
+        ),
+        dict(
+            name="bisect_start_date",
+            env="SCT_BISECT_START_DATE",
+            type=str,
+            help="""Scylla build date from which bisecting should start.
+              Setting this date enables bisection. Format: YYYY-MM-DD""",
+        ),
+        dict(
+            name="bisect_end_date",
+            env="SCT_BISECT_END_DATE",
+            type=str,
+            help="""Scylla build date until which bisecting should run. Format: YYYY-MM-DD""",
+        ),
+        dict(
+            name="kafka_backend",
+            env="SCT_KAFKA_BACKEND",
+            type=str,
+            help="Enable validation for large cells in system table and logs",
+            choices=(None, "localstack", "vm", "msk"),
+        ),
+        dict(
+            name="kafka_connectors",
+            env="SCT_KAFKA_CONNECTORS",
+            type=str_or_list_or_eval,
+            help="configuration for setup up kafka connectors",
+        ),
+        dict(
+            name="run_scylla_doctor",
+            env="SCT_RUN_SCYLLA_DOCTOR",
+            type=boolean,
+            help="Run scylla-doctor in artifact tests",
+        ),
+        dict(
+            name="scylla_doctor_version",
+            env="SCT_SCYLLA_DOCTOR_VERSION",
+            type=str,
+            help="""Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.9')
+            to hardcode the version, or leave empty to use the latest available version. For stability,
+            artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.""",
+        ),
+        dict(
+            name="skip_test_stages",
+            env="SCT_SKIP_TEST_STAGES",
+            type=dict_or_str,
+            help="""Skip selected stages of a test scenario""",
+        ),
+        dict(
+            name="use_zero_nodes",
+            env="SCT_USE_ZERO_NODES",
+            type=boolean,
+            help="If True, enable support in sct of zero nodes(configuration, nemesis)",
+        ),
+        dict(
+            name="n_db_zero_token_nodes",
+            env="SCT_N_DB_ZERO_TOKEN_NODES",
+            type=int_or_space_separated_ints,
+            help="""Number of zero token nodes in cluster. Value should be set as "0 1 1"
+               for multidc configuration in same manner as 'n_db_nodes' and should be equal
+               number of regions""",
+        ),
+        dict(
+            name="zero_token_instance_type_db",
+            env="SCT_ZERO_TOKEN_INSTANCE_TYPE_DB",
+            type=str,
+            help="""Instance type for zero token node""",
+        ),
+        dict(
+            name="sct_aws_account_id",
+            env="SCT_AWS_ACCOUNT_ID",
+            type=str,
+            help="AWS account id on behalf of which the test is run",
+        ),
+        dict(
+            name="latency_decorator_error_thresholds",
+            env="SCT_LATENCY_DECORATOR_ERROR_THRESHOLDS",
+            type=dict_or_str,
+            help="Error thresholds for latency decorator."
+            " Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}",
+        ),
+        dict(
+            name="workload_name",
+            env="SCT_WORKLOAD_NAME",
+            type=str,
+            help="Workload name, can be: write|read|mixed|unset."
+            "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true)."
+            "If unset, workload is taken from test name.",
+        ),
+        dict(
+            name="adaptive_timeout_store_metrics",
+            env="SCT_ADAPTIVE_TIMEOUT_STORE_METRICS",
+            type=boolean,
+            help="Store adaptive timeout metrics in Argus. Disabled for performance tests only.",
+        ),
+        dict(
+            name="xcloud_credentials_path",
+            env="SCT_XCLOUD_CREDENTIALS_PATH",
+            type=str,
+            help="Path to Scylla Cloud credentials file, if stored locally",
+        ),
+        dict(name="xcloud_env", env="SCT_XCLOUD_ENV", type=str, help="Scylla Cloud environment (e.g., lab)."),
+        dict(
+            name="xcloud_provider",
+            env="SCT_XCLOUD_PROVIDER",
+            type=str,
+            help="Cloud provider for Scylla Cloud deployment (aws, gce)",
+        ),
+        dict(
+            name="xcloud_replication_factor",
+            env="SCT_XCLOUD_REPLICATION_FACTOR",
+            type=int,
+            help="Replication factor for Scylla Cloud cluster",
+        ),
+        dict(
+            name="xcloud_vpc_peering",
+            env="SCT_XCLOUD_VPC_PEERING",
+            type=dict_or_str,
+            help="""Dictionary of VPC peering parameters for private connectivity between
+             SCT infrastructure and Scylla Cloud. The following parameters are used:
+                enabled: bool - indicates whether VPC peering is to be used
+                cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)
+                cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)""",
+        ),
+        dict(
+            name="xcloud_scaling_config",
+            env="SCT_XCLOUD_SCALING_CONFIG",
+            type=dict_or_str,
+            help="""Scaling policy configuration. The payload should follow the following structure:
+>>>>>>> 08844bed8 (feature(artifacts): add scylla_doctor_version config parameter)
 
         dict(name="use_dns_names", env="SCT_USE_DNS_NAMES", type=boolean,
              help="""Use dns names instead of ip addresses for nodes in cluster"""),

@@ -231,6 +231,61 @@ validate_large_collections: false
 
 scylla_d_overrides_files: []
 
+<<<<<<< HEAD
+||||||| parent of 08844bed8 (feature(artifacts): add scylla_doctor_version config parameter)
+run_commit_log_check_thread: true
+
+# teardown validators
+teardown_validators:
+  scrub:
+    enabled: false
+    timeout: 1200
+    keyspace: ''
+    table: ''
+  test_error_events:
+    enabled: false
+    failing_events:
+      - event_class: DatabaseLogEvent
+        event_type: RUNTIME_ERROR
+        regex: '.*runtime_error.*'
+      - event_class: CoreDumpEvent
+  rackaware:
+    enabled: false
+
+kafka_backend: null
+kafka_connectors: []
+
+run_scylla_doctor: true
+nemesis_double_load_during_grow_shrink_duration: 0
+
+=======
+run_commit_log_check_thread: true
+
+# teardown validators
+teardown_validators:
+  scrub:
+    enabled: false
+    timeout: 1200
+    keyspace: ''
+    table: ''
+  test_error_events:
+    enabled: false
+    failing_events:
+      - event_class: DatabaseLogEvent
+        event_type: RUNTIME_ERROR
+        regex: '.*runtime_error.*'
+      - event_class: CoreDumpEvent
+  rackaware:
+    enabled: false
+
+kafka_backend: null
+kafka_connectors: []
+
+run_scylla_doctor: true
+scylla_doctor_version: "1.9"
+nemesis_double_load_during_grow_shrink_duration: 0
+
+>>>>>>> 08844bed8 (feature(artifacts): add scylla_doctor_version config parameter)
 enterprise_disable_kms: false
 
 assert_linux_distro_features: []
