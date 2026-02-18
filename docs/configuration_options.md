@@ -955,7 +955,7 @@ If true, spawn a docker with a dns server for the ycsb loader to point to
 
 If true, enable native load balancing for alternator
 
-**default:** N/A
+**default:** True
 
 **type:** boolean
 
