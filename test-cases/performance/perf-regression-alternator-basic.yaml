@@ -67,6 +67,8 @@ prepare_stress_duration: 20
 alternator_write_isolation: 'forbid'
 alternator_port: 8080
 dynamodb_primarykey_type: HASH_AND_RANGE
+alternator_use_dns_routing: true
+alternator_loadbalancing: false
 
 user_prefix: 'perf-alternator-latency'
 space_node_threshold: 644245094

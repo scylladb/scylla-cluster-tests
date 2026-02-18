@@ -68,4 +68,3 @@ authorizer: 'CassandraAuthorizer'
 
 dynamodb_primarykey_type: HASH_AND_RANGE
 # NOTE: 'alternator_use_dns_routing' is not applicable in K8S case and will be ignored.
-alternator_use_dns_routing: false
