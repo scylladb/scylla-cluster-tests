@@ -50,6 +50,168 @@ def configure_syslogng_target_script(hostname: str = "") -> str:
     )
 
 
+<<<<<<< HEAD
+||||||| parent of b53d094ea (refactor(provision): use try-reload-or-restart for better error handling)
+def configure_vector_target_script(host: str, port: int) -> str:
+    """Prepare vector configuration script with client-side log filtering.
+
+    Configures vector to filter verbose logs before sending them to SCT, reducing memory pressure
+    on database nodes and network resources usage.
+
+    Filter Pipeline:
+        journald > filter_audit > filter_system_services > filter_verbose_scylla > filter_suppress_warnings > sct-runner
+
+    Filters:
+        - filter_audit: remove audit logs
+        - filter_system_services: remove unnecessary system services logs
+        - filter_verbose_scylla: remove compaction/repair/streaming scylla logs
+        - filter_suppress_warnings: remove Severity.SUPPRESS events
+    """
+    return dedent("""
+        cat > /etc/vector/vector.yaml <<'EOF'
+sources:
+    journald:
+        type: journald
+    vector_metrics:
+        type: internal_metrics
+
+transforms:
+    filter_audit:
+        inputs: [journald]
+        type: filter
+        condition: |
+            !starts_with(to_string(.SYSLOG_IDENTIFIER) ?? "default", "AUDIT")
+
+    filter_system_services:
+        inputs: [filter_audit]
+        type: filter
+        condition: |
+            identifier = to_string(.SYSLOG_IDENTIFIER) ?? ""
+            identifier != "sshd" &&
+            identifier != "systemd" &&
+            identifier != "systemd-logind" &&
+            identifier != "sudo" &&
+            identifier != "dhclient"
+
+    filter_verbose_scylla:
+        inputs: [filter_system_services]
+        type: filter
+        condition: |
+            message = to_string(.message) ?? ""
+            !contains(message, "] compaction - [Compact") &&
+            !contains(message, "] table - Done with off-strategy compaction") &&
+            !contains(message, "] table - Starting off-strategy compaction") &&
+            !contains(message, "] repair - Repair") &&
+            !contains(message, "repair id [id=") &&
+            !contains(message, "] stream_session - [Stream") &&
+            !contains(message, "] sstable - Rebuilding bloom filter") &&
+            !contains(message, "] storage_proxy - Exception when communicating with")
+
+    filter_suppress_warnings:
+        inputs: [filter_verbose_scylla]
+        type: filter
+        condition: |
+            message = to_string(.message) ?? ""
+            !(match(message, to_regex!("^WARNING.*[shard.*]")) || match(message, to_regex!("^!.*WARNING.*[shard.*]")))
+
+sinks:
+    sct-runner:
+        type: vector
+        inputs: [filter_suppress_warnings]
+        address: {host}:{port}
+        healthcheck: false
+    prometheus:
+        type: prometheus_exporter
+        address: 0.0.0.0:9577
+        inputs: [vector_metrics]
+        healthcheck: false
+EOF
+
+        systemctl kill -s HUP --kill-who=main vector.service
+    """).format(host=host, port=port)
+
+
+=======
+def configure_vector_target_script(host: str, port: int) -> str:
+    """Prepare vector configuration script with client-side log filtering.
+
+    Configures vector to filter verbose logs before sending them to SCT, reducing memory pressure
+    on database nodes and network resources usage.
+
+    Filter Pipeline:
+        journald > filter_audit > filter_system_services > filter_verbose_scylla > filter_suppress_warnings > sct-runner
+
+    Filters:
+        - filter_audit: remove audit logs
+        - filter_system_services: remove unnecessary system services logs
+        - filter_verbose_scylla: remove compaction/repair/streaming scylla logs
+        - filter_suppress_warnings: remove Severity.SUPPRESS events
+    """
+    return dedent("""
+        cat > /etc/vector/vector.yaml <<'EOF'
+sources:
+    journald:
+        type: journald
+    vector_metrics:
+        type: internal_metrics
+
+transforms:
+    filter_audit:
+        inputs: [journald]
+        type: filter
+        condition: |
+            !starts_with(to_string(.SYSLOG_IDENTIFIER) ?? "default", "AUDIT")
+
+    filter_system_services:
+        inputs: [filter_audit]
+        type: filter
+        condition: |
+            identifier = to_string(.SYSLOG_IDENTIFIER) ?? ""
+            identifier != "sshd" &&
+            identifier != "systemd" &&
+            identifier != "systemd-logind" &&
+            identifier != "sudo" &&
+            identifier != "dhclient"
+
+    filter_verbose_scylla:
+        inputs: [filter_system_services]
+        type: filter
+        condition: |
+            message = to_string(.message) ?? ""
+            !contains(message, "] compaction - [Compact") &&
+            !contains(message, "] table - Done with off-strategy compaction") &&
+            !contains(message, "] table - Starting off-strategy compaction") &&
+            !contains(message, "] repair - Repair") &&
+            !contains(message, "repair id [id=") &&
+            !contains(message, "] stream_session - [Stream") &&
+            !contains(message, "] sstable - Rebuilding bloom filter") &&
+            !contains(message, "] storage_proxy - Exception when communicating with")
+
+    filter_suppress_warnings:
+        inputs: [filter_verbose_scylla]
+        type: filter
+        condition: |
+            message = to_string(.message) ?? ""
+            !(match(message, to_regex!("^WARNING.*[shard.*]")) || match(message, to_regex!("^!.*WARNING.*[shard.*]")))
+
+sinks:
+    sct-runner:
+        type: vector
+        inputs: [filter_suppress_warnings]
+        address: {host}:{port}
+        healthcheck: false
+    prometheus:
+        type: prometheus_exporter
+        address: 0.0.0.0:9577
+        inputs: [vector_metrics]
+        healthcheck: false
+EOF
+
+        systemctl try-reload-or-restart vector.service
+    """).format(host=host, port=port)
+
+
+>>>>>>> b53d094ea (refactor(provision): use try-reload-or-restart for better error handling)
 def configure_hosts_set_hostname_script(hostname: str) -> str:
     return (
         f'grep -P "127.0.0.1[^\\\\n]+{hostname}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+'
