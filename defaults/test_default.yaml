@@ -261,6 +261,7 @@ kafka_backend: null
 kafka_connectors: []
 
 run_scylla_doctor: true
+scylla_doctor_version: "1.9"
 nemesis_double_load_during_grow_shrink_duration: 0
 
 enterprise_disable_kms: false
