@@ -89,6 +89,8 @@ compaction_strategy: 'SizeTieredCompactionStrategy'
 use_preinstalled_scylla: false
 
 alternator_enforce_authorization: false
+alternator_use_dns_routing: false
+alternator_loadbalancing: true
 alternator_access_key_id: ''
 alternator_secret_access_key: ''
 dynamodb_primarykey_type: 'HASH'
