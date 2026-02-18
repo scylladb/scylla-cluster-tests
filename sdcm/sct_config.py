@@ -2501,6 +2501,14 @@ class SCTConfiguration(dict):
             help="Run scylla-doctor in artifact tests",
         ),
         dict(
+            name="scylla_doctor_version",
+            env="SCT_SCYLLA_DOCTOR_VERSION",
+            type=str,
+            help="""Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.9')
+            to hardcode the version, or leave empty to use the latest available version. For stability,
+            artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.""",
+        ),
+        dict(
             name="skip_test_stages",
             env="SCT_SKIP_TEST_STAGES",
             type=dict_or_str,
