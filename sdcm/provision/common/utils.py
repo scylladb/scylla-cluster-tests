@@ -186,7 +186,12 @@ def update_repo_cache():
             rm -rf /var/cache/yum/
         elif apt-get --help 2>/dev/null 1>&2 ; then
             echo "Cleaning apt cache..."
-            apt-get clean all
+            for n in 1 2 3 4 5; do
+                if apt-get -o DPkg::Lock::Timeout=300 clean all; then
+                    break
+                fi
+                sleep $(backoff $n)
+            done
             rm -rf /var/cache/apt/
 
             for n in 1 2 3 4 5 6 7 8 9; do
