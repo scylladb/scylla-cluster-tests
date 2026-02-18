@@ -132,7 +132,7 @@ def configure_vector_target_script(host: str, port: int) -> str:
 
         " > /etc/vector/vector.yaml
 
-        systemctl kill -s HUP --kill-who=main vector.service
+        systemctl try-reload-or-restart vector.service
     """).format(host=host, port=port)
 
 
