@@ -95,26 +95,64 @@ class ScyllaDoctor:
         LOGGER.info("Scylla doctor version: %s", version)
         return version
 
-    def locate_newest_scylla_doctor_package(self):
+    @cached_property
+    def configured_version(self):
+        """Get the configured scylla-doctor version from test config."""
+        return self.test_config.tester_obj().params.get("scylla_doctor_version")
+
+    def locate_scylla_doctor_package(self, version: str = None):
+        """
+        Locate scylla-doctor package in S3.
+
+        Args:
+            version: Specific version to locate (e.g., "1.9"). If None, returns the latest version.
+
+        Returns:
+            Package information dict from S3, or None if not found.
+        """
         s3 = boto3.client("s3")
         packages = s3.list_objects(
             Bucket=self.SCYLLA_DOCTOR_OFFLINE_BUCKET_NAME, Prefix=self.SCYLLA_DOCTOR_OFFLINE_BUCKET_PREFIX, MaxKeys=5000
         )
-        latest = next(
-            iter(sorted(packages["Contents"], key=lambda package: package["LastModified"], reverse=True)), None
-        )
-        return latest
+
+        if not packages.get("Contents"):
+            return None
+
+        if version:
+            # Look for specific version
+            version_prefix = f"{self.SCYLLA_DOCTOR_OFFLINE_BUCKET_PREFIX}scylla-doctor-{version}"
+            matching_packages = [pkg for pkg in packages["Contents"] if pkg["Key"].startswith(version_prefix)]
+            if not matching_packages:
+                LOGGER.warning("No scylla-doctor package found for version %s", version)
+                return None
+            # Return the latest modified package for this version
+            return next(
+                iter(sorted(matching_packages, key=lambda package: package["LastModified"], reverse=True)), None
+            )
+        else:
+            # Return the latest version
+            return next(
+                iter(sorted(packages["Contents"], key=lambda package: package["LastModified"], reverse=True)), None
+            )
 
     def download_scylla_doctor(self):
         if self.node.remoter.run("curl --version", ignore_status=True).ok:
             LOGGER.info("curl already installed, proceeding...")
         else:
             self.node.install_package("curl")
-        latest_package = self.locate_newest_scylla_doctor_package()
-        if not latest_package:
-            raise ScyllaDoctorException("Unable to find latest scylla-doctor package for offline install")
 
-        package_path = latest_package["Key"]
+        if self.configured_version:
+            LOGGER.info("Using configured scylla-doctor version: %s", self.configured_version)
+            package = self.locate_scylla_doctor_package(version=self.configured_version)
+        else:
+            LOGGER.info("No scylla-doctor version configured, using latest available")
+            package = self.locate_scylla_doctor_package()
+
+        if not package:
+            version_msg = f"version {self.configured_version}" if self.configured_version else "latest version"
+            raise ScyllaDoctorException(f"Unable to find scylla-doctor package for {version_msg}")
+
+        package_path = package["Key"]
         package_filename = package_path.split("/")[-1]
         LOGGER.info("Downloading %s...", package_filename)
         self.node.remoter.run(f"curl -JL {self.SCYLLA_DOCTOR_OFFLINE_DOWNLOAD_URI}{package_path} | tar -xvz")
@@ -151,7 +189,12 @@ class ScyllaDoctor:
                     self.current_dir, additional_config=self.SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS
                 )
         else:
-            self.node.install_package("scylla-doctor")
+            # Install via package manager (apt/yum/dnf) with configured version
+            if self.configured_version:
+                LOGGER.info("Installing scylla-doctor version %s via package manager", self.configured_version)
+            else:
+                LOGGER.info("Installing latest scylla-doctor via package manager")
+            self.node.install_package("scylla-doctor", package_version=self.configured_version)
 
     def argus_collect_sd_package(self):
         try:
