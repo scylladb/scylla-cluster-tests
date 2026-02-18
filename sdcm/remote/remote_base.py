@@ -165,10 +165,23 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
 
     def stop(self):
         self._close_connection()
+        # Clean up connection from thread map to prevent id() reuse issues
+        # When a remoter is garbage collected, Python may reuse its id() for a new object.
+        # Without cleanup, the new object would inherit the stale connection.
+        self._remove_connection_from_thread_map()
+
+    def _remove_connection_from_thread_map(self):
+        """Remove connection from thread map to prevent stale connection reuse when id() is recycled."""
+        key = str(id(self))
+        if hasattr(self.connection_thread_map, key):
+            delattr(self.connection_thread_map, key)
 
     def _close_connection(self):
-        if self.connection:
-            self.connection.close()
+        # Get connection directly from thread map without triggering recreation via self.connection property
+        key = str(id(self))
+        connection = getattr(self.connection_thread_map, key, None)
+        if connection:
+            connection.close()
 
     def _open_connection(self):
         self.connection.open()

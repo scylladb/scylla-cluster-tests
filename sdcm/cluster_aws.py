@@ -779,6 +779,12 @@ class AWSNode(cluster.BaseNode):
         return self.scylla_network_configuration.interface_ipv6_address
 
     def refresh_network_interfaces_info(self):
+        # Clear cached network_configuration to ensure fresh data is fetched from the node.
+        # This is important when the remoter was recreated (e.g., during _init_remoter),
+        # as the cached property may contain stale MAC address mappings from a previous
+        # remoter that was connected to a different node due to id() reuse.
+        if "network_configuration" in self.__dict__:
+            del self.__dict__["network_configuration"]
         self.scylla_network_configuration.network_interfaces = self.network_interfaces
 
     def _refresh_instance_state(self):
