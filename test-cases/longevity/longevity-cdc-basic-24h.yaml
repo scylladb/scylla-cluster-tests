@@ -1,0 +1,67 @@
+test_duration: 420
+
+latte_schema_parameters:
+  lwt: 'false'
+  cdc: 'false'
+  mv: 'false'
+  ks_name: 'cdc_keyspace'
+  table_name: 'cdc_table'
+
+prepare_write_cmd:
+  - >-
+    latte run -f "update_or_delete_by_cycle" --consistency=QUORUM --concurrency 10 --threads=100 --rate=5000 --duration=10000000 --tag update-or-delete-by-cycle
+    --request-timeout=900s --retry-number=50 --retry-interval=1s,60s
+    -P offset=0 -P rows=5000000 -P rows_per_partition=10
+    -P update_cycles=1 -P read_cycles=2 -P delete_cycles=0
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f "update_or_delete_by_cycle" --consistency=QUORUM --concurrency 10 --threads=100 --rate=5000 --duration=10000000 --tag update-or-delete-by-cycle
+    --request-timeout=900s --retry-number=50 --retry-interval=1s,30s
+    -P offset=1000000000 -P rows=5000000 -P rows_per_partition=1
+    -P update_cycles=1 -P read_cycles=2 -P delete_cycles=0
+    data_dir/latte/tablet_split_merge_load.rn
+
+stress_cmd:
+  - >-
+    latte run -f "update_or_delete_by_cycle" --consistency=QUORUM --concurrency 10 --threads=100 --rate=10000 --duration=360m --tag update-or-delete-by-cycle
+    --request-timeout=900s --retry-number=50 --retry-interval=1s,60s
+    -P offset=0 -P rows=5000000 -P rows_per_partition=10
+    -P update_cycles=8 -P read_cycles=15 -P delete_cycles=4
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f "update_or_delete_by_cycle" --consistency=QUORUM --concurrency 10 --threads=100 --rate=10000 --duration=360m --tag update-or-delete-by-cycle2
+    --request-timeout=900s --retry-number=50 --retry-interval=1s,30s
+    -P offset=1000000000 -P rows=5000000 -P rows_per_partition=1
+    -P update_cycles=10 -P read_cycles=20 -P delete_cycles=5
+    data_dir/latte/tablet_split_merge_load.rn
+
+
+db_type: mixed_scylla
+
+n_db_nodes: 6
+simulated_racks: 3
+n_loaders: 2
+round_robin: true
+
+instance_type_db: 'i4i.2xlarge'
+gce_instance_type_db: 'n2-highmem-8'
+gce_n_local_ssd_disk_db: 8
+
+n_test_oracle_db_nodes: 3
+instance_type_db_oracle: 'i4i.2xlarge'
+oracle_scylla_version: '2025.4.0'
+
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: ["schema_changes and not disruptive"]
+nemesis_seed: '021'
+nemesis_during_prepare: false
+space_node_threshold: 64424
+
+user_prefix: 'longevity-cdc-24h'
+
+use_preinstalled_scylla: true
+
+append_scylla_args: '--logger-log-level table=debug'

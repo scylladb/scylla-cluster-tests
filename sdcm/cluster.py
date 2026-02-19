@@ -5350,6 +5350,7 @@ class BaseScyllaCluster:
                 termination_event=self.nemesis_termination_event,
                 nemesis_selector=nem["nemesis_selector"],
                 nemesis_seed=nem["nemesis_seed"],
+                nemesis_interval=nem["nemesis_interval"],
             )
             if hdr_tags:
                 nemesis_obj.hdr_tags = hdr_tags
