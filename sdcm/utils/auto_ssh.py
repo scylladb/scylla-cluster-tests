@@ -14,7 +14,7 @@
 import os
 from functools import cached_property
 
-from sdcm.utils.reverse_tunnel import get_tunnel_manager, AutosshTunnelManager
+from sdcm.utils.reverse_tunnel import get_tunnel_manager
 
 
 AUTO_SSH_IMAGE = "jnovack/autossh:1.2.2"
