@@ -205,8 +205,6 @@ class CleanResourcesDockerTest(unittest.TestCase):
             tags_dict={
                 "TestId": 1111,
             },
-            builder_name=None,
-            group_as_builder=False,
         )
         container.remove.assert_called_once_with(v=True, force=True)
         image.client.images.remove.assert_called_once_with(image=image.id, force=True)
