@@ -423,6 +423,7 @@ def list_logs_by_test_id(test_id):
         "corrupted-sstables",
         "sstables",
         "builder",
+        "system_compaction_history",
     ]
 
     results = []
