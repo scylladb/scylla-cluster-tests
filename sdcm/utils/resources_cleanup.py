@@ -14,7 +14,6 @@
 from __future__ import absolute_import, annotations
 import logging
 import os
-from typing import Optional
 from unittest.mock import MagicMock
 
 from botocore.exceptions import ClientError
@@ -116,28 +115,39 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
         if isinstance(azure_regions, str):
             azure_regions = [region for azure_region in azure_regions for region in azure_region.split(" ")]
         clean_instances_azure(tags_dict, regions=azure_regions, dry_run=dry_run)
-    if cluster_backend in ("docker", ""):
+    # Always clean local Docker resources for all backends (except k8s-local which has no resources)
+    # Tests on any backend may create local Docker containers for stress tools, monitoring, etc.
+    if not cluster_backend.startswith("k8s-local"):
         clean_resources_docker(tags_dict, dry_run=dry_run)
     return True
 
 
-def clean_resources_docker(tags_dict: dict, builder_name: Optional[str] = None, dry_run: bool = False) -> None:
+def clean_resources_docker(tags_dict: dict, dry_run: bool = False) -> None:
+    """Clean Docker containers and images matching the provided tags.
+
+    Scans the local Docker daemon for containers/images matching tags_dict.
+
+    Args:
+        tags_dict: Dictionary of tags to filter resources (must include TestId or RunByUser)
+        dry_run: If True, only log what would be deleted without actually deleting
+    """
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
 
     def delete_container(container):
         container.reload()
-        LOGGER.info("Going to delete Docker container %s on `%s'", container, container.client.info()["Name"])
+        container_name = container.name
+        LOGGER.info("Cleaned Docker container: %s on `%s'", container_name, container.client.info()["Name"])
         if not dry_run:
             container.remove(v=True, force=True)
             LOGGER.debug("Done.")
 
     def delete_image(image):
-        LOGGER.info("Going to delete Docker image tag(s) %s on `%s'", image.tags, image.client.info()["Name"])
+        LOGGER.info("Cleaned Docker image: %s on `%s'", image.tags, image.client.info()["Name"])
         if not dry_run:
             image.client.images.remove(image=image.id, force=True)
             LOGGER.debug("Done.")
 
-    resources_to_clean = list_resources_docker(tags_dict=tags_dict, builder_name=builder_name, group_as_builder=False)
+    resources_to_clean = list_resources_docker(tags_dict=tags_dict)
     containers = resources_to_clean.get("containers", [])
     images = resources_to_clean.get("images", [])
 
