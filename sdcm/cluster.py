@@ -314,7 +314,8 @@ class BaseNode(AutoSshContainerMixin):
 
     SYSTEM_EVENTS_PATTERNS = SYSTEM_ERROR_EVENTS_PATTERNS + INSTANCE_STATUS_EVENTS_PATTERNS
 
-    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0):
+    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0,
+                 config_callback=None):
         self.name = name
         self.rack = rack
         self.parent_cluster = parent_cluster  # reference to the Cluster object that the node belongs to
@@ -322,6 +323,7 @@ class BaseNode(AutoSshContainerMixin):
         self.ssh_login_info = ssh_login_info
         self.logdir = os.path.join(base_logdir, self.name) if base_logdir else None
         self.dc_idx = dc_idx
+        self.config_callback = config_callback  # Optional callback to configure node after install, before startup
 
         self._containers = {}
         self.is_seed = False
@@ -3945,12 +3947,15 @@ class BaseCluster:
     def wait_for_init(self):
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
-    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None,
+                  config_callback=None):
         """
         :param count: number of nodes to add
         :param ec2_user_data:
         :param dc_idx: datacenter index, used as an index for self.datacenter list
         :param instance_type: type of instance to use, can override what's defined in configuration
+        :param config_callback: Optional callback function to configure node after installation but before startup.
+                               Called with (node: BaseNode) -> None. Executed in node_setup() after config_setup().
         :return: list of Nodes
         """
         raise NotImplementedError("Derived class must implement 'add_nodes' method!")
@@ -5633,6 +5638,12 @@ class BaseScyllaCluster:
             for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
                 shutil.copy(src, node.ssl_conf_dir)
         node.config_setup(append_scylla_args=self.get_scylla_args())
+
+        # Execute custom configuration callback if provided
+        # This allows nemesis operations to configure nodes after installation but before startup
+        if hasattr(node, 'config_callback') and node.config_callback:
+            node.log.info("Executing custom configuration callback")
+            node.config_callback(node)
 
         self._scylla_post_install(node, install_scylla, nic_devname)
         # prepare and start saslauthd service
