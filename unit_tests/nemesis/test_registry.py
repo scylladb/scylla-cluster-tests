@@ -31,6 +31,8 @@ def registry():
         ("", {CustomNemesisA, CustomNemesisB, CustomNemesisC, CustomNemesisAD}),
         (None, {CustomNemesisA, CustomNemesisB, CustomNemesisC, CustomNemesisAD}),
         ("flag_true", {CustomNemesisB, CustomNemesisAD}),  # flag_true is set to False in CustomNemesisA
+        ("CustomNemesisA", {CustomNemesisA}),
+        ("CustomNemesisA or CustomNemesisAD", {CustomNemesisA, CustomNemesisAD}),
     ],
 )
 def test_filter_subclasses_by_single_flag(registry, logical_phrase, expected_classes):
