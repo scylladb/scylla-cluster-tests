@@ -44,10 +44,32 @@ latte_schema_parameters:
 prepare_write_cmd:
   - >-
     latte run --tag populate -f populate_all
-    --threads=10 --concurrency=1 --connections=1 --rate=500 --consistency=LOCAL_QUORUM
-    --warmup=0 --retries=3 --retry-interval=5s --request-timeout 60 --sampling 5s
-    --validation-strategy=ignore
-    -d 1000000
+    --threads=10 --concurrency=1 --connections=1 --rate=5000 --consistency=LOCAL_QUORUM
+    --warmup=0 --retries=3 --retry-interval=1s --request-timeout 60 --sampling 5s
+    --validation-strategy=ignore --start-cycle=0
+    -d 1000
+    -P row_count_per_table=10
+    -P gauss_mean=0
+    -P gauss_stddev=0
+    -P skip_write_errors=true
+    data_dir/latte/scylladb_682.rn
+  - >-
+    latte run --tag populate -f populate_all
+    --threads=10 --concurrency=1 --connections=1 --rate=5000 --consistency=LOCAL_QUORUM
+    --warmup=0 --retries=3 --retry-interval=1s --request-timeout 60 --sampling 5s
+    --validation-strategy=ignore --start-cycle=100000000
+    -d 1000
+    -P row_count_per_table=10
+    -P gauss_mean=0
+    -P gauss_stddev=0
+    -P skip_write_errors=true
+    data_dir/latte/scylladb_682.rn
+  - >-
+    latte run --tag populate -f populate_all
+    --threads=10 --concurrency=1 --connections=1 --rate=5000 --consistency=LOCAL_QUORUM
+    --warmup=0 --retries=3 --retry-interval=1s --request-timeout 60 --sampling 5s
+    --validation-strategy=ignore --start-cycle=100000
+    -d 1000
     -P row_count_per_table=10
     -P gauss_mean=0
     -P gauss_stddev=0
