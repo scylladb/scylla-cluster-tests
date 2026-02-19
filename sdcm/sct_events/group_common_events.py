@@ -528,6 +528,14 @@ def ignore_raft_topology_cmd_failing():
                 extra_time_to_expiration=30,
             )
         )
+        stack.enter_context(
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent,
+                regex=r".*raft_topology - transition_state::.*raft_topology_cmd::command::barrier failed.*connection is closed",
+                extra_time_to_expiration=30,
+            )
+        )
         yield
 
 
