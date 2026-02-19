@@ -12,7 +12,7 @@
 # Copyright (c) 2026 ScyllaDB
 
 from concurrent.futures import TimeoutError
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, Mock
 import pytest
 
 from sdcm.utils.gce_utils import wait_for_extended_operation
@@ -191,3 +191,131 @@ class TestWaitForExtendedOperation:
 
         # Assert
         assert result == "success"
+
+    @patch("sdcm.utils.gce_utils.GceLoggingClient")
+    def test_wait_for_extended_operation_timeout_with_audit_logs(self, mock_logging_client_class):
+        """Test that timeout includes audit log information when available."""
+        # Arrange
+        mock_operation = MagicMock()
+        mock_operation.result.side_effect = TimeoutError("Original timeout")
+        mock_operation.name = "operation-12345"
+
+        # Mock the logging client
+        mock_logging_client = Mock()
+        mock_logging_client_class.return_value = mock_logging_client
+        mock_logging_client.get_operation_audit_logs.return_value = [
+            {
+                "severity": "ERROR",
+                "protoPayload": {
+                    "methodName": "v1.compute.instances.insert",
+                    "status": {"code": 13, "message": "BACKEND_ERROR"},
+                },
+            }
+        ]
+
+        # Act & Assert
+        with pytest.raises(TimeoutError) as exc_info:
+            wait_for_extended_operation(
+                mock_operation,
+                "instance creation",
+                project_id="test-project",
+                zone="us-east1-b",
+                instance_name="test-instance",
+            )
+
+        # Verify audit logs were fetched
+        mock_logging_client_class.assert_called_once_with(instance_name="test-instance", zone="us-east1-b")
+        mock_logging_client.get_operation_audit_logs.assert_called_once()
+
+        # Verify error message contains audit log information
+        error_message = str(exc_info.value)
+        assert "BACKEND_ERROR" in error_message
+        assert "v1.compute.instances.insert" in error_message
+        assert "Code 13" in error_message
+
+    @patch("sdcm.utils.gce_utils.GceLoggingClient")
+    def test_wait_for_extended_operation_error_with_audit_logs(self, mock_logging_client_class):
+        """Test that operation error includes audit log information when available."""
+        # Arrange
+        mock_operation = MagicMock()
+        mock_operation.result.return_value = None
+        mock_operation.error_code = "RESOURCE_EXHAUSTED"
+        mock_operation.error_message = "Quota exceeded"
+        mock_operation.name = "operation-67890"
+        mock_operation.exception.return_value = RuntimeError("Quota exceeded")
+
+        # Mock the logging client
+        mock_logging_client = Mock()
+        mock_logging_client_class.return_value = mock_logging_client
+        mock_logging_client.get_operation_audit_logs.return_value = [
+            {
+                "severity": "ERROR",
+                "protoPayload": {
+                    "methodName": "v1.compute.instances.insert",
+                    "status": {"code": 8, "message": "RESOURCE_EXHAUSTED"},
+                },
+            }
+        ]
+
+        # Act & Assert
+        with pytest.raises(RuntimeError) as exc_info:
+            wait_for_extended_operation(
+                mock_operation,
+                "instance creation",
+                project_id="test-project",
+                zone="us-west1-a",
+                instance_name="test-instance-2",
+            )
+
+        # Verify audit logs were fetched
+        mock_logging_client_class.assert_called_once_with(instance_name="test-instance-2", zone="us-west1-a")
+        mock_logging_client.get_operation_audit_logs.assert_called_once()
+
+        assert "Quota exceeded" in str(exc_info.value)
+
+    @patch("sdcm.utils.gce_utils.GceLoggingClient")
+    def test_wait_for_extended_operation_timeout_without_instance_details(self, mock_logging_client_class):
+        """Test that timeout works without instance details (no audit log query)."""
+        # Arrange
+        mock_operation = MagicMock()
+        mock_operation.result.side_effect = TimeoutError("Original timeout")
+        mock_operation.name = "operation-99999"
+
+        # Act & Assert
+        with pytest.raises(TimeoutError) as exc_info:
+            wait_for_extended_operation(mock_operation, "test operation")
+
+        # Verify audit logs were NOT fetched (no instance details provided)
+        mock_logging_client_class.assert_not_called()
+
+        # Verify basic error message
+        error_message = str(exc_info.value)
+        assert "test operation timed out" in error_message
+        assert "Operation ID: operation-99999" in error_message
+
+    @patch("sdcm.utils.gce_utils.GceLoggingClient")
+    def test_wait_for_extended_operation_audit_log_exception_handled(self, mock_logging_client_class):
+        """Test that exceptions during audit log fetch are handled gracefully."""
+        # Arrange
+        mock_operation = MagicMock()
+        mock_operation.result.side_effect = TimeoutError("Original timeout")
+        mock_operation.name = "operation-error-test"
+
+        # Mock the logging client to raise an exception
+        mock_logging_client_class.side_effect = Exception("Logging API error")
+
+        # Act & Assert - should not raise exception from logging client
+        with pytest.raises(TimeoutError) as exc_info:
+            wait_for_extended_operation(
+                mock_operation,
+                "instance creation",
+                project_id="test-project",
+                zone="us-east1-b",
+                instance_name="test-instance",
+            )
+
+        # Verify error message still contains basic information
+        error_message = str(exc_info.value)
+        assert "instance creation timed out" in error_message
+        # Should not include audit log information due to exception
+        assert "BACKEND_ERROR" not in error_message

@@ -381,9 +381,40 @@ class GceLoggingClient:
             entries.extend(self._get_log_entries(service, query, page_token))
         return entries
 
+    def get_operation_audit_logs(self, operation_id: str, lookback_seconds: int = 300):
+        """Gets audit log entries for a specific operation.
+
+        Args:
+            operation_id: The operation ID to query for
+            lookback_seconds: How many seconds to look back for log entries
+
+        Returns:
+            List of audit log entries related to the operation
+        """
+        # Look back from now
+        until = time.time()
+        from_ = until - lookback_seconds
+        from_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(from_))
+        until_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(until))
+
+        # Query for activity logs (not just system_event)
+        query = {
+            "resourceNames": [f"projects/{self.project_id}"],
+            "filter": f'operation.id="{operation_id}"'
+            f' logName : "projects/{self.project_id}/logs/cloudaudit.googleapis.com%2Factivity"'
+            f' timestamp >= "{from_str}" timestamp <= "{until_str}"',
+        }
+        with build("logging", "v2", credentials=self.credentials, cache_discovery=False) as service:
+            return self._get_log_entries(service, query)
+
 
 def wait_for_extended_operation(
-    operation: ExtendedOperation, verbose_name: str = "operation", timeout: int = 300
+    operation: ExtendedOperation,
+    verbose_name: str = "operation",
+    timeout: int = 300,
+    project_id: str = None,
+    zone: str = None,
+    instance_name: str = None,
 ) -> Any:
     """
     Waits for the extended (long-running) operation to complete.
@@ -399,6 +430,9 @@ def wait_for_extended_operation(
             used only during error and warning reporting.
         timeout: how long (in seconds) to wait for operation to finish.
             If None, wait indefinitely.
+        project_id: (optional) GCP project ID for audit log queries
+        zone: (optional) GCP zone for audit log queries
+        instance_name: (optional) instance name for audit log queries
 
     Returns:
         Whatever the operation.result() returns.
@@ -411,6 +445,7 @@ def wait_for_extended_operation(
         In case of an operation taking longer than `timeout` seconds to complete,
         a `concurrent.futures.TimeoutError` will be raised with enhanced error information.
     """
+    start_time = time.time()
     try:
         result = operation.result(timeout=timeout)
     except TimeoutError as exc:
@@ -439,6 +474,30 @@ def wait_for_extended_operation(
         if hasattr(operation, "operation_type"):
             error_details.append(f"Operation Type: {operation.operation_type}")
 
+        # Try to get audit logs if we have the necessary information
+        if project_id and zone and instance_name:
+            try:
+                logging_client = GceLoggingClient(instance_name=instance_name, zone=zone)
+                # Calculate how far back to look (operation duration + buffer)
+                lookback_seconds = int(time.time() - start_time) + 60
+                audit_logs = logging_client.get_operation_audit_logs(
+                    operation_id=operation.name, lookback_seconds=lookback_seconds
+                )
+                if audit_logs:
+                    error_details.append("\nAudit Log Errors:")
+                    for log_entry in audit_logs:
+                        if log_entry.get("severity") == "ERROR":
+                            proto_payload = log_entry.get("protoPayload", {})
+                            status = proto_payload.get("status", {})
+                            if status:
+                                error_details.append(
+                                    f"  - {proto_payload.get('methodName', 'Unknown')}: "
+                                    f"Code {status.get('code', 'N/A')}, "
+                                    f"Message: {status.get('message', 'N/A')}"
+                                )
+            except Exception as audit_exc:  # noqa: BLE001
+                LOGGER.debug("Failed to fetch audit logs: %s", audit_exc)
+
         # Log all collected details
         error_msg = "\n  ".join(error_details)
         LOGGER.error("Extended operation timeout details:\n  %s", error_msg)
@@ -447,8 +506,38 @@ def wait_for_extended_operation(
         raise TimeoutError(f"{verbose_name} timed out. {error_msg}") from exc
 
     if operation.error_code:
-        LOGGER.debug("Error during %s: [Code: %s]: %s", verbose_name, operation.error_code, operation.error_message)
-        LOGGER.debug("Operation ID: %s", operation.name)
+        error_details = [
+            f"Error during {verbose_name}:",
+            f"Error Code: {operation.error_code}",
+            f"Error Message: {operation.error_message}",
+            f"Operation ID: {operation.name}",
+        ]
+
+        # Try to get audit logs if we have the necessary information
+        if project_id and zone and instance_name:
+            try:
+                logging_client = GceLoggingClient(instance_name=instance_name, zone=zone)
+                # Calculate how far back to look (operation duration + buffer)
+                lookback_seconds = int(time.time() - start_time) + 60
+                audit_logs = logging_client.get_operation_audit_logs(
+                    operation_id=operation.name, lookback_seconds=lookback_seconds
+                )
+                if audit_logs:
+                    error_details.append("\nAudit Log Details:")
+                    for log_entry in audit_logs:
+                        proto_payload = log_entry.get("protoPayload", {})
+                        status = proto_payload.get("status", {})
+                        if status:
+                            error_details.append(
+                                f"  - {proto_payload.get('methodName', 'Unknown')}: "
+                                f"Code {status.get('code', 'N/A')}, "
+                                f"Message: {status.get('message', 'N/A')}"
+                            )
+            except Exception as audit_exc:  # noqa: BLE001
+                LOGGER.debug("Failed to fetch audit logs: %s", audit_exc)
+
+        error_msg = "\n  ".join(error_details)
+        LOGGER.debug("%s", error_msg)
         raise operation.exception() or RuntimeError(operation.error_message)
 
     if operation.warnings:
@@ -645,7 +734,9 @@ def create_instance(  # noqa: PLR0913
 
     operation = instance_client.insert(request=request)
 
-    wait_for_extended_operation(operation, "instance creation")
+    wait_for_extended_operation(
+        operation, "instance creation", project_id=project_id, zone=zone, instance_name=instance_name
+    )
 
     LOGGER.debug("Instance %s created.", instance_name)
     return instance_client.get(project=project_id, zone=zone, instance=instance_name)
