@@ -7195,3 +7195,126 @@ class LocalK8SHostNode(LocalNode):
     @property
     def network_interfaces(self):
         raise NotImplementedError()
+
+
+CHECK_INTERVAL_SECONDS = 30  # Check every 30 seconds for kernel panics
+
+
+class BaseKernelPanicChecker(threading.Thread):
+    """Base class for cloud provider kernel panic checkers.
+    
+    Provides common functionality for monitoring cloud instances for kernel panics
+    via provider-specific mechanisms. Each cloud provider should subclass this and
+    implement the `_get_console_output()` method.
+    """
+
+    def __init__(self, node, provider_name: str):
+        super().__init__()
+        self.node = node
+        self.provider_name = provider_name
+        self._stop_event = threading.Event()
+        self._panic_detected = threading.Event()  # Thread-safe flag
+        self.daemon = True
+
+    def _get_console_output(self) -> str:
+        """Get console output from the cloud provider.
+        
+        This method must be implemented by each cloud provider subclass.
+        
+        Returns:
+            str: The console output text to scan for kernel panic patterns
+            
+        Raises:
+            NotImplementedError: If not implemented by subclass
+        """
+        raise NotImplementedError("Subclasses must implement _get_console_output()")
+
+    def _extract_panic_lines(self, output: str) -> List[str]:
+        """Extract lines containing kernel panic indicators from console output.
+        
+        Args:
+            output: Console output text
+            
+        Returns:
+            List of lines containing panic indicators
+        """
+        panic_lines = []
+        for line in output.splitlines():
+            line_lower = line.lower()
+            if "kernel panic" in line_lower or "not syncing" in line_lower:
+                panic_lines.append(line.strip())
+        return panic_lines
+
+    def _check_for_panic(self, output: str) -> bool:
+        """Check if output contains kernel panic indicators.
+        
+        Args:
+            output: Console output text
+            
+        Returns:
+            True if kernel panic detected, False otherwise
+        """
+        output_lower = output.lower()
+        return "kernel panic" in output_lower or "not syncing" in output_lower
+
+    def _publish_panic_event(self, output: str, instance_identifier: str):
+        """Publish a KernelPanicEvent when a panic is detected.
+        
+        Args:
+            output: Full console output
+            instance_identifier: Cloud-specific instance identifier for logging
+        """
+        from sdcm.sct_events.system import KernelPanicEvent
+        
+        panic_lines = self._extract_panic_lines(output)
+        panic_text = " | ".join(panic_lines) if panic_lines else "Kernel panic detected"
+        message = f"Kernel panic detected in console log for {instance_identifier}: {panic_text}"
+        
+        LOGGER.error("[%s] %s", self.provider_name, message)
+        LOGGER.error("[%s] Full console output for %s:\n%s", self.provider_name, instance_identifier, output)
+        
+        KernelPanicEvent(node=self.node, message=message).publish()
+
+    def run(self):
+        """Main monitoring loop that checks for kernel panics at regular intervals."""
+        while not self._stop_event.is_set():
+            try:
+                output = self._get_console_output()
+                
+                if output and self._check_for_panic(output) and not self._panic_detected.is_set():
+                    self._panic_detected.set()
+                    self._publish_panic_event(output, self._get_instance_identifier())
+                    # Stop checking after panic is detected
+                    self._stop_event.set()
+                    
+            except Exception as exc:  # noqa: BLE001
+                # Don't log errors if we're stopping (expected during shutdown)
+                if not self._stop_event.is_set():
+                    LOGGER.error("[%s] Error checking for kernel panic: %s", self.provider_name, exc)
+            
+            self._stop_event.wait(CHECK_INTERVAL_SECONDS)
+
+    def _get_instance_identifier(self) -> str:
+        """Get a cloud-specific instance identifier for logging.
+        
+        This method should be overridden by subclasses to provide a meaningful
+        identifier (instance ID, name, etc.) for log messages.
+        
+        Returns:
+            str: Instance identifier
+        """
+        return "unknown"
+
+    def stop(self):
+        """Stop the monitoring thread."""
+        self._stop_event.set()
+
+    def __enter__(self):
+        """Context manager entry - starts the monitoring thread."""
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - stops and joins the monitoring thread."""
+        self.stop()
+        self.join()
