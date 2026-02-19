@@ -34,7 +34,7 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config(monkeypatch
             "SCT_USER_PREFIX",
             "SCT_AZURE_IMAGE_DB",
             "SCT_N_LOADERS",
-            "SCT_N_MONITORS_NODES",
+            "SCT_N_MONITOR_NODES",
         ],
     )
 
@@ -51,7 +51,7 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config(monkeypatch
         SCT_AZURE_IMAGE_DB="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/"
         "Microsoft.Compute/images/scylla-5.2.0-dev-x86_64-2022-08-22T04-18-36Z",
         SCT_N_LOADERS="2 0",
-        SCT_N_MONITORS_NODES="1",
+        SCT_N_MONITOR_NODES="1",
     )
     for key, value in env_config._asdict().items():
         monkeypatch.setenv(key, value)
