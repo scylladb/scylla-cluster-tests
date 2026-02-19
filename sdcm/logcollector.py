@@ -1458,6 +1458,13 @@ class SSLConfCollector(BaseSCTLogCollector):
     cluster_log_type = "ssl-conf"
 
 
+class DiagnosticsLogCollector(BaseSCTLogCollector):
+    log_entities = [
+        DirLog(name="diagnostics/*", search_locally=True),
+    ]
+    cluster_log_type = "diagnostics"
+
+
 class Collector:
     """Collector instance
 
@@ -1511,6 +1518,7 @@ class Collector:
             VectorStoreLogCollector: self.vector_store_set,
             SSTablesCollector: self.db_cluster,
             JepsenLogCollector: self.loader_set,
+            DiagnosticsLogCollector: self.sct_set,
         }
         if self.params.get("server_encrypt") or self.params.get("client_encrypt"):
             self.cluster_log_collectors[SSLConfCollector] = self.sct_set
