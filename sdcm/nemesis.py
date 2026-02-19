@@ -2395,6 +2395,30 @@ class NemesisRunner:
         while time.time() < end_time:
             self._add_drop_column()
 
+    def _add_drop_column_cleanup(self):
+        """
+        Cleanup method to drop all columns that were added during the nemesis execution.
+        This ensures the table is restored to its original state.
+        """
+        if self._add_drop_column_target_table is None:
+            return
+        added_columns_info = self._add_drop_column_get_added_columns_info(
+            self._add_drop_column_target_table, self._add_drop_column_columns_info
+        )
+        if not added_columns_info["column_names"]:
+            self.log.debug("AddDropColumnMonkey: No columns to cleanup")
+            return
+
+        # Drop all remaining columns
+        columns_to_drop = list(added_columns_info["column_names"].keys())
+        ks_cf = f"{self._add_drop_column_target_table[0]}.{self._add_drop_column_target_table[1]}"
+        self.actions_log.info(f"AddDropColumnMonkey: Cleaning up {len(columns_to_drop)} columns from {ks_cf} table")
+        cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} DROP ( {', '.join(columns_to_drop)} );"
+        if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
+            # Clear the tracking dict after successful cleanup
+            added_columns_info["column_names"].clear()
+            self.log.debug("AddDropColumnMonkey: Cleanup completed successfully")
+
     def verify_initial_inputs_for_delete_nemesis(self):
         test_keyspaces = self.cluster.get_test_keyspaces()
 
@@ -2714,6 +2738,8 @@ class NemesisRunner:
             raise UnsupportedNemesis("AddDropColumnMonkey: can't find table to run on")
         InfoEvent(f"AddDropColumnMonkey table {'.'.join(self._add_drop_column_target_table)}").publish()
         self._add_drop_column_run_in_cycle()
+        # Cleanup: drop all remaining columns that were added during the nemesis
+        self._add_drop_column_cleanup()
 
     def disrupt_modify_table_comment(self):
         """
