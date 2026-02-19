@@ -2791,6 +2791,12 @@ class SCTConfiguration(dict):
             help="Whether or not to send email using argus instead of SCT.",
         ),
         dict(
+            name="cdc_replication_rounds_num",
+            env="SCT_CDC_REPLICATION_ROUNDS_NUM",
+            type=int,
+            help="""Number of rounds for cdc replication longevity tests""",
+        ),
+        dict(
             name="c_s_driver_version",
             env="SCT_C_S_DRIVER_VERSION",
             type=str,

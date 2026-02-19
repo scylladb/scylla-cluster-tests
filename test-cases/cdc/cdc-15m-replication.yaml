@@ -3,21 +3,21 @@ test_duration: 120
 user_prefix: 'cdc-replication-cs'
 db_type: mixed_scylla
 
-n_db_nodes: 3
-instance_type_db: 'i4i.large'
+n_db_nodes: 6
+instance_type_db: 'i4i.2xlarge'
 
-n_test_oracle_db_nodes: 1
-instance_type_db_oracle: 'i3.large'
+n_test_oracle_db_nodes: 3
+instance_type_db_oracle: 'i4i.2xlarge'
+oracle_scylla_version: 2025.2.0
 
 n_loaders: 1
-instance_type_loader: 'c6i.large'
+instance_type_loader: 'c7i.4xlarge'
 
-n_monitor_nodes: 0
-# instance_type_monitor: 't3.small'
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'RandomInterruptionNetworkMonkey'
+n_monitor_nodes: 1
+
+nemesis_class_name: 'SisyphusMonkey'
 nemesis_interval: 1
 # Required by the nemesis:
 extra_network_interface: true
 
-stress_cmd: "cassandra-stress user no-warmup profile=/tmp/cdc_replication_profile.yaml 'ops(update=1)' cl=QUORUM duration=15m -mode cql3 native -rate threads=10 -log interval=5 -errors retries=999"
+stress_cmd: "cassandra-stress user no-warmup profile=/tmp/cdc_replication_profile.yaml 'ops(update1=1,update2=1)' cl=QUORUM duration=15m -mode cql3 native -rate threads=100 -log interval=5 -errors retries=999"

@@ -3921,6 +3921,15 @@ Whether or not to send email using argus instead of SCT.
 **type:** bool
 
 
+## **cdc_replication_rounds_num** / SCT_CDC_REPLICATION_ROUNDS_NUM
+
+Number of rounds for cdc replication longevity tests
+
+**default:** 2
+
+**type:** int
+
+
 ## **c_s_driver_version** / SCT_C_S_DRIVER_VERSION
 
 cassandra-stress driver version to use: 3|4|random

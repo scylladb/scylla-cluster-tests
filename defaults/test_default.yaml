@@ -337,6 +337,7 @@ vector_store_scylla_port: 9042
 vector_store_threads: 0  # 0 = defaults to number of cores on a node
 vector_store_docker_image: 'scylladb/vector-store'
 vector_store_version: ''
+cdc_replication_rounds_num: 2
 
 download_from_s3: []
 # The object-storage method options in Scylla-Manager are: native/rclone/auto.

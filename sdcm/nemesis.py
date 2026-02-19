@@ -6833,7 +6833,9 @@ class CategoricalMonkey(NemesisRunner):
     In particular if the default weight is 0 then the unlisted disruptions won't be executed.
     """
 
-    def get_disruption_distribution(self, dist: dict, default_weight: float) -> Tuple[List[Callable], List[float]]:
+    def get_disruption_distribution(
+        self, dist: dict[str, int], default_weight: float
+    ) -> Tuple[List[Callable], List[float]]:
         def is_nonnegative_number(val):
             try:
                 val = float(val)
