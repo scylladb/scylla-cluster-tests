@@ -3821,10 +3821,35 @@ class Nemesis:
     def _disrupt_network_block_k8s(self, list_of_timeout_options):
         duration = f"{random.choice(list_of_timeout_options)}s"
         experiment = NetworkPacketLossExperiment(self.target_node, duration, probability=100)
+<<<<<<< HEAD
         experiment.start()
         experiment.wait_until_finished()
         time.sleep(15)
         self.cluster.wait_all_nodes_un()
+||||||| parent of a13d6900e (fix(nemesis): suppress raft topology errors in network block nemesis)
+        with DbNodeLogger(
+            self.cluster.nodes,
+            "block network traffic",
+            target_node=self.target_node,
+            additional_info=f"for {duration}sec",
+        ):
+            experiment.start()
+        experiment.wait_until_finished()
+        time.sleep(15)
+        self.cluster.wait_all_nodes_un()
+=======
+        with ignore_raft_topology_cmd_failing():
+            with DbNodeLogger(
+                self.cluster.nodes,
+                "block network traffic",
+                target_node=self.target_node,
+                additional_info=f"for {duration}sec",
+            ):
+                experiment.start()
+            experiment.wait_until_finished()
+            time.sleep(15)
+            self.cluster.wait_all_nodes_un()
+>>>>>>> a13d6900e (fix(nemesis): suppress raft topology errors in network block nemesis)
 
     @target_all_nodes
     def disrupt_network_block(self):
@@ -3852,7 +3877,15 @@ class Nemesis:
         selected_option = "--loss 100%"
         wait_time = random.choice(list_of_timeout_options)
         self.log.debug("BlockNetwork: [%s] for %dsec", selected_option, wait_time)
+<<<<<<< HEAD
         with context_manager:
+||||||| parent of a13d6900e (fix(nemesis): suppress raft topology errors in network block nemesis)
+        self.actions_log.info(f"Network block start on {self.target_node.name} node, wait_time: {wait_time}")
+        with context_manager:
+=======
+        self.actions_log.info(f"Network block start on {self.target_node.name} node, wait_time: {wait_time}")
+        with context_manager, ignore_raft_topology_cmd_failing():
+>>>>>>> a13d6900e (fix(nemesis): suppress raft topology errors in network block nemesis)
             self.target_node.traffic_control(None)
             try:
                 self.target_node.traffic_control(selected_option)
