@@ -1,7 +1,10 @@
 from textwrap import dedent
 from unittest import mock
 
-from sdcm.mgmt.cli import ManagerTask
+import pytest
+from packaging.version import Version
+
+from sdcm.mgmt.cli import ManagerTask, SCTool
 
 
 def test_01_get_task_info_dict():
@@ -44,3 +47,23 @@ def test_01_get_task_info_dict():
             ["", "13814000-1dd2-11b2-a009-02c33d089f9b", "07 Jan 23 23:08:59 UTC", "0s", "DONE"],
         ],
     }
+
+
+@pytest.mark.parametrize(
+    "version_string,expected",
+    [
+        # Plain PEP-440 version
+        ("3.8.1", Version("3.8.1")),
+        # Non-PEP-440 build-metadata suffix that real manager produces
+        ("3.9.0-dev-0.20260306.76e78d56e-SNAPSHOT", Version("3.9.0")),
+        # Another real-world-style string with extra segments after the dash
+        ("3.8.0-0.20260213.3882815ee", Version("3.8.0")),
+    ],
+)
+def test_parsed_client_version(version_string, expected):
+    """parsed_client_version must not raise on non-PEP-440 manager version strings."""
+    manager_node_mock = mock.MagicMock()
+    sctool = SCTool(manager_node=manager_node_mock)
+    with mock.patch.object(type(sctool), "client_version", new_callable=mock.PropertyMock, return_value=version_string):
+        result = sctool.parsed_client_version
+    assert result == expected
