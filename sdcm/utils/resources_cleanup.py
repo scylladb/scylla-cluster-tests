@@ -153,8 +153,7 @@ def clean_resources_docker(tags_dict: dict, dry_run: bool = False) -> None:
             LOGGER.debug("Done.")
 
     def delete_image(image):
-        image_tags = image.tags or ["<untagged>"]
-        LOGGER.info("Cleaned Docker image: %s on `%s'", ", ".join(image_tags), image.client.info()["Name"])
+        LOGGER.info("Cleaned Docker image: %s on `%s'", image.tags, image.client.info()["Name"])
         if not dry_run:
             image.client.images.remove(image=image.id, force=True)
             LOGGER.debug("Done.")
