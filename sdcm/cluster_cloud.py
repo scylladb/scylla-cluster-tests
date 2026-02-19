@@ -436,6 +436,31 @@ class CloudVSNode(CloudNode):
     def node_type(self) -> str:
         return "vector-store"
 
+    def configure_remote_logging(self):
+        """Wait for Ansible managed vector.dev service to be ready"""
+        if not (self.xcloud_connect_supported and self.parent_cluster.params.get("logs_transport") == "vector"):
+            self.log.debug("Skip configuring remote logging on VS node, for anything but vector transport")
+            return
+
+        self.log.debug("Waiting for Ansible to install vector.dev on VS node")
+
+        def is_vector_active():
+            result = self.remoter.run("systemctl is-active vector.service", ignore_status=True, verbose=False)
+            return result.stdout.strip() == "active"
+
+        wait.wait_for(
+            func=is_vector_active,
+            step=10,
+            text=f"Waiting for vector.service on {self.name}",
+            timeout=600,
+            throw_exc=True,
+        )
+        self.log.debug("vector.dev is active on VS node")
+
+        host, port = TestConfig().get_logging_service_host_port()
+        ssh_cmd = configure_vector_target_script(host=host, port=port)
+        self.remoter.sudo(shell_script_cmd(ssh_cmd, quote="'"), retry=0, verbose=True)
+
 
 class CloudManagerNode(CloudNode):
     """A Scylla Manager node running on Scylla Cloud"""
