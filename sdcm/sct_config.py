@@ -723,6 +723,16 @@ class SCTConfiguration(dict):
          """,
         ),
         dict(
+            name="reverse_tunnel_mode",
+            env="SCT_REVERSE_TUNNEL_MODE",
+            type=str,
+            help="""
+            Type of reverse tunneling to use for exposing services (syslog-ng, vector, ldap) 
+            from remote nodes to the local test runner.
+            Options: 'autossh' (default) or 'ngrok'
+         """,
+        ),
+        dict(
             name="backtrace_decoding",
             env="SCT_BACKTRACE_DECODING",
             type=boolean,
