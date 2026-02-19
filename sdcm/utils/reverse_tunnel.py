@@ -17,7 +17,13 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from typing import TYPE_CHECKING, Optional
 
-from pyngrok import ngrok, conf
+try:
+    from pyngrok import ngrok, conf
+    PYNGROK_AVAILABLE = True
+except ImportError:
+    PYNGROK_AVAILABLE = False
+    ngrok = None
+    conf = None
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
@@ -125,7 +131,15 @@ class NgrokTunnelManager(ReverseTunnelManager):
         Args:
             node: The BaseNode instance
             service_name: Name of the service (e.g., 'syslog_ng', 'vector', 'ldap')
+            
+        Raises:
+            ImportError: If pyngrok is not available
         """
+        if not PYNGROK_AVAILABLE:
+            raise ImportError(
+                "pyngrok is not installed. Install it with: pip install pyngrok\n"
+                "Or use 'autossh' tunnel mode instead by setting: reverse_tunnel_mode: autossh"
+            )
         super().__init__(node, service_name)
         self._configure_ngrok()
 
