@@ -101,7 +101,7 @@ class AwsMock:
         filters = {"NodeType": AWS_MOCK_NODE_TYPE}
         if not all_mocks and test_id:
             filters["TestId"] = test_id
-        containers = list_resources_docker(tags_dict=filters, builder_name="local", verbose=verbose).get(
+        containers = list_resources_docker(tags_dict=filters, verbose=verbose).get(
             "containers", []
         )
 
