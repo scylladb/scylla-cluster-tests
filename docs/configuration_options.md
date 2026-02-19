@@ -2708,7 +2708,7 @@ Threads amount of stress load for gradual performance test per sub-test. Example
 
 ## **perf_gradual_throttle_steps** / SCT_PERF_GRADUAL_THROTTLE_STEPS
 
-Used for gradual performance test. Define throttle for load step in ops. Example: {'read': ['100000', '150000'], 'mixed': ['300']}
+Used for gradual performance test. Define throttle for load step in ops. Supports three formats: 1) String/int list (cassandra-stress): {'read': ['100000', '150000'], 'mixed': [100, 200]} 2) Dict list (latte/multi-param): {'read': [{'threads': 10, 'concurrency': 128, 'rate': '100000'}, ...]} Dict format allows specifying threads, concurrency, and rate per step. Integers are automatically converted to strings for backward compatibility.
 
 **default:** N/A
 
