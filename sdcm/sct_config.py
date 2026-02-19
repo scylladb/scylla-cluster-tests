@@ -1242,8 +1242,9 @@ class SCTConfiguration(dict):
             name="gce_datacenter",
             env="SCT_GCE_DATACENTER",
             type=str_or_list_or_eval,
-            help="Supported: us-east1 - means that the zone will be selected automatically or "
-            "you can mention the zone explicitly, for example: us-east1-b",
+            help="Supported regions: us-east1, us-east4, us-west1, us-central1. Specifying just the region "
+            "(e.g., us-east1) means the zone will be selected automatically, or you can mention the zone "
+            "explicitly (e.g., us-east1-b)",
             appendable=False,
         ),
         dict(name="gce_network", env="SCT_GCE_NETWORK", type=str, help=""),

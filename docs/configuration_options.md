@@ -1484,7 +1484,7 @@ gcp project name to use
 
 ## **gce_datacenter** / SCT_GCE_DATACENTER
 
-Supported: us-east1 - means that the zone will be selected automatically or you can mention the zone explicitly, for example: us-east1-b
+Supported regions: us-east1, us-east4, us-west1, us-central1. Specifying just the region (e.g., us-east1) means the zone will be selected automatically, or you can mention the zone explicitly (e.g., us-east1-b)
 
 **default:** N/A
 
