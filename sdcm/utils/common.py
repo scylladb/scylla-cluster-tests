@@ -29,7 +29,6 @@ import shutil
 import copy
 import string
 import warnings
-import getpass
 import re
 import uuid
 import zipfile
@@ -76,7 +75,6 @@ from sdcm.utils.aws_utils import (
     DEFAULT_AWS_REGION,
 )
 from sdcm.utils.parallel_object import ParallelObject
-from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
 from sdcm.utils.ldap import DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, LdapServerType
@@ -502,60 +500,23 @@ def docker_current_container_id() -> Optional[str]:
     return None
 
 
-def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = False) -> Dict[str, docker.DockerClient]:
-    log = LOGGER if verbose else Mock()
-    docker_clients = {}
-
-    def get_builder_docker_client(builder: Dict[str, str]) -> None:
-        if not can_connect_to(builder["public_ip"], 22, timeout=5):
-            log.error("%(name)s: can't establish connection to %(public_ip)s:22, port is closed", builder)
-            return
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                # since a bug in docker package https://github.com/docker-library/python/issues/517 that need
-                # to explicitly pass down the port for supporting ipv6
-                client = docker.DockerClient(
-                    base_url=f"ssh://{builder['user']}@{normalize_ipv6_url(builder['public_ip'])}:22"
-                )
-            client.ping()
-            log.info("%(name)s: connected via SSH (%(user)s@%(public_ip)s)", builder)
-        except Exception:
-            log.error("%(name)s: failed to connect to Docker via SSH", builder)
-            raise
-        docker_clients[builder["name"]] = client
-
-    if builder_name is None or builder_name == "local":
-        docker_clients["local"] = docker.from_env()
-
-    if builder_name != "local" and getpass.getuser() != "jenkins":
-        builders = [item["builder"] for item in list_builders(running=True)]
-        if builder_name:
-            builders = (
-                {
-                    builder_name: builders[builder_name],
-                }
-                if builder_name in builders
-                else {}
-            )
-        if builders:
-            SSHAgent.start(verbose=verbose)
-            SSHAgent.add_keys(set(b["key_file"] for b in builders), verbose)
-            ParallelObject(builders, timeout=20).run(get_builder_docker_client, ignore_exceptions=True)
-            log.info("%d builders from %d available to scan for Docker resources", len(docker_clients), len(builders))
-        else:
-            log.warning("No builders found")
-
-    return docker_clients
-
-
 def list_resources_docker(
     tags_dict: Optional[dict] = None,
-    builder_name: Optional[str] = None,
     running: bool = False,
-    group_as_builder: bool = False,
     verbose: bool = False,
-) -> Dict[str, Union[list, dict]]:
+) -> Dict[str, list]:
+    """List Docker containers and images on the local daemon matching tags.
+
+    Scans only the local Docker daemon for resources matching the provided tags.
+
+    Args:
+        tags_dict: Optional tags to filter resources
+        running: If True, only list running containers
+        verbose: If True, log detailed information
+
+    Returns:
+        Dict with 'containers' and 'images' keys containing lists of Docker objects
+    """
     log = LOGGER if verbose else Mock()
     filters = {}
 
@@ -566,46 +527,35 @@ def list_resources_docker(
         for key, value in tags_dict.items():
             filters["label"].append(key if key == "NodeType" else f"{key}={value}")
 
-    containers = {}
-    images = {}
+    # Use local Docker daemon directly
+    docker_client = docker.from_env()
 
-    def get_containers(builder_name: str, docker_client: docker.DockerClient) -> None:
-        log.info("%s: scan for Docker containers", builder_name)
-        containers_list = docker_client.containers.list(filters=filters, sparse=True)
-        if node_type_values := tags_dict.get("NodeType"):
-            filtered_containers_list = []
-            for container in containers_list:
-                container.reload()
-                if container.labels.get("NodeType") in node_type_values:
-                    filtered_containers_list.append(container)
-            containers_list = filtered_containers_list
-        if current_container_id:
-            containers_list = [container for container in containers_list if container.id != current_container_id]
-        if running:
-            containers_list = [container for container in containers_list if container.status == "running"]
-        else:
-            containers_list = [container for container in containers_list if container.status != "removing"]
-        if containers_list:
-            log.info("%s: found %d containers", builder_name, len(containers_list))
-            containers[builder_name] = containers_list
+    # Get containers
+    log.info("local: scan for Docker containers")
+    containers_list = docker_client.containers.list(filters=filters, sparse=True)
+    if node_type_values := tags_dict.get("NodeType") if tags_dict else None:
+        filtered_containers_list = []
+        for container in containers_list:
+            container.reload()
+            if container.labels.get("NodeType") in node_type_values:
+                filtered_containers_list.append(container)
+        containers_list = filtered_containers_list
+    if current_container_id:
+        containers_list = [container for container in containers_list if container.id != current_container_id]
+    if running:
+        containers_list = [container for container in containers_list if container.status == "running"]
+    else:
+        containers_list = [container for container in containers_list if container.status != "removing"]
+    if containers_list:
+        log.info("local: found %d containers", len(containers_list))
 
-    def get_images(builder_name: str, docker_client: docker.DockerClient) -> None:
-        log.info("%s: scan for Docker images", builder_name)
-        images_list = docker_client.images.list(filters=filters)
-        if images_list:
-            log.info("%s: found %s images", builder_name, len(images_list))
-            images[builder_name] = images_list
+    # Get images
+    log.info("local: scan for Docker images")
+    images_list = docker_client.images.list(filters=filters)
+    if images_list:
+        log.info("local: found %s images", len(images_list))
 
-    docker_clients = tuple(list_clients_docker(builder_name=builder_name, verbose=verbose).items())
-
-    ParallelObject(docker_clients, timeout=30).run(get_containers, ignore_exceptions=True, unpack_objects=True)
-    ParallelObject(docker_clients, timeout=30).run(get_images, ignore_exceptions=True, unpack_objects=True)
-
-    if not group_as_builder:
-        containers = list(itertools.chain.from_iterable(containers.values()))
-        images = list(itertools.chain.from_iterable(images.values()))
-
-    return dict(containers=containers, images=images)
+    return dict(containers=containers_list, images=images_list)
 
 
 def aws_tags_to_dict(tags_list):
