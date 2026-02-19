@@ -18,6 +18,7 @@ import random
 import logging
 import time
 import uuid
+from concurrent.futures import TimeoutError
 from functools import cached_property
 from typing import Any, List, Literal
 
@@ -408,9 +409,42 @@ def wait_for_extended_operation(
         set for the `operation`.
 
         In case of an operation taking longer than `timeout` seconds to complete,
-        a `concurrent.futures.TimeoutError` will be raised.
+        a `concurrent.futures.TimeoutError` will be raised with enhanced error information.
     """
-    result = operation.result(timeout=timeout)
+    try:
+        result = operation.result(timeout=timeout)
+    except TimeoutError as exc:
+        # Extract operation details for better error reporting
+        error_details = [
+            f"Operation timed out after {timeout} seconds",
+            f"Operation: {verbose_name}",
+            f"Operation ID: {operation.name}",
+        ]
+
+        # Add operation status if available
+        if hasattr(operation, "status"):
+            error_details.append(f"Status: {operation.status}")
+
+        # Add error information if available
+        if hasattr(operation, "error_code") and operation.error_code:
+            error_details.append(f"Error Code: {operation.error_code}")
+        if hasattr(operation, "error_message") and operation.error_message:
+            error_details.append(f"Error Message: {operation.error_message}")
+
+        # Add target information if available
+        if hasattr(operation, "target_link"):
+            error_details.append(f"Target: {operation.target_link}")
+
+        # Add operation type if available
+        if hasattr(operation, "operation_type"):
+            error_details.append(f"Operation Type: {operation.operation_type}")
+
+        # Log all collected details
+        error_msg = "\n  ".join(error_details)
+        LOGGER.error("Extended operation timeout details:\n  %s", error_msg)
+
+        # Raise TimeoutError with enhanced message
+        raise TimeoutError(f"{verbose_name} timed out. {error_msg}") from exc
 
     if operation.error_code:
         LOGGER.debug("Error during %s: [Code: %s]: %s", verbose_name, operation.error_code, operation.error_message)
