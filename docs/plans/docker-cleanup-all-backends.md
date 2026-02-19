@@ -43,10 +43,10 @@ Docker cleanup currently only runs when `cluster_backend` is "docker" or empty s
 - Add INFO-level logging for each container/image cleaned (e.g., "Cleaned Docker container: <name>")
 
 **Definition of Done**:
-- [ ] Condition changed to run for all backends except k8s-local
-- [ ] Comment added explaining rationale
-- [ ] Docker cleanup runs for aws/azure/gce test runs
-- [ ] INFO-level logging added for each resource cleaned
+- [x] Condition changed to run for all backends except k8s-local
+- [x] Comment added explaining rationale
+- [x] Docker cleanup runs for aws/azure/gce test runs
+- [x] INFO-level logging added for each resource cleaned
 
 **Dependencies**: None
 
@@ -63,10 +63,10 @@ Docker cleanup currently only runs when `cluster_backend` is "docker" or empty s
 - Update docstring to clarify local-only scanning
 
 **Definition of Done**:
-- [ ] `builder_name` parameter removed from function signature
-- [ ] All callers updated (should be only one in same file)
-- [ ] Docstring updated
-- [ ] No references to `builder_name` remain in function
+- [x] `builder_name` parameter removed from function signature
+- [x] All callers updated (should be only one in same file)
+- [x] Docstring updated
+- [x] No references to `builder_name` remain in function
 
 **Dependencies**: Phase 1 (so tests pass during development)
 
@@ -84,11 +84,11 @@ Docker cleanup currently only runs when `cluster_backend` is "docker" or empty s
 - Update docstring
 
 **Definition of Done**:
-- [ ] Parameters removed from function signature
-- [ ] Direct use of `docker.from_env()` implemented
-- [ ] No builder scanning logic remains
-- [ ] Function works with local Docker daemon only
-- [ ] All callers updated
+- [x] Parameters removed from function signature
+- [x] Direct use of `docker.from_env()` implemented
+- [x] No builder scanning logic remains
+- [x] Function works with local Docker daemon only
+- [x] All callers updated
 
 **Dependencies**: Phase 2
 
@@ -105,9 +105,9 @@ Docker cleanup currently only runs when `cluster_backend` is "docker" or empty s
 - If used elsewhere, document but don't remove
 
 **Definition of Done**:
-- [ ] Usage of `list_clients_docker()` verified across codebase
-- [ ] Function removed if unused, or documented if still needed
-- [ ] Related builder connection helper functions assessed for removal
+- [x] Usage of `list_clients_docker()` verified across codebase
+- [x] Function removed if unused, or documented if still needed
+- [x] Related builder connection helper functions assessed for removal
 
 **Dependencies**: Phase 3
 
