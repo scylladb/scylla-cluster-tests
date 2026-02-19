@@ -51,9 +51,16 @@ class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
     @property
     def client_encryption_options(self) -> Optional[ClientEncryptionOptions]:
         if not self.params.get("client_encrypt"):
-            return None
+            if not self.node.is_client_encrypt:
+                return None
+            # Need to disable if was enabled once, but now disable is requested (not self.params.get("client_encrypt"))
+            # Relevant for clusters where the encryption state changes during the test
+            enable_encryption = False
+        else:
+            enable_encryption = True
+
         return ClientEncryptionOptions(
-            enabled=True,
+            enabled=enable_encryption,
             certificate=str(self._ssl_files_path / CLIENT_FACING_CERTFILE.name),
             keyfile=str(self._ssl_files_path / CLIENT_FACING_KEYFILE.name),
             truststore=str(self._ssl_files_path / CA_CERT_FILE.name),
