@@ -24,7 +24,24 @@
   "enabledManagers": [
     "pep621",
     "github-actions",
-    "helm-values"
+    "helm-values",
+    "custom.regex"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track scylla-doctor versions from GitHub tags",
+      "fileMatch": [
+        "^defaults/.*\\.ya?ml$"
+      ],
+      "matchStrings": [
+        "scylla_doctor_version:\\s*[\"'](?<currentValue>[\\d.]+)[\"']"
+      ],
+      "depNameTemplate": "scylladb/scylla-doctor",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^scylla-doctor-v(?<version>.+)$",
+      "versioningTemplate": "semver-coerced"
+    }
   ],
   "packageRules": [
     {
@@ -61,6 +78,18 @@
       "enabled": true,
       "addLabels": [
         "New Hydra Version"
+      ]
+    },
+    {
+      "matchPackageNames": [
+        "scylladb/scylla-doctor"
+      ],
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "enabled": true,
+      "addLabels": [
+        "scylla-doctor"
       ]
     },
     {
