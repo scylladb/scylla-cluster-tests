@@ -156,13 +156,6 @@ class GceRegion:
                 network=self.network.self_link,
             ),
             Firewall(
-                name=f"{self.SCT_NETWORK_NAME}-allow-vector",
-                direction="INGRESS",
-                allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["15000"])],
-                source_ranges=["0.0.0.0/0"],
-                network=self.network.self_link,
-            ),
-            Firewall(
                 name=f"{self.SCT_NETWORK_NAME}-deny-all",
                 direction="INGRESS",
                 denied=[compute_v1.Denied(I_p_protocol="all")],
