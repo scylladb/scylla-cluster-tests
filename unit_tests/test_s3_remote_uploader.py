@@ -12,6 +12,8 @@ import tarfile
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 from sdcm.utils.common import S3Storage
 
+
+LOGGER = logging.getLogger(__name__)
 # Constants for the test
 TEST_S3_BUCKET = S3Storage.bucket_name
 TEST_S3_KEY_PREFIX = os.environ.get("TEST_S3_KEY_PREFIX", "integration-test/")
@@ -49,10 +51,10 @@ def ssh_docker_server(tmp_path_factory):
         SSH_IMAGE,
     ]
     # Print docker run output for debugging
-    logging.info("Running docker run command: %s", " ".join(cmd))
+    LOGGER.info("Running docker run command: %s", " ".join(cmd))
     docker_run_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    logging.info("docker run stdout: %s", docker_run_result.stdout.decode())
-    logging.info("docker run stderr: %s", docker_run_result.stderr.decode())
+    LOGGER.info("docker run stdout: %s", docker_run_result.stdout.decode())
+    LOGGER.info("docker run stderr: %s", docker_run_result.stderr.decode())
     if docker_run_result.returncode != 0:
         pytest.skip(f"Docker run failed: {docker_run_result.stderr.decode()}")
 
@@ -89,8 +91,8 @@ def ssh_docker_server(tmp_path_factory):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            logging.info(output.stdout.decode().strip())
-            logging.info(output.stderr.decode().strip())
+            LOGGER.info(output.stdout.decode().strip())
+            LOGGER.info(output.stderr.decode().strip())
             if output.returncode == 0:
                 break
         except Exception:  # noqa: BLE001
@@ -153,9 +155,8 @@ def test_upload_remote_files_directly_to_s3(ssh_docker_server, s3_test_key):
     with tempfile.NamedTemporaryFile() as f:
         s3.download_file(TEST_S3_BUCKET, s3_key, f.name)
         # Extract tar.gz and check content
-        logging.info(f.name)
-
+        LOGGER.info(f.name)
         with tarfile.open(f.name, "r:gz") as tar:
-            logging.info(tar.getnames())
+            LOGGER.info(tar.getnames())
             member = tar.getmember("tmp/testfile.bin")
             assert member

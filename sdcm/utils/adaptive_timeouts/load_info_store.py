@@ -299,7 +299,7 @@ class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
         )
         table.add_result(column="node_idx", row=f"#{cycle}", value=result.metrics.get("node_idx"), status=Status.UNSET)
 
-        logging.debug("Submitting adaptive timeout results to Argus: %s", table.as_dict())
+        LOGGER.debug("Submitting adaptive timeout results to Argus: %s", table.as_dict())
         submit_results_to_argus(argus_client, table)
 
     def store(self, metrics: dict[str, Any], operation: str, duration: float, timeout: float, timeout_occurred: bool):
