@@ -28,7 +28,7 @@ class TestClass:
             setattr(self, arg_name, arg_value)
 
     def __str__(self):
-        body = ",".join([f"{attr_name}={repr(attr_value)}" for attr_name, attr_value in self.__dict__.items()])
+        body = ",".join([f"{attr_name}={attr_value!r}" for attr_name, attr_value in self.__dict__.items()])
         return f"<{body}>"
 
     __repr__ = __str__

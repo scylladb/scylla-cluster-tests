@@ -62,7 +62,7 @@ class NemesisElasticSearchPublisher:
             commit_id = ""
             commit_date = ""
             build_id = ""
-        scylla_version = ".".join([version, commit_date, commit_id])
+        scylla_version = f"{version}.{commit_date}.{commit_id}"
         new_nemesis_data = dict(
             test_id=test_data["test_details"]["test_id"],
             job_name=test_data["test_details"]["job_name"],

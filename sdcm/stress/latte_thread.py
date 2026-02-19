@@ -162,7 +162,7 @@ class LatteStressThread(DockerBasedStressThread):
                 except Exception:  # noqa: BLE001
                     if v not in ("true", "false"):
                         processed_v = r"\"%s\"" % v
-                custom_schema_params += " -P {k}={v}".format(k=k, v=processed_v)
+                custom_schema_params += f" -P {k}={processed_v}"
         first_tag_or_op = (find_latte_tags(self.stress_cmd) or [self.stress_operation])[0]
         # NOTE: use superuser creds for the 'latte schema' cmd because test users will only be created with it.
         schema_cmd = f"latte schema {script_name} {ssl_config}{auth_config}{custom_schema_params} -- {hosts}"

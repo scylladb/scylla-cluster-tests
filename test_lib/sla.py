@@ -160,9 +160,7 @@ class ServiceLevel:
 
     def alter(self, new_shares: int = None, new_timeout: str = None, new_workload_type: str = None):
         sla = ServiceLevelAttributes(shares=new_shares, timeout=new_timeout, workload_type=new_workload_type)
-        query = "ALTER SERVICE_LEVEL {service_level_name} {query_string}".format(
-            service_level_name=self.name, query_string=sla.query_string
-        )
+        query = f"ALTER SERVICE_LEVEL {self.name} {sla.query_string}"
         if self.verbose:
             LOGGER.debug("Change service level query: %s", query)
         self.session.execute(query)
@@ -181,7 +179,7 @@ class ServiceLevel:
         self.created = False
 
     def list_service_level(self) -> ServiceLevel | None:
-        query = "LIST SERVICE_LEVEL {}".format(self.name)
+        query = f"LIST SERVICE_LEVEL {self.name}"
         if self.verbose:
             LOGGER.debug("List service level query: %s", query)
         res = self.session.execute(query).all()
@@ -353,10 +351,10 @@ class Role(UserRoleBase):
             if hasattr(self, opt):
                 value = getattr(self, opt)
                 if value:
-                    role_options[opt.replace("_dict", "")] = "'{}'".format(value) if opt == "password" else value
-        role_options_str = " AND ".join(["{} = {}".format(opt, val) for opt, val in role_options.items()])
+                    role_options[opt.replace("_dict", "")] = f"'{value}'" if opt == "password" else value
+        role_options_str = " AND ".join([f"{opt} = {val}" for opt, val in role_options.items()])
         if role_options_str:
-            role_options_str = " WITH {}".format(role_options_str)
+            role_options_str = f" WITH {role_options_str}"
 
         query = f"CREATE ROLE{' IF NOT EXISTS' if if_not_exists else ''} {self.name}{role_options_str}"
         if self.verbose:
@@ -418,11 +416,11 @@ class User(UserRoleBase):
 
     def create(self) -> User:
         user_options_str = "{password}{superuser}".format(
-            password=" PASSWORD '{}'".format(self.password) if self.password else "",
+            password=f" PASSWORD '{self.password}'" if self.password else "",
             superuser="" if self.superuser is None else " SUPERUSER" if self.superuser else " NOSUPERUSER",
         )
         if user_options_str:
-            user_options_str = " WITH {}".format(user_options_str)
+            user_options_str = f" WITH {user_options_str}"
 
         query = f"CREATE USER {self.name}{user_options_str}"
         if self.verbose:

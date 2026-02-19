@@ -36,7 +36,7 @@ def fix_es_mapping(index_name):
     print(res.text)
     res.raise_for_status()
 
-    click.secho("fixed {index_name}".format(index_name=index_name), fg="green")
+    click.secho(f"fixed {index_name}", fg="green")
 
 
 if __name__ == "__main__":

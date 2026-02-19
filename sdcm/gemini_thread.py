@@ -269,7 +269,7 @@ class GeminiStressThread(DockerBasedStressThread):
                 stats["results"].append(res)
                 for err_type in ["write_errors", "read_errors", "errors"]:
                     if res.get(err_type, None):
-                        LOGGER.error("Gemini {} errors: {}".format(err_type, res[err_type]))
+                        LOGGER.error(f"Gemini {err_type} errors: {res[err_type]}")
                         stats["status"] = "FAILED"
                         stats["errors"][err_type] = res[err_type]
         if not stats.get("status"):
@@ -284,7 +284,7 @@ class GeminiStressThread(DockerBasedStressThread):
             results = json.loads(json_str)
 
         except Exception as details:  # noqa: BLE001
-            LOGGER.error("Invalid json document {}".format(details))
+            LOGGER.error(f"Invalid json document {details}")
 
         return results.get("result")
 

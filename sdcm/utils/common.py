@@ -112,7 +112,7 @@ def deprecation(message):
 
 def _remote_get_hash(remoter, file_path):
     try:
-        result = remoter.run("md5sum {}".format(file_path), verbose=True)
+        result = remoter.run(f"md5sum {file_path}", verbose=True)
         return result.stdout.strip().split()[0]
     except Exception as details:  # noqa: BLE001
         LOGGER.error(str(details))
@@ -120,7 +120,7 @@ def _remote_get_hash(remoter, file_path):
 
 
 def _remote_get_file(remoter, src, dst, user_agent=None):
-    cmd = "curl -L {} -o {}".format(src, dst)
+    cmd = f"curl -L {src} -o {dst}"
     if user_agent:
         cmd += " --user-agent %s" % user_agent
     cmd += f" && chmod 644 {dst}"
@@ -222,7 +222,7 @@ def find_file_under_sct_dir(filename: str, sub_folder: str = None):
         elif sub_folder in str(profile_file_path.parent):
             return str(profile_file_path)
 
-    raise FileNotFoundError(f"User profile file {filename} not found under {str(sct_path)}")
+    raise FileNotFoundError(f"User profile file {filename} not found under {sct_path!s}")
 
 
 def verify_scylla_repo_file(content, is_rhel_like=True):
@@ -250,7 +250,7 @@ def verify_scylla_repo_file(content, is_rhel_like=True):
                 valid_prefix = True
                 break
         LOGGER.debug(line)
-        assert valid_prefix, "Repository content has invalid line: {}".format(line)
+        assert valid_prefix, f"Repository content has invalid line: {line}"
 
 
 class S3Storage:
@@ -285,17 +285,15 @@ class S3Storage:
     def generate_url(self, file_path, dest_dir=""):
         bucket_name = self.bucket_name
         file_name = os.path.basename(os.path.normpath(file_path))
-        return "https://{bucket_name}.s3.amazonaws.com/{dest_dir}/{file_name}".format(
-            dest_dir=dest_dir, file_name=file_name, bucket_name=bucket_name
-        )
+        return f"https://{bucket_name}.s3.amazonaws.com/{dest_dir}/{file_name}"
 
     def upload_file(self, file_path, dest_dir="", public=True):
         s3_url = self.generate_url(file_path, dest_dir)
-        s3_obj = "{}/{}".format(dest_dir, os.path.basename(file_path))
+        s3_obj = f"{dest_dir}/{os.path.basename(file_path)}"
         try:
-            LOGGER.info("Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url))
+            LOGGER.info(f"Uploading '{file_path}' to {s3_url}")
             self._bucket.upload_file(Filename=file_path, Key=s3_obj, Config=self.transfer_config)
-            LOGGER.info("Uploaded to {0}".format(s3_url))
+            LOGGER.info(f"Uploaded to {s3_url}")
 
             for user, canonical_id in KeyStore().get_acl_grantees().items():
                 LOGGER.info("Setting ACL for user %s", user)
@@ -366,14 +364,14 @@ class S3Storage:
             except requests.exceptions.RequestException as exc:
                 raise RuntimeError(f"Failed to communicate with Argus to get S3 download link: {exc}") from exc
 
-        key_name = link.replace("https://{0.bucket_name}.s3.amazonaws.com/".format(self), "")
+        key_name = link.replace(f"https://{self.bucket_name}.s3.amazonaws.com/", "")
         file_name = os.path.basename(key_name)
 
         if not file_name:
             raise RuntimeError(f"Invalid S3 link: could not extract file name from {link}")
 
         try:
-            LOGGER.info("Downloading {0} from {1}".format(key_name, self.bucket_name))
+            LOGGER.info(f"Downloading {key_name} from {self.bucket_name}")
             self._bucket.download_file(
                 Key=key_name, Filename=os.path.join(dst_dir, file_name), Config=self.transfer_config
             )
@@ -645,7 +643,7 @@ def list_instances_aws(
         custom_filter = []
         if tags_dict:
             custom_filter = [
-                {"Name": "tag:{}".format(key), "Values": value if isinstance(value, list) else [value]}
+                {"Name": f"tag:{key}", "Values": value if isinstance(value, list) else [value]}
                 for key, value in tags_dict.items()
             ]
         response = client.describe_instances(Filters=custom_filter)
@@ -707,7 +705,7 @@ def list_instances_aws(
         total_items = sum([len(value) for _, value in instances.items()])
 
     if verbose:
-        LOGGER.info("Found total of {} instances.".format(total_items))
+        LOGGER.info(f"Found total of {total_items} instances.")
 
     return instances
 
@@ -734,7 +732,7 @@ def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False
         custom_filter = []
         if tags_dict:
             custom_filter = [
-                {"Name": "tag:{}".format(key), "Values": value if isinstance(value, list) else [value]}
+                {"Name": f"tag:{key}", "Values": value if isinstance(value, list) else [value]}
                 for key, value in tags_dict.items()
             ]
         response = client.describe_addresses(Filters=custom_filter)
@@ -774,7 +772,7 @@ def list_test_security_groups(tags_dict=None, region_name=None, group_as_region=
         time.sleep(random.random())
         client: EC2Client = boto3.client("ec2", region_name=region)
         custom_filter = [
-            {"Name": "tag:{}".format(key), "Values": value if isinstance(value, list) else [value]}
+            {"Name": f"tag:{key}", "Values": value if isinstance(value, list) else [value]}
             for key, value in tags_dict.items()
             if key != "NodeType"
         ]
@@ -2009,7 +2007,7 @@ def download_dir_from_cloud(url, dst_dir=None, skip_if_dst_dir_exists=True):
     parsed = urlparse(url)
     LOGGER.info("Downloading [%s] to [%s]", url, dst_dir)
     if os.path.isdir(dst_dir) and os.listdir(dst_dir) and skip_if_dst_dir_exists:
-        LOGGER.warning("[{}] already exists, skipping download".format(dst_dir))
+        LOGGER.warning(f"[{dst_dir}] already exists, skipping download")
     elif url.startswith("s3://"):
         s3_download_dir(parsed.hostname, parsed.path, dst_dir)
     elif url.startswith("gs://"):
@@ -2017,7 +2015,7 @@ def download_dir_from_cloud(url, dst_dir=None, skip_if_dst_dir_exists=True):
     elif os.path.isdir(url):
         dst_dir = url
     else:
-        raise ValueError("Unsupported url schema or non-existing directory [{}]".format(url))
+        raise ValueError(f"Unsupported url schema or non-existing directory [{url}]")
     if not dst_dir.endswith("/"):
         dst_dir += "/"
     LOGGER.info("Finished downloading [%s]", url)
@@ -2164,7 +2162,7 @@ def get_builder_by_test_id(test_id):
 
         LOGGER.info("Search on %s", builder["name"])
         result = remoter.run(
-            "find {where} -name test_id | xargs grep -rl {test_id}".format(where=base_path_on_builder, test_id=test_id),
+            f"find {base_path_on_builder} -name test_id | xargs grep -rl {test_id}",
             ignore_status=True,
             verbose=False,
         )
@@ -2214,11 +2212,11 @@ def get_post_behavior_actions(config):
 
 def search_test_id_in_latest(logdir):
     test_id = None
-    result = LocalCmdRunner().run("cat {0}/latest/test_id".format(logdir), ignore_status=True)
+    result = LocalCmdRunner().run(f"cat {logdir}/latest/test_id", ignore_status=True)
     if not result.exited and result.stdout:
         test_id = result.stdout.strip()
-        LOGGER.info("Found latest test_id: {}".format(test_id))
-        LOGGER.info("Collect logs for test-run with test-id: {}".format(test_id))
+        LOGGER.info(f"Found latest test_id: {test_id}")
+        LOGGER.info(f"Collect logs for test-run with test-id: {test_id}")
     else:
         LOGGER.error("test_id not found. Exit code: %s; Error details %s", result.exited, result.stderr)
     return test_id
@@ -2411,9 +2409,7 @@ class PageFetcher:
         """
 
         def error_message(msg):
-            return "{}. Requested: {}; retrieved: {}; empty retrieved {}".format(
-                msg, self.requested_pages, self.retrieved_pages, self.retrieved_empty_pages
-            )
+            return f"{msg}. Requested: {self.requested_pages}; retrieved: {self.retrieved_pages}; empty retrieved {self.retrieved_empty_pages}"
 
         def missing_pages():
             pages = self.requested_pages - (self.retrieved_pages + self.retrieved_empty_pages)
@@ -2488,7 +2484,7 @@ def reach_enospc_on_node(target_node):
         free_space_size = int(result.stdout.split()[3])
         occupy_space_size = int(free_space_size * 90 / 100)
         occupy_space_cmd = f"fallocate -l {occupy_space_size}K /var/lib/scylla/occupy_90percent.{time.time()}"
-        LOGGER.debug("Cost 90% free space on /var/lib/scylla/ by {}".format(occupy_space_cmd))
+        LOGGER.debug(f"Cost 90% free space on /var/lib/scylla/ by {occupy_space_cmd}")
         try:
             target_node.remoter.sudo(occupy_space_cmd, verbose=True)
         except Exception as details:  # noqa: BLE001
@@ -2501,7 +2497,7 @@ def reach_enospc_on_node(target_node):
 
 
 def clean_enospc_on_node(target_node, sleep_time):
-    LOGGER.debug("Sleep {} seconds before releasing space to scylla".format(sleep_time))
+    LOGGER.debug(f"Sleep {sleep_time} seconds before releasing space to scylla")
     time.sleep(sleep_time)
 
     LOGGER.debug("Delete occupy_90percent file to release space to scylla-server")
@@ -2639,7 +2635,7 @@ def shorten_cluster_name(name: str, max_string_len: int):
         max_alpha_chunk_size -= 1
     if max_alpha_chunk_size == 0:
         return name
-    return "-".join([current, last_chunk])
+    return f"{current}-{last_chunk}"
 
 
 def download_from_github(repo: str, tag: str, dst_dir: str):
@@ -2905,7 +2901,7 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
         custom_filter = []
         if tags_dict:
             custom_filter = [
-                {"Name": "tag:{}".format(key), "Values": value if isinstance(value, list) else [value]}
+                {"Name": f"tag:{key}", "Values": value if isinstance(value, list) else [value]}
                 for key, value in tags_dict.items()
             ]
         response = client.describe_placement_groups(Filters=custom_filter)
@@ -2932,7 +2928,7 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
         total_items = sum([len(value) for _, value in placement_groups.items()])
 
     if verbose:
-        LOGGER.info("Found total of {} instances.".format(total_items))
+        LOGGER.info(f"Found total of {total_items} instances.")
 
     return placement_groups
 

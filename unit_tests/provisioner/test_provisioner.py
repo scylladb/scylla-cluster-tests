@@ -54,7 +54,7 @@ def image_type(backend):
 
 @pytest.fixture(scope="module")
 def test_id():
-    return f"{str(uuid.uuid4())}"
+    return f"{uuid.uuid4()!s}"
 
 
 @pytest.fixture(scope="module")

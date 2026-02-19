@@ -112,8 +112,7 @@ def convert_tags_to_aws_format(tags: TagsType) -> List[Dict[str, str]]:
 
 def convert_tags_to_filters(tags: TagsType) -> List[Dict[str, str]]:
     return [
-        {"Name": "tag:{}".format(name), "Values": value if isinstance(value, list) else [value]}
-        for name, value in tags.items()
+        {"Name": f"tag:{name}", "Values": value if isinstance(value, list) else [value]} for name, value in tags.items()
     ]
 
 

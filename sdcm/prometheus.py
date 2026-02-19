@@ -60,7 +60,7 @@ def start_metrics_server():
         port = httpd.server_port
         ip = get_my_ip()
         LOGGER.info("prometheus API server running on port: %s", port)
-        return "{}:{}".format(ip, port)
+        return f"{ip}:{port}"
     except Exception as ex:  # noqa: BLE001
         LOGGER.error("Cannot start local http metrics server: %s", ex)
 

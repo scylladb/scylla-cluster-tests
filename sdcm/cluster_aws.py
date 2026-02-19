@@ -631,7 +631,7 @@ class AWSNode(cluster.BaseNode):
         return interfaces
 
     def init(self):
-        LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
+        LOGGER.debug(f"Waiting until instance {self._instance} starts running...")
         self._instance_wait_safe(self._instance.wait_until_running)
 
         if not self.test_config.REUSE_CLUSTER:
@@ -1014,7 +1014,7 @@ class AWSNode(cluster.BaseNode):
             tc_command = LOCAL_CMD_RUNNER.run("tcdel eth1 --tc-command", ignore_status=True).stdout
             self.remoter.run('sudo bash -cxe "%s"' % tc_command, ignore_status=True)
         else:
-            tc_command = LOCAL_CMD_RUNNER.run("tcset eth1 {} --tc-command".format(tcconfig_params)).stdout
+            tc_command = LOCAL_CMD_RUNNER.run(f"tcset eth1 {tcconfig_params} --tc-command").stdout
             self.remoter.run('sudo bash -cxe "%s"' % tc_command)
 
     def install_traffic_control(self):
@@ -1083,7 +1083,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         if not ec2_user_data:
             if self._ec2_user_data and isinstance(self._ec2_user_data, str):
                 ec2_user_data = re.sub(
-                    r"(--totalnodes\s)(\d*)(\s)", r"\g<1>{}\g<3>".format(len(self.nodes) + count), self._ec2_user_data
+                    r"(--totalnodes\s)(\d*)(\s)", rf"\g<1>{len(self.nodes) + count}\g<3>", self._ec2_user_data
                 )
             elif self._ec2_user_data and isinstance(self._ec2_user_data, dict):
                 ec2_user_data = self._ec2_user_data

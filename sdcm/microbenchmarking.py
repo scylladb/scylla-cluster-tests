@@ -64,7 +64,7 @@ class LargeNumberOfDatasetsException(Exception):
         self.message = msg
 
     def __str__(self):
-        return "MBM: {0.message}".format(self)
+        return f"MBM: {self.message}"
 
 
 class EmptyResultFolder(Exception):
@@ -73,7 +73,7 @@ class EmptyResultFolder(Exception):
         self.message = msg
 
     def __str__(self):
-        return "MBM: {0.message}".format(self)
+        return f"MBM: {self.message}"
 
 
 class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
@@ -336,14 +336,14 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 self.log.info(fullpath)
                 if os.path.dirname(fullpath).endswith("perf_fast_forward_output") and len(subdirs) > 1:
                     raise LargeNumberOfDatasetsException(
-                        "Test set {} has more than one datasets: {}".format(os.path.basename(fullpath), subdirs)
+                        f"Test set {os.path.basename(fullpath)} has more than one datasets: {subdirs}"
                     )
 
                 if not subdirs:
                     dataset_name = os.path.basename(fullpath)
-                    self.log.info("Dataset name: {}".format(dataset_name))
+                    self.log.info(f"Dataset name: {dataset_name}")
                     dirname = os.path.basename(os.path.dirname(fullpath))
-                    self.log.info("Test set: {}".format(dirname))
+                    self.log.info(f"Test set: {dirname}")
                     for filename in files:
                         if filename.startswith("."):
                             continue
@@ -387,7 +387,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             self.log.info("Nothing to exclude")
             return
 
-        self.log.info("Exclude testrun {} from results".format(testrun_id))
+        self.log.info(f"Exclude testrun {testrun_id} from results")
         filter_path = (
             "hits.hits._id",  # '2018-04-02_18:36:47_large-partition-skips_[64-32.1)'
             "hits.hits._source.hostname",  # 'monster'
@@ -417,7 +417,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             self.log.info("Nothing to exclude")
             return
 
-        self.log.info("Exclude test id {} from results".format(test_id))
+        self.log.info(f"Exclude test id {test_id} from results")
         doc = self._es.get_doc(index=self._es_index, doc_id=test_id)
         if doc:
             self._es.update_doc(index=self._es_index, doc_id=doc["_id"], body={"excluded": True})
@@ -457,7 +457,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "hits.hits._source.hostname",
             "hits.hits._source.versions.scylla-server.run_date_time",
         )
-        self.log.info("Exclude tests before date {}".format(date))
+        self.log.info(f"Exclude tests before date {date}")
         results = self._es.search(
             index=self._es_index,
             filter_path=filter_path,
@@ -491,20 +491,18 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "hits.hits._source.test_run_date",
         )
 
-        self.log.info("Exclude tests by commit id #{}".format(commit_id))
+        self.log.info(f"Exclude tests by commit id #{commit_id}")
 
         results = self._es.search(
             index=self._es_index,
             filter_path=filter_path,
             size=self._limit,
-            q="hostname:'{}' \
-                                  AND versions.scylla-server.version:{}*\
-                                  AND versions.scylla-server.commit_id:'{}'".format(
-                self.hostname, self.db_version[:3], commit_id
-            ),
+            q=f"hostname:'{self.hostname}' \
+                                  AND versions.scylla-server.version:{self.db_version[:3]}*\
+                                  AND versions.scylla-server.commit_id:'{commit_id}'",
         )
         if not results:
-            self.log.info("There is no testrun results for commit id #{}".format(commit_id))
+            self.log.info(f"There is no testrun results for commit id #{commit_id}")
             return
 
         for doc in results["hits"]["hits"]:
