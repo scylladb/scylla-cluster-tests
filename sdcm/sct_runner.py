@@ -1960,7 +1960,7 @@ def _manage_runner_keep_tag_value(
 
     if sct_runner_info.logs_collected:
         if not dry_run:
-            sct_runner_info.sct_runner_class.set_tags(sct_runner_info, {"keep": "0", "keep-action": "terminate"})
+            sct_runner_info.sct_runner_class.set_tags(sct_runner_info, {"keep": "0", "keep_action": "terminate"})
         sct_runner_info.keep = 0
         sct_runner_info.keep_action = "terminate"
         return sct_runner_info
