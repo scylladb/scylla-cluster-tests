@@ -53,6 +53,7 @@ instance_type_loader: 'c5n.4xlarge'
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '016'
 nemesis_interval: 30
+nemesis_during_prepare: false
 
 user_prefix: 'longevity-large-partitions-200k-pks-4d'
 
