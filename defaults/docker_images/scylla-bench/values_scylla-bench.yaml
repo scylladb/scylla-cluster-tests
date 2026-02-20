@@ -1,2 +1,8 @@
 scylla-bench:
+<<<<<<< HEAD
   image: scylladb/scylla-bench:0.3.3
+||||||| parent of fcc734436 (chore(deps): update scylladb/scylla-bench docker tag to v1)
+  image: scylladb/scylla-bench:0.3.6
+=======
+  image: scylladb/scylla-bench:1.0.0
+>>>>>>> fcc734436 (chore(deps): update scylladb/scylla-bench docker tag to v1)
