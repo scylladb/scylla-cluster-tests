@@ -98,7 +98,7 @@ def major_compaction_nodes(cluster, keyspace: str, table: str):
         )
         for node in cluster.data_nodes
     ]
-    ParallelObject(objects=triggers, timeout=3000).call_objects()
+    ParallelObject(objects=triggers, timeout=7200).call_objects()
 
 
 def clear_snapshot_nodes(cluster):
