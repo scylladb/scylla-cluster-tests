@@ -362,9 +362,11 @@ class NemesisRunner:
                     self.num_deletions_factor = 1
                     break
 
-    def use_nemesis_seed(self):
+    @property
+    def random(self) -> random.Random:
         if self.nemesis_seed:
-            random.seed(self.nemesis_seed)
+            return random.Random(self.nemesis_seed)
+        return random.Random()
 
     def update_stats(self, disrupt, status=True, data=None):
         if not data:
@@ -2016,7 +2018,7 @@ class NemesisRunner:
         self.log.debug(f"nemesis stack BEFORE SHUFFLE is {[nemesis.__class__.__name__ for nemesis in disruption_list]}")
         nemesis_multiply_factor = nemesis_multiply_factor or self.cluster.params.get("nemesis_multiply_factor") or 1
         multipled_disruption_list = disruption_list * nemesis_multiply_factor
-        random.Random(self.nemesis_seed).shuffle(multipled_disruption_list)
+        self.random.shuffle(multipled_disruption_list)
         self.log.info(
             f"List of Nemesis to execute: {[nemesis.__class__.__name__ for nemesis in multipled_disruption_list]}"
         )
@@ -3248,19 +3250,18 @@ class NemesisRunner:
             # The restore should not take more than 5% of the space total space in /var/lib/scylla
             assert fitting_snapshot_sizes, "There's not enough space for any snapshot restoration"
 
-            self.use_nemesis_seed()
-            chosen_snapshot_size = random.choice(fitting_snapshot_sizes)
+            chosen_snapshot_size = self.random.choice(fitting_snapshot_sizes)
             all_snapshots_per_region = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"][region]
 
             if self.cluster.nodes[0].is_enterprise:
-                snapshot_tag = random.choice(list(all_snapshots_per_region.keys()))
+                snapshot_tag = self.random.choice(list(all_snapshots_per_region.keys()))
             else:
                 oss_snapshots = [
                     snapshot_key
                     for snapshot_key, snapshot_value in all_snapshots_per_region.items()
                     if snapshot_value["scylla_product"] == "oss"
                 ]
-                snapshot_tag = random.choice(oss_snapshots)
+                snapshot_tag = self.random.choice(oss_snapshots)
 
             snapshot_info = all_snapshots_per_region[snapshot_tag]
             snapshot_info.update(
@@ -5938,7 +5939,7 @@ class NemesisRunner:
         new_znode = self._add_and_init_new_cluster_nodes(count=1, is_zero_node=True)[0]
         self.log.debug("Run with zero-token node %s for %ds", new_znode.name, duration_with_znode)
         time.sleep(duration_with_znode)
-        znode = random.choice([node for node in self.cluster.zero_nodes if node.dc_idx == self.target_node.dc_idx])
+        znode = self.random.choice([node for node in self.cluster.zero_nodes if node.dc_idx == self.target_node.dc_idx])
         self.decommission_nodes(nodes=[znode])
 
     def disrupt_serial_restart_elected_topology_coordinator(self):
@@ -5948,10 +5949,9 @@ class NemesisRunner:
         if not self.target_node.raft.is_consistent_topology_changes_enabled:
             raise UnsupportedNemesis("Consistent topology changes feature is disabled")
 
-        self.use_nemesis_seed()
-        num_of_restarts = random.randint(1, len(self.cluster.nodes))
+        num_of_restarts = self.random.randint(1, len(self.cluster.nodes))
         self.log.debug("Number of serial restart of topology coordinator: %s", num_of_restarts)
-        election_wait_timeout = random.choice([5, 10, 15])
+        election_wait_timeout = self.random.choice([5, 10, 15])
         self.log.debug("Wait new topology coordinator election timeout: %s", election_wait_timeout)
         for num_of_restart in range(num_of_restarts):
             with self.node_allocator.run_nemesis(nemesis_label="SearchCoordinator") as verification_node:
