@@ -1156,3 +1156,11 @@ class ModifyTableSpeculativeRetryMonkey(NemesisBaseClass):
 
     def disrupt(self):
         self.runner.disrupt_modify_table_speculative_retry()
+
+
+@target_data_nodes
+class AbortDecommissionNemesis(NemesisBaseClass):
+    disruptive = True
+
+    def disrupt(self):
+        self.runner.disrupt_abort_decommission()
