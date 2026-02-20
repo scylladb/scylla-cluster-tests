@@ -42,37 +42,79 @@ latte_schema_parameters:
 
 # Phase 1: Populate all 130 tables (72 simple + 58 UDT) with initial data
 prepare_write_cmd:
+  # - >-
+  #   latte run --tag populate -f populate_all
+  #   --threads=10 --concurrency=1 --connections=1 --rate=5000 --consistency=LOCAL_QUORUM
+  #   --warmup=0 --retries=3 --retry-interval=1s --request-timeout 60 --sampling 5s
+  #   --validation-strategy=ignore --start-cycle=0
+  #   -d 1000
+  #   -P row_count_per_table=10
+  #   -P gauss_mean=0
+  #   -P gauss_stddev=0
+  #   -P skip_write_errors=true
+  #   data_dir/latte/scylladb_682.rn
+  # - >-
+  #   latte run --tag populate -f populate_all
+  #   --threads=10 --concurrency=1 --connections=1 --rate=5000 --consistency=LOCAL_QUORUM
+  #   --warmup=0 --retries=3 --retry-interval=1s --request-timeout 60 --sampling 5s
+  #   --validation-strategy=ignore --start-cycle=100000000
+  #   -d 1000
+  #   -P row_count_per_table=10
+  #   -P gauss_mean=0
+  #   -P gauss_stddev=0
+  #   -P skip_write_errors=true
+  #   data_dir/latte/scylladb_682.rn
+  # - >-
+  #   latte run --tag populate -f populate_all
+  #   --threads=10 --concurrency=1 --connections=1 --rate=5000 --consistency=LOCAL_QUORUM
+  #   --warmup=0 --retries=3 --retry-interval=1s --request-timeout 60 --sampling 5s
+  #   --validation-strategy=ignore --start-cycle=100000
+  #   -d 1000
+  #   -P row_count_per_table=10
+  #   -P gauss_mean=0
+  #   -P gauss_stddev=0
+  #   -P skip_write_errors=true
+  #   data_dir/latte/scylladb_682.rn
+    # Mixed CRUD workload across all 130 tables (write:2, read:5, update:1, delete:1)
   - >-
-    latte run --tag populate -f populate_all
-    --threads=10 --concurrency=1 --connections=1 --rate=5000 --consistency=LOCAL_QUORUM
-    --warmup=0 --retries=3 --retry-interval=1s --request-timeout 60 --sampling 5s
-    --validation-strategy=ignore --start-cycle=0
+    latte run --tag mixed-crud -f write_all
+    --threads=10 --concurrency=1 --connections=1 --consistency=LOCAL_QUORUM --rate=2500
+    --warmup=0 --retries=3 --retry-interval=5s,15s --request-timeout 600 --sampling 5s
+    --validation-strategy=ignore
     -d 1000
-    -P row_count_per_table=10
-    -P gauss_mean=0
-    -P gauss_stddev=0
+    -P row_count_per_table=1000
+    -P gauss_mean=100
+    -P gauss_stddev=20000
+    -P data_validation=false
     -P skip_write_errors=true
     data_dir/latte/scylladb_682.rn
+
+  # Payment workflow simulation (3-table correlated writes: transactions → settlements → receipts)
   - >-
-    latte run --tag populate -f populate_all
-    --threads=10 --concurrency=1 --connections=1 --rate=5000 --consistency=LOCAL_QUORUM
-    --warmup=0 --retries=3 --retry-interval=1s --request-timeout 60 --sampling 5s
-    --validation-strategy=ignore --start-cycle=100000000
+    latte run --tag payment-workflow -f payment_workflow
+    --threads=10 --concurrency=1 --connections=1 --consistency=LOCAL_QUORUM --rate=2500
+    --warmup=0 --retries=3 --retry-interval=5s,15s --request-timeout 600 --sampling 5s
+    --validation-strategy=ignore
     -d 1000
-    -P row_count_per_table=10
-    -P gauss_mean=0
-    -P gauss_stddev=0
+    -P row_count_per_table=1000
+    -P gauss_mean=1000
+    -P gauss_stddev=20000
+    -P data_validation=false
     -P skip_write_errors=true
     data_dir/latte/scylladb_682.rn
+
+  # Windowed write/read/delete with shifting table windows
+  # 40 tables active at once, shifting by 5 tables every 10 seconds
   - >-
-    latte run --tag populate -f populate_all
-    --threads=10 --concurrency=1 --connections=1 --rate=5000 --consistency=LOCAL_QUORUM
-    --warmup=0 --retries=3 --retry-interval=1s --request-timeout 60 --sampling 5s
-    --validation-strategy=ignore --start-cycle=100000
+    latte run --tag payment-workflow -f payment_workflow
+    --threads=10 --concurrency=1 --connections=1 --consistency=LOCAL_QUORUM --rate=2500
+    --warmup=0 --retries=3 --retry-interval=5s,15s --request-timeout 600 --sampling 5s
+    --validation-strategy=ignore
     -d 1000
-    -P row_count_per_table=10
-    -P gauss_mean=0
-    -P gauss_stddev=0
+    -P row_count_per_table=1000
+    -P gauss_mean=10000
+    -P gauss_stddev=20000
+    -P data_validation=false
     -P skip_write_errors=true
     data_dir/latte/scylladb_682.rn
 
@@ -84,13 +126,13 @@ prepare_write_cmd:
 stress_cmd:
   # Mixed CRUD workload across all 130 tables (write:2, read:5, update:1, delete:1)
   - >-
-    latte run --tag mixed-crud -f write_all:2 -f read_all:5 -f update_all:1 -f delete_all:1
-    --threads=14 --concurrency=4 --connections=1 --consistency=LOCAL_QUORUM --rate=100
-    --warmup=0 --retries=3 --retry-interval=5s --request-timeout 60 --sampling 5s
-    --validation-strategy=retry
+    latte run --tag mixed-crud -f write_all:3 -f read_all:5 -f update_all:1 -f delete_all:1
+    --threads=14 --concurrency=4 --connections=1 --consistency=LOCAL_QUORUM --rate=1000
+    --warmup=0 --retries=3 --retry-interval=5s,15s --request-timeout 600 --sampling 5s
+    --validation-strategy=ignore
     -d 36000s
     -P row_count_per_table=20000
-    -P gauss_mean=100000
+    -P gauss_mean=100
     -P gauss_stddev=20000
     -P data_validation=false
     -P skip_write_errors=true
@@ -99,12 +141,12 @@ stress_cmd:
   # Payment workflow simulation (3-table correlated writes: transactions → settlements → receipts)
   - >-
     latte run --tag payment-workflow -f payment_workflow:1 -f read_all:3
-    --threads=14 --concurrency=4 --connections=1 --consistency=LOCAL_QUORUM --rate=100
-    --warmup=0 --retries=3 --retry-interval=5s --request-timeout 60 --sampling 5s
-    --validation-strategy=retry
+    --threads=14 --concurrency=4 --connections=1 --consistency=LOCAL_QUORUM --rate=1000
+    --warmup=0 --retries=3 --retry-interval=5s,15s --request-timeout 600 --sampling 5s
+    --validation-strategy=ignore
     -d 36000s
     -P row_count_per_table=20000
-    -P gauss_mean=100000
+    -P gauss_mean=1000
     -P gauss_stddev=20000
     -P data_validation=false
     -P skip_write_errors=true
@@ -114,16 +156,13 @@ stress_cmd:
   # 40 tables active at once, shifting by 5 tables every 10 seconds
   - >-
     latte run --tag windowed -f write_windowed:2 -f read_windowed:5 -f delete_windowed:1
-    --threads=14 --concurrency=4 --connections=1 --consistency=LOCAL_QUORUM --rate=100
-    --warmup=0 --retries=3 --retry-interval=5s --request-timeout 60 --sampling 5s
-    --validation-strategy=retry
+    --threads=14 --concurrency=4 --connections=1 --consistency=LOCAL_QUORUM --rate=1000
+    --warmup=0 --retries=3 --retry-interval=5s,15s --request-timeout 600 --sampling 5s
+    --validation-strategy=ignore
     -d 36000s
-    -P row_count_per_table=20000
-    -P gauss_mean=100000
+    -P row_count_per_table=10000
+    -P gauss_mean=10000
     -P gauss_stddev=20000
-    -P table_group_size=40
-    -P table_shift_count=5
-    -P table_shift_interval_s=10
     -P data_validation=false
     -P skip_write_errors=true
     data_dir/latte/scylladb_682.rn
