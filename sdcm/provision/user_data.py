@@ -111,7 +111,9 @@ class UserDataBuilder:
         user_data_yaml = yaml.dump(
             data={"packages": list(packages), "write_files": scripts, "runcmd": runcmds}
             | self.yum_repos
-            | self.apt_configuration
+            | self.apt_configuration,
+            width=float("inf"),  # prevent YAML from breaking long lines with newlines
+            default_flow_style=False,  # Do not use JSON-like brackets anywhere, classic YAML format
         )
         return "#cloud-config\n" + user_data_yaml
 
