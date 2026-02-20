@@ -304,6 +304,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 "log_to_syslog": None,
                 "logger_log_level": None,
                 "lsa_reclamation_step": None,
+                "maintenance_socket": "ignore",
                 "max_clustering_key_restrictions_per_query": None,
                 "max_hint_window_in_ms": None,
                 "max_hints_delivery_threads": None,
