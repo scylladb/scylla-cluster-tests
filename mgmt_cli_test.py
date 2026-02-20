@@ -151,7 +151,14 @@ class ManagerBackupTests(ManagerRestoreTests):
         assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
         )
-        self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, ks_names=ks_names)
+        # Do restore with a task for multiDC clusters, otherwise the test will take a long time
+        restore_with_task = True if self.db_node.test_config.MULTI_REGION else False
+        self.verify_backup_success(
+            mgr_cluster=mgr_cluster,
+            backup_task=backup_task,
+            ks_names=ks_names,
+            restore_data_with_task=restore_with_task,
+        )
         self.run_verification_read_stress(ks_names)
         mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info("finishing test_basic_backup")
@@ -459,7 +466,7 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self.db_cluster.get_cluster_manager()
 
-        rf = self.get_rf_based_on_nodes_number() if len(self.params.region_names) > 1 else 2
+        rf = self.get_rf_based_on_nodes_number() if self.db_node.test_config.MULTI_REGION else 3
         self.create_keyspace_and_basic_table(self.NETWORKSTRATEGY_KEYSPACE_NAME, replication_factor=rf)
 
         self.create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, replication_factor=0)
@@ -595,8 +602,9 @@ class ManagerHealthCheckTests(ManagerTestFunctionsMixIn):
         """
         self.log.info("starting test_healthcheck_change_max_timeout")
 
-        nodes_from_local_dc = self.db_cluster.nodes[:2]
-        nodes_from_distant_dc = self.db_cluster.nodes[2:]
+        nodes_num_per_dc = 3
+        nodes_from_local_dc = self.db_cluster.nodes[:nodes_num_per_dc]
+        nodes_from_distant_dc = self.db_cluster.nodes[nodes_num_per_dc:]
         manager_node = self.monitors.nodes[0]
         mgr_cluster = self.db_cluster.get_cluster_manager()
         try:
