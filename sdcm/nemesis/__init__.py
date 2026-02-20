@@ -359,9 +359,11 @@ class NemesisRunner:
                     self.num_deletions_factor = 1
                     break
 
-    def use_nemesis_seed(self):
+    @property
+    def random(self) -> random.Random:
         if self.nemesis_seed:
-            random.seed(self.nemesis_seed)
+            return random.Random(self.nemesis_seed)
+        return random.Random()
 
     def update_stats(self, disrupt, status=True, data=None):
         if not data:
@@ -2008,7 +2010,7 @@ class NemesisRunner:
         self.log.debug(f"nemesis stack BEFORE SHUFFLE is {[nemesis.__class__.__name__ for nemesis in disruption_list]}")
         nemesis_multiply_factor = nemesis_multiply_factor or self.cluster.params.get("nemesis_multiply_factor") or 1
         multipled_disruption_list = disruption_list * nemesis_multiply_factor
-        random.Random(self.nemesis_seed).shuffle(multipled_disruption_list)
+        self.random.shuffle(multipled_disruption_list)
         self.log.info(
             f"List of Nemesis to execute: {[nemesis.__class__.__name__ for nemesis in multipled_disruption_list]}"
         )
@@ -3240,19 +3242,18 @@ class NemesisRunner:
             # The restore should not take more than 5% of the space total space in /var/lib/scylla
             assert fitting_snapshot_sizes, "There's not enough space for any snapshot restoration"
 
-            self.use_nemesis_seed()
-            chosen_snapshot_size = random.choice(fitting_snapshot_sizes)
+            chosen_snapshot_size = self.random.choice(fitting_snapshot_sizes)
             all_snapshots_per_region = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"][region]
 
             if self.cluster.nodes[0].is_enterprise:
-                snapshot_tag = random.choice(list(all_snapshots_per_region.keys()))
+                snapshot_tag = self.random.choice(list(all_snapshots_per_region.keys()))
             else:
                 oss_snapshots = [
                     snapshot_key
                     for snapshot_key, snapshot_value in all_snapshots_per_region.items()
                     if snapshot_value["scylla_product"] == "oss"
                 ]
-                snapshot_tag = random.choice(oss_snapshots)
+                snapshot_tag = self.random.choice(oss_snapshots)
 
             snapshot_info = all_snapshots_per_region[snapshot_tag]
             snapshot_info.update(
@@ -3861,7 +3862,6 @@ class NemesisRunner:
         self.cluster.wait_all_nodes_un()
 
     def disrupt_network_random_interruptions(self):
-        self.use_nemesis_seed()
         list_of_timeout_options = [10, 60, 120, 300, 500]
         if self._is_it_on_kubernetes():
             self._disrupt_network_random_interruptions_k8s(list_of_timeout_options)
@@ -3883,13 +3883,13 @@ class NemesisRunner:
             self.log.warning("NetworkRandomInterruption won't limit network bandwidth due to lack of monitoring nodes.")
 
         # random packet loss - between 1% - 15%
-        loss_percentage = random.randrange(1, 15)
+        loss_percentage = self.random.randrange(1, 15)
 
         # random packet corruption - between 1% - 15%
-        corrupt_percentage = random.randrange(1, 15)
+        corrupt_percentage = self.random.randrange(1, 15)
 
         # random packet delay - between 1s - 30s
-        delay_in_secs = random.randrange(1, 30)
+        delay_in_secs = self.random.randrange(1, 30)
 
         list_of_tc_options = [
             ("NetworkRandomInterruption_{}pct_loss".format(loss_percentage), "--loss {}%".format(loss_percentage)),
@@ -3907,8 +3907,8 @@ class NemesisRunner:
                 ("NetworkRandomInterruption_{}_limit".format(rate_limit), "--rate {}".format(rate_limit))
             )
 
-        option_name, selected_option = random.choice(list_of_tc_options)
-        wait_time = random.choice(list_of_timeout_options)
+        option_name, selected_option = self.random.choice(list_of_tc_options)
+        wait_time = self.random.choice(list_of_timeout_options)
 
         self.actions_log.info(
             f"Network interruption start on {self.target_node.name}, option: {option_name}, wait time: {wait_time}"
@@ -3939,7 +3939,7 @@ class NemesisRunner:
         self.actions_log.info(f"Network random interruption finished on node {self.target_node.name}")
 
     def _disrupt_network_block_k8s(self, list_of_timeout_options):
-        duration = f"{random.choice(list_of_timeout_options)}s"
+        duration = f"{self.random.choice(list_of_timeout_options)}s"
         experiment = NetworkPacketLossExperiment(self.target_node, duration, probability=100)
         with ignore_raft_topology_cmd_failing():
             with DbNodeLogger(
@@ -4027,7 +4027,7 @@ class NemesisRunner:
         # it will be terminated, choose new seed node
         num_of_seed_nodes = len(self.cluster.seed_nodes)
         if node_to_remove.is_seed and num_of_seed_nodes < 2:
-            new_seed_node = random.choice([n for n in self.cluster.nodes if n is not node_to_remove])
+            new_seed_node = self.random.choice([n for n in self.cluster.nodes if n is not node_to_remove])
             new_seed_node.set_seed_flag(True)
             self.cluster.update_seed_provider()
 
@@ -4152,7 +4152,7 @@ class NemesisRunner:
 
         textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
         textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
-        wait_time = random.choice([10, 60, 120, 300, 500])
+        wait_time = self.random.choice([10, 60, 120, 300, 500])
 
         InfoEvent(
             f"{name} {textual_matching_rule} that belongs to "
@@ -4211,7 +4211,7 @@ class NemesisRunner:
 
         textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
         textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
-        wait_time = random.choice([10, 60, 120, 300, 500])
+        wait_time = self.random.choice([10, 60, 120, 300, 500])
 
         InfoEvent(
             f"{name} {textual_matching_rule} that belongs to "
@@ -4344,7 +4344,7 @@ class NemesisRunner:
             raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
 
         list_of_timeout_options = [10, 60, 120, 300, 500]
-        wait_time = random.choice(list_of_timeout_options)
+        wait_time = self.random.choice(list_of_timeout_options)
         self.log.debug("Taking down eth1 for %dsec", wait_time)
 
         try:
@@ -5127,7 +5127,7 @@ class NemesisRunner:
         if not ks_tables_with_cdc:
             raise UnsupportedNemesis("CDC is not enabled on any table. Skipping")
 
-        ks, table = random.choice(ks_tables_with_cdc).split(".")
+        ks, table = self.random.choice(ks_tables_with_cdc).split(".")
 
         self.log.debug(f"Get table {ks}.{table} cdc extension state")
         with self.cluster.cql_connection_patient(node=self.target_node) as session:
@@ -5135,7 +5135,7 @@ class NemesisRunner:
         self.log.debug(f"table {ks}.{table} cdc extension state: {cdc_settings}")
 
         self.log.debug("Choose random cdc property to toggle")
-        cdc_property = random.choice(cdc.options.get_cdc_settings_names())
+        cdc_property = self.random.choice(cdc.options.get_cdc_settings_names())
         self.log.debug(f"Next cdc property will be changed {cdc_property}")
 
         cdc_settings[cdc_property] = cdc.options.toggle_cdc_property(cdc_property, cdc_settings[cdc_property])
@@ -5153,14 +5153,14 @@ class NemesisRunner:
             self.log.warning("CDC is not enabled on any table. Skipping")
             raise UnsupportedNemesis("CDC is not enabled on any table. Skipping")
 
-        ks, table = random.choice(ks_tables_with_cdc).split(".")
+        ks, table = self.random.choice(ks_tables_with_cdc).split(".")
         self._run_cdc_stressor_tool(ks, table)
 
     def _run_cdc_stressor_tool(self, ks, table):
         cdc_stressor_cmd = self.tester.params.get("stress_cdclog_reader_cmd")
 
         if " -duration" not in cdc_stressor_cmd:
-            read_time = random.randint(5, 20)
+            read_time = self.random.randint(5, 20)
             cdc_stressor_cmd += f" -duration {read_time}m "
 
         cdc_reader_thread = self.tester.run_cdclog_reader_thread(
@@ -5601,7 +5601,7 @@ class NemesisRunner:
             ks_cf_list = self.cluster.get_non_system_ks_cf_list(self.target_node, filter_out_mv=True)
             if not ks_cf_list:
                 raise UnsupportedNemesis("No table found to create index on")
-            ks, cf = random.choice(ks_cf_list).split(".")
+            ks, cf = self.random.choice(ks_cf_list).split(".")
             column = get_random_column_name(
                 session, ks, cf, filter_out_static_columns=True, filter_out_column_types=["counter"]
             )
@@ -5657,7 +5657,7 @@ class NemesisRunner:
         free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
         if not free_nodes:
             raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
-        cql_query_executor_node = random.choice(free_nodes)
+        cql_query_executor_node = self.random.choice(free_nodes)
         with self.node_allocator.nodes_running_nemesis(cql_query_executor_node, self.current_disruption):
             ks_cfs = self.cluster.get_non_system_ks_cf_list(
                 db_node=cql_query_executor_node,
@@ -5931,7 +5931,7 @@ class NemesisRunner:
         new_znode = self._add_and_init_new_cluster_nodes(count=1, is_zero_node=True)[0]
         self.log.debug("Run with zero-token node %s for %ds", new_znode.name, duration_with_znode)
         time.sleep(duration_with_znode)
-        znode = random.choice([node for node in self.cluster.zero_nodes if node.dc_idx == self.target_node.dc_idx])
+        znode = self.random.choice([node for node in self.cluster.zero_nodes if node.dc_idx == self.target_node.dc_idx])
         self.decommission_nodes(nodes=[znode])
 
     def disrupt_serial_restart_elected_topology_coordinator(self):
@@ -5941,10 +5941,9 @@ class NemesisRunner:
         if not self.target_node.raft.is_consistent_topology_changes_enabled:
             raise UnsupportedNemesis("Consistent topology changes feature is disabled")
 
-        self.use_nemesis_seed()
-        num_of_restarts = random.randint(1, len(self.cluster.nodes))
+        num_of_restarts = self.random.randint(1, len(self.cluster.nodes))
         self.log.debug("Number of serial restart of topology coordinator: %s", num_of_restarts)
-        election_wait_timeout = random.choice([5, 10, 15])
+        election_wait_timeout = self.random.choice([5, 10, 15])
         self.log.debug("Wait new topology coordinator election timeout: %s", election_wait_timeout)
         for num_of_restart in range(num_of_restarts):
             with self.node_allocator.run_nemesis(nemesis_label="SearchCoordinator") as verification_node:
@@ -6142,7 +6141,7 @@ class NemesisRunner:
         with self.node_allocator.run_nemesis(
             node_list=self.cluster.nodes, nemesis_label="Verification node for MV"
         ) as working_node:
-            ks_name, base_table_name = random.choice(ks_cfs).split(".")
+            ks_name, base_table_name = self.random.choice(ks_cfs).split(".")
             view_name = f"{base_table_name}_view_{str(uuid4())[:8]}"
             with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
                 try:
