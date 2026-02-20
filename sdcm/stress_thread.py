@@ -26,6 +26,7 @@ from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, c_s_transport_str
 from sdcm.reporting.tooling_reporter import CassandraStressVersionReporter
 from sdcm.sct_events import Severity
+from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
 from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_internal_path
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
@@ -382,6 +383,12 @@ class CassandraStressThread(DockerBasedStressThread):
             reporter.report()
         except Exception:  # noqa: BLE001
             LOGGER.info("Failed to collect cassandra-stress version information", exc_info=True)
+        report_stress_command(
+            client=loader.parent_cluster.test_config.argus_client(),
+            stress_cmd=stress_cmd,
+            log_path=log_file_name,
+            loader_name=loader.name,
+        )
         with (
             cleanup_context,
             CassandraStressExporter(

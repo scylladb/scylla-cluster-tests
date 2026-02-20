@@ -18,9 +18,11 @@ import random
 import json
 import time
 
+
 from sdcm.cluster import BaseCluster, BaseScyllaCluster
 from sdcm.cluster_aws import CassandraAWSCluster, ScyllaAWSCluster
 from sdcm.sct_events import Severity
+from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread
 from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
 from sdcm.stress_thread import DockerBasedStressThread
@@ -198,6 +200,12 @@ class GeminiStressThread(DockerBasedStressThread):
         except Exception:  # noqa: BLE001
             LOGGER.info("Failed to collect scylla-bench version information", exc_info=True)
 
+        report_stress_command(
+            client=loader.parent_cluster.test_config.argus_client(),
+            stress_cmd=gemini_cmd,
+            log_path=log_file_name,
+            loader_name=loader.name,
+        )
         with (
             cleanup_context,
             GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher,

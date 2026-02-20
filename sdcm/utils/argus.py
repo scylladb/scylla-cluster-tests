@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from pathlib import Path
@@ -102,3 +103,30 @@ def argus_offline_collect_events(client: ArgusSCTClient) -> None:
         event_category = EventsInfo(severity=severity, total_events=events_summary.get(severity, 0), messages=messages)
         events_sorted.append(event_category)
     client.submit_events(events_sorted)
+
+
+def report_scylla_yaml_to_argus(tester):
+    if not tester:
+        LOGGER.warning("Unable to report scylla yaml - no tester object provided.")
+        return
+    if not tester.db_cluster:
+        LOGGER.warning("Unable to report scylla yaml - cluster isn't set up.")
+        return
+    node = next(iter(tester.db_cluster.nodes), None)
+    if not node:
+        LOGGER.warning("Unable to report scylla yaml - no nodes available.")
+        return
+    if not node.remoter:
+        LOGGER.warning("Unable to report scylla yaml - remoter is not available.")
+        return
+    with node.remote_scylla_yaml() as scylla_yml:
+        content = json.dumps(scylla_yml.model_dump())
+        client = node.test_config.argus_client()
+        client.sct_submit_config(name="scylla_yaml", content=content)
+
+
+def report_stress_command(client: ArgusSCTClient, stress_cmd: str, loader_name: str, log_path: str):
+    try:
+        client.add_stress_command(command=stress_cmd, log_name=Path(log_path).name, loader_name=loader_name)
+    except ArgusClientError:
+        LOGGER.warning("Unable to report stress command.", exc_info=True)
