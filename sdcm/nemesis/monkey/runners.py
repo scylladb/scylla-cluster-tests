@@ -3,7 +3,6 @@ NemesisRunner override, also known as Complex Nemesis
 Runners can be used in nemesis_class_names config option
 """
 
-import random
 import time
 from typing import Callable, List, Set, Tuple
 
@@ -209,7 +208,6 @@ class CategoricalMonkey(NemesisRunner):
 
     def __init__(self, tester_obj, termination_event, dist: dict, *args, default_weight: float = 1, **kwargs):
         super().__init__(tester_obj, termination_event, *args, **kwargs)
-        self.random = random.Random(self.nemesis_seed)
         self.disruption_distribution = self.get_disruption_distribution(dist, default_weight)
 
     def select_next_nemesis(self):
