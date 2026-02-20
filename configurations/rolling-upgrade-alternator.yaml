@@ -24,5 +24,6 @@ authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
 
 alternator_port: 8080
-alternator_use_dns_routing: true
+alternator_use_dns_routing: false
+alternator_loadbalancing: true
 docker_network: 'ycsb_net'
