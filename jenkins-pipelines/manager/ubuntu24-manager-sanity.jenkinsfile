@@ -7,7 +7,7 @@ managerPipeline(
     backend: 'aws',
     region: '''["us-east-1", "us-west-2"]''',
     test_name: 'mgmt_cli_test.ManagerSanityTests.test_manager_sanity',
-    test_config: '''["test-cases/manager/manager-regression-multiDC-set-distro.yaml", "configurations/manager/ubuntu24.yaml", "configurations/disable_client_encrypt.yaml"]''',
+    test_config: '''["test-cases/manager/manager-regression-multiDC-set-distro.yaml", "configurations/manager/ubuntu24.yaml"]''',
 
     downstream_jobs_to_run: 'ubuntu24-upgrade-test'
 )
