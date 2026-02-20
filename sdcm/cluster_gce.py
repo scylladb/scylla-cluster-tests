@@ -12,11 +12,9 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
-import re
 import time
 import logging
-from typing import Dict, Any, ParamSpec, TypeVar
-from textwrap import dedent
+from typing import Dict, Any, ParamSpec, TypeVar, List
 from functools import cached_property, cache
 from collections.abc import Callable
 
@@ -25,8 +23,12 @@ import google.api_core.exceptions
 from google.cloud import compute_v1
 
 from sdcm import cluster
+from sdcm.provision.gce.provisioner import GceProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
+from sdcm.provision.provisioner import PricingModel
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
+from sdcm.sct_provision import region_definition_builder
+from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
 from sdcm.utils.gce_utils import (
@@ -41,7 +43,6 @@ from sdcm.utils.gce_utils import (
     gce_set_labels,
 )
 from sdcm.wait import exponential_retry
-from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
@@ -84,10 +85,10 @@ class GCENode(cluster.BaseNode):
         rack: int = 0,
         gce_project: str = None,
     ):
-        name = f"{node_prefix}-{dc_idx}-{node_index}".lower()
+        self._instance = gce_instance
+        name = self._instance.name
         self.node_index = node_index
         self.project = gce_project
-        self._instance = gce_instance
         self._instance_type = gce_instance.machine_type.split("/")[-1]
         self._gce_service = gce_service
         self._gce_logging_client = GceLoggingClient(instance_name=name, zone=self.zone)
@@ -245,6 +246,16 @@ class GCENode(cluster.BaseNode):
         self._instance_wait_safe(self._safe_destroy)
         super().destroy()
 
+    def get_console_output(self):
+        # TODO adding console output from instance on GCE
+        self.log.warning("Method is not implemented for GCENode")
+        return ""
+
+    def get_console_screenshot(self):
+        # TODO adding console output from instance on GCE
+        self.log.warning("Method is not implemented for GCENode")
+        return b""
+
     @cache
     def _get_ipv6_ip_address(self):
         self.log.warning(
@@ -286,6 +297,7 @@ class GCECluster(cluster.BaseCluster):
         gce_network,
         gce_service,
         credentials,
+        provisioners: List[GceProvisioner],
         cluster_uuid=None,
         gce_instance_type="n2-standard-1",
         gce_region_names=None,
@@ -297,9 +309,9 @@ class GCECluster(cluster.BaseCluster):
         add_disks=None,
         params=None,
         node_type=None,
-        service_accounts=None,
         add_nodes=True,
     ):
+        self.provisioners: List[GceProvisioner] = provisioners
         self._gce_image = gce_image
         self._gce_image_type = gce_image_type
         self._gce_image_size = gce_image_size
@@ -317,9 +329,9 @@ class GCECluster(cluster.BaseCluster):
         LOGGER.debug("GCE zones used: %s", self._gce_zone_names)
         self._gce_n_local_ssd = int(gce_n_local_ssd) if gce_n_local_ssd else 0
         self._add_disks = add_disks
-        self._service_accounts = service_accounts
         # the full node prefix will contain unique uuid, so use this for search of existing nodes
         self._node_prefix = node_prefix.lower()
+        self._definition_builder = region_definition_builder.get_builder(params, test_config=self.test_config)
         super().__init__(
             cluster_uuid=cluster_uuid,
             cluster_prefix=cluster_prefix,
@@ -397,79 +409,81 @@ class GCECluster(cluster.BaseCluster):
         self.log.debug(gce_disk_struct)
         return gce_disk_struct
 
-    def _create_instance(self, node_index, dc_idx, spot=False, enable_auto_bootstrap=False, instance_type=None):
-        def set_tags_as_labels(_instance: compute_v1.Instance):
-            self.log.debug(f"Expected tags are {self.tags}")
-            # https://cloud.google.com/resource-manager/docs/tags/tags-creating-and-managing#adding_tag_values
-            regex_key = re.compile(r"[^a-z0-9-_]")
-
-            def to_short_name(value):
-                return regex_key.sub("_", value.lower())[:60]
-
-            normalized_tags = {to_short_name(k): to_short_name(v) for k, v in self.tags.items()}
-            self.log.debug(f"normalized tags are {normalized_tags}")
-
-            gce_set_labels(
-                instances_client=self._gce_service,
-                instance=_instance,
-                new_labels=normalized_tags,
-                project=self.project,
-                zone=self._gce_zone_names[dc_idx],
-            )
-
-        name = f"{self.node_prefix}-{dc_idx}-{node_index}".lower()
-        gce_disk_struct = self._get_disks_struct(name=name, dc_idx=dc_idx)
-        # Name must start with a lowercase letter followed by up to 63
-        # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
-        assert len(name) <= 63, "Max length of instance name is 63"
-        startup_script = ""
-
-        if self.params.get("scylla_linux_distro") in (
-            "ubuntu-bionic",
-            "ubuntu-xenial",
-            "ubuntu-focal",
-        ):
-            # we need to disable sshguard to prevent blocking connections from the builder
-            startup_script += dedent("""
-                sudo systemctl disable sshguard
-                sudo systemctl stop sshguard
-            """)
-        username = self._gce_image_username
-        public_key, key_type = pub_key_from_private_key_file(self.params.get("user_credentials_path"))
-        zone = self._gce_zone_names[dc_idx]
-        network_tags = ["sct-network-only"]
-        if self.params.get("intra_node_comm_public") or ssh_connection_ip_type(self.params) == "public":
-            network_tags.append("sct-allow-public")
-        create_node_params = dict(
-            project_id=self.project,
-            zone=zone,
-            machine_type=instance_type or self._gce_instance_type,
-            instance_name=name,
-            network_name=self._gce_network,
-            disks=gce_disk_struct,
-            external_access=True,
-            metadata={
-                **self.tags,
-                "Name": name,
-                "NodeIndex": node_index,
-                "startup-script": startup_script,
-                "user-data": self.prepare_user_data(enable_auto_bootstrap),
-                "block-project-ssh-keys": "true",
-                "ssh-keys": f"{username}:{key_type} {public_key} {username}",
-            },
-            spot=spot,
-            service_accounts=self._service_accounts,
-            network_tags=network_tags,
-        )
-        instance = self._create_node_with_retries(name=name, dc_idx=dc_idx, create_node_params=create_node_params)
-
-        self.log.debug("Created %s instance %s", "spot" if spot else "on-demand", instance)
-        try:
-            set_tags_as_labels(instance)
-        except google.api_core.exceptions.InvalidArgument as exc:
-            self.log.warning(f"Unable to set tags as labels due to {exc}")
-
-        return instance
+    # def _create_instance(self, node_index, dc_idx, spot=False, enable_auto_bootstrap=False, instance_type=None):
+    #     def set_tags_as_labels(_instance: compute_v1.Instance):
+    #         self.log.debug(f"Expected tags are {self.tags}")
+    #         # https://cloud.google.com/resource-manager/docs/tags/tags-creating-and-managing#adding_tag_values
+    #         regex_key = re.compile(r"[^a-z0-9-_]")
+    #
+    #         def to_short_name(value):
+    #             return regex_key.sub("_", value.lower())[:60]
+    #
+    #         normalized_tags = {to_short_name(k): to_short_name(v) for k, v in self.tags.items()}
+    #         self.log.debug(f"normalized tags are {normalized_tags}")
+    #
+    #         gce_set_labels(
+    #             instances_client=self._gce_service,
+    #             instance=_instance,
+    #             new_labels=normalized_tags,
+    #             project=self.project,
+    #             zone=self._gce_zone_names[dc_idx],
+    #         )
+    #
+    #     name = gce_instance_name(node_prefix=self.node_prefix, dc_idx=dc_idx, node_index=node_index)
+    #
+    #     # Check if instance already exists before creating a new one
+    #     existing_instance = self._get_instances_by_name(name=name, dc_idx=dc_idx)
+    #     if existing_instance:
+    #         self.log.info("Instance %s already exists, reusing existing instance", name)
+    #         return existing_instance
+    #     gce_disk_struct = self._get_disks_struct(name=name, dc_idx=dc_idx)
+    #     startup_script = ""
+    #
+    #     if self.params.get("scylla_linux_distro") in (
+    #         "ubuntu-bionic",
+    #         "ubuntu-xenial",
+    #         "ubuntu-focal",
+    #     ):
+    #         # we need to disable sshguard to prevent blocking connections from the builder
+    #         startup_script += dedent("""
+    #             sudo systemctl disable sshguard
+    #             sudo systemctl stop sshguard
+    #         """)
+    #     username = self._gce_image_username
+    #     public_key, key_type = pub_key_from_private_key_file(self.params.get("user_credentials_path"))
+    #     zone = self._gce_zone_names[dc_idx]
+    #     network_tags = ["sct-network-only"]
+    #     if self.params.get("intra_node_comm_public") or ssh_connection_ip_type(self.params) == "public":
+    #         network_tags.append("sct-allow-public")
+    #     create_node_params = dict(
+    #         project_id=self.project,
+    #         zone=zone,
+    #         machine_type=instance_type or self._gce_instance_type,
+    #         instance_name=name,
+    #         network_name=self._gce_network,
+    #         disks=gce_disk_struct,
+    #         external_access=True,
+    #         metadata={
+    #             **self.tags,
+    #             "Name": name,
+    #             "NodeIndex": node_index,
+    #             "startup-script": startup_script,
+    #             "user-data": self.prepare_user_data(enable_auto_bootstrap),
+    #             "block-project-ssh-keys": "true",
+    #             "ssh-keys": f"{username}:{key_type} {public_key} {username}",
+    #         },
+    #         spot=spot,
+    #         network_tags=network_tags,
+    #     )
+    #     instance = self._create_node_with_retries(name=name, dc_idx=dc_idx, create_node_params=create_node_params)
+    #
+    #     self.log.debug("Created %s instance %s", "spot" if spot else "on-demand", instance)
+    #     try:
+    #         set_tags_as_labels(instance)
+    #     except google.api_core.exceptions.InvalidArgument as exc:
+    #         self.log.warning(f"Unable to set tags as labels due to {exc}")
+    #
+    #     return instance
 
     @retrying(
         n=3,
@@ -502,13 +516,26 @@ class GCECluster(cluster.BaseCluster):
             raise gbe
 
     def _create_instances(self, count, dc_idx=0, enable_auto_bootstrap=False, instance_type=None):
-        spot = "spot" in self.instance_provision
-        instances = []
+        region = self._definition_builder.regions[dc_idx]
+        pricing_model = PricingModel.SPOT if "spot" in self.instance_provision else PricingModel.ON_DEMAND
+        definitions = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
-            instances.append(
-                self._create_instance(node_index, dc_idx, spot, enable_auto_bootstrap, instance_type=instance_type)
+            definitions.append(
+                self._definition_builder.build_instance_definition(
+                    region=region,
+                    node_type=self.node_type,
+                    index=node_index,
+                    dc_idx=dc_idx,
+                    instance_type=instance_type,
+                )
             )
-        return instances
+        return provision_instances_with_fallback(
+            self.provisioners[dc_idx],
+            definitions=definitions,
+            pricing_model=pricing_model,
+            fallback_on_demand=self.params.get("instance_provision_fallback_on_demand"),
+            params=self.params,
+        )
 
     def _destroy_instance(self, name: str, dc_idx: int):
         target_node = self._get_instances_by_name(dc_idx=dc_idx, name=name)
@@ -522,9 +549,38 @@ class GCECluster(cluster.BaseCluster):
         return [node for node in instances_by_zone if node.name.startswith(self._node_prefix)]
 
     def _get_instances_by_name(self, name: str, dc_idx: int = 0):
-        instances_by_zone = self._gce_service.list(project=self.project, zone=self._gce_zone_names[dc_idx])
-        found = [node for node in instances_by_zone if node.name == name]
-        return found[0] if found else None
+        """Search for an instance by name across all zones in the project.
+
+        The provisioner may create instances in a different zone than the cluster expects,
+        so we need to search across all zones to find existing instances.
+        """
+        all_instances = self._gce_service.aggregated_list(project=self.project)
+        for _, response in all_instances:
+            if response.instances:
+                for instance in response.instances:
+                    if instance.name == name:
+                        return instance
+        return None
+
+    @retrying(
+        n=20,
+        sleep_time=30,
+        allowed_exceptions=(CreateGCENodeError,),
+        message="Waiting for GCE instance to be available and in RUNNING state...",
+        raise_on_exceeded=True,
+    )
+    def _get_instance_with_retry(self, name: str, dc_idx: int) -> compute_v1.Instance:
+        """Fetch GCE instance by name with retry logic.
+
+        The provisioner may take some time to create the instance and bring it to RUNNING state,
+        so we retry until the instance is found and ready.
+        """
+        instance = self._get_instances_by_name(name=name, dc_idx=dc_idx)
+        if not instance:
+            raise CreateGCENodeError(f"Instance {name} not found")
+        if instance.status != "RUNNING":
+            raise CreateGCENodeError(f"Instance {name} is not in RUNNING state: {instance.status}")
+        return instance
 
     def _get_instances(self, dc_idx: int) -> list[compute_v1.Instance]:
         test_id = self.test_config.test_id()
@@ -533,10 +589,20 @@ class GCECluster(cluster.BaseCluster):
 
         instances_by_tags = list_instances_gce(tags_dict={"TestId": test_id, "NodeType": self.node_type})
         region = self._gce_zone_names[dc_idx][:-2]
-        ip_addresses = gce_public_addresses if self._node_public_ips else gce_private_addresses
+        # Use ssh_connection_ip_type from params if _node_public_ips is not yet set (during __init__)
+        # If _node_public_ips exists, use it; otherwise fallback to ssh_connection_ip_type
+        if hasattr(self, "_node_public_ips"):
+            use_public_ips = bool(self._node_public_ips)
+        else:
+            use_public_ips = ssh_connection_ip_type(self.params) == "public"
+        ip_addresses = gce_public_addresses if use_public_ips else gce_private_addresses
 
         # Filter instances by ip addresses and region
         instances = [instance for instance in instances_by_tags if ip_addresses(instance) and region in instance.zone]
+
+        # Filter out instances that are already in use by existing nodes in this cluster
+        existing_node_names = {node.name for node in self.nodes}
+        instances = [instance for instance in instances if instance.name not in existing_node_names]
 
         def sort_by_index(instance):
             metadata = gce_meta_to_dict(instance.metadata)
@@ -576,8 +642,19 @@ class GCECluster(cluster.BaseCluster):
             instances = self._get_instances(instance_dc)
             if not instances:
                 raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
+        elif instances := self._get_instances(instance_dc):
+            self.log.info("Found provisioned instances = %s", instances)
         else:
-            instances = self._create_instances(count, instance_dc, enable_auto_bootstrap, instance_type=instance_type)
+            self.log.info("Found no provisioned instances. Provision them.")
+            provisioned_vms = self._create_instances(
+                count, instance_dc, enable_auto_bootstrap, instance_type=instance_type
+            )
+            # The provisioner returns VmInstance objects, but GCENode expects compute_v1.Instance.
+            # Fetch the native GCE instances by name with retry to ensure they are in RUNNING state.
+            instances = []
+            for vm in provisioned_vms:
+                gce_instance = self._get_instance_with_retry(name=vm.name, dc_idx=instance_dc)
+                instances.append(gce_instance)
 
         self.log.debug("instances: %s", instances)
         if instances:
@@ -605,6 +682,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
         gce_network,
         gce_service,
         credentials,
+        provisioners: List[GceProvisioner],
         gce_instance_type="n2-standard-1",
         gce_n_local_ssd=1,
         gce_image_username="centos",
@@ -613,7 +691,6 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
         add_disks=None,
         params=None,
         gce_datacenter=None,
-        service_accounts=None,
     ):
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "db-cluster")
@@ -635,7 +712,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
             params=params,
             gce_region_names=gce_datacenter,
             node_type="scylla-db",
-            service_accounts=service_accounts,
+            provisioners=provisioners,
         )
         self.version = "2.1"
 
@@ -656,6 +733,7 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
         gce_network,
         gce_service,
         credentials,
+        provisioners: List[GceProvisioner],
         gce_instance_type="n2-standard-1",
         gce_n_local_ssd=1,
         gce_image_username="centos",
@@ -686,6 +764,7 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
             params=params,
             node_type="loader",
             gce_region_names=gce_datacenter,
+            provisioners=provisioners,
         )
 
 
@@ -698,6 +777,7 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
         gce_network,
         gce_service,
         credentials,
+        provisioners: List[GceProvisioner],
         gce_instance_type="n2-standard-1",
         gce_n_local_ssd=1,
         gce_image_username="centos",
@@ -739,4 +819,5 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
             node_type="monitor",
             gce_region_names=gce_datacenter,
             add_nodes=add_nodes,
+            provisioners=provisioners,
         )
