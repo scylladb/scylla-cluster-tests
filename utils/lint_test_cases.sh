@@ -1,7 +1,7 @@
 #! /bin/bash
 
 OUT=0
-SCT_AMI_ID_DB_SCYLLA=ami-1234 ./sct.py lint-yamls -i '.yaml' -e 'azure,multi-dc,multiDC,multidc,multiple-dc,3dcs,5dcs,rolling,docker,artifacts,private-repo,ics/long,scylla-operator,gce,custom-d3,jepsen,repair-based-operations,add-new-dc,baremetal'
+SCT_AMI_ID_DB_SCYLLA=ami-1234 ./sct.py lint-yamls -i '.yaml' -e 'azure,multi-dc,multiDC,multidc,multiple-dc,3dcs,5dcs,rolling,docker,artifacts,private-repo,ics/long,scylla-operator,gce,custom-d3,jepsen,repair-based-operations,add-new-dc,baremetal,x86-to-arm'
 OUT=$(($OUT + $?))
 
 SCT_AZURE_IMAGE_DB=image SCT_AZURE_REGION_NAME="eastus" ./sct.py lint-yamls --backend azure -i azure
