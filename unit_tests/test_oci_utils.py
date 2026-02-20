@@ -218,41 +218,39 @@ def test_get_ubuntu_image_ocid_not_found(mock_page_iterator, mock_get_client):
 
 @patch("sdcm.utils.oci_utils.get_oci_compartment_id")
 @patch("sdcm.utils.oci_utils.get_oci_compute_client")
-def test_list_instances_oci_single_region(mock_get_client, mock_get_compartment):
+@patch("oci.pagination.list_call_get_all_results_generator")
+def test_list_instances_oci_single_region(mock_page_iterator, mock_get_client, mock_get_compartment):
     """Test listing instances in a single region."""
     mock_get_compartment.return_value = "compartment-id"
-
     mock_client = MagicMock()
     mock_instance = MagicMock()
     mock_instance.freeform_tags = {"NodeType": "sct-runner"}
     mock_instance.lifecycle_state = "RUNNING"
-
-    mock_client.list_instances.return_value.data = [mock_instance]
     mock_get_client.return_value = (mock_client, {})
+    mock_page_iterator.return_value = iter([mock_instance])
 
     result = list_instances_oci(region_name="us-ashburn-1", verbose=False)
 
     assert len(result) == 1
     assert result[0] == mock_instance
+    mock_page_iterator.assert_called_once()
 
 
 @patch("sdcm.utils.oci_utils.get_oci_compartment_id")
 @patch("sdcm.utils.oci_utils.get_oci_compute_client")
-def test_list_instances_oci_with_tag_filter(mock_get_client, mock_get_compartment):
+@patch("oci.pagination.list_call_get_all_results_generator")
+def test_list_instances_oci_with_tag_filter(mock_page_iterator, mock_get_client, mock_get_compartment):
     """Test listing instances with tag filter."""
     mock_get_compartment.return_value = "compartment-id"
-
     mock_client = MagicMock()
     mock_instance1 = MagicMock()
     mock_instance1.defined_tags = {"sct": {"NodeType": "sct-runner"}}
     mock_instance1.lifecycle_state = "RUNNING"
-
     mock_instance2 = MagicMock()
     mock_instance2.defined_tags = {"sct": {"NodeType": "db-node"}}
     mock_instance2.lifecycle_state = "RUNNING"
-
-    mock_client.list_instances.return_value.data = [mock_instance1, mock_instance2]
     mock_get_client.return_value = (mock_client, {})
+    mock_page_iterator.return_value = iter([mock_instance1, mock_instance2])
 
     result = list_instances_oci(
         tags_dict={"NodeType": "sct-runner"},
@@ -262,6 +260,7 @@ def test_list_instances_oci_with_tag_filter(mock_get_client, mock_get_compartmen
 
     assert len(result) == 1
     assert result[0] == mock_instance1
+    mock_page_iterator.assert_called_once()
 
 
 # --- Tests for wait_for_instance_state ---

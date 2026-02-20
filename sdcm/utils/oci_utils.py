@@ -299,37 +299,21 @@ def list_instances_oci(
     for region in regions:
         if verbose:
             LOGGER.info("Listing OCI instances in region '%s'...", region)
-
         try:
             compute_client, _ = get_oci_compute_client(region=region)
-            if running:
-                kwargs = {"lifecycle_state": "RUNNING"}
-            else:
-                kwargs = {}
-            instances = compute_client.list_instances(compartment_id=compartment_id, **kwargs).data
-
-            # Handle pagination if needed
-            # Note: For simplicity, assuming results fit in one page
-            # In production, should handle pagination with page tokens
-
-            region_instances = list(instances) if instances else []
-
+            kwargs = {"lifecycle_state": "RUNNING"} if running else {}
+            region_instances = oci.pagination.list_call_get_all_results_generator(
+                compute_client.list_instances, yield_mode="record", compartment_id=compartment_id, **kwargs
+            )
+            all_instances.extend(region_instances)
             if verbose:
                 LOGGER.debug("Found %d instances in region '%s'", len(region_instances), region)
-
             all_instances.extend(region_instances)
-
         except oci.exceptions.ServiceError as exc:
             LOGGER.warning("Failed to list instances in region '%s': %s", region, exc.message)
 
-    # Filter by tags if specified
     if tags_dict:
         all_instances = filter_oci_by_tags(tags_dict=tags_dict, instances=all_instances)
-
-    # Filter for running instances if requested and not already filtered by API
-    if running and not region_name:  # API filter only works when single region specified
-        all_instances = [i for i in all_instances if i.lifecycle_state == "RUNNING"]
-
     if verbose:
         LOGGER.info("Found total of %d OCI instances", len(all_instances))
 
