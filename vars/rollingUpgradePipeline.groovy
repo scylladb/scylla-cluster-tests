@@ -6,7 +6,7 @@ def completed_stages = [:]
 (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, null /* oci placeholder */)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
 
     // since this is a boolean param, we need to handle its default value upfront, we can't do it in the parameters section
     // we'll keep it as boolean to simplify its usage later on
@@ -24,12 +24,6 @@ def call(Map pipelineParams) {
         }
         parameters {
             separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
-            string(defaultValue: '',
-                   description: 'a Azure Image to run against',
-                   name: 'azure_image_db')
-            string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
-                   description: 'Azure location',
-                   name: 'azure_region_name')
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
                description: 'aws|gce|azure',
                name: 'backend')
@@ -40,6 +34,12 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
+            string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
+                   description: 'Azure Cloud region',
+                   name: 'azure_region_name')
+            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
+                   description: 'Oracle Cloud region',
+                   name: 'oci_region_name')
             string(defaultValue: "",
                description: 'Availability zone',
                name: 'availability_zone')
@@ -47,6 +47,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('scylla_ami_id', '')}", description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
             string(defaultValue: "${pipelineParams.get('gce_image_db', '')}", description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
             string(defaultValue: "${pipelineParams.get('azure_image_db', '')}", description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
+            string(defaultValue: "${pipelineParams.get('oci_image_db', '')}", description: 'Oracle image for ScyllaDB ', name: 'oci_image_db')
 
             string(defaultValue: '',
                    description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',

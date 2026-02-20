@@ -39,6 +39,10 @@ def call(Map params, String region){
         export SCT_AZURE_REGION_NAME=${params.azure_region_name}
     fi
 
+    if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
+        export SCT_OCI_REGION_NAME=${params.oci_region_name}
+    fi
+
     if [[ -n "${params.new_version ? params.new_version : ''}" ]] ; then
         export SCT_NEW_VERSION="${params.new_version}"
     fi
@@ -78,6 +82,9 @@ def call(Map params, String region){
     fi
     if [[ -n "${params.azure_image_db ? params.azure_image_db : ''}" ]] ; then
         export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
+    fi
+    if [[ -n "${params.oci_image_db ? params.oci_image_db : ''}" ]] ; then
+        export SCT_OCI_IMAGE_DB="${params.oci_image_db}"
     fi
     if [[ -n "${params.scylla_version ? params.scylla_version : ''}" ]] ; then
         export SCT_SCYLLA_VERSION="${params.scylla_version}"

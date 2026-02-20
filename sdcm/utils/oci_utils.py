@@ -15,21 +15,23 @@
 
 from __future__ import annotations
 
+from functools import (
+    cache,
+    cached_property,
+)
 import logging
-import time
-from functools import cached_property
 import oci
-from oci.core import ComputeClient, VirtualNetworkClient
-from oci.core.models import Instance, Image
+from oci.core import BlockstorageClient, ComputeClient, VirtualNetworkClient
+from oci.core.models import Image, Instance
+from oci.exceptions import ServiceError
 from oci.identity import IdentityClient
 from oci.object_storage import ObjectStorageClient
 from oci.work_requests import WorkRequestClient
-from oci.exceptions import ServiceError
+import time
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.metaclasses import Singleton
 from sdcm.provision.provisioner import VmArch
-
+from sdcm.utils.metaclasses import Singleton
 
 LOGGER = logging.getLogger(__name__)
 
@@ -65,6 +67,7 @@ SUPPORTED_REGIONS = [
 ]
 
 
+@cache
 def get_oci_config() -> dict:
     """Get OCI configuration from keystore.
 
@@ -80,100 +83,73 @@ def get_oci_config() -> dict:
     }
 
 
+@cache
 def get_oci_compartment_id() -> str:
     """Get the default compartment ID from keystore."""
     creds = KeyStore().get_oci_credentials()
     return creds["compartment_id"]
 
 
-def get_oci_compute_client(region: str | None = None) -> tuple[ComputeClient, dict]:
-    """Get OCI Compute client for the specified region.
+class OciService(metaclass=Singleton):
+    """Singleton service class for OCI operations, similar to AzureService."""
 
-    Args:
-        region: OCI region name. If None, uses the default from config.
+    @cached_property
+    def oci_credentials(self) -> dict[str, str]:
+        return KeyStore().get_oci_credentials()
 
-    Returns:
-        Tuple of (ComputeClient, config_dict)
-    """
-    config = get_oci_config()
-    if region:
-        config["region"] = region
-    return ComputeClient(config), config
+    @cached_property
+    def compartment_id(self) -> str:
+        return self.oci_credentials["compartment_id"]
 
+    @cached_property
+    def tenancy_id(self) -> str:
+        return self.oci_credentials["tenancy"]
 
-def get_oci_identity_client(region: str | None = None) -> tuple[IdentityClient, dict]:
-    """Get OCI Identity client for compartment and availability domain operations.
+    @cached_property
+    def config(self) -> dict:
+        return get_oci_config()
 
-    Args:
-        region: OCI region name. If None, uses the default from config.
+    def get_compute_client(self, region: str | None = None) -> ComputeClient:
+        """Get Compute client for specified region."""
+        config = self.config.copy()
+        if region:
+            config["region"] = region
+        return ComputeClient(config)
 
-    Returns:
-        Tuple of (IdentityClient, config_dict)
-    """
-    config = get_oci_config()
-    if region:
-        config["region"] = region
-    return IdentityClient(config), config
+    def get_identity_client(self, region: str | None = None) -> IdentityClient:
+        """Get Identity client for specified region."""
+        config = self.config.copy()
+        if region:
+            config["region"] = region
+        return IdentityClient(config)
 
+    def get_network_client(self, region: str | None = None) -> VirtualNetworkClient:
+        """Get Virtual Network client for specified region."""
+        config = self.config.copy()
+        if region:
+            config["region"] = region
+        return VirtualNetworkClient(config)
 
-def get_oci_network_client(region: str | None = None) -> tuple[VirtualNetworkClient, dict]:
-    """Get OCI Virtual Network client.
+    def get_object_storage_client(self, region: str | None = None) -> ObjectStorageClient:
+        """Get Object Storage client for specified region."""
+        config = self.config.copy()
+        if region:
+            config["region"] = region
+        return ObjectStorageClient(config)
 
-    Args:
-        region: OCI region name. If None, uses the default from config.
+    def get_block_storage_client(self, region: str | None = None) -> BlockstorageClient:
+        """Get Block Storage client for specified region."""
+        config = self.config.copy()
+        if region:
+            config["region"] = region
+        return BlockstorageClient(config)
 
-    Returns:
-        Tuple of (VirtualNetworkClient, config_dict)
-    """
-    config = get_oci_config()
-    if region:
-        config["region"] = region
-    return VirtualNetworkClient(config), config
-
-
-def get_oci_object_storage_client(region: str | None = None) -> tuple[ObjectStorageClient, dict]:
-    """Get OCI Object Storage client.
-
-    Args:
-        region: OCI region name. If None, uses the default from config.
-
-    Returns:
-        Tuple of (ObjectStorageClient, config_dict)
-    """
-    config = get_oci_config()
-    if region:
-        config["region"] = region
-    return ObjectStorageClient(config), config
-
-
-def get_oci_work_request_client(region: str | None = None) -> tuple[WorkRequestClient, dict]:
-    """Get OCI Work Request client.
-
-    Args:
-        region: OCI region name. If None, uses the default from config.
-
-    Returns:
-        Tuple of (WorkRequestClient, config_dict)
-    """
-    config = get_oci_config()
-    if region:
-        config["region"] = region
-    return WorkRequestClient(config), config
-
-
-def oci_tags_to_dict(defined_tags: dict | None) -> dict:
-    """Convert OCI defined tags to a standard dict.
-
-    OCI uses defined_tags as a dict[str, dict[str, str]], so this is mostly a pass-through
-    with None handling.
-
-    Args:
-        defined_tags: OCI instance defined_tags attribute
-
-    Returns:
-        Dict of tags, empty dict if None
-    """
-    return defined_tags or {}
+    def get_work_request_client(self, region: str | None = None) -> WorkRequestClient:
+        """Get Work Request client for specified region."""
+        config = self.config.copy()
+        if region:
+            config["region"] = region
+        return WorkRequestClient(config)
 
 
 def get_availability_domains(compartment_id: str, region: str | None = None) -> list[str]:
@@ -186,7 +162,7 @@ def get_availability_domains(compartment_id: str, region: str | None = None) -> 
     Returns:
         List of availability domain names (e.g., ["Uocm:US-ASHBURN-AD-1", ...])
     """
-    identity_client, _ = get_oci_identity_client(region=region)
+    identity_client = OciService().get_identity_client(region=region)
     ads = identity_client.list_availability_domains(compartment_id=compartment_id).data
     return [ad.name for ad in ads]
 
@@ -236,7 +212,7 @@ def get_ubuntu_image_ocid(compartment_id: str, region: str | None = None, versio
     Raises:
         ValueError: If no matching image is found
     """
-    compute_client, _ = get_oci_compute_client(region=region)
+    compute_client = OciService().get_compute_client(region=region)
 
     # List images with Ubuntu filter
     # OCI provides official Ubuntu images from Canonical
@@ -299,37 +275,21 @@ def list_instances_oci(
     for region in regions:
         if verbose:
             LOGGER.info("Listing OCI instances in region '%s'...", region)
-
         try:
-            compute_client, _ = get_oci_compute_client(region=region)
-            if running:
-                kwargs = {"lifecycle_state": "RUNNING"}
-            else:
-                kwargs = {}
-            instances = compute_client.list_instances(compartment_id=compartment_id, **kwargs).data
-
-            # Handle pagination if needed
-            # Note: For simplicity, assuming results fit in one page
-            # In production, should handle pagination with page tokens
-
-            region_instances = list(instances) if instances else []
-
+            compute_client = OciService().get_compute_client(region=region)
+            kwargs = {"lifecycle_state": "RUNNING"} if running else {}
+            region_instances = oci.pagination.list_call_get_all_results_generator(
+                compute_client.list_instances, yield_mode="record", compartment_id=compartment_id, **kwargs
+            )
+            all_instances.extend(region_instances)
             if verbose:
                 LOGGER.debug("Found %d instances in region '%s'", len(region_instances), region)
-
             all_instances.extend(region_instances)
-
         except oci.exceptions.ServiceError as exc:
             LOGGER.warning("Failed to list instances in region '%s': %s", region, exc.message)
 
-    # Filter by tags if specified
     if tags_dict:
         all_instances = filter_oci_by_tags(tags_dict=tags_dict, instances=all_instances)
-
-    # Filter for running instances if requested and not already filtered by API
-    if running and not region_name:  # API filter only works when single region specified
-        all_instances = [i for i in all_instances if i.lifecycle_state == "RUNNING"]
-
     if verbose:
         LOGGER.info("Found total of %d OCI instances", len(all_instances))
 
@@ -833,42 +793,44 @@ def import_image_from_object_storage(
     return image
 
 
-class OciService(metaclass=Singleton):
-    """Singleton service class for OCI operations, similar to AzureService."""
+def get_scylla_images(scylla_version: str, region: str) -> list:
+    compute_client = OciService().get_compute_client(region=region)
+    images = oci.pagination.list_call_get_all_results_generator(
+        compute_client.list_images,
+        yield_mode="record",
+        compartment_id=get_oci_compartment_id(),
+        image_type="CUSTOM",
+        lifecycle_state="AVAILABLE",
+        sort_by="TIMECREATED",
+        sort_order="DESC",
+    )
+    filtered_images = []
+    while current_image := next(images, None):
+        # NOTE: image names examples:
+        #       - debug-scylla-2026.1.0~dev-x86_64-2026-01-06T14:23:24
+        #       - debug-scylla-2026.1.0-x86_64-2025-12-31T15:14:42
+        # TODO: differentiate the released and dev images
+        # TODO: change behavior when we have explicit scylla version and branch/latest
+        if scylla_version in current_image.display_name.lower():
+            filtered_images.append(current_image)
+    return filtered_images
 
-    @cached_property
-    def oci_credentials(self) -> dict[str, str]:
-        return KeyStore().get_oci_credentials()
 
-    @cached_property
-    def compartment_id(self) -> str:
-        return self.oci_credentials["compartment_id"]
+def is_shape_available(shape_name: str, region: str) -> bool:
+    shape_name = shape_name.split(":")[0]
+    compute_client = OciService().get_compute_client(region=region)
+    shapes = oci.pagination.list_call_get_all_results_generator(
+        compute_client.list_shapes,
+        yield_mode="record",
+        compartment_id=get_oci_compartment_id(),
+    )
+    while current_shape := next(shapes, None):
+        if current_shape.shape == shape_name:
+            return True
+    return False
 
-    @cached_property
-    def tenancy_id(self) -> str:
-        return self.oci_credentials["tenancy"]
 
-    @cached_property
-    def config(self) -> dict:
-        return get_oci_config()
-
-    def get_compute_client(self, region: str | None = None) -> ComputeClient:
-        """Get Compute client for specified region."""
-        config = self.config.copy()
-        if region:
-            config["region"] = region
-        return ComputeClient(config)
-
-    def get_identity_client(self, region: str | None = None) -> IdentityClient:
-        """Get Identity client for specified region."""
-        config = self.config.copy()
-        if region:
-            config["region"] = region
-        return IdentityClient(config)
-
-    def get_network_client(self, region: str | None = None) -> VirtualNetworkClient:
-        """Get Virtual Network client for specified region."""
-        config = self.config.copy()
-        if region:
-            config["region"] = region
-        return VirtualNetworkClient(config)
+def get_image_tags(image_id: str, tag_namespace: str) -> dict:
+    compute_client = OciService().get_compute_client()
+    image = compute_client.get_image(image_id=image_id)
+    return image.data.defined_tags.get(tag_namespace, {})

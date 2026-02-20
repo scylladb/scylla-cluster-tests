@@ -1,7 +1,7 @@
 #! groovy
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, null /* oci placeholder */)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
 
     pipeline {
         agent none
@@ -16,7 +16,7 @@ def call(Map pipelineParams) {
         parameters {
             separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
-                   description: 'aws|gce|azure|docker',
+                   description: 'aws|gce|azure|oci|docker',
                    name: 'backend')
             string(defaultValue: "${pipelineParams.get('availability_zone', '')}",
                description: 'Availability zone',
@@ -50,6 +50,9 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'a Azure Image to run against',
                    name: 'azure_image_db')
+            string(defaultValue: '',
+                   description: 'an Oracle Image to run against',
+                   name: 'oci_image_db')
             string(defaultValue: "${pipelineParams.get('region', '')}",
                    description: 'AWS region with Scylla AMI (for AMI test, ignored otherwise)',
                    name: 'region')
@@ -59,6 +62,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
                    description: 'Azure location',
                    name: 'azure_region_name')
+            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
+                   description: 'OCI (Oracle) location',
+                   name: 'oci_region_name')
             string(defaultValue: '',
                    description: "a Scylla docker image to run against (for docker backend.) Should be `scylladb/scylla' for official images",
                    name: 'scylla_docker_image')
@@ -188,12 +194,17 @@ def call(Map pipelineParams) {
                                                     if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
                                                         export SCT_AZURE_REGION_NAME=${params.azure_region_name}
                                                     fi
+                                                    if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
+                                                        export SCT_OCI_REGION_NAME=${params.oci_region_name}
+                                                    fi
                                                     if [[ ! -z "${params.scylla_ami_id}" ]]; then
                                                         export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
                                                     elif [[ ! -z "${params.gce_image_db}" ]]; then
                                                         export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
                                                     elif [[ ! -z "${params.azure_image_db}" ]]; then
                                                         export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
+                                                    elif [[ ! -z "${params.oci_image_db}" ]]; then
+                                                        export SCT_OCI_IMAGE_DB="${params.oci_image_db}"
                                                     elif [[ ! -z "${params.scylla_version}" ]]; then
                                                         export SCT_SCYLLA_VERSION="${params.scylla_version}"
                                                     elif [[ ! -z "${params.scylla_repo}" ]]; then
@@ -241,6 +252,9 @@ def call(Map pipelineParams) {
                                                                 ;;
                                                             "azure")
                                                                 export SCT_AZURE_INSTANCE_TYPE_DB="${instance_type}"
+                                                                ;;
+                                                            "oci")
+                                                                export SCT_OCI_INSTANCE_TYPE_DB="${instance_type}"
                                                                 ;;
                                                         esac
                                                     fi

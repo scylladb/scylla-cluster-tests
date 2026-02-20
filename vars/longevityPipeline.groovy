@@ -5,7 +5,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, null /* oci placeholder */)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
     def functional_test = pipelineParams.functional_test
 
     pipeline {
@@ -25,7 +25,7 @@ def call(Map pipelineParams) {
         parameters {
             separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
-               description: 'aws|gce|azure|docker|xcloud',
+               description: 'aws|gce|azure|oci|docker|xcloud',
                name: 'backend')
 
             string(defaultValue: "${pipelineParams.get('xcloud_provider', 'aws')}",
@@ -45,6 +45,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
                    description: 'Azure location',
                    name: 'azure_region_name')
+            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
+                   description: 'Oracle location',
+                   name: 'oci_region_name')
             string(defaultValue: "${pipelineParams.get('availability_zone', '')}",
                description: 'Availability zone',
                name: 'availability_zone')
@@ -65,6 +68,7 @@ def call(Map pipelineParams) {
 	    string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
 	    string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
 	    string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
+	    string(defaultValue: '', description: 'Oracle image for ScyllaDB ', name: 'oci_image_db')
 	    string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs:// ', name: 'update_db_packages')
             string(defaultValue: "${pipelineParams.get('scylla_version', '')}",
                    description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
@@ -337,7 +341,7 @@ def call(Map pipelineParams) {
                                     if (params.backend == 'xcloud') {
                                         echo "Scylla Cloud backend selected: provisioning loader nodes only on ${params.xcloud_provider} cloud provider"
                                     }
-                                    if (params.backend == 'xcloud' || params.backend == 'aws' || params.backend == 'azure') {
+                                    if (params.backend == 'xcloud' || params.backend == 'aws' || params.backend == 'azure' || params.backend == 'oci') {
                                         provisionResources(params, builder.region)
                                     } else if (params.backend.contains('docker')) {
                                         sh """

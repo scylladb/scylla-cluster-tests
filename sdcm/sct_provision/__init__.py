@@ -12,8 +12,10 @@
 # Copyright (c) 2021 ScyllaDB
 
 from sdcm.sct_provision.azure.azure_region_definition_builder import AzureDefinitionBuilder
+from sdcm.sct_provision.oci.oci_region_definition_builder import OciDefinitionBuilder
 from sdcm.sct_provision.region_definition_builder import RegionDefinitionBuilder
 
 
 region_definition_builder = RegionDefinitionBuilder()
 region_definition_builder.register_builder(backend="azure", builder_class=AzureDefinitionBuilder)
+region_definition_builder.register_builder(backend="oci", builder_class=OciDefinitionBuilder)

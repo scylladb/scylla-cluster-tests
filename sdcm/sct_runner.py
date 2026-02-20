@@ -24,7 +24,6 @@ import glob
 from contextlib import suppress
 from enum import Enum
 from functools import cached_property
-from ipaddress import ip_network
 from itertools import chain
 from math import ceil
 from typing import TYPE_CHECKING
@@ -62,6 +61,7 @@ except ImportError:
 
 from sct_ssh import ssh_run_cmd
 from sdcm.keystore import KeyStore
+from sdcm.provision.oci.constants import TAG_NAMESPACE
 from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance, provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
 from sdcm.utils.common import (
@@ -95,10 +95,7 @@ from sdcm.utils.azure_utils import AzureService, list_instances_azure
 from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
 from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.oci_utils import (
-    get_oci_compute_client,
-    get_oci_network_client,
-    get_oci_object_storage_client,
-    get_oci_work_request_client,
+    OciService,
     list_instances_oci,
     oci_public_addresses,
     wait_for_instance_state,
@@ -1321,31 +1318,36 @@ class OciSctRunner(SctRunner):
     IMAGE_BUILDER_INSTANCE_TYPE = "VM.Standard.E4.Flex-2-2"
     REGULAR_TEST_INSTANCE_TYPE = "VM.Standard.E4.Flex-2-8"  # 2 vcpus, 8G
     LONGTERM_TEST_INSTANCE_TYPE = "VM.Standard.E4.Flex-4-16"  # 4 vcpus, 16G
-    TAG_NAMESPACE = "sct"
 
     @cached_property
     def BASE_IMAGE(self) -> str:
         """Get the latest Ubuntu 24.04 image for the source region."""
         return get_ubuntu_image_ocid(
-            compartment_id=self.oci_region_source.compartment_id,
+            compartment_id=self.oci_region_src.compartment_id,
             region=self.SOURCE_IMAGE_REGION,
             version="24.04",
         )
 
     def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration):
-        availability_zone = availability_zone or params.get("availability_zone")
+        availability_zone = availability_zone or params.get("availability_zone") if params else ""
         assert availability_zone, "Availability zone is required for OCI"
         availability_zone = availability_zone.split(",")[0]  # in case multiple AZs are given, take the first one
 
         super().__init__(region_name=region_name, availability_zone=availability_zone, params=params)
         self.oci_region = OciRegion(region_name=region_name)
-        self.oci_region_source = OciRegion(region_name=self.SOURCE_IMAGE_REGION)
-        self.compute_client, self._config = get_oci_compute_client(region=region_name)
-        self.network_client, _ = get_oci_network_client(region=region_name)
+        # TODO: create mapper of regions and clients and then reuse?
+        self.oci_service = OciService()
+        self.compute_client = self.oci_service.get_compute_client(region_name)
+        self.network_client = self.oci_service.get_network_client(region_name)
+
+        self.oci_region_src = OciRegion(region_name=self.SOURCE_IMAGE_REGION)
+        self.compute_client_src = self.oci_service.get_compute_client(self.SOURCE_IMAGE_REGION)
+        self.network_client_src = self.oci_service.get_network_client(self.SOURCE_IMAGE_REGION)
+
         self._instance = None
         # Map availability_zone to full AD name if needed (e.g., 'a' -> 'us-ashburn-1-AD-1')
         self._full_availability_domain = self._map_to_full_ad(self.oci_region, availability_zone)
-        self._full_availability_domain_source = self._map_to_full_ad(self.oci_region_source, "a")
+        self._full_availability_domain_source = self._map_to_full_ad(self.oci_region_src, "a")
 
     def _map_to_full_ad(self, oci_region: OciRegion, az_input: str) -> str:
         """Map availability zone input to full OCI AD name.
@@ -1404,19 +1406,32 @@ class OciSctRunner(SctRunner):
     def instance(self, new_instance_value: oci.core.models.Instance):
         self._instance = new_instance_value
 
+    def get_compute_and_network_clients_for_instance(self, instance: Any):
+        region = instance.region
+        if region == self.region_name:
+            return (self.compute_client, self.network_client)
+        elif region == self.SOURCE_IMAGE_REGION:
+            return (self.compute_client_src, self.network_client_src)
+        else:
+            return (
+                self.oci_service.get_compute_client(region),
+                self.oci_service.get_network_client(region),
+            )
+
     @cached_property
     def key_pair(self) -> SSHKey:
         return KeyStore().get_oci_ssh_key_pair()
 
     def _image(self, image_type: ImageType = ImageType.SOURCE) -> Any:
         if image_type == ImageType.SOURCE:
-            compute_client, _ = get_oci_compute_client(region=self.SOURCE_IMAGE_REGION)
+            compute_client = self.compute_client_src
         elif image_type == ImageType.GENERAL:
-            compute_client, _ = get_oci_compute_client(region=self.region_name)
+            compute_client = self.compute_client
         else:
             raise ValueError(f"Unknown Image type: {image_type}")
 
         try:
+            # TODO: add pagination
             images = compute_client.list_images(
                 compartment_id=self.oci_region.compartment_id,
                 display_name=self.image_name,
@@ -1452,28 +1467,19 @@ class OciSctRunner(SctRunner):
         full_ad = self._full_availability_domain
         network_client = self.network_client
 
-        # Get or create subnet for the instance
-        subnet = oci_region.subnet(ad=full_ad)
+        # Get or create public subnet for the SCT runner instance
+        subnet = oci_region.subnet(public=True)
         if not subnet:
-            LOGGER.info("Subnet not found in %s, creating it...", full_ad)
+            LOGGER.info("Public subnet not found in %s, creating it...", self.oci_region.region_name)
             # Ensure the VCN and security list exist first
             _ = oci_region.vcn  # This will create VCN if it doesn't exist
             _ = oci_region.security_list  # This will create security list if it doesn't exist
             _ = oci_region.internet_gateway  # This will create internet gateway for outbound connectivity
-
-            # Create the subnet with proper CIDR
-            region_index = oci_region._region_index()
-            vcn_cidr = ip_network(oci_region.SCT_VCN_CIDR_TMPL.format(region_index))
-            # Get the number of ADs to determine subnet index
-            ad_index = oci_region.availability_domains.index(full_ad)
-            subnet_cidr = list(vcn_cidr.subnets(prefixlen_diff=8))[ad_index]
-
-            oci_region.create_subnet(ad=full_ad, ipv4_cidr=subnet_cidr)
-            subnet = oci_region.subnet(ad=full_ad)
-
+            # Create the subnet
+            subnet = oci_region.create_subnet(public=True)
             if not subnet:
                 raise Exception(
-                    f"Failed to create subnet in {full_ad}. "
+                    f"Failed to get and/or create a public subnet in {self.oci_region.region_name}. "
                     f"Use `hydra prepare-regions --cloud-provider oci --region-name {self.region_name}' "
                     f"to create cloud env!"
                 )
@@ -1483,7 +1489,7 @@ class OciSctRunner(SctRunner):
         vnic_details = CreateVnicDetails(
             subnet_id=subnet.id,
             assign_public_ip=True,
-            defined_tags={self.TAG_NAMESPACE: tags},
+            defined_tags={TAG_NAMESPACE: tags},
         )
 
         # For flexible instances, we need to specify ShapeConfig
@@ -1520,7 +1526,7 @@ class OciSctRunner(SctRunner):
             shape_config=shape_config,
             create_vnic_details=vnic_details,
             metadata=metadata,
-            defined_tags={self.TAG_NAMESPACE: tags | {"launch_time": get_current_datetime_formatted()}},
+            defined_tags={TAG_NAMESPACE: tags | {"launch_time": get_current_datetime_formatted()}},
         )
 
         response = compute_client.launch_instance(instance_details)
@@ -1551,11 +1557,7 @@ class OciSctRunner(SctRunner):
         return instance
 
     def _stop_image_builder_instance(self, instance: Any) -> None:
-        if self.SOURCE_IMAGE_REGION == self.region_name:
-            compute_client = self.compute_client
-        else:
-            compute_client, _ = get_oci_compute_client(region=self.SOURCE_IMAGE_REGION)
-
+        compute_client, _ = self.get_compute_and_network_clients_for_instance(instance)
         compute_client.instance_action(instance_id=instance.id, action="STOP")
         wait_for_instance_state(
             compute_client=compute_client,
@@ -1564,19 +1566,14 @@ class OciSctRunner(SctRunner):
         )
 
     def _terminate_image_builder_instance(self, instance: Any) -> None:
-        if self.SOURCE_IMAGE_REGION == self.region_name:
-            compute_client = self.compute_client
-        else:
-            compute_client, _ = get_oci_compute_client(region=self.SOURCE_IMAGE_REGION)
-
+        compute_client, _ = self.get_compute_and_network_clients_for_instance(instance)
         compute_client.terminate_instance(instance_id=instance.id)
 
     def _get_instance_id(self) -> Any:
         return self.instance.id
 
     def get_instance_public_ip(self, instance: Any) -> str:
-        compute_client, _ = get_oci_compute_client(region=self.SOURCE_IMAGE_REGION)
-        network_client, _ = get_oci_network_client(region=self.SOURCE_IMAGE_REGION)
+        compute_client, network_client = self.get_compute_and_network_clients_for_instance(instance)
         public_ips = oci_public_addresses(
             instance=instance,
             compute_client=compute_client,
@@ -1587,21 +1584,19 @@ class OciSctRunner(SctRunner):
         raise Exception(f"No public IP found for instance {instance.id}")
 
     def _create_image(self, instance: Any) -> Any:
-        compute_client, _ = get_oci_compute_client(region=self.SOURCE_IMAGE_REGION)
-
         image_details = CreateImageDetails(
-            compartment_id=self.oci_region_source.compartment_id,
+            compartment_id=self.oci_region_src.compartment_id,
             display_name=self.image_name,
             instance_id=instance.id,
-            defined_tags={self.TAG_NAMESPACE: self.image_tags},
+            defined_tags={TAG_NAMESPACE: self.image_tags},
         )
 
-        response = compute_client.create_image(image_details)
+        response = self.compute_client_src.create_image(image_details)
         image_id = response.data.id
 
         LOGGER.info("Image created: %s. Waiting for it to be available...", image_id)
         image = wait_for_image_state(
-            compute_client=compute_client,
+            compute_client=self.compute_client_src,
             image_id=image_id,
             target_state="AVAILABLE",
         )
@@ -1637,12 +1632,10 @@ class OciSctRunner(SctRunner):
         LOGGER.info("Starting image copy from %s to %s", self.SOURCE_IMAGE_REGION, self.region_name)
 
         # Get clients for source and destination regions
-        source_compute_client, _ = get_oci_compute_client(region=self.SOURCE_IMAGE_REGION)
-        source_os_client, _ = get_oci_object_storage_client(region=self.SOURCE_IMAGE_REGION)
-        source_wr_client, _ = get_oci_work_request_client(region=self.SOURCE_IMAGE_REGION)
+        source_os_client = self.oci_service.get_object_storage_client(region=self.SOURCE_IMAGE_REGION)
+        source_wr_client = self.oci_service.get_work_request_client(region=self.SOURCE_IMAGE_REGION)
 
-        dest_compute_client = self.compute_client
-        dest_os_client, _ = get_oci_object_storage_client(region=self.region_name)
+        dest_os_client = self.oci_service.get_object_storage_client(region=self.region_name)
 
         # Get Object Storage namespace
         namespace = source_os_client.get_namespace().data
@@ -1663,7 +1656,7 @@ class OciSctRunner(SctRunner):
         create_bucket_if_missing(
             os_client=source_os_client,
             bucket_name=source_bucket,
-            compartment_id=self.oci_region_source.compartment_id,
+            compartment_id=self.oci_region_src.compartment_id,
             namespace=namespace,
         )
         create_bucket_if_missing(
@@ -1685,7 +1678,7 @@ class OciSctRunner(SctRunner):
             # Step 2: Export image to Object Storage in source region
             LOGGER.info("Step 2/4: Exporting image to Object Storage in %s...", self.SOURCE_IMAGE_REGION)
             export_image_to_object_storage(
-                compute_client=source_compute_client,
+                compute_client=self.compute_client_src,
                 work_request_client=source_wr_client,
                 os_client=source_os_client,
                 image_id=source_image.id,
@@ -1723,13 +1716,13 @@ class OciSctRunner(SctRunner):
             return
 
         imported_image = import_image_from_object_storage(
-            compute_client=dest_compute_client,
+            compute_client=self.compute_client,
             compartment_id=self.oci_region.compartment_id,
             image_name=self.image_name,
             bucket_name=dest_bucket,
             namespace=namespace,
             object_name=object_name,
-            defined_tags={self.TAG_NAMESPACE: self.image_tags},
+            defined_tags={TAG_NAMESPACE: self.image_tags},
         )
 
         LOGGER.info("✓ Image successfully copied to %s (OCID: %s)", self.region_name, imported_image.id)
@@ -1755,9 +1748,7 @@ class OciSctRunner(SctRunner):
         )
 
         for instance in instances:
-            tags = (instance.defined_tags or {}).get(cls.TAG_NAMESPACE, {})
-            region = instance.region  # Extract region from instance attribute
-
+            tags = (instance.defined_tags or {}).get(TAG_NAMESPACE, {})
             if launch_time := tags.get("launch_time"):
                 try:
                     launch_time = datetime_from_formatted(date_string=launch_time)
@@ -1771,8 +1762,9 @@ class OciSctRunner(SctRunner):
                 launch_time = create_time.replace(tzinfo=pytz.utc) if hasattr(create_time, "replace") else create_time
 
             # Get compute and network clients for this region
-            compute_client, _ = get_oci_compute_client(region=region)
-            network_client, _ = get_oci_network_client(region=region)
+            oci_service = OciService()
+            compute_client = oci_service.get_compute_client(instance.region)
+            network_client = oci_service.get_network_client(instance.region)
 
             public_ips = oci_public_addresses(
                 instance=instance,
@@ -1811,12 +1803,10 @@ class OciSctRunner(SctRunner):
         tags_to_create = {str(k): str(v) for k, v in tags.items()}
         LOGGER.info("Setting SCT runner defined tags to: %s", tags_to_create)
 
-        tag_namespace = sct_runner_info.sct_runner_class.TAG_NAMESPACE
-
         existing_defined_tags = instance.defined_tags or {}
-        our_tags = existing_defined_tags.get(tag_namespace, {})
+        our_tags = existing_defined_tags.get(TAG_NAMESPACE, {})
         our_tags.update(tags_to_create)
-        existing_defined_tags[tag_namespace] = our_tags
+        existing_defined_tags[TAG_NAMESPACE] = our_tags
 
         update_details = UpdateInstanceDetails(defined_tags=existing_defined_tags)
         compute_client.update_instance(instance_id=instance.id, update_instance_details=update_details)
@@ -1848,7 +1838,7 @@ def _get_runner_user_tag(sct_runner_info: SctRunnerInfo) -> str | None:
         if hasattr(sct_runner_info.instance, "tags") and sct_runner_info.instance.tags:
             return sct_runner_info.instance.tags.get("RunByUser")
     elif sct_runner_info.cloud_provider == "oci":
-        tags = (sct_runner_info.instance.defined_tags or {}).get(OciSctRunner.TAG_NAMESPACE, {})
+        tags = (sct_runner_info.instance.defined_tags or {}).get(TAG_NAMESPACE, {})
         return tags.get("RunByUser")
     return None
 
