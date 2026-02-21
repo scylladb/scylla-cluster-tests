@@ -86,6 +86,33 @@ hydra run-test ....
 # http://fruch.ngrok.io
 ```
 
+## Configuring reverse tunneling for services (syslog-ng, vector, ldap)
+
+When running tests with `ip_ssh_connections: public`, SCT needs to expose local services (syslog-ng, vector, ldap)
+to remote nodes. This is done using reverse tunneling. You can choose between two methods:
+
+### Using autossh (default)
+
+Autossh creates reverse SSH tunnels through Docker containers:
+
+```bash
+export SCT_REVERSE_TUNNEL_MODE=autossh  # or omit (default)
+hydra run-test ...
+```
+
+### Using ngrok
+
+Ngrok creates public tunnels without requiring SSH. This is useful when SSH reverse tunneling is blocked
+or when you want simpler setup:
+
+```bash
+export SCT_REVERSE_TUNNEL_MODE=ngrok
+hydra run-test ...
+```
+
+**Note:** For ngrok, you may need to authenticate with an ngrok account if you hit rate limits.
+See https://ngrok.com/docs for authentication setup.
+
 ## How can I connect to test machines in AWS ?
 
 ```bash
