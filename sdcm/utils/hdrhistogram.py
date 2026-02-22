@@ -424,16 +424,16 @@ class _HdrRangeHistogramBuilder:
         #    First two ifs will handle all ycsb tags and return correct workload type.
 
         hdr_tag = hdr_tag.lower().strip()
-        LOGGER.debug(f"Checking hdr_tag {hdr_tag} for workload type detection")
+        LOGGER.info(f"Checking hdr_tag {hdr_tag} for workload type detection, stress_operation `{self.stress_operation}`")
         if any(w_word in hdr_tag for w_word in ("write", "insert", "update", "delete")):
             return "WRITE"
-        elif any(r_word in hdr_tag for r_word in ("read", "select", "get", "count", "scan")):
+        elif any(r_word in hdr_tag for r_word in ("read", "select", "get", "count", "scan", 'fn--insert')):
             return "READ"
         elif self.stress_operation in ("WRITE", "READ"):
             # branch for the scylla-bench case with its 'co-fixed' and 'raw' tags
             return self.stress_operation
         # NOTE: following exception raising is not expected in the properly configured test scenarios
-        raise ValueError(f"Failed to detect the workload type for the following hdr_tag: {hdr_tag}")
+        raise ValueError(f"Failed to detect the workload type for the following hdr_tag: {hdr_tag} and stress_operation: `{self.stress_operation}`")
 
     def _get_summary_for_operation_by_hdr_tag(self, histogram: _HdrRangeHistogram) -> dict[str, dict[str, int]] | None:
         if histogram.histogram and (
