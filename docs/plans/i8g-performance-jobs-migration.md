@@ -67,7 +67,7 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
   - Mixed 50K-150K: ≤3ms (both r/w), 300K: ≤5ms (both r/w)
   - Write: No P99 latency limits for unthrottled write test
 
-**Current Throughput Expectations (Maximum Expected):**
+**Current Throughput Expectations (Minimum Expected):**
 - **Vnodes** (`latency-decorator-error-thresholds-steps-ent-vnodes.yaml`):
   - Write (unthrottled): ≥284,479 ops/sec
   - Read (unthrottled): ≥862,336 ops/sec
