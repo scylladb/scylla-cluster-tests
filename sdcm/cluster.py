@@ -2617,6 +2617,66 @@ class BaseNode(AutoSshContainerMixin):
             self.remoter.run(f"sudo grep Xmx {jmx_file}")
             self.log.info("result after changing scylla-jmx heap above")
 
+    DNS_FAILURE_PATTERNS = (
+        "Temporary failure resolving",
+        "Could not resolve",
+        "Name or service not known",
+        "Err:1 http",
+        "Failed to fetch",
+    )
+
+    def check_dns_ready(self, timeout=120, interval=5, dns_host="archive.ubuntu.com"):
+        """Check that DNS resolution is working on the node.
+
+        Args:
+            timeout: Maximum time in seconds to wait for DNS readiness.
+            interval: Time in seconds between retries.
+            dns_host: Hostname to resolve for the check.
+
+        Returns:
+            True if DNS resolution succeeds within the timeout, False otherwise.
+        """
+        deadline = time.time() + timeout
+        attempt = 0
+        while time.time() < deadline:
+            attempt += 1
+            result = self.remoter.run(
+                f"getent hosts {dns_host}",
+                ignore_status=True,
+                verbose=False,
+            )
+            if result.exit_status == 0:
+                self.log.debug("DNS readiness check passed on attempt %d", attempt)
+                return True
+            self.log.warning(
+                "DNS readiness check failed (attempt %d): getent hosts %s returned %d",
+                attempt, dns_host, result.exit_status,
+            )
+            time.sleep(interval)
+
+        self.log.error("DNS readiness check failed after %d seconds", timeout)
+        self._capture_dns_diagnostics()
+        return False
+
+    def _capture_dns_diagnostics(self):
+        """Capture DNS/network diagnostic information for debugging."""
+        diag_commands = [
+            "cat /etc/resolv.conf",
+            "resolvectl status 2>/dev/null || systemd-resolve --status 2>/dev/null || true",
+            "nmcli device show 2>/dev/null || true",
+        ]
+        for cmd in diag_commands:
+            result = self.remoter.run(cmd, ignore_status=True, verbose=False)
+            self.log.info("DNS diagnostics [%s]:\n%s", cmd, result.stdout)
+
+    @staticmethod
+    def _is_dns_network_error(output):
+        """Check if command output indicates a DNS/network failure."""
+        for pattern in BaseNode.DNS_FAILURE_PATTERNS:
+            if pattern in output:
+                return True
+        return False
+
     @log_run_info
     def scylla_setup(self, disks, devname: str):
         """
@@ -2630,11 +2690,29 @@ class BaseNode(AutoSshContainerMixin):
             extra_setup_args += " --swap-directory / "
         if self.parent_cluster.params.get("unified_package"):
             extra_setup_args += " --no-verify-package "
-        self.remoter.run(
-            "sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --setup-nic-and-disks {}".format(
-                devname, ",".join(disks), extra_setup_args
-            )
+        setup_cmd = "sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --setup-nic-and-disks {}".format(
+            devname, ",".join(disks), extra_setup_args
         )
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                self.remoter.run(setup_cmd)
+                break
+            except (Failure, UnexpectedExit, Libssh2_UnexpectedExit) as exc:
+                error_output = str(exc)
+                if hasattr(exc, "result"):
+                    error_output += getattr(exc.result, "stdout", "") or ""
+                    error_output += getattr(exc.result, "stderr", "") or ""
+                if attempt < max_retries and self._is_dns_network_error(error_output):
+                    self.log.warning(
+                        "scylla_setup failed with DNS/network error (attempt %d/%d), retrying after apt-get update",
+                        attempt + 1, max_retries + 1,
+                    )
+                    self._capture_dns_diagnostics()
+                    self.remoter.run("sudo apt-get update", ignore_status=True)
+                    time.sleep(10 * (attempt + 1))
+                else:
+                    raise
 
         result = self.remoter.run("cat /proc/mounts")
         assert " /var/lib/scylla " in result.stdout, "RAID setup failed, scylla directory isn't mounted correctly"
@@ -5801,6 +5879,14 @@ class BaseScyllaCluster:
     @staticmethod
     def _scylla_post_install(node: BaseNode, new_scylla_installed: bool, devname: str) -> None:
         if new_scylla_installed:
+            if not node.check_dns_ready():
+                raise NodeSetupFailed(
+                    node=node,
+                    error_msg="DNS readiness check failed before scylla_setup. "
+                              "Network/DNS is not available on the node. "
+                              "Check network connectivity and DNS configuration. "
+                              "Diagnostics have been captured in the node log.",
+                )
             try:
                 disks = node.detect_disks(nvme=True)
             except AssertionError:
