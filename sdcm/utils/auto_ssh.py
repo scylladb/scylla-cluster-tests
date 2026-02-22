@@ -27,22 +27,22 @@ class AutoSshContainerMixin:
     Requires `ssh_login_info', `name' and `logdir' properties.
 
     See sdcm.utils.docker_utils.ContainerManager for details.
-    
+
     This mixin now delegates to the reverse_tunnel module for actual implementation,
     maintaining backward compatibility while supporting alternative tunnel types.
     """
 
     def auto_ssh_container_run_args(self, local_port, remote_port, ssh_mode="-R"):
         """Get container run arguments for autossh tunnel.
-        
+
         This method maintains backward compatibility with existing code.
         It creates an AutosshTunnelManager and delegates to it.
-        
+
         Args:
             local_port: Local port on the test runner
             remote_port: Remote port on the node
             ssh_mode: SSH tunnel mode (default: "-R" for reverse)
-            
+
         Returns:
             Dictionary of container run arguments
         """
@@ -52,7 +52,7 @@ class AutoSshContainerMixin:
             tunnel_mode = getattr(tunnel_mode, 'params', {}).get('reverse_tunnel_mode', 'autossh')
         else:
             tunnel_mode = 'autossh'
-        
+
         # For backward compatibility, if this method is called directly,
         # we always use autossh (maintaining existing behavior)
         tunnel_manager = get_tunnel_manager(self, 'autossh', 'autossh')

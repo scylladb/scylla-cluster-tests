@@ -11,9 +11,8 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import os
 import tempfile
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -45,9 +44,9 @@ class TestAutosshTunnelManager:
     def test_get_container_run_args(self, mock_node):
         """Test that AutosshTunnelManager generates correct container args."""
         manager = AutosshTunnelManager(mock_node, "syslog_ng")
-        
+
         args = manager.get_container_run_args(local_port=5000, remote_port=8000)
-        
+
         assert args["image"] == "jnovack/autossh:1.2.2"
         assert "test-node" in args["name"]
         assert "192.168.1.100" in args["name"]  # hostname with colons replaced, dots kept
@@ -64,9 +63,9 @@ class TestAutosshTunnelManager:
     def test_logfile_property(self, mock_node):
         """Test that logfile property returns correct path."""
         manager = AutosshTunnelManager(mock_node, "vector")
-        
+
         logfile = manager.logfile
-        
+
         assert "vector_tunnel.log" in logfile
         assert logfile.startswith(tempfile.gettempdir())
 
@@ -99,9 +98,9 @@ class TestNgrokTunnelManager:
         with patch('sdcm.utils.reverse_tunnel.ngrok') as mock_ngrok:
             mock_ngrok.connect.return_value = mock_tunnel
             manager = NgrokTunnelManager(mock_node, "ldap")
-            
+
             args = manager.get_container_run_args(local_port=5001, remote_port=389)
-            
+
             assert args["image"] == "ngrok-tunnel"
             assert "test-node-ngrok-ldap" in args["name"]
             assert args["environment"]["TUNNEL_TYPE"] == "ngrok"
@@ -117,11 +116,11 @@ class TestNgrokTunnelManager:
             # Create first manager
             manager1 = NgrokTunnelManager(mock_node, "service1")
             manager1.get_container_run_args(local_port=5000, remote_port=8000)
-            
+
             # Create second manager with same local port
             manager2 = NgrokTunnelManager(mock_node, "service2")
             manager2.get_container_run_args(local_port=5000, remote_port=9000)
-            
+
             # ngrok.connect should only be called once
             assert mock_ngrok.connect.call_count == 1
 
@@ -132,9 +131,9 @@ class TestNgrokTunnelManager:
             mock_ngrok.connect.return_value = mock_tunnel
             manager = NgrokTunnelManager(mock_node, "test")
             manager.get_container_run_args(local_port=5555, remote_port=8888)
-            
+
             url = NgrokTunnelManager.get_tunnel_url(5555)
-            
+
             assert url == "https://abc123.ngrok.io"
 
     @pytest.mark.skipif(not PYNGROK_AVAILABLE, reason="pyngrok not installed")
@@ -145,13 +144,13 @@ class TestNgrokTunnelManager:
             # Create tunnels
             manager1 = NgrokTunnelManager(mock_node, "service1")
             manager1.get_container_run_args(local_port=5000, remote_port=8000)
-            
+
             manager2 = NgrokTunnelManager(mock_node, "service2")
             manager2.get_container_run_args(local_port=6000, remote_port=9000)
-            
+
             # Disconnect all
             NgrokTunnelManager.disconnect_all()
-            
+
             # Both tunnels should be disconnected
             assert mock_ngrok.disconnect.call_count == 2
             assert len(NgrokTunnelManager._active_tunnels) == 0
@@ -176,7 +175,7 @@ class TestTunnelManagerFactory:
     def test_get_autossh_manager(self, mock_node):
         """Test that factory returns AutosshTunnelManager for 'autossh'."""
         manager = get_tunnel_manager(mock_node, "test", "autossh")
-        
+
         assert isinstance(manager, AutosshTunnelManager)
         assert manager.service_name == "test"
 
@@ -184,7 +183,7 @@ class TestTunnelManagerFactory:
     def test_get_ngrok_manager(self, mock_node):
         """Test that factory returns NgrokTunnelManager for 'ngrok'."""
         manager = get_tunnel_manager(mock_node, "test", "ngrok")
-        
+
         assert isinstance(manager, NgrokTunnelManager)
         assert manager.service_name == "test"
 
@@ -198,6 +197,6 @@ class TestTunnelManagerFactory:
         """Test that tunnel mode is case-insensitive."""
         manager1 = get_tunnel_manager(mock_node, "test", "AUTOSSH")
         manager2 = get_tunnel_manager(mock_node, "test", "NgRoK")
-        
+
         assert isinstance(manager1, AutosshTunnelManager)
         assert isinstance(manager2, NgrokTunnelManager)

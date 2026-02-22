@@ -33,14 +33,14 @@ LOGGER = logging.getLogger(__name__)
 
 class ReverseTunnelManager(ABC):
     """Base class for reverse tunnel managers.
-    
+
     Manages reverse tunneling from remote nodes to the local test runner
     for services like syslog-ng, vector, and ldap.
     """
 
     def __init__(self, node: "BaseNode", service_name: str):
         """Initialize reverse tunnel manager.
-        
+
         Args:
             node: The BaseNode instance
             service_name: Name of the service (e.g., 'syslog_ng', 'vector', 'ldap')
@@ -52,12 +52,12 @@ class ReverseTunnelManager(ABC):
     @abstractmethod
     def get_container_run_args(self, local_port: int, remote_port: int, ssh_mode: str = "-R") -> dict:
         """Get arguments for running the tunnel container.
-        
+
         Args:
             local_port: Local port on the test runner (where service is running)
             remote_port: Remote port on the node (where service should be accessible)
             ssh_mode: SSH tunnel mode (default: "-R" for reverse)
-            
+
         Returns:
             Dictionary of container run arguments
         """
@@ -71,7 +71,7 @@ class ReverseTunnelManager(ABC):
 
 class AutosshTunnelManager(ReverseTunnelManager):
     """Reverse tunnel manager using autossh (Docker-based SSH tunneling).
-    
+
     Creates a reverse SSH tunnel that allows the remote node to access
     services running on the test runner at localhost:remote_port by
     forwarding them from the test runner's local_port.
@@ -81,12 +81,12 @@ class AutosshTunnelManager(ReverseTunnelManager):
 
     def get_container_run_args(self, local_port: int, remote_port: int, ssh_mode: str = "-R") -> dict:
         """Get arguments for running the autossh container.
-        
+
         Args:
             local_port: Local port on the test runner where service is running
             remote_port: Remote port on the node where service should be accessible
             ssh_mode: SSH tunnel mode (default: "-R" for reverse)
-            
+
         Returns:
             Dictionary of container run arguments for autossh
         """
@@ -116,7 +116,7 @@ class AutosshTunnelManager(ReverseTunnelManager):
 
 class NgrokTunnelManager(ReverseTunnelManager):
     """Reverse tunnel manager using pyngrok (Python-based ngrok client).
-    
+
     Instead of SSH reverse tunnels, this creates a public ngrok tunnel
     that exposes the local service. Remote nodes can then connect to
     the public ngrok URL to access the service.
@@ -127,11 +127,11 @@ class NgrokTunnelManager(ReverseTunnelManager):
 
     def __init__(self, node: "BaseNode", service_name: str):
         """Initialize ngrok tunnel manager.
-        
+
         Args:
             node: The BaseNode instance
             service_name: Name of the service (e.g., 'syslog_ng', 'vector', 'ldap')
-            
+
         Raises:
             ImportError: If pyngrok is not available
         """
@@ -147,14 +147,14 @@ class NgrokTunnelManager(ReverseTunnelManager):
         """Configure ngrok with custom settings."""
         # Set ngrok log path
         ngrok_log = os.path.join(self.logdir, f"{self.service_name}_ngrok.log")
-        
+
         # Configure ngrok logging
         pyngrok_config = conf.get_default()
         pyngrok_config.log_event_callback = lambda log: self._log_ngrok_event(log, ngrok_log)
 
     def _log_ngrok_event(self, log_message: str, log_file: str):
         """Log ngrok events to a file.
-        
+
         Args:
             log_message: The log message from ngrok
             log_file: Path to the log file
@@ -167,20 +167,20 @@ class NgrokTunnelManager(ReverseTunnelManager):
 
     def get_container_run_args(self, local_port: int, remote_port: int, ssh_mode: str = "-R") -> dict:
         """Get arguments for ngrok tunnel (returns dummy container args).
-        
+
         For ngrok, we don't use a Docker container. Instead, we create a public
         tunnel to expose the local service. This method creates the tunnel and
         returns metadata that can be stored.
-        
+
         The workflow is:
         1. Start ngrok tunnel exposing localhost:local_port to the internet
         2. Remote node connects to the public ngrok URL (instead of localhost:remote_port)
-        
+
         Args:
             local_port: Local port on the test runner where service is running
             remote_port: Remote port on the node (not used for ngrok, kept for API compatibility)
             ssh_mode: SSH tunnel mode (ignored for ngrok)
-            
+
         Returns:
             Dictionary with tunnel metadata (not actual container args)
         """
@@ -188,7 +188,7 @@ class NgrokTunnelManager(ReverseTunnelManager):
         if local_port in self._active_tunnels:
             tunnel = self._active_tunnels[local_port]
             public_url = tunnel.public_url
-            LOGGER.info("Reusing existing ngrok tunnel for %s: %s -> localhost:%s", 
+            LOGGER.info("Reusing existing ngrok tunnel for %s: %s -> localhost:%s",
                        self.service_name, public_url, local_port)
         else:
             try:
@@ -196,13 +196,13 @@ class NgrokTunnelManager(ReverseTunnelManager):
                 tunnel = ngrok.connect(local_port, bind_tls=True)
                 self._active_tunnels[local_port] = tunnel
                 public_url = tunnel.public_url
-                
-                LOGGER.info("Ngrok tunnel for %s created: %s -> localhost:%s", 
+
+                LOGGER.info("Ngrok tunnel for %s created: %s -> localhost:%s",
                            self.service_name, public_url, local_port)
             except Exception as exc:
                 LOGGER.error("Failed to create ngrok tunnel for %s: %s", self.service_name, exc)
                 raise
-        
+
         # Return metadata about the tunnel (not actual container args)
         # The ContainerManager will skip container creation for ngrok
         return dict(
@@ -231,10 +231,10 @@ class NgrokTunnelManager(ReverseTunnelManager):
     @classmethod
     def get_tunnel_url(cls, local_port: int) -> Optional[str]:
         """Get the public URL for an active tunnel.
-        
+
         Args:
             local_port: The local port the tunnel is connected to
-            
+
         Returns:
             The public URL or None if no tunnel exists for that port
         """
@@ -244,17 +244,17 @@ class NgrokTunnelManager(ReverseTunnelManager):
 
 def get_tunnel_manager(node: "BaseNode", service_name: str, tunnel_mode: str = "autossh") -> ReverseTunnelManager:
     """Factory function to create the appropriate tunnel manager.
-    
+
     Args:
         node: The BaseNode instance
         service_name: Name of the service
         tunnel_mode: Type of tunnel ('autossh' or 'ngrok')
-        
+
     Returns:
         An instance of the appropriate ReverseTunnelManager subclass
     """
     tunnel_mode = tunnel_mode.lower()
-    
+
     if tunnel_mode == "ngrok":
         return NgrokTunnelManager(node, service_name)
     elif tunnel_mode == "autossh":
