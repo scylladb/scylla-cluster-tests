@@ -82,6 +82,7 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 **Instance Type Configurations:**
 - Existing: `configurations/aws/i4i_4xlarge.yaml` (single line: instance_type_db)
 - ARM pattern: `configurations/arm_instance_types/i8g_2xlarge.yaml` (includes --no-ec2-check flag)
+- Target for migration: i8g.4xlarge (will need new configuration file or update existing ARM config)
 
 **Test Implementation:**
 - **File:** `performance_regression_gradual_grow_throughput.py`
