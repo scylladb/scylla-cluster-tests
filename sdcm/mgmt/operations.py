@@ -252,6 +252,13 @@ class SnapshotData:
 
 
 class SnapshotOperations(ClusterTester):
+    def _get_total_loaders(self) -> int:
+        """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string) formats."""
+        n_loaders = self.params.get("n_loaders")
+        if isinstance(n_loaders, int):
+            return n_loaders
+        return sum(int(n) for n in n_loaders.split())
+
     @staticmethod
     def get_snapshot_data(snapshot_name: str) -> SnapshotData:
         snapshots_config = "defaults/manager_restore_benchmark_snapshots.yaml"
@@ -360,7 +367,7 @@ class SnapshotPreparerOperations(ClusterTester):
 
     def calculate_rows_per_loader(self, overall_rows_num: int) -> int:
         """Calculate number of rows per loader thread based on the overall number of rows and the number of loaders."""
-        num_of_loaders = int(self.params.get("n_loaders"))
+        num_of_loaders = self._get_total_loaders()
         if overall_rows_num % num_of_loaders:
             raise ValueError(f"Overall rows number ({overall_rows_num}) should be divisible by the number of loaders")
         return int(overall_rows_num / num_of_loaders)
@@ -390,7 +397,7 @@ class SnapshotPreparerOperations(ClusterTester):
         params_to_use_in_cs_cmd["ks_name"] = ks_name
 
         cs_cmds = []
-        num_of_loaders = int(self.params.get("n_loaders"))
+        num_of_loaders = self._get_total_loaders()
         for loader_index in range(num_of_loaders):
             # Sequence params should be defined for every loader thread separately since vary for each thread
             params_to_use_in_cs_cmd["sequence_start"] = rows_per_loader * loader_index + 1
@@ -410,7 +417,7 @@ class SnapshotPreparerOperations(ClusterTester):
         dataset = snapshot.dataset
 
         rows_per_loader = self.calculate_rows_per_loader(overall_rows_num=dataset["num_of_rows"])
-        num_of_loaders = int(self.params.get("n_loaders"))
+        num_of_loaders = self._get_total_loaders()
 
         cs_cmds = []
         cs_cmd_template = snapshot.cs_read_cmd_template
@@ -579,6 +586,20 @@ class DatabaseOperations(ClusterTester):
 
 
 class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
+    def _get_total_loaders(self) -> int:
+        """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string) formats."""
+        n_loaders = self.params.get("n_loaders")
+        if isinstance(n_loaders, int):
+            return n_loaders
+        return sum(int(n) for n in n_loaders.split())
+
+    def _get_total_db_nodes(self) -> int:
+        """Get total number of db nodes, handling both single-DC (int) and multi-DC (space-separated string) formats."""
+        n_db_nodes = self.params.get("n_db_nodes")
+        if isinstance(n_db_nodes, int):
+            return n_db_nodes
+        return sum(int(n) for n in n_db_nodes.split())
+
     def _generate_load(self, keyspace_name: str = None):
         self.log.info("Starting c-s write workload")
         stress_cmd = self.params.get("stress_cmd")
@@ -601,8 +622,8 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
     def generate_background_read_load(self):
         self.log.info("Starting c-s read")
         stress_cmd = self.params.get("stress_read_cmd")
-        number_of_nodes = self.params.get("n_db_nodes")
-        number_of_loaders = self.params.get("n_loaders")
+        number_of_nodes = self._get_total_db_nodes()
+        number_of_loaders = self._get_total_loaders()
 
         throttle_per_node = 14666
         throttle_per_loader = int(throttle_per_node * number_of_nodes / number_of_loaders)
