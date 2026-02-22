@@ -302,13 +302,14 @@ def list_instances_oci(
         try:
             compute_client, _ = get_oci_compute_client(region=region)
             kwargs = {"lifecycle_state": "RUNNING"} if running else {}
-            region_instances = oci.pagination.list_call_get_all_results_generator(
-                compute_client.list_instances, yield_mode="record", compartment_id=compartment_id, **kwargs
+            region_instances = list(
+                oci.pagination.list_call_get_all_results_generator(
+                    compute_client.list_instances, yield_mode="record", compartment_id=compartment_id, **kwargs
+                )
             )
             all_instances.extend(region_instances)
             if verbose:
                 LOGGER.debug("Found %d instances in region '%s'", len(region_instances), region)
-            all_instances.extend(region_instances)
         except oci.exceptions.ServiceError as exc:
             LOGGER.warning("Failed to list instances in region '%s': %s", region, exc.message)
 
