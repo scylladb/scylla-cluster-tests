@@ -140,28 +140,35 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 
 ### Phase 2: Validation with Last Week's AMIs
 
-**Description:** Execute validation runs using recent AMIs to ensure infrastructure stability and collect baseline performance data.
+**Description:** Execute validation runs using recent AMIs to ensure infrastructure stability and collect baseline performance data. **Critical: Must measure maximum throughput for all 8 test combinations (4 load types × 2 configurations) before proceeding to recalibration.**
 
 **Definition of Done:**
 - [ ] Identify appropriate AMI IDs for validation (last week's master builds)
-- [ ] Execute manual runs of both vnodes and tablets jobs
+- [ ] Execute manual runs for all test combinations to find maximum throughput:
+  - [ ] **Vnodes - Read** (test_read_gradual_increase_load with unthrottled step)
+  - [ ] **Vnodes - Write** (test_write_gradual_increase_load with unthrottled step)
+  - [ ] **Vnodes - Mixed** (test_mixed_gradual_increase_load with unthrottled step)
+  - [ ] **Vnodes - Read Disk-Only** (test_read_disk_only_gradual_increase_load with unthrottled step)
+  - [ ] **Tablets - Read** (test_read_gradual_increase_load with unthrottled step)
+  - [ ] **Tablets - Write** (test_write_gradual_increase_load with unthrottled step)
+  - [ ] **Tablets - Mixed** (test_mixed_gradual_increase_load with unthrottled step)
+  - [ ] **Tablets - Read Disk-Only** (test_read_disk_only_gradual_increase_load with unthrottled step)
 - [ ] Verify all infrastructure components provision successfully
 - [ ] Confirm P99 latencies are within expected ranges per existing threshold files
 - [ ] Document no infrastructure stability issues (node failures, network issues)
-- [ ] Document observed maximum sustainable throughput per workload type
-- [ ] Document unthrottled step performance metrics
-- [ ] Create validation report with:
-  - [ ] Maximum observed throughput per workload (read, write, mixed, read_disk_only)
-  - [ ] P99 latency at each existing step
-  - [ ] Any infrastructure anomalies
-  - [ ] Recommendations for step recalibration
+- [ ] Create maximum throughput baseline document with:
+  - [ ] **Maximum sustained throughput for each of the 8 test combinations**
+  - [ ] P99 latency at unthrottled (max) load for each combination
+  - [ ] Resource utilization metrics (CPU, disk I/O, network) at max throughput
+  - [ ] Any infrastructure anomalies or limitations observed
+  - [ ] Recommendations for percentage-based step calculations in Phase 4
 
 **Dependencies:** Phase 1
 
 **Deliverables:**
-- Validation test runs (stored in Jenkins/test results)
-- Validation report document (markdown in /docs or test results comment)
-- Baseline throughput measurements
+- Validation test runs for all 8 combinations (stored in Jenkins/test results)
+- **Maximum throughput baseline document** with measurements for all load types (vnodes & tablets)
+- Infrastructure validation report
 
 ### Phase 3: Finalize Version Support Matrix
 
@@ -184,25 +191,29 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 
 ### Phase 4: Recalibrate Throughput Steps
 
-**Description:** Redefine gradual ramp steps as percentages of validated maximum throughput on i8g.
+**Description:** Redefine gradual ramp steps as percentages of validated maximum throughput on i8g for all 8 test combinations.
 
 **Definition of Done:**
-- [ ] Calculate percentage-based steps from validation data:
-  - [ ] ~10% of max throughput
-  - [ ] ~50% of max throughput
-  - [ ] ~75% of max throughput
-  - [ ] ~90% of max throughput
-  - [ ] unthrottled (100%)
+- [ ] Calculate percentage-based steps from Phase 2 max throughput measurements for each test combination:
+  - [ ] **For each of the 8 test combinations** (4 load types × 2 configs):
+    - [ ] ~10% of measured max throughput
+    - [ ] ~50% of measured max throughput
+    - [ ] ~75% of measured max throughput
+    - [ ] ~90% of measured max throughput
+    - [ ] unthrottled (100% - no throttle applied)
 - [ ] Create new configuration file: `configurations/performance/cassandra_stress_gradual_load_steps_enterprise_i8g.yaml`
-- [ ] Define steps for each workload type (read, write, mixed, read_disk_only)
+- [ ] Define steps for each workload type and configuration:
+  - [ ] Vnodes: read, write, mixed, read_disk_only
+  - [ ] Tablets: read, write, mixed, read_disk_only
 - [ ] Maintain thread count strategy (static or per-step if needed)
 - [ ] Document rationale for each step in configuration comments
+- [ ] Document the base max throughput values used for percentage calculations
 
-**Dependencies:** Phase 2
+**Dependencies:** Phase 2 (requires max throughput measurements from all 8 test combinations)
 
 **Deliverables:**
-- New throughput steps configuration file
-- Documentation of step calculations
+- New throughput steps configuration file with percentage-based steps
+- Documentation of step calculations with base max throughput values
 
 ### Phase 5: Validate Recalibrated Steps
 
