@@ -133,7 +133,7 @@ The configured version is used for both:
 The Scylla Doctor version is configured in `defaults/test_default.yaml`:
 
 ```yaml
-scylla_doctor_version: "1.9"
+scylla_doctor_version: "1.7"
 ```
 
 This version is used for all artifact tests by default.
