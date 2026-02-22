@@ -420,6 +420,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
     ) -> None:
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "db-cluster")
         node_prefix = cluster.prepend_user_prefix(user_prefix, "db-node")
+        print(f"QWERTY loading docker image {docker_image} {docker_image_tag}")
         super().__init__(
             docker_image=docker_image,
             docker_image_tag=docker_image_tag,

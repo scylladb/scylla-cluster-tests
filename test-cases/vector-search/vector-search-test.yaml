@@ -1,0 +1,34 @@
+test_duration: 60
+
+prepare_write_cmd:
+  - >-
+    latte run --function insert --threads 4 --rate 5 --duration 10s -P is_schema_creation=true data_dir/latte/vector_search/vector_search_recall.rn
+
+# # Make sure values in `--rate` == `-P recall_validation_rate` and `--duration` == -P recall_validation_duration`
+# # Latte don't have access to non-custom parameters in runtime of prepare function
+stress_cmd:
+  - >-
+    latte run --function validate_average_recall --connections 2 --rate 5 -P recall_validation_rate=5 --duration 10s -P recall_validation_duration=300 data_dir/latte/vector_search/vector_search_recall.rn
+
+# n_db_nodes: 3
+# instance_type_loader: 'c6i.2xlarge'
+# instance_type_db: 'i4i.large'
+# gce_instance_type_loader: 'n2-highmem-2'
+# gce_instance_type_db: 'n2-highmem-2'
+# n_loaders: 1
+# n_vector_store_nodes: 1
+
+# user_prefix: 'vector-search-sanity'
+
+# # docker_image: scylladb/scylla-nightly
+# vector_store_docker_image: scylladb/scylla-nightly
+scylla_version: latest
+# # ami_id_vector_store: vector-store-1-4-0-amd64-2026-01-20t09-48-49z # x64
+# ami_id_vector_store: vector-store-1-4-0-arm64-2026-01-20t09-33-37z #arm
+enable_argus: false
+use_mgmt: false
+n_vector_store_nodes: 1
+n_loaders: 1
+n_db_nodes: 1
+
+# validate_large_collections: true
