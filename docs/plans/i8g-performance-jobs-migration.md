@@ -96,7 +96,7 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 - Already used in: longevity tests (i8ge.xlarge, i8ge.2xlarge), rolling-upgrade-ami-arm, vector-search
 - ARM config exists: `configurations/arm_instance_types/i8g_2xlarge.yaml`
 - All i8g configs use ARM64 AMIs (see `configurations/arm/` directory)
-- Note: i8g.2xlarge supported from Scylla 2025.3.3+ (comment in jenkins-pipelines/oss/rolling-upgrade/rolling-upgrade-ami-arm.jenkinsfile line 13)
+- Note: i8g.4xlarge supported from Scylla 2025.3.3+ (comment in jenkins-pipelines/oss/rolling-upgrade/rolling-upgrade-ami-arm.jenkinsfile line 13)
 
 **Version Support for i8g (ARM64):**
 - **Confirmed unsupported:** 2024.1, 2024.2, 2025.1, 2025.2 - these releases do not support i8g/ARM64 and will remain on i4i (x86_64)
