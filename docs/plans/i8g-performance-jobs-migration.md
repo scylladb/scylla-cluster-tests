@@ -27,10 +27,18 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
   - Latency thresholds: `configurations/performance/latency-decorator-error-thresholds-steps-ent-vnodes.yaml`
   - Sub-tests: test_read_gradual_increase_load, test_mixed_gradual_increase_load, test_read_disk_only_gradual_increase_load
 
+- **Vnodes write job:** `scylla-enterprise-perf-regression-predefined-throughput-steps-write-vnodes.jenkinsfile`
+  - Same config as vnodes job
+  - Sub-tests: test_write_gradual_increase_load (separate job for write workload)
+
 - **Tablets job:** `scylla-enterprise-perf-regression-predefined-throughput-steps-tablets.jenkinsfile`
   - Same config base as vnodes but with tablets enabled
   - Latency thresholds: `configurations/performance/latency-decorator-error-thresholds-steps-ent-tablets.yaml`
-  - Tablets have slightly different latency expectations (e.g., 235,014 vs 284,479 ops/sec write throughput)
+  - Sub-tests: test_read_gradual_increase_load, test_mixed_gradual_increase_load, test_read_disk_only_gradual_increase_load
+
+- **Tablets write job:** `scylla-enterprise-perf-regression-predefined-throughput-steps-write-tablets.jenkinsfile`
+  - Same config as tablets job
+  - Sub-tests: test_write_gradual_increase_load (separate job for write workload)
 
 **Master Trigger:**
 - **Location:** `/jenkins-pipelines/master-triggers/sct_triggers/perf-regression-trigger.jenkinsfile`
@@ -50,12 +58,26 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 **Current Latency Expectations (P99):**
 - **Vnodes** (`latency-decorator-error-thresholds-steps-ent-vnodes.yaml`):
   - Read 150K-300K: ≤1ms, 450K: ≤5ms, 600K: ≤40ms, 700K: ≤50ms
+  - Read disk-only 80K-165K: ≤5ms, 250K: ≤50ms
   - Mixed 50K-150K: ≤3ms (both r/w), 300K: ≤5ms (both r/w)
-  - Write: 284,479 ops/sec baseline
+  - Write: No P99 latency limits for unthrottled write test
 - **Tablets** (`latency-decorator-error-thresholds-steps-ent-tablets.yaml`):
-  - Read 450K: ≤3ms (more strict than vnodes), others similar
-  - Write: 235,014 ops/sec baseline
-  - More relaxed disk-only thresholds (many null limits)
+  - Read 150K-300K: ≤1ms, 450K: ≤3ms (more strict than vnodes), 600K: ≤40ms, 700K: ≤50ms
+  - Read disk-only: No P99 latency limits (all null)
+  - Mixed 50K-150K: ≤3ms (both r/w), 300K: ≤5ms (both r/w)
+  - Write: No P99 latency limits for unthrottled write test
+
+**Current Throughput Expectations (Maximum Expected):**
+- **Vnodes** (`latency-decorator-error-thresholds-steps-ent-vnodes.yaml`):
+  - Write (unthrottled): ≥284,479 ops/sec
+  - Read (unthrottled): ≥862,336 ops/sec
+  - Read disk-only (unthrottled): ≥300,000 ops/sec
+  - Mixed write (unthrottled): ≥252,383 ops/sec
+- **Tablets** (`latency-decorator-error-thresholds-steps-ent-tablets.yaml`):
+  - Write (unthrottled): ≥235,014 ops/sec
+  - Read (unthrottled): ≥827,911 ops/sec
+  - Read disk-only (unthrottled): No throughput limit (null)
+  - Mixed write (unthrottled): ≥270,615 ops/sec
 
 **Instance Type Configurations:**
 - Existing: `configurations/aws/i4i_4xlarge.yaml` (single line: instance_type_db)
@@ -82,7 +104,7 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 
 ## 3. Goals
 
-1. **Create new i8g-based performance jobs** for vnodes and tablets with proper instance type configuration
+1. **Create new i8g-based performance jobs** for vnodes and tablets (including separate write jobs) with proper ARM64 configuration
 2. **Validate infrastructure stability** using last week's AMIs before production use
 3. **Recalibrate throughput steps** based on i8g maximum sustainable throughput using percentage-based approach
 4. **Update P99 latency thresholds** to reflect i8g performance characteristics
@@ -97,11 +119,13 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 **Description:** Create new Jenkins jobs and configuration files for i8g instances with existing throughput steps, ready for validation.
 
 **Definition of Done:**
-- [ ] Create `/configurations/aws/i8g_4xlarge.yaml` configuration file
-- [ ] Create new Jenkins jobs:
+- [ ] Create `/configurations/aws/i8g_4xlarge.yaml` configuration file (or update existing ARM configuration)
+- [ ] Create new Jenkins jobs for i8g:
   - [ ] `scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes-i8g.jenkinsfile`
+  - [ ] `scylla-enterprise-perf-regression-predefined-throughput-steps-write-vnodes-i8g.jenkinsfile`
   - [ ] `scylla-enterprise-perf-regression-predefined-throughput-steps-tablets-i8g.jenkinsfile`
-- [ ] Jobs reference i8g configuration instead of i4i
+  - [ ] `scylla-enterprise-perf-regression-predefined-throughput-steps-write-tablets-i8g.jenkinsfile`
+- [ ] Jobs reference i8g configuration with ARM64 AMIs instead of i4i
 - [ ] Jobs use existing throughput steps from `cassandra_stress_gradual_load_steps_enterprise.yaml`
 - [ ] Jobs use existing latency thresholds (vnodes/tablets)
 - [ ] Jobs can be triggered manually (not yet in master trigger)
@@ -111,7 +135,7 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 
 **Deliverables:**
 - New configuration file for i8g.4xlarge
-- Two new Jenkins job files (vnodes and tablets)
+- Four new Jenkins job files (vnodes, vnodes-write, tablets, tablets-write)
 
 ### Phase 2: Validation with Last Week's AMIs
 
