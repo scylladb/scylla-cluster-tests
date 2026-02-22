@@ -2,14 +2,16 @@
 
 ## 1. Problem Statement
 
-The current performance regression testing infrastructure uses i4i.4xlarge instances for gradual throughput tests. The AWS i8g instance family offers significantly higher throughput capabilities, requiring a comprehensive migration plan to:
-- Leverage improved hardware performance of i8g instances
+The current performance regression testing infrastructure uses i4i.4xlarge (x86_64) instances for gradual throughput tests. The AWS i8g instance family (ARM64/Graviton) offers significantly higher throughput capabilities, requiring a comprehensive migration plan to:
+- Leverage improved hardware performance of ARM-based i8g instances
 - Recalibrate throughput steps based on new maximum sustainable throughput
 - Validate latency expectations remain within acceptable ranges
 - Maintain support for releases that don't support i8g instances
 - Preserve rollback capabilities to ensure infrastructure reliability
 
-The migration impacts critical weekly performance testing jobs for both vnodes and tablets configurations across multiple Scylla releases (2024.1, 2024.2, 2025.1, 2025.2, 2025.3, 2025.4, and master).
+**Important:** The i8g instance family is ARM64-only (AWS Graviton processors), not x86_64. This migration represents both an instance type change and an architecture change from x86_64 to ARM64.
+
+The migration impacts critical weekly performance testing jobs for both vnodes and tablets configurations across Scylla releases that support ARM64 architecture: 2025.3, 2025.4, and master. **Releases 2024.1, 2024.2, 2025.1, and 2025.2 do not support i8g and will remain on i4i instances.**
 
 ## 2. Current State
 
@@ -34,7 +36,8 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 - **Location:** `/jenkins-pipelines/master-triggers/sct_triggers/perf-regression-trigger.jenkinsfile`
 - Calls: `perfRegressionParallelPipelinebyRegion()` from `vars/perfRegressionParallelPipelinebyRegion.groovy`
 - Schedules: Weekly runs (Sunday 6am) with label 'master-weekly'
-- Supports versions: 2024.1, 2024.2, 2025.1, 2025.2, 2025.3, 2025.4, master (lines 56-70)
+- Current versions: 2024.1, 2024.2, 2025.1, 2025.2, 2025.3, 2025.4, master (lines 56-70)
+- **i8g migration scope:** Only 2025.3, 2025.4, and master (ARM64-supporting releases)
 
 **Current Throughput Configuration:**
 - **File:** `configurations/performance/cassandra_stress_gradual_load_steps_enterprise.yaml`
@@ -66,14 +69,16 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 - Supports both static ops/sec and percentage-based throttling (for future use)
 
 **i8g Current Usage:**
+- **Architecture:** ARM64-only (AWS Graviton processors)
 - Already used in: longevity tests (i8ge.xlarge, i8ge.2xlarge), rolling-upgrade-ami-arm, vector-search
 - ARM config exists: `configurations/arm_instance_types/i8g_2xlarge.yaml`
+- All i8g configs use ARM64 AMIs (see `configurations/arm/` directory)
 - Note: i8g.2xlarge supported from Scylla 2025.3.3+ (comment in jenkins-pipelines/oss/rolling-upgrade/rolling-upgrade-ami-arm.jenkinsfile line 13)
 
-**Version Support for i8g:**
-- **Needs Investigation:** Which exact minor versions of 2024.1, 2024.2, 2025.1, 2025.2, 2025.3, 2025.4 support i8g instances
-- **Known:** master branch supports i8g
-- **Known:** 2025.3.3+ explicitly supports i8g (from ARM upgrade jenkinsfile)
+**Version Support for i8g (ARM64):**
+- **Confirmed unsupported:** 2024.1, 2024.2, 2025.1, 2025.2 - these releases do not support i8g/ARM64 and will remain on i4i (x86_64)
+- **Supported:** 2025.3.3+, 2025.4.x, master - these releases support ARM64 architecture and i8g instances
+- **Needs Investigation:** Exact minimum minor version for 2025.3.x (known: at least 2025.3.3+)
 
 ## 3. Goals
 
@@ -82,8 +87,8 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 3. **Recalibrate throughput steps** based on i8g maximum sustainable throughput using percentage-based approach
 4. **Update P99 latency thresholds** to reflect i8g performance characteristics
 5. **Migrate master trigger** to use new jobs while preserving rollback capability
-6. **Update release-specific triggers** based on i8g version support matrix
-7. **Maintain backward compatibility** for older LTS releases (2024.1 and possibly 2025.1) that don't support i8g
+6. **Update release-specific triggers** to use i8g jobs only for ARM64-supporting releases (2025.3+, 2025.4, master)
+7. **Maintain backward compatibility** for x86_64-only releases (2024.1, 2024.2, 2025.1, 2025.2) that don't support i8g/ARM64
 
 ## 4. Implementation Phases
 
@@ -133,27 +138,24 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 - Validation report document (markdown in /docs or test results comment)
 - Baseline throughput measurements
 
-### Phase 3: Investigate Version Support Matrix
+### Phase 3: Finalize Version Support Matrix
 
-**Description:** Determine which Scylla release versions support i8g instance type to inform trigger migration strategy.
+**Description:** Confirm exact minor versions that support i8g/ARM64 for releases 2025.3 and 2025.4, and document the migration strategy.
 
 **Definition of Done:**
-- [ ] Research i8g support for each target release:
-  - [ ] 2024.1.x - latest minor version identification and i8g support status
-  - [ ] 2024.2.x - latest minor version identification and i8g support status  
-  - [ ] 2025.1.x - latest minor version identification and i8g support status
-  - [ ] 2025.2.x - latest minor version identification and i8g support status
-  - [ ] 2025.3.x - latest minor version identification and i8g support status (known: 2025.3.3+ supported)
-  - [ ] 2025.4.x - latest minor version identification and i8g support status
+- [ ] Confirm i8g/ARM64 support for ARM64-capable releases:
+  - [ ] 2025.3.x - identify exact minimum minor version (known: at least 2025.3.3)
+  - [ ] 2025.4.x - identify latest minor version and confirm i8g support
+  - [ ] master - confirm continued i8g support
+- [ ] Document that 2024.1, 2024.2, 2025.1, 2025.2 do NOT support i8g/ARM64 and remain on i4i
 - [ ] Document findings in version support matrix table
-- [ ] Identify which releases need to stay on i4i jobs
-- [ ] Identify which releases can migrate to i8g jobs
+- [ ] Finalize release migration strategy with clear version boundaries
 
 **Dependencies:** Phase 2 (can run in parallel with Phase 4)
 
 **Deliverables:**
-- Version support matrix document
-- Release migration strategy
+- Version support matrix document with ARM64 support clarification
+- Release migration strategy clearly documenting which releases stay on i4i (x86_64) vs migrate to i8g (ARM64)
 
 ### Phase 4: Recalibrate Throughput Steps
 
@@ -197,25 +199,25 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 - Performance analysis report
 - Decision on latency threshold updates
 
-### Phase 6: Update Latency Thresholds for i8g (If Needed)
+### Phase 6: Update Latency Thresholds for i8g
 
-**Description:** If validation in Phase 5 shows significantly different latency characteristics, create new latency threshold configurations.
+**Description:** Create new latency threshold configurations based on i8g/ARM64 performance characteristics. Since we're changing both instance type and architecture (x86_64 to ARM64), and adding/changing throughput steps, new thresholds are required.
 
 **Definition of Done:**
 - [ ] Analyze P99 latency results from Phase 5 validation
-- [ ] If thresholds need adjustment:
+- [ ] Create new latency threshold files for i8g:
   - [ ] Create `latency-decorator-error-thresholds-steps-ent-vnodes-i8g.yaml`
   - [ ] Create `latency-decorator-error-thresholds-steps-ent-tablets-i8g.yaml`
-  - [ ] Document threshold adjustments and rationale
-- [ ] If existing thresholds are appropriate:
-  - [ ] Document that existing thresholds will be reused
-  - [ ] Skip file creation
-- [ ] Update Jenkins jobs to reference appropriate threshold files
+  - [ ] Document threshold values and rationale for each step
+  - [ ] Compare with i4i thresholds and document differences
+- [ ] Update Jenkins jobs to reference new i8g threshold files
+- [ ] Validate that thresholds are achievable but still catch regressions
 
 **Dependencies:** Phase 5
 
 **Deliverables:**
-- New latency threshold files (if needed) or documentation of threshold reuse
+- New latency threshold files for vnodes and tablets on i8g/ARM64
+- Documentation of threshold rationale and comparison with i4i baselines
 - Updated Jenkins jobs with correct threshold references
 
 ### Phase 7: Update Master Trigger and Rollback Plan
@@ -224,9 +226,10 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 
 **Definition of Done:**
 - [ ] Update `vars/perfRegressionParallelPipelinebyRegion.groovy`:
-  - [ ] For supported versions: Update job_name to point to new i8g jobs
-  - [ ] For unsupported versions: Keep existing i4i job references
-  - [ ] Add comments documenting version-specific job routing
+  - [ ] For ARM64-supporting versions (2025.3+, 2025.4, master): Update job_name to point to new i8g jobs
+  - [ ] For x86_64-only versions (2024.1, 2024.2, 2025.1, 2025.2): Keep existing i4i job references unchanged
+  - [ ] Add comments documenting ARM64 vs x86_64 architecture routing
+  - [ ] Ensure version boundaries are correct (e.g., 2025.3.3+ for 2025.3.x)
 - [ ] Document rollback procedure:
   - [ ] Steps to revert to i4i jobs if issues arise
   - [ ] Monitoring metrics to watch post-migration
@@ -316,7 +319,7 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
    - Results properly reported to Argus and email
 
 4. **Backward Compatibility Maintained:**
-   - Older releases continue using i4i jobs
+   - x86_64-only releases (2024.1, 2024.2, 2025.1, 2025.2) continue using i4i jobs
    - No test result format changes breaking downstream consumers
    - Rollback capability preserved and documented
 
@@ -342,12 +345,14 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 - Can adjust step count before production (Phase 4)
 - May need to add intermediate steps for better granularity
 
-### Risk: Version Support Unclear
-**Impact:** May migrate versions that don't properly support i8g
+### Risk: ARM64 Architecture Compatibility Issues
+**Impact:** May encounter ARM64-specific issues not present on x86_64
 **Mitigation:**
-- Dedicated investigation phase (Phase 3)
-- Conservative approach: keep on i4i if support unclear
-- Test runs on each target version during validation
+- i8g is ARM64-only; architecture change from x86_64 to ARM64
+- Releases 2024.1, 2024.2, 2025.1, 2025.2 confirmed not supporting i8g - remain on i4i
+- Only migrate releases with confirmed ARM64 support (2025.3.3+, 2025.4, master)
+- Validation phase tests actual ARM64 compatibility
+- Existing ARM tests (rolling-upgrade-ami-arm) provide precedent
 
 ### Risk: Rollback Needed After Production Deployment
 **Impact:** Weekly test runs may be disrupted during rollback
@@ -357,11 +362,12 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 - Monitor first production run closely
 - Have team availability during first trigger execution
 
-### Risk: Latency Thresholds Too Strict for i8g
-**Impact:** Jobs may fail latency checks despite healthy performance
+### Risk: ARM64 Performance Characteristics Differ from x86_64
+**Impact:** Latency patterns may differ significantly between architectures, causing false positives/negatives
 **Mitigation:**
-- Validation phases (2 & 5) capture latency data before production
-- Phase 6 allows threshold adjustment if needed
+- Validation phases (2 & 5) capture ARM64-specific latency data before production
+- Phase 6 creates new thresholds based on actual i8g/ARM64 performance
+- Since we're changing architecture, new thresholds are required (not optional)
 - Can temporarily disable latency decorator if urgent rollback needed
 
 ### Risk: AWS Pricing Changes
@@ -380,26 +386,30 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 
 ## 8. Open Questions
 
-1. **What is the exact i8g.4xlarge throughput improvement over i4i.4xlarge?**
+1. **What is the exact i8g.4xlarge (ARM64) throughput improvement over i4i.4xlarge (x86_64)?**
    - Answer will be determined in Phase 2 validation
    - Impacts step recalibration strategy
+   - Note: Comparing across architectures (ARM64 vs x86_64) not just instance types
 
-2. **Which specific minor versions of each release support i8g?**
-   - Requires investigation in Phase 3
-   - Critical for Phase 7 trigger update logic
+2. **What is the exact minimum minor version for 2025.3.x that supports i8g?**
+   - Known: At least 2025.3.3
+   - Need to verify if earlier 2025.3.x versions support i8g
+   - Critical for Phase 7 trigger version boundaries
 
 3. **Should we add additional intermediate steps if throughput is much higher?**
    - Depends on Phase 2 results
    - May need 6-7 steps instead of current 4-5 if 3x+ throughput
 
-4. **Do tablets have different throughput characteristics on i8g vs i4i?**
+4. **Do tablets have different throughput characteristics on i8g/ARM64 vs i4i/x86_64?**
    - Will be measured in Phase 2
    - May need different step definitions for tablets vs vnodes
+   - Architecture change may affect tablets differently than vnodes
 
 5. **Is there a staging/test trigger environment for validation?**
    - Impacts Phase 7 testing approach
    - May need production-like manual testing if no staging
 
-6. **What is the minimum Scylla version that supports i8g?**
-   - Known: 2025.3.3+ for ARM
-   - Need to verify for x86_64 and earlier versions
+6. **Are there ARM64-specific Scylla configuration considerations?**
+   - Known: `--no-ec2-check` flag required for i8g (see `configurations/arm_instance_types/i8g_2xlarge.yaml`)
+   - Need to verify if this applies to i8g.4xlarge
+   - Any other ARM64-specific tuning needed?
