@@ -1,0 +1,81 @@
+# AWS alternative for longevity-1tb-5days-azure
+# Using i8g instances with LZ4 dict compression
+# Target: ~50% CPU load during stress phase
+#
+# Disk usage calculation (original dataset: 1.1B rows):
+# - 6 nodes × i8g.large (468 GB each) = 2,808 GB total storage
+# - Original dataset: 1.1B rows × ~1KB = ~1.1 TB uncompressed logical data
+# - With RF=3: ~3.3 TB raw replicated data
+# - Without compression: 3.3 TB / 2.8 TB = ~118% disk usage (won't fit!)
+# - With LZ4 only (~1.5-2x): ~1.65-2.2 TB / 2.8 TB = ~59-78% disk usage
+# - With LZ4 dict compression (~2-2.5x): ~1.3-1.6 TB / 2.8 TB = ~46-57% disk usage
+#
+# Compression strategy:
+# - LZ4Compressor applied during prepare_write_cmd to ensure data fits on disk
+# - LZ4WithDictsCompressor applied via post_prepare_cql_cmds for better compression
+#   during stress phase (new SSTables use dict compression, existing data recompressed
+#   during LeveledCompactionStrategy compactions)
+test_duration: 7200
+
+# Prepare phase: target close to 100% CPU load on DB nodes
+# 4 prepare commands with 90 threads each = 360 total threads for 6 nodes = 60 threads/node
+# 4 commands balanced across 4 loaders (1 command per loader)
+# LZ4Compressor applied during prepare to ensure data fits on i8g.large (468 GB) disks
+# Rate limited to 8000/s to avoid quorum timeout failures with compression overhead
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate 'threads=90 fixed=8000/s' -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..275050075",
+                    "cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate 'threads=90 fixed=8000/s' -col 'size=FIXED(200) n=FIXED(5)' -pop seq=275050076..550100150",
+                    "cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate 'threads=90 fixed=8000/s' -col 'size=FIXED(200) n=FIXED(5)' -pop seq=550100151..825150225",
+                    "cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate 'threads=90 fixed=8000/s' -col 'size=FIXED(200) n=FIXED(5)' -pop seq=825150226..1100200300"]
+
+# Stress phase: target ~50% CPU load on DB nodes
+# Original Azure: 6 nodes, ~220 total threads = ~37 threads/node
+# For ~50% load: ~18 threads/node × 6 nodes = ~108 total threads
+# 4 commands balanced across 4 loaders (1 command per loader)
+# Using: 2×50 mixed + 10 user + 10 read = 120 total threads for 6 nodes = 20 threads/node
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=6800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop seq=1..550100150  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+             "cassandra-stress mixed cl=QUORUM duration=6800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop seq=550100151..1100200300  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+             "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=6800m -mode cql3 native -rate threads=10",
+             "cassandra-stress read cl=QUORUM duration=6800m -mode cql3 native  -rate threads=10 -pop seq=1..1100200300  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'" ]
+
+run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "random", "interval": 180}']
+round_robin: true
+
+n_db_nodes: 6
+n_loaders: 4
+seeds_num: 2
+
+# i8g.large: 2 vCPU, 16GB RAM, 1x468GB NVMe SSD
+# Note: i8g provides good price/performance for storage-intensive workloads
+instance_type_db: 'i8g.large'
+root_disk_size_runner: 120
+
+# c6i.xlarge: 4 vCPU, 8GB RAM (equivalent to Azure Standard_F4s_v2)
+instance_type_loader: 'c6i.xlarge'
+
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '031'
+nemesis_interval: 30
+
+
+user_prefix: 'longevity-tls-1tb-5d-aws'
+space_node_threshold: 644245094
+server_encrypt: true
+client_encrypt: true
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'
+
+nemesis_during_prepare: false
+use_preinstalled_scylla: true
+
+# LZ4WithDictsCompressor applied after prepare for better compression (~2-2.5x)
+# This upgrades from LZ4Compressor used during prepare to dict-based compression
+# Existing data recompressed during LeveledCompactionStrategy compactions
+post_prepare_cql_cmds: >-
+  ALTER TABLE keyspace1.standard1
+  WITH compression = {
+    'sstable_compression': 'LZ4WithDictsCompressor'
+  };
