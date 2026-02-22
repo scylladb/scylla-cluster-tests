@@ -88,14 +88,28 @@ hydra run-test ....
 
 ## Configuring reverse tunneling for services (syslog-ng, vector, ldap)
 
-When running tests with `ip_ssh_connections: public`, SCT needs to expose local services (syslog-ng, vector, ldap)
-to remote nodes. This is done using reverse tunneling. You can choose between two methods:
+When running tests from outside your cloud provider (local development), SCT needs to expose local services
+(syslog-ng, vector, ldap) to remote nodes. This requires:
+1. Setting `ip_ssh_connections: public` to use public IPs
+2. Choosing a reverse tunneling method (autossh or ngrok)
 
 ### Using autossh (default)
 
 Autossh creates reverse SSH tunnels through Docker containers:
 
 ```bash
+# For AWS backend
+export SCT_IP_SSH_CONNECTIONS=public
+export SCT_REVERSE_TUNNEL_MODE=autossh  # or omit (default)
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws
+
+# For GCE backend
+export SCT_IP_SSH_CONNECTIONS=public
+export SCT_REVERSE_TUNNEL_MODE=autossh  # or omit (default)
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend gce
+
+# For other backends (azure, docker, etc.)
+export SCT_IP_SSH_CONNECTIONS=public
 export SCT_REVERSE_TUNNEL_MODE=autossh  # or omit (default)
 hydra run-test ...
 ```
@@ -106,6 +120,18 @@ Ngrok creates public tunnels without requiring SSH. This is useful when SSH reve
 or when you want simpler setup:
 
 ```bash
+# For AWS backend
+export SCT_IP_SSH_CONNECTIONS=public
+export SCT_REVERSE_TUNNEL_MODE=ngrok
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws
+
+# For GCE backend
+export SCT_IP_SSH_CONNECTIONS=public
+export SCT_REVERSE_TUNNEL_MODE=ngrok
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend gce
+
+# For other backends (azure, docker, etc.)
+export SCT_IP_SSH_CONNECTIONS=public
 export SCT_REVERSE_TUNNEL_MODE=ngrok
 hydra run-test ...
 ```
