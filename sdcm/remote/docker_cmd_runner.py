@@ -74,11 +74,12 @@ class DockerCmdRunner(CommandRunner):
         timestamp_logs: bool = False,
     ) -> Result:
         """Execute a command inside a Docker container"""
+        self.log.info(f"QWERTY running command {cmd} verbose={verbose}")
         watchers_list = self._setup_watchers(verbose, log_file, watchers, timestamp_logs=timestamp_logs)
 
         @retrying(n=retry, sleep_time=3, allowed_exceptions=(RetryableNetworkException,))
         def _run():
-            return self._execute_command(cmd, timeout, ignore_status, verbose, watchers_list, user)
+            return self._execute_command(cmd, timeout, ignore_status, True, watchers_list, user)
 
         result = _run()
         self._print_command_results(result, verbose, ignore_status)
@@ -96,7 +97,7 @@ class DockerCmdRunner(CommandRunner):
         start_time = time.perf_counter()
 
         if verbose:
-            self.log.debug('<%s>: Docker exec command: "%s"', self.node.name, cmd)
+            self.log.info('<%s>: Docker exec command: "%s"', self.node.name, cmd)
 
         container = self._get_container()
 
@@ -111,6 +112,7 @@ class DockerCmdRunner(CommandRunner):
                 raise UnexpectedExit(result)
             return result
 
+        result = None
         try:
             exec_output = container.exec_run(["sh", "-c", cmd], tty=False, demux=True, stream=False, user=user)
             stdout_bytes, stderr_bytes = exec_output.output if isinstance(exec_output.output, tuple) else (b"", b"")
@@ -125,7 +127,7 @@ class DockerCmdRunner(CommandRunner):
             result.exit_status = exec_output.exit_code
 
             if verbose:
-                self.log.debug(
+                self.log.info(
                     "<%s>: Docker exec result (status=%d, duration=%.2fs)\nStdout:\n%s\nStderr:\n%s",
                     self.node.name,
                     result.exited,
@@ -139,6 +141,16 @@ class DockerCmdRunner(CommandRunner):
             return result
 
         except UnexpectedExit:
+            if verbose:
+                self.log.info('<%s>: Docker exec command: "%s" failed', self.node.name, cmd)
+                self.log.info(
+                    "<%s>: Docker exec result (status=%d, duration=%.2fs)\nStdout:\n%s\nStderr:\n%s",
+                    self.node.name,
+                    result.exited,
+                    result.duration,
+                    result.stdout,
+                    result.stderr,
+            )
             raise
         except Exception as exc:  # noqa: BLE001
             duration = time.perf_counter() - start_time

@@ -1612,6 +1612,20 @@ class SCTConfiguration(BaseModel):
         description="Custom parameters of c-s write operation used in snapshots preparer",
     )
 
+    # VectorStoreTest
+    vs_service_level: int = SctField(
+        description="Defines the service level for the Vector Store test, which may impact the configuration and performance expectations of the test. The specific meaning of the service level values should be defined in the context of the Vector Store test suite.",
+    )
+    vs_query_per_seconds: int = SctField(
+        description="Defines the target number of queries per second (QPS) for the Vector Store for a single runner (vs_concurrency = 1)."
+    )
+    vs_concurrency: int | list[int] = SctField(
+        description="Number of parallel workers running queries, each worker will run `vs_query_per_seconds` queries. Either a single integer or python's list of integers."
+    )
+    vs_concurrency_time: int = SctField(
+        description="Time duration in seconds for each concurrency level defined in `vs_concurrency` to be applied. For example, if `vs_concurrency` is set to [1, 2, 4] and `vs_concurrency_time_duration` is set to 60, then the test will run with concurrency 1 for 60 seconds, then with concurrency 2 for 60 seconds, and finally with concurrency 4 for 60 seconds.",
+    )
+    
     # PerformanceRegressionTest
     stress_cmd_w: MultitenantValue(StringOrList) = SctField(
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
