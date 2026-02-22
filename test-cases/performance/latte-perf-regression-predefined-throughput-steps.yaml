@@ -137,28 +137,28 @@ stress_cmd_cache_warmup:
 # Mixed workload stress commands (CL=QUORUM, read/write mix on working set)
 stress_cmd_m:
   - >-
-    latte run --function write:1,read:2 --consistency QUORUM --duration $duration
+    latte run --function write:1,read:1 --consistency QUORUM --duration $duration
     --threads $threads --concurrency $concurrency $throttle
     --start-cycle 1 --end-cycle 5000000
     -P row_count=20000000 -P offset=0
     -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
     data_dir/latte/latte_cs_alike.rn
   - >-
-    latte run --function write:1,read:2 --consistency QUORUM --duration $duration
+    latte run --function write:1,read:1 --consistency QUORUM --duration $duration
     --threads $threads --concurrency $concurrency $throttle
     --start-cycle 5000001 --end-cycle 10000000
     -P row_count=20000000 -P offset=5000000
     -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
     data_dir/latte/latte_cs_alike.rn
   - >-
-    latte run --function write:1,read:2 --consistency QUORUM --duration $duration
+    latte run --function write:1,read:1 --consistency QUORUM --duration $duration
     --threads $threads --concurrency $concurrency $throttle
     --start-cycle 10000001 --end-cycle 15000000
     -P row_count=20000000 -P offset=10000000
     -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
     data_dir/latte/latte_cs_alike.rn
   - >-
-    latte run --function write:1,read:2 --consistency QUORUM --duration $duration
+    latte run --function write:1,read:1 --consistency QUORUM --duration $duration
     --threads $threads --concurrency $concurrency $throttle
     --start-cycle 15000001 --end-cycle 20000000
     -P row_count=20000000 -P offset=15000000
