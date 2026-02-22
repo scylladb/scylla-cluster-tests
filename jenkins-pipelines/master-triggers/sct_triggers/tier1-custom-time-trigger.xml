@@ -33,7 +33,7 @@ requested_by_user=pehala</properties>
           </configs>
           <projects>
               ../tier1/gemini-1tb-10h-test,
-              ../tier1/longevity-1tb-5days-azure-test,
+              ../tier1/longevity-2tb-5days-aws-test,
               ../tier1/longevity-large-partition-200k-pks-4days-gce-test,
               ../tier1/longevity-mv-si-4days-streaming-test,
               ../tier1/longevity-schema-topology-changes-12h-test,

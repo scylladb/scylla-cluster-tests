@@ -1,0 +1,61 @@
+# AWS alternative for longevity-1tb-5days-azure
+# Using i8g.2xlarge instances with LZ4 dict compression
+# Target: ~50% CPU load during stress phase, ~60% disk fill
+#
+# Disk usage (measured on i8g.2xlarge with 1.1B rows → 36% fill):
+# - i8g.2xlarge formatted disk: ~1,750 GiB per node (10,500 GiB total across 6 nodes)
+# - 1.84B rows × ~1KB × RF=3 / 6 nodes ≈ 920 GiB/node uncompressed row data
+# - Estimated disk fill after prepare: ~60% per node (~1,050 GiB)
+#
+# Note: original Azure test (no compression in prepare) had ~1 TB/node with 1.1B rows.
+# Dataset increased from 1.1B to 1.84B rows to compensate and reach ~60% fill target.
+#
+# Compression strategy:
+# - LZ4Compressor during prepare_write_cmd (minimal gain on random data)
+# - LZ4WithDictsCompressor applied via post_prepare_cql_cmds after prepare completes;
+#   dict compression achieves better ratio and LCS recompacts existing SSTables
+test_duration: 7200
+
+# Prepare phase: 4 commands × threads=140 rate-capped at 30K/s each
+# i8g.2xlarge (8 vCPU) handles this comfortably
+# 1.84B total rows (4 × 460M): ~1.8 TB logical dataset
+# Measured prepare time with 1.1B rows: ~2.5h; estimated for 1.84B rows: ~4.2h
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=460000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate 'threads=140 fixed=30000/s' -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..460000000",
+                    "cassandra-stress write cl=QUORUM n=460000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate 'threads=140 fixed=30000/s' -col 'size=FIXED(200) n=FIXED(5)' -pop seq=460000001..920000000",
+                    "cassandra-stress write cl=QUORUM n=460000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate 'threads=140 fixed=30000/s' -col 'size=FIXED(200) n=FIXED(5)' -pop seq=920000001..1380000000",
+                    "cassandra-stress write cl=QUORUM n=460000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate 'threads=140 fixed=30000/s' -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1380000001..1840000000"]
+
+# Stress phase: target ~50% CPU load on i8g.2xlarge (8 vCPU)
+# Original Azure test: 220 total threads on 16 vCPU nodes (Standard_L16s_v3)
+# i8g.2xlarge has 8 vCPU — reduced to 120 total threads for ~50% CPU target
+# 2×50 mixed + 10 user + 10 read = 120 total threads / 6 nodes = 20 threads/node
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=6800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop seq=1..920000000  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+             "cassandra-stress mixed cl=QUORUM duration=6800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop seq=920000001..1840000000  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+             "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=6800m -mode cql3 native -rate threads=10",
+             "cassandra-stress read cl=QUORUM duration=6800m -mode cql3 native  -rate threads=10 -pop seq=1..1840000000  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'" ]
+
+run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "random", "interval": 180}']
+round_robin: true
+
+n_db_nodes: 6
+n_loaders: 4
+seeds_num: 2
+
+# i8g.2xlarge: 8 vCPU, 64 GB RAM, 1×1,875 GB NVMe SSD (~1,750 GiB formatted)
+instance_type_db: 'i8g.2xlarge'
+root_disk_size_runner: 120
+
+# c6i.xlarge: 4 vCPU, 8GB RAM (equivalent to Azure Standard_F4s_v2)
+instance_type_loader: 'c6i.xlarge'
+
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_interval: 30
+
+
+user_prefix: 'longevity-tls-2tb-5d-aws'
+server_encrypt: true
+client_encrypt: true
+
+nemesis_during_prepare: false
+use_preinstalled_scylla: true
