@@ -21,6 +21,7 @@ from sdcm.utils.reverse_tunnel import (
     get_tunnel_manager,
     AutosshTunnelManager,
     NgrokTunnelManager,
+    PYNGROK_AVAILABLE,
 )
 
 
@@ -49,7 +50,7 @@ class TestAutosshTunnelManager:
         
         assert args["image"] == "jnovack/autossh:1.2.2"
         assert "test-node" in args["name"]
-        assert "192-168-1-100" in args["name"]
+        assert "192.168.1.100" in args["name"]  # hostname with colons replaced, dots kept
         assert args["environment"]["SSH_HOSTNAME"] == "192.168.1.100"
         assert args["environment"]["SSH_HOSTPORT"] == "22"
         assert args["environment"]["SSH_HOSTUSER"] == "centos"
@@ -92,9 +93,11 @@ class TestNgrokTunnelManager:
         tunnel.public_url = "https://abc123.ngrok.io"
         return tunnel
 
+    @pytest.mark.skipif(not PYNGROK_AVAILABLE, reason="pyngrok not installed")
     def test_get_container_run_args_creates_tunnel(self, mock_node, mock_tunnel):
         """Test that NgrokTunnelManager creates a tunnel."""
-        with patch('sdcm.utils.reverse_tunnel.ngrok.connect', return_value=mock_tunnel):
+        with patch('sdcm.utils.reverse_tunnel.ngrok') as mock_ngrok:
+            mock_ngrok.connect.return_value = mock_tunnel
             manager = NgrokTunnelManager(mock_node, "ldap")
             
             args = manager.get_container_run_args(local_port=5001, remote_port=389)
@@ -106,9 +109,11 @@ class TestNgrokTunnelManager:
             assert args["environment"]["LOCAL_PORT"] == "5001"
             assert args["environment"]["REMOTE_PORT"] == "389"
 
+    @pytest.mark.skipif(not PYNGROK_AVAILABLE, reason="pyngrok not installed")
     def test_tunnel_reuse(self, mock_node, mock_tunnel):
         """Test that creating multiple managers for the same port reuses the tunnel."""
-        with patch('sdcm.utils.reverse_tunnel.ngrok.connect', return_value=mock_tunnel) as mock_connect:
+        with patch('sdcm.utils.reverse_tunnel.ngrok') as mock_ngrok:
+            mock_ngrok.connect.return_value = mock_tunnel
             # Create first manager
             manager1 = NgrokTunnelManager(mock_node, "service1")
             manager1.get_container_run_args(local_port=5000, remote_port=8000)
@@ -118,11 +123,13 @@ class TestNgrokTunnelManager:
             manager2.get_container_run_args(local_port=5000, remote_port=9000)
             
             # ngrok.connect should only be called once
-            assert mock_connect.call_count == 1
+            assert mock_ngrok.connect.call_count == 1
 
+    @pytest.mark.skipif(not PYNGROK_AVAILABLE, reason="pyngrok not installed")
     def test_get_tunnel_url(self, mock_node, mock_tunnel):
         """Test that get_tunnel_url returns correct URL."""
-        with patch('sdcm.utils.reverse_tunnel.ngrok.connect', return_value=mock_tunnel):
+        with patch('sdcm.utils.reverse_tunnel.ngrok') as mock_ngrok:
+            mock_ngrok.connect.return_value = mock_tunnel
             manager = NgrokTunnelManager(mock_node, "test")
             manager.get_container_run_args(local_port=5555, remote_port=8888)
             
@@ -130,23 +137,24 @@ class TestNgrokTunnelManager:
             
             assert url == "https://abc123.ngrok.io"
 
+    @pytest.mark.skipif(not PYNGROK_AVAILABLE, reason="pyngrok not installed")
     def test_disconnect_all(self, mock_node, mock_tunnel):
         """Test that disconnect_all closes all tunnels."""
-        with patch('sdcm.utils.reverse_tunnel.ngrok.connect', return_value=mock_tunnel):
-            with patch('sdcm.utils.reverse_tunnel.ngrok.disconnect') as mock_disconnect:
-                # Create tunnels
-                manager1 = NgrokTunnelManager(mock_node, "service1")
-                manager1.get_container_run_args(local_port=5000, remote_port=8000)
-                
-                manager2 = NgrokTunnelManager(mock_node, "service2")
-                manager2.get_container_run_args(local_port=6000, remote_port=9000)
-                
-                # Disconnect all
-                NgrokTunnelManager.disconnect_all()
-                
-                # Both tunnels should be disconnected
-                assert mock_disconnect.call_count == 2
-                assert len(NgrokTunnelManager._active_tunnels) == 0
+        with patch('sdcm.utils.reverse_tunnel.ngrok') as mock_ngrok:
+            mock_ngrok.connect.return_value = mock_tunnel
+            # Create tunnels
+            manager1 = NgrokTunnelManager(mock_node, "service1")
+            manager1.get_container_run_args(local_port=5000, remote_port=8000)
+            
+            manager2 = NgrokTunnelManager(mock_node, "service2")
+            manager2.get_container_run_args(local_port=6000, remote_port=9000)
+            
+            # Disconnect all
+            NgrokTunnelManager.disconnect_all()
+            
+            # Both tunnels should be disconnected
+            assert mock_ngrok.disconnect.call_count == 2
+            assert len(NgrokTunnelManager._active_tunnels) == 0
 
 
 class TestTunnelManagerFactory:
@@ -172,6 +180,7 @@ class TestTunnelManagerFactory:
         assert isinstance(manager, AutosshTunnelManager)
         assert manager.service_name == "test"
 
+    @pytest.mark.skipif(not PYNGROK_AVAILABLE, reason="pyngrok not installed")
     def test_get_ngrok_manager(self, mock_node):
         """Test that factory returns NgrokTunnelManager for 'ngrok'."""
         manager = get_tunnel_manager(mock_node, "test", "ngrok")
@@ -184,6 +193,7 @@ class TestTunnelManagerFactory:
         with pytest.raises(ValueError, match="Unknown tunnel mode"):
             get_tunnel_manager(mock_node, "test", "invalid")
 
+    @pytest.mark.skipif(not PYNGROK_AVAILABLE, reason="pyngrok not installed")
     def test_case_insensitive(self, mock_node):
         """Test that tunnel mode is case-insensitive."""
         manager1 = get_tunnel_manager(mock_node, "test", "AUTOSSH")
