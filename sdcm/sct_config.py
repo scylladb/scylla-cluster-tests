@@ -71,6 +71,7 @@ from sdcm.utils.version_utils import (
     find_scylla_repo,
     is_enterprise,
     ComparableScyllaVersion,
+    latest_unified_package,
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import (
@@ -2500,7 +2501,34 @@ class SCTConfiguration(BaseModel):
         dist_type = scylla_linux_distro.split("-")[0]
         dist_version = scylla_linux_distro.split("-")[-1]
 
+        # 6.0) handle relocatable:<version> scylla_version format
         if scylla_version := self.get("scylla_version"):
+            if scylla_version.startswith("relocatable:"):
+                self.log.info("Resolving scylla_version='%s' to unified package URL", scylla_version)
+                # Parse format: relocatable:<branch>:<arch>
+                # Examples: relocatable:latest, relocatable:master:x86_64, relocatable:branch-2025.1:aarch64
+                parts = scylla_version.split(":")
+                branch = parts[1] if len(parts) > 1 and parts[1] not in ("latest", "") else "master"
+                arch = parts[2] if len(parts) > 2 and parts[2] else "x86_64"
+                backend = self.get("cluster_backend")
+                if backend == "aws" and len(parts) <= 2:
+                    # Auto-detect arch from AWS instance type when not explicitly specified
+                    try:
+                        arch = get_arch_from_instance_type(
+                            self.get("instance_type_db"), region_name=region_names[0])
+                    except Exception:  # noqa: BLE001
+                        self.log.warning("Could not detect architecture from instance type, defaulting to x86_64")
+                elif backend != "aws" and len(parts) <= 2:
+                    # TODO: get_arch_from_instance_type should be implemented for all backends, not just AWS
+                    self.log.warning(
+                        "Architecture auto-detection is only supported on AWS backend. "
+                        "Defaulting to '%s'. Use 'relocatable:<branch>:<arch>' format to specify "
+                        "architecture explicitly, e.g. 'relocatable:master:aarch64'", arch)
+                unified_url = latest_unified_package(arch=arch, branch=branch)
+                self.log.info("Resolved unified package URL: %s", unified_url)
+                self["unified_package"] = unified_url
+                self["scylla_version"] = ""
+
             if self.get("cluster_backend") in ["docker", "k8s-eks", "k8s-gke"] and not self.get("docker_image"):
                 self["docker_image"] = get_scylla_docker_repo_from_version(scylla_version)
             if self.get("cluster_backend") in (
