@@ -3150,7 +3150,15 @@ class SCTConfiguration(dict):
         if scylla_version := self.get("scylla_version"):
             if scylla_version.startswith("relocatable:"):
                 self.log.info("Resolving scylla_version='%s' to unified package URL", scylla_version)
-                unified_url = latest_unified_package()
+                arch = "x86_64"
+                backend = self.get("cluster_backend")
+                if backend == "aws":
+                    try:
+                        arch = get_arch_from_instance_type(
+                            self.get("instance_type_db"), region_name=region_names[0])
+                    except Exception:  # noqa: BLE001
+                        self.log.warning("Could not detect architecture from instance type, defaulting to x86_64")
+                unified_url = latest_unified_package(arch=arch)
                 self.log.info("Resolved unified package URL: %s", unified_url)
                 self["unified_package"] = unified_url
                 self["scylla_version"] = ""
