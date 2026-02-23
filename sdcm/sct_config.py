@@ -68,6 +68,7 @@ from sdcm.utils.version_utils import (
     find_scylla_repo,
     is_enterprise,
     ComparableScyllaVersion,
+    latest_unified_package,
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import (
@@ -449,6 +450,7 @@ class SCTConfiguration(dict):
             type=str,
             help="""Version of scylla to install, ex. '2.3.1'
                      Automatically lookup AMIs and repo links for formal versions.
+                     Use 'relocatable:latest' to resolve the latest unified package from S3.
                      WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'""",
             appendable=False,
         ),
@@ -3143,6 +3145,15 @@ class SCTConfiguration(dict):
         scylla_linux_distro = self.get("scylla_linux_distro")
         dist_type = scylla_linux_distro.split("-")[0]
         dist_version = scylla_linux_distro.split("-")[-1]
+
+        # 6.0) handle relocatable:<version> scylla_version format
+        if scylla_version := self.get("scylla_version"):
+            if scylla_version.startswith("relocatable:"):
+                self.log.info("Resolving scylla_version='%s' to unified package URL", scylla_version)
+                unified_url = latest_unified_package()
+                self.log.info("Resolved unified package URL: %s", unified_url)
+                self["unified_package"] = unified_url
+                self["scylla_version"] = ""
 
         if scylla_version := self.get("scylla_version"):
             if self.get("cluster_backend") in ["docker", "k8s-eks", "k8s-gke"] and not self.get("docker_image"):

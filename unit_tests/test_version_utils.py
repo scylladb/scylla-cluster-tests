@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import os
 import unittest
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -29,6 +30,7 @@ from sdcm.utils.version_utils import (
     get_scylla_docker_repo_from_version,
     parse_scylla_version_tag,
     FullVersionTag,
+    latest_unified_package,
 )
 
 BASE_S3_DOWNLOAD_URL = "https://s3.amazonaws.com/downloads.scylladb.com"
@@ -1076,3 +1078,79 @@ def test_docker_version_routing_logic(version, expected_repo):
     """Test Docker repo selection for various version formats."""
     repo = get_scylla_docker_repo_from_version(version)
     assert repo == expected_repo, f"Version '{version}' should route to '{expected_repo}', got '{repo}'"
+
+
+class TestLatestUnifiedPackage:
+    """Tests for latest_unified_package function."""
+
+    @patch("sdcm.utils.version_utils.boto3")
+    def test_returns_url_for_matching_package(self, mock_boto3):
+        mock_s3 = MagicMock()
+        mock_boto3.client.return_value = mock_s3
+        mock_s3.list_objects_v2.return_value = {
+            "Contents": [
+                {"Key": "unstable/scylla/master/relocatable/latest/00-Build.txt"},
+                {"Key": "unstable/scylla/master/relocatable/latest/"
+                        "scylla-unified-5.5.0~dev-0.20231113.7b08886e8dd8.x86_64.tar.gz"},
+            ]
+        }
+
+        result = latest_unified_package()
+        assert result == (
+            "https://downloads.scylladb.com/unstable/scylla/master/relocatable/latest/"
+            "scylla-unified-5.5.0~dev-0.20231113.7b08886e8dd8.x86_64.tar.gz"
+        )
+
+    @patch("sdcm.utils.version_utils.boto3")
+    def test_returns_url_for_aarch64(self, mock_boto3):
+        mock_s3 = MagicMock()
+        mock_boto3.client.return_value = mock_s3
+        mock_s3.list_objects_v2.return_value = {
+            "Contents": [
+                {"Key": "unstable/scylla/master/relocatable/latest/"
+                        "scylla-unified-5.5.0~dev-0.20231113.7b08886e8dd8.aarch64.tar.gz"},
+            ]
+        }
+
+        result = latest_unified_package(arch="aarch64")
+        assert "aarch64" in result
+        assert "scylla-unified" in result
+
+    @patch("sdcm.utils.version_utils.boto3")
+    def test_raises_when_no_matching_package(self, mock_boto3):
+        mock_s3 = MagicMock()
+        mock_boto3.client.return_value = mock_s3
+        mock_s3.list_objects_v2.return_value = {
+            "Contents": [
+                {"Key": "unstable/scylla/master/relocatable/latest/00-Build.txt"},
+            ]
+        }
+
+        with pytest.raises(FileNotFoundError, match="No scylla-unified package found"):
+            latest_unified_package()
+
+    @patch("sdcm.utils.version_utils.boto3")
+    def test_raises_when_empty_bucket(self, mock_boto3):
+        mock_s3 = MagicMock()
+        mock_boto3.client.return_value = mock_s3
+        mock_s3.list_objects_v2.return_value = {}
+
+        with pytest.raises(FileNotFoundError, match="No scylla-unified package found"):
+            latest_unified_package()
+
+    @patch("sdcm.utils.version_utils.boto3")
+    def test_custom_product_and_branch(self, mock_boto3):
+        mock_s3 = MagicMock()
+        mock_boto3.client.return_value = mock_s3
+        mock_s3.list_objects_v2.return_value = {
+            "Contents": [
+                {"Key": "unstable/scylla-enterprise/enterprise/relocatable/latest/"
+                        "scylla-unified-2024.1.0~dev.x86_64.tar.gz"},
+            ]
+        }
+
+        result = latest_unified_package(product="scylla-enterprise", branch="enterprise")
+        assert "scylla-enterprise" in result
+        mock_s3.list_objects_v2.assert_called_once()
+        call_kwargs = mock_s3.list_objects_v2.call_args[1]
+        assert call_kwargs["Prefix"] == "unstable/scylla-enterprise/enterprise/relocatable/latest/"
