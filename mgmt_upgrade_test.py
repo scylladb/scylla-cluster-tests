@@ -19,7 +19,7 @@ from sdcm.mgmt.cli import ManagerTask
 from sdcm.mgmt.common import (
     TaskRunDetails,
     create_cron_list_from_timedelta,
-    get_manager_repo_from_defaults,
+    get_manager_repo,
     get_task_run_details,
 )
 from sdcm.mgmt.operations import ManagerTestFunctionsMixIn
@@ -111,13 +111,9 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
         target_upgrade_agent_version = self.params.get("target_scylla_mgmt_agent_address")
         target_manager_version = self.params.get("target_manager_version")
         if not target_upgrade_server_version:
-            target_upgrade_server_version = get_manager_repo_from_defaults(
-                target_manager_version, distro=self.manager_node.distro
-            )
+            target_upgrade_server_version = get_manager_repo(target_manager_version, distro=self.manager_node.distro)
         if not target_upgrade_agent_version:
-            target_upgrade_agent_version = get_manager_repo_from_defaults(
-                target_manager_version, distro=self.db_node.distro
-            )
+            target_upgrade_agent_version = get_manager_repo(target_manager_version, distro=self.db_node.distro)
 
         new_manager_http_port = 12345
         with self.manager_node.remote_manager_yaml() as scylla_manager_yaml:

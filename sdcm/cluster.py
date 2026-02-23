@@ -63,7 +63,7 @@ from argus.client.sct.types import LogLink
 from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.db_log_reader import DbLogReader
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
-from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
+from sdcm.mgmt.common import get_manager_repo, get_manager_scylla_backend
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
@@ -2244,7 +2244,7 @@ class BaseNode(AutoSshContainerMixin):
             self.download_scylla_manager_repo(self.parent_cluster.params.get("scylla_mgmt_agent_address"))
         else:
             manager_version = self.parent_cluster.params.get("manager_version")
-            agent_repo_url = get_manager_repo_from_defaults(manager_version, self.distro)
+            agent_repo_url = get_manager_repo(manager_version, self.distro)
             self.download_scylla_manager_repo(agent_repo_url)
             # If patch version, this specific patch version should be installed. Otherwise, the latest is installed.
             if len(manager_version.split(".")) == 3:
@@ -2694,7 +2694,7 @@ class BaseNode(AutoSshContainerMixin):
             self.download_scylla_manager_repo(self.parent_cluster.params.get("scylla_mgmt_address"))
         else:
             manager_version = self.parent_cluster.params.get("manager_version")
-            manager_repo_url = get_manager_repo_from_defaults(manager_version, self.distro)
+            manager_repo_url = get_manager_repo(manager_version, self.distro)
             self.download_scylla_manager_repo(manager_repo_url)
             # If patch version, this specific patch version should be installed. Otherwise, the latest is installed.
             if len(manager_version.split(".")) == 3:

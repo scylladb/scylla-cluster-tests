@@ -4,7 +4,6 @@ from enum import Enum
 import logging
 import yaml
 from typing import Optional, TYPE_CHECKING
-from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
@@ -12,7 +11,7 @@ if TYPE_CHECKING:
     from sdcm.mgmt.cli import ManagerTask
 
 from sdcm.utils.distro import Distro
-from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.version_utils import find_scylla_repo
 
 DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
 LOGGER = logging.getLogger(__name__)
@@ -24,6 +23,15 @@ LOGGER = logging.getLogger(__name__)
 # │ 10.12.4.125 │     100% │ 422.434GiB │ 422.434GiB │           0B │     0B │
 # │ 10.12.4.25  │     100% │ 422.413GiB │ 422.413GiB │           0B │     0B │
 BACKUP_SIZE_REGEX = re.compile(r".+100% │ (.*?) │ ", re.MULTILINE)
+
+MANAGER_REPO_PATTERNS = {
+    "rhel": "https://downloads.scylladb.com/rpm/centos/scylladb-manager-{version}.repo",
+    "debian": "https://downloads.scylladb.com/deb/debian/scylladb-manager-{version}.list",
+}
+MANAGER_REPO_MASTER_LATEST = {
+    "rhel": "https://downloads.scylladb.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo",
+    "debian": "https://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list",
+}
 
 
 def get_persistent_snapshots():  # Snapshot sizes (dict keys) are in GB
@@ -131,38 +139,44 @@ def get_task_run_details(task: "ManagerTask", wait: bool = True, timeout: int = 
     return task_details
 
 
-def get_manager_repo_from_defaults(manager_version, distro):
-    with (Path(get_sct_root_path()) / "defaults/manager_versions.yaml").open(encoding="utf-8") as mgmt_config:
-        manager_repos_by_version_dict = yaml.safe_load(mgmt_config)["manager_repos_by_version"]
+def get_manager_repo(manager_version: str, distro: Distro) -> str:
+    """Build the Scylla Manager repo URL for the given version and distro.
 
+    Constructs the URL from a pattern based on the distro family (RHEL or Debian).
+    The special value "master_latest" resolves to the latest unstable build URL.
+    Patch version components are stripped (e.g. "3.8.1" -> "3.8").
+
+    Args:
+        manager_version: Manager version string, e.g. "3.8", "3.8.1", or "master_latest".
+        distro: Distro object representing the target OS.
+
+    Returns:
+        Full URL to the repo file.
+    """
     # If the version is a patch version, we need to remove the patch part
     if len(version_parts := manager_version.split(".")) == 3:
         manager_version = f"{version_parts[0]}.{version_parts[1]}"
 
-    version_specific_repos = manager_repos_by_version_dict.get(manager_version, None)
-    assert version_specific_repos, f"Couldn't find manager version {manager_version} in manager defaults"
-
     distro_name = get_distro_name(distro)
 
-    repo_address = version_specific_repos.get(distro_name, None)
-    assert repo_address, f"Could not find manager repo for distro {distro_name} in version {manager_version}"
+    if manager_version == "master_latest":
+        return MANAGER_REPO_MASTER_LATEST[distro_name]
 
-    return repo_address
+    return MANAGER_REPO_PATTERNS[distro_name].format(version=manager_version)
 
 
-def get_manager_scylla_backend(scylla_backend_version_name, distro):
-    with (Path(get_sct_root_path()) / "defaults/manager_versions.yaml").open(encoding="utf-8") as mgmt_config:
-        scylla_backend_repos_by_version_dict = yaml.safe_load(mgmt_config)["scylla_backend_repo_by_version"]
+def get_manager_scylla_backend(scylla_backend_version_name: str, distro: Distro) -> str:
+    """Find the Scylla backend repo URL for the given version and distro.
 
-    version_specific_repos = scylla_backend_repos_by_version_dict.get(scylla_backend_version_name, None)
-    assert version_specific_repos, f"Couldn't find scylla version {scylla_backend_version_name} in manager defaults"
+    Args:
+        scylla_backend_version_name: Scylla version string, e.g. "2025.4" or "2025.4.1".
+        distro: Distro object representing the target OS.
 
+    Returns:
+        Full URL to the repo file.
+    """
     distro_name = get_distro_name(distro)
-
-    backend_repo_address = version_specific_repos.get(distro_name, None)
-    assert backend_repo_address, f"Could not find manager scylla backend repo for {distro}"
-
-    return backend_repo_address
+    return find_scylla_repo(scylla_version=scylla_backend_version_name, dist_type=distro_name)
 
 
 def reconfigure_scylla_manager(manager_node, logger, values_to_update=(), values_to_remove=()):
