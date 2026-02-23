@@ -281,6 +281,8 @@ zero_token_instance_type_db: 'i4i.large'
 use_zero_nodes: false
 
 latte_schema_parameters: {}
+stress_keyspace: null
+stress_table: null
 workload_name: ''
 latency_decorator_error_thresholds:
   write:
