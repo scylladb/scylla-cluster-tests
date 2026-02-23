@@ -10,7 +10,7 @@ from typing import List, Union
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.utils.common import skip_optional_stage
 from sdcm.sct_events import Severity
-from sdcm.sct_events.system import TestFrameworkEvent, InfoEvent
+from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 
@@ -82,27 +82,38 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         return step_duration[workload_type]
 
     def get_test_table_name(self, stress_cmds) -> (str, str):
-        # TODO: define keyspace and table names as test parameter (https://github.com/scylladb/qa-tasks/issues/2020)
+        """Resolve keyspace and table name for a stress command.
+
+        For all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress)
+        the values are read from ``perf_stress_keyspace`` / ``perf_stress_table`` SCT config options.
+
+        For latte commands the values are first looked up in ``perf_stress_keyspace`` /
+        ``perf_stress_table``, then in ``latte_schema_parameters`` (``keyspace`` / ``table`` keys).
+        """
         stress_cmd = stress_cmds[0] if isinstance(stress_cmds, list) else stress_cmds
         stress_tool = stress_cmd.split(" ")[0]
-        if stress_tool == "scylla-bench":
-            return "scylla_bench", "test"
-        elif stress_tool in ["cassandra-stress", "cql-stress-cassandra-stress"]:
-            return "keyspace1", "standard1"
-        elif is_latte_command(stress_cmds):
-            InfoEvent(
-                message="Make sure that rune script disables speculative retries for its table.",
-                severity=Severity.WARNING,
-            ).publish()
-            keyspace, table_name = "", "footable"
+
+        keyspace = self.params.get("perf_stress_keyspace") or ""
+        table = self.params.get("perf_stress_table") or ""
+
+        if is_latte_command(stress_cmd) and (not keyspace or not table):
             if latte_schema_parameters := self.params.get("latte_schema_parameters"):
-                for key, value in latte_schema_parameters.items():
-                    if key == "keyspace":
-                        keyspace = value
-                        break
-            return keyspace, table_name
-        else:
-            raise ValueError(f"Not supported stress tool in command: {stress_cmds}")
+                if not keyspace:
+                    keyspace = latte_schema_parameters.get("keyspace", "")
+                if not table:
+                    table = latte_schema_parameters.get("table", "")
+
+        if not keyspace:
+            raise ValueError(
+                f"'perf_stress_keyspace' (or 'latte_schema_parameters.keyspace' for latte) is required for "
+                f"'{stress_tool}' gradual performance tests. Please add it to your test YAML configuration."
+            )
+        if not table:
+            raise ValueError(
+                f"'perf_stress_table' (or 'latte_schema_parameters.table' for latte) is required for "
+                f"'{stress_tool}' gradual performance tests. Please add it to your test YAML configuration."
+            )
+        return keyspace, table
 
     def test_mixed_gradual_increase_load(self):
         """
