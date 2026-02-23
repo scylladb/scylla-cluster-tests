@@ -22,8 +22,9 @@ from functools import cached_property
 from textwrap import dedent
 
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.remote import FailuresWatcher
+from sdcm.reporting.tooling_reporter import YcsbVersionReporter
+from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.utils import alternator
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.docker_remote import RemoteDocker
@@ -154,7 +155,7 @@ class YcsbStressThread(DockerBasedStressThread):
     def _hdr_files_directory_on_loaders_node(self, loader_idx, cpu_idx):
         return f"{self._hdr_main_dir_on_loaders_node()}/{loader_idx}/{cpu_idx}"
 
-    def copy_template(self, cmd_runner, loader_name, memo={}):  # noqa: B006
+    def copy_template(self, cmd_runner, loader_name, loader=None, memo={}):  # noqa: B006
         if loader_name in memo:
             return None
         web_protocol = "http"
@@ -210,6 +211,11 @@ class YcsbStressThread(DockerBasedStressThread):
 
             with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as tmp_file:
                 tmp_file.write(dynamodb_teample)
+                alternator_port = self.params.get("alternator_port")
+                native_loading = self.params.get("alternator_loadbalancing")
+                trustAllCerts = self.params.get("alternator_trust_all_certificates")  # noqa: N806
+                access_key = self.params.get("alternator_access_key_id")
+                secret_key = self.params.get("alternator_secret_access_key")
                 tmp_file.write(
                     dedent(f"""
                     dynamodb.debug = false
@@ -416,8 +422,16 @@ class YcsbStressThread(DockerBasedStressThread):
             )
             cmd_runner_name = str(loader)
 
-        self.copy_template(cmd_runner, loader.name)
+        self.copy_template(cmd_runner, loader.name, loader=loader)
         stress_cmd = self.build_stress_cmd(loader_idx, cpu_idx)
+
+        try:
+            reporter = YcsbVersionReporter(
+                cmd_runner, "", loader.parent_cluster.test_config.argus_client(), stress_cmd=self.stress_cmd
+            )
+            reporter.report()
+        except Exception:  # noqa: BLE001
+            LOGGER.info("Failed to collect ycsb version information", exc_info=True)
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
