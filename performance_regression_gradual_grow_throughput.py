@@ -132,7 +132,14 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         return keyspace, table
 
     def _parse_latte_params_from_rune_script(self, stress_cmd) -> (str, str):
-        """Parse default keyspace and table values from a latte rune script file."""
+        """Parse default keyspace and table values from a latte rune script file.
+
+        Uses the same path-extraction regex as sdcm/stress/latte_thread.py which covers
+        all current rune script paths (letters, digits, underscores, hyphens and slashes).
+        Rune script string literals always use double quotes per Rust/Rune syntax, so the
+        latte::param! pattern targets double-quoted values only.
+        """
+        # Same pattern as used in sdcm/stress/latte_thread.py build_stress_cmd()
         script_name_regex = re.compile(r"([/\w-]*\.rn)")
         match = script_name_regex.search(stress_cmd)
         if not match:
@@ -147,6 +154,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         keyspace = ""
         table = ""
         for param_name in ("keyspace", "table"):
+            # Rune/Rust string literals use double quotes; latte::param! format is:
+            # latte::param!("param_name", "default_value")
             param_regex = re.compile(rf'latte::param!\("{re.escape(param_name)}",\s*"([^"]+)"\)')
             if m := param_regex.search(script_content):
                 if param_name == "keyspace":
