@@ -916,6 +916,37 @@ def get_relocatable_pkg_url(scylla_version: str) -> str | None:
     return relocatable_pkg
 
 
+def latest_unified_package(arch: str = "x86_64", product: str = "scylla", branch: str = "master") -> str:
+    """Get the URL of the latest unified package from the S3 bucket.
+
+    Args:
+        arch: CPU architecture, e.g. 'x86_64' or 'aarch64'.
+              Also accepts 'arm64' (AWS naming convention) which is
+              automatically normalized to 'aarch64'.
+        product: Scylla product name, e.g. 'scylla' or 'scylla-enterprise'.
+        branch: Branch name, e.g. 'master' or 'enterprise'.
+
+    Returns:
+        Full HTTPS URL of the latest scylla-unified package.
+
+    Raises:
+        FileNotFoundError: If no matching unified package is found.
+    """
+    # Normalize AWS arch naming ("arm64") to the convention used in
+    # unified-package filenames ("aarch64").
+    if arch == "arm64":
+        arch = "aarch64"
+    prefix = f"unstable/{product}/{branch}/relocatable/latest/"
+    s3_client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION, config=Config(signature_version=UNSIGNED))
+    paginator = s3_client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=SCYLLA_REPO_BUCKET, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            filename = obj["Key"].rsplit("/", 1)[-1]
+            if "scylla-unified" in filename and arch in filename:
+                return f"https://{SCYLLA_REPO_BUCKET}/{obj['Key']}"
+    raise FileNotFoundError(f"No scylla-unified package found for arch={arch} in {SCYLLA_REPO_BUCKET}/{prefix}")
+
+
 _S3_SCYLLA_REPOS_CACHE = defaultdict(dict)
 
 

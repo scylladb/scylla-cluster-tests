@@ -9,6 +9,7 @@ billing_project: ''
 ip_ssh_connections: 'private'
 
 scylla_repo: ''
+unified_package: ''
 
 manager_version: '3.8'
 manager_scylla_backend_version: '2025'
