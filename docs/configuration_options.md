@@ -1,3 +1,4 @@
+# scylla-cluster-tests configuration options
 
 #### Appending with environment variables or with config files
 * **strings:** can be appended with adding `++` at the beginning of the string:
