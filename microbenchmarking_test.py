@@ -19,11 +19,13 @@ from sdcm.tester import ClusterTester
 class PerfSimpleQueryTest(ClusterTester):
     def test_perf_simple_query(self):
         perf_simple_query_extra_command = self.params.get("perf_simple_query_extra_command") or ""
-        result = self.db_cluster.nodes[0].remoter.run(
-            f"scylla perf-simple-query --json-result=perf-simple-query-result.txt --smp 1 -m 1G {perf_simple_query_extra_command}"
+        node = self.db_cluster.nodes[0]
+        scylla_bin = node.add_install_prefix("/usr/bin/scylla")
+        result = node.remoter.run(
+            f"{scylla_bin} perf-simple-query --json-result=perf-simple-query-result.txt --smp 1 -m 1G {perf_simple_query_extra_command}"
         )
         if result.ok:
-            output = self.db_cluster.nodes[0].remoter.run("cat perf-simple-query-result.txt").stdout
+            output = node.remoter.run("cat perf-simple-query-result.txt").stdout
             results = json.loads(output)
 
             error_thresholds = self.params.get("latency_decorator_error_thresholds")

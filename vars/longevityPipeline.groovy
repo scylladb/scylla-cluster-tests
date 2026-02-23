@@ -60,13 +60,23 @@ def call(Map pipelineParams) {
                name: 'prepare_stress_duration')
 
             // ScyllaDB Configuration
-	    separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 6 options)')
+	    separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 7 options)')
 	    string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
 	    string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
 	    string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
 	    string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs:// ', name: 'update_db_packages')
-            string(name: 'scylla_version', defaultValue: '', description: 'Version of ScyllaDB')
-            string(name: 'scylla_repo', defaultValue: '', description: 'Repository for ScyllaDB')
+            string(defaultValue: "${pipelineParams.get('scylla_version', '')}",
+                   description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
+                   name: 'scylla_version')
+            string(defaultValue: '',
+                   description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
+                   name: 'scylla_repo')
+            string(defaultValue: "${pipelineParams.get('unified_package', '')}",
+                   description: 'Url to the unified package of scylla version to install scylla',
+                   name: 'unified_package')
+            booleanParam(defaultValue: "${pipelineParams.get('nonroot_offline_install', false)}",
+                   description: 'Install Scylla without required root priviledge',
+                   name: 'nonroot_offline_install')
 
             // Provisioning Configuration
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
