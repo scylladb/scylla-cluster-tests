@@ -2393,6 +2393,22 @@ class SCTConfiguration(dict):
             help="""Optional. Allows to pass through custom rune script parameters to the 'latte schema' command.""",
         ),
         dict(
+            name="perf_stress_keyspace",
+            env="SCT_PERF_STRESS_KEYSPACE",
+            type=str,
+            help="""Keyspace name used in performance gradual throughput tests.
+                    Required for cassandra-stress, scylla-bench and cql-stress-cassandra-stress tools.
+                    For latte, if not set, falls back to the 'keyspace' key in latte_schema_parameters.""",
+        ),
+        dict(
+            name="perf_stress_table",
+            env="SCT_PERF_STRESS_TABLE",
+            type=str,
+            help="""Table name used in performance gradual throughput tests.
+                    Required for cassandra-stress, scylla-bench and cql-stress-cassandra-stress tools.
+                    For latte, if not set, falls back to the 'table' key in latte_schema_parameters.""",
+        ),
+        dict(
             name="num_loaders_step",
             env="SCT_NUM_LOADERS_STEP",
             type=int,
