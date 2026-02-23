@@ -22,8 +22,9 @@ from functools import cached_property
 from textwrap import dedent
 
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.remote import FailuresWatcher
+from sdcm.reporting.tooling_reporter import YcsbVersionReporter
+from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.utils import alternator
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.docker_remote import RemoteDocker
@@ -374,6 +375,12 @@ class YcsbStressThread(DockerBasedStressThread):
 
         self.copy_template(cmd_runner, loader.name)
         stress_cmd = self.build_stress_cmd(loader_idx, cpu_idx)
+
+        try:
+            reporter = YcsbVersionReporter(cmd_runner, "", loader.parent_cluster.test_config.argus_client())
+            reporter.report()
+        except Exception:  # noqa: BLE001
+            LOGGER.info("Failed to collect ycsb version information", exc_info=True)
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
