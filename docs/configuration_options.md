@@ -3417,6 +3417,24 @@ Optional. Allows to pass through custom rune script parameters to the 'latte sch
 **type:** dict
 
 
+## **perf_stress_keyspace** / SCT_PERF_STRESS_KEYSPACE
+
+Keyspace name used in performance gradual throughput tests.<br>Required for cassandra-stress, scylla-bench and cql-stress-cassandra-stress tools.<br>For latte, if not set, falls back to the 'keyspace' key in latte_schema_parameters.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **perf_stress_table** / SCT_PERF_STRESS_TABLE
+
+Table name used in performance gradual throughput tests.<br>Required for cassandra-stress, scylla-bench and cql-stress-cassandra-stress tools.<br>For latte, if not set, falls back to the 'table' key in latte_schema_parameters.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **num_loaders_step** / SCT_NUM_LOADERS_STEP
 
 Number of loaders which should be added per step
