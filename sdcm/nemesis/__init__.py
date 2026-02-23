@@ -3861,6 +3861,7 @@ class NemesisRunner:
         self.cluster.wait_all_nodes_un()
 
     def disrupt_network_random_interruptions(self):
+        self.use_nemesis_seed()
         list_of_timeout_options = [10, 60, 120, 300, 500]
         if self._is_it_on_kubernetes():
             self._disrupt_network_random_interruptions_k8s(list_of_timeout_options)
