@@ -311,6 +311,60 @@ class GeminiGoCqlDriverVersionReporter(ToolReporterBase):
         pass
 
 
+class YcsbAwsSdkVersionReporter(ToolReporterBase):
+    TOOL_NAME = "ycsb-aws-sdk"
+
+    def __init__(self, version: str, argus_client: ArgusSCTClient = None) -> None:
+        super().__init__(None, "", argus_client)
+        self.version = version
+
+    def _collect_version_info(self) -> None:
+        pass
+
+
+class YcsbScyllaDriverVersionReporter(ToolReporterBase):
+    TOOL_NAME = "ycsb-scylla-driver"
+
+    def __init__(self, version: str, argus_client: ArgusSCTClient = None) -> None:
+        super().__init__(None, "", argus_client)
+        self.version = version
+
+    def _collect_version_info(self) -> None:
+        pass
+
+
+class YcsbVersionReporter(ToolReporterBase):
+    """Reports YCSB version used in SCT."""
+
+    TOOL_NAME = "ycsb"
+    _YCSB_HOME = "/usr/local/share/scylla-ycsb"
+
+    def __init__(
+        self,
+        runner: CommandRunner,
+        command_prefix: str = None,
+        argus_client: ArgusSCTClient = None,
+        stress_cmd: str = "",
+    ) -> None:
+        super().__init__(runner, command_prefix, argus_client)
+        self.stress_cmd = stress_cmd
+
+    def _collect_version_info(self) -> None:
+        output = self.runner.run(f"{self._YCSB_HOME}/bin/ycsb.sh --version")
+        LOGGER.debug("%s: Collected ycsb version output:\n%s", self, output.stdout)
+        version_info = json.loads(output.stdout.strip())
+
+        self.version = version_info.get("version", "#FAILED_CHECK_LOGS")
+        self.date = version_info.get("build_date")
+        self.revision_id = version_info.get("git_hash")
+
+        if "dynamodb" in self.stress_cmd and (aws_sdk_version := version_info.get("aws_sdk_version")):
+            YcsbAwsSdkVersionReporter(version=aws_sdk_version, argus_client=self.argus_client).report()
+
+        if "scylla" in self.stress_cmd and (scylla_driver_version := version_info.get("scylla_driver_version")):
+            YcsbScyllaDriverVersionReporter(version=scylla_driver_version, argus_client=self.argus_client).report()
+
+
 class VectorStoreVersionReporter(ToolReporterBase):
     TOOL_NAME = "vector-store"
 
