@@ -1,5 +1,9 @@
 test_duration: 500
 
+# Keyspace and table used by cassandra-stress commands below
+stress_keyspace: keyspace1
+stress_table: standard1
+
 # Define the commands to be used in the write-load test. The purpose of this command is to prepare the schema without hardcoded ks.table definition.
 prepare_stress_cmd: "cassandra-stress write cl=ALL n=1 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=1' -col 'size=FIXED(1024) n=FIXED(1)'"
 

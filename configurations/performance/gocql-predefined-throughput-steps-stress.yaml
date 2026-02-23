@@ -1,3 +1,7 @@
+# Keyspace and table used by scylla-bench commands below (override the defaults from base test YAML)
+stress_keyspace: scylla_bench
+stress_table: test
+
 # Define the commands to be used in the write-load test. The purpose of this command is to prepare the schema.
 prepare_stress_cmd: "scylla-bench -workload=sequential -mode=write -replication-factor=3 -consistency-level=all -partition-count=1 -clustering-row-count=1 -clustering-row-size=1024 -concurrency=10 -connection-count=10 -rows-per-request=1"
 

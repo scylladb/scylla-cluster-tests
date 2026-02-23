@@ -1,16 +1,18 @@
 import pathlib
+import re
 import time
 from enum import Enum
 from collections import defaultdict, Counter
+from pathlib import Path
 
 import json
 from dataclasses import dataclass, replace
 from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
-from sdcm.utils.common import skip_optional_stage
+from sdcm.utils.common import get_sct_root_path, skip_optional_stage
 from sdcm.sct_events import Severity
-from sdcm.sct_events.system import TestFrameworkEvent, InfoEvent
+from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.results_analyze import PredefinedStepsTestPerformanceAnalyzer
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
@@ -83,27 +85,84 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         return step_duration[workload_type]
 
     def get_test_table_name(self, stress_cmds) -> (str, str):
-        # TODO: define keyspace and table names as test parameter (https://github.com/scylladb/qa-tasks/issues/2020)
         stress_cmd = stress_cmds[0] if isinstance(stress_cmds, list) else stress_cmds
+        if is_latte_command(stress_cmds):
+            return self._resolve_latte_keyspace_and_table(stress_cmd)
+
         stress_tool = stress_cmd.split(" ")[0]
-        if stress_tool == "scylla-bench":
-            return "scylla_bench", "test"
-        elif stress_tool in ["cassandra-stress", "cql-stress-cassandra-stress"]:
-            return "keyspace1", "standard1"
-        elif is_latte_command(stress_cmds):
-            InfoEvent(
-                message="Make sure that rune script disables speculative retries for its table.",
-                severity=Severity.WARNING,
-            ).publish()
-            keyspace, table_name = "", "footable"
-            if latte_schema_parameters := self.params.get("latte_schema_parameters"):
-                for key, value in latte_schema_parameters.items():
-                    if key == "keyspace":
-                        keyspace = value
-                        break
-            return keyspace, table_name
-        else:
-            raise ValueError(f"Not supported stress tool in command: {stress_cmds}")
+        keyspace = self.params.get("stress_keyspace")
+        table = self.params.get("stress_table")
+        if not keyspace:
+            raise ValueError(
+                f"'stress_keyspace' is required for '{stress_tool}' gradual performance tests. "
+                "Please add it to your test YAML configuration."
+            )
+        if not table:
+            raise ValueError(
+                f"'stress_table' is required for '{stress_tool}' gradual performance tests. "
+                "Please add it to your test YAML configuration."
+            )
+        return keyspace, table
+
+    def _resolve_latte_keyspace_and_table(self, stress_cmd) -> (str, str):
+        """Dynamically resolve keyspace and table name for latte commands."""
+        keyspace = ""
+        table = ""
+        if latte_schema_parameters := self.params.get("latte_schema_parameters"):
+            keyspace = latte_schema_parameters.get("keyspace", "")
+            table = latte_schema_parameters.get("table", "")
+
+        if not keyspace or not table:
+            parsed_keyspace, parsed_table = self._parse_latte_params_from_rune_script(stress_cmd)
+            if not keyspace:
+                keyspace = parsed_keyspace
+            if not table:
+                table = parsed_table
+
+        if not keyspace:
+            raise ValueError(
+                "Cannot determine latte keyspace. Add 'keyspace' to 'latte_schema_parameters' in your test YAML, "
+                'or ensure the rune script defines it via latte::param!("keyspace", "...").'
+            )
+        if not table:
+            self.log.warning(
+                "Cannot determine latte table name. Add 'table' to 'latte_schema_parameters' in your test YAML "
+                "if post_prepare_cql_cmds filtering by table is needed."
+            )
+        return keyspace, table
+
+    def _parse_latte_params_from_rune_script(self, stress_cmd) -> (str, str):
+        """Parse default keyspace and table values from a latte rune script file.
+
+        Uses the same path-extraction regex as sdcm/stress/latte_thread.py which covers
+        all current rune script paths (letters, digits, underscores, hyphens and slashes).
+        Rune script string literals always use double quotes per Rust/Rune syntax, so the
+        latte::param! pattern targets double-quoted values only.
+        """
+        # Same pattern as used in sdcm/stress/latte_thread.py build_stress_cmd()
+        script_name_regex = re.compile(r"([/\w-]*\.rn)")
+        match = script_name_regex.search(stress_cmd)
+        if not match:
+            return "", ""
+
+        script_name = match.group(0)
+        script_path = Path(get_sct_root_path()) / script_name
+        if not script_path.exists():
+            return "", ""
+
+        script_content = script_path.read_text(encoding="utf-8")
+        keyspace = ""
+        table = ""
+        for param_name in ("keyspace", "table"):
+            # Rune/Rust string literals use double quotes; latte::param! format is:
+            # latte::param!("param_name", "default_value")
+            param_regex = re.compile(rf'latte::param!\("{re.escape(param_name)}",\s*"([^"]+)"\)')
+            if m := param_regex.search(script_content):
+                if param_name == "keyspace":
+                    keyspace = m.group(1)
+                else:
+                    table = m.group(1)
+        return keyspace, table
 
     def test_mixed_gradual_increase_load(self):
         """

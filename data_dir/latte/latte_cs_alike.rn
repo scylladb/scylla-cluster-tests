@@ -91,12 +91,16 @@ pub async fn schema(db) {
         `CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE}` +
         `(key blob PRIMARY KEY${columns_def}${compression}${compaction}${comment}`
     ).await?;
+    // Disable speculative retry for performance testing accuracy
+    db.execute(`ALTER TABLE ${KEYSPACE}.${TABLE} WITH speculative_retry = 'NONE'`).await?;
 
     // Create counter table
     db.execute(
         `CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${COUNTER_TABLE}` +
         `(key blob PRIMARY KEY${counter_columns_def}${compression}${compaction}${comment}`
     ).await?;
+    // Disable speculative retry for performance testing accuracy
+    db.execute(`ALTER TABLE ${KEYSPACE}.${COUNTER_TABLE} WITH speculative_retry = 'NONE'`).await?;
 }
 
 pub async fn erase(db) {
