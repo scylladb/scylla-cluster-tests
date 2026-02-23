@@ -320,7 +320,7 @@ class ArtifactsTest(ClusterTester):
         # we only test this in images created by scylla-machine-image
         if self.params.get("use_preinstalled_scylla"):
             self.log.info("Ensure that we don't run fstrim")
-            self.assertEqual(run("systemctl is-enabled fstrim.timer", ignore_status=True).stdout.strip(), "disabled")
+            assert run("systemctl is-enabled fstrim.timer", ignore_status=True).stdout.strip() in ["disabled", "masked"]
 
     def check_service_existence(self, service_name):
         res = self.node.remoter.run(f'systemctl list-units --full | grep -Fq "{service_name}"', ignore_status=True)
