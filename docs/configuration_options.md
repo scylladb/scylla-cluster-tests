@@ -314,7 +314,7 @@ Url to the repo of scylla manager agent version to install for management tests
 
 ## **manager_version** / SCT_MANAGER_VERSION
 
-Branch of scylla manager server and agent to install. Options in defaults/manager_versions.yaml
+Version of Scylla Manager server and agent to install
 
 **default:** 3.8
 
@@ -323,7 +323,7 @@ Branch of scylla manager server and agent to install. Options in defaults/manage
 
 ## **target_manager_version** / SCT_TARGET_MANAGER_VERSION
 
-Branch of scylla manager server and agent to upgrade to. Options in defaults/manager_versions.yaml
+Version of Scylla Manager server and agent to upgrade to
 
 **default:** N/A
 
@@ -332,7 +332,7 @@ Branch of scylla manager server and agent to upgrade to. Options in defaults/man
 
 ## **manager_scylla_backend_version** / SCT_MANAGER_SCYLLA_BACKEND_VERSION
 
-Branch of scylla db enterprise to install. Options in defaults/manager_versions.yaml
+Version of ScyllaDB to install as Manager backend
 
 **default:** 2025
 
