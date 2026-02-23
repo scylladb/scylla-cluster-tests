@@ -33,7 +33,7 @@ You should use different parameters for .rpm/.deb tests and for AMI test:
 
 To verify Scylla Manager package you need to provide `scylla_repo` and `scylla_mgmt_address` parameters. In this case Scylla Manager will be installed during artifacts test as well as ScyllaDB.
 
-Alternatively, and even recommended, one can use the `manager_version` parameter to just choose the desired version. Branch options can be view in defaults/manager_versions.yaml
+Alternatively, and even recommended, one can use the `manager_version` parameter to just choose the desired version.
 
 Optionally, you can override default cloud instance type by providing `instance_type` parameter. This parameter can be a space-separated list of instance types.
 

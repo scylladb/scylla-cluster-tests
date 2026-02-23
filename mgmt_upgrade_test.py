@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from sdcm.tester import ClusterTester
 from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
 from sdcm.mgmt.cli import RepairTask
-from sdcm.mgmt.common import get_manager_repo_from_defaults, create_cron_list_from_timedelta
+from sdcm.mgmt.common import create_cron_list_from_timedelta, get_manager_repo
 from sdcm.mgmt.operations import ManagerTestFunctionsMixIn
 
 LOGGER = logging.getLogger(__name__)
@@ -60,11 +60,9 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
         target_upgrade_agent_version = self.params.get("target_scylla_mgmt_agent_address")
         target_manager_version = self.params.get("target_manager_version")
         if not target_upgrade_server_version:
-            target_upgrade_server_version = get_manager_repo_from_defaults(
-                target_manager_version, distro=manager_node.distro
-            )
+            target_upgrade_server_version = get_manager_repo(target_manager_version, distro=manager_node.distro)
         if not target_upgrade_agent_version:
-            target_upgrade_agent_version = get_manager_repo_from_defaults(
+            target_upgrade_agent_version = get_manager_repo(
                 target_manager_version, distro=self.db_cluster.nodes[0].distro
             )
 
