@@ -14,6 +14,8 @@
 import os
 from functools import cached_property
 
+from sdcm.utils.reverse_tunnel import get_tunnel_manager
+
 
 AUTO_SSH_IMAGE = "jnovack/autossh:1.2.2"
 AUTO_SSH_LOGFILE = "autossh.log"
@@ -25,31 +27,36 @@ class AutoSshContainerMixin:
     Requires `ssh_login_info', `name' and `logdir' properties.
 
     See sdcm.utils.docker_utils.ContainerManager for details.
+
+    This mixin now delegates to the reverse_tunnel module for actual implementation,
+    maintaining backward compatibility while supporting alternative tunnel types.
     """
 
     def auto_ssh_container_run_args(self, local_port, remote_port, ssh_mode="-R"):
-        hostname = self.ssh_login_info["hostname"]
-        port = self.ssh_login_info.get("port", "22")
-        user = self.ssh_login_info["user"]
-        volumes = {os.path.expanduser(self.ssh_login_info["key_file"]): {"bind": "/id_rsa", "mode": "ro,z"}}
+        """Get container run arguments for autossh tunnel.
 
-        return dict(
-            image=AUTO_SSH_IMAGE,
-            name=f"{self.name}-{hostname.replace(':', '-')}-autossh",
-            environment=dict(
-                SSH_HOSTNAME=hostname,
-                SSH_HOSTPORT=port,
-                SSH_HOSTUSER=user,
-                SSH_TUNNEL_HOST="127.0.0.1",
-                SSH_MODE=ssh_mode,
-                SSH_TUNNEL_LOCAL=local_port,
-                SSH_TUNNEL_REMOTE=remote_port,
-                AUTOSSH_GATETIME=0,
-            ),
-            network_mode="host",
-            restart_policy={"Name": "always"},
-            volumes=volumes,
-        )
+        This method maintains backward compatibility with existing code.
+        It creates an AutosshTunnelManager and delegates to it.
+
+        Args:
+            local_port: Local port on the test runner
+            remote_port: Remote port on the node
+            ssh_mode: SSH tunnel mode (default: "-R" for reverse)
+
+        Returns:
+            Dictionary of container run arguments
+        """
+        # Get tunnel mode from test config if available
+        tunnel_mode = getattr(self, 'test_config', None)
+        if tunnel_mode:
+            tunnel_mode = getattr(tunnel_mode, 'params', {}).get('reverse_tunnel_mode', 'autossh')
+        else:
+            tunnel_mode = 'autossh'
+
+        # For backward compatibility, if this method is called directly,
+        # we always use autossh (maintaining existing behavior)
+        tunnel_manager = get_tunnel_manager(self, 'autossh', 'autossh')
+        return tunnel_manager.get_container_run_args(local_port, remote_port, ssh_mode)
 
     @cached_property
     def auto_ssh_container_logfile(self):

@@ -599,40 +599,79 @@ class BaseNode(AutoSshContainerMixin):
         self.log.debug(self.remoter.ssh_debug_cmd())
 
     def _init_port_mapping(self):
+        """Initialize port mapping for services using reverse tunneling."""
         if self.test_config.IP_SSH_CONNECTIONS == "public":
-            if self.test_config.SYSLOGNG_ADDRESS:
-                try:
-                    ContainerManager.destroy_container(self, "auto_ssh:syslog_ng", ignore_keepalive=True)
-                except NotFound:
-                    pass
-                ContainerManager.run_container(
-                    self,
-                    "auto_ssh:syslog_ng",
-                    local_port=self.test_config.SYSLOGNG_ADDRESS[1],
-                    remote_port=self.test_config.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT,
-                )
-            if self.test_config.VECTOR_ADDRESS:
-                try:
-                    ContainerManager.destroy_container(self, "auto_ssh:vector", ignore_keepalive=True)
-                except NotFound:
-                    pass
-                ContainerManager.run_container(
-                    self,
-                    "auto_ssh:vector",
-                    local_port=self.test_config.VECTOR_ADDRESS[1],
-                    remote_port=self.test_config.VECTOR_SSH_TUNNEL_LOCAL_PORT,
-                )
-            if self.test_config.LDAP_ADDRESS and self.parent_cluster.node_type == "scylla-db":
-                try:
-                    ContainerManager.destroy_container(self, "auto_ssh:ldap", ignore_keepalive=True)
-                except NotFound:
-                    pass
-                ContainerManager.run_container(
-                    self,
-                    "auto_ssh:ldap",
-                    local_port=self.test_config.LDAP_ADDRESS[1],
-                    remote_port=LDAP_SSH_TUNNEL_LOCAL_PORT,
-                )
+            # Get the tunnel mode from configuration
+            tunnel_mode = self.params.get("reverse_tunnel_mode", "autossh")
+            
+            if tunnel_mode == "autossh":
+                # Use autossh with ContainerManager (existing behavior)
+                if self.test_config.SYSLOGNG_ADDRESS:
+                    try:
+                        ContainerManager.destroy_container(self, "auto_ssh:syslog_ng", ignore_keepalive=True)
+                    except NotFound:
+                        pass
+                    ContainerManager.run_container(
+                        self,
+                        "auto_ssh:syslog_ng",
+                        local_port=self.test_config.SYSLOGNG_ADDRESS[1],
+                        remote_port=self.test_config.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT,
+                    )
+                if self.test_config.VECTOR_ADDRESS:
+                    try:
+                        ContainerManager.destroy_container(self, "auto_ssh:vector", ignore_keepalive=True)
+                    except NotFound:
+                        pass
+                    ContainerManager.run_container(
+                        self,
+                        "auto_ssh:vector",
+                        local_port=self.test_config.VECTOR_ADDRESS[1],
+                        remote_port=self.test_config.VECTOR_SSH_TUNNEL_LOCAL_PORT,
+                    )
+                if self.test_config.LDAP_ADDRESS and self.parent_cluster.node_type == "scylla-db":
+                    try:
+                        ContainerManager.destroy_container(self, "auto_ssh:ldap", ignore_keepalive=True)
+                    except NotFound:
+                        pass
+                    ContainerManager.run_container(
+                        self,
+                        "auto_ssh:ldap",
+                        local_port=self.test_config.LDAP_ADDRESS[1],
+                        remote_port=LDAP_SSH_TUNNEL_LOCAL_PORT,
+                    )
+            elif tunnel_mode == "ngrok":
+                # Use ngrok tunnels (no containers needed)
+                from sdcm.utils.reverse_tunnel import NgrokTunnelManager
+                
+                if self.test_config.SYSLOGNG_ADDRESS:
+                    manager = NgrokTunnelManager(self, "syslog_ng")
+                    manager.get_container_run_args(
+                        local_port=self.test_config.SYSLOGNG_ADDRESS[1],
+                        remote_port=self.test_config.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT,
+                    )
+                    self.log.info("Syslog-NG tunnel via ngrok: %s", 
+                                 NgrokTunnelManager.get_tunnel_url(self.test_config.SYSLOGNG_ADDRESS[1]))
+                    
+                if self.test_config.VECTOR_ADDRESS:
+                    manager = NgrokTunnelManager(self, "vector")
+                    manager.get_container_run_args(
+                        local_port=self.test_config.VECTOR_ADDRESS[1],
+                        remote_port=self.test_config.VECTOR_SSH_TUNNEL_LOCAL_PORT,
+                    )
+                    self.log.info("Vector tunnel via ngrok: %s",
+                                 NgrokTunnelManager.get_tunnel_url(self.test_config.VECTOR_ADDRESS[1]))
+                    
+                if self.test_config.LDAP_ADDRESS and self.parent_cluster.node_type == "scylla-db":
+                    manager = NgrokTunnelManager(self, "ldap")
+                    manager.get_container_run_args(
+                        local_port=self.test_config.LDAP_ADDRESS[1],
+                        remote_port=LDAP_SSH_TUNNEL_LOCAL_PORT,
+                    )
+                    self.log.info("LDAP tunnel via ngrok: %s",
+                                 NgrokTunnelManager.get_tunnel_url(self.test_config.LDAP_ADDRESS[1]))
+            else:
+                self.log.warning("Unknown reverse_tunnel_mode: %s. Skipping tunnel setup.", tunnel_mode)
+
 
     @property
     def vm_region(self):
