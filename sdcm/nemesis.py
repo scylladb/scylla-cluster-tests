@@ -522,16 +522,8 @@ class Nemesis:
                                          regex=".*Connection reset by peer.*",
                                          extra_time_to_expiration=30):
             self.log.info('Kill all scylla processes in %s', self.target_node)
-<<<<<<< HEAD
-            self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-            with DbNodeLogger(self.cluster.nodes, "kill all scylla processes", target_node=self.target_node):
+            with self.action_log_scope(f"pkill -9 scylla on {self.target_node.name} node"):
                 self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
-=======
-            with DbNodeLogger(self.cluster.nodes, "kill all scylla processes", target_node=self.target_node), \
-                    self.action_log_scope(f"pkill -9 scylla on {self.target_node.name} node"):
-                self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
 
             # Wait for the process to be down before waiting for service to be restarted
             self.target_node.wait_db_down(check_interval=2)
@@ -645,33 +637,13 @@ class Nemesis:
                              watch_for="User initiated compaction started on behalf of",
                              timeout=compaction_args.timeout,
                              stop_func=compaction_args.compaction_ops.stop_major_compaction)
-<<<<<<< HEAD
-
-        results = ParallelObject.run_named_tasks_in_parallel(
-            tasks={"trigger": trigger_func, "watcher": watch_func},
-            timeout=compaction_args.timeout + 5,
-            ignore_exceptions=True
-        )
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-
-        with DbNodeLogger(self.cluster.nodes, "start and stop major compaction", target_node=self.target_node,
-                          additional_info=f"on {compaction_args.keyspace}.{compaction_args.columnfamily}"):
-            results = ParallelObject.run_named_tasks_in_parallel(
-                tasks={"trigger": trigger_func, "watcher": watch_func},
-                timeout=compaction_args.timeout + 5,
-                ignore_exceptions=True
-            )
-=======
         ks_cf = f"{compaction_args.keyspace}.{compaction_args.columnfamily}"
-        with DbNodeLogger(self.cluster.nodes, "start and stop major compaction", target_node=self.target_node,
-                          additional_info=f"on {ks_cf}"), \
-                self.action_log_scope(f"start and stop major compaction on {ks_cf} table on {self.target_node.name} node"):
+        with self.action_log_scope(f"start and stop major compaction on {ks_cf} table on {self.target_node.name} node"):
             results = ParallelObject.run_named_tasks_in_parallel(
                 tasks={"trigger": trigger_func, "watcher": watch_func},
                 timeout=compaction_args.timeout + 5,
                 ignore_exceptions=True
             )
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
 
         self._handle_start_stop_compaction_results(
             trigger_and_watcher_futures=results,
@@ -710,30 +682,13 @@ class Nemesis:
                              watch_for="Scrubbing",
                              timeout=compaction_args.timeout,
                              stop_func=compaction_args.compaction_ops.stop_scrub_compaction)
-<<<<<<< HEAD
-
-        results = ParallelObject.run_named_tasks_in_parallel(
-            tasks={"trigger": trigger_func, "watcher": watch_func},
-            timeout=compaction_args.timeout + 5,
-            ignore_exceptions=True
-        )
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-        with DbNodeLogger(self.cluster.nodes, "start and stop scrub compaction", target_node=self.target_node):
-            results = ParallelObject.run_named_tasks_in_parallel(
-                tasks={"trigger": trigger_func, "watcher": watch_func},
-                timeout=compaction_args.timeout + 5,
-                ignore_exceptions=True
-            )
-=======
         ks_cf = f"{compaction_args.keyspace}.{compaction_args.columnfamily}"
-        with DbNodeLogger(self.cluster.nodes, "start and stop scrub compaction", target_node=self.target_node), \
-                self.action_log_scope(f"start and stop scrub compaction on {ks_cf} table on {self.target_node.name} node"):
+        with self.action_log_scope(f"start and stop scrub compaction on {ks_cf} table on {self.target_node.name} node"):
             results = ParallelObject.run_named_tasks_in_parallel(
                 tasks={"trigger": trigger_func, "watcher": watch_func},
                 timeout=compaction_args.timeout + 5,
                 ignore_exceptions=True
             )
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
 
         self._handle_start_stop_compaction_results(
             trigger_and_watcher_futures=results,
@@ -770,29 +725,13 @@ class Nemesis:
                              watch_for="Cleaning",
                              stop_func=compaction_args.compaction_ops.stop_cleanup_compaction)
 
-<<<<<<< HEAD
-        results = ParallelObject.run_named_tasks_in_parallel(
-            tasks={"trigger": trigger_func, "watcher": watch_func},
-            timeout=compaction_args.timeout + 5,
-            ignore_exceptions=True
-        )
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-        with DbNodeLogger(self.cluster.nodes, "start and stop cleanup compaction", target_node=self.target_node):
-            results = ParallelObject.run_named_tasks_in_parallel(
-                tasks={"trigger": trigger_func, "watcher": watch_func},
-                timeout=compaction_args.timeout + 5,
-                ignore_exceptions=True
-            )
-=======
         ks_cf = f"{compaction_args.keyspace}.{compaction_args.columnfamily}"
-        with DbNodeLogger(self.cluster.nodes, "start and stop cleanup compaction", target_node=self.target_node), \
-                self.action_log_scope(f"start and stop cleanup compaction on {ks_cf} table on {self.target_node.name} node"):
+        with self.action_log_scope(f"start and stop cleanup compaction on {ks_cf} table on {self.target_node.name} node"):
             results = ParallelObject.run_named_tasks_in_parallel(
                 tasks={"trigger": trigger_func, "watcher": watch_func},
                 timeout=compaction_args.timeout + 5,
                 ignore_exceptions=True
             )
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
 
         self._handle_start_stop_compaction_results(
             trigger_and_watcher_futures=results,
@@ -828,29 +767,13 @@ class Nemesis:
                              timeout=compaction_args.timeout,
                              stop_func=compaction_args.compaction_ops.stop_validation_compaction)
 
-<<<<<<< HEAD
-        results = ParallelObject.run_named_tasks_in_parallel(
-            tasks={"trigger": trigger_func, "watcher": watch_func},
-            timeout=compaction_args.timeout + 5,
-            ignore_exceptions=True
-        )
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-        with DbNodeLogger(self.cluster.nodes, "start and stop validation compaction", target_node=self.target_node):
-            results = ParallelObject.run_named_tasks_in_parallel(
-                tasks={"trigger": trigger_func, "watcher": watch_func},
-                timeout=compaction_args.timeout + 5,
-                ignore_exceptions=True
-            )
-=======
         ks_cf = f"{compaction_args.keyspace}.{compaction_args.columnfamily}"
-        with DbNodeLogger(self.cluster.nodes, "start and stop validation compaction", target_node=self.target_node), \
-                self.action_log_scope(f"start and stop validation compaction on {ks_cf} on {self.target_node.name} node"):
+        with self.action_log_scope(f"start and stop validation compaction on {ks_cf} on {self.target_node.name} node"):
             results = ParallelObject.run_named_tasks_in_parallel(
                 tasks={"trigger": trigger_func, "watcher": watch_func},
                 timeout=compaction_args.timeout + 5,
                 ignore_exceptions=True
             )
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
 
         self._handle_start_stop_compaction_results(
             trigger_and_watcher_futures=results,
@@ -865,15 +788,7 @@ class Nemesis:
                             line="Can't find a column family with UUID", node=self.target_node), \
             DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE,
                            line="Can't find a column family with UUID", node=self.target_node):
-<<<<<<< HEAD
-            with self.action_log_scope("Restart the node", target=self.target_node.name):
-||||||| parent of 4440c6a8c (improvement(actions_log): removed target and metadata)
-            with DbNodeLogger(self.cluster.nodes, "restart node", target_node=self.target_node), \
-                    self.action_log_scope("Restart the node", target=self.target_node.name):
-=======
-            with DbNodeLogger(self.cluster.nodes, "restart node", target_node=self.target_node), \
-                    self.action_log_scope(f"Restart {self.target_node.name} node"):
->>>>>>> 4440c6a8c (improvement(actions_log): removed target and metadata)
+            with self.action_log_scope(f"Restart {self.target_node.name} node"):
                 self.target_node.restart()
         self.target_node.wait_node_fully_start(timeout=28800)  # 8 hours
         self.repair_nodetool_repair()
@@ -1288,35 +1203,15 @@ class Nemesis:
         #       as 'NotReady' and will fail the pod waiter function.
         self.log.info("Adding new node to cluster...")
         InfoEvent(message='StartEvent - Adding new node to cluster').publish()
-<<<<<<< HEAD
-        if is_zero_node:
-            new_node = critical_on_capacity_issues(self.cluster.add_nodes)(
-                count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack, is_zero_node=is_zero_node)[0]
-        else:
-            new_node = critical_on_capacity_issues(self.cluster.add_nodes)(
-                count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)[0]
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
         add_node_func_args = {
             "count": 1,
             "dc_idx": self.target_node.dc_idx,
             "enable_auto_bootstrap": True,
             "rack": rack,
-            "disruption_name": self.current_disruption,
-            **({"is_zero_node": is_zero_node} if is_zero_node else {})
-        }
-        new_node = critical_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)[0]
-=======
-        add_node_func_args = {
-            "count": 1,
-            "dc_idx": self.target_node.dc_idx,
-            "enable_auto_bootstrap": True,
-            "rack": rack,
-            "disruption_name": self.current_disruption,
             **({"is_zero_node": is_zero_node} if is_zero_node else {})
         }
         with self.action_log_scope("Add a new node"):
             new_node = critical_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)[0]
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
 
@@ -1364,30 +1259,10 @@ class Nemesis:
             instance_type = self.cluster.params.get("zero_token_instance_type_db") or instance_type
             add_node_func_args.update({"is_zero_node": is_zero_node, "instance_type": instance_type})
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-        new_nodes = skip_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-        new_nodes = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(
-            self.cluster.add_nodes)(**add_node_func_args)
-=======
-        with self.action_log_scope("Add new nodes", metadata={"count": count, "rack": rack, "instance_type": instance_type}):
-||||||| parent of 4440c6a8c (improvement(actions_log): removed target and metadata)
-        with self.action_log_scope("Add new nodes", metadata={"count": count, "rack": rack, "instance_type": instance_type}):
-=======
         with self.action_log_scope(f"Add {count} new nodes on {rack} rack, {instance_type} type"):
->>>>>>> 4440c6a8c (improvement(actions_log): removed target and metadata)
-            new_nodes = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(
-                self.cluster.add_nodes)(**add_node_func_args)
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
+            new_nodes = skip_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)
         self.monitoring_set.reconfigure_scylla_monitoring()
-<<<<<<< HEAD
-        for new_node in new_nodes:
-            self.set_current_running_nemesis(node=new_node)
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-=======
         nodes_names = ",".join([new_node.name for new_node in new_nodes])
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
         try:
             with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.data_nodes[0], timeout=timeout):
                 self.cluster.wait_for_init(node_list=new_nodes, timeout=timeout, check_node_health=False)
@@ -1442,18 +1317,10 @@ class Nemesis:
             self.actions_log.info(f"new node added: {new_node.name}")
             if dc_topology_rf_change:
                 dc_topology_rf_change.revert_to_original_keyspaces_rf(node_to_wait_for_balance=new_node)
-<<<<<<< HEAD
             try:
-                with self.action_log_scope("Cleanup all nodes in parallel", target=new_node.name):
-                    self.nodetool_cleanup_on_all_nodes_parallel()
+                self.nodetool_cleanup_on_all_nodes_parallel()
             finally:
                 self.unset_current_running_nemesis(new_node)
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-            with self.action_log_scope("Cleanup all nodes in parallel", target=new_node.name):
-                self.nodetool_cleanup_on_all_nodes_parallel()
-=======
-            self.nodetool_cleanup_on_all_nodes_parallel()
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
         return new_node
 
     @target_all_nodes
@@ -1908,27 +1775,11 @@ class Nemesis:
                         continue
 
                     try:
-<<<<<<< HEAD
+                        self.actions_log.info(f"Filling disk space to reach enospc error on {node.name}")
                         reach_enospc_on_node(target_node=node)
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-                        with DbNodeLogger(self.cluster.nodes, "fill disk space", target_node=node):
-                            reach_enospc_on_node(target_node=node)
-=======
-                        with DbNodeLogger(self.cluster.nodes, "fill disk space", target_node=node):
-                            self.actions_log.info(f"Filling disk space to reach enospc error on {node.name}")
-                            reach_enospc_on_node(target_node=node)
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
                     finally:
-<<<<<<< HEAD
+                        self.actions_log.info(f"Cleaning disk space with scylla restart on {node.name}")
                         clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-                        with DbNodeLogger(self.cluster.nodes, "clean disk space", target_node=node):
-                            clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
-=======
-                        with DbNodeLogger(self.cluster.nodes, "clean disk space", target_node=node):
-                            self.actions_log.info(f"Cleaning disk space with scylla restart on {node.name}")
-                            clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
 
     @target_all_nodes
     def disrupt_end_of_quota_nemesis(self, sleep_time=30):
@@ -3132,89 +2983,6 @@ class Nemesis:
         disrupt_func = getattr(self, disrupt_func_name)
         disrupt_func()
 
-<<<<<<< HEAD
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-    def _run_manager_backup(self, mgr_cluster, object_storage_upload_mode: ObjectStorageUploadMode, timeout: int) -> BackupTask:
-        task = run_manager_backup(mgr_cluster, self.tester.locations, object_storage_upload_mode, timeout)
-        return task
-
-    def _manager_backup_and_report(self, object_storage_upload_mode: ObjectStorageUploadMode, label) -> BackupTask:
-        """
-        Run a backup using Scylla Manager and report the result to Argus.
-
-        :param object_storage_upload_mode: The upload mode for object storage (e.g., RCLONE or NATIVE).
-        :param label: A label for reporting.
-        :return: BackupTask object representing the backup operation.
-        """
-        timeout = int(timedelta(hours=14).total_seconds())
-        manager_tool = self.get_manager_tool()
-        mgr_cluster = self.tester.ensure_and_get_cluster(manager_tool)
-        decorated = latency_calculator_decorator(legend="Scylla-Manager Backup", cycle_name=label)(
-            self._run_manager_backup)
-        task = decorated(mgr_cluster, object_storage_upload_mode, timeout)
-        report_manager_backup_results_to_argus(self.tester.monitors, self.tester.test_config, label, task, mgr_cluster)
-        return task
-
-    def disrupt_manager_backup(self, object_storage_upload_mode: ObjectStorageUploadMode, label):
-        """
-        Perform a Manager backup as a nemesis.
-        Deletes created snapshot at end.
-        Args:
-            object_storage_upload_mode: The upload mode (e.g., RCLONE or NATIVE).
-            label: Label for reporting to Argus.
-        """
-
-        time_postfix = datetime.datetime.now().strftime("_%m%d_%H%M")
-        label_with_time = f"{label}{time_postfix}"
-        task = self._manager_backup_and_report(object_storage_upload_mode, label_with_time)
-        self.log.info("Delete Manager backup snapshot")
-        task.delete_backup_snapshot()
-
-    def get_manager_tool(self):
-        return mgmt.get_scylla_manager_tool(manager_node=self.tester.monitors.nodes[0])
-
-=======
-    def _run_manager_backup(self, mgr_cluster, object_storage_upload_mode: ObjectStorageUploadMode, timeout: int) -> BackupTask:
-        with self.action_log_scope("Scylla Manager backup"):
-            task = run_manager_backup(mgr_cluster, self.tester.locations, object_storage_upload_mode, timeout)
-        return task
-
-    def _manager_backup_and_report(self, object_storage_upload_mode: ObjectStorageUploadMode, label) -> BackupTask:
-        """
-        Run a backup using Scylla Manager and report the result to Argus.
-
-        :param object_storage_upload_mode: The upload mode for object storage (e.g., RCLONE or NATIVE).
-        :param label: A label for reporting.
-        :return: BackupTask object representing the backup operation.
-        """
-        timeout = int(timedelta(hours=14).total_seconds())
-        manager_tool = self.get_manager_tool()
-        mgr_cluster = self.tester.ensure_and_get_cluster(manager_tool)
-        decorated = latency_calculator_decorator(legend="Scylla-Manager Backup", cycle_name=label)(
-            self._run_manager_backup)
-        task = decorated(mgr_cluster, object_storage_upload_mode, timeout)
-        report_manager_backup_results_to_argus(self.tester.monitors, self.tester.test_config, label, task, mgr_cluster)
-        return task
-
-    def disrupt_manager_backup(self, object_storage_upload_mode: ObjectStorageUploadMode, label):
-        """
-        Perform a Manager backup as a nemesis.
-        Deletes created snapshot at end.
-        Args:
-            object_storage_upload_mode: The upload mode (e.g., RCLONE or NATIVE).
-            label: Label for reporting to Argus.
-        """
-
-        time_postfix = datetime.datetime.now().strftime("_%m%d_%H%M")
-        label_with_time = f"{label}{time_postfix}"
-        task = self._manager_backup_and_report(object_storage_upload_mode, label_with_time)
-        with self.action_log_scope("Delete Manager backup snapshot"):
-            task.delete_backup_snapshot()
-
-    def get_manager_tool(self):
-        return mgmt.get_scylla_manager_tool(manager_node=self.tester.monitors.nodes[0])
-
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
     @target_data_nodes
     def disrupt_mgmt_backup_specific_keyspaces(self):
         self._mgmt_backup(backup_specific_tables=True)
@@ -3408,22 +3176,8 @@ class Nemesis:
             location = f"{backup_bucket_backend}:{backup_bucket_location.split()[0]}"
         self._delete_existing_backups(mgr_cluster)
         if backup_specific_tables:
-<<<<<<< HEAD
             non_test_keyspaces = self.cluster.get_test_keyspaces()
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-            non_test_keyspaces = [cql_unquote_if_needed(ks) for ks in self.cluster.get_test_keyspaces()]
-=======
-            non_test_keyspaces = [cql_unquote_if_needed(ks) for ks in self.cluster.get_test_keyspaces()]
-<<<<<<< HEAD
-            self.actions_log.info("Starting Scylla Manager backup task",
-                                  metadata={"keyspaces": non_test_keyspaces})
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
-||||||| parent of 4440c6a8c (improvement(actions_log): removed target and metadata)
-            self.actions_log.info("Starting Scylla Manager backup task",
-                                  metadata={"keyspaces": non_test_keyspaces})
-=======
             self.actions_log.info(f"Starting Scylla Manager backup task for keyspaces: {non_test_keyspaces}")
->>>>>>> 4440c6a8c (improvement(actions_log): removed target and metadata)
             mgr_task = mgr_cluster.create_backup_task(location_list=[location, ], keyspace_list=non_test_keyspaces)
         else:
             self.actions_log.info("Starting Scylla Manager backup task for all keyspaces")
@@ -3457,14 +3211,8 @@ class Nemesis:
     @latency_calculator_decorator(legend="Scylla-Manger repair")
     def _mgmt_repair_cli(self):
         mgr_cluster = self.cluster.get_cluster_manager()
-<<<<<<< HEAD
-        mgr_task = mgr_cluster.create_repair_task()
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-        mgr_task = mgr_cluster.create_repair_task(ignore_down_hosts=ignore_down_hosts)
-=======
         self.actions_log.info("Starting Scylla Manager repair task")
-        mgr_task = mgr_cluster.create_repair_task(ignore_down_hosts=ignore_down_hosts)
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
+        mgr_task = mgr_cluster.create_repair_task()
         task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
         self.actions_log.info(f"Scylla Manager repair task finished with status: {task_final_status}")
         if task_final_status != TaskStatus.DONE:
@@ -3530,15 +3278,7 @@ class Nemesis:
                 DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
                                line="Failed to repair",
                                node=self.target_node):
-<<<<<<< HEAD
-                with self.action_log_scope("Abort repair streaming", target=self.target_node.name):
-||||||| parent of 4440c6a8c (improvement(actions_log): removed target and metadata)
-                with DbNodeLogger(self.cluster.nodes, "abort repair streaming", target_node=self.target_node), \
-                        self.action_log_scope("Abort repair streaming", target=self.target_node.name):
-=======
-                with DbNodeLogger(self.cluster.nodes, "abort repair streaming", target_node=self.target_node), \
-                        self.action_log_scope(f"Abort repair streaming on {self.target_node.name} node"):
->>>>>>> 4440c6a8c (improvement(actions_log): removed target and metadata)
+                with self.action_log_scope(f"Abort repair streaming on {self.target_node.name} node"):
                     self.target_node.remoter.run(
                         "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
                         " http://127.0.0.1:10000/storage_service/force_terminate_repair"
@@ -3851,19 +3591,9 @@ class Nemesis:
                     f"Interruption by limiting network bandwidth - rate: {rate_limit}, limit: {limit}")
                 experiment = NetworkBandwidthLimitExperiment(
                     self.target_node, duration, rate=rate_limit, limit=limit, buffer=10000)
-<<<<<<< HEAD
-        experiment.start()
-        experiment.wait_until_finished()
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-        with DbNodeLogger(self.cluster.nodes, f"network {interruption} interruption", target_node=self.target_node):
+        with self.action_log_scope(f"Network interruption on {self.target_node.name} for {duration}s"):
             experiment.start()
             experiment.wait_until_finished()
-=======
-        with DbNodeLogger(self.cluster.nodes, f"network {interruption} interruption", target_node=self.target_node), \
-                self.action_log_scope(f"Network interruption on {self.target_node.name} for {duration}s"):
-            experiment.start()
-            experiment.wait_until_finished()
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
         self.cluster.wait_all_nodes_un()
 
     @target_all_nodes
@@ -4016,37 +3746,12 @@ class Nemesis:
             host_id = removed_node_status["host_id"]
         else:
             host_id = remove_node_host_id
-
-<<<<<<< HEAD
         with ignore_ycsb_connection_refused(), self.action_log_scope("Terminate a node", target=node_to_remove.name):
             # node stop and make sure its "DN"
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-        if SkipPerIssues('https://github.com/scylladb/scylladb/issues/21815', params=self.tester.params):
-            # TBD: To be removed after https://github.com/scylladb/scylladb/issues/21815 is resolved
-            ignore_stream_mutation_errors_due_to_issue = ignore_stream_mutation_fragments_errors
-        else:
-            ignore_stream_mutation_errors_due_to_issue = contextlib.nullcontext
-
-        with ignore_ycsb_connection_refused(), ignore_stream_mutation_errors_due_to_issue(), \
-                self.action_log_scope("Terminate a node", target=node_to_remove.name):
-            # node stop and make sure its "DN"
-=======
-        if SkipPerIssues('https://github.com/scylladb/scylladb/issues/21815', params=self.tester.params):
-            # TBD: To be removed after https://github.com/scylladb/scylladb/issues/21815 is resolved
-            ignore_stream_mutation_errors_due_to_issue = ignore_stream_mutation_fragments_errors
-        else:
-            ignore_stream_mutation_errors_due_to_issue = contextlib.nullcontext
-
-        with ignore_ycsb_connection_refused(), ignore_stream_mutation_errors_due_to_issue():
-<<<<<<< HEAD
-            self.actions_log.info("Stop node and make sure is DN", target=node_to_remove.name)
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
-||||||| parent of 4440c6a8c (improvement(actions_log): removed target and metadata)
-            self.actions_log.info("Stop node and make sure is DN", target=node_to_remove.name)
-=======
             self.actions_log.info(f"Stop {node_to_remove.name} node and make sure is DN")
->>>>>>> 4440c6a8c (improvement(actions_log): removed target and metadata)
             node_to_remove.stop_scylla_server(verify_up=False, verify_down=True)
+
+            # terminate node
             self._terminate_cluster_node(node_to_remove)
 
         @retrying(n=3, sleep_time=5, message="Removing node from cluster...")
@@ -4067,19 +3772,8 @@ class Nemesis:
         up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node)
         # Repairing will result in a best effort repair due to the terminated node,
         # and as a result requires ignoring repair errors
-<<<<<<< HEAD
-        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                            line="failed to repair"):
-            self.run_repair_on_nodes(nodes=up_normal_nodes)
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                            line="failed to repair"), \
-                self.action_log_scope("Repair all nodes", target=self.target_node.name):
-            self.run_repair_on_nodes(nodes=up_normal_nodes, ignore_down_hosts=True)
-=======
         with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to repair"):
             self.run_repair_on_nodes(nodes=up_normal_nodes, ignore_down_hosts=True)
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
 
         with self.action_log_scope(f"Remove {node_to_remove.name} node"):
             exit_status = remove_node()
@@ -4444,27 +4138,12 @@ class Nemesis:
                     terminate_pattern.timeout):
                 stack.enter_context(expected_start_failed_context)
             with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing(), \
-<<<<<<< HEAD
                     self.run_nemesis(node_list=self.cluster.data_nodes, nemesis_label="DecommissionStreamingErr") as verification_node, \
                     FailedDecommissionOperationMonitoring(target_node=self.target_node,
                                                           verification_node=verification_node,
                                                           timeout=full_operations_timeout), \
-                    self.action_log_scope("Reboot node during decommission streaming", target=self.target_node.name):
-||||||| parent of 4440c6a8c (improvement(actions_log): removed target and metadata)
-                self.node_allocator.run_nemesis(nemesis_label="DecommissionStreamingErr") as verification_node, \
-                FailedDecommissionOperationMonitoring(target_node=self.target_node,
-                                                      verification_node=verification_node,
-                                                      timeout=full_operations_timeout), \
-                    self.action_log_scope("Reboot node during decommission streaming", target=self.target_node.name):
-
-=======
-                self.node_allocator.run_nemesis(nemesis_label="DecommissionStreamingErr") as verification_node, \
-                FailedDecommissionOperationMonitoring(target_node=self.target_node,
-                                                      verification_node=verification_node,
-                                                      timeout=full_operations_timeout), \
                     self.action_log_scope(f"Reboot {self.target_node.name} node during decommission streaming"):
 
->>>>>>> 4440c6a8c (improvement(actions_log): removed target and metadata)
                 ParallelObject(objects=[trigger, watcher], timeout=full_operations_timeout).call_objects()
             if new_node := decommission_post_action():
                 new_node.wait_node_fully_start()
@@ -4792,24 +4471,8 @@ class Nemesis:
             self.actions_log.info("Reconfigured Scylla nodes to use AWS KMS")
 
         # Create table with encryption
-<<<<<<< HEAD
         keyspace_name, table_name = self.cluster.get_test_keyspaces()[0], 'tmp_encrypted_table'
-        self.log.info("Create '%s.%s' table with server encryption", keyspace_name, table_name)
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-        keyspace_name, table_name = cql_unquote_if_needed(self.cluster.get_test_keyspaces()[0]), 'tmp_encrypted_table'
-        self.log.info("Create '%s.%s' table with server encryption", keyspace_name, table_name)
-=======
-        keyspace_name, table_name = cql_unquote_if_needed(self.cluster.get_test_keyspaces()[0]), 'tmp_encrypted_table'
-<<<<<<< HEAD
-        self.actions_log.info("Create encrypted table",
-                              metadata={"keyspace": keyspace_name, "table": table_name})
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
-||||||| parent of 4440c6a8c (improvement(actions_log): removed target and metadata)
-        self.actions_log.info("Create encrypted table",
-                              metadata={"keyspace": keyspace_name, "table": table_name})
-=======
         self.actions_log.info(f"Create encrypted table: {keyspace_name}.{table_name}")
->>>>>>> 4440c6a8c (improvement(actions_log): removed target and metadata)
         with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_name) as session:
             # NOTE: scylla-bench expects following table structure:
             #       (pk bigint, ck bigint, v blob, PRIMARY KEY(pk, ck)) WITH compression = { }
@@ -4849,8 +4512,8 @@ class Nemesis:
                     new_severity=Severity.WARNING, event_class=ScyllaBenchEvent, extra_time_to_expiration=30,
                     regex=r".*Error during truncate: seastar::rpc::remote_verb_error \(filesystem error.*"
             ), EventsSeverityChangerFilter(
-                new_severity=Severity.WARNING, event_class=DatabaseLogEvent, extra_time_to_expiration=30,
-                regex=".*sstable - Error while linking SSTable.*filesystem error: stat failed: No such file or directory.*"), \
+                    new_severity=Severity.WARNING, event_class=DatabaseLogEvent, extra_time_to_expiration=30,
+                    regex=".*sstable - Error while linking SSTable.*filesystem error: stat failed: No such file or directory.*"), \
                     self.action_log_scope(f"Write data with scylla-bench using cmd: {write_cmd}"):
                 write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, stop_test_on_failure=False)
                 self.tester.verify_stress_thread(write_thread)
@@ -4872,26 +4535,10 @@ class Nemesis:
                     " -partition-count=50 -clustering-row-count=100 -clustering-row-size=uniform:75..125"
                     f" -keyspace {keyspace_name} -table {table_name} -timeout=120s -validate-data"
                     " -iterations=1 -concurrency=10 -connection-count=10 -rows-per-request=10")
-<<<<<<< HEAD
-<<<<<<< HEAD
-                read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
-                self.tester.verify_stress_thread(read_thread)
-                self.stop_nemesis_on_stress_errors(read_thread)
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-                read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
-                self.tester.verify_stress_thread(read_thread, error_handler=self._nemesis_stress_failure_handler)
-=======
-                with self.action_log_scope("Read data with scylla-bench", target=self.target_node.name,
-                                           metadata={"cmd": read_cmd}):
-||||||| parent of 4440c6a8c (improvement(actions_log): removed target and metadata)
-                with self.action_log_scope("Read data with scylla-bench", target=self.target_node.name,
-                                           metadata={"cmd": read_cmd}):
-=======
                 with self.action_log_scope(f"Read data with scylla-bench with {read_cmd}"):
->>>>>>> 4440c6a8c (improvement(actions_log): removed target and metadata)
                     read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
                     self.tester.verify_stress_thread(read_thread, error_handler=self._nemesis_stress_failure_handler)
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
+                    self.stop_nemesis_on_stress_errors(read_thread)
 
                 # Rotate KMS key
                 if enable_kms_key_rotation and aws_kms and kms_key_alias_name and i == 0:
@@ -5036,21 +4683,9 @@ class Nemesis:
         self.log.info('Try to allocate 100% total memory')
         experiment = MemoryStressExperiment(pod=self.target_node, duration=f"{duration}s",
                                             workers=1, size="100%", time_to_reach=f"{time_to_reach_secs}s")
-<<<<<<< HEAD
-        experiment.start()
-        experiment.wait_until_finished()
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-        with DbNodeLogger(self.cluster.nodes, "start memory stress",
-                          target_node=self.target_node, additional_info="allocate 100% of total memory"):
-            experiment.start()
-        experiment.wait_until_finished()
-=======
-        with DbNodeLogger(self.cluster.nodes, "start memory stress",
-                          target_node=self.target_node, additional_info="allocate 100% of total memory"), \
-                self.action_log_scope(f"Memory stress by allocating 100% memory on {self.target_node.name}"):
+        with self.action_log_scope(f"Memory stress by allocating 100% memory on {self.target_node.name}"):
             experiment.start()
             experiment.wait_until_finished()
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
 
     @decorate_with_context(ignore_reactor_stall_errors)
     @target_all_nodes
@@ -5079,21 +4714,9 @@ class Nemesis:
             raise UnsupportedNemesis(f"{self.target_node.distro} OS not supported!")
 
         self.log.info('Try to allocate 90% total memory, the allocated memory will be swaped out')
-<<<<<<< HEAD
-        self.target_node.remoter.run(
-            "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-        with DbNodeLogger(self.cluster.nodes, "start memory stress",
-                          target_node=self.target_node, additional_info="allocate 90% of total memory"):
+        with self.action_log_scope(f"Memory stress by allocating 90% memory on {self.target_node.name} node"):
             self.target_node.remoter.run(
                 "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
-=======
-        with DbNodeLogger(self.cluster.nodes, "start memory stress",
-                          target_node=self.target_node, additional_info="allocate 90% of total memory"), \
-                self.action_log_scope(f"Memory stress by allocating 90% memory on {self.target_node.name} node"):
-            self.target_node.remoter.run(
-                "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
 
     def disrupt_toggle_cdc_feature_properties_on_table(self):
         """Manipulate cdc feature settings
@@ -5223,27 +4846,9 @@ class Nemesis:
                     f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' " \
                     f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..10000 -log interval=5"
         write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, round_robin=True, stop_test_on_failure=False)
-<<<<<<< HEAD
         self.tester.verify_stress_thread(cs_thread_pool=write_thread)
         self.stop_nemesis_on_stress_errors(write_thread)
         self._verify_multi_dc_keyspace_data(consistency_level="ALL")
-||||||| parent of 4440c6a8c (improvement(actions_log): removed target and metadata)
-        self.tester.verify_stress_thread(write_thread, error_handler=self._nemesis_stress_failure_handler)
-        with self.action_log_scope("Verify multi DC keyspace data", target=self.target_node.name):
-            self._verify_multi_dc_keyspace_data(consistency_level="ALL")
-        # flush data to ensure it is seen in monitoring
-        for node in self.cluster.nodes:
-            with self.action_log_scope("Flush data in keyspace_new_dc", target=node.name):
-                node.run_nodetool("flush keyspace_new_dc")
-=======
-        self.tester.verify_stress_thread(write_thread, error_handler=self._nemesis_stress_failure_handler)
-        with self.action_log_scope("Verify multi DC keyspace data"):
-            self._verify_multi_dc_keyspace_data(consistency_level="ALL")
-        # flush data to ensure it is seen in monitoring
-        for node in self.cluster.nodes:
-            with self.action_log_scope(f"Flush data in keyspace_new_dc on {node.name} node"):
-                node.run_nodetool("flush keyspace_new_dc")
->>>>>>> 4440c6a8c (improvement(actions_log): removed target and metadata)
 
     def _verify_multi_dc_keyspace_data(self, consistency_level: str = "ALL"):
         read_cmd = f"cassandra-stress read no-warmup cl={consistency_level} n=10000 -schema 'keyspace=keyspace_new_dc " \
@@ -5569,18 +5174,8 @@ class Nemesis:
             if not column:
                 raise UnsupportedNemesis("No column found to create index on")
             try:
-<<<<<<< HEAD
-                index_name = create_index(session, ks, cf, column)
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-                with DbNodeLogger(self.cluster.nodes, "create index",
-                                  target_node=self.target_node, additional_info=f"on {ks}.{cf}.{column}"):
+                with self.action_log_scope(f"Create {ks}.{cf} {column} index"):
                     index_name = create_index(session, ks, cf, column)
-=======
-                with DbNodeLogger(self.cluster.nodes, "create index",
-                                  target_node=self.target_node, additional_info=f"on {ks}.{cf}.{column}"), \
-                        self.action_log_scope(f"Create {ks}.{cf} {column} index"):
-                    index_name = create_index(session, ks, cf, column)
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
             except InvalidRequest as exc:
                 LOGGER.warning(exc)
                 raise UnsupportedNemesis(
@@ -5593,18 +5188,8 @@ class Nemesis:
                 sleep_for_percent_of_duration(self.tester.test_duration * 60, percent=1,
                                               min_duration=300, max_duration=2400)
             finally:
-<<<<<<< HEAD
+                self.actions_log.info(f"Drop {index_name} index")
                 drop_index(session, ks, index_name)
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-                with DbNodeLogger(self.cluster.nodes, "drop_index",
-                                  target_node=self.target_node, additional_info=f"index: {index_name}"):
-                    drop_index(session, ks, index_name)
-=======
-                with DbNodeLogger(self.cluster.nodes, "drop_index",
-                                  target_node=self.target_node, additional_info=f"index: {index_name}"):
-                    self.actions_log.info(f"Drop {index_name} index")
-                    drop_index(session, ks, index_name)
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
 
     @target_data_nodes
     def disrupt_add_remove_mv(self):
@@ -5675,16 +5260,10 @@ class Nemesis:
                     sleep_for_percent_of_duration(self.tester.test_duration * 60, percent=1,
                                                   min_duration=300, max_duration=2400)
                 finally:
-<<<<<<< HEAD
-                    drop_materialized_view(session, ks_name, view_name)
-        finally:
-            self.unset_current_running_nemesis(cql_query_executor_node)
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-                    drop_materialized_view(session, ks_name, view_name)
-=======
                     with self.action_log_scope("Drop materialized view"):
                         drop_materialized_view(session, ks_name, view_name)
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
+        finally:
+            self.unset_current_running_nemesis(cql_query_executor_node)
 
     def disrupt_toggle_audit_syslog(self):
         self._disrupt_toggle_audit(store="syslog")
@@ -5818,19 +5397,8 @@ class Nemesis:
         new_node: BaseNode = skip_on_capacity_issues(self.cluster.add_nodes)(
             count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=self.target_node.rack)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
-<<<<<<< HEAD
-<<<<<<< HEAD
-        self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
-
-||||||| parent of 3da59556e (improvement(actions_log): added more actions log lines)
-=======
-        self.actions_log.info("Added new node", target=new_node.name)
->>>>>>> 3da59556e (improvement(actions_log): added more actions log lines)
-||||||| parent of 4440c6a8c (improvement(actions_log): removed target and metadata)
-        self.actions_log.info("Added new node", target=new_node.name)
-=======
         self.actions_log.info(f"Added new node : {new_node.name}")
->>>>>>> 4440c6a8c (improvement(actions_log): removed target and metadata)
+        self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
         terminate_pattern = self.target_node.raft.get_random_log_message(operation=TopologyOperations.BOOTSTRAP,
                                                                          seed=self.nemesis_seed)
         bootstrapabortmanager = NodeBootstrapAbortManager(bootstrap_node=new_node, verification_node=self.target_node,
