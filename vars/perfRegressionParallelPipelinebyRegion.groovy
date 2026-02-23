@@ -1,3 +1,9 @@
+def isVersionIgnored(String version, List ignoreVersions) {
+    return ignoreVersions.any { ver ->
+        version?.trim() == ver || version?.trim().startsWith(ver + ".")
+    }
+}
+
 def call(Map pipelineParams) {
     def builder = getJenkinsLabels("aws", "eu-west-1")
     pipeline {
@@ -55,15 +61,15 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes',
                                 region: 'us-east-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
-                                pre_release: [], // Example: ['rc1', 'rc3']
+                                ignore_versions: [],
+                                pre_release: [],
                                 sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"', '"test_read_disk_only_gradual_increase_load"'],
                                 labels: ['master-weekly']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-vnodes',
                                 region: 'us-east-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
+                                ignore_versions: [],
                                 pre_release: [],
                                 sub_tests: ['"test_write_gradual_increase_load"'],
                                 labels: ['master-weekly']
@@ -71,7 +77,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade',
                                 region: 'eu-west-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
+                                ignore_versions: [],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_upgrade"'],
                                 labels: ['master-weekly'],
@@ -80,7 +86,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis',
                                 region: 'eu-west-2',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', '2026.1'],
+                                ignore_versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-weekly']
@@ -96,7 +102,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-rbno-disabled',
                                 region: 'eu-west-3',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
+                                ignore_versions: [],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-weekly']
@@ -104,7 +110,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64',
                                 region: 'us-east-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
+                                ignore_versions: [],
                                 pre_release: [],
                                 sub_tests: ['microbenchmark'],
                                 labels: ['master-weekly'],
@@ -113,7 +119,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-write',
                                 region: 'us-east-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
+                                ignore_versions: [],
                                 pre_release: [],
                                 sub_tests: ['microbenchmark'],
                                 labels: ['master-weekly'],
@@ -122,7 +128,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64',
                                 region: 'us-east-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
+                                ignore_versions: [],
                                 pre_release: [],
                                 sub_tests: ['microbenchmark'],
                                 labels: ['master-weekly'],
@@ -131,7 +137,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64-write',
                                 region: 'us-east-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
+                                ignore_versions: [],
                                 pre_release: [],
                                 sub_tests: ['microbenchmark'],
                                 labels: ['master-weekly'],
@@ -156,7 +162,7 @@ def call(Map pipelineParams) {
                                 job_name: 'scylla-master/perf-regression/latte-perf-regression-latency-steady-state-custom-d1-workload1-vnodes',
                                 cloud_provider: 'gce',
                                 region: 'us-east1',
-                                versions: ['2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
+                                ignore_versions: ['2024.1', '2024.2'],
                                 pre_release: ['rc1', 'rc3'],
                                 sub_tests: ['"test_latency_steady_state"'],
                                 labels: ['gce-custom-monthly']
@@ -165,7 +171,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets',
                                 region: 'us-east-1',
-                                versions: ['2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
+                                ignore_versions: ['2024.1', '2024.2'],
                                 pre_release: [],
                                 sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"', '"test_read_disk_only_gradual_increase_load"'],
                                 labels: ['master-weekly']
@@ -173,7 +179,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-tablets',
                                 region: 'us-east-1',
-                                versions: ['2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
+                                ignore_versions: ['2024.1', '2024.2'],
                                 pre_release: [],
                                 sub_tests: ['"test_write_gradual_increase_load"'],
                                 labels: ['master-weekly']
@@ -182,7 +188,7 @@ def call(Map pipelineParams) {
                                 job_name: 'scylla-master/perf-regression/latte-perf-regression-latency-steady-state-custom-d1-workload1-tablets',
                                 cloud_provider: 'gce',
                                 region: 'us-east1',
-                                versions: ['2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
+                                ignore_versions: ['2024.1', '2024.2'],
                                 pre_release: ['rc1', 'rc3'],
                                 sub_tests: ['"test_latency_steady_state"'],
                                 labels: ['gce-custom-monthly']
@@ -191,7 +197,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-tablets',
                                 region: 'eu-west-2',
-                                versions: ['2025.1', '2025.2', '2025.3', '2025.4', '2026.1', 'master'],
+                                ignore_versions: ['2024.1', '2024.2'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_upgrade"'],
                                 labels: ['master-3weeks'],
@@ -200,7 +206,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-tablets',
                                 region: 'eu-west-3',
-                                versions: ['2025.1', '2025.2', '2025.3', '2025.4', '2026.1'],
+                                ignore_versions: ['2024.1', '2024.2', 'master'],
                                 pre_release: ['rc1',],
                                 sub_tests: ['"test_latency_read_with_nemesis"', '"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-3weeks']
@@ -216,7 +222,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-elasticity',
                                 region: 'eu-north-1',
-                                versions: ['2025.1', '2025.2', '2025.3', '2025.4', '2026.1'],
+                                ignore_versions: ['2024.1', '2024.2', 'master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"', '"test_latency_write_with_nemesis"'],
                                 labels: ['master-3weeks']
@@ -236,14 +242,14 @@ def call(Map pipelineParams) {
                         def image_name = null
                         for (job_name in jobs_names) {
                             println("Job name: $job_name")
+                            def version = null
+                            def sub_tests = []
+                            def region = null
+                            def image_name_for_job = null
+                            def rolling_upgrade_test = null
+                            def microbenchmark = null
                             for (def entry in testRegionMatrix) {
                                  def cloud_provider = entry.cloud_provider ?: 'aws'
-                                 def version = null
-                                 def sub_tests = []
-                                 def region = null
-                                 def image_name_for_job = null
-                                 def rolling_upgrade_test = null
-                                 def microbenchmark = null
                                  if (scylla_version == "master" && !image_name){
                                     region = entry.region ?: 'us-east-1'
                                     def output = sh(script: "./docker/env/hydra.sh list-images -c ${cloud_provider} -r ${region} -o json", returnStdout: true).trim()
@@ -259,11 +265,21 @@ def call(Map pipelineParams) {
                                  }
 
                                 if (entry.job_name == job_name) {
-                                    for (def ver in entry.versions) {
-                                        if (scylla_version?.trim() == ver || scylla_version?.trim().startsWith(ver + ".")) {
+                                    def entry_version_matched = false
+                                    if (entry.containsKey('ignore_versions')) {
+                                        if (!isVersionIgnored(scylla_version, entry.ignore_versions)) {
                                             version = params.scylla_version
+                                            entry_version_matched = true
                                         }
-                                    if (version) {
+                                    } else {
+                                        for (def ver in (entry.versions ?: [])) {
+                                            if (scylla_version?.trim() == ver || scylla_version?.trim().startsWith(ver + ".")) {
+                                                version = params.scylla_version
+                                                entry_version_matched = true
+                                            }
+                                        }
+                                    }
+                                    if (entry_version_matched) {
                                         if (labels_selector && !(entry.labels.contains(labels_selector))) {
                                             println("Skipping job $job_name for labels_selector: $labels_selector")
                                             continue
@@ -277,22 +293,20 @@ def call(Map pipelineParams) {
                                         region = entry.region
                                         sub_tests = entry.sub_tests
                                         println("Found for job $job_name: region : $region, version: $version, sub_tests: $sub_tests")
-                                    } else {
-                                        continue
-                                    }
-                                    rolling_upgrade_test = entry.rolling_upgrade_test
-                                    microbenchmark = entry.microbenchmark
-                                    if (rolling_upgrade_test || microbenchmark) {
-                                        image_name_for_job = null
-                                    } else {
-                                        image_name_for_job = image_name
+                                        rolling_upgrade_test = entry.rolling_upgrade_test
+                                        microbenchmark = entry.microbenchmark
+                                        if (rolling_upgrade_test || microbenchmark) {
+                                            image_name_for_job = null
+                                        } else {
+                                            image_name_for_job = image_name
+                                        }
                                     }
                                 }
                             }
                             if (region && version && sub_tests) {
                                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                                     println("Building job: $job_name with sub_test: ${sub_tests}, region: ${region}, image_name_for_job: ${image_name_for_job}, scylla_version: ${version}")
-                                    println("Send to job: scylla_version: ${rolling_upgrade_test ? null : (image_name_for_job ? null : params.scylla_version)}; scylla_ami_id: ${image_name_for_job ? image_name_for_job : null}")
+                                    println("Send to job: scylla_version: ${rolling_upgrade_test ? null : (image_name_for_job ? null : params.scylla_version)}; scylla_ami_id: ${image_name_for_job ? image_name_for_job : null}; new_scylla_repo: ${rolling_upgrade_test ? params.new_scylla_repo : null}")
                                         build job: job_name, wait: false, parameters: [
                                             string(name: 'scylla_version', value: rolling_upgrade_test ? null : (image_name_for_job ? null : params.scylla_version)),
                                             string(name: 'scylla_ami_id', value: image_name_for_job ? image_name_for_job : null),
@@ -311,7 +325,6 @@ def call(Map pipelineParams) {
                         }
                     }
                 }
-            }
         }
     }
 }
