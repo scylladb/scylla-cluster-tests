@@ -52,7 +52,7 @@ prepare_write_cmd:
   #   -P gauss_mean=0
   #   -P gauss_stddev=0
   #   -P skip_write_errors=true
-  #   data_dir/latte/scylladb_682.rn
+  #   scylla-qa-internal/scylladb_682/scylladb_682.rn
   # - >-
   #   latte run --tag populate -f populate_all
   #   --threads=10 --concurrency=1 --connections=1 --rate=5000 --consistency=LOCAL_QUORUM
@@ -63,7 +63,7 @@ prepare_write_cmd:
   #   -P gauss_mean=0
   #   -P gauss_stddev=0
   #   -P skip_write_errors=true
-  #   data_dir/latte/scylladb_682.rn
+  #   scylla-qa-internal/scylladb_682/scylladb_682.rn
   # - >-
   #   latte run --tag populate -f populate_all
   #   --threads=10 --concurrency=1 --connections=1 --rate=5000 --consistency=LOCAL_QUORUM
@@ -74,7 +74,7 @@ prepare_write_cmd:
   #   -P gauss_mean=0
   #   -P gauss_stddev=0
   #   -P skip_write_errors=true
-  #   data_dir/latte/scylladb_682.rn
+  #   scylla-qa-internal/scylladb_682/scylladb_682.rn
     # Mixed CRUD workload across all 130 tables (write:2, read:5, update:1, delete:1)
   - >-
     latte run --tag mixed-crud -f write_all
@@ -87,7 +87,7 @@ prepare_write_cmd:
     -P gauss_stddev=20000
     -P data_validation=false
     -P skip_write_errors=true
-    data_dir/latte/scylladb_682.rn
+    scylla-qa-internal/scylladb_682/scylladb_682.rn
 
   # Payment workflow simulation (3-table correlated writes: transactions → settlements → receipts)
   - >-
@@ -101,7 +101,7 @@ prepare_write_cmd:
     -P gauss_stddev=20000
     -P data_validation=false
     -P skip_write_errors=true
-    data_dir/latte/scylladb_682.rn
+    scylla-qa-internal/scylladb_682/scylladb_682.rn
 
   # Windowed write/read/delete with shifting table windows
   # 40 tables active at once, shifting by 5 tables every 10 seconds
@@ -116,7 +116,7 @@ prepare_write_cmd:
     -P gauss_stddev=20000
     -P data_validation=false
     -P skip_write_errors=true
-    data_dir/latte/scylladb_682.rn
+    scylla-qa-internal/scylladb_682/scylladb_682.rn
 
 
 # Phase 3: Advanced mixed workloads
@@ -136,7 +136,7 @@ stress_cmd:
     -P gauss_stddev=20000
     -P data_validation=false
     -P skip_write_errors=true
-    data_dir/latte/scylladb_682.rn
+    scylla-qa-internal/scylladb_682/scylladb_682.rn
 
   # Payment workflow simulation (3-table correlated writes: transactions → settlements → receipts)
   - >-
@@ -150,7 +150,7 @@ stress_cmd:
     -P gauss_stddev=20000
     -P data_validation=false
     -P skip_write_errors=true
-    data_dir/latte/scylladb_682.rn
+    scylla-qa-internal/scylladb_682/scylladb_682.rn
 
   # Windowed write/read/delete with shifting table windows
   # 40 tables active at once, shifting by 5 tables every 10 seconds
@@ -165,4 +165,4 @@ stress_cmd:
     -P gauss_stddev=20000
     -P data_validation=false
     -P skip_write_errors=true
-    data_dir/latte/scylladb_682.rn
+    scylla-qa-internal/scylladb_682/scylladb_682.rn
