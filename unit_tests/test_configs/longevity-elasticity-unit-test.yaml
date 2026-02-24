@@ -1,0 +1,22 @@
+# Minimal config for unit testing test_user_batch_custom_time
+# Reduces table count and batch size to speed up unit tests
+# This is NOT for real cluster testing - only for validating batch processing logic
+
+test_duration: 60
+
+cs_user_profiles:
+    - data_dir/templated-elasticity-tables.yaml
+
+pre_create_schema: true
+user_profile_table_count: 10  # Reduced from 500 to 10 for unit tests
+batch_size: 5  # Reduced from 125 to 5 for unit tests
+cs_duration: ''
+
+n_loaders: 1  # Reduced from 4
+n_db_nodes: 1  # Reduced from 3
+add_node_cnt: 0
+
+cluster_health_check: false
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_interval: 60

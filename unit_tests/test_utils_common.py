@@ -114,14 +114,15 @@ class Remoter:
 
 
 class DummyDbCluster(BaseCluster, BaseScyllaCluster):
-    def __init__(self, nodes):
+    def __init__(self, nodes, params=None):
         self.nodes = nodes
-        self.params = sct_config.SCTConfiguration()
+        self.params = params or sct_config.SCTConfiguration()
         self.params["region_name"] = "test_region"
         self.racks_count = 0
         self.added_password_suffix = False
         self.log = logging.getLogger(__name__)
         self.node_type = "scylla-db"
+        self.name = "dummy_db_cluster"
         self.vector_store_cluster = None
 
     def start_nemesis(self):
