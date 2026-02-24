@@ -163,17 +163,16 @@ def enable_default_filters(sct_config: SCTConfiguration):
             new_severity=Severity.WARNING, event_class=DatabaseLogEvent.DATABASE_ERROR, regex=r".*Startup failed.*"
         ).publish()
 
-    if sct_config.get("new_scylla_repo") or sct_config.get("new_version"):
-        # scylladb/scylla-enterprise#3814
-        # scylladb/scylla-enterprise#3092
-        # skip audit related issue when upgrading from older versions it's default in
-        # TODO: remove when branch 2022.2 is deprecated
-        EventsSeverityChangerFilter(
-            new_severity=Severity.WARNING,
-            event_class=DatabaseLogEvent.DATABASE_ERROR,
-            regex=r".*audit - Unexpected exception when writing login.*"
-            r"Cannot achieve consistency level for cl ONE",
-        ).publish()
+    # The error is expected: audit events are logged when audit table is unavailable (e.g. node down) to record the failed audit write.
+    # Can happen during upgrade, but also in other scenarios, e.g. networking based nemeses.
+    # scylladb/scylla-enterprise#3814
+    # scylladb/scylla-enterprise#3092
+    EventsSeverityChangerFilter(
+        new_severity=Severity.WARNING,
+        event_class=DatabaseLogEvent.DATABASE_ERROR,
+        regex=r".*audit - Unexpected exception when writing login.*"
+        r"Cannot achieve consistency level for cl ONE",
+    ).publish()
 
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="Rate-limit: supressed").publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="Rate-limit: suppressed").publish()
