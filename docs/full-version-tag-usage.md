@@ -93,23 +93,43 @@ Full version tag support is **fully backward compatible**:
 
 ## Relocatable / Unified Package
 
-### Using `scylla_version=relocatable:latest`
+### Format: `relocatable:<branch>:<arch>`
 
-Setting `scylla_version` to `relocatable:latest` will automatically resolve and download the latest
+Setting `scylla_version` to a `relocatable:` value will automatically resolve and download the latest
 unified package from S3. This performs an offline installation using the relocatable tarball,
 without requiring a package repository. Scylla Manager is **not** included in the unified package,
 so `use_mgmt` is automatically set to `false`.
 
+**Format**: `relocatable:<branch>:<arch>`
+- `branch` defaults to `master` (use `latest` as alias for `master`)
+- `arch` defaults to `x86_64` (auto-detected on AWS from instance type)
+
+**Examples**:
 ```bash
-# Automatically resolve the latest unified package from S3
+# Use latest from master branch (arch auto-detected on AWS)
 export SCT_SCYLLA_VERSION=relocatable:latest
 
+# Explicitly specify branch and architecture
+export SCT_SCYLLA_VERSION=relocatable:master:x86_64
+export SCT_SCYLLA_VERSION=relocatable:branch-2025.1:aarch64
+```
+
+> **Note**: Architecture auto-detection only works on the AWS backend.
+> On other backends (GCE, Azure, etc.), specify the architecture explicitly
+> using `relocatable:<branch>:<arch>` format.
+
+```bash
+# AWS: arch auto-detected from instance type
 hydra run-test longevity_test.LongevityTest.test_custom_time \
   --backend aws \
   --config test-cases/PR-provision-test.yaml
-```
 
-On AWS, the architecture (x86_64 or aarch64) is automatically detected from the configured instance type.
+# GCE: specify arch explicitly
+export SCT_SCYLLA_VERSION=relocatable:master:x86_64
+hydra run-test longevity_test.LongevityTest.test_custom_time \
+  --backend gce \
+  --config test-cases/PR-provision-test.yaml
+```
 
 ### Using `unified_package` directly
 

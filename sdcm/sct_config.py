@@ -453,9 +453,12 @@ class SCTConfiguration(dict):
             type=str,
             help="""Version of scylla to install, ex. '2.3.1'
                      Automatically lookup AMIs and repo links for formal versions.
-                     Use 'relocatable:latest' to automatically resolve and install the latest
-                     unified package from S3 (sets unified_package, disables manager).
-                     Examples: '2025.4', 'master:latest', 'relocatable:latest'
+                     Use 'relocatable:<branch>:<arch>' to resolve the latest unified package from S3
+                     (sets unified_package, disables manager).
+                     Format: 'relocatable:<branch>:<arch>' where branch defaults to 'master'
+                     and arch defaults to 'x86_64' (auto-detected on AWS).
+                     Examples: '2025.4', 'master:latest', 'relocatable:latest',
+                     'relocatable:master:x86_64', 'relocatable:branch-2025.1:aarch64'
                      WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'""",
             appendable=False,
         ),
@@ -3155,15 +3158,26 @@ class SCTConfiguration(dict):
         if scylla_version := self.get("scylla_version"):
             if scylla_version.startswith("relocatable:"):
                 self.log.info("Resolving scylla_version='%s' to unified package URL", scylla_version)
-                arch = "x86_64"
+                # Parse format: relocatable:<branch>:<arch>
+                # Examples: relocatable:latest, relocatable:master:x86_64, relocatable:branch-2025.1:aarch64
+                parts = scylla_version.split(":")
+                branch = parts[1] if len(parts) > 1 and parts[1] not in ("latest", "") else "master"
+                arch = parts[2] if len(parts) > 2 and parts[2] else "x86_64"
                 backend = self.get("cluster_backend")
-                if backend == "aws":
+                if backend == "aws" and len(parts) <= 2:
+                    # Auto-detect arch from AWS instance type when not explicitly specified
                     try:
                         arch = get_arch_from_instance_type(
                             self.get("instance_type_db"), region_name=region_names[0])
                     except Exception:  # noqa: BLE001
                         self.log.warning("Could not detect architecture from instance type, defaulting to x86_64")
-                unified_url = latest_unified_package(arch=arch)
+                elif backend != "aws" and len(parts) <= 2:
+                    # TODO: get_arch_from_instance_type should be implemented for all backends, not just AWS
+                    self.log.warning(
+                        "Architecture auto-detection is only supported on AWS backend. "
+                        "Defaulting to '%s'. Use 'relocatable:<branch>:<arch>' format to specify "
+                        "architecture explicitly, e.g. 'relocatable:master:aarch64'", arch)
+                unified_url = latest_unified_package(arch=arch, branch=branch)
                 self.log.info("Resolved unified package URL: %s", unified_url)
                 self["unified_package"] = unified_url
                 self["scylla_version"] = ""
