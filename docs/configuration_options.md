@@ -3394,7 +3394,7 @@ nemesis_exclude_disabled determines whether 'disabled' nemeses are filtered out 
 
 Multiply the list of nemesis to execute by the specified factor
 
-**default:** 6
+**default:** 2
 
 **type:** int
 
