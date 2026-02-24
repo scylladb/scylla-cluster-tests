@@ -429,7 +429,10 @@ class SCTConfiguration(dict):
             name="unified_package",
             env="SCT_UNIFIED_PACKAGE",
             type=str,
-            help="Url to the unified package of scylla version to install scylla",
+            help="""Url to the unified package of scylla version to install scylla.
+                     Example: 'https://downloads.scylladb.com/unstable/scylla/master/relocatable/latest/scylla-unified-6.3.0~dev....x86_64.tar.gz'
+                     Can also be set automatically via scylla_version='relocatable:latest'.
+                     NOTE: Manager is not included in the unified package, so use_mgmt is set to false.""",
         ),
         dict(
             name="nonroot_offline_install",
@@ -450,7 +453,9 @@ class SCTConfiguration(dict):
             type=str,
             help="""Version of scylla to install, ex. '2.3.1'
                      Automatically lookup AMIs and repo links for formal versions.
-                     Use 'relocatable:latest' to resolve the latest unified package from S3.
+                     Use 'relocatable:latest' to automatically resolve and install the latest
+                     unified package from S3 (sets unified_package, disables manager).
+                     Examples: '2025.4', 'master:latest', 'relocatable:latest'
                      WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'""",
             appendable=False,
         ),

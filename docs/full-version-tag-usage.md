@@ -86,8 +86,48 @@ Full version tag support is **fully backward compatible**:
 
 - ✅ Simple versions continue to work: `5.2.1`, `2024.2.0`
 - ✅ Branch versions continue to work: `master:latest`, `enterprise:latest`
+- ✅ Relocatable/unified package: `relocatable:latest`
 - ✅ Existing test configs require no changes
 - ✅ Automatic detection determines version format
+
+
+## Relocatable / Unified Package
+
+### Using `scylla_version=relocatable:latest`
+
+Setting `scylla_version` to `relocatable:latest` will automatically resolve and download the latest
+unified package from S3. This performs an offline installation using the relocatable tarball,
+without requiring a package repository. Scylla Manager is **not** included in the unified package,
+so `use_mgmt` is automatically set to `false`.
+
+```bash
+# Automatically resolve the latest unified package from S3
+export SCT_SCYLLA_VERSION=relocatable:latest
+
+hydra run-test longevity_test.LongevityTest.test_custom_time \
+  --backend aws \
+  --config test-cases/PR-provision-test.yaml
+```
+
+On AWS, the architecture (x86_64 or aarch64) is automatically detected from the configured instance type.
+
+### Using `unified_package` directly
+
+You can also provide a direct URL to a specific unified package tarball:
+
+```bash
+# Use a specific unified package URL
+export SCT_UNIFIED_PACKAGE="https://downloads.scylladb.com/unstable/scylla/master/relocatable/latest/scylla-unified-6.3.0~dev-0.20260101.abcdef123456.x86_64.tar.gz"
+
+hydra run-test artifacts_test \
+  --backend gce \
+  --config test-cases/artifacts/centos9.yaml
+```
+
+For non-root installation, also set:
+```bash
+export SCT_NONROOT_OFFLINE_INSTALL=true
+```
 
 
 ## Troubleshooting
