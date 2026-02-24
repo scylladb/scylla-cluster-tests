@@ -755,9 +755,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
 
     def list_resources_on_docker():
         click.secho("Checking Docker...", fg="green")
-        docker_resources = list_resources_docker(
-            tags_dict=params, running=get_all_running, group_as_builder=True, verbose=verbose
-        )
+        docker_resources = list_resources_docker(tags_dict=params, running=get_all_running, verbose=verbose)
 
         if any(docker_resources.values()):
             if docker_resources.get("containers"):
