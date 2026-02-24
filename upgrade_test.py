@@ -711,17 +711,12 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         # prepare write workload
         self.actions_log.info("Starting prepare write workload (n=10000000)")
-        prepare_write_stress = self.params.get("prepare_write_stress")
-        # Handle both single command (string) and multiple commands (list)
-        if isinstance(prepare_write_stress, str):
-            prepare_write_stress_cmds = [prepare_write_stress]
-        else:
-            prepare_write_stress_cmds = prepare_write_stress
-        
-        prepare_write_cs_thread_pools = []
-        for stress_cmd in prepare_write_stress_cmds:
-            prepare_write_cs_thread_pools.append(self.run_stress_thread(stress_cmd=stress_cmd))
-        
+        prepare_write_cs_thread_pools = self._run_all_stress_cmds(
+            [],
+            params={
+                "stress_cmd": self.params.get("prepare_write_stress"),
+            },
+        )
         self.actions_log.info("Waiting for cassandra-stress to start before upgrade")
         self.metric_has_data(
             metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}'
