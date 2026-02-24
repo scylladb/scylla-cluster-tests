@@ -469,6 +469,37 @@ class ClusterTester(unittest.TestCase):
         except Exception:
             self.log.error("Error saving test status to Argus", exc_info=True)
 
+    def get_scylla_versions(self) -> dict:
+        """Get installed scylla package versions from the first DB node.
+
+        Returns a dict mapping package names (with '-enterprise' stripped) to
+        dicts with 'version', 'date', and 'commit_id' keys.
+        """
+        versions = {}
+        try:
+            node = self.db_cluster.nodes[0]
+            packages_installed = node.scylla_packages_installed
+            for line in packages_installed:
+                for package in [
+                    "scylla-jmx",
+                    "scylla-server",
+                    "scylla-tools",
+                    "scylla-enterprise-jmx",
+                    "scylla-enterprise-server",
+                    "scylla-enterprise-tools",
+                ]:
+                    match = re.search(r"(%s-(\S+)-(0.)?([0-9]{8,8}).(\w+).)" % package, line)
+                    if match:
+                        versions[package.replace("-enterprise", "")] = {
+                            "version": match.group(2),
+                            "date": match.group(4),
+                            "commit_id": match.group(5),
+                        }
+        except Exception:
+            self.log.error("Failed getting scylla versions", exc_info=True)
+
+        return versions
+
     def generate_scylla_server_package(self) -> Package:
         """
         Used for offline tests for tracking scylla versions in Argus.
