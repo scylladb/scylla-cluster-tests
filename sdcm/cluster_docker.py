@@ -14,6 +14,7 @@
 import os
 import re
 import logging
+import shutil
 from typing import Optional, Union, Dict
 from functools import cached_property
 
@@ -29,6 +30,11 @@ from sdcm.utils.health_checker import check_nodes_status
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import get_my_public_ip
 from sdcm.utils.vector_store_utils import VectorStoreClusterMixin, VectorStoreNodeMixin
+from sdcm.provision.helpers.certificate import (
+    CA_CERT_FILE,
+    JKS_TRUSTSTORE_FILE,
+    TLSAssets,
+)
 
 DEFAULT_SCYLLA_DB_IMAGE = "scylladb/scylla-nightly"
 DEFAULT_SCYLLA_DB_IMAGE_TAG = "latest"
@@ -435,6 +441,21 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
         self.vector_store_cluster = None
 
     def node_setup(self, node, verbose=False, timeout=3600):
+        logging.error("Fruch !!!")
+        if any([self.params.get("server_encrypt"), self.params.get("client_encrypt")]):
+            # Create node certificate for internode communication
+            node.create_node_certificate(
+                cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
+                cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
+                csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR,
+            )
+            # Create client facing node certificate, for client-to-node communication
+            node.create_node_certificate(
+                node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY
+            )
+            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+                shutil.copy(src, node.ssl_conf_dir)
+
         node.is_scylla_installed(raise_if_not_installed=True)
         self.check_aio_max_nr(node)
         if self.test_config.BACKTRACE_DECODING:
@@ -591,6 +612,13 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
             verbose=True,
             ignore_status=True,
         )
+        if self.params.get("client_encrypt"):
+            # Create client facing node certificate, for client-to-node communication
+            node.create_node_certificate(
+                node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY
+            )
+            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+                shutil.copy(src, node.ssl_conf_dir)
 
         self._install_docker_cli(node, verbose=verbose)
         if self.params.get("client_encrypt"):

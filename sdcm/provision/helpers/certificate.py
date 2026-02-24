@@ -78,10 +78,11 @@ JKS_TRUSTSTORE_FILE = Path(get_data_dir_path("ssl_conf", TLSAssets.JKS_TRUSTSTOR
 def install_client_certificate(remoter, node_identifier):
     if remoter.run(f"ls {SCYLLA_SSL_CONF_DIR}", ignore_status=True).ok:
         return
-    dst = "/tmp/ssl_conf"
+    dst = "/tmp/ssl_conf/"
     remoter.run(f"mkdir -p {dst}")
-    remoter.send_files(src=str(Path(get_data_dir_path("ssl_conf")) / node_identifier) + "/", dst=dst)
-    remoter.send_files(src=str(Path(get_data_dir_path("ssl_conf")) / "client"), dst=dst)
+    remoter.run(f"mkdir -p {dst}client/")
+    remoter.send_files(src=str(Path(get_data_dir_path("ssl_conf")) / node_identifier), dst=dst)
+    remoter.send_files(src=str(Path(get_data_dir_path("ssl_conf")) / "client"), dst=dst + "client/")
     setup_script = dedent(f"""
         mkdir -p ~/.cassandra/
         cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
