@@ -1,2 +1,8 @@
 cassandra-stress:
+<<<<<<< HEAD
   image: scylladb/cassandra-stress:3.18.1
+||||||| parent of a05f8105f (feature(c-s): Enable c-s java 4x driver support)
+  image: scylladb/cassandra-stress:3.19.0
+=======
+  image: scylladb/cassandra-stress:3.20.0
+>>>>>>> a05f8105f (feature(c-s): Enable c-s java 4x driver support)
