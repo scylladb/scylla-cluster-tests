@@ -712,7 +712,16 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # prepare write workload
         self.actions_log.info("Starting prepare write workload (n=10000000)")
         prepare_write_stress = self.params.get("prepare_write_stress")
-        prepare_write_cs_thread_pool = self.run_stress_thread(stress_cmd=prepare_write_stress)
+        # Handle both single command (string) and multiple commands (list)
+        if isinstance(prepare_write_stress, str):
+            prepare_write_stress_cmds = [prepare_write_stress]
+        else:
+            prepare_write_stress_cmds = prepare_write_stress
+        
+        prepare_write_cs_thread_pools = []
+        for stress_cmd in prepare_write_stress_cmds:
+            prepare_write_cs_thread_pools.append(self.run_stress_thread(stress_cmd=stress_cmd))
+        
         self.actions_log.info("Waiting for cassandra-stress to start before upgrade")
         self.metric_has_data(
             metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}'
@@ -740,7 +749,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self.db_cluster.node_to_upgrade.check_node_health()
 
             # wait for the prepare write workload to finish
-            self.verify_stress_thread(prepare_write_cs_thread_pool)
+            for thread_pool in prepare_write_cs_thread_pools:
+                self.verify_stress_thread(thread_pool)
 
             # read workload (cl=QUORUM)
             self.actions_log.info("Starting read workload (cl=QUORUM n=10000000)")
