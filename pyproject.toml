@@ -74,6 +74,7 @@ dependencies = [
 dev = [
     "pre-commit==4.0.1",
     "pycodestyle==2.13.0",
+    "pyright==1.1.408",
     "ruff==0.14.6",
     "uv-sort>=0.4.0",
 ]
@@ -126,3 +127,15 @@ max-locals = 15
 [tool.autopep8]
 max_line_length = 120
 ignore = "E226,E24,W50,W690,E402,E731"
+
+[tool.pyright]
+typeCheckingMode = "off"
+reportUninitializedInstanceVariable = "error"
+pythonVersion = "3.12"
+useLibraryCodeForTypes = false
+exclude = [
+    "argus/",
+    "**/node_modules",
+    "**/__pycache__",
+    ".venv*",
+]

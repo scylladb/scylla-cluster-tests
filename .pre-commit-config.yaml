@@ -63,6 +63,14 @@ repos:
         types: [python]
         exclude: ^argus/.*$
 
+    -   id: pyright
+        name: pyright
+        entry: pyright --level error
+        language: system
+        types: [python]
+        pass_filenames: false
+        exclude: ^argus/.*$
+
     -   id: update-conf-docs
         name: update-conf-docs
         entry: ./sct.py update-conf-docs
