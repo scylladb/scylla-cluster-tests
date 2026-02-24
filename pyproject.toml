@@ -131,7 +131,7 @@ ignore = "E226,E24,W50,W690,E402,E731"
 [tool.pyright]
 typeCheckingMode = "off"
 reportUninitializedInstanceVariable = "error"
-pythonVersion = "3.12"
+pythonVersion = "3.14"
 useLibraryCodeForTypes = false
 exclude = [
     "argus/",
