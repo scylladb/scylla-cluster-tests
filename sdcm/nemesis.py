@@ -4011,12 +4011,24 @@ class Nemesis(NemesisFlags):
         else:
             ignore_stream_mutation_errors_due_to_issue = contextlib.nullcontext
 
+<<<<<<< HEAD
         with (
             ignore_ycsb_connection_refused(),
             ignore_stream_mutation_errors_due_to_issue(),
             self.action_log_scope("Terminate a node", target=node_to_remove.name),
         ):
             # node stop and make sure its "DN"
+||||||| parent of 6d1d3aa92 (fix(TerminateAndRemoveNodeMonkey): add ignore raft failing)
+        with ignore_ycsb_connection_refused(), ignore_stream_mutation_errors_due_to_issue():
+            self.actions_log.info(f"Stop {node_to_remove.name} node and make sure is DN")
+=======
+        with (
+            ignore_ycsb_connection_refused(),
+            ignore_stream_mutation_errors_due_to_issue(),
+            ignore_raft_topology_cmd_failing(),
+        ):
+            self.actions_log.info(f"Stop {node_to_remove.name} node and make sure is DN")
+>>>>>>> 6d1d3aa92 (fix(TerminateAndRemoveNodeMonkey): add ignore raft failing)
             node_to_remove.stop_scylla_server(verify_up=False, verify_down=True)
 
             # terminate node
