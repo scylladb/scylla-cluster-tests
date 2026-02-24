@@ -23,8 +23,10 @@ class ScyllaYamlTest(unittest.TestCase):
     @staticmethod
     def _run_test(object_type, init_params: dict, expected_without_defaults: dict, expected_with_defaults: dict):
         instance = object_type(**init_params)
-        assert instance.model_dump(exclude_unset=True) == expected_without_defaults
-        assert instance.model_dump(exclude_unset=False) == expected_with_defaults
+        assert instance.model_dump(exclude_unset=True) == expected_without_defaults, \
+            f"model_dump(exclude_unset=True) mismatch for {object_type.__name__}"
+        assert instance.model_dump(exclude_unset=False) == expected_with_defaults, \
+            f"model_dump(exclude_unset=False) mismatch for {object_type.__name__}"
 
     def test_server_encryption_options(self):
         self._run_test(
@@ -449,7 +451,7 @@ class ScyllaYamlTest(unittest.TestCase):
         )
         yaml3 = ScyllaYaml(client_encryption_options=ClientEncryptionOptions())
         yaml1.update(yaml2, yaml3)
-        assert yaml1 == ScyllaYaml(
+        expected = ScyllaYaml(
             cluster_name="cluster1",
             redis_keyspace_replication_strategy="SimpleStrategy",
             server_encryption_options=ServerEncryptionOptions(
@@ -460,6 +462,7 @@ class ScyllaYamlTest(unittest.TestCase):
             ),
             client_encryption_options=ClientEncryptionOptions(),
         )
+        assert yaml1 == expected, "ScyllaYaml update with multiple objects failed to merge correctly"
 
     @staticmethod
     def test_update_with_dict_object():
@@ -469,10 +472,12 @@ class ScyllaYamlTest(unittest.TestCase):
             test_config_file_yaml = yaml.safe_load(test_file)
             append_scylla_args_dict = test_config_file_yaml.get("append_scylla_yaml", {})
         yaml1.update(append_scylla_args_dict)
-        assert yaml1.enable_sstables_mc_format == append_scylla_args_dict["enable_sstables_mc_format"]
-        assert yaml1.enable_sstables_md_format == append_scylla_args_dict["enable_sstables_md_format"]
-
-        assert yaml1.force_schema_commit_log == append_scylla_args_dict["force_schema_commit_log"]
+        assert yaml1.enable_sstables_mc_format == append_scylla_args_dict["enable_sstables_mc_format"], \
+            "enable_sstables_mc_format not updated correctly from dict"
+        assert yaml1.enable_sstables_md_format == append_scylla_args_dict["enable_sstables_md_format"], \
+            "enable_sstables_md_format not updated correctly from dict"
+        assert yaml1.force_schema_commit_log == append_scylla_args_dict["force_schema_commit_log"], \
+            "force_schema_commit_log not updated correctly from dict"
 
     @staticmethod
     def test_copy():
@@ -492,21 +497,23 @@ class ScyllaYamlTest(unittest.TestCase):
             ),
         )
         copy_instance = original.copy()
-        assert copy_instance == original
+        assert copy_instance == original, "Copied instance should equal original"
         assert copy_instance.model_dump(exclude_unset=True, exclude_defaults=True) == original.model_dump(
             exclude_unset=True, exclude_defaults=True
-        )
+        ), "Copied instance model_dump should equal original model_dump"
         copy_instance.client_encryption_options.enabled = False
-        assert copy_instance.client_encryption_options.enabled is False
-        assert original.client_encryption_options.enabled is True
-        assert copy_instance != original
+        assert copy_instance.client_encryption_options.enabled is False, \
+            "Copy's client_encryption_options.enabled should be False after modification"
+        assert original.client_encryption_options.enabled is True, \
+            "Original's client_encryption_options.enabled should remain True (deep copy verification)"
+        assert copy_instance != original, "Modified copy should not equal original"
         assert copy_instance.model_dump(exclude_unset=True, exclude_defaults=True) != original.model_dump(
             exclude_unset=True, exclude_defaults=True
-        )
+        ), "Modified copy model_dump should not equal original model_dump"
 
         copy_instance = original.copy()
         copy_instance.client_encryption_options = None
-        assert copy_instance != original
+        assert copy_instance != original, "Copy with None client_encryption_options should not equal original"
         assert copy_instance.model_dump(exclude_unset=True, exclude_defaults=True) != original.model_dump(
             exclude_unset=True, exclude_defaults=True
-        )
+        ), "Copy with None client_encryption_options model_dump should not equal original model_dump"
