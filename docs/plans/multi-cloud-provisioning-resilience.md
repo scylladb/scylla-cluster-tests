@@ -109,6 +109,88 @@ For multi-node clusters, the recommended approach is:
 
 This limitation and rationale will be included in the feature documentation (`docs/FALLBACK_FEATURES.md`) to ensure users understand why the constraint exists and how to use the features effectively.
 
+## Instance Type Availability APIs by Cloud Provider
+
+Before attempting provisioning with fallback, it's beneficial to check if instance types are available in target zones/regions. This can help filter out zones/regions where specific instance types are not supported, reducing unnecessary provisioning attempts.
+
+### API Comparison Table
+
+| Cloud Provider | API / Method | Scope | What It Checks | Current SCT Usage | Limitations |
+|----------------|--------------|-------|----------------|-------------------|-------------|
+| **AWS** | `describe-instance-type-offerings` | Zone/Region | Instance type availability in specific location | Used in `is_instance_type_supported()` | Does not check real-time capacity, only if type is offered |
+| **AWS** | Reserved Capacity | Zone | Guarantees capacity availability | Not currently used | Requires pre-purchased capacity reservation |
+| **AWS** | Spot Instance Advisor | Regional | Historical spot interruption rates | Not currently used | Only provides probabilistic guidance |
+| **GCE** | `MachineTypesClient.get()` | Zone | Machine type exists in zone | Used in `gce_check_if_machine_type_supported()` | Does not check real-time capacity |
+| **GCE** | `compute.zones.get()` | Zone | Zone availability status | Can be added | Shows if zone is UP, DOWN, or deprecated |
+| **Azure** | `compute.virtual_machine_sizes.list()` | Region/Location | VM size availability in location | Used in `azure_check_instance_type_available()` | Does not check zone-level or real-time capacity |
+| **Azure** | `compute.resource_skus.list()` | Region/Zone | SKU restrictions and capabilities | Can be added | Provides zone-level restrictions and quota info |
+| **OCI** | `compute.list_shapes()` | Availability Domain | Shape availability in AD | Should be added when cluster ready | Returns shapes available in specific AD |
+| **OCI** | `limits.get_resource_availability()` | Availability Domain | Service limits and current usage | Should be added when cluster ready | Checks against quota limits |
+
+### Implementation Recommendations
+
+#### For Zone Fallback Pre-Filtering
+
+**AWS**:
+- Use `ec2_client.describe_instance_type_offerings(LocationType='availability-zone')` to filter zones
+- Already implemented in `sdcm/utils/aws_utils.py:is_instance_type_supported()`
+- Consider adding zone status check to avoid deprecated zones
+
+**GCE**:
+- Use `MachineTypesClient.get(zone=zone, machine_type=type)` to verify type exists in zone
+- Already implemented in `sdcm/utils/gce_utils.py:gce_check_if_machine_type_supported()`
+- Add `compute.zones.get()` to check zone status (UP vs DOWN)
+
+**Azure**:
+- Use `compute.resource_skus.list()` with location and zone filters
+- Parse `restrictions` field to identify zone-level limitations
+- More precise than current `virtual_machine_sizes.list()` which only checks region-level
+
+**OCI**:
+- Use `compute_client.list_shapes(compartment_id, availability_domain)` to get shapes per AD
+- Use `limits_client.get_resource_availability()` to check quota headroom
+- Should be implemented when OCI cluster support is complete
+
+#### Reserved Capacity Considerations
+
+**AWS**: Support for On-Demand Capacity Reservations (ODCRs) could be added to guarantee capacity in specific zones. This would require:
+- Configuration parameter to specify capacity reservation ID
+- Modified provisioning logic to use `CapacityReservationTarget` in run_instances()
+- Only practical for long-running or recurring test scenarios
+
+**GCE**: Committed Use Discounts and Reserved Capacity work similarly but are regional, not zonal
+
+**Azure**: Reserved VM Instances provide cost savings but don't guarantee capacity at provisioning time
+
+**OCI**: Reserved capacity not applicable to the same extent
+
+### Impact on Fallback Implementation
+
+Pre-filtering zones/regions based on instance type availability can:
+
+1. **Reduce Failed Attempts**: Skip zones where instance type isn't offered at all
+2. **Faster Fallback**: Don't waste time on zones that will definitely fail
+3. **Better Logging**: Distinguish between "type not available" vs "temporary capacity issue"
+4. **Cost Optimization**: Try zones with lower historical spot interruption rates first (AWS)
+
+However, important caveats:
+
+- **Real-time Capacity**: None of these APIs check real-time capacity availability
+- **Race Conditions**: Capacity can be exhausted between check and provision attempt
+- **Complexity**: Pre-filtering adds code complexity and API calls
+- **Quota vs Capacity**: Quota APIs show limits, not whether resources are actually available
+
+### Recommended Approach
+
+For the initial implementation:
+
+1. **Use existing checks**: Leverage `is_instance_type_supported()` (AWS), `gce_check_if_machine_type_supported()` (GCE), and `azure_check_instance_type_available()` (Azure) to filter zones/regions
+2. **Keep fallback logic simple**: Iterate through all zones regardless of pre-filtering, as capacity availability is dynamic
+3. **Log pre-filter results**: Help with debugging by logging which zones were filtered out
+4. **Future enhancement**: Consider adding zone status checks (GCE) and SKU restrictions (Azure) for more precise filtering
+
+This approach balances implementation complexity with practical benefits while acknowledging that real-time capacity checks aren't possible through cloud provider APIs.
+
 ## Implementation Paths
 
 There are two distinct code paths for creating database nodes that need to be aligned and tested:
