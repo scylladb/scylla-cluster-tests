@@ -17,4 +17,3 @@ user_prefix: 'longevity-azure-kms-10gb-3h'
 space_node_threshold: 64424
 enterprise_disable_kms: false
 enable_kms_key_rotation: true
-kms_key_rotation_interval: 60
