@@ -38,5 +38,7 @@ backup_bucket_backend: 'gcs'
 
 use_preinstalled_scylla: true
 
+kms_key_rotation_interval: 60
+
 # we are using monitor images, see `gce_image_monitor`
 monitor_branch: null
