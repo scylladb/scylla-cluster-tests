@@ -1976,6 +1976,7 @@ class ClusterTester(unittest.TestCase):
             credentials=self.credentials,
             ssh_username=baremetal_info["db_nodes"]["username"],
             params=self.params,
+            region_names=["dummy_region"],
         )
         self.db_cluster = cluster_baremetal.ScyllaPhysicalCluster(**params)
 
