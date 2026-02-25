@@ -17,7 +17,6 @@ Module containing logic for running disruptions on a test cluster
 """
 
 import contextlib
-import copy
 import datetime
 import importlib
 import inspect
@@ -35,7 +34,7 @@ from abc import ABC, abstractmethod
 from contextlib import ExitStack
 from datetime import timedelta
 from typing import Any, List, Optional, Callable, Dict, Union, Iterable, TYPE_CHECKING
-from functools import wraps, partial, cached_property
+from functools import partial, cached_property
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
@@ -223,7 +222,7 @@ NEMESIS_RUN_INFO = {}
 
 DISRUPT_POOL_PROPERTY_NAME = "target_pool"
 
-__all__ = []
+__all__ = ["DataValidatorEvent"]
 
 
 def target_data_nodes(func: Callable) -> Callable:
@@ -239,6 +238,9 @@ def target_zero_nodes(func: Callable) -> Callable:
 def target_all_nodes(func: Callable) -> Callable:
     setattr(func, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.all_nodes)
     return func
+
+
+DISRUPT_DEFAULT_POOL = NEMESIS_TARGET_POOLS.data_nodes
 
 
 class NemesisFlags:
@@ -267,8 +269,6 @@ class NemesisFlags:
 class NemesisBaseClass(NemesisFlags, ABC):
     additional_configs: list[str] = None  # Configs required for running nemesis, used in job generation
     additional_params: dict[str, str] = None  # Parameters required for jenkins pipelines, used in job generation
-
-    exclusive: bool = False  # True, if the nemesis is exclusive, i.e. it should not run in parallel with other nemeses
 
     def __init__(self, runner: "NemesisRunner"):
         super().__init__()
@@ -422,8 +422,6 @@ class NemesisRunner:
             rack=rack,
             allow_only_last_node_in_rack=allow_only_last_node_in_rack,
         )
-        if current_disruption:
-            self.set_current_disruption(current_disruption)
         self.log.info("%s: target node selected by allocator - %s", disruption_name, self.target_node)
 
     @raise_event_on_failure
@@ -1093,16 +1091,8 @@ class NemesisRunner:
     def disrupt(self):
         raise NotImplementedError("Derived classes must implement disrupt()")
 
-    @property
-    def base_disruption_name(self) -> str:
-        return self.current_disruption.rsplit("-", 1)[0]
-
     def get_class_name(self):
         return self.__class__.__name__.replace("Monkey", "")
-
-    def set_current_disruption(self, label=None):
-        self.log.debug("Set current_disruption -> %s", label.split("-", 1)[0])
-        self.current_disruption = label
 
     def disrupt_destroy_data_then_repair(self):
         """repair at the beginning added to avoid c-s failure 'data wasn't validated'"""
@@ -1927,12 +1917,89 @@ class NemesisRunner:
     # Nemesis running code
     def execute_nemesis(self, nemesis: NemesisBaseClass):
         """Runs selected disrupt method"""
-        event_name = nemesis.__class__.__name__
-        self.metrics_srv.event_start(event_name)
-        try:
-            disrupt_method_wrapper(nemesis.disrupt, caller_obj=nemesis, is_exclusive=nemesis.exclusive)()
-        finally:
-            self.metrics_srv.event_stop(event_name)
+        assert nemesis.runner == self, "Nemesis needs to be initialized with the same runner that executes it"
+        class_name = nemesis.__class__.__name__
+        target_pool_type = getattr(nemesis, DISRUPT_POOL_PROPERTY_NAME, DISRUPT_DEFAULT_POOL)
+
+        # Skip health check if previous nemesis was skipped to avoid wasting 2+ hours on large clusters
+        last_event = self.last_nemesis_event
+        if last_event and last_event.is_skipped:
+            self.log.info(
+                "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
+                last_event.nemesis_name,
+                last_event.skip_reason,
+            )
+        else:
+            self.cluster.check_cluster_health()
+        start_time = time.time()
+
+        nemesis_event = None
+        self.current_disruption = unique_disruption_name(class_name)
+        disruption_name = self.current_disruption.rsplit("-", 1)[0]
+        raise_error = None
+        self.set_target_node_pool_type(target_pool_type)
+        self.set_target_node()
+        with (
+            DisruptionEvent(nemesis_name=disruption_name, node=self.target_node, publish_event=True) as nemesis_event,
+            self.actions_log.action_scope(f"Disruption {class_name} on {self.target_node.name}"),
+            self.argus_submit(nemesis_name=class_name, start_time=start_time, nemesis_event=nemesis_event),
+            self.verify_nodes(),
+            self.tester.run_nemesis_hooks(),
+            self.metrics_srv.event(class_name),
+        ):
+            self.log_on_all_nodes(
+                f"Started disruption {class_name} ({disruption_name} nemesis) on the target node '{str(self.target_node)}'"
+            )
+            try:
+                nemesis.disrupt()
+            except (UnsupportedNemesis, MethodVersionNotFound) as exp:
+                nemesis_event.skip(skip_reason=str(exp))
+                raise_error = exp
+            except KillNemesis as exp:
+                if self.tester.get_event_summary().get("CRITICAL", 0):
+                    nemesis_event.add_simple_error("Killed by tearDown - test fail", traceback.format_exc())
+                else:
+                    nemesis_event.skip(skip_reason="Killed by tearDown - test success")
+                raise_error = exp
+            except Exception as details:  # noqa: BLE001
+                nemesis_event.add_simple_error(str(details), traceback.format_exc())
+                self.error_list.append(str(details))
+                self.log.error("Unhandled exception in method %s", nemesis.disrupt, exc_info=True)
+            finally:
+                self.last_nemesis_event = nemesis_event
+                end_time = time.time()
+                time_elapsed = int(end_time - start_time)
+                nemesis_event.duration = time_elapsed
+
+                # Build log_info once from nemesis_event — single source of truth
+                log_info = {
+                    "start": int(start_time),
+                    "end": int(end_time),
+                    "duration": time_elapsed,
+                    "node": str(self.target_node),
+                    "subtype": str(nemesis_event.nemesis_status.value),
+                }
+                status = True
+                if nemesis_event.severity == Severity.ERROR:
+                    log_info["error"] = nemesis_event.errors[-1]
+                    log_info["full_traceback"] = nemesis_event.full_traceback
+                    status = False
+                if nemesis_event.is_skipped:
+                    log_info["skip_reason"] = nemesis_event.skip_reason
+
+                self.duration_list.append(time_elapsed)
+                self.operation_log.append({"operation": disruption_name, **log_info})
+                self.log.debug("%s duration -> %s s", disruption_name, time_elapsed)
+                self.log.info("log_info: %s", log_info)
+                self.update_stats(disruption_name, status, log_info)
+
+                self.log_on_all_nodes(
+                    f"Finished disruption {class_name} ({disruption_name} nemesis) with status '{nemesis_event.nemesis_status}'"
+                )
+                self.current_disruption = None
+        self.set_target_node_pool_type(DISRUPT_DEFAULT_POOL)
+        if raise_error:
+            raise raise_error
 
     def build_disruptions_by_selector(self, nemesis_selector: str | None = None):
         """
@@ -6184,260 +6251,63 @@ class NemesisRunner:
                 with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
                     drop_materialized_view(session, ks_name, view_name)
 
-
-def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=False):  # noqa: PLR0915
-    """
-    Log time elapsed for method to run
-
-    :param method: Remote method to wrap.
-    :return: Wrapped method.
-    """
-
-    def argus_create_nemesis_info(
-        nemesis: "NemesisRunner", class_name: str, method_name: str, start_time: int | float
-    ) -> bool:
+    @contextlib.contextmanager
+    def argus_submit(self, nemesis_name: str, start_time: int | float, nemesis_event: DisruptionEvent):
+        argus_client = None
         try:
-            argus_client = nemesis.target_node.test_config.argus_client()
+            argus_client = self.cluster.test_config.argus_client()
             argus_client.submit_nemesis(
-                name=method_name,
-                class_name=class_name,
+                name=nemesis_name,
+                class_name=self.get_class_name(),
                 start_time=int(start_time),
-                target_name=nemesis.target_node.name,
-                target_ip=nemesis.target_node.public_ip_address,
-                target_shards=nemesis.target_node.scylla_shards,
+                target_name=self.target_node.name,
+                target_ip=self.target_node.public_ip_address,
+                target_shards=self.target_node.scylla_shards,
             )
-            return True
         except Exception:
-            nemesis.log.error("Error creating nemesis information in Argus", exc_info=True)
-        return False
+            self.log.error("Error creating nemesis information in Argus", exc_info=True)
+        yield
 
-    def argus_finalize_nemesis_info(
-        nemesis: "NemesisRunner", method_name: str, start_time: int, nemesis_event: DisruptionEvent
-    ):
-        if not isinstance(start_time, int):
-            start_time = int(start_time)
-        try:
-            argus_client = nemesis.cluster.test_config.argus_client()
-            if nemesis_event.severity == Severity.ERROR:
+        if argus_client:
+            try:
+                match nemesis_event.nemesis_status:
+                    case NemesisStatus.FAILED:
+                        message = nemesis_event.full_traceback
+                    case NemesisStatus.SKIPPED:
+                        message = nemesis_event.skip_reason
+                    case _:
+                        message = ""
                 argus_client.finalize_nemesis(
-                    name=method_name,
+                    name=nemesis_name,
                     start_time=start_time,
-                    status=NemesisStatus.FAILED,
-                    message=nemesis_event.full_traceback,
+                    status=nemesis_event.nemesis_status,
+                    message=message,
                 )
-            elif nemesis_event.is_skipped:
-                argus_client.finalize_nemesis(
-                    name=method_name,
-                    start_time=start_time,
-                    status=NemesisStatus.SKIPPED,
-                    message=nemesis_event.skip_reason,
-                )
-            else:
-                argus_client.finalize_nemesis(
-                    name=method_name, start_time=start_time, status=NemesisStatus.SUCCEEDED, message=""
-                )
-        except Exception:
-            nemesis.log.error("Error finalizing nemesis information in Argus", exc_info=True)
+            except Exception:
+                self.log.error("Error finalizing nemesis information in Argus", exc_info=True)
 
-    def get_nemesis_status(nemesis_event: DisruptionEvent) -> str:
-        if nemesis_event.severity == Severity.ERROR:
-            return NemesisStatus.FAILED
-        if nemesis_event.is_skipped:
-            return NemesisStatus.SKIPPED
-        return NemesisStatus.SUCCEEDED
-
-    def data_validation_prints(caller):
-        try:
-            if hasattr(caller.tester, "data_validator") and caller.tester.data_validator:
-                if not (keyspace := caller.tester.data_validator.keyspace_name):
-                    DataValidatorEvent.DataValidator(
-                        severity=Severity.NORMAL, message="Failed fo get keyspace name. Data validator is disabled."
-                    ).publish()
-                    return
-
-                with caller.cluster.cql_connection_patient(caller.cluster.nodes[0], keyspace=keyspace) as session:
-                    caller.tester.data_validator.validate_range_not_expected_to_change(session, during_nemesis=True)
-                    caller.tester.data_validator.validate_range_expected_to_change(session, during_nemesis=True)
-                    caller.tester.data_validator.validate_deleted_rows(session, during_nemesis=True)
-        except Exception as err:  # noqa: BLE001
-            caller.log.debug(f"Data validator error: {err}")
-
-    @wraps(method)
-    def wrapper(*args, **kwargs):  # noqa: PLR0912, PLR0914, PLR0915
-        method_name = method.__self__.__class__.__name__
-        target_pool_type = getattr(method.__self__, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
-        nemesis_run_info_key = f"{id(method)}--{method_name}"
-        runner = caller_obj.runner
-        nemesis_event = None  # Initialize to None to avoid UnboundLocalError in finally block
-        try:
-            NEMESIS_LOCK.acquire()
-            if not is_exclusive:
-                NEMESIS_RUN_INFO[nemesis_run_info_key] = "Running"
-                NEMESIS_LOCK.release()
-            else:
-                while NEMESIS_RUN_INFO:
-                    # NOTE: exclusive nemesis will wait before the end of all other ones
-                    time.sleep(10)
-
-            # Skip health check if previous nemesis was skipped to avoid wasting 2+ hours on large clusters
-            last_event = runner.last_nemesis_event
-            if last_event and last_event.is_skipped:
-                runner.log.info(
-                    "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
-                    last_event.nemesis_name,
-                    last_event.skip_reason,
-                )
-            else:
-                runner.cluster.check_cluster_health()
-            num_data_nodes_before = len(runner.cluster.data_nodes)
-            num_zero_nodes_before = len(runner.cluster.zero_nodes)
-            start_time = time.time()
-
-            current_disruption = unique_disruption_name(method_name)
-            runner.set_target_node_pool_type(target_pool_type)
-            runner.set_target_node(current_disruption=current_disruption)
-            start_msg = (
-                f"Started disruption {method_name} ({runner.base_disruption_name} nemesis) on the target node "
-                f"'{str(runner.target_node)}'"
+    @contextlib.contextmanager
+    def verify_nodes(self):
+        num_data_nodes_before = len(self.cluster.data_nodes)
+        num_zero_nodes_before = len(self.cluster.zero_nodes)
+        yield
+        num_data_nodes_after = len(self.cluster.data_nodes)
+        num_zero_nodes_after = len(self.cluster.zero_nodes)
+        if num_data_nodes_before != num_data_nodes_after:
+            self.log.error(
+                "num data nodes before %s and data nodes after %s does not match"
+                % (num_data_nodes_before, num_data_nodes_after)
             )
-            runner.log.debug("{start_symbol} {msg} {start_symbol}".format(start_symbol=">" * 12, msg=start_msg))
-            for nodes_set in (runner.cluster, runner.loaders):
-                nodes_set.log_message(
-                    "{start_symbol} {msg} {start_symbol}".format(start_symbol="=" * 12, msg=start_msg)
-                )
+        if self.cluster.params.get("use_zero_nodes") and num_zero_nodes_before != num_zero_nodes_after:
+            self.log.error(
+                "num zero nodes before %s and zero nodes after %s does not match"
+                % (num_zero_nodes_before, num_zero_nodes_after)
+            )
 
-            class_name = runner.get_class_name()
-            if class_name.find("Chaos") < 0:
-                runner.metrics_srv.event_start(class_name)
-            result = None
-            status = True
-
-            log_info = {
-                "operation": runner.base_disruption_name,
-                "start": int(start_time),
-                "end": 0,
-                "duration": 0,
-                "node": str(runner.target_node),
-                "subtype": "end",
-            }
-            # TODO: Temporary print. Will be removed later
-            data_validation_prints(runner)
-
-            with (
-                DisruptionEvent(
-                    nemesis_name=runner.base_disruption_name, node=runner.target_node, publish_event=True
-                ) as nemesis_event,
-                runner.actions_log.action_scope(f"Disruption {method_name} on {runner.target_node.name}"),
-            ):
-                nemesis_info = argus_create_nemesis_info(
-                    nemesis=runner, class_name=class_name, method_name=method_name, start_time=start_time
-                )
-                try:
-                    result = method(*args, **kwargs)
-                except (UnsupportedNemesis, MethodVersionNotFound) as exp:
-                    skip_reason = str(exp)
-                    log_info.update({"subtype": "skipped", "skip_reason": skip_reason})
-                    nemesis_event.skip(skip_reason=skip_reason)
-                    raise
-                except KillNemesis:
-                    if runner.tester.get_event_summary().get("CRITICAL", 0):
-                        error_sting = "Killed by tearDown - test fail"
-                        nemesis_event.add_error([error_sting])
-                        nemesis_event.full_traceback = traceback.format_exc()
-                        nemesis_event.severity = Severity.ERROR
-                        log_info.update({"error": error_sting, "full_traceback": traceback.format_exc()})
-                        status = False
-                    else:
-                        skip_reason = "Killed by tearDown - test success"
-                        log_info.update({"subtype": "skipped", "skip_reason": skip_reason})
-                        nemesis_event.skip(skip_reason=skip_reason)
-                    raise
-                except Exception as details:  # noqa: BLE001
-                    nemesis_event.add_error([str(details)])
-                    nemesis_event.full_traceback = traceback.format_exc()
-                    nemesis_event.severity = Severity.ERROR
-                    runner.error_list.append(str(details))
-                    runner.log.error("Unhandled exception in method %s", method, exc_info=True)
-                    log_info.update({"error": str(details), "full_traceback": traceback.format_exc()})
-                    status = False
-                finally:
-                    end_time = time.time()
-                    time_elapsed = int(end_time - start_time)
-                    log_info.update(
-                        {
-                            "end": int(end_time),
-                            "duration": time_elapsed,
-                        }
-                    )
-                    runner.duration_list.append(time_elapsed)
-                    runner.operation_log.append(copy.deepcopy(log_info))
-                    runner.log.debug("%s duration -> %s s", runner.base_disruption_name, time_elapsed)
-
-                    if class_name.find("Chaos") < 0:
-                        runner.metrics_srv.event_stop(class_name)
-                    disrupt = runner.base_disruption_name
-                    del log_info["operation"]
-
-                    runner.update_stats(disrupt, status, log_info)
-
-                    runner.log.info(f"log_info: {log_info}")
-                    nemesis_event.duration = time_elapsed
-
-                    if nemesis_info:
-                        argus_finalize_nemesis_info(
-                            nemesis=runner,
-                            method_name=method_name,
-                            start_time=int(start_time),
-                            nemesis_event=nemesis_event,
-                        )
-
-                    end_msg = (
-                        f"Finished disruption {method_name} ({runner.base_disruption_name} nemesis) with status "
-                        f"'{get_nemesis_status(nemesis_event)}'"
-                    )
-                    runner.log.debug("{end_symbol} {msg} {end_symbol}".format(end_symbol="<" * 12, msg=end_msg))
-                    for nodes_set in (runner.cluster, runner.loaders):
-                        nodes_set.log_message(
-                            "{end_symbol} {msg} {end_symbol}".format(end_symbol="=" * 12, msg=end_msg)
-                        )
-
-            num_data_nodes_after = len(runner.cluster.data_nodes)
-            num_zero_nodes_after = len(runner.cluster.zero_nodes)
-            if num_data_nodes_before != num_data_nodes_after:
-                runner.log.error(
-                    "num data nodes before %s and data nodes after %s does not match"
-                    % (num_data_nodes_before, num_data_nodes_after)
-                )
-            if runner.cluster.params.get("use_zero_nodes") and num_zero_nodes_before != num_zero_nodes_after:
-                runner.log.error(
-                    "num zero nodes before %s and zero nodes after %s does not match"
-                    % (num_zero_nodes_before, num_zero_nodes_after)
-                )
-            # TODO: Temporary print. Will be removed later
-            data_validation_prints(runner)
-        finally:
-            # Store nemesis event to track skip status for health checks
-            # Only update if nemesis_event was created (i.e., we entered the with block)
-            if nemesis_event is not None:
-                runner.last_nemesis_event = nemesis_event
-
-            if is_exclusive:
-                # NOTE: sleep the nemesis interval here because the next one is already
-                #       ready to start right after the lock gets released.
-                if runner.tester.params.get("k8s_tenants_num") > 1:
-                    runner.log.debug("Exclusive nemesis: Sleep for '%s' seconds", runner.interval)
-                    time.sleep(runner.interval)
-                NEMESIS_LOCK.release()
-            else:
-                # NOTE: the key may be absent if a nemesis which waits for a lock release
-                #       gets killed/aborted. So, use safe 'pop' call with the default 'None' value.
-                NEMESIS_RUN_INFO.pop(nemesis_run_info_key, None)
-
-            runner.set_target_node_pool_type(NEMESIS_TARGET_POOLS.data_nodes)
-
-        return result
-
-    return wrapper
+    def log_on_all_nodes(self, msg):
+        self.log.debug("{start_symbol} {msg} {start_symbol}".format(start_symbol=">" * 12, msg=msg))
+        for nodes_set in (self.cluster, self.loaders):
+            nodes_set.log_message("{start_symbol} {msg} {start_symbol}".format(start_symbol="=" * 12, msg=msg))
 
 
 # Auto-discovery mechanism.

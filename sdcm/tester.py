@@ -10,6 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
+import contextlib
 import shutil
 import configparser
 import importlib
@@ -435,6 +436,19 @@ class ClusterTester(unittest.TestCase):
             self.log.info("Submitted SCTConfiguration to Argus.")
         except ArgusClientError:
             self.log.error("Failed to submit data to Argus", exc_info=True)
+
+    def pre_nemesis(self):
+        """Runs before nemesis execution"""
+
+    def post_nemesis(self):
+        """Runs after each nemesis execution"""
+
+    @contextlib.contextmanager
+    def run_nemesis_hooks(self):
+        """Runs hooks around nemesis invocation"""
+        self.pre_nemesis()
+        yield
+        self.post_nemesis()
 
     def start_argus_heartbeat_thread(self) -> threading.Event:
         def send_argus_heartbeat(client: ArgusSCTClient, stop_signal: threading.Event):

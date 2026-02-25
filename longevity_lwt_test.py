@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
+import logging
 # This is stress longevity test that runs light weight transactions in parallel with different node operations:
 # disruptive and not disruptive
 #
@@ -27,12 +27,23 @@ from sdcm.utils.common import skip_optional_stage
 from sdcm.sct_events.group_common_events import ignore_mutation_write_errors
 
 
+LOGGER = logging.Logger(__name__)
+
+
 class LWTLongevityTest(LongevityTest):
     BASE_TABLE_PARTITION_KEYS = ["domain", "published_date"]
 
     def setUp(self):
         super().setUp()
         self.data_validator = None
+
+    def pre_nemesis(self):
+        """Runs before nemesis execution"""
+        self.validate_data(during_nemesis=True)
+
+    def post_nemesis(self):
+        """Runs after each nemesis execution"""
+        self.validate_data(during_nemesis=True)
 
     def run_prepare_write_cmd(self):
         # `mutation_write_*' errors are thrown when system is overloaded and got timeout on
@@ -88,15 +99,20 @@ class LWTLongevityTest(LongevityTest):
                 self.db_cluster.stop_nemesis(timeout=300)
             self.validate_data()
 
-    def validate_data(self):
-        node = self.db_cluster.nodes[0]
-        if not (keyspace := self.data_validator.keyspace_name):
-            DataValidatorEvent.DataValidator(
-                severity=Severity.NORMAL, message="Failed fo get keyspace name. Data validator is disabled."
-            ).publish()
-            return
+    def validate_data(self, during_nemesis=False):
+        try:
+            node = self.db_cluster.nodes[0]
+            if not (keyspace := self.data_validator.keyspace_name):
+                DataValidatorEvent.DataValidator(
+                    severity=Severity.NORMAL, message="Failed fo get keyspace name. Data validator is disabled."
+                ).publish()
+                return
 
-        with self.db_cluster.cql_connection_patient(node, keyspace=keyspace) as session:
-            self.data_validator.validate_range_not_expected_to_change(session=session)
-            self.data_validator.validate_range_expected_to_change(session=session)
-            self.data_validator.validate_deleted_rows(session=session)
+            with self.db_cluster.cql_connection_patient(node, keyspace=keyspace) as session:
+                self.data_validator.validate_range_not_expected_to_change(
+                    session=session, during_nemesis=during_nemesis
+                )
+                self.data_validator.validate_range_expected_to_change(session=session, during_nemesis=during_nemesis)
+                self.data_validator.validate_deleted_rows(session=session, during_nemesis=during_nemesis)
+        except Exception as err:  # noqa: BLE001
+            LOGGER.debug(f"Data validator error: {err}")
