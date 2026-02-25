@@ -63,7 +63,10 @@ class YcsbStatsPublisher(FileFollowerThread):
     def handle_verify_metric(self, line):
         verify_status_regex = re.compile(r"Return\((?P<status>.*?)\)=(?P<value>\d*)")
         verify_regex = re.compile(r"\[VERIFY:(.*?)\]")
-        verify_content = verify_regex.findall(line)[0]
+        found = verify_regex.findall(line)
+        if not found:
+            return
+        verify_content = found[0]
 
         for status_match in verify_status_regex.finditer(verify_content):
             stat = status_match.groupdict()
@@ -108,6 +111,13 @@ class YcsbStatsPublisher(FileFollowerThread):
                                     except ValueError:
                                         value = float(0)  # noqa: PLW2901
                                 self.set_metric(operation, key, float(value))
+
+                    # [VERIFY: Return(OK/UNEXPECTED_STATE/ERROR)=N] lines are final summary lines
+                    # that do NOT match the stats regex (no Count/Max/Min/Avg fields), so
+                    # handle_verify_metric would never be called for them from inside the
+                    # stats regex loop above. Handle them separately here.
+                    if "[VERIFY:" in line and "Return(" in line:
+                        self.handle_verify_metric(line)
 
                 except Exception:
                     LOGGER.exception("fail to send metric")
@@ -228,8 +238,6 @@ class YcsbStressThread(DockerBasedStressThread):
                 tmp_file.write(dynamodb_teample)
                 tmp_file.write(
                     dedent(f"""
-                    dynamodb.alternator.datacenter = {getattr(loader, "datacenter", "")}
-                    dynamodb.alternator.rack = {getattr(loader, "rack", "")}
                     dynamodb.debug = false
                     dynamodb.alternator.port = {alternator_port}
                     dynamodb.alternator.loadbalancing = {native_loading}
@@ -239,6 +247,16 @@ class YcsbStressThread(DockerBasedStressThread):
                     dynamodb.awsSecretKey = {secret_key}
                 """)
                 )
+                # Only write datacenter/rack when non-empty. Java's Properties.getProperty()
+                # returns "" for empty values (not null), so `datacenter != null` would be
+                # true for "", creating DatacenterScope.of("") which routes to a non-existent
+                # datacenter and causes all operations to fail.
+                loader_datacenter = getattr(loader, "datacenter", "")
+                loader_rack = getattr(loader, "rack", "")
+                if loader_datacenter:
+                    tmp_file.write(f"dynamodb.alternator.datacenter = {loader_datacenter}\n")
+                if loader_rack:
+                    tmp_file.write(f"dynamodb.alternator.rack = {loader_rack}\n")
                 tmp_file.flush()
                 cmd_runner.send_files(tmp_file.name, os.path.join("/tmp", "dynamodb.properties"))
             if is_kubernetes:
