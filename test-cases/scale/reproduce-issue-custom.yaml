@@ -17,7 +17,7 @@ nemesis_class_name: "SisyphusMonkey"
 nemesis_selector: 'GrowShrinkClusterNemesis'
 nemesis_seed: '777'
 nemesis_interval: 15
-nemesis_add_node_cnt: 3
+nemesis_add_node_cnt: 1
 
 # NOTE: prepare phase fails without nemesis. See https://github.com/scylladb/scylladb/issues/27566
 #       So, it is better to keep prepare phase without nemesis to cover the bug case.
