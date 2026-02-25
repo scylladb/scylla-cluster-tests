@@ -1,11 +1,13 @@
-# GCE, Azure, and OCI Fallback Features Implementation Plan
+# Multi-Cloud Provisioning Resilience for Artifact Tests
 
 ## Problem Statement
 
-Two AWS-specific provisioning features need to be extended to GCE, Azure, and OCI backends:
+Two AWS-specific provisioning features need to be extended to GCE, Azure, and OCI backends for artifact testing scenarios:
 
 1. **instance_provision_fallback_on_demand**: Automatically fall back from spot/preemptible to on-demand instances when spot provisioning fails
 2. **aws_fallback_to_next_availability_zone**: Try all availability zones sequentially to maximize chances of getting instance capacity
+
+**Primary Use Case**: These features are designed specifically for **artifact tests** (testing new OS images, Scylla packages, database versions) where test resilience is more important than specific infrastructure topology. For artifact tests, we need *a working node somewhere* rather than a precisely configured cluster.
 
 ### Current State
 
@@ -32,14 +34,18 @@ Two AWS-specific provisioning features need to be extended to GCE, Azure, and OC
 
 ## Goals
 
+**Primary Focus**: Enable provisioning resilience for artifact tests across all cloud backends
+
 1. Make `fallback_to_next_availability_zone` backend-agnostic (remove "aws_" prefix)
-2. Implement zone fallback for GCE, Azure, and OCI
-3. Add region fallback capability for all backends
+2. Implement zone fallback for GCE, Azure, and OCI for single-node artifact tests
+3. Add region fallback capability for all backends for single-node artifact tests
 4. Ensure spot-to-ondemand fallback works consistently across all backends
 5. Validate configuration to prevent misuse - both zone and region fallback only work with n_db_nodes=1
-6. Maintain backward compatibility with existing AWS tests
-7. Provide comprehensive test coverage
+6. Maintain backward compatibility with existing AWS artifact tests
+7. Provide comprehensive test coverage for artifact test scenarios
 8. Design implementation to be ready for OCI backend when cluster implementation is complete
+
+**Out of Scope**: Multi-node cluster fallback support (see Phase 8 for future considerations)
 
 ## Single-Node Limitation for Zone and Region Fallback
 
@@ -663,6 +669,79 @@ Integration testing:
 - Run full provision test suite for each backend (AWS, GCE, Azure)
 - Verify consistent behavior across all backends
 - Test with various configurations and fallback scenarios
+
+### Phase 8: Future Multi-Node Fallback Support (Not in Scope)
+
+**Status**: Future enhancement - not part of current implementation plan
+
+**Goal**: Explore how fallback features could support multi-node clusters while maintaining consistent zone/region placement for all resources
+
+#### Problem with Multi-Node Fallback
+
+The current single-node limitation exists because with multiple resources (DB nodes, loaders, monitors), we must ensure all resources land in the same zone/region to avoid:
+- Split clusters across zones (inconsistent latency, different failure domains)
+- Split clusters across regions (high latency 50-200ms+, expensive data transfer)
+- Mixed resource placement (DB in one zone, loaders in another zone)
+
+#### Potential Multi-Node Approach
+
+A future implementation could support multi-node fallback using a "provision-and-filter" strategy:
+
+**Conceptual Flow**:
+1. Attempt to provision ALL resources (n_db_nodes, n_loaders, n_monitors) in target zone
+2. On capacity failure, provision whatever VMs are available across multiple zones
+3. Analyze provisioned VMs to identify largest zone with enough capacity
+4. Filter: Keep VMs in target zone, remove VMs in other zones
+5. If target zone has insufficient capacity for requirements, retry in next zone
+6. Repeat until finding a zone that can fit all requirements
+
+**Requirements for Multi-Node Support**:
+- Track which zone each VM was provisioned in
+- Ability to terminate partially provisioned VMs
+- Logic to determine "target zone" (zone with most successful provisions or first with full capacity)
+- Cleanup logic to remove VMs outside target zone
+- Cost consideration: May provision and destroy many VMs during search
+
+**Challenges**:
+- **Cost**: Provisioning and destroying VMs costs money (minimal but non-zero)
+- **Time**: Provision-filter-retry cycles take longer than simple zone iteration
+- **Complexity**: Significantly more complex logic than single-node fallback
+- **Partial state**: Must handle cleanup of partially provisioned infrastructure
+- **Coordination**: All resource types (db, loader, monitor) must land in same zone
+
+**Alternative Approaches**:
+- **Pre-flight capacity check**: Query cloud APIs for capacity before provisioning (but no real-time capacity APIs exist)
+- **Reserved capacity**: Use cloud provider reserved capacity features (AWS ODCR, etc.)
+- **Explicit configuration**: Require users to specify exact zone for multi-node clusters
+- **Separate fallback per type**: Allow loaders/monitors to fall back independently of DB nodes (but this creates split-zone issues)
+
+#### Why Not in Current Plan
+
+This feature is NOT included in the current implementation because:
+1. **Artifact tests don't need it**: Primary use case (artifact testing) uses single nodes
+2. **Complexity vs benefit**: Implementation complexity is high for limited use cases
+3. **Cost concerns**: Provision-and-destroy cycles add unnecessary costs
+4. **Current workaround works**: Multi-node tests can specify zones explicitly or retry at test level
+5. **Spot fallback sufficient**: Spot-to-ondemand fallback works with multi-node and provides resilience
+
+#### When This Might Be Needed
+
+Future scenarios that could justify multi-node fallback:
+- High-volume CI/CD with many multi-node longevity tests
+- Frequent capacity constraints affecting longevity test pipelines
+- Need for fully automated resilience across all test types
+- Cloud providers with extreme capacity volatility
+
+#### Definition of Done (Future Phase)
+
+If this feature is implemented in the future:
+- Design document with provision-filter-retry algorithm details
+- VM cleanup logic that handles partial provisioning states
+- Cost analysis and safeguards against excessive provision-destroy cycles
+- Configuration to enable/disable multi-node fallback (default: disabled)
+- Unit tests for provision-filter logic
+- Integration tests with mock provisioning to verify zone filtering
+- Documentation explaining when to use multi-node fallback vs explicit zone config
 
 ---
 
