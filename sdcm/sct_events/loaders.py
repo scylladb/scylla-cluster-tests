@@ -109,7 +109,7 @@ class BaseYcsbStressEvent(StressEvent, abstract=True):
     pass
 
 
-class YcsbStressEvent(BaseYcsbStressEvent, abstract=True):
+class YcsbStressEvent(BaseYcsbStressEvent):
     failure: Type[StressEventProtocol]
     error: Type[StressEventProtocol]
     start: Type[StressEventProtocol]
