@@ -658,9 +658,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
         self.prepare_keyspaces_and_tables()
         self.actions_log.info("Running s-b to create schemas to avoid #11459")
-        large_partition_stress_during_upgrade = self.params.get("stress_before_upgrade")
-        sb_create_schema = self.run_stress_thread(stress_cmd=f"{large_partition_stress_during_upgrade} -duration=1m")
-        self.verify_stress_thread(sb_create_schema)
+        # Use large_partition_stress_during_upgrade for schema creation if defined
+        large_partition_stress_cmd = self.params.get("large_partition_stress_during_upgrade")
+        if large_partition_stress_cmd:
+            sb_create_schema = self.run_stress_thread(stress_cmd=f"{large_partition_stress_cmd} -duration=1m")
+            self.verify_stress_thread(sb_create_schema)
         self.fill_and_verify_db_data("BEFORE UPGRADE", pre_fill=True)
 
         # write workload during entire test
@@ -709,8 +711,12 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         # prepare write workload
         self.actions_log.info("Starting prepare write workload (n=10000000)")
-        prepare_write_stress = self.params.get("prepare_write_stress")
-        prepare_write_cs_thread_pool = self.run_stress_thread(stress_cmd=prepare_write_stress)
+        prepare_write_cs_thread_pools = self._run_all_stress_cmds(
+            [],
+            params={
+                "stress_cmd": self.params.get("prepare_write_stress"),
+            },
+        )
         self.actions_log.info("Waiting for cassandra-stress to start before upgrade")
         self.metric_has_data(
             metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}'
@@ -738,7 +744,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self.db_cluster.node_to_upgrade.check_node_health()
 
             # wait for the prepare write workload to finish
-            self.verify_stress_thread(prepare_write_cs_thread_pool)
+            for thread_pool in prepare_write_cs_thread_pools:
+                self.verify_stress_thread(thread_pool)
 
             # read workload (cl=QUORUM)
             self.actions_log.info("Starting read workload (cl=QUORUM n=10000000)")
@@ -757,8 +764,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             read_10m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
 
             self.actions_log.info("Running stress-bench large partitions workload during upgrade")
-            large_partition_stress_during_upgrade = self.params.get("stress_before_upgrade")
-            self.run_stress_thread(stress_cmd=large_partition_stress_during_upgrade)
+            large_partition_stress_during_upgrade = self.params.get("large_partition_stress_during_upgrade")
+            if large_partition_stress_during_upgrade:
+                self.run_stress_thread(stress_cmd=large_partition_stress_during_upgrade)
 
             self.actions_log.info("Waiting 60s for workloads to start before upgrade")
             time.sleep(60)
