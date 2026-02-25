@@ -189,7 +189,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         keyspace_num=1,
         prefix="",
         debug_message="",
-        save_stats=True,
     ):
         if debug_message:
             self.log.debug(debug_message)
@@ -201,16 +200,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             prefix=prefix,
             stats_aggregate_cmds=False,
         )
-        results = self.get_stress_results(queue=stress_queue, store_results=True)
-        if save_stats:
-            self.display_results(results, test_name=test_name)
-            total_ops = self._get_total_ops()
-            self.log.debug("Total ops: {}".format(total_ops))
-            return total_ops
-        return None
-
-    def _get_total_ops(self):
-        return self._stats["results"]["stats_total"]["op rate"]
+        self.get_stress_results(queue=stress_queue, store_results=True)
 
     @staticmethod
     def _clean_email_data():
@@ -390,8 +380,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         ops_without_mv = self._workload(
             stress_cmd=base_cmd_w,
             stress_num=2,
-            sub_type="write_without_mv",
             test_name=test_name,
+            sub_type="write_without_mv",
             keyspace_num=1,
             debug_message="First write cassandra-stress command: {}".format(base_cmd_w),
         )
@@ -403,8 +393,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         ops_with_mv = self._workload(
             stress_cmd=base_cmd_w,
             stress_num=2,
-            sub_type="write_with_mv",
             test_name=test_name,
+            sub_type="write_with_mv",
             keyspace_num=1,
             debug_message="Second write cassandra-stress command: {}".format(base_cmd_w),
         )
@@ -435,18 +425,17 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             stress_cmd=base_cmd_p,
             stress_num=2,
             test_name=test_name,
-            prefix="preload-",
             keyspace_num=1,
+            prefix="preload-",
             debug_message="Prepare the test, run cassandra-stress command: {}".format(base_cmd_p),
-            save_stats=False,
         )
 
         # run a read workload
         ops_without_mv = self._workload(
             stress_cmd=base_cmd_r,
             stress_num=2,
-            sub_type="read_without_mv",
             test_name=test_name,
+            sub_type="read_without_mv",
             keyspace_num=1,
             debug_message="First read cassandra-stress command: {}".format(base_cmd_r),
         )
@@ -459,18 +448,17 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 stress_cmd=base_cmd_w,
                 stress_num=2,
                 test_name=test_name,
-                prefix="preload-",
                 keyspace_num=1,
+                prefix="preload-",
                 debug_message="Prepare test before second cassandra-stress command: {}".format(base_cmd_w),
-                save_stats=False,
             )
 
         # run a read workload
         ops_with_mv = self._workload(
             stress_cmd=base_cmd_r,
             stress_num=2,
-            sub_type="read_with_mv",
             test_name=test_name,
+            sub_type="read_with_mv",
             keyspace_num=1,
             debug_message="Second read cassandra-stress command: {}".format(base_cmd_r),
         )
@@ -501,15 +489,14 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             keyspace_num=1,
             prefix="preload-",
             debug_message="Prepare the test, run cassandra-stress command: {}".format(base_cmd_p),
-            save_stats=False,
         )
 
         # run a mixed workload without MV
         ops_without_mv = self._workload(
             stress_cmd=base_cmd_m,
             stress_num=2,
-            sub_type="mixed_without_mv",
             test_name=test_name,
+            sub_type="mixed_without_mv",
             keyspace_num=1,
             debug_message="First mixed cassandra-stress command: {}".format(base_cmd_m),
         )
@@ -520,8 +507,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         ops_with_mv = self._workload(
             stress_cmd=base_cmd_p,
             stress_num=2,
-            sub_type="mixed_with_mv",
             test_name=test_name,
+            sub_type="mixed_with_mv",
             keyspace_num=1,
             debug_message="Second start of mixed cassandra-stress command: {}".format(base_cmd_p),
         )
