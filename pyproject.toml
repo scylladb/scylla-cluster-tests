@@ -135,6 +135,7 @@ pythonVersion = "3.14"
 useLibraryCodeForTypes = false
 exclude = [
     "argus/",
+    ".git/",
     "**/node_modules",
     "**/__pycache__",
     ".venv*",

@@ -68,8 +68,7 @@ repos:
         entry: env PYRIGHT_PYTHON_GLOBAL_NODE=on pyright --level error
         language: system
         types: [python]
-        pass_filenames: false
-        exclude: ^argus/.*$
+        exclude: ^(argus|\.git)/.*$
 
     -   id: update-conf-docs
         name: update-conf-docs
