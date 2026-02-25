@@ -122,11 +122,18 @@ def report_scylla_yaml_to_argus(tester):
     with node.remote_scylla_yaml() as scylla_yml:
         content = json.dumps(scylla_yml.model_dump())
         client = node.test_config.argus_client()
-        client.sct_submit_config(name="scylla_yaml", content=content)
+        try:
+            client.sct_submit_config(name="scylla_yaml", content=content)
+        except ArgusClientError:
+            LOGGER.warning("Backend exception reporting scylla.yaml to Argus.", exc_info=True)
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("General error reporting scylla yaml.", exc_info=True)
 
 
 def report_stress_command(client: ArgusSCTClient, stress_cmd: str, loader_name: str, log_path: str):
     try:
         client.add_stress_command(command=stress_cmd, log_name=Path(log_path).name, loader_name=loader_name)
     except ArgusClientError:
+        LOGGER.warning("Backend exception reporting a stress command to Argus", exc_info=True)
+    except Exception:  # noqa: BLE001
         LOGGER.warning("Unable to report stress command.", exc_info=True)
