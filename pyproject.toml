@@ -74,7 +74,7 @@ dependencies = [
 dev = [
     "pre-commit==4.0.1",
     "pycodestyle==2.13.0",
-    "pyright==1.1.408",
+    "pyright[nodejs]==1.1.408",
     "ruff==0.14.6",
     "uv-sort>=0.4.0",
 ]

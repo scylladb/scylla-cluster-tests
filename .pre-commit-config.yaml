@@ -65,7 +65,7 @@ repos:
 
     -   id: pyright
         name: pyright
-        entry: env PYRIGHT_PYTHON_GLOBAL_NODE=on pyright --level error
+        entry: pyright --level error
         language: system
         types: [python]
         exclude: ^(argus|\.git)/.*$
