@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from contextlib import ExitStack, contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from unittest.mock import MagicMock
 import packaging.version
 
 import yaml
@@ -498,6 +499,8 @@ class BaseNode(AutoSshContainerMixin):
     def _add_node_to_argus(self):
         try:
             client = self.test_config.argus_client()
+            if isinstance(client, MagicMock):
+                return
             shards = -1 if "db" in self.node_type else self.cpu_cores
             client.create_resource(
                 name=self.name,
@@ -518,6 +521,8 @@ class BaseNode(AutoSshContainerMixin):
     def update_shards_in_argus(self):
         try:
             client = self.test_config.argus_client()
+            if isinstance(client, MagicMock):
+                return
             shards = self.scylla_shards if "db" in self.node_type else self.cpu_cores
             shards = int(shards) if shards else 0
             client.update_shards_for_resource(name=self.name, new_shards=shards)
@@ -527,6 +532,8 @@ class BaseNode(AutoSshContainerMixin):
     def update_rack_info_in_argus(self, dc_name: str, rack_name: str):
         try:
             client = self.test_config.argus_client()
+            if isinstance(client, MagicMock):
+                return
             client.update_resource(
                 name=self.name, update_data={"instance_info": {"rack_name": rack_name, "dc_name": dc_name}}
             )
@@ -536,6 +543,8 @@ class BaseNode(AutoSshContainerMixin):
     def _terminate_node_in_argus(self):
         try:
             client = self.test_config.argus_client()
+            if isinstance(client, MagicMock):
+                return
             reason = self.running_nemesis if self.running_nemesis else "GracefulShutdown"
             client.terminate_resource(name=self.name, reason=reason)
         except Exception:
@@ -4031,7 +4040,9 @@ class BaseCluster:
                 storage_dir=os.path.join(self.logdir, "collected_logs"),
                 params=self.params,
             ).collect_logs()
-            self.test_config.argus_client().submit_sct_logs([LogLink(log_name=node.name, log_link=log_links[0])])
+            argus_client = self.test_config.argus_client()
+            if not isinstance(argus_client, MagicMock):
+                argus_client.submit_sct_logs([LogLink(log_name=node.name, log_link=log_links[0])])
         except Exception as exc:  # noqa: BLE001
             self.log.error("Failed to collect logs for node %s: %s", node.name, exc)
         with DbNodeLogger(self.nodes, "terminate node", target_node=node):
