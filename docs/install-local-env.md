@@ -184,20 +184,105 @@ If they didn't for example in VS Code, you can:
 - [Python Packaging Guide](https://packaging.python.org/)
 
 
-# SCT test profiling (OUTDATED)
--
-- set environment variable "SCT_ENABLE_TEST_PROFILING" to 1, or add "enable_test_profiling: true" into yaml file
-- run test
+# Profiling SCT Code
 
-After test is done there are following ways to use collected stats:
-- `cat ~/latest/profile.stats/stats.txt`
-- `snakeviz ~/latest/profile.stats/stats.bin`
-- `tuna ~/latest/profile.stats/stats.bin`
-- `gprof2dot -f pstats ~/latest/profile.stats/stats.bin | dot -Tpng -o ~/latest/profile.stats/stats.png`
+Use standard Python profiling tools to analyze SCT performance. Below are the recommended approaches.
 
-Another way to profile is py-spy:
-- `pip install py-spy`
-Run recording:
-- `py-spy record -s -o ./py-spy.svg -- python3 sct.py ...`
-Run 'top' mode:
-- `py-spy top -s -- python3 sct.py ...`
+## py-spy (Recommended for most use cases)
+
+[py-spy](https://github.com/benfred/py-spy) is a sampling profiler that works without modifying code or restarting processes. It has minimal overhead and supports multithreaded applications.
+
+Install:
+```bash
+pip install py-spy
+```
+
+### Record a flame graph
+
+Generate an SVG flame graph of an SCT test run:
+```bash
+py-spy record -s -o ./profile.svg -- python3 sct.py run-test longevity_test.LongevityTest.test_custom_time --backend docker --config test-cases/PR-provision-test.yaml
+```
+
+Open `profile.svg` in a browser to explore the flame graph interactively.
+
+### Live top-like view
+
+Monitor a running test in real time:
+```bash
+py-spy top -s -- python3 sct.py run-test longevity_test.LongevityTest.test_custom_time --backend docker --config test-cases/PR-provision-test.yaml
+```
+
+### Attach to a running process
+
+If a test is already running, attach to it by PID:
+```bash
+py-spy record -s -o ./profile.svg --pid <PID>
+py-spy top -s --pid <PID>
+```
+
+### Generate speedscope format
+
+For use with [speedscope.app](https://www.speedscope.app/):
+```bash
+py-spy record -s -o ./profile.speedscope.json --format speedscope -- python3 sct.py ...
+```
+
+## cProfile + snakeviz (stdlib deterministic profiler)
+
+Python's built-in `cProfile` is a deterministic profiler useful for measuring exact call counts and cumulative time.
+
+Run with cProfile:
+```bash
+python3 -m cProfile -o ./profile.stats sct.py run-test ...
+```
+
+Visualize the results with [snakeviz](https://jiffyclub.github.io/snakeviz/):
+```bash
+pip install snakeviz
+snakeviz ./profile.stats
+```
+
+Or generate a call graph with [gprof2dot](https://github.com/jrfonseca/gprof2dot):
+```bash
+pip install gprof2dot
+gprof2dot -f pstats ./profile.stats | dot -Tpng -o ./profile.png
+```
+
+## scalene (CPU + memory + GPU profiler)
+
+[Scalene](https://github.com/plasma-umass/scalene) profiles CPU time, memory usage, and GPU usage with line-level granularity.
+
+Install and run:
+```bash
+pip install scalene
+scalene sct.py run-test ...
+```
+
+## viztracer (timeline trace visualization)
+
+[VizTracer](https://github.com/gaogaotiantian/viztracer) produces timeline traces viewable in Chrome's `chrome://tracing` or [Perfetto](https://ui.perfetto.dev/).
+
+```bash
+pip install viztracer
+viztracer --tracer_entries 10000000 -o ./result.json -- python3 sct.py run-test ...
+vizviewer ./result.json
+```
+
+## memray (memory profiler)
+
+[Memray](https://github.com/bloomberg/memray) tracks memory allocations in detail, useful for debugging memory leaks.
+
+```bash
+pip install memray
+memray run -o ./memray.bin python3 sct.py run-test ...
+memray flamegraph ./memray.bin -o ./memray.html
+```
+
+## Tips
+
+- **py-spy** is the best general-purpose choice: zero-code-modification, low overhead, works on running processes.
+- Use **cProfile** when you need deterministic call counts rather than statistical sampling.
+- Use **scalene** for combined CPU + memory profiling in a single run.
+- Use **memray** specifically for memory leak investigations.
+- For long-running SCT tests, prefer attaching to a running process (`py-spy --pid`) rather than wrapping the launch command.
