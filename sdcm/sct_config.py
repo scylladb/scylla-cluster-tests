@@ -3658,6 +3658,22 @@ class SCTConfiguration(dict):
         if key in self.multi_region_params and isinstance(ret_val, list):
             ret_val = " ".join(ret_val)
 
+        # Derive mgmt_docker_image from manager version for Docker backend if not explicitly set
+        if key == "mgmt_docker_image" and super().get("cluster_backend") == "docker":
+            if not ret_val:
+                # Build image name from scylla_mgmt_agent_version or manager_version
+                # scylla_mgmt_agent_version is typically full semver (e.g., "3.8.0")
+                # manager_version is major.minor only (e.g., "3.8")
+                agent_version = super().get("scylla_mgmt_agent_version")
+                if agent_version:
+                    ret_val = f"scylladb/scylla-manager:{agent_version}"
+                else:
+                    # Fallback: append .0 to manager_version for Docker image tag
+                    # (manager_version "3.8" becomes image tag "3.8.0")
+                    manager_version = super().get("manager_version")
+                    if manager_version:
+                        ret_val = f"scylladb/scylla-manager:{manager_version}.0"
+
         return ret_val
 
     def _dotted_get(self, key: str):
@@ -4364,8 +4380,8 @@ class SCTConfiguration(dict):
                         raise ValueError(f"Scylla-bench command {cmd} doesn't have parameter -workload")
 
     def _validate_docker_backend_parameters(self):
-        if self.get("use_mgmt"):
-            raise ValueError("Scylla Manager is not supported for docker backend")
+        # Scylla Manager is now supported on Docker backend via dedicated container
+        pass
 
     def _verify_rackaware_configuration(self):
         if not self.get("rack_aware_loader"):
