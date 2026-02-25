@@ -1,0 +1,124 @@
+test_duration: 1080 # ~5h prepare + 10h mixed + 3h margin
+
+n_db_nodes: "6 6 6"
+instance_type_db: 'i4i.xlarge'
+n_loaders: "1 1 1"
+instance_type_loader: 'c6i.4xlarge'
+region_aware_loader: true
+
+user_prefix: 'reproduce-issue'
+append_scylla_yaml:
+  # NOTE: per table metrics on the big count of tables has terrible performance
+  # See: https://github.com/scylladb/scylla-monitoring/issues/2429
+  # So, disable per table metrics
+  enable_node_aggregated_table_metrics: false
+
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'GrowShrinkClusterNemesis'
+nemesis_seed: '777'
+nemesis_interval: 15
+nemesis_add_node_cnt: 3
+parallel_node_operations: true
+
+# NOTE: prepare phase fails without nemesis. See https://github.com/scylladb/scylladb/issues/27566
+#       So, it is better to keep prepare phase without nemesis to cover the bug case.
+nemesis_during_prepare: false
+# NOTE: skip enospc https://github.com/scylladb/scylla-cluster-tests/issues/12989
+# NOTE: disable mgmt because we run disruptive nemesis with data validation.
+# And if we do repairs, it takes too long making data validation exceed retries.
+use_mgmt: false
+
+root_disk_size_monitor: 120
+root_disk_size_runner: 120
+
+round_robin: true
+# NOTE: use 1 latte thread with concurrency=12 to avoid the following bug:
+#       https://github.com/scylladb/scylladb/issues/27551
+prepare_write_cmd:
+  - >-
+    latte run --tag create-schema -f create_schema
+    --threads=1 --concurrency=12 --connections=1
+    --warmup=0 --retries=2 --retry-interval=10s --request-timeout 300 --sampling 1s
+    -d 150
+    -P keyspace_count=3
+    -P table_count_per_keyspace=50
+    -P enable_tablets=false
+    -P create_index=true
+    -P replication_factor=3
+    -P compaction_strategy="\"IncrementalCompactionStrategy\""
+    -P sstable_compression="\"LZ4Compressor\""
+    data_dir/latte/schema_scale.rn
+prepare_verify_cmd:
+  - >-
+    latte run --tag populate-data -f write
+    --threads=14 --concurrency=10 --connections=10 --rate=2500
+    --warmup=0 --retries=10 --retry-interval=5s,120s --request-timeout 60 --sampling 5s
+    -d 1000000
+    -P keyspace_count=3
+    -P table_count_per_keyspace=50
+    -P row_count_per_table=20000
+    -P blob_col_size=128
+    -P text_col_size=128
+    -P gauss_mean=0
+    -P gauss_stddev=0
+    -P table_group_size=50
+    -P table_shift_count=0
+    -P table_shift_interval_s=0
+    data_dir/latte/schema_scale.rn
+stress_cmd:
+  - >-
+    latte run --tag mixed -f write:1 -f read:5
+    --threads=14 --concurrency=4 --connections=10  --rate=2500
+    --warmup=0 --retries=50 --retry-interval=1s,120s --request-timeout 300 --sampling 5s
+    --validation-strategy=ignore
+    -d 3600s
+    -P keyspace_count=3
+    -P table_count_per_keyspace=50
+    -P row_count_per_table=20000
+    -P blob_col_size=128
+    -P text_col_size=128
+    -P gauss_mean=100000
+    -P gauss_stddev=20000
+    -P table_group_size=50
+    -P table_shift_count=1
+    -P table_shift_interval_s=5
+    -P data_validation=true
+    data_dir/latte/schema_scale.rn
+
+  - >-
+    latte run --tag mixed -f write:1 -f read:5
+    --threads=14 --concurrency=4 --connections=1 --rate=2500
+    --warmup=0 --retries=50 --retry-interval=1s,120s --request-timeout 300 --sampling 5s
+    --validation-strategy=ignore
+    -d 3600s
+    -P keyspace_count=3
+    -P table_count_per_keyspace=50
+    -P row_count_per_table=20000
+    -P blob_col_size=128
+    -P text_col_size=128
+    -P gauss_mean=1000000
+    -P gauss_stddev=20000
+    -P table_group_size=50
+    -P table_shift_count=1
+    -P table_shift_interval_s=5
+    -P data_validation=true
+    data_dir/latte/schema_scale.rn
+
+  - >-
+    latte run --tag mixed -f write:1 -f read:5
+    --threads=14 --concurrency=4 --connections=1
+    --warmup=0 --retries=50 --retry-interval=1s,120s --request-timeout 300 --sampling 5s
+    --validation-strategy=ignore
+    -d 36000s
+    -P keyspace_count=3
+    -P table_count_per_keyspace=50
+    -P row_count_per_table=20000
+    -P blob_col_size=128
+    -P text_col_size=128
+    -P gauss_mean=10000000
+    -P gauss_stddev=20000
+    -P table_group_size=50
+    -P table_shift_count=1
+    -P table_shift_interval_s=5
+    -P data_validation=true
+    data_dir/latte/schema_scale.rn
