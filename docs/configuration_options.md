@@ -989,7 +989,7 @@ the aws_secret_access_key that would be used for alternator
 
 ## **alternator_loadbalancing** / SCT_ALTERNATOR_LOADBALANCING
 
-If true, enable client-side load balancing across alternator nodes
+If true, enable native load balancing for alternator
 
 **default:** N/A
 
@@ -998,7 +998,7 @@ If true, enable client-side load balancing across alternator nodes
 
 ## **alternator_trust_all_certificates** / SCT_ALTERNATOR_TRUST_ALL_CERTIFICATES
 
-If true, trust all TLS certificates when connecting to alternator (useful for self-signed certs)
+If true, trust all TLS certificates for alternator connections (for testing with self-signed certs)
 
 **default:** True
 

@@ -960,13 +960,13 @@ class SCTConfiguration(dict):
             name="alternator_loadbalancing",
             env="SCT_ALTERNATOR_LOADBALANCING",
             type=boolean,
-            help="If true, enable client-side load balancing across alternator nodes",
+            help="If true, enable native load balancing for alternator",
         ),
         dict(
             name="alternator_trust_all_certificates",
             env="SCT_ALTERNATOR_TRUST_ALL_CERTIFICATES",
             type=boolean,
-            help="If true, trust all TLS certificates when connecting to alternator (useful for self-signed certs)",
+            help="If true, trust all TLS certificates for alternator connections (for testing with self-signed certs)",
         ),
         dict(
             name="region_aware_loader",
