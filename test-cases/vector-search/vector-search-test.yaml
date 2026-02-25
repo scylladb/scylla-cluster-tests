@@ -31,4 +31,8 @@ n_vector_store_nodes: 1
 n_loaders: 1
 n_db_nodes: 1
 
+download_from_s3:
+  - data_dir/latte/vector_search:
+     - 's3://vector-search-sct/'
+
 # validate_large_collections: true

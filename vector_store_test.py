@@ -44,101 +44,101 @@ from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
 
 class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     def setUp(self):
-        self.log.info("QWERTY")
-        
         super().setUp()
 
-        # This ignores large_data warning messages "Writing large collection" for large collections to prevent
-        # creating SCT Events from these warnings.
-        # During large collections test thousands of warnings are being created.
-        self.validate_large_collections = self.params.get("validate_large_collections")
-        if self.validate_large_collections:
-            self.stack = contextlib.ExitStack()
-            self.stack.enter_context(ignore_large_collection_warning())
-            self.stack.enter_context(ignore_max_memory_for_unlimited_query_soft_limit())
+    #     # This ignores large_data warning messages "Writing large collection" for large collections to prevent
+    #     # creating SCT Events from these warnings.
+    #     # During large collections test thousands of warnings are being created.
+    #     self.validate_large_collections = self.params.get("validate_large_collections")
+    #     if self.validate_large_collections:
+    #         self.stack = contextlib.ExitStack()
+    #         self.stack.enter_context(ignore_large_collection_warning())
+    #         self.stack.enter_context(ignore_max_memory_for_unlimited_query_soft_limit())
 
-    default_params = {"timeout": 650000}
+    # default_params = {"timeout": 650000}
 
-    def _get_tombstone_gc_verification_params(self) -> dict:
-        self.log.info("QWERTY")
+    # def _get_tombstone_gc_verification_params(self) -> dict:
+    #     self.log.info("QWERTY")
 
-        params = {}
-        if tombstone_params := self.params.get("run_tombstone_gc_verification"):
-            params = json.loads(tombstone_params)
-            self.log.info("Tombstone GC verification params are: %s", params)
-        return params
+    #     params = {}
+    #     if tombstone_params := self.params.get("run_tombstone_gc_verification"):
+    #         params = json.loads(tombstone_params)
+    #         self.log.info("Tombstone GC verification params are: %s", params)
+    #     return params
 
-    def _get_scan_operation_params(self) -> list[ThreadParams]:
-        self.log.info("QWERTY")
+    # def _get_scan_operation_params(self) -> list[ThreadParams]:
+    #     self.log.info("QWERTY")
 
-        params = self.params.get("run_fullscan")
-        self.log.info("Scan operation params are: %s", params)
+    #     params = self.params.get("run_fullscan")
+    #     self.log.info("Scan operation params are: %s", params)
 
-        sla_role_name, sla_role_password = None, None
-        if fullscan_role := getattr(self, "fullscan_role", None):
-            sla_role_name = fullscan_role.name
-            sla_role_password = fullscan_role.password
-        scan_operation_params_list = []
-        for item in params:
-            item_dict = json.loads(item)
-            scan_operation_params_list.append(
-                ThreadParams(
-                    db_cluster=self.db_cluster,
-                    termination_event=self.db_cluster.nemesis_termination_event,
-                    user=sla_role_name,
-                    user_password=sla_role_password,
-                    duration=self.get_duration(item_dict.get("duration")),
-                    **item_dict,
-                )
-            )
+    #     sla_role_name, sla_role_password = None, None
+    #     if fullscan_role := getattr(self, "fullscan_role", None):
+    #         sla_role_name = fullscan_role.name
+    #         sla_role_password = fullscan_role.password
+    #     scan_operation_params_list = []
+    #     for item in params:
+    #         item_dict = json.loads(item)
+    #         scan_operation_params_list.append(
+    #             ThreadParams(
+    #                 db_cluster=self.db_cluster,
+    #                 termination_event=self.db_cluster.nemesis_termination_event,
+    #                 user=sla_role_name,
+    #                 user_password=sla_role_password,
+    #                 duration=self.get_duration(item_dict.get("duration")),
+    #                 **item_dict,
+    #             )
+    #         )
 
-            self.log.info("Scan operation scan_operation_params_list are: %s", scan_operation_params_list)
-        return scan_operation_params_list
+    #         self.log.info("Scan operation scan_operation_params_list are: %s", scan_operation_params_list)
+    #     return scan_operation_params_list
 
-    @optional_stage("prepare_write")
-    def run_pre_create_schema(self):
-        self.log.info("QWERTY")
+    # @optional_stage("prepare_write")
+    # def run_pre_create_schema(self):
+    #     self.log.info("QWERTY")
 
-        pre_create_schema = self.params.get("pre_create_schema")
-        keyspace_num = self.params.get("keyspace_num")
-        if pre_create_schema:
-            self._pre_create_schema(
-                keyspace_num, scylla_encryption_options=self.params.get("scylla_encryption_options")
-            )
+    #     pre_create_schema = self.params.get("pre_create_schema")
+    #     keyspace_num = self.params.get("keyspace_num")
+    #     if pre_create_schema:
+    #         self._pre_create_schema(
+    #             keyspace_num, scylla_encryption_options=self.params.get("scylla_encryption_options")
+    #         )
 
-    @optional_stage("prepare_write")
-    def run_pre_create_keyspace(self):
-        self.log.info("QWERTY")
+    # @optional_stage("prepare_write")
+    # def run_pre_create_keyspace(self):
+    #     self.log.info("QWERTY")
 
-        if self.params.get("pre_create_keyspace"):
-            self._pre_create_keyspace()
+    #     if self.params.get("pre_create_keyspace"):
+    #         self._pre_create_keyspace()
 
-    @optional_stage("main_load")
-    def _run_validate_large_collections_in_system(self, node, table="table_with_large_collection"):
-        self.log.info("QWERTY")
+    # @optional_stage("main_load")
+    # def _run_validate_large_collections_in_system(self, node, table="table_with_large_collection"):
+    #     self.log.info("QWERTY")
 
-        self.log.info("Verifying large collections in system tables on node: {}".format(node))
-        with self.db_cluster.cql_connection_exclusive(node=node) as session:
-            query = (
-                "SELECT * from system.large_cells WHERE keyspace_name='large_collection_test'"
-                f" AND table_name='{table}' ALLOW FILTERING"
-            )
-            statement = SimpleStatement(query, fetch_size=10)
-            data = list(session.execute(statement))
-            if not data:
-                InfoEvent("Did not find expected row in system.large_cells", severity=Severity.ERROR)
+    #     self.log.info("Verifying large collections in system tables on node: {}".format(node))
+    #     with self.db_cluster.cql_connection_exclusive(node=node) as session:
+    #         query = (
+    #             "SELECT * from system.large_cells WHERE keyspace_name='large_collection_test'"
+    #             f" AND table_name='{table}' ALLOW FILTERING"
+    #         )
+    #         statement = SimpleStatement(query, fetch_size=10)
+    #         data = list(session.execute(statement))
+    #         if not data:
+    #             InfoEvent("Did not find expected row in system.large_cells", severity=Severity.ERROR)
 
-    @optional_stage("main_load")
-    def _run_validate_large_collections_warning_in_logs(self, node):
-        self.log.info("QWERTY")
+    # @optional_stage("main_load")
+    # def _run_validate_large_collections_warning_in_logs(self, node):
+    #     self.log.info("QWERTY")
 
-        self.log.info("Verifying warning for large collections in logs on node: {}".format(node))
-        msg = "Writing large collection"
-        res = list(node.follow_system_log(patterns=[msg], start_from_beginning=True))
-        if not res:
-            InfoEvent("Did not find expected log message warning: {}".format(msg), severity=Severity.ERROR)
+    #     self.log.info("Verifying warning for large collections in logs on node: {}".format(node))
+    #     msg = "Writing large collection"
+    #     res = list(node.follow_system_log(patterns=[msg], start_from_beginning=True))
+    #     if not res:
+    #         InfoEvent("Did not find expected log message warning: {}".format(msg), severity=Severity.ERROR)
 
     def test_noop(self):  # noqa: PLR0914
+        self.download_artifacts_from_s3()
+
         self.log.info("QWERTY QWERTY QWERTY")
 
     # def test_batch_custom_time(self):
@@ -317,122 +317,122 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     #         for stress in stress_queue:
     #             self.verify_stress_thread(stress)
 
-    @property
-    def all_node_ips_for_stress_command(self):
-        return f" -node {','.join([n.cql_address for n in self.db_cluster.data_nodes])}"
+    # @property
+    # def all_node_ips_for_stress_command(self):
+    #     return f" -node {','.join([n.cql_address for n in self.db_cluster.data_nodes])}"
 
-    @staticmethod
-    def _get_columns_num_of_single_stress(single_stress_cmd):
-        self.log.info("QWERTY")
+    # @staticmethod
+    # def _get_columns_num_of_single_stress(single_stress_cmd):
+    #     self.log.info("QWERTY")
 
-        if "-col" not in single_stress_cmd:
-            return None
-        col_num = None
-        params_list = single_stress_cmd.split()
-        col_params_list = []
-        for param in params_list[params_list.index("-col") + 1 :]:
-            col_params_list.append(param.strip("'"))
-            if param.endswith("'"):
-                break
-        for param in col_params_list:
-            if param.startswith("n="):
-                col_num = int(re.findall(r"\b\d+\b", param)[0])
-                break
-        return col_num
+    #     if "-col" not in single_stress_cmd:
+    #         return None
+    #     col_num = None
+    #     params_list = single_stress_cmd.split()
+    #     col_params_list = []
+    #     for param in params_list[params_list.index("-col") + 1 :]:
+    #         col_params_list.append(param.strip("'"))
+    #         if param.endswith("'"):
+    #             break
+    #     for param in col_params_list:
+    #         if param.startswith("n="):
+    #             col_num = int(re.findall(r"\b\d+\b", param)[0])
+    #             break
+    #     return col_num
 
-    def _get_prepare_write_cmd_columns_num(self):
-        self.log.info("QWERTY")
+    # def _get_prepare_write_cmd_columns_num(self):
+    #     self.log.info("QWERTY")
 
-        prepare_write_cmd = self.params.get("prepare_write_cmd")
-        if not prepare_write_cmd:
-            return None
-        if isinstance(prepare_write_cmd, str):
-            prepare_write_cmd = [prepare_write_cmd]
-        return max([self._get_columns_num_of_single_stress(single_stress_cmd=stress) for stress in prepare_write_cmd])
+    #     prepare_write_cmd = self.params.get("prepare_write_cmd")
+    #     if not prepare_write_cmd:
+    #         return None
+    #     if isinstance(prepare_write_cmd, str):
+    #         prepare_write_cmd = [prepare_write_cmd]
+    #     return max([self._get_columns_num_of_single_stress(single_stress_cmd=stress) for stress in prepare_write_cmd])
 
-    def _pre_create_schema(self, keyspace_num=1, scylla_encryption_options=None):
-        """
-        For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
-        cassandra-stress.
-        """
+    # def _pre_create_schema(self, keyspace_num=1, scylla_encryption_options=None):
+    #     """
+    #     For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
+    #     cassandra-stress.
+    #     """
 
-        self.log.info("QWERTY")
+    #     self.log.info("QWERTY")
 
-        self.log.debug("Pre Creating Schema for c-s with {} keyspaces".format(keyspace_num))
-        compaction_strategy = self.params.get("compaction_strategy")
-        sstable_size = self.params.get("sstable_size")
-        for i in range(1, keyspace_num + 1):
-            keyspace_name = "keyspace{}".format(i)
-            self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
-            self.log.debug("{} Created".format(keyspace_name))
-            col_num = self._get_prepare_write_cmd_columns_num() or 5
-            columns = {}
-            for col_idx in range(col_num):
-                cs_key = '"C' + str(col_idx) + '"'
-                columns[cs_key] = "blob"
-            self.create_table(
-                name="standard1",
-                keyspace_name=keyspace_name,
-                key_type="blob",
-                read_repair=0.0,
-                columns=columns,
-                scylla_encryption_options=scylla_encryption_options,
-                compaction=compaction_strategy,
-                sstable_size=sstable_size,
-            )
+    #     self.log.debug("Pre Creating Schema for c-s with {} keyspaces".format(keyspace_num))
+    #     compaction_strategy = self.params.get("compaction_strategy")
+    #     sstable_size = self.params.get("sstable_size")
+    #     for i in range(1, keyspace_num + 1):
+    #         keyspace_name = "keyspace{}".format(i)
+    #         self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
+    #         self.log.debug("{} Created".format(keyspace_name))
+    #         col_num = self._get_prepare_write_cmd_columns_num() or 5
+    #         columns = {}
+    #         for col_idx in range(col_num):
+    #             cs_key = '"C' + str(col_idx) + '"'
+    #             columns[cs_key] = "blob"
+    #         self.create_table(
+    #             name="standard1",
+    #             keyspace_name=keyspace_name,
+    #             key_type="blob",
+    #             read_repair=0.0,
+    #             columns=columns,
+    #             scylla_encryption_options=scylla_encryption_options,
+    #             compaction=compaction_strategy,
+    #             sstable_size=sstable_size,
+    #         )
 
-    def _pre_create_templated_user_schema(self, batch_start=None, batch_end=None):
-        self.log.info("QWERTY")
+    # def _pre_create_templated_user_schema(self, batch_start=None, batch_end=None):
+    #     self.log.info("QWERTY")
 
-        user_profile_table_count = self.params.get("user_profile_table_count") or 0
-        cs_user_profiles = self.params.get("cs_user_profiles")
-        # read user-profile
-        for profile_file in cs_user_profiles:
-            with open(sct_abs_path(profile_file), encoding="utf-8") as fobj:
-                profile_yaml = yaml.safe_load(fobj)
-            keyspace_definition = profile_yaml["keyspace_definition"]
-            keyspace_name = profile_yaml["keyspace"]
-            table_template = string.Template(profile_yaml["table_definition"])
+    #     user_profile_table_count = self.params.get("user_profile_table_count") or 0
+    #     cs_user_profiles = self.params.get("cs_user_profiles")
+    #     # read user-profile
+    #     for profile_file in cs_user_profiles:
+    #         with open(sct_abs_path(profile_file), encoding="utf-8") as fobj:
+    #             profile_yaml = yaml.safe_load(fobj)
+    #         keyspace_definition = profile_yaml["keyspace_definition"]
+    #         keyspace_name = profile_yaml["keyspace"]
+    #         table_template = string.Template(profile_yaml["table_definition"])
 
-            with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
-                # since we are using connection while nemesis is running (and we have more then 5000 tables in this
-                # use case), we need a bigger timeout here to keep the following CQL commands from failing
-                session.default_timeout = 60.0 * 5
-                try:
-                    session.execute(keyspace_definition)
-                except AlreadyExists:
-                    self.log.debug("keyspace [{}] exists".format(keyspace_name))
+    #         with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
+    #             # since we are using connection while nemesis is running (and we have more then 5000 tables in this
+    #             # use case), we need a bigger timeout here to keep the following CQL commands from failing
+    #             session.default_timeout = 60.0 * 5
+    #             try:
+    #                 session.execute(keyspace_definition)
+    #             except AlreadyExists:
+    #                 self.log.debug("keyspace [{}] exists".format(keyspace_name))
 
-                if batch_start is not None and batch_end is not None:
-                    table_range = range(batch_start, batch_end)
-                else:
-                    table_range = range(user_profile_table_count)
-                self.log.debug("Pre Creating Schema for c-s with {} user tables".format(user_profile_table_count))
-                for i in table_range:
-                    table_name = "table{}".format(i)
-                    query = table_template.substitute(table_name=table_name)
-                    try:
-                        session.execute(query)
-                    except AlreadyExists:
-                        self.log.debug("table [{}] exists".format(table_name))
-                    self.log.debug("{} Created".format(table_name))
+    #             if batch_start is not None and batch_end is not None:
+    #                 table_range = range(batch_start, batch_end)
+    #             else:
+    #                 table_range = range(user_profile_table_count)
+    #             self.log.debug("Pre Creating Schema for c-s with {} user tables".format(user_profile_table_count))
+    #             for i in table_range:
+    #                 table_name = "table{}".format(i)
+    #                 query = table_template.substitute(table_name=table_name)
+    #                 try:
+    #                     session.execute(query)
+    #                 except AlreadyExists:
+    #                     self.log.debug("table [{}] exists".format(table_name))
+    #                 self.log.debug("{} Created".format(table_name))
 
-                    for definition in profile_yaml.get("extra_definitions", []):
-                        query = string.Template(definition).substitute(table_name=table_name)
-                        try:
-                            session.execute(query)
-                        except (AlreadyExists, InvalidRequest) as exc:
-                            self.log.debug("extra definition for [{}] exists [{}]".format(table_name, str(exc)))
+    #                 for definition in profile_yaml.get("extra_definitions", []):
+    #                     query = string.Template(definition).substitute(table_name=table_name)
+    #                     try:
+    #                         session.execute(query)
+    #                     except (AlreadyExists, InvalidRequest) as exc:
+    #                         self.log.debug("extra definition for [{}] exists [{}]".format(table_name, str(exc)))
 
-    def _flush_all_nodes(self):
-        self.log.info("QWERTY")
+    # def _flush_all_nodes(self):
+    #     self.log.info("QWERTY")
 
-        """
-        This function will connect all db nodes in the cluster and run "nodetool flush" command.
-        :return:
-        """
-        for node in self.db_cluster.nodes:
-            node.run_nodetool("flush")
+    #     """
+    #     This function will connect all db nodes in the cluster and run "nodetool flush" command.
+    #     :return:
+    #     """
+    #     for node in self.db_cluster.nodes:
+    #         node.run_nodetool("flush")
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
@@ -453,37 +453,37 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         )
         return email_data
 
-    def create_templated_user_stress_params(self, idx, cs_profile) -> List[Dict]:
-        self.log.info("QWERTY")
+    # def create_templated_user_stress_params(self, idx, cs_profile) -> List[Dict]:
+    #     self.log.info("QWERTY")
 
-        params_list = []
-        cs_duration = self.params.get("cs_duration")
+    #     params_list = []
+    #     cs_duration = self.params.get("cs_duration")
 
-        with open(cs_profile, encoding="utf-8") as pconf:
-            cont = pconf.readlines()
-            pconf.seek(0)
-            template = string.Template(pconf.read())
-            prefix, suffix = os.path.splitext(os.path.basename(cs_profile))
-            table_name = "table%s" % idx
+    #     with open(cs_profile, encoding="utf-8") as pconf:
+    #         cont = pconf.readlines()
+    #         pconf.seek(0)
+    #         template = string.Template(pconf.read())
+    #         prefix, suffix = os.path.splitext(os.path.basename(cs_profile))
+    #         table_name = "table%s" % idx
 
-            with tempfile.NamedTemporaryFile(
-                mode="w+", prefix=prefix, suffix=suffix, delete=False, encoding="utf-8"
-            ) as file_obj:
-                output = template.substitute(table_name=table_name)
-                file_obj.write(output)
-                profile_dst = file_obj.name
+    #         with tempfile.NamedTemporaryFile(
+    #             mode="w+", prefix=prefix, suffix=suffix, delete=False, encoding="utf-8"
+    #         ) as file_obj:
+    #             output = template.substitute(table_name=table_name)
+    #             file_obj.write(output)
+    #             profile_dst = file_obj.name
 
-            # collect stress command from the comment in the end of the profile yaml
-            # example:
-            # cassandra-stress user profile={} cl=QUORUM 'ops(insert=1)' duration={} -rate threads=100 -pop 'dist=gauss(0..1M)'
-            for cmd in [line.lstrip("#").strip() for line in cont if line.find("cassandra-stress") > 0]:
-                # Use a conditional tuple to handle optional formatting arguments for c-s duration parameter.
-                # For example, without a duration: cassandra-stress user profile={} 'ops(insert=1)' cl=QUORUM n=2572262 -rate threads=1
-                # Or with a duration: cassandra-stress user profile={} 'ops(insert=1)' cl=QUORUM duration={} -rate threads=1
-                args = (profile_dst, cs_duration) if cs_duration else (profile_dst,)
-                stress_cmd = cmd.format(*args)
-                params = {"stress_cmd": stress_cmd, "profile": profile_dst}
-                self.log.debug("Stress cmd: {}".format(stress_cmd))
-                params_list.append(params)
+    #         # collect stress command from the comment in the end of the profile yaml
+    #         # example:
+    #         # cassandra-stress user profile={} cl=QUORUM 'ops(insert=1)' duration={} -rate threads=100 -pop 'dist=gauss(0..1M)'
+    #         for cmd in [line.lstrip("#").strip() for line in cont if line.find("cassandra-stress") > 0]:
+    #             # Use a conditional tuple to handle optional formatting arguments for c-s duration parameter.
+    #             # For example, without a duration: cassandra-stress user profile={} 'ops(insert=1)' cl=QUORUM n=2572262 -rate threads=1
+    #             # Or with a duration: cassandra-stress user profile={} 'ops(insert=1)' cl=QUORUM duration={} -rate threads=1
+    #             args = (profile_dst, cs_duration) if cs_duration else (profile_dst,)
+    #             stress_cmd = cmd.format(*args)
+    #             params = {"stress_cmd": stress_cmd, "profile": profile_dst}
+    #             self.log.debug("Stress cmd: {}".format(stress_cmd))
+    #             params_list.append(params)
 
-        return params_list
+    #     return params_list
