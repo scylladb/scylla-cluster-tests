@@ -65,7 +65,7 @@ repos:
 
     -   id: pyright
         name: pyright
-        entry: pyright --level error
+        entry: env PYRIGHT_PYTHON_GLOBAL_NODE=on pyright --level error
         language: system
         types: [python]
         pass_filenames: false
