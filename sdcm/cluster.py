@@ -4930,25 +4930,29 @@ class BaseScyllaCluster:
                 node.config_setup(append_scylla_args=self.get_scylla_args())
                 node.restart_scylla()
 
-    def enable_client_encrypt(self):
-        create_ca(self.test_config.tester_obj().localhost)
-        for node in self.nodes:
-            node.create_node_certificate(
-                cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
-                cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
-                csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR,
-            )
-            # Create client facing node certificate, for client-to-node communication
-            node.create_node_certificate(
-                node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY
-            )
-            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
-                shutil.copy(src, node.ssl_conf_dir)
+    def enable_client_encrypt(self, create_certificates: bool = True):
+        if create_certificates:
+            create_ca(self.test_config.tester_obj().localhost)
+            for node in self.nodes:
+                node.create_node_certificate(
+                    cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
+                    cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
+                    csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR,
+                )
+                # Create client facing node certificate, for client-to-node communication
+                node.create_node_certificate(
+                    node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT,
+                    node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY,
+                )
+                for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+                    shutil.copy(src, node.ssl_conf_dir)
+
         self.log.debug("Enabling client encryption on nodes")
         with self.patch_params() as params:
             params["client_encrypt"] = True
 
     def disable_client_encrypt(self):
+        self.log.debug("Disabling client encryption on Scylla nodes")
         with self.patch_params() as params:
             params["client_encrypt"] = False
 

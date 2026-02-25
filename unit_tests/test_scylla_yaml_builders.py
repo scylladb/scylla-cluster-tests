@@ -531,6 +531,13 @@ class DummyNode(BaseNode):
     def is_nonroot_install(self):
         return False
 
+    @property
+    def is_client_encrypt(self):
+        client_encrypt = self._scylla_yaml.client_encryption_options
+        if client_encrypt is None:
+            return False
+        return client_encrypt.enabled
+
     @system_log.setter
     def system_log(self, log):
         self._system_log = log
