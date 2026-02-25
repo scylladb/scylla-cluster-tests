@@ -34,9 +34,10 @@ use latte::*;
 const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
 const COMPRESSION = latte::param!("compression", "");
 const COMPACTION_STRATEGY = latte::param!("compaction_strategy", "");
+const SPECULATIVE_RETRY = latte::param!("speculative_retry", "");
 const KEYSPACE = latte::param!("keyspace", "keyspace1");
 const TABLE = latte::param!("table", "standard1");
-const COUNTER_TABLE = latte::param!("counter_table", "counter1");
+const COUNTER_TABLE = latte::param!("counter_table", "");
 const KEY_SIZE = latte::param!("key_size", 16);
 const COLUMN_SIZE = latte::param!("column_size", 128);
 const COLUMN_COUNT = latte::param!("column_count", 8);
@@ -84,24 +85,33 @@ pub async fn schema(db) {
         // Result: WITH COMPACTION = { 'class': 'IncrementalCompactionStrategy' }
         compaction += " AND COMPACTION = { 'class' : '" + COMPACTION_STRATEGY + "' }"
     }
+    let speculative_retry = "";
+    if !SPECULATIVE_RETRY.is_empty() {
+        // Result: WITH speculative_retry = "NONE"
+        speculative_retry += " AND speculative_retry = '" + SPECULATIVE_RETRY + "' "
+    }
     let comment = " AND comment='Created by latte'";
 
     // Create blob table
     db.execute(
         `CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE}` +
-        `(key blob PRIMARY KEY${columns_def}${compression}${compaction}${comment}`
+        `(key blob PRIMARY KEY${columns_def}${compression}${compaction}${speculative_retry}${comment}`
     ).await?;
 
-    // Create counter table
-    db.execute(
-        `CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${COUNTER_TABLE}` +
-        `(key blob PRIMARY KEY${counter_columns_def}${compression}${compaction}${comment}`
-    ).await?;
+    if !COUNTER_TABLE.is_empty() {
+        // Create counter table
+        db.execute(
+            `CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${COUNTER_TABLE}` +
+            `(key blob PRIMARY KEY${counter_columns_def}${compression}${compaction}${comment}`
+        ).await?;
+    }
 }
 
 pub async fn erase(db) {
     db.execute(`TRUNCATE TABLE ${KEYSPACE}.${TABLE}`).await?;
-    db.execute(`TRUNCATE TABLE ${KEYSPACE}.${COUNTER_TABLE}`).await?;
+    if !COUNTER_TABLE.is_empty() {
+        db.execute(`TRUNCATE TABLE ${KEYSPACE}.${COUNTER_TABLE}`).await?;
+    }
 }
 
 pub async fn prepare(db) {
@@ -130,13 +140,15 @@ pub async fn prepare(db) {
     ).await?;
     db.prepare(P_STMT_READ, `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE key = :key`).await?;
 
-    db.prepare(
-        P_STMT_COUNTER_WRITE,
-        `UPDATE ${KEYSPACE}.${COUNTER_TABLE}` +
-        ` SET ${counter_columns}` +
-        " WHERE key = :key"
-    ).await?;
-    db.prepare(P_STMT_COUNTER_READ, `SELECT * FROM ${KEYSPACE}.${COUNTER_TABLE} WHERE key = :key`).await?;
+    if !COUNTER_TABLE.is_empty() {
+        db.prepare(
+            P_STMT_COUNTER_WRITE,
+            `UPDATE ${KEYSPACE}.${COUNTER_TABLE}` +
+            ` SET ${counter_columns}` +
+            " WHERE key = :key"
+        ).await?;
+        db.prepare(P_STMT_COUNTER_READ, `SELECT * FROM ${KEYSPACE}.${COUNTER_TABLE} WHERE key = :key`).await?;
+    }
 
     prepare_gauss_distribution(db).await
 }
