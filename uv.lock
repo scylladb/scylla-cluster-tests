@@ -3265,6 +3265,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pyright"
+version = "1.1.408"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nodeenv", marker = "sys_platform != 'win32'" },
+    { name = "typing-extensions", marker = "sys_platform != 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/74/b2/5db700e52554b8f025faa9c3c624c59f1f6c8841ba81ab97641b54322f16/pyright-1.1.408.tar.gz", hash = "sha256:f28f2321f96852fa50b5829ea492f6adb0e6954568d1caa3f3af3a5f555eb684", size = 4400578, upload-time = "2026-01-08T08:07:38.795Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0c/82/a2c93e32800940d9573fb28c346772a14778b84ba7524e691b324620ab89/pyright-1.1.408-py3-none-any.whl", hash = "sha256:090b32865f4fdb1e0e6cd82bf5618480d48eecd2eb2e70f960982a3d9a4c17c1", size = 6399144, upload-time = "2026-01-08T08:07:37.082Z" },
+]
+
+[[package]]
 name = "pyroute2"
 version = "0.9.4"
 source = { registry = "https://pypi.org/simple" }
@@ -3877,6 +3890,7 @@ dependencies = [
 dev = [
     { name = "pre-commit", marker = "sys_platform != 'win32'" },
     { name = "pycodestyle", marker = "sys_platform != 'win32'" },
+    { name = "pyright", marker = "sys_platform != 'win32'" },
     { name = "ruff", marker = "sys_platform != 'win32'" },
     { name = "uv-sort", marker = "sys_platform != 'win32'" },
 ]
@@ -3951,6 +3965,7 @@ requires-dist = [
 dev = [
     { name = "pre-commit", specifier = "==4.0.1" },
     { name = "pycodestyle", specifier = "==2.13.0" },
+    { name = "pyright", specifier = "==1.1.408" },
     { name = "ruff", specifier = "==0.14.6" },
     { name = "uv-sort", specifier = ">=0.4.0" },
 ]
