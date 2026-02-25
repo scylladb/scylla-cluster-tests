@@ -4616,7 +4616,7 @@ class NemesisRunner:
 
     @latency_calculator_decorator(legend="Adding new nodes")
     def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:
-        nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type)
+        nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type, timeout=96000)
         self.actions_log.info(f"New nodes added: {', '.join(node.name for node in nodes)}")
         wait_no_tablets_migration_running(nodes[0])
         return nodes
