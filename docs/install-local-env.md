@@ -188,9 +188,74 @@ If they didn't for example in VS Code, you can:
 
 Use standard Python profiling tools to analyze SCT performance. Below are the recommended approaches.
 
-## py-spy (Recommended for most use cases)
+### Python 3.14 compatibility
+
+| Tool | Python 3.14 | Notes |
+|------|:-----------:|-------|
+| cProfile (stdlib) | ✅ | Part of Python, always compatible |
+| scalene | ✅ | Officially supports 3.14 |
+| viztracer | ✅ | Supports 3.14 since v1.1.0 |
+| memray | ✅ | Officially supports 3.14 (Linux and macOS only) |
+| py-spy | ❌ | Not yet — tracking [issue #750](https://github.com/benfred/py-spy/issues/750) |
+| snakeviz | ⚠️ | Pure-Python viewer, likely works but no explicit 3.14 classifiers |
+| gprof2dot | ⚠️ | Pure-Python, likely works but minimally maintained |
+
+## cProfile + snakeviz (stdlib deterministic profiler)
+
+Python's built-in `cProfile` is a deterministic profiler useful for measuring exact call counts and cumulative time. Works on every Python version.
+
+Run with cProfile:
+```bash
+python3 -m cProfile -o ./profile.stats sct.py run-test ...
+```
+
+Visualize the results with [snakeviz](https://jiffyclub.github.io/snakeviz/):
+```bash
+pip install snakeviz
+snakeviz ./profile.stats
+```
+
+Or generate a call graph with [gprof2dot](https://github.com/jrfonseca/gprof2dot):
+```bash
+pip install gprof2dot
+gprof2dot -f pstats ./profile.stats | dot -Tpng -o ./profile.png
+```
+
+## scalene (CPU + memory + GPU profiler)
+
+[Scalene](https://github.com/plasma-umass/scalene) profiles CPU time, memory usage, and GPU usage with line-level granularity. Supports Python 3.14.
+
+Install and run:
+```bash
+pip install scalene
+scalene sct.py run-test ...
+```
+
+## viztracer (timeline trace visualization)
+
+[VizTracer](https://github.com/gaogaotiantian/viztracer) produces timeline traces viewable in Chrome's `chrome://tracing` or [Perfetto](https://ui.perfetto.dev/). Supports Python 3.14 since v1.1.0.
+
+```bash
+pip install viztracer
+viztracer --tracer_entries 10000000 -o ./result.json -- python3 sct.py run-test ...
+vizviewer ./result.json
+```
+
+## memray (memory profiler)
+
+[Memray](https://github.com/bloomberg/memray) tracks memory allocations in detail, useful for debugging memory leaks. Supports Python 3.14. Linux and macOS only (not Windows).
+
+```bash
+pip install memray
+memray run -o ./memray.bin python3 sct.py run-test ...
+memray flamegraph ./memray.bin -o ./memray.html
+```
+
+## py-spy (sampling profiler)
 
 [py-spy](https://github.com/benfred/py-spy) is a sampling profiler that works without modifying code or restarting processes. It has minimal overhead and supports multithreaded applications.
+
+> **⚠️ Python 3.14 not yet supported** — see [benfred/py-spy#750](https://github.com/benfred/py-spy/issues/750). Works with Python ≤ 3.13.
 
 Install:
 ```bash
@@ -228,61 +293,10 @@ For use with [speedscope.app](https://www.speedscope.app/):
 py-spy record -s -o ./profile.speedscope.json --format speedscope -- python3 sct.py ...
 ```
 
-## cProfile + snakeviz (stdlib deterministic profiler)
-
-Python's built-in `cProfile` is a deterministic profiler useful for measuring exact call counts and cumulative time.
-
-Run with cProfile:
-```bash
-python3 -m cProfile -o ./profile.stats sct.py run-test ...
-```
-
-Visualize the results with [snakeviz](https://jiffyclub.github.io/snakeviz/):
-```bash
-pip install snakeviz
-snakeviz ./profile.stats
-```
-
-Or generate a call graph with [gprof2dot](https://github.com/jrfonseca/gprof2dot):
-```bash
-pip install gprof2dot
-gprof2dot -f pstats ./profile.stats | dot -Tpng -o ./profile.png
-```
-
-## scalene (CPU + memory + GPU profiler)
-
-[Scalene](https://github.com/plasma-umass/scalene) profiles CPU time, memory usage, and GPU usage with line-level granularity.
-
-Install and run:
-```bash
-pip install scalene
-scalene sct.py run-test ...
-```
-
-## viztracer (timeline trace visualization)
-
-[VizTracer](https://github.com/gaogaotiantian/viztracer) produces timeline traces viewable in Chrome's `chrome://tracing` or [Perfetto](https://ui.perfetto.dev/).
-
-```bash
-pip install viztracer
-viztracer --tracer_entries 10000000 -o ./result.json -- python3 sct.py run-test ...
-vizviewer ./result.json
-```
-
-## memray (memory profiler)
-
-[Memray](https://github.com/bloomberg/memray) tracks memory allocations in detail, useful for debugging memory leaks.
-
-```bash
-pip install memray
-memray run -o ./memray.bin python3 sct.py run-test ...
-memray flamegraph ./memray.bin -o ./memray.html
-```
-
 ## Tips
 
-- **py-spy** is the best general-purpose choice: zero-code-modification, low overhead, works on running processes.
-- Use **cProfile** when you need deterministic call counts rather than statistical sampling.
+- Use **cProfile** when you need deterministic call counts — it works on every Python version.
 - Use **scalene** for combined CPU + memory profiling in a single run.
 - Use **memray** specifically for memory leak investigations.
+- Use **py-spy** for zero-overhead sampling on Python ≤ 3.13; once [#750](https://github.com/benfred/py-spy/issues/750) is resolved it will be the best general-purpose choice again.
 - For long-running SCT tests, prefer attaching to a running process (`py-spy --pid`) rather than wrapping the launch command.
