@@ -66,7 +66,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
             @latency_calculator_decorator(cycle_name=cycle_name, row_name=row_name)
             def execute_workload_with_latency_calculator_decorator(self, *args, **kwargs):
-                return self._workload(*args, **kwargs)
+                return self._workload(**kwargs)
 
             ret = execute_workload_with_latency_calculator_decorator(
                 self, test_name=test_name, stress_num=stress_num, **kwargs
@@ -89,7 +89,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         keyspace_num=1,
         prefix="",
         debug_message="",
-        save_stats=True,
         is_alternator=True,
     ):
         if not is_alternator:
