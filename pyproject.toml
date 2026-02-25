@@ -77,6 +77,14 @@ dev = [
     "ruff==0.14.6",
     "uv-sort>=0.4.0",
 ]
+profiling = [
+    "gprof2dot",
+    "memray",
+    "py-spy",
+    "pytest-memray",
+    "scalene",
+    "snakeviz",
+]
 
 [tool.uv]
 package = false

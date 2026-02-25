@@ -780,9 +780,6 @@ class SCTConfiguration(BaseModel):
     email_subject_postfix: String = SctField(
         description="""Email subject postfix""",
     )
-    enable_test_profiling: Boolean = SctField(
-        description="""Turn on sct profiling""",
-    )
     ssh_transport: Literal["libssh2", "fabric"] = SctField(
         description="""Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'""",
         default="libssh2",
