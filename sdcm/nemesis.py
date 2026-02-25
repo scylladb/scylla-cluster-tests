@@ -4690,14 +4690,15 @@ class NemesisRunner:
         if not self.has_steady_run and sleep_time_between_ops:
             self.steady_state_latency()
             self.has_steady_run = True
-        new_nodes = self._grow_cluster(rack=None)
+        self._grow_cluster(rack=None)
+        # new_nodes = self._grow_cluster(rack=None)
 
-        # pass on the exact nodes only if we have specific types for them
-        new_nodes = new_nodes if self.tester.params.get("nemesis_grow_shrink_instance_type") else None
-        if duration := self.tester.params.get("nemesis_double_load_during_grow_shrink_duration"):
-            with self.action_log_scope("Double load after grow cluster"):
-                self._double_cluster_load(duration)
-        self._shrink_cluster(rack=None, new_nodes=new_nodes)
+        # # pass on the exact nodes only if we have specific types for them
+        # new_nodes = new_nodes if self.tester.params.get("nemesis_grow_shrink_instance_type") else None
+        # if duration := self.tester.params.get("nemesis_double_load_during_grow_shrink_duration"):
+        #     with self.action_log_scope("Double load after grow cluster"):
+        #         self._double_cluster_load(duration)
+        # self._shrink_cluster(rack=None, new_nodes=new_nodes)
 
     # NOTE: version limitation is caused by the following:
     #       - https://github.com/scylladb/scylla-enterprise/issues/3211
