@@ -389,6 +389,16 @@ Jenkins pipelines are in `jenkins-pipelines/` organized by:
 
 Pipeline utilities are in `vars/` directory.
 
+## Skills
+
+Modular, task-specific guidance for AI agents lives in the `skills/` directory. Each skill is a self-contained directory with a `SKILL.md` entry point and optional `references/` and `workflows/` subdirectories.
+
+| Skill | Description | Path |
+|-------|-------------|------|
+| designing-skills | Meta-skill for creating new AI agent skills for SCT | `skills/designing-skills/SKILL.md` |
+
+When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
+
 ## Implementation Plans
 
 I have strict standards for feature planning. You can find the full guidelines in `docs/plans/INSTRUCTIONS.md`.
