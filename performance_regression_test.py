@@ -952,7 +952,6 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
         time.sleep(60)  # postpone measure steady state latency to skip c-s start period when latency is high
         self.steady_state_latency(hdr_tags=stress_queue.hdr_tags)
-        versions_list = []
 
         def _get_version_and_build_id_from_node(node):
             version = node.remoter.run("scylla --version")
@@ -961,22 +960,19 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
 
         for node in self.db_cluster.nodes:
             base_version, base_build_id = _get_version_and_build_id_from_node(node)
+            self.log.debug("Upgrading node %s with version %s and build id %S", node.name, base_version, base_build_id)
             self.upgrade_node(node, hdr_tags=stress_queue.hdr_tags)
             target_version, target_build_id = _get_version_and_build_id_from_node(node)
-            versions_list.append(
-                {
-                    "base_version": base_version,
-                    "base_build_id": base_build_id,
-                    "target_version": target_version,
-                    "target_build_id": target_build_id,
-                    "node_name": node.name,
-                }
+            self.log.debug(
+                "Finished upgrading node %s. Current version is %s and build id is %S",
+                node.name,
+                target_version,
+                target_build_id,
             )
             time.sleep(120)  # sleeping 2 min to give time for cache to re-heat
         self.post_upgrades_steady_state(hdr_tags=stress_queue.hdr_tags)
 
         # TODO: check if all `base_version` and all `target_version` are the same
-        self.update({"base_target_versions": versions_list})
         self._stop_stress_when_finished()
         results = self.get_stress_results(queue=stress_queue)
         self.display_results(results, test_name="test_latency_with_upgrade")
