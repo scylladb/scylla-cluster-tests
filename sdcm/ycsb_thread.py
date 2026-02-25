@@ -63,7 +63,10 @@ class YcsbStatsPublisher(FileFollowerThread):
     def handle_verify_metric(self, line):
         verify_status_regex = re.compile(r"Return\((?P<status>.*?)\)=(?P<value>\d*)")
         verify_regex = re.compile(r"\[VERIFY:(.*?)\]")
-        verify_content = verify_regex.findall(line)[0]
+        found = verify_regex.findall(line)
+        if not found:
+            return
+        verify_content = found[0]
 
         for status_match in verify_status_regex.finditer(verify_content):
             stat = status_match.groupdict()
@@ -108,6 +111,13 @@ class YcsbStatsPublisher(FileFollowerThread):
                                     except ValueError:
                                         value = float(0)  # noqa: PLW2901
                                 self.set_metric(operation, key, float(value))
+
+                    # [VERIFY: Return(OK/UNEXPECTED_STATE/ERROR)=N] lines are final summary lines
+                    # that do NOT match the stats regex (no Count/Max/Min/Avg fields), so
+                    # handle_verify_metric would never be called for them from inside the
+                    # stats regex loop above. Handle them separately here.
+                    if "[VERIFY:" in line and "Return(" in line:
+                        self.handle_verify_metric(line)
 
                 except Exception:
                     LOGGER.exception("fail to send metric")
