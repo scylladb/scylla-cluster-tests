@@ -135,7 +135,6 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
         stress_num,
         test_name,
         sub_type=None,
-        save_stats=True,
         read_cdclog_cmd=None,
         update_cdclog_stats=False,
         enable_batching=True,
@@ -153,15 +152,10 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
                 enable_batching=enable_batching,
             )
 
-        results = self.get_stress_results(queue=stress_queue, store_results=True)
+        self.get_stress_results(queue=stress_queue, store_results=True)
         if cdc_stress_queue:
             cdc_stress_results = self.verify_cdclog_reader_results(cdc_stress_queue, update_cdclog_stats)
             self.log.debug(cdc_stress_results)
-
-        if save_stats:
-            stat_results = PP.pformat(self._stats["results"])
-            self.log.debug("Results %s: \n%s", test_name, stat_results)
-            self.display_results(results, test_name=test_name)
 
     def truncate_base_table(self, node, cdclog_table=False):
         try:
