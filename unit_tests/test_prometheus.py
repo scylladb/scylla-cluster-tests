@@ -60,5 +60,6 @@ class PrometheusAlertManagerTest(unittest.TestCase):
             test_data = json.load(file)
         listener = PrometheusAlertManagerListenerArtificialTest(artificial_alerts=test_data["post"])
         listener.start()
+        listener.join()
         result = listener.get_result()
         self.assertEqual(result, test_data["expected"])
