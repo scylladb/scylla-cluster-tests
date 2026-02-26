@@ -87,7 +87,7 @@ Known risks and how to address them.
 - Provide comprehensive testing requirements
 - Document backend-specific details (AWS, GCE, Azure, etc.)
 - Include code examples where helpful
-- **If a requirement or dependency is unclear, explicitly list it as an "Open Question"**
+- **If a requirement or dependency is unclear, explicitly mark it as "Needs Investigation"**
 - Use bullet points for clarity
 - Link to relevant issues, PRs, or documentation
 
