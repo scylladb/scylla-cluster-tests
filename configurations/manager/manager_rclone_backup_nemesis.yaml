@@ -1,2 +1,1 @@
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'ManagerRcloneBackup'
+nemesis_class_name: "ManagerRcloneBackup"

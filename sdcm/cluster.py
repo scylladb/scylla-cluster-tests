@@ -2278,7 +2278,7 @@ class BaseNode(AutoSshContainerMixin):
             if region and region != self.region:
                 backup_backend_config["region"] = region
         elif backup_backend == "gcs":
-            pass
+            backup_backend_config["endpoint"] = "https://storage.googleapis.com"
         elif backup_backend == "azure":
             backup_backend_config["account"] = self.test_config.backup_azure_blob_credentials["account"]
             backup_backend_config["key"] = self.test_config.backup_azure_blob_credentials["key"]

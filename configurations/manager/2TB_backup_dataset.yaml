@@ -1,5 +1,6 @@
 
 # fill the cluster with data
+prepare_stress_duration: 400
 prepare_write_cmd: [ "cassandra-stress write cl=ALL n=536870912 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=650 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..536870912",
                      "cassandra-stress write cl=ALL n=536870912 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=650 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=536870913..1073741824",
                      "cassandra-stress write cl=ALL n=536870912 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=650 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1073741825..1610612736",
