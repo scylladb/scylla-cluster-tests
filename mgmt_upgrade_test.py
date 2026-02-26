@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+from contextlib import nullcontext
 from datetime import datetime
 
 from sdcm import mgmt
@@ -23,6 +24,7 @@ from sdcm.mgmt.common import (
     get_task_run_details,
 )
 from sdcm.mgmt.operations import ManagerTestFunctionsMixIn
+from sdcm.sct_events.group_common_events import ignore_aborted_snapshot_upload_storage_io_errors
 from sdcm.tester import ClusterTester
 
 
@@ -171,7 +173,13 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
                 method=self.backup_method,
             )
             stopped_backup_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=180, step=2)
-            stopped_backup_task.stop()
+            ctx = (
+                ignore_aborted_snapshot_upload_storage_io_errors()
+                if self.params.get("manager_backup_restore_method") == "native"
+                else nullcontext()
+            )
+            with ctx:
+                stopped_backup_task.stop()
 
         with self.subTest("Running Manager upgrade"):
             self.upgrade_scylla_manager(
