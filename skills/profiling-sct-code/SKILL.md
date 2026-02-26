@@ -82,4 +82,4 @@ py-spy record -s -o ./profile.svg --pid <PID>
 
 ## Full Documentation
 
-See [docs/profiling.md](../docs/profiling.md) for detailed per-tool instructions, workflow guidance, and references.
+See [Install local environment](../../docs/install-local-env.md#profiling-sct-code) for detailed per-tool instructions, workflow guidance, and references.
