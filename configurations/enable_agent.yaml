@@ -1,0 +1,6 @@
+agent:
+  enabled: true
+  port: 16000
+  binary_url: "https://dimakr.s3.eu-north-1.amazonaws.com/sct-agent"
+  max_concurrent_jobs: 10
+  log_level: "info"
