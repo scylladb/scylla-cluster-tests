@@ -3,7 +3,6 @@ test_duration: 500
 # Define the commands to be used in the write-load test. The purpose of this command is to prepare the schema.
 prepare_stress_cmd: >-
   latte schema
-  --keyspace keyspace1
   --replication-factor 3
   -P column_count=1 -P column_size=1024 -P speculative_retry="\"NONE\""
   data_dir/latte/latte_cs_alike.rn
