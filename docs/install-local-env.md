@@ -284,14 +284,14 @@ scalene run --- -m pytest -xvs unit_tests/test_config.py::test_config_default
 
 ```bash
 uv pip install viztracer
-viztracer --tracer_entries 10000000 -o ./result.json -- python3 sct.py run-test ...
+viztracer --tracer_entries 10000000 -o ./result.json sct.py run-test ...
 vizviewer ./result.json
 ```
 
 ### Profile a specific unit test with pytest
 
 ```bash
-viztracer --tracer_entries 10000000 -o ./result.json -- python3 -m pytest -xvs unit_tests/test_config.py::test_config_default
+viztracer --tracer_entries 10000000 -o ./result.json -m pytest -xvs unit_tests/test_config.py::test_config_default
 vizviewer ./result.json
 ```
 
@@ -315,8 +315,9 @@ vizviewer ./result.json
 
 ```bash
 uv pip install memray
-memray run -o ./memray.bin python3 sct.py run-test ...
+memray run -o ./memray.bin sct.py run-test ...
 memray flamegraph ./memray.bin -o ./memray.html
+open ./memray.html
 ```
 
 ### Profile a specific unit test with pytest
@@ -329,8 +330,9 @@ python3 -m pytest --memray -xvs unit_tests/test_config.py::test_config_default
 
 Or with the `memray run` command directly:
 ```bash
-memray run -o ./memray.bin python3 -m pytest -xvs unit_tests/test_config.py::test_config_default
+memray run -o ./memray.bin -m pytest -xvs unit_tests/test_config.py::test_config_default
 memray flamegraph ./memray.bin -o ./memray.html
+open ./memray.html
 ```
 
 ### Finding bottlenecks

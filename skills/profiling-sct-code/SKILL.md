@@ -48,7 +48,7 @@ scalene run --- -m pytest -xvs unit_tests/test_config.py::test_config_default
 
 # viztracer
 uv pip install viztracer
-viztracer -o ./result.json -- python3 -m pytest -xvs unit_tests/test_config.py::test_config_default
+viztracer -o ./result.json -m pytest -xvs unit_tests/test_config.py::test_config_default
 vizviewer ./result.json
 
 # memray
@@ -70,10 +70,10 @@ python3 -m cProfile -o ./profile.stats sct.py run-test ...
 scalene run sct.py --- run-test ...
 
 # viztracer
-viztracer --tracer_entries 10000000 -o ./result.json -- python3 sct.py run-test ...
+viztracer --tracer_entries 10000000 -o ./result.json sct.py run-test ...
 
 # memray
-memray run -o ./memray.bin python3 sct.py run-test ...
+memray run -o ./memray.bin sct.py run-test ...
 
 # py-spy (attach to running process)
 py-spy record -s -o ./profile.svg --pid <PID>

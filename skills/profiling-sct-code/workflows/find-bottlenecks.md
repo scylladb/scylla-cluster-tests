@@ -48,7 +48,7 @@ If the bottleneck involves concurrency, thread coordination, or ordering:
 
 ```bash
 uv pip install viztracer
-viztracer -o ./result.json -- python3 -m pytest -xvs unit_tests/test_config.py::test_config_default
+viztracer -o ./result.json -m pytest -xvs unit_tests/test_config.py::test_config_default
 vizviewer ./result.json
 ```
 
@@ -69,8 +69,9 @@ python3 -m pytest --memray -xvs unit_tests/test_config.py::test_config_default
 Or for detailed analysis:
 ```bash
 uv pip install memray
-memray run -o ./memray.bin python3 -m pytest -xvs unit_tests/test_config.py::test_config_default
+memray run -o ./memray.bin -m pytest -xvs unit_tests/test_config.py::test_config_default
 memray flamegraph ./memray.bin -o ./memray.html
+open ./memray.html
 memray stats ./memray.bin
 ```
 
