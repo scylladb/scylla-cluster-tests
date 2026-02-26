@@ -5,7 +5,7 @@ gce_project: '' # empty mean default one, can be overwritten to use different on
 
 gce_image_db: '' # so we can use `scylla_version` as needed
 gce_image_loader: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64'
-gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylladb-monitor-4-14-0-2026-02-05t11-58-50z'
+gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylladb-monitor-4-14-1-2026-02-25t09-17-49z'
 
 gce_image_username: 'scylla-test'
 
