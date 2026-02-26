@@ -1,0 +1,43 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><project>
+  <actions/>
+  <description>Triggers longevity test with sct-agent enabled, every Saturday at 10:00 UTC.
+
+  Validates sct-agent readiness by running a standard longevity workload with agent-based
+  command execution instead of SSH.
+  </description>
+  <scm class="hudson.scm.NullSCM"/>
+  <disabled>false</disabled>
+  <triggers>
+    <hudson.triggers.TimerTrigger>
+      <spec>00 07 * * 6</spec>
+    </hudson.triggers.TimerTrigger>
+  </triggers>
+  <concurrentBuild>false</concurrentBuild>
+  <builders/>
+  <publishers>
+    <hudson.plugins.parameterizedtrigger.BuildTrigger>
+      <configs>
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+              <properties>scylla_version=master:latest
+provision_type=on_demand
+stress_duration=720
+post_behavior_db_nodes=destroy
+post_behavior_loader_nodes=destroy
+post_behavior_monitor_nodes=destroy
+email_recipients=qa@scylladb.com
+requested_by_user=dimakr</properties>
+              <textParamValueOnNewLine>false</textParamValueOnNewLine>
+            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+          </configs>
+          <projects>../longevity/longevity-10gb-3h-agent-test</projects>
+          <condition>SUCCESS</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+          <triggerFromChildProjects>false</triggerFromChildProjects>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+      </configs>
+    </hudson.plugins.parameterizedtrigger.BuildTrigger>
+  </publishers>
+  <buildWrappers/>
+</project>

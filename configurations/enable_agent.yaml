@@ -1,0 +1,6 @@
+agent:
+  enabled: true
+  port: 16000
+  binary_url: "https://github.com/scylladb/sct-agent/releases/latest/download/sct-agent"
+  max_concurrent_jobs: 10
+  log_level: "info"
