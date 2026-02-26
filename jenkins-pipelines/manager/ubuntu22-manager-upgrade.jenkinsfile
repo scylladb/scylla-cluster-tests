@@ -14,5 +14,9 @@ managerPipeline(
     target_manager_version: 'master_latest',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
-    test_config: 'test-cases/upgrades/manager-upgrade.yaml'
+    test_config: '''[
+        "test-cases/upgrades/manager-upgrade.yaml",
+        "configurations/object_storage.yaml",
+        "configurations/object_storage_native_method.yaml"
+    ]'''
 )
