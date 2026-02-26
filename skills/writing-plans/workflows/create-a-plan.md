@@ -74,13 +74,18 @@ A 5-phase process for writing an SCT implementation plan following the 7-section
 
 3. **Mark uncertain steps.** If a requirement or dependency is unclear, mark it as "Needs Investigation" rather than making assumptions.
 
-4. **Include SCT-specific details:**
+4. **Include a documentation update phase.** Every plan should have a phase (or phase deliverable) covering:
+   - Updated or new entries in `docs/` for user-facing changes
+   - Configuration documentation regenerated via `uv run sct.py pre-commit`
+   - README or guide updates if the feature changes user workflows
+
+5. **Include SCT-specific details:**
    - Backend-specific impact (which backends are affected?)
    - Configuration changes (`sdcm/sct_config.py` parameters)
    - Default values in `defaults/test_default.yaml`
    - Test case YAML files in `test-cases/`
 
-5. **Add separation lines** (`---`) between phases for readability.
+6. **Add separation lines** (`---`) between phases for readability.
 
 **Exit:** Implementation Phases section complete with Definition of Done for each phase.
 
