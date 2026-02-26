@@ -349,10 +349,12 @@ class SnapshotPreparerOperations(ClusterTester):
         """
         return "".join(char for char in compaction_strategy if char.isupper()).lower()
 
-    def _build_ks_name(self, backup_size: int, cs_cmd_params: dict) -> str:
+    def _build_ks_name(self, backup_size: int, cs_cmd_params: dict, ks_index: int | None = None) -> str:
         """Build the keyspace name based on the backup size and the parameters used in the c-s command.
         The name should include all the parameters important for c-s read verification and can be used to
         recreate such a command based on ks_name.
+
+        If ks_index is provided, it will be appended to the keyspace name (for multi-keyspace scenarios).
         """
         scylla_version = re.sub(r"[.]", "_", self.db_cluster.nodes[0].scylla_version)
         ks_name = self.ks_name_template.format(
@@ -363,7 +365,10 @@ class SnapshotPreparerOperations(ClusterTester):
             col_n=cs_cmd_params.get("col_n"),
             scylla_version=scylla_version,
         )
-        return ks_name.replace("~", "_")
+        ks_name = ks_name.replace("~", "_")
+        if ks_index is not None:
+            ks_name = f"{ks_name}_ks{ks_index}"
+        return ks_name
 
     def calculate_rows_per_loader(self, overall_rows_num: int) -> int:
         """Calculate number of rows per loader thread based on the overall number of rows and the number of loaders."""
@@ -372,16 +377,29 @@ class SnapshotPreparerOperations(ClusterTester):
             raise ValueError(f"Overall rows number ({overall_rows_num}) should be divisible by the number of loaders")
         return int(overall_rows_num / num_of_loaders)
 
-    def build_snapshot_preparer_cs_write_cmd(self, backup_size: int) -> tuple[str, list[str]]:
+    def build_snapshot_preparer_cs_write_cmd(self, backup_size: int) -> tuple[str | list[str], list[str]]:
         """Build the c-s command from 'mgmt_snapshots_preparer_params' parameters based on backup size.
 
         Extra params complete the missing part of command template.
         Among them are keyspace_name, num_of_rows, sequence_start and sequence_end.
 
+        When num_keyspaces > 1, the total backup_size is distributed equally across all keyspaces.
+        For example, with backup_size=1000 (1TB) and num_keyspaces=10, each keyspace will contain ~100GB.
+
         Returns:
-            - ks_name: keyspace name
-            - cs_cmds: list of c-s commands to be executed
+            - ks_names: keyspace name(s) - single string for backward compatibility when num_keyspaces=1,
+                       or list of keyspace names when num_keyspaces > 1
+            - cs_cmds: list of c-s commands to be executed (one set of commands per keyspace per loader)
         """
+        preparer_params = self.params.get("mgmt_snapshots_preparer_params")
+        num_keyspaces = preparer_params.get("num_keyspaces", 1)
+
+        if num_keyspaces > 1:
+            return self._build_multi_keyspace_cs_write_cmds(backup_size, num_keyspaces)
+        return self._build_single_keyspace_cs_write_cmds(backup_size)
+
+    def _build_single_keyspace_cs_write_cmds(self, backup_size: int) -> tuple[str, list[str]]:
+        """Build c-s write commands for a single keyspace scenario (original behavior)."""
         overall_num_of_rows = backup_size * 1024 * 1024  # Considering 1 row = 1Kb
         rows_per_loader = self.calculate_rows_per_loader(overall_num_of_rows)
 
@@ -407,6 +425,49 @@ class SnapshotPreparerOperations(ClusterTester):
             cs_cmds.append(cs_cmd)
 
         return ks_name, cs_cmds
+
+    def _build_multi_keyspace_cs_write_cmds(self, backup_size: int, num_keyspaces: int) -> tuple[list[str], list[str]]:
+        """Build c-s write commands distributed across multiple keyspaces.
+
+        The total backup_size is divided equally among all keyspaces.
+
+        Args:
+            backup_size: Total backup size in GB
+            num_keyspaces: Number of keyspaces to distribute the data across
+
+        Returns:
+            - ks_names: list of keyspace names
+            - cs_cmds: list of all c-s commands (grouped by keyspace, then by loader)
+        """
+        size_per_ks = backup_size // num_keyspaces
+
+        preparer_params = self.params.get("mgmt_snapshots_preparer_params")
+        cs_cmd_template = preparer_params.get("cs_cmd_template")
+        cs_cmd_params = {key: value for key, value in preparer_params.items() if key != "cs_cmd_template"}
+        num_of_loaders = self._get_total_loaders()
+
+        overall_num_of_rows = size_per_ks * 1024 * 1024  # Considering 1 row = 1Kb
+        rows_per_loader = self.calculate_rows_per_loader(overall_num_of_rows)
+
+        all_ks_names = []
+        all_cs_cmds = []
+
+        for ks_index in range(1, num_keyspaces + 1):
+            extra_params = {"num_of_rows": rows_per_loader}
+            params_to_use_in_cs_cmd = {**cs_cmd_params, **extra_params}
+
+            ks_name = self._build_ks_name(backup_size, params_to_use_in_cs_cmd, ks_index=ks_index)
+            params_to_use_in_cs_cmd["ks_name"] = ks_name
+            all_ks_names.append(ks_name)
+
+            for loader_index in range(num_of_loaders):
+                params_to_use_in_cs_cmd["sequence_start"] = rows_per_loader * loader_index + 1
+                params_to_use_in_cs_cmd["sequence_end"] = rows_per_loader * (loader_index + 1)
+
+                cs_cmd = cs_cmd_template.format(**params_to_use_in_cs_cmd)
+                all_cs_cmds.append(cs_cmd)
+
+        return all_ks_names, all_cs_cmds
 
     def build_cs_read_cmd_from_snapshot_details(self, snapshot: SnapshotData) -> list[str]:
         """Define a list of cassandra-stress read commands from snapshot (dataset) details.

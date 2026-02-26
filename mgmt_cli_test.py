@@ -834,7 +834,7 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         backup_size = self.params.get("mgmt_prepare_snapshot_size")  # in Gb
         assert backup_size and backup_size >= 1, "Backup size must be at least 1Gb"
 
-        ks_name, cs_write_cmds = self.build_snapshot_preparer_cs_write_cmd(backup_size)
+        ks_names, cs_write_cmds = self.build_snapshot_preparer_cs_write_cmd(backup_size)
         self.run_and_verify_stress_in_threads(cs_cmds=cs_write_cmds, stop_on_failure=True)
 
         self.log.info("Run backup and wait for it to finish")
@@ -866,11 +866,13 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
             manager_cluster_id = "N/A"
 
         self.log.info("Send snapshot details to Argus")
+        # Handle both single keyspace (string) and multiple keyspaces (list) for backward compatibility
+        ks_name_str = ",".join(ks_names) if isinstance(ks_names, list) else ks_names
         snapshot_details = {
             "tag": backup_task.get_snapshot_tag(),
             "size": backup_size,
             "locations": ",".join(location_list),
-            "ks_name": ks_name,
+            "ks_name": ks_name_str,
             "scylla_version": self.params.get_version_based_on_conf()[0],
             "cluster_id": cluster_id,
             "ear_key_id": key_id,
