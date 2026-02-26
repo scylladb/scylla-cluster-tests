@@ -97,11 +97,27 @@ When writing plans for SCT, consider these domain-specific areas:
 | **CI/CD** | Jenkins pipeline changes in `jenkins-pipelines/` |
 | **Provision labels** | Which provision test labels to add (`provision-aws`, `provision-gce`, etc.) |
 
+## Anti-Pattern Quick Reference
+
+The most common mistakes. Full catalog with before/after examples in [anti-patterns.md](references/anti-patterns.md).
+
+| ID | Anti-Pattern | One-Line Fix |
+|----|-------------|-------------|
+| PAP-1 | Too much code in the plan | Use short snippets for interfaces only; describe behavior in prose |
+| PAP-2 | Missing diagrams for complex interactions | Add ASCII/Mermaid diagrams for 3+ component interactions |
+| PAP-3 | Overly granular phases | Describe deliverables, not line-by-line changes |
+| PAP-4 | Vague or unmeasurable goals | Add measurable criteria or verifiable conditions |
+| PAP-5 | Conflicting requirements | Cross-check goals, phases, and risks for consistency |
+| PAP-6 | Missing code references in Current State | Cite specific file paths, verify they exist |
+| PAP-7 | Phases without Definition of Done | Add checkbox criteria to every phase |
+| PAP-8 | Monolithic phase spanning multiple PRs | Split into single-PR-scoped phases |
+
 ## Reference Index
 
 | File | Content |
 |------|---------|
 | [plan-templates.md](references/plan-templates.md) | Complete plan skeleton, section-by-section templates with SCT-specific examples |
+| [anti-patterns.md](references/anti-patterns.md) | Common plan writing mistakes with before/after fixes |
 
 | Workflow | Purpose |
 |----------|---------|
