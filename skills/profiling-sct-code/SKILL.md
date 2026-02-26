@@ -36,6 +36,9 @@ This skill guides you through profiling SCT code to find performance bottlenecks
 ### Profile a unit test
 
 ```bash
+# Install all profiling tools
+uv sync --group profiling
+
 # cProfile
 python3 -m cProfile -o ./profile.stats -m pytest -xvs unit_tests/test_config.py::test_config_default
 uv pip install snakeviz && snakeviz ./profile.stats
@@ -79,4 +82,4 @@ py-spy record -s -o ./profile.svg --pid <PID>
 
 ## Full Documentation
 
-See [docs/install-local-env.md — Profiling SCT Code](../docs/install-local-env.md#profiling-sct-code) for detailed per-tool instructions, workflow guidance, and references.
+See [docs/profiling.md](../docs/profiling.md) for detailed per-tool instructions, workflow guidance, and references.
