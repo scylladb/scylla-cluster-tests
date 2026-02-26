@@ -256,6 +256,7 @@ class ContainerManager:
             ):
                 if run_args.pop("pull", None):
                     docker_client.images.pull(*image_tag.split(":", maxsplit=1))
+                print(f"QWERTY Running container with args: {pformat(run_args)}")  # noqa: T201
                 container = docker_client.containers.run(**run_args)
             instance._containers[name.full] = container
             LOGGER.debug("Container %s started.", container)
