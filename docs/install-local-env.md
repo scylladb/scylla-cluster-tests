@@ -211,13 +211,13 @@ python3 -m cProfile -o ./profile.stats sct.py run-test ...
 
 Visualize the results with [snakeviz](https://jiffyclub.github.io/snakeviz/):
 ```bash
-pip install snakeviz
+uv pip install snakeviz
 snakeviz ./profile.stats
 ```
 
 Or generate a call graph with [gprof2dot](https://github.com/jrfonseca/gprof2dot):
 ```bash
-pip install gprof2dot
+uv pip install gprof2dot
 gprof2dot -f pstats ./profile.stats | dot -Tpng -o ./profile.png
 ```
 
@@ -227,7 +227,7 @@ gprof2dot -f pstats ./profile.stats | dot -Tpng -o ./profile.png
 
 Install and run:
 ```bash
-pip install scalene
+uv pip install scalene
 scalene sct.py run-test ...
 ```
 
@@ -236,7 +236,7 @@ scalene sct.py run-test ...
 [VizTracer](https://github.com/gaogaotiantian/viztracer) produces timeline traces viewable in Chrome's `chrome://tracing` or [Perfetto](https://ui.perfetto.dev/). Supports Python 3.14 since v1.1.0.
 
 ```bash
-pip install viztracer
+uv pip install viztracer
 viztracer --tracer_entries 10000000 -o ./result.json -- python3 sct.py run-test ...
 vizviewer ./result.json
 ```
@@ -246,7 +246,7 @@ vizviewer ./result.json
 [Memray](https://github.com/bloomberg/memray) tracks memory allocations in detail, useful for debugging memory leaks. Supports Python 3.14. Linux and macOS only (not Windows).
 
 ```bash
-pip install memray
+uv pip install memray
 memray run -o ./memray.bin python3 sct.py run-test ...
 memray flamegraph ./memray.bin -o ./memray.html
 ```
@@ -259,7 +259,7 @@ memray flamegraph ./memray.bin -o ./memray.html
 
 Install:
 ```bash
-pip install py-spy
+uv pip install py-spy
 ```
 
 ### Record a flame graph
