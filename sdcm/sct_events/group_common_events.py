@@ -644,6 +644,29 @@ def suppress_expected_unavailability_errors():
         yield
 
 
+@contextmanager
+def ignore_aborted_snapshot_upload_storage_io_errors():
+    with ExitStack() as stack:
+        if SkipPerIssues(
+            issues="https://github.com/scylladb/scylladb/issues/24642",
+            params=TestConfig().tester_obj().params,
+        ):
+            stack.enter_context(
+                EventsSeverityChangerFilter(
+                    new_severity=Severity.WARNING,
+                    event_class=DatabaseLogEvent,
+                    regex=r".*std::runtime_error \(Failed to parse ETag list\. Aborting multipart upload\.\)",
+                )
+            )
+            stack.enter_context(
+                EventsSeverityChangerFilter(
+                    new_severity=Severity.WARNING,
+                    event_class=DatabaseLogEvent,
+                    regex=r".*storage_io_error \(S3 error \(seastar::abort_requested_exception \(abort requested\)\)\)",
+                )
+            )
+
+
 def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):
     """
     helper to decorate a function to run with a list of callables that return context managers

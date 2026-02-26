@@ -17,6 +17,7 @@ import random
 import shutil
 import threading
 import time
+from contextlib import nullcontext
 from datetime import timedelta
 
 from sdcm import mgmt
@@ -52,7 +53,11 @@ from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.utils.time_utils import ExecutionTimer
 from sdcm.mgmt.operations import ManagerTestFunctionsMixIn, SnapshotData
 from sdcm.sct_events.system import InfoEvent
-from sdcm.sct_events.group_common_events import ignore_no_space_errors, ignore_stream_mutation_fragments_errors
+from sdcm.sct_events.group_common_events import (
+    ignore_no_space_errors,
+    ignore_stream_mutation_fragments_errors,
+    ignore_aborted_snapshot_upload_storage_io_errors,
+)
 from sdcm.utils.tablets.common import TabletsConfiguration
 
 
@@ -223,6 +228,7 @@ class ManagerBackupTests(ManagerRestoreTests):
         previously mentioned orphan files from the bucket.
         """
         self.log.info("starting test_backup_purge_removes_orphan_files")
+
         mgr_cluster = self.db_cluster.get_cluster_manager()
         snapshot_file_list_pre_test = self.get_all_snapshot_files(cluster_id=mgr_cluster.id)
 
@@ -230,7 +236,15 @@ class ManagerBackupTests(ManagerRestoreTests):
             location_list=self.locations, retention=1, method=self.backup_method
         )
         backup_task.wait_for_uploading_stage(step=5)
-        backup_task.stop()
+
+        ctx = (
+            ignore_aborted_snapshot_upload_storage_io_errors()
+            if self.params.get("manager_backup_restore_method") == "native"
+            else nullcontext()
+        )
+        with ctx:
+            backup_task.stop()
+
         snapshot_file_list_post_task_stopping = self.get_all_snapshot_files(cluster_id=mgr_cluster.id)
         orphan_files_pre_rerun = snapshot_file_list_post_task_stopping.difference(snapshot_file_list_pre_test)
         assert orphan_files_pre_rerun, "SCT could not create orphan snapshots by stopping a backup task"
@@ -262,7 +276,14 @@ class ManagerBackupTests(ManagerRestoreTests):
             try:
                 backup_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
                 backup_task.wait_for_uploading_stage()
-                backup_task.stop()
+
+                ctx = (
+                    ignore_aborted_snapshot_upload_storage_io_errors()
+                    if self.params.get("manager_backup_restore_method") == "native"
+                    else nullcontext()
+                )
+                with ctx:
+                    backup_task.stop()
 
                 reach_enospc_on_node(target_node=target_node)
 
