@@ -1655,7 +1655,8 @@ def get_gce_images(branch: str, arch: VmArch) -> list:
 def rich_table_to_string(table: RichTable) -> str:
     """Convert a rich Table to a plain text string."""
     string_io = io.StringIO()
-    console = Console(file=string_io, force_terminal=False, width=300)
+    terminal_width = shutil.get_terminal_size(fallback=(120, 24)).columns
+    console = Console(file=string_io, force_terminal=False, width=terminal_width)
     console.print(table)
     return string_io.getvalue().rstrip()
 
