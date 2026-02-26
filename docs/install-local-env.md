@@ -194,7 +194,6 @@ Use standard Python profiling tools to analyze SCT performance. Below are the re
 |------|:-----------:|-------|
 | cProfile (stdlib) | ✅ | Part of Python, always compatible |
 | scalene | ✅ | Officially supports 3.14 |
-| viztracer | ✅ | Supports 3.14 since v1.1.0 |
 | memray | ✅ | Officially supports 3.14 (Linux and macOS only) |
 | py-spy | ❌ | Not yet — tracking [issue #750](https://github.com/benfred/py-spy/issues/750) |
 | snakeviz | ⚠️ | Pure-Python viewer, likely works but no explicit 3.14 classifiers |
@@ -270,38 +269,6 @@ scalene run --- -m pytest -xvs unit_tests/test_config.py::test_config_default
 2. Lines highlighted in red are CPU hotspots; the "Memory" column shows allocation intensity.
 3. The "Python" vs. "C" split shows whether time is in Python code (optimize-able) or native extensions (harder to change).
 4. Use `--cpu-only` for faster profiling when memory is not a concern.
-
-## viztracer (timeline trace visualization)
-
-[VizTracer](https://github.com/gaogaotiantian/viztracer) records every function entry/exit with timestamps, producing a timeline trace. It is best for understanding execution flow, concurrency, and ordering of operations across threads. View traces in Chrome's `chrome://tracing` or [Perfetto](https://ui.perfetto.dev/).
-
-**Workflow:** Run under viztracer → open the trace in Perfetto → zoom into slow regions on the timeline → expand thread lanes to see which calls overlap and which are sequential.
-
-- [VizTracer repo & docs](https://github.com/gaogaotiantian/viztracer)
-- [Perfetto trace viewer](https://ui.perfetto.dev/)
-
-### Profile a full SCT test run
-
-```bash
-uv pip install viztracer
-viztracer --tracer_entries 10000000 -o ./result.json sct.py run-test ...
-vizviewer ./result.json
-```
-
-### Profile a specific unit test with pytest
-
-```bash
-viztracer --tracer_entries 10000000 -o ./result.json -m pytest -xvs unit_tests/test_config.py::test_config_default
-vizviewer ./result.json
-```
-
-### Finding bottlenecks
-
-1. Open the trace in Perfetto (`vizviewer` does this automatically).
-2. Zoom into the timeline — wide bars are long-running calls.
-3. Expand thread lanes to see concurrent activity and identify idle gaps.
-4. Use `--min_duration 1ms` to filter out very short calls and reduce noise.
-5. Use `--log_func_args` or `--log_func_retval` to capture argument/return values for deeper investigation.
 
 ## memray (memory profiler)
 
@@ -407,7 +374,6 @@ py-spy record -s -o ./profile.speedscope.json --format speedscope -- python3 sct
 
 - Use **cProfile** when you need deterministic call counts — it works on every Python version.
 - Use **scalene** for combined CPU + memory profiling in a single run.
-- Use **viztracer** to understand execution flow and concurrency across threads.
 - Use **memray** specifically for memory leak investigations.
 - Use **py-spy** for zero-overhead sampling on Python ≤ 3.13; once [#750](https://github.com/benfred/py-spy/issues/750) is resolved it will be the best general-purpose choice again.
 - For long-running SCT tests, prefer attaching to a running process (`py-spy --pid`) rather than wrapping the launch command.

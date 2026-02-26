@@ -42,22 +42,7 @@ Open the HTML report. Look for:
 - Lines with high "C %" — these are in native extensions (harder to optimize directly)
 - Lines with high "Memory" — these allocate heavily
 
-## Step 4: Understand Execution Flow (viztracer)
-
-If the bottleneck involves concurrency, thread coordination, or ordering:
-
-```bash
-uv pip install viztracer
-viztracer -o ./result.json -m pytest -xvs unit_tests/test_config.py::test_config_default
-vizviewer ./result.json
-```
-
-In the Perfetto trace viewer:
-- Look for long gaps between operations (idle time)
-- Check thread lanes for serialization bottlenecks
-- Zoom into slow regions to see the call stack
-
-## Step 5: Check for Memory Issues (memray)
+## Step 4: Check for Memory Issues (memray)
 
 If the problem is memory growth or leaks:
 
@@ -75,7 +60,7 @@ open ./memray.html
 memray stats ./memray.bin
 ```
 
-## Step 6: Optimize and Verify
+## Step 5: Optimize and Verify
 
 1. Make the targeted change based on profiling results.
 2. Re-run the same profile to confirm the bottleneck is resolved.

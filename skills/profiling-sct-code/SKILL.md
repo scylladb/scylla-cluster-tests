@@ -21,7 +21,6 @@ This skill guides you through profiling SCT code to find performance bottlenecks
 |------|----------|:-----------:|
 | **cProfile + snakeviz** | Exact call counts, cumulative time, call trees | ✅ |
 | **scalene** | Line-level CPU + memory profiling in one run | ✅ |
-| **viztracer** | Timeline traces, concurrency analysis, execution flow | ✅ |
 | **memray** | Memory allocations, leak detection | ✅ |
 | **py-spy** | Zero-overhead sampling, attach to running processes | ❌ ([#750](https://github.com/benfred/py-spy/issues/750)) |
 
@@ -29,9 +28,8 @@ This skill guides you through profiling SCT code to find performance bottlenecks
 
 1. **"Which function is slowest?"** → Use **cProfile** (deterministic, exact counts)
 2. **"Which line is slowest and is it Python or C?"** → Use **scalene** (line-level, Python vs native split)
-3. **"What happens when, across threads?"** → Use **viztracer** (timeline trace)
-4. **"Where is memory allocated / leaked?"** → Use **memray** (allocation tracking)
-5. **"Profile a running process with zero overhead?"** → Use **py-spy** (sampling, attach by PID)
+3. **"Where is memory allocated / leaked?"** → Use **memray** (allocation tracking)
+4. **"Profile a running process with zero overhead?"** → Use **py-spy** (sampling, attach by PID)
 
 ## Quick Reference
 
@@ -45,11 +43,6 @@ uv pip install snakeviz && snakeviz ./profile.stats
 # scalene
 uv pip install scalene
 scalene run --- -m pytest -xvs unit_tests/test_config.py::test_config_default
-
-# viztracer
-uv pip install viztracer
-viztracer -o ./result.json -m pytest -xvs unit_tests/test_config.py::test_config_default
-vizviewer ./result.json
 
 # memray
 uv pip install pytest-memray
@@ -68,9 +61,6 @@ python3 -m cProfile -o ./profile.stats sct.py run-test ...
 
 # scalene
 scalene run sct.py --- run-test ...
-
-# viztracer
-viztracer --tracer_entries 10000000 -o ./result.json sct.py run-test ...
 
 # memray
 memray run -o ./memray.bin sct.py run-test ...
