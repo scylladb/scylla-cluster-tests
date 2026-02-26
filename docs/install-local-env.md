@@ -228,7 +228,7 @@ gprof2dot -f pstats ./profile.stats | dot -Tpng -o ./profile.png
 Install and run:
 ```bash
 uv pip install scalene
-scalene sct.py run-test ...
+scalene run sct.py --- run-test ...
 ```
 
 ## viztracer (timeline trace visualization)
