@@ -2735,18 +2735,6 @@ wheels = [
 ]
 
 [[package]]
-name = "prettytable"
-version = "3.10.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "wcwidth", marker = "sys_platform != 'win32'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4c/90/e1c8c06235d53c3adaae74d295669612beea5f5a2052b3184a763e7bdd62/prettytable-3.10.2.tar.gz", hash = "sha256:29ec6c34260191d42cd4928c28d56adec360ac2b1208a26c7e4f14b90cc8bc84", size = 56415, upload-time = "2024-07-12T09:22:28.278Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c5/16/ec5cc65437dce97d2814a7ba31842b0ee958d102f6e99e264c35f15c328f/prettytable-3.10.2-py3-none-any.whl", hash = "sha256:1cbfdeb4bcc73976a778a0fb33cb6d752e75396f16574dcb3e2d6332fd93c76a", size = 28320, upload-time = "2024-07-12T09:22:04.224Z" },
-]
-
-[[package]]
 name = "prometheus-client"
 version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3852,7 +3840,7 @@ dependencies = [
     { name = "paramiko", marker = "sys_platform != 'win32'" },
     { name = "pre-commit", marker = "sys_platform != 'win32'" },
     { name = "pre-commit-hooks", marker = "sys_platform != 'win32'" },
-    { name = "prettytable", marker = "sys_platform != 'win32'" },
+    { name = "rich", marker = "sys_platform != 'win32'" },
     { name = "prometheus-client", marker = "sys_platform != 'win32'" },
     { name = "pycryptodome", marker = "sys_platform != 'win32'" },
     { name = "pydantic", marker = "sys_platform != 'win32'" },
@@ -3926,7 +3914,7 @@ requires-dist = [
     { name = "paramiko", specifier = "==4.0.0" },
     { name = "pre-commit", specifier = "==4.0.1" },
     { name = "pre-commit-hooks", specifier = "==6.0.0" },
-    { name = "prettytable", specifier = "==3.10.2" },
+    { name = "rich", specifier = "==14.2.0" },
     { name = "prometheus-client", specifier = "==0.11.0" },
     { name = "pycryptodome", specifier = "==3.19.1" },
     { name = "pydantic", specifier = "==2.12.0" },
