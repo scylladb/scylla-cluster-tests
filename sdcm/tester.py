@@ -191,7 +191,6 @@ from sdcm.logcollector import (
 )
 from sdcm.send_email import build_reporter, save_email_data_to_file
 from sdcm.utils import alternator
-from sdcm.utils.profiler import ProfilerFactory
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER
 from sdcm.utils.gce_utils import get_gce_compute_instances_client
 from sdcm.utils.auth_context import temp_authenticator
@@ -1158,11 +1157,6 @@ class ClusterTester(unittest.TestCase):
         self.test_config.set_test_name(self.id())
         self.test_config.set_tester_obj(self)
         RemoteCmdRunnerBase.set_default_ssh_transport(self.params.get("ssh_transport"))
-
-        self._profile_factory = None
-        if self.params.get("enable_test_profiling"):
-            self._profile_factory = ProfilerFactory(os.path.join(self.logdir, "profile.stats"))
-            self._profile_factory.activate()
 
         ip_ssh_connections = ssh_connection_ip_type(self.params)
         self.test_config.set_ip_ssh_connections(ip_ssh_connections)

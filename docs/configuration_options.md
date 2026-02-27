@@ -780,15 +780,6 @@ Email subject postfix
 **type:** str (appendable)
 
 
-## **enable_test_profiling** / SCT_ENABLE_TEST_PROFILING
-
-Turn on sct profiling
-
-**default:** N/A
-
-**type:** boolean
-
-
 ## **ssh_transport** / SSH_TRANSPORT
 
 Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'
