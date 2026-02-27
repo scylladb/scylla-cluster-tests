@@ -567,6 +567,22 @@ def ignore_raft_transport_failing():
                 extra_time_to_expiration=30,
             )
         )
+        stack.enter_context(
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent,
+                regex=r".*raft - \[[0-9a-f-]+\] Transferring snapshot .* failed with: raft::transport_error .*connection is closed\).*",
+                extra_time_to_expiration=30,
+            )
+        )
+        stack.enter_context(
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent,
+                regex=r".*raft - apply_snapshot\[.*\]: ignore outdated snapshot .*",
+                extra_time_to_expiration=30,
+            )
+        )
         yield
 
 
