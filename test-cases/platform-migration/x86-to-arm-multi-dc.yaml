@@ -1,0 +1,23 @@
+test_duration: 480
+n_db_nodes: '3 3'
+region_name: 'eu-west-1 us-east-1'
+n_loaders: '1 1'
+
+prepare_write_cmd: [
+  "cassandra-stress write cl=LOCAL_ONE n=450000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=300 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..450000000",
+  "cassandra-stress write cl=LOCAL_ONE n=450000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=300 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=450000001..900000000"
+]
+
+stress_before_migration: "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=5 -connection-count=5 -consistency-level=local_quorum -rows-per-request=10 -timeout=30s -validate-data"
+
+stress_cmd: [
+  "cassandra-stress mixed 'ratio(write=1,read=9)' cl=LOCAL_QUORUM duration=420m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..900000000 -errors retries=50",
+  "cassandra-stress mixed 'ratio(write=1,read=9)' cl=LOCAL_QUORUM duration=420m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..900000000 -errors retries=50"
+]
+
+rack_aware_loader: true
+region_aware_loader: true
+
+verify_stress_after_migration: "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=20 -connection-count=20 -consistency-level=local_quorum -rows-per-request=100 -timeout=30s -validate-data"
+
+user_prefix: 'platform-migration-multidc'

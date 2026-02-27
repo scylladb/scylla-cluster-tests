@@ -3946,12 +3946,15 @@ class BaseCluster:
     def wait_for_init(self):
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
-    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+    def add_nodes(
+        self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None, image_id=None
+    ):
         """
         :param count: number of nodes to add
         :param ec2_user_data:
         :param dc_idx: datacenter index, used as an index for self.datacenter list
         :param instance_type: type of instance to use, can override what's defined in configuration
+        :param image_id: image ID to use, can override what's defined in configuration
         :return: list of Nodes
         """
         raise NotImplementedError("Derived class must implement 'add_nodes' method!")
@@ -5960,8 +5963,9 @@ class BaseScyllaCluster:
 
         target_node_ip = node.ip_address
         node_allocator = self.test_config.tester_obj().nemesis_allocator
+        verification_candidates = [n for n in self.data_nodes if n != node]
         with node_allocator.run_nemesis(
-            nemesis_label="verify decommission", node_list=self.data_nodes
+            nemesis_label="verify decommission", node_list=verification_candidates
         ) as verification_node:
             node_ip_list = get_node_ip_list(verification_node)
             missing_host_ids = verification_node.raft.search_inconsistent_host_ids()
