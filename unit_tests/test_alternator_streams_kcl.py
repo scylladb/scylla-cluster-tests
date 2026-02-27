@@ -31,8 +31,9 @@ def test_01_kcl_with_ycsb(request, docker_scylla, events, params):
     params.update(
         dict(
             dynamodb_primarykey_type="HASH_AND_RANGE",
-            alternator_use_dns_routing=True,
             alternator_port=ALTERNATOR_PORT,
+            alternator_loadbalancing=True,
+            alternator_use_dns_routing=False,
             alternator_enforce_authorization=True,
             alternator_access_key_id="alternator",
             alternator_secret_access_key="password",
