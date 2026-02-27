@@ -1,2 +1,3 @@
-nemesis_class_name: 'TruncateLargeParititionMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'TruncateLargeParititionMonkey'
 user_prefix: 'longevity-5gb-1h-TruncateLargeParititionMonkey'

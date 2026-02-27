@@ -28,7 +28,7 @@ from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.decorators import retrying
-from sdcm.utils.nemesis_utils.indexes import create_index, verify_query_by_index_works, wait_for_index_to_be_built
+from sdcm.nemesis.utils.indexes import create_index, verify_query_by_index_works, wait_for_index_to_be_built
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
 from threading import Thread
 

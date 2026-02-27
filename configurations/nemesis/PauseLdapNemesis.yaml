@@ -1,2 +1,3 @@
-nemesis_class_name: 'PauseLdapNemesis'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'PauseLdapNemesis'
 user_prefix: 'longevity-5gb-1h-PauseLdapNemesis'

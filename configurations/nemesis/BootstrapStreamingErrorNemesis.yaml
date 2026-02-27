@@ -1,2 +1,3 @@
-nemesis_class_name: 'BootstrapStreamingErrorNemesis'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'BootstrapStreamingErrorNemesis'
 user_prefix: 'longevity-5gb-1h-BootstrapStreamingErrorNemesis'

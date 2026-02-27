@@ -13,5 +13,6 @@ n_loaders: 1
 instance_type_loader: 'c6i.large'
 instance_type_db: 'i4i.large'
 
-nemesis_class_name: 'GrowShrinkClusterNemesis'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'GrowShrinkClusterNemesis'
 nemesis_sequence_sleep_between_ops: 5
