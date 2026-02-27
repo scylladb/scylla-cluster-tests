@@ -6307,8 +6307,8 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
                 )
             else:
                 runner.cluster.check_cluster_health()
-            num_data_nodes_before = len(args[0].cluster.data_nodes)
-            num_zero_nodes_before = len(args[0].cluster.zero_nodes)
+            num_data_nodes_before = len(runner.cluster.data_nodes)
+            num_zero_nodes_before = len(runner.cluster.zero_nodes)
             start_time = time.time()
 
             current_disruption = unique_disruption_name(method_name)
@@ -6445,7 +6445,7 @@ def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=
             # Store nemesis event to track skip status for health checks
             # Only update if nemesis_event was created (i.e., we entered the with block)
             if nemesis_event is not None:
-                args[0].last_nemesis_event = nemesis_event
+                runner.last_nemesis_event = nemesis_event
 
             if is_exclusive:
                 # NOTE: sleep the nemesis interval here because the next one is already
