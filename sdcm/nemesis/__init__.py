@@ -34,7 +34,7 @@ import itertools
 from abc import ABC, abstractmethod
 from contextlib import ExitStack
 from datetime import timedelta
-from typing import Any, List, Optional, Callable, Dict, Union, Iterable, TYPE_CHECKING
+from typing import List, Optional, Callable, Union, Iterable, TYPE_CHECKING
 from functools import wraps, partial, cached_property
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
@@ -205,8 +205,6 @@ from test_lib.compaction import (
     get_compaction_random_additional_params,
     get_gc_mode,
     GcMode,
-    calculate_allowed_twcs_ttl,
-    get_table_compaction_info,
 )
 from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
@@ -359,9 +357,11 @@ class NemesisRunner:
                     self.num_deletions_factor = 1
                     break
 
-    def use_nemesis_seed(self):
+    @property
+    def random(self) -> random.Random:
         if self.nemesis_seed:
-            random.seed(self.nemesis_seed)
+            return random.Random(self.nemesis_seed)
+        return random.Random()
 
     def update_stats(self, disrupt, status=True, data=None):
         if not data:
@@ -2008,7 +2008,7 @@ class NemesisRunner:
         self.log.debug(f"nemesis stack BEFORE SHUFFLE is {[nemesis.__class__.__name__ for nemesis in disruption_list]}")
         nemesis_multiply_factor = nemesis_multiply_factor or self.cluster.params.get("nemesis_multiply_factor") or 1
         multipled_disruption_list = disruption_list * nemesis_multiply_factor
-        random.Random(self.nemesis_seed).shuffle(multipled_disruption_list)
+        self.random.shuffle(multipled_disruption_list)
         self.log.info(
             f"List of Nemesis to execute: {[nemesis.__class__.__name__ for nemesis in multipled_disruption_list]}"
         )
@@ -2209,33 +2209,6 @@ class NemesisRunner:
             self.target_node.run_cqlsh(
                 cmd=f"TRUNCATE {ks_name}.{table}{truncate_cmd_timeout_suffix}", timeout=truncate_timeout
             )
-
-    def _modify_table_property(self, name, val, filter_out_table_with_counter=False, keyspace_table=None):
-        disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
-        InfoEvent("ModifyTableProperties%s %s" % (disruption_name, self.target_node)).publish()
-
-        if not keyspace_table:
-            self.use_nemesis_seed()
-
-            ks_cfs = self.cluster.get_non_system_ks_cf_list(
-                db_node=self.target_node,
-                filter_out_table_with_counter=filter_out_table_with_counter,
-                filter_out_mv=True,
-            )  # not allowed to modify MV
-
-            keyspace_table = random.choice(ks_cfs) if ks_cfs else ks_cfs
-
-        if not keyspace_table:
-            raise UnsupportedNemesis(
-                "Non-system keyspace and table are not found. ModifyTableProperties nemesis can't be run"
-            )
-
-        cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(
-            keyspace_table=keyspace_table, name=name, val=val
-        )
-        self.actions_log.info(f"Modify table property on {keyspace_table}: {name} = {val}")
-        with self.cluster.cql_connection_patient(self.target_node) as session:
-            session.execute(cmd)
 
     def _get_all_tables_with_no_compact_storage(self, tables_to_skip=None):
         """
@@ -2715,48 +2688,6 @@ class NemesisRunner:
         InfoEvent(f"AddDropColumnMonkey table {'.'.join(self._add_drop_column_target_table)}").publish()
         self._add_drop_column_run_in_cycle()
 
-    def disrupt_modify_table_comment(self):
-        """
-        Adds random comment to a test table
-        """
-        prop_val = generate_random_string(24)
-        self._modify_table_property(name="comment", val=f"'{prop_val}'")
-
-    def disrupt_modify_table_gc_grace_time(self):
-        """
-        The number of seconds after data is marked with a tombstone (deletion marker)
-        before it is eligible for garbage-collection.
-        default: gc_grace_seconds = 864000
-        """
-        self._modify_table_property(name="gc_grace_seconds", val=random.randint(216000, 864000))
-
-    def disrupt_modify_table_caching(self):
-        """
-        Caching optimizes the use of cache memory by a table without manual tuning.
-        Cassandra weighs the cached data by size and access frequency.
-        default: caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
-        """
-        prop_val = dict(
-            keys=random.choice(["NONE", "ALL"]),
-            rows_per_partition=random.choice(["NONE", "ALL", random.randint(1, 10000)]),
-        )
-        self._modify_table_property(name="caching", val=str(prop_val))
-
-    def disrupt_modify_table_bloom_filter_fp_chance(self):
-        """
-        The Bloom filter sets the false-positive probability for SSTable Bloom filters.
-        When a client requests data, Cassandra uses the Bloom filter to check if the row
-        exists before doing disk I/O. Bloom filter property value ranges from 0 to 1.0.
-        Lower Bloom filter property probabilities result in larger Bloom filters that use more memory.
-        The effects of the minimum and maximum values:
-            0: Enables the unmodified, effectively the largest possible, Bloom filter.
-            1.0: Disables the Bloom filter.
-        default: bloom_filter_fp_chance = 0.01
-        """
-        # minimum value cannot be 0, as that would require "infinite" memory
-        # the actual minimum value is 6.71e-05, as declared in `min_supported_bloom_filter_fp_chance()`
-        self._modify_table_property(name="bloom_filter_fp_chance", val=random.uniform(6.71e-05, 0.5))
-
     def toggle_table_gc_mode(self):
         """
         Alters a non-system table tombstone_gc_mode option.
@@ -2850,323 +2781,6 @@ class NemesisRunner:
         with self.action_log_scope("Waiting for schema agreement"):
             self.cluster.wait_for_schema_agreement()
 
-    def disrupt_modify_table_compaction(self):
-        """
-        The compaction property defines the compaction strategy class for this table.
-        default: compaction = {
-            'class': 'SizeTieredCompactionStrategy'
-            'bucket_high': 1.5,
-            'bucket_low': 0.5,
-            'min_sstable_size': 50,
-            'min_threshold': 4,
-            'max_threshold': 32,
-        }
-        """
-        strategies = [
-            lambda: {
-                "class": "SizeTieredCompactionStrategy",
-                "bucket_high": random.uniform(1.2, 2.0),
-                "bucket_low": random.uniform(0.3, 0.7),
-                "min_sstable_size": random.randint(10, 100),
-                "min_threshold": random.randint(2, 6),
-                "max_threshold": random.randint(10, 32),
-            },
-            lambda: {
-                "class": "LeveledCompactionStrategy",
-                "sstable_size_in_mb": random.randint(100, 200),
-            },
-            lambda: {
-                "class": "TimeWindowCompactionStrategy",
-                "compaction_window_unit": "DAYS",
-                "compaction_window_size": random.randint(1, 7),
-                "expired_sstable_check_frequency_seconds": random.randint(300, 1200),
-                "min_threshold": random.randint(2, 6),
-                "max_threshold": random.randint(10, 32),
-            },
-        ]
-
-        # Pick a random strategy and get its properties.
-        prop_val = random.choice(strategies)()
-
-        if prop_val["class"] == "TimeWindowCompactionStrategy":
-            # Max allowed TTL - 49 days (4300000) (to be compatible with default TWCS settings)
-            self._modify_table_property(
-                name="default_time_to_live", val=str(4300000), filter_out_table_with_counter=True
-            )
-
-        self._modify_table_property(name="compaction", val=str(prop_val))
-
-    def disrupt_modify_table_compression(self):
-        """
-        The compression algorithm. Valid values are LZ4Compressor, SnappyCompressor, DeflateCompressor and
-        ZstdCompressor
-        default: compression = {}
-        """
-        algos = (
-            "",  # no compression
-            "LZ4Compressor",
-            "SnappyCompressor",
-            "DeflateCompressor",
-            "ZstdCompressor",
-        )
-        algo = random.choice(algos)
-        prop_val = {"sstable_compression": algo}
-        if algo:
-            prop_val["chunk_length_kb"] = random.choice(["4K", "64KB", "128KB"])
-            prop_val["crc_check_chance"] = random.random()
-        self._modify_table_property(name="compression", val=str(prop_val))
-
-    def disrupt_modify_table_crc_check_chance(self):
-        """
-        Not implemented, value is ignored, testing it only for backwards compatibility
-        https://docs.scylladb.com/manual/stable/cql/ddl.html
-        """
-        self._modify_table_property(name="crc_check_chance", val=random.random())
-
-    def disrupt_modify_table_dclocal_read_repair_chance(self):
-        """
-        The probability that a successful read operation triggers a read repair.
-        Unlike the repair controlled by read_repair_chance, this repair is limited to
-        replicas in the same DC as the coordinator. The value must be between 0 and 1
-        default: dclocal_read_repair_chance = 0.1
-        """
-        self._modify_table_property(name="dclocal_read_repair_chance", val=random.choice([0, 0.2, 0.5, 0.9]))
-
-    def disrupt_modify_table_default_time_to_live(self):
-        """
-        The value of this property is a number of seconds. If it is set, Cassandra applies a
-        default TTL marker to each column in the table, set to this value. When the table TTL
-        is exceeded, Cassandra tombstones the table.
-        This nemesis selects random table, check if it has TimeWindowCompactionStrategy applied
-        and calculate possible default time to live, if no - sets random values in allowed range.
-        default: default_time_to_live = 0
-        """
-        # Select table without columns with "counter" type for this nemesis - issue #1037:
-        #    Modify_table nemesis chooses first non-system table, and modify default_time_to_live of it.
-        #    But table with counters doesn't support this
-
-        # max allowed TTL - 49 days (4300000) (to be compatible with default TWCS settings)
-
-        default_min_ttl = 864000  # 10 days in seconds
-        default_max_ttl = 4300000
-
-        ks_cfs = self.cluster.get_non_system_ks_cf_list(
-            db_node=self.target_node, filter_out_table_with_counter=True, filter_out_mv=True
-        )
-
-        if not ks_cfs:
-            raise UnsupportedNemesis("No non-system user tables found")
-
-        keyspace_table = random.choice(ks_cfs) if ks_cfs else ks_cfs
-        keyspace, table = keyspace_table.split(".")
-        compaction_strategy = get_compaction_strategy(node=self.target_node, keyspace=keyspace, table=table)
-
-        if compaction_strategy == CompactionStrategy.TIME_WINDOW:
-            with self.cluster.cql_connection_patient(self.target_node) as session:
-                LOGGER.debug(f"Getting data from Scylla node: {self.target_node}, table: {keyspace_table}")
-                compaction_properties = get_table_compaction_info(keyspace=keyspace, table=table, session=session)
-            ttl_to_set = calculate_allowed_twcs_ttl(compaction_properties, default_min_ttl, default_max_ttl)
-        else:
-            ttl_to_set = default_max_ttl
-
-        InfoEvent(f"New default time to live to be set: {ttl_to_set}, for table: {keyspace_table}").publish()
-        self._modify_table_property(
-            name="default_time_to_live",
-            val=ttl_to_set,
-            filter_out_table_with_counter=True,
-            keyspace_table=keyspace_table,
-        )
-
-    def disrupt_modify_table_max_index_interval(self):
-        """
-        If the total memory usage of all index summaries reaches this value, Cassandra decreases
-        the index summaries for the coldest SSTables to the maximum set by max_index_interval.
-        The max_index_interval is the sparsest possible sampling in relation to memory pressure.
-        default: max_index_interval = 2048
-        """
-        self._modify_table_property(name="max_index_interval", val=random.choice([1024, 4096, 8192]))
-
-    def disrupt_modify_table_min_index_interval(self):
-        """
-        The minimum gap between index entries in the index summary. A lower min_index_interval
-        means the index summary contains more entries from the index, which allows Cassandra
-        to search fewer index entries to execute a read. A larger index summary may also use
-        more memory. The value for min_index_interval is the densest possible sampling of the index.
-        default: min_index_interval = 128
-        """
-        self._modify_table_property(name="min_index_interval", val=random.choice([128, 256, 512]))
-
-    def disrupt_modify_table_memtable_flush_period_in_ms(self):
-        """
-        The number of milliseconds before Cassandra flushes memtables associated with this table.
-        default: memtable_flush_period_in_ms = 0
-        """
-        self._modify_table_property(
-            name="memtable_flush_period_in_ms", val=random.choice([0, random.randint(60000, 200000)])
-        )
-
-    def disrupt_modify_table_read_repair_chance(self):
-        """
-        The probability that a successful read operation will trigger a read repair.of read repairs
-        being invoked. Unlike the repair controlled by dc_local_read_repair_chance, this repair is
-        not limited to replicas in the same DC as the coordinator. The value must be between 0 and 1
-        default: read_repair_chance = 0.0
-        """
-        self._modify_table_property(name="read_repair_chance", val=random.choice([0, 0.2, 0.5, 0.9]))
-
-    def disrupt_modify_table_speculative_retry(self):
-        """
-        Use the speculative retry property to configure rapid read protection. In a normal read,
-        Cassandra sends data requests to just enough replica nodes to satisfy the consistency
-        level. In rapid read protection, Cassandra sends out extra read requests to other replicas,
-        even after the consistency level has been met. The speculative retry property specifies
-        the trigger for these extra read requests.
-            ALWAYS: Send extra read requests to all other replicas after every read.
-            Xpercentile: Cassandra constantly tracks each table's typical read latency (in milliseconds).
-                         If you set speculative retry to Xpercentile, Cassandra sends redundant read
-                         requests if the coordinator has not received a response after X percent of the
-                         table's typical latency time.
-            Nms: Send extra read requests to all other replicas if the coordinator node has not received
-                 any responses within N milliseconds.
-            NONE: Do not send extra read requests after any read.
-        default: speculative_retry = '99.0PERCENTILE';
-        """
-        options = ("'ALWAYS'", "'%spercentile'" % random.randint(95, 99), "'%sms'" % random.randint(300, 1000))
-        self._modify_table_property(name="speculative_retry", val=random.choice(options))
-
-    def disrupt_modify_table_twcs_window_size(self):
-        """Change window size for tables with TWCS
-
-        After window size of TWCS changed, tables should be
-        reshaped. Process should not bring write amplification
-        if size of sstables in timewindow is differs significantly
-        """
-        self.use_nemesis_seed()
-
-        def set_new_twcs_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
-            """
-            Adjust window unit and size with random increments in acceptable borders,
-            ensuring the final TTL does not exceed 4,300,000 seconds (~49 days).
-            """
-            self.log.debug("Initial TWCS settings are: %s", settings)
-            MAX_TTL = 4_300_000  # ~49 days in seconds
-            expected_sstable_number = 35
-
-            compaction = settings["compaction"]
-            current_unit = compaction.get("compaction_window_unit", "DAYS")
-            current_size = int(compaction.get("compaction_window_size", 1))
-
-            random_increments = {
-                "MINUTES": (10, 90),
-                "HOURS": (2, 24),
-                "DAYS": (1, 10),
-            }
-
-            inc_min, inc_max = random_increments.get(current_unit, (1, 5))
-            increment = random.randint(inc_min, inc_max)
-            current_size += increment
-
-            unit_multipliers = {
-                "DAYS": 24 * 3600,
-                "HOURS": 3600,
-                "MINUTES": 60,
-            }
-
-            multiplier = unit_multipliers.get(current_unit, unit_multipliers["DAYS"])
-            proposed_ttl = current_size * multiplier * expected_sstable_number
-
-            if proposed_ttl > MAX_TTL:
-                current_size = MAX_TTL // (multiplier * expected_sstable_number)
-                current_size = max(current_size, 1)
-
-                proposed_ttl = current_size * multiplier * expected_sstable_number
-
-            settings["gc"] = proposed_ttl // 2
-            settings["dttl"] = proposed_ttl
-            settings["compaction"]["compaction_window_unit"] = current_unit
-            settings["compaction"]["compaction_window_size"] = current_size
-
-            self.log.debug("New TWCS settings are: %s", settings)
-            return settings
-
-        all_ks_cs_with_twcs = self.cluster.get_all_tables_with_twcs(self.target_node)
-        self.log.debug("All tables with TWCS %s", all_ks_cs_with_twcs)
-
-        if not all_ks_cs_with_twcs:
-            raise UnsupportedNemesis("No table found with TWCS")
-
-        target_ks_cs_with_settings = random.choice(all_ks_cs_with_twcs)
-
-        ks_cs_settings = set_new_twcs_settings(target_ks_cs_with_settings)
-        keyspace, table = ks_cs_settings["name"].split(".")
-
-        num_sstables_before_change = len(self.target_node.get_list_of_sstables(keyspace, table, suffix="-Data.db"))
-
-        self.log.debug("New TWCS settings: %s", str(ks_cs_settings))
-        self._modify_table_property(
-            name="compaction", val=ks_cs_settings["compaction"], keyspace_table=ks_cs_settings["name"]
-        )
-        self._modify_table_property(
-            name="default_time_to_live", val=ks_cs_settings["dttl"], keyspace_table=ks_cs_settings["name"]
-        )
-        self._modify_table_property(
-            name="gc_grace_seconds", val=ks_cs_settings["gc"], keyspace_table=ks_cs_settings["name"]
-        )
-
-        with self.action_log_scope("Waiting for schema agreement"):
-            self.cluster.wait_for_schema_agreement()
-        # wait timeout  equal 2% of test duration for generating sstables with timewindow settings
-        sleep_timeout = int(0.02 * self.tester.params["test_duration"])
-        time.sleep(sleep_timeout)
-
-        with self.action_log_scope(f"Stopping Scylla on {self.target_node.name}"):
-            self.target_node.stop_scylla()
-
-        reshape_twcs_records = self.target_node.follow_system_log(
-            patterns=[
-                "need reshape. Starting reshape process",
-                "Reshaping",
-                f"Reshape {ks_cs_settings['name']} .* Reshaped",
-            ]
-        )
-        with self.action_log_scope(f"Starting Scylla on {self.target_node.name}"):
-            self.target_node.start_scylla()
-
-        reshape_twcs_records = list(reshape_twcs_records)
-        if not reshape_twcs_records:
-            self.log.warning(
-                "Log message with sstables for reshape was not found. Autocompaction already"
-                "compact sstables by timewindows"
-            )
-            self.actions_log.info("TWCS reshape was not needed")
-        self.actions_log.info("TWCS reshape completed")
-        self.log.debug("Reshape log %s", reshape_twcs_records)
-
-        num_sstables_after_change = len(self.target_node.get_list_of_sstables(keyspace, table, suffix="-Data.db"))
-
-        self.log.info(
-            "Number of sstables before: %s and after %s change twcs settings",
-            num_sstables_before_change,
-            num_sstables_after_change,
-        )
-        if num_sstables_before_change > num_sstables_after_change:
-            self.log.error("Number of sstables after change settings larger than before")
-        # run major compaction on all nodes
-        # to reshape sstables on other nodes
-        for node in self.cluster.data_nodes:
-            num_sstables_before_change = len(node.get_list_of_sstables(keyspace, table, suffix="-Data.db"))
-            with self.action_log_scope(f"Run {keyspace}.{table} major compaction on {node.name}"):
-                node.run_nodetool("compact", args=f"{keyspace} {table}")
-            num_sstables_after_change = len(node.get_list_of_sstables(keyspace, table, suffix="-Data.db"))
-            self.log.info(
-                "Number of sstables before: %s and after %s change twcs settings on node: %s",
-                num_sstables_before_change,
-                num_sstables_after_change,
-                node.name,
-            )
-            if num_sstables_before_change > num_sstables_after_change:
-                self.log.error("Number of sstables after change settings larger than before")
-
     def disrupt_toggle_table_ics(self):
         self.toggle_table_ics()
 
@@ -3240,19 +2854,18 @@ class NemesisRunner:
             # The restore should not take more than 5% of the space total space in /var/lib/scylla
             assert fitting_snapshot_sizes, "There's not enough space for any snapshot restoration"
 
-            self.use_nemesis_seed()
-            chosen_snapshot_size = random.choice(fitting_snapshot_sizes)
+            chosen_snapshot_size = self.random.choice(fitting_snapshot_sizes)
             all_snapshots_per_region = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"][region]
 
             if self.cluster.nodes[0].is_enterprise:
-                snapshot_tag = random.choice(list(all_snapshots_per_region.keys()))
+                snapshot_tag = self.random.choice(list(all_snapshots_per_region.keys()))
             else:
                 oss_snapshots = [
                     snapshot_key
                     for snapshot_key, snapshot_value in all_snapshots_per_region.items()
                     if snapshot_value["scylla_product"] == "oss"
                 ]
-                snapshot_tag = random.choice(oss_snapshots)
+                snapshot_tag = self.random.choice(oss_snapshots)
 
             snapshot_info = all_snapshots_per_region[snapshot_tag]
             snapshot_info.update(
@@ -3874,7 +3487,6 @@ class NemesisRunner:
         self.cluster.wait_all_nodes_un()
 
     def disrupt_network_random_interruptions(self):
-        self.use_nemesis_seed()
         list_of_timeout_options = [10, 60, 120, 300, 500]
         if self._is_it_on_kubernetes():
             self._disrupt_network_random_interruptions_k8s(list_of_timeout_options)
@@ -3896,13 +3508,13 @@ class NemesisRunner:
             self.log.warning("NetworkRandomInterruption won't limit network bandwidth due to lack of monitoring nodes.")
 
         # random packet loss - between 1% - 15%
-        loss_percentage = random.randrange(1, 15)
+        loss_percentage = self.random.randrange(1, 15)
 
         # random packet corruption - between 1% - 15%
-        corrupt_percentage = random.randrange(1, 15)
+        corrupt_percentage = self.random.randrange(1, 15)
 
         # random packet delay - between 1s - 30s
-        delay_in_secs = random.randrange(1, 30)
+        delay_in_secs = self.random.randrange(1, 30)
 
         list_of_tc_options = [
             ("NetworkRandomInterruption_{}pct_loss".format(loss_percentage), "--loss {}%".format(loss_percentage)),
@@ -3920,8 +3532,8 @@ class NemesisRunner:
                 ("NetworkRandomInterruption_{}_limit".format(rate_limit), "--rate {}".format(rate_limit))
             )
 
-        option_name, selected_option = random.choice(list_of_tc_options)
-        wait_time = random.choice(list_of_timeout_options)
+        option_name, selected_option = self.random.choice(list_of_tc_options)
+        wait_time = self.random.choice(list_of_timeout_options)
 
         self.actions_log.info(
             f"Network interruption start on {self.target_node.name}, option: {option_name}, wait time: {wait_time}"
@@ -3952,7 +3564,7 @@ class NemesisRunner:
         self.actions_log.info(f"Network random interruption finished on node {self.target_node.name}")
 
     def _disrupt_network_block_k8s(self, list_of_timeout_options):
-        duration = f"{random.choice(list_of_timeout_options)}s"
+        duration = f"{self.random.choice(list_of_timeout_options)}s"
         experiment = NetworkPacketLossExperiment(self.target_node, duration, probability=100)
         with ignore_raft_topology_cmd_failing():
             with DbNodeLogger(
@@ -4040,7 +3652,7 @@ class NemesisRunner:
         # it will be terminated, choose new seed node
         num_of_seed_nodes = len(self.cluster.seed_nodes)
         if node_to_remove.is_seed and num_of_seed_nodes < 2:
-            new_seed_node = random.choice([n for n in self.cluster.nodes if n is not node_to_remove])
+            new_seed_node = self.random.choice([n for n in self.cluster.nodes if n is not node_to_remove])
             new_seed_node.set_seed_flag(True)
             self.cluster.update_seed_provider()
 
@@ -4165,7 +3777,7 @@ class NemesisRunner:
 
         textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
         textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
-        wait_time = random.choice([10, 60, 120, 300, 500])
+        wait_time = self.random.choice([10, 60, 120, 300, 500])
 
         InfoEvent(
             f"{name} {textual_matching_rule} that belongs to "
@@ -4224,7 +3836,7 @@ class NemesisRunner:
 
         textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
         textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
-        wait_time = random.choice([10, 60, 120, 300, 500])
+        wait_time = self.random.choice([10, 60, 120, 300, 500])
 
         InfoEvent(
             f"{name} {textual_matching_rule} that belongs to "
@@ -4357,7 +3969,7 @@ class NemesisRunner:
             raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
 
         list_of_timeout_options = [10, 60, 120, 300, 500]
-        wait_time = random.choice(list_of_timeout_options)
+        wait_time = self.random.choice(list_of_timeout_options)
         self.log.debug("Taking down eth1 for %dsec", wait_time)
 
         try:
@@ -5140,7 +4752,7 @@ class NemesisRunner:
         if not ks_tables_with_cdc:
             raise UnsupportedNemesis("CDC is not enabled on any table. Skipping")
 
-        ks, table = random.choice(ks_tables_with_cdc).split(".")
+        ks, table = self.random.choice(ks_tables_with_cdc).split(".")
 
         self.log.debug(f"Get table {ks}.{table} cdc extension state")
         with self.cluster.cql_connection_patient(node=self.target_node) as session:
@@ -5148,7 +4760,7 @@ class NemesisRunner:
         self.log.debug(f"table {ks}.{table} cdc extension state: {cdc_settings}")
 
         self.log.debug("Choose random cdc property to toggle")
-        cdc_property = random.choice(cdc.options.get_cdc_settings_names())
+        cdc_property = self.random.choice(cdc.options.get_cdc_settings_names())
         self.log.debug(f"Next cdc property will be changed {cdc_property}")
 
         cdc_settings[cdc_property] = cdc.options.toggle_cdc_property(cdc_property, cdc_settings[cdc_property])
@@ -5166,14 +4778,14 @@ class NemesisRunner:
             self.log.warning("CDC is not enabled on any table. Skipping")
             raise UnsupportedNemesis("CDC is not enabled on any table. Skipping")
 
-        ks, table = random.choice(ks_tables_with_cdc).split(".")
+        ks, table = self.random.choice(ks_tables_with_cdc).split(".")
         self._run_cdc_stressor_tool(ks, table)
 
     def _run_cdc_stressor_tool(self, ks, table):
         cdc_stressor_cmd = self.tester.params.get("stress_cdclog_reader_cmd")
 
         if " -duration" not in cdc_stressor_cmd:
-            read_time = random.randint(5, 20)
+            read_time = self.random.randint(5, 20)
             cdc_stressor_cmd += f" -duration {read_time}m "
 
         cdc_reader_thread = self.tester.run_cdclog_reader_thread(
@@ -5614,7 +5226,7 @@ class NemesisRunner:
             ks_cf_list = self.cluster.get_non_system_ks_cf_list(self.target_node, filter_out_mv=True)
             if not ks_cf_list:
                 raise UnsupportedNemesis("No table found to create index on")
-            ks, cf = random.choice(ks_cf_list).split(".")
+            ks, cf = self.random.choice(ks_cf_list).split(".")
             column = get_random_column_name(
                 session, ks, cf, filter_out_static_columns=True, filter_out_column_types=["counter"]
             )
@@ -5670,7 +5282,7 @@ class NemesisRunner:
         free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
         if not free_nodes:
             raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
-        cql_query_executor_node = random.choice(free_nodes)
+        cql_query_executor_node = self.random.choice(free_nodes)
         with self.node_allocator.nodes_running_nemesis(cql_query_executor_node, self.current_disruption):
             ks_cfs = self.cluster.get_non_system_ks_cf_list(
                 db_node=cql_query_executor_node,
@@ -5941,7 +5553,7 @@ class NemesisRunner:
         new_znode = self._add_and_init_new_cluster_nodes(count=1, is_zero_node=True)[0]
         self.log.debug("Run with zero-token node %s for %ds", new_znode.name, duration_with_znode)
         time.sleep(duration_with_znode)
-        znode = random.choice([node for node in self.cluster.zero_nodes if node.dc_idx == self.target_node.dc_idx])
+        znode = self.random.choice([node for node in self.cluster.zero_nodes if node.dc_idx == self.target_node.dc_idx])
         self.decommission_nodes(nodes=[znode])
 
     def disrupt_serial_restart_elected_topology_coordinator(self):
@@ -5951,10 +5563,9 @@ class NemesisRunner:
         if not self.target_node.raft.is_consistent_topology_changes_enabled:
             raise UnsupportedNemesis("Consistent topology changes feature is disabled")
 
-        self.use_nemesis_seed()
-        num_of_restarts = random.randint(1, len(self.cluster.nodes))
+        num_of_restarts = self.random.randint(1, len(self.cluster.nodes))
         self.log.debug("Number of serial restart of topology coordinator: %s", num_of_restarts)
-        election_wait_timeout = random.choice([5, 10, 15])
+        election_wait_timeout = self.random.choice([5, 10, 15])
         self.log.debug("Wait new topology coordinator election timeout: %s", election_wait_timeout)
         for num_of_restart in range(num_of_restarts):
             with self.node_allocator.run_nemesis(nemesis_label="SearchCoordinator") as verification_node:
@@ -6152,7 +5763,7 @@ class NemesisRunner:
         with self.node_allocator.run_nemesis(
             node_list=self.cluster.nodes, nemesis_label="Verification node for MV"
         ) as working_node:
-            ks_name, base_table_name = random.choice(ks_cfs).split(".")
+            ks_name, base_table_name = self.random.choice(ks_cfs).split(".")
             view_name = f"{base_table_name}_view_{str(uuid4())[:8]}"
             with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
                 try:
