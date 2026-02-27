@@ -509,7 +509,7 @@ class NemesisRunner:
         with self.action_log_scope(f"Wait for schema agreement on {self.target_node.name}"):
             self.cluster.wait_for_schema_agreement()
 
-    @decorate_with_context(ignore_raft_topology_cmd_failing)
+    @decorate_with_context([ignore_raft_topology_cmd_failing, ignore_raft_transport_failing])
     def disrupt_stop_wait_start_scylla_server(self, sleep_time=300):
         with self.action_log_scope(f"Stop Scylla on {self.target_node.name} node"):
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
