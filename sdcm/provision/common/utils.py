@@ -345,6 +345,8 @@ def disable_daily_apt_triggers():
             systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service || true
             systemctl disable apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service || true
             apt-get remove -o DPkg::Lock::Timeout=300 -y unattended-upgrades update-manager || true
+            sudo systemctl stop fwupd fwupd-refresh fwupd-refresh.timer || true
+            sudo systemctl disable fwupd fwupd-refresh fwupd-refresh.timer || true
             touch /tmp/disable_daily_apt_triggers_done
         fi
     fi
