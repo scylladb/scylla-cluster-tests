@@ -13,6 +13,7 @@ from invoke import exceptions
 
 from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
 from sdcm.mgmt.cli import ScyllaManagerTool
+from sdcm.mgmt.common import ObjectStorageUploadMode
 from sdcm import mgmt
 from sdcm.exceptions import FilesNotCorrupted
 from sdcm.remote import shell_script_cmd, LOCALRUNNER
@@ -732,6 +733,12 @@ class ManagerTestFunctionsMixIn(
 
         # FIXME: Make it works with multiple locations or file a bug for scylla-manager.
         return [f"{backend}:{location}" for location in buckets[:1]]
+
+    @cached_property
+    def backup_method(self) -> ObjectStorageUploadMode | None:
+        if manager_backup_restore_method := self.params.get("manager_backup_restore_method"):
+            return ObjectStorageUploadMode(manager_backup_restore_method)
+        return None
 
     def get_dc_mapping(self) -> str | None:
         """Get the datacenter mapping string for the restore task if there are > 1 DCs (multiDC) in the cluster.

@@ -7,7 +7,12 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
     test_name: 'mgmt_cli_test.ManagerSanityTests.test_manager_sanity',
-    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/disable_kms_key_rotation.yaml"]''',
+    test_config: '''[
+        "test-cases/manager/manager-regression-singleDC-set-distro.yaml",
+        "configurations/disable_kms_key_rotation.yaml",
+        "configurations/object_storage.yaml",
+        "configurations/object_storage_native_method.yaml"
+    ]''',
 
     scylla_version: '2025.3',
 
