@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from functools import lru_cache
 
 from cassandra import __version__ as PYTHON_DRIVER_VERSION
@@ -309,6 +310,20 @@ class GeminiGoCqlDriverVersionReporter(ToolReporterBase):
 
     def _collect_version_info(self) -> None:
         pass
+
+
+class YcsbVersionReporter(ToolReporterBase):
+    """Reports YCSB version used in SCT."""
+
+    TOOL_NAME = "ycsb"
+    _YCSB_HOME = "/usr/local/share/scylla-ycsb"
+    _VERSION_RE = re.compile(r"(\d+\.\d+(?:\.\d+)?(?:-[A-Za-z0-9]+)?)")
+
+    def _collect_version_info(self) -> None:
+        output = self.runner.run(f"ls {self._YCSB_HOME}/lib/core-*.jar 2>/dev/null | head -1 | sed 's|.*/||'")
+        LOGGER.debug("%s: Collected ycsb version output:\n%s", self, output.stdout)
+        match = self._VERSION_RE.search(output.stdout.strip())
+        self.version = match.group(1) if match else "#FAILED_CHECK_LOGS"
 
 
 class VectorStoreVersionReporter(ToolReporterBase):
