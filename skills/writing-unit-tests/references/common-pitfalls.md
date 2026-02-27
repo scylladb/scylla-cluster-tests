@@ -111,10 +111,11 @@ def test_node_status(fake_remoter):
 
 ✅ **Good:**
 ```python
+import re
+
 from invoke import Result
 
 def test_node_status(fake_remoter):
-    import re
     fake_remoter.result_map = {
         re.compile(r"nodetool status"): Result(stdout="UN  192.168.1.1", exited=0),
     }
