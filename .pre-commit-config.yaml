@@ -71,14 +71,14 @@ repos:
         entry: ./sct.py create-nemesis-yaml
         language: system
         pass_filenames: false
-        files: (sdcm/nemesis.py|sdcm/nemesis_registry.py|sdcm/utils/nemesis_generation.py)
+        files: ^sdcm/nemesis/
 
     -   id: create-nemesis-pipelines
         name: create-nemesis-pipelines
         entry: ./sct.py create-nemesis-pipelines
         language: system
         pass_filenames: false
-        files: (sdcm/nemesis.py|sdcm/nemesis_registry.py|sdcm/utils/nemesis_generation.py|templates/.*.j2)
+        files: (^sdcm/nemesis/|templates/.*.j2)
 
     -   id: uv-sort
         name: uv-sort

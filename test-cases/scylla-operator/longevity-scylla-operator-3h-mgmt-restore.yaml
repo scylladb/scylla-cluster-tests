@@ -7,7 +7,8 @@ k8s_n_scylla_pods_per_cluster: 3
 
 n_loaders: 2
 
-nemesis_class_name: 'MgmtRestore'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: 'MgmtRestore'
 nemesis_during_prepare: false
 
 user_prefix: 'longevity-operator-3h-mgmt-restore'

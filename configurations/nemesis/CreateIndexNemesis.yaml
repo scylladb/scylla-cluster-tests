@@ -1,2 +1,3 @@
-nemesis_class_name: 'CreateIndexNemesis'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'CreateIndexNemesis'
 user_prefix: 'longevity-5gb-1h-CreateIndexNemesis'

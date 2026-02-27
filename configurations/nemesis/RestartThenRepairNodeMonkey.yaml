@@ -1,2 +1,3 @@
-nemesis_class_name: 'RestartThenRepairNodeMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'RestartThenRepairNodeMonkey'
 user_prefix: 'longevity-5gb-1h-RestartThenRepairNodeMonkey'

@@ -4,6 +4,7 @@
 # - https://github.com/scylladb/scylla-enterprise/issues/4588
 
 hinted_handoff: 'enabled'
-nemesis_class_name: 'MgmtRepair'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'MgmtRepair'
 latte_schema_parameters:
   tombstone_gc_mode: repair

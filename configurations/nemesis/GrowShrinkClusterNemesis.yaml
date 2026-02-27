@@ -1,2 +1,3 @@
-nemesis_class_name: 'GrowShrinkClusterNemesis'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'GrowShrinkClusterNemesis'
 user_prefix: 'longevity-5gb-1h-GrowShrinkClusterNemesis'

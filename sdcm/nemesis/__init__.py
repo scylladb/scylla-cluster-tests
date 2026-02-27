@@ -13,25 +13,28 @@
 
 
 """
-Classes that introduce disruption in clusters.
+Module containing logic for running disruptions on a test cluster
 """
 
 import contextlib
 import copy
 import datetime
+import importlib
 import inspect
 import logging
 import math
 import os
+import pkgutil
 import random
 import re
 import time
 import traceback
 import json
 import itertools
+from abc import ABC, abstractmethod
 from contextlib import ExitStack
 from datetime import timedelta
-from typing import Any, List, Optional, Tuple, Callable, Dict, Set, Union, Iterable
+from typing import Any, List, Optional, Callable, Dict, Union, Iterable, TYPE_CHECKING
 from functools import wraps, partial, cached_property
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
@@ -44,13 +47,12 @@ from cassandra.cluster import NoHostAvailable, OperationTimedOut
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.common.enums import NemesisStatus
-from sdcm.mgmt.cli import BackupTask
-from sdcm.nemesis_registry import NemesisRegistry
+from sdcm.nemesis.registry import NemesisRegistry
 from sdcm.utils.action_logger import get_action_logger
 
 from sdcm.utils.cql_utils import cql_unquote_if_needed, cql_quote_if_needed
 from sdcm import wait, mgmt
-from sdcm.audit import Audit, AuditConfiguration, AuditStore
+from sdcm.audit import Audit, AuditConfiguration
 from sdcm.cluster import (
     BaseCluster,
     BaseNode,
@@ -148,9 +150,11 @@ from sdcm.utils.k8s.chaos_mesh import (
 )
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
-from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS, DefaultValue, unique_disruption_name
-from sdcm.utils.nemesis_utils.indexes import (
+
+from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS, DefaultValue, node_operations, unique_disruption_name
+from sdcm.nemesis.utils.indexes import (
     ViewFinishedBuildingException,
+    is_cf_a_view,
     get_random_column_name,
     create_index,
     wait_for_index_to_be_built,
@@ -162,8 +166,7 @@ from sdcm.utils.nemesis_utils.indexes import (
     create_materialized_view_for_random_column,
     wait_materialized_view_building_tasks_started,
 )
-from sdcm.utils.nemesis_utils import node_operations
-from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocationError, NemesisNodeAllocator
+from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator, NemesisNodeAllocationError
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.replication_strategy_utils import (
     temporary_replication_strategy_setter,
@@ -212,22 +215,18 @@ from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
 
+if TYPE_CHECKING:
+    from sdcm.audit import AuditStore
+    from sdcm.mgmt.cli import BackupTask
 
 LOGGER = logging.getLogger(__name__)
 # NOTE: following lock is needed in the K8S multitenant case
 NEMESIS_LOCK = Lock()
 NEMESIS_RUN_INFO = {}
-EXCLUSIVE_NEMESIS_NAMES = (
-    "disrupt_drain_kubernetes_node_then_replace_scylla_node",
-    "disrupt_terminate_kubernetes_host_then_replace_scylla_node",
-    "disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node",
-    "disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node",
-)
 
 DISRUPT_POOL_PROPERTY_NAME = "target_pool"
 
-
-DISRUPT_METHOD_IDENTIFY_REGEX = re.compile(r"self\.(?P<method_name>disrupt_[0-9A-Za-z_]+?)\(.*\)", re.MULTILINE)
+__all__ = []
 
 
 def target_data_nodes(func: Callable) -> Callable:
@@ -265,18 +264,31 @@ class NemesisFlags:
     delete_rows: bool = False  # A flag denotes a nemesis deletes partitions/rows, generating tombstones.
     zero_node_changes: bool = False
     sla: bool = False  # flag that signal that nemesis is used for SLA tests
+    modify_table: bool = False  # flag that modifies table properties, not columns
 
 
-class Nemesis(NemesisFlags):
+class NemesisBaseClass(NemesisFlags, ABC):
     additional_configs: list[str] = None  # Configs required for running nemesis, used in job generation
     additional_params: dict[str, str] = None  # Parameters required for jenkins pipelines, used in job generation
 
+    exclusive: bool = False  # True, if the nemesis is exclusive, i.e. it should not run in parallel with other nemeses
+
+    def __init__(self, runner: "NemesisRunner"):
+        super().__init__()
+        self.runner: "NemesisRunner" = runner
+
+    @abstractmethod
+    def disrupt(self):
+        """
+        Runs the actual disruption
+        """
+
+
+class NemesisRunner:
     def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
         # *args -  compatible with CategoricalMonkey
         self.tester = tester_obj  # ClusterTester object
-        self.nemesis_registry = NemesisRegistry(
-            base_class=Nemesis, flag_class=NemesisFlags, excluded_list=COMPLEX_NEMESIS
-        )
+        self.nemesis_registry = NemesisRegistry(base_class=NemesisBaseClass, flag_class=NemesisFlags)
         self.cluster: Union[BaseCluster, BaseScyllaCluster] = tester_obj.db_cluster
         self.loaders = tester_obj.loaders
         self.monitoring_set = tester_obj.monitors
@@ -348,35 +360,6 @@ class Nemesis(NemesisFlags):
                 if "scylla-bench" in stress_cmd_splitted and "-mode=write" in stress_cmd_splitted:
                     self.num_deletions_factor = 1
                     break
-
-    @classmethod
-    def add_disrupt_method(cls, func=None):
-        """
-        Add disrupt methods to Nemesis class, so those can be randomlly selected by `Nemesis.call_random_disrupt_method`
-        or `Nemesis.get_list_of_disrupt_methods_for_nemesis_subclasses`.
-
-        example of usage:
-        >>> class AddRemoveDCMonkey(Nemesis):
-        >>>    @Nemesis.add_disrupt_method
-        >>>    def disrupt_add_remove_dc(self):
-        >>>        return 'Worked'
-        >>>
-        >>>    def disrupt(self):
-        >>>        self.disrupt_add_remove_dc()
-
-        :param func: if not None, function was used with parantasis @Nemesis.add_disrupt_method()
-        :return: the original function
-        """
-        if func is None:
-            # if func is not defined, return a this function wrapped see https://stackoverflow.com/a/39335652
-            return partial(cls.add_disrupt_method)
-
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            return func(self, *args, **kwargs)
-
-        setattr(cls, func.__name__, wrapper)  # bind it to Nemesis class
-        return func  # returning func means func can still be used normally
 
     def use_nemesis_seed(self):
         if self.nemesis_seed:
@@ -463,7 +446,7 @@ class Nemesis(NemesisFlags):
                 cycles_count -= 1
                 cur_interval = self.interval
                 try:
-                    self.disrupt()
+                    self.call_next_nemesis()
                 except (UnsupportedNemesis, MethodVersionNotFound) as exc:
                     self.log.warning("Skipping unsupported nemesis: %s", exc)
                     cur_interval = 0
@@ -534,7 +517,6 @@ class Nemesis(NemesisFlags):
             self.cluster.wait_for_schema_agreement()
 
     @decorate_with_context(ignore_raft_topology_cmd_failing)
-    @target_all_nodes
     def disrupt_stop_wait_start_scylla_server(self, sleep_time=300):
         with self.action_log_scope(f"Stop Scylla on {self.target_node.name} node"):
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
@@ -548,7 +530,6 @@ class Nemesis(NemesisFlags):
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     @decorate_with_context(ignore_ycsb_connection_refused)
-    @target_all_nodes
     def disrupt_stop_start_scylla_server(self):
         with self.action_log_scope(f"Stop Scylla on {self.target_node.name}"):
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
@@ -791,7 +772,6 @@ class Nemesis(NemesisFlags):
 
     # This nemesis should be run with "private" ip_ssh_connections till the issue #665 is not fixed
 
-    @target_all_nodes
     def disrupt_restart_then_repair_node(self):
         with (
             DbEventsFilter(
@@ -812,7 +792,6 @@ class Nemesis(NemesisFlags):
         self.target_node.wait_node_fully_start(timeout=28800)  # 8 hours
         self.run_repair()
 
-    @target_all_nodes
     def disrupt_resetlocalschema(self):
         rlocal_schema_res = self.target_node.follow_system_log(patterns=["schema_tables - Schema version changed to"])
         with self.action_log_scope(f"Reset local schema on {self.target_node.name}"):
@@ -831,13 +810,11 @@ class Nemesis(NemesisFlags):
         self.log.debug("Sleep for 60 sec: the other nodes should pull new version")
         time.sleep(60)
 
-    @target_all_nodes
     def disrupt_hard_reboot_node(self):
         self.reboot_node(target_node=self.target_node, hard=True)
         with self.action_log_scope(f"Wait for {self.target_node.name} node to be fully started"):
             self.target_node.wait_node_fully_start()
 
-    @target_all_nodes
     def disrupt_multiple_hard_reboot_node(self) -> None:
         cdc_expected_error_patterns = [
             "cdc - Could not update CDC description table with generation",
@@ -885,14 +862,12 @@ class Nemesis(NemesisFlags):
                 f"After '{found_cdc_error[0]}', messages '{' or '.join(cdc_success_msg)}' were not found"
             )
 
-    @target_all_nodes
     def disrupt_soft_reboot_node(self):
         self.reboot_node(target_node=self.target_node, hard=False)
         with self.action_log_scope(f"Wait for {self.target_node.name} node to be fully started"):
             self.target_node.wait_node_fully_start()
 
-    @decorate_with_context(ignore_ycsb_connection_refused)
-    @target_all_nodes
+    @decorate_with_context([ignore_ycsb_connection_refused, ignore_raft_topology_cmd_failing])
     def disrupt_rolling_restart_cluster(self, random_order=False):
         with self.action_log_scope(f"Rolling restart cluster. random order: {random_order}"):
             self.cluster.restart_scylla(random_order=random_order)
@@ -937,8 +912,7 @@ class Nemesis(NemesisFlags):
             with self.cluster.cql_connection_patient(self.target_node) as session:
                 session.execute("DROP KEYSPACE keyspace_for_authenticator_switch")
 
-    @decorate_with_context(ignore_ycsb_connection_refused)
-    @target_all_nodes
+    @decorate_with_context([ignore_ycsb_connection_refused, ignore_raft_topology_cmd_failing])
     def disrupt_rolling_config_change_internode_compression(self):
         def get_internode_compression_new_value_randomly(current_compression):
             self.log.debug(f"Current compression is {current_compression}")
@@ -1162,7 +1136,6 @@ class Nemesis(NemesisFlags):
             self.repair_nodetool_rebuild()
 
     @decorate_with_context(ignore_ycsb_connection_refused)
-    @target_all_nodes
     def disrupt_nodetool_drain(self):
         with self.action_log_scope(f"Draining Scylla on {self.target_node.name} node"):
             result = self.target_node.run_nodetool("drain", timeout=15 * 60, coredump_on_timeout=True)
@@ -1178,7 +1151,6 @@ class Nemesis(NemesisFlags):
                 self.target_node.stop_scylla_server(verify_up=False, verify_down=True, ignore_status=True)
                 self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
-    @target_all_nodes
     def disrupt_ldap_connection_toggle(self):
         if not self.cluster.params.get("use_ldap_authorization"):
             raise UnsupportedNemesis("Cluster is not configured to run with LDAP authorization, hence skipping")
@@ -1194,7 +1166,6 @@ class Nemesis(NemesisFlags):
         self.actions_log.info("Resuming the LDAP container")
         ContainerManager.unpause_container(self.tester.localhost, "ldap")
 
-    @target_all_nodes
     def disrupt_disable_enable_ldap_authorization(self):
         if not self.cluster.params.get("use_ldap_authorization"):
             raise UnsupportedNemesis("Cluster is not configured to run with LDAP authorization, hence skipping")
@@ -1389,11 +1360,9 @@ class Nemesis(NemesisFlags):
             self.nodetool_cleanup_on_all_nodes_parallel()
         return new_node
 
-    @target_all_nodes
     def disrupt_nodetool_decommission(self, add_node=True):
         return self._nodetool_decommission(add_node=add_node)
 
-    @target_all_nodes
     def disrupt_nodetool_seed_decommission(self, add_node=True):
         if len(self.cluster.seed_nodes) < 2:
             raise UnsupportedNemesis("To running seed decommission the cluster must contains at least 2 seed nodes")
@@ -1663,7 +1632,6 @@ class Nemesis(NemesisFlags):
         self.log.info("Wait till %s is ready", node)
         node.wait_for_pod_readiness()
 
-    @target_all_nodes
     def disrupt_terminate_and_replace_node(self):
         with self.action_log_scope(f"Terminate and replace {self.target_node.name} node"):
             self._terminate_and_replace_node()
@@ -1719,7 +1687,6 @@ class Nemesis(NemesisFlags):
                 self.cluster.update_seed_provider()
 
     @decorate_with_context([ignore_ycsb_connection_refused, ignore_raft_topology_cmd_failing])
-    @target_all_nodes
     def disrupt_kill_scylla(self):
         self._kill_scylla_daemon()
 
@@ -1758,7 +1725,6 @@ class Nemesis(NemesisFlags):
     def disrupt_major_compaction(self):
         self._major_compaction()
 
-    @target_data_nodes
     def disrupt_load_and_stream(self):
         # Checking the columns number of keyspace1.standard1
         self.log.debug("Prepare keyspace1.standard1 if it does not exist")
@@ -1786,7 +1752,6 @@ class Nemesis(NemesisFlags):
                 with self.action_log_scope(f"Loading and streaming sstables on {load_on_node.name} node"):
                     SstableLoadUtils.run_load_and_stream(load_on_node, **kwargs)
 
-    @target_all_nodes
     def disrupt_nodetool_refresh(self, big_sstable: bool = False):
         # Checking the columns number of keyspace1.standard1
         self.log.debug("Prepare keyspace1.standard1 if it does not exist")
@@ -1869,7 +1834,6 @@ class Nemesis(NemesisFlags):
             node.restart_scylla_server(verify_up_after=True)
             assert no_space_errors, "There are no 'No space left on device' errors in db log during enospc disruption."
 
-    @target_all_nodes
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
         if ComparableScyllaVersion(self.target_node.scylla_version) > "2025.3.99":
             raise UnsupportedNemesis(
@@ -1901,7 +1865,6 @@ class Nemesis(NemesisFlags):
                             self.actions_log.info(f"Cleaning disk space with scylla restart on {node.name}")
                             clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
 
-    @target_all_nodes
     def disrupt_end_of_quota_nemesis(self, sleep_time=30):
         """
         Nemesis flow
@@ -1980,27 +1943,15 @@ class Nemesis(NemesisFlags):
                     ).create()
                 )
 
-    @cached_property
-    def all_disrupt_methods(self):
-        return self.nemesis_registry.get_disrupt_methods()
-
-    def execute_disrupt_method(self, disrupt_method):
+    # Nemesis running code
+    def execute_nemesis(self, nemesis: NemesisBaseClass):
         """Runs selected disrupt method"""
-        disrupt_method_name = disrupt_method.__name__.replace("disrupt_", "")
-        self.metrics_srv.event_start(disrupt_method_name)
+        event_name = nemesis.__class__.__name__
+        self.metrics_srv.event_start(event_name)
         try:
-            disrupt_method(self)
+            disrupt_method_wrapper(nemesis.disrupt, caller_obj=nemesis, is_exclusive=nemesis.exclusive)()
         finally:
-            self.metrics_srv.event_stop(disrupt_method_name)
-
-    def build_disruptions_by_name(self, disrupt_methods: List[str]):
-        """Builds list of available disruptions according to function names"""
-        filtered = [func for func in self.all_disrupt_methods if func.__name__ in disrupt_methods]
-        names = [func.__name__ for func in filtered]
-        assert names == disrupt_methods, (
-            f"Unable to find these disrupt methods: {set(disrupt_methods).difference(names)}"
-        )
-        return filtered
+            self.metrics_srv.event_stop(event_name)
 
     def build_disruptions_by_selector(self, nemesis_selector: str | None = None):
         """
@@ -2015,8 +1966,25 @@ class Nemesis(NemesisFlags):
                 nemesis_selector = nemesis_selector + " and kubernetes"
             else:
                 nemesis_selector = "kubernetes"
-        disruptions = self.nemesis_registry.get_disrupt_methods(nemesis_selector)
+        subclasses = self.nemesis_registry.filter_subclasses(nemesis_selector)
+        disruptions = []
+        for subclass in subclasses:
+            try:
+                disruptions.append(subclass(runner=self))
+            except Exception as e:  # noqa: BLE001
+                self.log.warning(f"Error while initializing nemesis {subclass.__name__}, ignoring: {e}")
         return disruptions
+
+    def build_disruptions_by_name(self, disrupt_methods: List[str]):
+        """Builds list of available disruptions according to class names"""
+        method_selector = " or ".join(disrupt_methods)
+        selector = f"{self.nemesis_selector} and ({method_selector})" if self.nemesis_selector else method_selector
+        filtered = self.build_disruptions_by_selector(selector)
+        names = [func.__class__.__name__ for func in filtered]
+        assert names == disrupt_methods, (
+            f"Unable to find these disrupt methods: {set(disrupt_methods).difference(names)}"
+        )
+        return filtered
 
     @property
     def nemesis_selector(self) -> str:
@@ -2045,7 +2013,7 @@ class Nemesis(NemesisFlags):
     @property
     def _disruption_list_names(self):
         """Returns name of all collected nemesis"""
-        return [nemesis.__name__ for nemesis in self.disruptions_list]
+        return [nemesis.__class__.__name__ for nemesis in self.disruptions_list]
 
     def shuffle_list_of_disruptions(self, disruption_list: List, nemesis_multiply_factor: int | None = None):
         """
@@ -2056,11 +2024,13 @@ class Nemesis(NemesisFlags):
         Usually retrieved from the test yaml by using the "nemesis_selector", more about nemesis_selector behaviour in sct_config.py
         """
         self.log.debug(f"nemesis_seed to be used is {self.nemesis_seed}")
-        self.log.debug(f"nemesis stack BEFORE SHUFFLE is {[nemesis.__name__ for nemesis in disruption_list]}")
+        self.log.debug(f"nemesis stack BEFORE SHUFFLE is {[nemesis.__class__.__name__ for nemesis in disruption_list]}")
         nemesis_multiply_factor = nemesis_multiply_factor or self.cluster.params.get("nemesis_multiply_factor") or 1
         multipled_disruption_list = disruption_list * nemesis_multiply_factor
         random.Random(self.nemesis_seed).shuffle(multipled_disruption_list)
-        self.log.info(f"List of Nemesis to execute: {[nemesis.__name__ for nemesis in multipled_disruption_list]}")
+        self.log.info(
+            f"List of Nemesis to execute: {[nemesis.__class__.__name__ for nemesis in multipled_disruption_list]}"
+        )
         return multipled_disruption_list
 
     @cached_property
@@ -2071,7 +2041,7 @@ class Nemesis(NemesisFlags):
     def call_next_nemesis(self):
         """Calls next nemesis in the order"""
         assert self.disruptions_list, "no nemesis were selected"
-        self.execute_disrupt_method(disrupt_method=next(self.infinite_cycle))
+        self.execute_nemesis(nemesis=next(self.infinite_cycle))
 
     # End of Nemesis running code
     @latency_calculator_decorator(legend="Run repair process with nodetool repair", cycle_name="repair_nodetool_repair")
@@ -2163,7 +2133,6 @@ class Nemesis(NemesisFlags):
         with self.action_log_scope("Cleanup all nodes in parallel"):
             parallel_objects.run(_nodetool_cleanup)
 
-    @target_all_nodes
     def disrupt_nodetool_cleanup(self):
         self.nodetool_cleanup_on_all_nodes_parallel()
 
@@ -2766,12 +2735,14 @@ class Nemesis(NemesisFlags):
         InfoEvent(f"AddDropColumnMonkey table {'.'.join(self._add_drop_column_target_table)}").publish()
         self._add_drop_column_run_in_cycle()
 
-    def modify_table_comment(self):
-        # default: comment = ''
+    def disrupt_modify_table_comment(self):
+        """
+        Adds random comment to a test table
+        """
         prop_val = generate_random_string(24)
         self._modify_table_property(name="comment", val=f"'{prop_val}'")
 
-    def modify_table_gc_grace_time(self):
+    def disrupt_modify_table_gc_grace_time(self):
         """
         The number of seconds after data is marked with a tombstone (deletion marker)
         before it is eligible for garbage-collection.
@@ -2779,7 +2750,7 @@ class Nemesis(NemesisFlags):
         """
         self._modify_table_property(name="gc_grace_seconds", val=random.randint(216000, 864000))
 
-    def modify_table_caching(self):
+    def disrupt_modify_table_caching(self):
         """
         Caching optimizes the use of cache memory by a table without manual tuning.
         Cassandra weighs the cached data by size and access frequency.
@@ -2791,7 +2762,7 @@ class Nemesis(NemesisFlags):
         )
         self._modify_table_property(name="caching", val=str(prop_val))
 
-    def modify_table_bloom_filter_fp_chance(self):
+    def disrupt_modify_table_bloom_filter_fp_chance(self):
         """
         The Bloom filter sets the false-positive probability for SSTable Bloom filters.
         When a client requests data, Cassandra uses the Bloom filter to check if the row
@@ -2899,7 +2870,7 @@ class Nemesis(NemesisFlags):
         with self.action_log_scope("Waiting for schema agreement"):
             self.cluster.wait_for_schema_agreement()
 
-    def modify_table_compaction(self):
+    def disrupt_modify_table_compaction(self):
         """
         The compaction property defines the compaction strategy class for this table.
         default: compaction = {
@@ -2945,7 +2916,7 @@ class Nemesis(NemesisFlags):
 
         self._modify_table_property(name="compaction", val=str(prop_val))
 
-    def modify_table_compression(self):
+    def disrupt_modify_table_compression(self):
         """
         The compression algorithm. Valid values are LZ4Compressor, SnappyCompressor, DeflateCompressor and
         ZstdCompressor
@@ -2965,13 +2936,14 @@ class Nemesis(NemesisFlags):
             prop_val["crc_check_chance"] = random.random()
         self._modify_table_property(name="compression", val=str(prop_val))
 
-    def modify_table_crc_check_chance(self):
+    def disrupt_modify_table_crc_check_chance(self):
         """
-        default: crc_check_chance = 1.0
+        Not implemented, value is ignored, testing it only for backwards compatibility
+        https://docs.scylladb.com/manual/stable/cql/ddl.html
         """
         self._modify_table_property(name="crc_check_chance", val=random.random())
 
-    def modify_table_dclocal_read_repair_chance(self):
+    def disrupt_modify_table_dclocal_read_repair_chance(self):
         """
         The probability that a successful read operation triggers a read repair.
         Unlike the repair controlled by read_repair_chance, this repair is limited to
@@ -2980,7 +2952,7 @@ class Nemesis(NemesisFlags):
         """
         self._modify_table_property(name="dclocal_read_repair_chance", val=random.choice([0, 0.2, 0.5, 0.9]))
 
-    def modify_table_default_time_to_live(self):
+    def disrupt_modify_table_default_time_to_live(self):
         """
         The value of this property is a number of seconds. If it is set, Cassandra applies a
         default TTL marker to each column in the table, set to this value. When the table TTL
@@ -3025,7 +2997,7 @@ class Nemesis(NemesisFlags):
             keyspace_table=keyspace_table,
         )
 
-    def modify_table_max_index_interval(self):
+    def disrupt_modify_table_max_index_interval(self):
         """
         If the total memory usage of all index summaries reaches this value, Cassandra decreases
         the index summaries for the coldest SSTables to the maximum set by max_index_interval.
@@ -3034,7 +3006,7 @@ class Nemesis(NemesisFlags):
         """
         self._modify_table_property(name="max_index_interval", val=random.choice([1024, 4096, 8192]))
 
-    def modify_table_min_index_interval(self):
+    def disrupt_modify_table_min_index_interval(self):
         """
         The minimum gap between index entries in the index summary. A lower min_index_interval
         means the index summary contains more entries from the index, which allows Cassandra
@@ -3044,7 +3016,7 @@ class Nemesis(NemesisFlags):
         """
         self._modify_table_property(name="min_index_interval", val=random.choice([128, 256, 512]))
 
-    def modify_table_memtable_flush_period_in_ms(self):
+    def disrupt_modify_table_memtable_flush_period_in_ms(self):
         """
         The number of milliseconds before Cassandra flushes memtables associated with this table.
         default: memtable_flush_period_in_ms = 0
@@ -3053,7 +3025,7 @@ class Nemesis(NemesisFlags):
             name="memtable_flush_period_in_ms", val=random.choice([0, random.randint(60000, 200000)])
         )
 
-    def modify_table_read_repair_chance(self):
+    def disrupt_modify_table_read_repair_chance(self):
         """
         The probability that a successful read operation will trigger a read repair.of read repairs
         being invoked. Unlike the repair controlled by dc_local_read_repair_chance, this repair is
@@ -3062,7 +3034,7 @@ class Nemesis(NemesisFlags):
         """
         self._modify_table_property(name="read_repair_chance", val=random.choice([0, 0.2, 0.5, 0.9]))
 
-    def modify_table_speculative_retry(self):
+    def disrupt_modify_table_speculative_retry(self):
         """
         Use the speculative retry property to configure rapid read protection. In a normal read,
         Cassandra sends data requests to just enough replica nodes to satisfy the consistency
@@ -3221,20 +3193,14 @@ class Nemesis(NemesisFlags):
     def disrupt_toggle_table_gc_mode(self):
         self.toggle_table_gc_mode()
 
-    def disrupt_modify_table(self):
-        # randomly select and run one of disrupt_modify_table* methods
-        disrupt_func_name = random.choice([dm for dm in dir(self) if dm.startswith("modify_table")])
-        disrupt_func = getattr(self, disrupt_func_name)
-        disrupt_func()
-
     def _run_manager_backup(
         self, mgr_cluster, object_storage_upload_mode: ObjectStorageUploadMode, timeout: int
-    ) -> BackupTask:
+    ) -> "BackupTask":
         with self.action_log_scope("Scylla Manager backup"):
             task = run_manager_backup(mgr_cluster, self.tester.locations, object_storage_upload_mode, timeout)
         return task
 
-    def _manager_backup_and_report(self, object_storage_upload_mode: ObjectStorageUploadMode, label) -> BackupTask:
+    def _manager_backup_and_report(self, object_storage_upload_mode: ObjectStorageUploadMode, label) -> "BackupTask":
         """
         Run a backup using Scylla Manager and report the result to Argus.
 
@@ -3270,15 +3236,12 @@ class Nemesis(NemesisFlags):
     def get_manager_tool(self):
         return mgmt.get_scylla_manager_tool(manager_node=self.tester.monitors.nodes[0])
 
-    @target_data_nodes
     def disrupt_mgmt_backup_specific_keyspaces(self):
         self._mgmt_backup(backup_specific_tables=True)
 
-    @target_data_nodes
     def disrupt_mgmt_backup(self):
         self._mgmt_backup(backup_specific_tables=False)
 
-    @target_data_nodes
     def disrupt_mgmt_restore(self):  # noqa: PLR0914
         def get_total_scylla_partition_size():
             result = self.cluster.data_nodes[0].remoter.run("df -k | grep /var/lib/scylla")  # Size in KB
@@ -3517,13 +3480,11 @@ class Nemesis(NemesisFlags):
             mgr_task.stop()
             assert False, f"Backup task {mgr_task.id} timed out - while on status {status}"
 
-    @target_data_nodes
     def disrupt_mgmt_repair_cli(self):
         if not self.cluster.params.get("use_mgmt") and not self.cluster.params.get("use_cloud_manager"):
             raise UnsupportedNemesis("Scylla-manager configuration is not defined!")
         self.run_repair_manager()
 
-    @target_data_nodes
     def disrupt_mgmt_corrupt_then_repair(self):
         if not self.cluster.params.get("use_mgmt") and not self.cluster.params.get("use_cloud_manager"):
             raise UnsupportedNemesis("Scylla-manager configuration is not defined!")
@@ -3612,7 +3573,6 @@ class Nemesis(NemesisFlags):
         self.log.debug("Execute a complete repair for target node")
         self.run_repair()
 
-    @target_data_nodes
     def disrupt_validate_hh_short_downtime(self):
         """
         Validates that hinted handoff mechanism works: there were no drops and errors
@@ -3720,7 +3680,6 @@ class Nemesis(NemesisFlags):
                 f"Actual snapshot content: {sorted(snapshot_content_list)}"
             )
 
-    @target_all_nodes
     def disrupt_snapshot_operations(self):
         """
         Extend this nemesis to run 'nodetool snapshot' more options including multiple tables.
@@ -3830,7 +3789,6 @@ class Nemesis(NemesisFlags):
 
     # NOTE: '2023.1.rc0' is set in advance, not guaranteed to match when appears
     @scylla_versions(("4.6.rc0", None), ("2023.1.rc0", None))
-    @target_all_nodes
     def disrupt_show_toppartitions(self):
         # NOTE: new API is supported only starting with Scylla 4.6
         #       In Scylla 4.5 it exists but disabled.
@@ -3935,7 +3893,6 @@ class Nemesis(NemesisFlags):
             experiment.wait_until_finished()
         self.cluster.wait_all_nodes_un()
 
-    @target_all_nodes
     def disrupt_network_random_interruptions(self):
         list_of_timeout_options = [10, 60, 120, 300, 500]
         if self._is_it_on_kubernetes():
@@ -4028,7 +3985,6 @@ class Nemesis(NemesisFlags):
             time.sleep(15)
             self.cluster.wait_all_nodes_un()
 
-    @target_all_nodes
     def disrupt_network_block(self):
         list_of_timeout_options = [10, 60, 120, 300, 500]
         if self._is_it_on_kubernetes():
@@ -4072,7 +4028,6 @@ class Nemesis(NemesisFlags):
                 self.cluster.wait_all_nodes_un()
         self.actions_log.info(f"Network block finished on {self.target_node.name} node")
 
-    @target_all_nodes
     def disrupt_remove_node_then_add_node(self):
         """
         https://docs.scylladb.com/operating-scylla/procedures/cluster-management/remove_node/
@@ -4216,7 +4171,6 @@ class Nemesis(NemesisFlags):
         # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
         self.nodetool_cleanup_on_all_nodes_parallel()
 
-    @target_all_nodes
     def disrupt_network_reject_inter_node_communication(self):
         """
         Generates random firewall rule to drop/reject packets for inter-node communications, port 7000 and 7001
@@ -4256,7 +4210,6 @@ class Nemesis(NemesisFlags):
                 wait_time=wait_time,
             )
 
-    @target_all_nodes
     def disrupt_network_reject_node_exporter(self):
         """
         Generates random firewall rule to drop/reject packets for node exporter connections, port 9100
@@ -4284,7 +4237,6 @@ class Nemesis(NemesisFlags):
             wait_time=wait_time,
         )
 
-    @target_all_nodes
     def disrupt_network_reject_thrift(self):
         """
         Generates random firewall rule to drop/reject packets for thrift connections, port 9100
@@ -4425,7 +4377,6 @@ class Nemesis(NemesisFlags):
         if self.tester.params.get("print_kernel_callstack"):
             save_kallsyms_map(node=target_node)
 
-    @target_all_nodes
     def disrupt_network_start_stop_interface(self):
         if not self.cluster.extra_network_interface:
             raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
@@ -4691,7 +4642,6 @@ class Nemesis(NemesisFlags):
             self.target_node.remoter.run("sudo dd if=/dev/urandom of={} count=1024".format(sstable_file))
             self.log.debug("File {} was corrupted by dd".format(sstable_file))
 
-    @target_data_nodes
     def disrupt_corrupt_then_scrub(self):
         """
         Try to rebuild the sstables of all test keyspaces by scrub, the corrupted partitions
@@ -4779,7 +4729,6 @@ class Nemesis(NemesisFlags):
         )
         self.log.info(f"Double load results: {results}")
 
-    @target_data_nodes
     def disrupt_grow_shrink_cluster(self):
         sleep_time_between_ops = self.cluster.params.get("nemesis_sequence_sleep_between_ops")
         if not self.has_steady_run and sleep_time_between_ops:
@@ -4873,14 +4822,12 @@ class Nemesis(NemesisFlags):
     # TODO: add support for the 'LocalFileSystemKeyProviderFactory' and 'KmipKeyProviderFactory' key providers
     # TODO: add encryption for a table with large partitions?
 
-    @target_all_nodes
     def disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation(self):
         self._enable_disable_table_encryption(
             enable_kms_key_rotation=False,
             additional_scylla_encryption_options={"key_provider": "KmsKeyProviderFactory"},
         )
 
-    @target_all_nodes
     def disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation(self):
         self._enable_disable_table_encryption(
             enable_kms_key_rotation=True, additional_scylla_encryption_options={"key_provider": "KmsKeyProviderFactory"}
@@ -5045,7 +4992,6 @@ class Nemesis(NemesisFlags):
             with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_name) as session:
                 session.execute(f"DROP TABLE {table_name};")
 
-    @target_all_nodes
     def disrupt_hot_reloading_internode_certificate(self):
         """
         https://github.com/scylladb/scylla/issues/6067
@@ -5171,7 +5117,6 @@ class Nemesis(NemesisFlags):
             experiment.wait_until_finished()
 
     @decorate_with_context(ignore_reactor_stall_errors)
-    @target_all_nodes
     def disrupt_memory_stress(self):
         """
         Try to run stress-ng to preempt allocated memory of scylla process,
@@ -5681,7 +5626,6 @@ class Nemesis(NemesisFlags):
                 "\n".join(f"Step: {error.step}. Error:\n - {error}" for error in error_events if error)
             )
 
-    @target_data_nodes
     def disrupt_create_index(self):
         """
         Create index on a random column (regular or static) of a table with the most number of partitions and wait until it gets build.
@@ -5741,7 +5685,6 @@ class Nemesis(NemesisFlags):
                     self.actions_log.info(f"Drop {index_name} index")
                     drop_index(session, ks, index_name)
 
-    @target_data_nodes
     def disrupt_add_remove_mv(self):
         """
         Create a Materialized view on an existing table while a node is down.
@@ -5805,7 +5748,7 @@ class Nemesis(NemesisFlags):
     def disrupt_toggle_audit_syslog(self):
         self._disrupt_toggle_audit(store="syslog")
 
-    def _disrupt_toggle_audit(self, store: AuditStore):
+    def _disrupt_toggle_audit(self, store: "AuditStore"):
         """
         Enable audit log with all categories and user keyspaces (if audit already enabled, disable it and finish the Nemesis),
         verify audit log content,
@@ -5924,7 +5867,6 @@ class Nemesis(NemesisFlags):
         if errors:
             raise AuditLogTestFailure("\n".join(errors))
 
-    @target_data_nodes
     def disrupt_bootstrap_streaming_error(self):
         """Abort bootstrap process at different point
 
@@ -6020,7 +5962,6 @@ class Nemesis(NemesisFlags):
             self.target_node.restart_scylla_server()
             raise
 
-    @target_all_nodes
     def disrupt_grow_shrink_zero_nodes(self):
         """ "Add/remove znodes to same dc where target node. The target node could be any node"""
         if not self.cluster.params.get("use_zero_nodes"):
@@ -6033,7 +5974,6 @@ class Nemesis(NemesisFlags):
         znode = random.choice([node for node in self.cluster.zero_nodes if node.dc_idx == self.target_node.dc_idx])
         self.decommission_nodes(nodes=[znode])
 
-    @target_all_nodes
     def disrupt_serial_restart_elected_topology_coordinator(self):
         """Serial restart of elected topology coordinator node,
         should trigger new coordinator node election
@@ -6070,11 +6010,9 @@ class Nemesis(NemesisFlags):
                 f"New coordinator node was not elected while old one {coordinator_node.name} was stopped"
             )
 
-    @target_all_nodes
     def disrupt_refuse_connection_with_block_scylla_ports_on_banned_node(self):
         self._refuse_connection_from_banned_node(use_iptables=True)
 
-    @target_all_nodes
     def disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node(self):
         self._refuse_connection_from_banned_node(use_iptables=False)
 
@@ -6218,7 +6156,6 @@ class Nemesis(NemesisFlags):
                 LOGGER.debug("Query result %s", result)
                 assert not result, f"New rows were added from banned node, {result}"
 
-    @target_all_nodes
     def disrupt_kill_mv_building_coordinator(self):
         """
         MV building coordinator is responsible for building MV from base table in
@@ -6304,7 +6241,7 @@ class Nemesis(NemesisFlags):
                     drop_materialized_view(session, ks_name, view_name)
 
 
-def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
+def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=False):  # noqa: PLR0915
     """
     Log time elapsed for method to run
 
@@ -6312,7 +6249,9 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
     :return: Wrapped method.
     """
 
-    def argus_create_nemesis_info(nemesis: Nemesis, class_name: str, method_name: str, start_time: int | float) -> bool:
+    def argus_create_nemesis_info(
+        nemesis: "NemesisRunner", class_name: str, method_name: str, start_time: int | float
+    ) -> bool:
         try:
             argus_client = nemesis.target_node.test_config.argus_client()
             argus_client.submit_nemesis(
@@ -6329,7 +6268,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
         return False
 
     def argus_finalize_nemesis_info(
-        nemesis: Nemesis, method_name: str, start_time: int, nemesis_event: DisruptionEvent
+        nemesis: "NemesisRunner", method_name: str, start_time: int, nemesis_event: DisruptionEvent
     ):
         if not isinstance(start_time, int):
             start_time = int(start_time)
@@ -6363,27 +6302,28 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
             return NemesisStatus.SKIPPED
         return NemesisStatus.SUCCEEDED
 
-    def data_validation_prints(args):
+    def data_validation_prints(caller):
         try:
-            if hasattr(args[0].tester, "data_validator") and args[0].tester.data_validator:
-                if not (keyspace := args[0].tester.data_validator.keyspace_name):
+            if hasattr(caller.tester, "data_validator") and caller.tester.data_validator:
+                if not (keyspace := caller.tester.data_validator.keyspace_name):
                     DataValidatorEvent.DataValidator(
                         severity=Severity.NORMAL, message="Failed fo get keyspace name. Data validator is disabled."
                     ).publish()
                     return
 
-                with args[0].cluster.cql_connection_patient(args[0].cluster.nodes[0], keyspace=keyspace) as session:
-                    args[0].tester.data_validator.validate_range_not_expected_to_change(session, during_nemesis=True)
-                    args[0].tester.data_validator.validate_range_expected_to_change(session, during_nemesis=True)
-                    args[0].tester.data_validator.validate_deleted_rows(session, during_nemesis=True)
+                with caller.cluster.cql_connection_patient(caller.cluster.nodes[0], keyspace=keyspace) as session:
+                    caller.tester.data_validator.validate_range_not_expected_to_change(session, during_nemesis=True)
+                    caller.tester.data_validator.validate_range_expected_to_change(session, during_nemesis=True)
+                    caller.tester.data_validator.validate_deleted_rows(session, during_nemesis=True)
         except Exception as err:  # noqa: BLE001
-            args[0].log.debug(f"Data validator error: {err}")
+            caller.log.debug(f"Data validator error: {err}")
 
     @wraps(method)
     def wrapper(*args, **kwargs):  # noqa: PLR0914, PLR0915
-        method_name = method.__name__
-        target_pool_type = getattr(method, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
-        nemesis_run_info_key = f"{id(args[0])}--{method_name}"
+        method_name = method.__self__.__class__.__name__
+        target_pool_type = getattr(method.__self__, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
+        nemesis_run_info_key = f"{id(method)}--{method_name}"
+        runner = caller_obj.runner
         try:
             NEMESIS_LOCK.acquire()
             if not is_exclusive:
@@ -6394,49 +6334,49 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
                     # NOTE: exclusive nemesis will wait before the end of all other ones
                     time.sleep(10)
 
-            args[0].cluster.check_cluster_health()
-            num_data_nodes_before = len(args[0].cluster.data_nodes)
-            num_zero_nodes_before = len(args[0].cluster.zero_nodes)
+            runner.cluster.check_cluster_health()
+            num_data_nodes_before = len(runner.cluster.data_nodes)
+            num_zero_nodes_before = len(runner.cluster.zero_nodes)
             start_time = time.time()
 
             current_disruption = unique_disruption_name(method_name)
-            args[0].set_target_node_pool_type(target_pool_type)
-            args[0].set_target_node(current_disruption=current_disruption)
+            runner.set_target_node_pool_type(target_pool_type)
+            runner.set_target_node(current_disruption=current_disruption)
             start_msg = (
-                f"Started disruption {method_name} ({args[0].base_disruption_name} nemesis) on the target node "
-                f"'{str(args[0].target_node)}'"
+                f"Started disruption {method_name} ({runner.base_disruption_name} nemesis) on the target node "
+                f"'{str(runner.target_node)}'"
             )
-            args[0].log.debug("{start_symbol} {msg} {start_symbol}".format(start_symbol=">" * 12, msg=start_msg))
-            for nodes_set in (args[0].cluster, args[0].loaders):
+            runner.log.debug("{start_symbol} {msg} {start_symbol}".format(start_symbol=">" * 12, msg=start_msg))
+            for nodes_set in (runner.cluster, runner.loaders):
                 nodes_set.log_message(
                     "{start_symbol} {msg} {start_symbol}".format(start_symbol="=" * 12, msg=start_msg)
                 )
 
-            class_name = args[0].get_class_name()
+            class_name = runner.get_class_name()
             if class_name.find("Chaos") < 0:
-                args[0].metrics_srv.event_start(class_name)
+                runner.metrics_srv.event_start(class_name)
             result = None
             status = True
 
             log_info = {
-                "operation": args[0].base_disruption_name,
+                "operation": runner.base_disruption_name,
                 "start": int(start_time),
                 "end": 0,
                 "duration": 0,
-                "node": str(args[0].target_node),
+                "node": str(runner.target_node),
                 "subtype": "end",
             }
             # TODO: Temporary print. Will be removed later
-            data_validation_prints(args=args)
+            data_validation_prints(runner)
 
             with (
                 DisruptionEvent(
-                    nemesis_name=args[0].base_disruption_name, node=args[0].target_node, publish_event=True
+                    nemesis_name=runner.base_disruption_name, node=runner.target_node, publish_event=True
                 ) as nemesis_event,
-                args[0].actions_log.action_scope(f"Disruption {method_name} on {args[0].target_node.name}"),
+                runner.actions_log.action_scope(f"Disruption {method_name} on {runner.target_node.name}"),
             ):
                 nemesis_info = argus_create_nemesis_info(
-                    nemesis=args[0], class_name=class_name, method_name=method_name, start_time=start_time
+                    nemesis=runner, class_name=class_name, method_name=method_name, start_time=start_time
                 )
                 try:
                     result = method(*args, **kwargs)
@@ -6446,7 +6386,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
                     nemesis_event.skip(skip_reason=skip_reason)
                     raise
                 except KillNemesis:
-                    if args[0].tester.get_event_summary().get("CRITICAL", 0):
+                    if runner.tester.get_event_summary().get("CRITICAL", 0):
                         error_sting = "Killed by tearDown - test fail"
                         nemesis_event.add_error([error_sting])
                         nemesis_event.full_traceback = traceback.format_exc()
@@ -6462,8 +6402,8 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
                     nemesis_event.add_error([str(details)])
                     nemesis_event.full_traceback = traceback.format_exc()
                     nemesis_event.severity = Severity.ERROR
-                    args[0].error_list.append(str(details))
-                    args[0].log.error("Unhandled exception in method %s", method, exc_info=True)
+                    runner.error_list.append(str(details))
+                    runner.log.error("Unhandled exception in method %s", method, exc_info=True)
                     log_info.update({"error": str(details), "full_traceback": traceback.format_exc()})
                     status = False
                 finally:
@@ -6475,1272 +6415,88 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
                             "duration": time_elapsed,
                         }
                     )
-                    args[0].duration_list.append(time_elapsed)
-                    args[0].operation_log.append(copy.deepcopy(log_info))
-                    args[0].log.debug("%s duration -> %s s", args[0].base_disruption_name, time_elapsed)
+                    runner.duration_list.append(time_elapsed)
+                    runner.operation_log.append(copy.deepcopy(log_info))
+                    runner.log.debug("%s duration -> %s s", runner.base_disruption_name, time_elapsed)
 
                     if class_name.find("Chaos") < 0:
-                        args[0].metrics_srv.event_stop(class_name)
-                    disrupt = args[0].base_disruption_name
+                        runner.metrics_srv.event_stop(class_name)
+                    disrupt = runner.base_disruption_name
                     del log_info["operation"]
 
                     try:  # So that the nemesis thread won't stop due to elasticsearch failure
-                        args[0].update_stats(disrupt, status, log_info)
+                        runner.update_stats(disrupt, status, log_info)
                     except ElasticSearchConnectionTimeout as err:
-                        args[0].log.warning(
+                        runner.log.warning(
                             f"Connection timed out when attempting to update elasticsearch statistics:\n{err}"
                         )
                     except Exception as err:  # noqa: BLE001
-                        args[0].log.warning(
+                        runner.log.warning(
                             f"Unexpected error when attempting to update elasticsearch statistics:\n{err}"
                         )
-                    args[0].log.info(f"log_info: {log_info}")
+                    runner.log.info(f"log_info: {log_info}")
                     nemesis_event.duration = time_elapsed
 
                     if nemesis_info:
                         argus_finalize_nemesis_info(
-                            nemesis=args[0],
+                            nemesis=runner,
                             method_name=method_name,
                             start_time=int(start_time),
                             nemesis_event=nemesis_event,
                         )
 
                     end_msg = (
-                        f"Finished disruption {method_name} ({args[0].base_disruption_name} nemesis) with status "
+                        f"Finished disruption {method_name} ({runner.base_disruption_name} nemesis) with status "
                         f"'{get_nemesis_status(nemesis_event)}'"
                     )
-                    args[0].log.debug("{end_symbol} {msg} {end_symbol}".format(end_symbol="<" * 12, msg=end_msg))
-                    for nodes_set in (args[0].cluster, args[0].loaders):
+                    runner.log.debug("{end_symbol} {msg} {end_symbol}".format(end_symbol="<" * 12, msg=end_msg))
+                    for nodes_set in (runner.cluster, runner.loaders):
                         nodes_set.log_message(
                             "{end_symbol} {msg} {end_symbol}".format(end_symbol="=" * 12, msg=end_msg)
                         )
 
-            num_data_nodes_after = len(args[0].cluster.data_nodes)
-            num_zero_nodes_after = len(args[0].cluster.zero_nodes)
+            num_data_nodes_after = len(runner.cluster.data_nodes)
+            num_zero_nodes_after = len(runner.cluster.zero_nodes)
             if num_data_nodes_before != num_data_nodes_after:
-                args[0].log.error(
+                runner.log.error(
                     "num data nodes before %s and data nodes after %s does not match"
                     % (num_data_nodes_before, num_data_nodes_after)
                 )
-            if args[0].cluster.params.get("use_zero_nodes") and num_zero_nodes_before != num_zero_nodes_after:
-                args[0].log.error(
+            if runner.cluster.params.get("use_zero_nodes") and num_zero_nodes_before != num_zero_nodes_after:
+                runner.log.error(
                     "num zero nodes before %s and zero nodes after %s does not match"
                     % (num_zero_nodes_before, num_zero_nodes_after)
                 )
             # TODO: Temporary print. Will be removed later
-            data_validation_prints(args=args)
+            data_validation_prints(runner)
         finally:
             if is_exclusive:
                 # NOTE: sleep the nemesis interval here because the next one is already
                 #       ready to start right after the lock gets released.
-                if args[0].tester.params.get("k8s_tenants_num") > 1:
-                    args[0].log.debug("Exclusive nemesis: Sleep for '%s' seconds", args[0].interval)
-                    time.sleep(args[0].interval)
+                if runner.tester.params.get("k8s_tenants_num") > 1:
+                    runner.log.debug("Exclusive nemesis: Sleep for '%s' seconds", runner.interval)
+                    time.sleep(runner.interval)
                 NEMESIS_LOCK.release()
             else:
                 # NOTE: the key may be absent if a nemesis which waits for a lock release
                 #       gets killed/aborted. So, use safe 'pop' call with the default 'None' value.
                 NEMESIS_RUN_INFO.pop(nemesis_run_info_key, None)
 
-            args[0].set_target_node_pool_type(NEMESIS_TARGET_POOLS.data_nodes)
+            runner.set_target_node_pool_type(NEMESIS_TARGET_POOLS.data_nodes)
 
         return result
 
     return wrapper
 
 
-DISRUPT_NAME_PREF = "disrupt_"
-for name, member in inspect.getmembers(Nemesis, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
-    if not name.startswith(DISRUPT_NAME_PREF):
-        continue
-    is_exclusive = name in EXCLUSIVE_NEMESIS_NAMES
-    # add "disrupt_method_wrapper" decorator to all methods are started with "disrupt_"
-    setattr(Nemesis, name, disrupt_method_wrapper(member, is_exclusive=is_exclusive))
-
-
-class SisyphusMonkey(Nemesis):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disruptions_list = self.build_disruptions_by_selector(self.nemesis_selector)
-        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
-
-    def disrupt(self):
-        self.call_next_nemesis()
-
-
-class SslHotReloadingNemesis(Nemesis):
-    disruptive = False
-    config_changes = True
-
-    def disrupt(self):
-        self.disrupt_hot_reloading_internode_certificate()
-
-
-class PauseLdapNemesis(Nemesis):
-    disruptive = False
-    limited = True
-
-    additional_configs = ["configurations/ldap-authorization.yaml"]
-
-    def disrupt(self):
-        self.disrupt_ldap_connection_toggle()
-
-
-class ToggleLdapConfiguration(Nemesis):
-    disruptive = True
-    limited = True
-
-    additional_configs = ["configurations/ldap-authorization.yaml"]
-
-    def disrupt(self):
-        self.disrupt_disable_enable_ldap_authorization()
-
-
-class NoOpMonkey(Nemesis):
-    kubernetes = True
-
-    def disrupt(self):
-        time.sleep(300)
-
-
-class AddRemoveDcNemesis(Nemesis):
-    disruptive = True
-    run_with_gemini = False
-    limited = True
-    topology_changes = True
-
-    def disrupt(self):
-        self.disrupt_add_remove_dc()
-
-
-class GrowShrinkClusterNemesis(Nemesis):
-    disruptive = True
-    kubernetes = True
-    topology_changes = True
-
-    def disrupt(self):
-        self.disrupt_grow_shrink_cluster()
-
-
-class AddRemoveRackNemesis(Nemesis):
-    disruptive = True
-    kubernetes = True
-    config_changes = True
-
-    def disrupt(self):
-        self.disrupt_grow_shrink_new_rack()
-
-
-class StopWaitStartMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-    limited = True
-    zero_node_changes = True
-
-    def disrupt(self):
-        self.disrupt_stop_wait_start_scylla_server(600)
-
-
-class StopStartMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-    limited = True
-
-    def disrupt(self):
-        self.disrupt_stop_start_scylla_server()
-
-
-class EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey(Nemesis):
-    disruptive = True
-    kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
-
-    def disrupt(self):
-        self.disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation()
-
-
-class EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(Nemesis):
-    disruptive = True
-    kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
-
-    def disrupt(self):
-        self.disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation()
-
-
-class EnableDisableTableEncryptionAwsKmsProviderMonkey(Nemesis):
-    disruptive = True
-    kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disruptions_list = self.build_disruptions_by_name(
-            [
-                "disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation",
-                "disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation",
-            ]
-        )
-        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
-
-    def disrupt(self):
-        self.call_next_nemesis()
-
-
-class RestartThenRepairNodeMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def disrupt(self):
-        self.disrupt_restart_then_repair_node()
-
-
-class MultipleHardRebootNodeMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_multiple_hard_reboot_node()
-
-
-class HardRebootNodeMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-    limited = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_hard_reboot_node()
-
-
-class SoftRebootNodeMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-    limited = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_soft_reboot_node()
-
-
-class DrainerMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-    limited = True
-    topology_changes = True
-
-    def disrupt(self):
-        self.disrupt_nodetool_drain()
-
-
-class CorruptThenRepairMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def disrupt(self):
-        self.disrupt_destroy_data_then_repair()
-
-
-class CorruptThenRebuildMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def disrupt(self):
-        self.disrupt_destroy_data_then_rebuild()
-
-
-class DecommissionMonkey(Nemesis):
-    disruptive = True
-    limited = True
-    topology_changes = True
-    supports_high_disk_utilization = (
-        False  # Decommissioning a node cause increase of disk space across rest of the nodes
-    )
-
-    def disrupt(self):
-        self.disrupt_nodetool_decommission()
-
-
-class DecommissionSeedNode(Nemesis):
-    disruptive = True
-    topology_changes = True
-    supports_high_disk_utilization = (
-        False  # Decommissioning a node cause increase of disk space across rest of the nodes
-    )
-
-    def disrupt(self):
-        self.disrupt_nodetool_seed_decommission()
-
-
-class NoCorruptRepairMonkey(Nemesis):
-    disruptive = False
-    kubernetes = True
-    limited = True
-
-    def disrupt(self):
-        self.disrupt_no_corrupt_repair()
-
-
-class MajorCompactionMonkey(Nemesis):
-    disruptive = False
-    kubernetes = True
-    limited = True
-
-    def disrupt(self):
-        self.disrupt_major_compaction()
-
-
-class RefreshMonkey(Nemesis):
-    disruptive = False
-    run_with_gemini = False
-    kubernetes = True
-    limited = True
-
-    def disrupt(self):
-        self.disrupt_nodetool_refresh(big_sstable=False)
-
-
-class LoadAndStreamMonkey(Nemesis):
-    disruptive = False
-    run_with_gemini = False
-    kubernetes = True
-    limited = True
-
-    def disrupt(self):
-        self.disrupt_load_and_stream()
-
-
-class RefreshBigMonkey(Nemesis):
-    disruptive = False
-    run_with_gemini = False
-    kubernetes = True
-
-    def disrupt(self):
-        self.disrupt_nodetool_refresh(big_sstable=True)
-
-
-class RemoveServiceLevelMonkey(Nemesis):
-    disruptive = True
-    sla = True
-
-    def disrupt(self):
-        self.disrupt_remove_service_level_while_load()
-
-
-class EnospcMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-    limited = True
-
-    def disrupt(self):
-        self.disrupt_nodetool_enospc()
-
-
-class EnospcAllNodesMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def disrupt(self):
-        self.disrupt_nodetool_enospc(all_nodes=True)
-
-
-class NodeToolCleanupMonkey(Nemesis):
-    disruptive = False
-    kubernetes = True
-    limited = True
-
-    def disrupt(self):
-        self.disrupt_nodetool_cleanup()
-
-
-class TruncateMonkey(Nemesis):
-    disruptive = False
-    kubernetes = True
-    limited = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_truncate()
-
-
-class TruncateLargeParititionMonkey(Nemesis):
-    disruptive = False
-    kubernetes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_truncate_large_partition()
-
-
-class DeleteByPartitionsMonkey(Nemesis):
-    disruptive = False
-    kubernetes = True
-    free_tier_set = True
-    delete_rows = True
-
-    def disrupt(self):
-        self.disrupt_delete_10_full_partitions()
-
-
-class DeleteByRowsRangeMonkey(Nemesis):
-    disruptive = False
-    kubernetes = True
-    free_tier_set = True
-    delete_rows = True
-
-    def disrupt(self):
-        self.disrupt_delete_by_rows_range()
-
-
-class DeleteOverlappingRowRangesMonkey(Nemesis):
-    disruptive = False
-    kubernetes = True
-    free_tier_set = True
-    delete_rows = True
-
-    def disrupt(self):
-        self.disrupt_delete_overlapping_row_ranges()
-
-
-class CategoricalMonkey(Nemesis):
-    """Randomly picks disruptions to execute using the given categorical distribution.
-
-    Each disruption is assigned a weight. The probability that a disruption D with weight W
-    will be executed is W / T, where T is the sum of weights of all disruptions.
-
-    The distribution is passed into the monkey's constructor as a dictionary.
-    Keys in the dictionary are names of the disruption methods (from the `Nemesis` class)
-    e.g. `disrupt_hard_reboot_node`. The value for each key is the weight of this disruption.
-    You can omit the ``disrupt_'' prefix from the key, e.g. `hard_reboot_node`.
-
-    A default weight can be passed; it will be assigned to each disruption that is not listed.
-    In particular if the default weight is 0 then the unlisted disruptions won't be executed.
-    """
-
-    @staticmethod
-    def get_disruption_distribution(dist: dict, default_weight: float) -> Tuple[List[Callable], List[float]]:
-        def is_nonnegative_number(val):
-            try:
-                val = float(val)
-            except ValueError:
-                return False
-            else:
-                return val >= 0
-
-        def prefixed(pref: str, val: str) -> str:
-            if val.startswith(pref):
-                return val
-            return pref + val
-
-        all_methods = CategoricalMonkey.get_disrupt_methods()
-
-        population: List[Callable] = []
-        weights: List[float] = []
-        listed_methods: Set[str] = set()
-
-        for _name, _weight in dist.items():
-            name = str(_name)
-            prefixed_name = prefixed("disrupt_", name)
-            if prefixed_name not in all_methods:
-                raise ValueError(f"'{name}' is not a valid disruption. All methods: {all_methods.keys()}")
-
-            if not is_nonnegative_number(_weight):
-                raise ValueError(
-                    "Each disruption weight must be a non-negative number. '{weight}' is not a valid weight."
-                )
-
-            weight = float(_weight)
-            if weight > 0:
-                population.append(all_methods[prefixed_name])
-                weights.append(weight)
-            listed_methods.add(prefixed_name)
-
-        if default_weight > 0:
-            for method_name, method in all_methods.items():
-                if method_name not in listed_methods:
-                    population.append(method)
-                    weights.append(default_weight)
-
-        if not population:
-            raise ValueError("There must be at least one disruption with a positive weight.")
-
-        return population, weights
-
-    @staticmethod
-    def get_disrupt_methods() -> Dict[str, Callable]:
-        return {
-            attr[0]: attr[1]
-            for attr in inspect.getmembers(CategoricalMonkey)
-            if attr[0].startswith("disrupt_") and callable(attr[1])
-        }
-
-    def __init__(self, tester_obj, termination_event, dist: dict, *args, default_weight: float = 1, **kwargs):
-        super().__init__(tester_obj, termination_event, *args, **kwargs)
-        self.disruption_distribution = CategoricalMonkey.get_disruption_distribution(dist, default_weight)
-
-    def disrupt(self):
-        self._random_disrupt()
-
-    def _random_disrupt(self):
-        population, weights = self.disruption_distribution
-        assert len(population) == len(weights) and population
-
-        method = random.choices(population, weights=weights)[0]
-        self.execute_disrupt_method(method)
-
-
-class ScyllaCloudLimitedChaosMonkey(Nemesis):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disruptions_list = self.build_disruptions_by_name(
-            [
-                "disrupt_nodetool_cleanup",
-                "disrupt_nodetool_drain",
-                "disrupt_nodetool_refresh",
-                "disrupt_stop_start_scylla_server",
-                "disrupt_major_compaction",
-                "disrupt_modify_table",
-                "disrupt_nodetool_enospc",
-                "disrupt_stop_wait_start_scylla_server",
-                "disrupt_soft_reboot_node",
-                "disrupt_truncate",
-            ]
-        )
-        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
-
-    def disrupt(self):
-        # Limit the nemesis scope to only one relevant to scylla cloud, where we defined we don't have AWS api access:
-        self.call_next_nemesis()
-
-
-class MdcChaosMonkey(Nemesis):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disruptions_list = self.build_disruptions_by_name(
-            ["disrupt_destroy_data_then_repair", "disrupt_no_corrupt_repair", "disrupt_nodetool_decommission"]
-        )
-        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
-
-    def disrupt(self):
-        self.call_next_nemesis()
-
-
-class ModifyTableMonkey(Nemesis):
-    disruptive = False
-    kubernetes = True
-    limited = True
-    schema_changes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_modify_table()
-
-
-class AddDropColumnMonkey(Nemesis):
-    disruptive = False
-    run_with_gemini = False
-    networking = False
-    kubernetes = True
-    limited = True
-    schema_changes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_add_drop_column()
-
-
-class ToggleTableIcsMonkey(Nemesis):
-    kubernetes = True
-    schema_changes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_toggle_table_ics()
-
-
-class ToggleGcModeMonkey(Nemesis):
-    kubernetes = True
-    disruptive = False
-    schema_changes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_toggle_table_gc_mode()
-
-
-class MgmtBackup(Nemesis):
-    manager_operation = True
-    disruptive = False
-    limited = True
-    supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
-
-    def disrupt(self):
-        self.disrupt_mgmt_backup()
-
-
-class MgmtBackupSpecificKeyspaces(Nemesis):
-    manager_operation = True
-    disruptive = False
-    limited = True
-    supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
-
-    def disrupt(self):
-        self.disrupt_mgmt_backup_specific_keyspaces()
-
-
-class MgmtRestore(Nemesis):
-    manager_operation = True
-    disruptive = True
-    kubernetes = True
-    limited = True
-    supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
-
-    def disrupt(self):
-        self.disrupt_mgmt_restore()
-
-
-class MgmtRepair(Nemesis):
-    manager_operation = True
-    disruptive = False
-    kubernetes = True
-    limited = True
-
-    def disrupt(self):
-        self.log.info("disrupt_mgmt_repair_cli Nemesis begin")
-        self.disrupt_mgmt_repair_cli()
-        self.log.info("disrupt_mgmt_repair_cli Nemesis end")
-        # For Manager APIs test, use: self.disrupt_mgmt_repair_api()
-
-
-class MgmtCorruptThenRepair(Nemesis):
-    manager_operation = True
-    disruptive = True
-    kubernetes = True
-
-    def disrupt(self):
-        self.disrupt_mgmt_corrupt_then_repair()
-
-
-class AbortRepairMonkey(Nemesis):
-    disruptive = False
-    kubernetes = True
-    limited = True
-
-    def disrupt(self):
-        self.disrupt_abort_repair()
-
-
-class NodeTerminateAndReplace(Nemesis):
-    disruptive = True
-    # It should not be run on kubernetes, since it is a manual procedure
-    # While on kubernetes we put it all on scylla-operator
-    kubernetes = False
-    topology_changes = True
-    zero_node_changes = True
-
-    def disrupt(self):
-        self.disrupt_terminate_and_replace_node()
-
-
-class DrainKubernetesNodeThenReplaceScyllaNode(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def disrupt(self):
-        self.disrupt_drain_kubernetes_node_then_replace_scylla_node()
-
-
-class TerminateKubernetesHostThenReplaceScyllaNode(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def disrupt(self):
-        self.disrupt_terminate_kubernetes_host_then_replace_scylla_node()
-
-
-class DisruptKubernetesNodeThenReplaceScyllaNode(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disruptions_list = self.build_disruptions_by_name(
-            [
-                "disrupt_drain_kubernetes_node_then_replace_scylla_node",
-                "disrupt_terminate_kubernetes_host_then_replace_scylla_node",
-            ]
-        )
-        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
-
-    def disrupt(self):
-        self.call_next_nemesis()
-
-
-class DrainKubernetesNodeThenDecommissionAndAddScyllaNode(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def disrupt(self):
-        self.disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node()
-
-
-class TerminateKubernetesHostThenDecommissionAndAddScyllaNode(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def disrupt(self):
-        self.disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node()
-
-
-class DisruptKubernetesNodeThenDecommissionAndAddScyllaNode(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disruptions_list = self.build_disruptions_by_name(
-            [
-                "disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node",
-                "disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node",
-            ]
-        )
-        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
-
-    def disrupt(self):
-        self.call_next_nemesis()
-
-
-class K8sSetMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disruptions_list = self.build_disruptions_by_name(
-            [
-                "disrupt_drain_kubernetes_node_then_replace_scylla_node",
-                "disrupt_terminate_kubernetes_host_then_replace_scylla_node",
-                "disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node",
-                "disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node",
-            ]
-        )
-        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
-
-    def disrupt(self):
-        self.call_next_nemesis()
-
-
-class OperatorNodeReplace(Nemesis):
-    disruptive = True
-    kubernetes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_replace_scylla_node_on_kubernetes()
-
-
-class OperatorNodetoolFlushAndReshard(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def disrupt(self):
-        self.disrupt_nodetool_flush_and_reshard_on_kubernetes()
-
-
-class ScyllaKillMonkey(Nemesis):
-    disruptive = True
-    kubernetes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_kill_scylla()
-
-
-class ValidateHintedHandoffShortDowntime(Nemesis):
-    disruptive = True
-    kubernetes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_validate_hh_short_downtime()
-
-
-class SnapshotOperations(Nemesis):
-    disruptive = False
-    kubernetes = True
-    limited = True
-
-    def disrupt(self):
-        self.disrupt_snapshot_operations()
-
-
-class NodeRestartWithResharding(Nemesis):
-    disruptive = True
-    kubernetes = True
-    topology_changes = True
-    config_changes = True
-
-    def disrupt(self):
-        self.disrupt_restart_with_resharding()
-
-
-class ClusterRollingRestart(Nemesis):
-    disruptive = True
-    kubernetes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_rolling_restart_cluster(random_order=False)
-
-
-class RollingRestartConfigChangeInternodeCompression(Nemesis):
-    disruptive = True
-    full_cluster_restart = True
-    config_changes = True
-
-    def disrupt(self):
-        self.disrupt_rolling_config_change_internode_compression()
-
-
-class ClusterRollingRestartRandomOrder(Nemesis):
-    disruptive = True
-    kubernetes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_rolling_restart_cluster(random_order=True)
-
-
-class SwitchBetweenPasswordAuthAndSaslauthdAuth(Nemesis):
-    disruptive = True  # the nemesis has rolling restart
-    config_changes = True
-
-    def disrupt(self):
-        self.disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back()
-
-
-class TopPartitions(Nemesis):
-    disruptive = False
-    kubernetes = True
-    limited = True
-
-    def disrupt(self):
-        self.disrupt_show_toppartitions()
-
-
-class RandomInterruptionNetworkMonkey(Nemesis):
-    disruptive = True
-    networking = True
-    run_with_gemini = False
-    kubernetes = True
-
-    additional_configs = ["configurations/network_config/two_interfaces.yaml"]
-    # TODO: this definition should be removed when network configuration new mechanism will be supported by all backends.
-    #  Now "ip_ssh_connections" is not supported for AWS and it is ignored.
-    #  Test communication address (ip_ssh_connections) is defined as "public" for the relevant pipelines in "two_interfaces.yaml"
-    additional_params = {"ip_ssh_connections": "public"}
-
-    def disrupt(self):
-        self.disrupt_network_random_interruptions()
-
-
-class BlockNetworkMonkey(Nemesis):
-    disruptive = True
-    networking = True
-    run_with_gemini = False
-    kubernetes = True
-
-    additional_configs = ["configurations/network_config/two_interfaces.yaml"]
-    # TODO: this definition should be removed when network configuration new mechanism will be supported by all backends.
-    #  Now "ip_ssh_connections" is not supported for AWS and it is ignored.
-    #  Test communication address (ip_ssh_connections) is defined as "public" for the relevant pipelines in "two_interfaces.yaml"
-    additional_params = {"ip_ssh_connections": "public"}
-
-    def disrupt(self):
-        self.disrupt_network_block()
-
-
-class RejectInterNodeNetworkMonkey(Nemesis):
-    disruptive = True
-    networking = True
-    run_with_gemini = False
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_network_reject_inter_node_communication()
-
-
-class RejectNodeExporterNetworkMonkey(Nemesis):
-    disruptive = True
-    networking = True
-    run_with_gemini = False
-
-    def disrupt(self):
-        self.disrupt_network_reject_node_exporter()
-
-
-class RejectThriftNetworkMonkey(Nemesis):
-    disruptive = True
-    networking = True
-    run_with_gemini = False
-
-    def disrupt(self):
-        self.disrupt_network_reject_thrift()
-
-
-class StopStartInterfacesNetworkMonkey(Nemesis):
-    disruptive = True
-    networking = True
-    run_with_gemini = False
-
-    additional_configs = ["configurations/network_config/two_interfaces.yaml"]
-    # TODO: this definition should be removed when network configuration new mechanism will be supported by all backends.
-    #  Now "ip_ssh_connections" is not supported for AWS and it is ignored.
-    #  Test communication address (ip_ssh_connections) is defined as "public" for the relevant pipelines in "two_interfaces.yaml"
-    additional_params = {"ip_ssh_connections": "public"}
-
-    def disrupt(self):
-        self.disrupt_network_start_stop_interface()
-
-
-class ScyllaOperatorBasicOperationsMonkey(Nemesis):
-    """
-    Selected number of nemesis that is focused on scylla-operator functionality
-    """
-
-    disruptive = True
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disruptions_list = self.build_disruptions_by_name(
-            [
-                "disrupt_nodetool_flush_and_reshard_on_kubernetes",
-                "disrupt_rolling_restart_cluster",
-                "disrupt_grow_shrink_cluster",
-                "disrupt_grow_shrink_new_rack",
-                "disrupt_stop_start_scylla_server",
-                "disrupt_drain_kubernetes_node_then_replace_scylla_node",
-                "disrupt_terminate_kubernetes_host_then_replace_scylla_node",
-                "disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node",
-                "disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node",
-                "disrupt_replace_scylla_node_on_kubernetes",
-                "disrupt_mgmt_corrupt_then_repair",
-                "disrupt_mgmt_repair_cli",
-                "disrupt_mgmt_backup_specific_keyspaces",
-                "disrupt_mgmt_backup",
-            ]
-        )
-        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
-
-    def disrupt(self):
-        self.call_next_nemesis()
-
-
-class NemesisSequence(Nemesis):
-    disruptive = True
-    networking = False
-    run_with_gemini = False
-
-    def disrupt(self):
-        self.disrupt_run_unique_sequence()
-
-
-class TerminateAndRemoveNodeMonkey(Nemesis):
-    """Remove a Node from a Scylla Cluster (Down Scale)"""
-
-    disruptive = True
-    # It should not be run on kubernetes, since it is a manual procedure
-    # While on kubernetes we put it all on scylla-operator
-    kubernetes = False
-    topology_changes = True
-    supports_high_disk_utilization = False  # Removing a node consumes disk space
-
-    def disrupt(self):
-        self.disrupt_remove_node_then_add_node()
-
-
-class ToggleCDCMonkey(Nemesis):
-    disruptive = False
-    schema_changes = True
-    config_changes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_toggle_cdc_feature_properties_on_table()
-
-
-class CDCStressorMonkey(Nemesis):
-    disruptive = False
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_run_cdcstressor_tool()
-
-
-class DecommissionStreamingErrMonkey(Nemesis):
-    disruptive = True
-    topology_changes = True
-
-    def disrupt(self):
-        self.disrupt_decommission_streaming_err()
-
-
-class RebuildStreamingErrMonkey(Nemesis):
-    disruptive = True
-
-    def disrupt(self):
-        self.disrupt_rebuild_streaming_err()
-
-
-class RepairStreamingErrMonkey(Nemesis):
-    disruptive = True
-
-    def disrupt(self):
-        self.disrupt_repair_streaming_err()
-
-
-class ManagerRcloneBackup(Nemesis):
-    manager_operation = True
-    disruptive = False
-    supports_high_disk_utilization = False
-
-    def disrupt(self):
-        self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.RCLONE, label="rclone_backup")
-
-
-class ManagerNativeBackup(Nemesis):
-    manager_operation = True
-    disruptive = False
-    supports_high_disk_utilization = False
-
-    def disrupt(self):
-        self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.NATIVE, label="native_backup")
-
-
-COMPLEX_NEMESIS = [
-    NoOpMonkey,
-    ScyllaCloudLimitedChaosMonkey,
-    MdcChaosMonkey,
-    SisyphusMonkey,
-    DisruptKubernetesNodeThenReplaceScyllaNode,
-    DisruptKubernetesNodeThenDecommissionAndAddScyllaNode,
-    CategoricalMonkey,
-    NemesisSequence,
-    ManagerNativeBackup,
-    ManagerRcloneBackup,
-]
-
-
-class CorruptThenScrubMonkey(Nemesis):
-    disruptive = False
-    supports_high_disk_utilization = False  # Failed for: https://github.com/scylladb/scylladb/issues/22088
-
-    def disrupt(self):
-        self.disrupt_corrupt_then_scrub()
-
-
-class MemoryStressMonkey(Nemesis):
-    disruptive = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_memory_stress()
-
-
-class ResetLocalSchemaMonkey(Nemesis):
-    disruptive = False
-    config_changes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_resetlocalschema()
-
-
-class StartStopMajorCompaction(Nemesis):
-    disruptive = False
-
-    def disrupt(self):
-        self.disrupt_start_stop_major_compaction()
-
-
-class StartStopScrubCompaction(Nemesis):
-    disruptive = False
-
-    def disrupt(self):
-        self.disrupt_start_stop_scrub_compaction()
-
-
-class StartStopCleanupCompaction(Nemesis):
-    disruptive = False
-
-    def disrupt(self):
-        self.disrupt_start_stop_cleanup_compaction()
-
-
-class StartStopValidationCompaction(Nemesis):
-    disruptive = False
-    supports_high_disk_utilization = False  # Failed for: https://github.com/scylladb/scylladb/issues/22088
-
-    def disrupt(self):
-        self.disrupt_start_stop_validation_compaction()
-
-
-class SlaIncreaseSharesDuringLoad(Nemesis):
-    disruptive = False
-    sla = True
-
-    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
-
-    def disrupt(self):
-        self.disrupt_sla_increase_shares_during_load()
-
-
-class SlaDecreaseSharesDuringLoad(Nemesis):
-    disruptive = False
-    sla = True
-
-    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
-
-    def disrupt(self):
-        self.disrupt_sla_decrease_shares_during_load()
-
-
-class SlaReplaceUsingDetachDuringLoad(Nemesis):
-    # TODO: This SLA nemesis uses binary disable/enable workaround that in a test with parallel nemeses can cause to the errors and
-    #  failures that is not a problem of Scylla. The option "disruptive" was set to True to prevent irrelevant failures. Should be changed
-    #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
-    disruptive = True
-    sla = True
-
-    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
-
-    def disrupt(self):
-        self.disrupt_replace_service_level_using_detach_during_load()
-
-
-class SlaReplaceUsingDropDuringLoad(Nemesis):
-    # TODO: This SLA nemesis uses binary disable/enable workaround that in a test with parallel nemeses can cause to the errors and
-    #  failures that is not a problem of Scylla. The option "disruptive" was set to True to prevent irrelevant failures. Should be changed
-    #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
-    disruptive = True
-    sla = True
-
-    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
-
-    def disrupt(self):
-        self.disrupt_replace_service_level_using_drop_during_load()
-
-
-class SlaIncreaseSharesByAttachAnotherSlDuringLoad(Nemesis):
-    # TODO: This SLA nemesis uses binary disable/enable workaround that in a test with parallel nemeses can cause to the errors and
-    #  failures that is not a problem of Scylla. The option "disruptive" was set to True to prevent irrelevant failures. Should be changed
-    #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
-    disruptive = True
-    sla = True
-
-    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
-
-    def disrupt(self):
-        self.disrupt_increase_shares_by_attach_another_sl_during_load()
-
-
-class SlaMaximumAllowedSlsWithMaxSharesDuringLoad(Nemesis):
-    disruptive = False
-    sla = True
-
-    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
-
-    def disrupt(self):
-        self.disrupt_maximum_allowed_sls_with_max_shares_during_load()
-
-
-class CreateIndexNemesis(Nemesis):
-    disruptive = False
-    schema_changes = True
-    free_tier_set = True
-    supports_high_disk_utilization = False  # Creating an Index consumes disk space
-
-    def disrupt(self):
-        self.disrupt_create_index()
-
-
-class AddRemoveMvNemesis(Nemesis):
-    disruptive = True
-    schema_changes = True
-    free_tier_set = True
-    supports_high_disk_utilization = False  # Creating an MV consumes disk space
-
-    def disrupt(self):
-        self.disrupt_add_remove_mv()
-
-
-class ToggleAuditNemesisSyslog(Nemesis):
-    disruptive = True
-    schema_changes = True
-    config_changes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.disrupt_toggle_audit_syslog()
-
-
-class BootstrapStreamingErrorNemesis(Nemesis):
-    disruptive = True
-    topology_changes = True
-
-    def disrupt(self):
-        self.disrupt_bootstrap_streaming_error()
-
-
-class DisableBinaryGossipExecuteMajorCompaction(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    def disrupt(self):
-        self.disrupt_disable_binary_gossip_execute_major_compaction()
-
-
-class EndOfQuotaNemesis(Nemesis):
-    disruptive = True
-    config_changes = True
-
-    def disrupt(self):
-        self.disrupt_end_of_quota_nemesis()
-
-
-class GrowShrinkZeroTokenNode(Nemesis):
-    disruptive = True
-    zero_node_changes = True
-
-    def disrupt(self):
-        self.disrupt_grow_shrink_zero_nodes()
-
-
-class SerialRestartOfElectedTopologyCoordinatorNemesis(Nemesis):
-    disruptive = True
-    topology_changes = True
-
-    def disrupt(self):
-        self.disrupt_serial_restart_elected_topology_coordinator()
-
-
-class IsolateNodeWithProcessSignalNemesis(Nemesis):
-    disruptive = True
-    topology_changes = True
-
-    def disrupt(self):
-        self.disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node()
-
-
-class IsolateNodeWithIptableRuleNemesis(Nemesis):
-    disruptive = True
-    topology_changes = True
-
-    def disrupt(self):
-        self.disrupt_refuse_connection_with_block_scylla_ports_on_banned_node()
-
-
-class KillMVBuildingCoordinator(Nemesis):
-    disruptive = True
-    topology_changes = True
-
-    def disrupt(self):
-        self.disrupt_kill_mv_building_coordinator()
+# Auto-discovery mechanism.
+# It walks through the entire package and finds all Monkeys (=child of NemesisBaseClass) or Runners (=child of NemesisRunner)
+# It adds then to __all__ and ensures that if you request ANYTHING from nemesis module, all nemesis will be loaded
+for _, module_name, _ in pkgutil.walk_packages(path=__path__, prefix="sdcm.nemesis."):
+    imported = importlib.import_module(module_name)
+    for item in dir(imported):
+        if item not in __all__:
+            obj = getattr(imported, item)
+            if inspect.isclass(obj) and (issubclass(obj, NemesisBaseClass) or issubclass(obj, NemesisRunner)):
+                globals()[item] = obj
+                __all__.append(item)

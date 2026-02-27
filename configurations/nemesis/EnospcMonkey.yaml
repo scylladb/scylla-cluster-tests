@@ -1,2 +1,3 @@
-nemesis_class_name: 'EnospcMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'EnospcMonkey'
 user_prefix: 'longevity-5gb-1h-EnospcMonkey'
