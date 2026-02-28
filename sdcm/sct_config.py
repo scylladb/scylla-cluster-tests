@@ -1645,6 +1645,17 @@ class SCTConfiguration(dict):
             help="When true, start cluster health checker for all nodes",
         ),
         dict(
+            name="cluster_health_check_parallel_workers",
+            env="SCT_CLUSTER_HEALTH_CHECK_PARALLEL_WORKERS",
+            type=int,
+            help="""Number of parallel workers for health checks.
+                    Default: 5, maximum: 10 (enforced).
+                    Higher values provide faster health checks but may increase cluster load.
+                    Expected impact: 5 workers = ~80% time reduction, 10 workers = ~90% time reduction.
+                    See docs/plans/health-check-optimization.md for details.
+                    """,
+        ),
+        dict(
             name="data_validation",
             env="SCT_DATA_VALIDATION",
             type=str,
