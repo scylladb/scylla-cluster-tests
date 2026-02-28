@@ -1,0 +1,29 @@
+test_duration: 1440
+
+prepare_write_cmd:  [ "cassandra-stress write cl=ALL n=500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=1..500000          -col 'n=FIXED(10) size=FIXED(128)' -log interval=5",
+                      "cassandra-stress write cl=ALL n=500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=500001..1000000   -col 'n=FIXED(16) size=FIXED(128)' -log interval=5",
+                    ]
+
+stress_cmd: [ "cassandra-stress mixed cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=1..500000          -col 'n=FIXED(16) size=FIXED(128)' -log interval=5",
+              "cassandra-stress mixed cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=25 -pop seq=500001..1000000   -col 'n=FIXED(16) size=FIXED(182)' -log interval=5",
+             ]
+
+round_robin: true
+
+
+n_db_nodes: 5
+cluster_target_size: 100
+add_node_cnt: 15
+n_loaders: 2
+
+user_prefix: 'cluster-scale-5-100-15-test'
+
+# Takes too long on big clusters
+cluster_health_check: false
+backtrace_decoding: false
+
+# enable parallel node bootstrap
+parallel_node_operations: true
+
+nemesis_class_name: 'NoOpMonkey' # disable nemesis
+nemesis_during_prepare: false
