@@ -132,6 +132,12 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     if [[ -n "${params.scylla_repo ? params.scylla_repo : ''}" ]] ; then
         export SCT_SCYLLA_REPO="${params.scylla_repo}"
     fi
+    if [[ -n "${params.unified_package ? params.unified_package : ''}" ]] ; then
+        export SCT_UNIFIED_PACKAGE="${params.unified_package}"
+        export SCT_NONROOT_OFFLINE_INSTALL=${params.nonroot_offline_install}
+        # Manager is not included in the unified package, so it must be disabled
+        export SCT_USE_MGMT=false
+    fi
     if [[ -n "${params.new_scylla_repo ? params.new_scylla_repo : ''}" ]] ; then
         export SCT_NEW_SCYLLA_REPO="${params.new_scylla_repo}"
     fi

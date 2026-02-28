@@ -224,7 +224,7 @@ APT keys for ScyllaDB repos
 
 ## **unified_package** / SCT_UNIFIED_PACKAGE
 
-Url to the unified package of scylla version to install scylla
+Url to the unified package of scylla version to install scylla.<br>Example: 'https://downloads.scylladb.com/unstable/scylla/master/relocatable/latest/scylla-unified-6.3.0~dev....x86_64.tar.gz'<br>Can also be set automatically via scylla_version='relocatable:latest'.<br>NOTE: Manager is not included in the unified package, so use_mgmt is set to false.
 
 **default:** N/A
 
@@ -251,7 +251,7 @@ Scylla install mode, repo/offline/web
 
 ## **scylla_version** / SCT_SCYLLA_VERSION
 
-Version of scylla to install, ex. '2.3.1'<br>Automatically lookup AMIs and repo links for formal versions.<br>WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'
+Version of scylla to install, ex. '2.3.1'<br>Automatically lookup AMIs and repo links for formal versions.<br>Use 'relocatable:&lt;branch&gt;:&lt;arch&gt;' to resolve the latest unified package from S3 (sets unified_package, disables manager).<br>Format: 'relocatable:&lt;branch&gt;:&lt;arch&gt;' where branch defaults to 'master' and arch defaults to 'x86_64' (auto-detected on AWS).<br>Examples: '2025.4', 'master:latest', 'relocatable:latest', 'relocatable:master:x86_64', 'relocatable:branch-2025.1:aarch64'<br>WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'
 
 **default:** N/A
 
