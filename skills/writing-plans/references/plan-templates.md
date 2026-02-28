@@ -39,6 +39,7 @@ Use this as a starting point for any new plan:
 
 ### Phase 1: <Name>
 
+**Importance**: Critical/Important/Nice-to-have
 **Description**: <What will be implemented>
 
 **Deliverables**:
@@ -53,6 +54,7 @@ Use this as a starting point for any new plan:
 
 ### Phase 2: <Name>
 
+**Importance**: Critical/Important/Nice-to-have
 **Description**: <What will be implemented>
 
 **Dependencies**: Phase 1
@@ -67,6 +69,12 @@ Use this as a starting point for any new plan:
 
 ### Unit Tests
 - <What to test at unit level>
+
+### Integration Tests
+- <What to verify end-to-end>
+
+### Manual Testing
+- <What requires human verification>
 
 ## Success Criteria
 
@@ -180,16 +188,31 @@ between nemesis, this results in extremely bloated class.
 - Phases should be scoped to single Pull Requests where possible
 - Large phases should be split into separate commits within the PR for easier review
 - Order by dependency: foundational work first
-- Each phase needs Description, Deliverables, and Definition of Done
+- Each phase needs Importance, Description, Deliverables, and Definition of Done
 - Mark unclear steps as "Needs Investigation"
 - Definition of Done items should be verifiable and serve as the success criteria for the phase
 
-**PR scoping guidance**: Keep PRs as small and focused as possible. If a phase is too large for a single review, split it into multiple sub-phases. Within a PR, use separate commits for logically distinct changes (e.g., one commit for refactoring, another for new functionality, another for tests).
+**Importance levels** — use these to indicate which phases are essential vs. optional:
+
+| Level | Meaning | Heuristic |
+|-------|---------|-----------|
+| **Critical** | Must be completed for the plan to succeed | Blocks other phases or is the core deliverable |
+| **Important** | Significantly improves the outcome | Adds meaningful value but plan works without it |
+| **Nice-to-have** | Can be deferred or dropped if time is limited | Polish, optimization, or stretch goals |
+
+**PR sizing rules** — based on industry best practices:
+- **Target ≤200 lines of code per PR.** Research shows PRs over 200 lines receive lower-quality reviews ([Google Engineering Practices](https://google.github.io/eng-practices/), [Graphite: PR Size Best Practices](https://www.graphite.com/guides/best-practices-managing-pr-size))
+- **One logical change per PR.** Do not mix refactoring, new features, and config changes in a single PR ([Microsoft Engineering Fundamentals](https://microsoft.github.io/code-with-engineering-playbook/code-reviews/pull-requests/))
+- **Split large phases into sub-phases.** If a phase exceeds ~200 lines, break it into multiple PRs that each stand alone
+- **Use separate commits for distinct changes within a PR** (e.g., one commit for refactoring, another for new functionality, another for tests)
+- **Each PR must leave the codebase in a working state.** No broken intermediate states ([Google: Small CLs](https://google.github.io/eng-practices/review/developer/small-cls.html))
+- **Prep work goes in separate PRs.** Pre-refactoring, dependency upgrades, or configuration changes should be submitted before the main feature PR
 
 **Phase template**:
 ```markdown
 ### Phase N: <Name>
 
+**Importance**: Critical/Important/Nice-to-have
 **Description**: <What will be implemented and why>
 
 **Dependencies**: <Which phases must be complete first>
@@ -209,14 +232,13 @@ between nemesis, this results in extremely bloated class.
 
 ### 5. Testing Requirements
 
-**Purpose**: Define what unit tests are needed to verify each phase.
-
-**Focus on unit tests** — these are what the LLM can actually write and run. Integration testing, manual testing, and performance validation are handled during review, not in the plan.
+**Purpose**: Define what testing is needed to verify each phase. Think about testing upfront, not as an afterthought.
 
 **Must include**:
-- What to test at the unit level
-- Test file locations in `unit_tests/`
-- Key scenarios and edge cases to cover
+- Unit tests the LLM can write and run
+- Integration testing needs (what to verify end-to-end)
+- Manual testing procedures (what requires human verification)
+- Performance testing requirements (if applicable)
 
 **Pattern**:
 ```markdown
@@ -226,6 +248,15 @@ between nemesis, this results in extremely bloated class.
 - Test configuration parsing with valid/invalid inputs
 - Mock cluster nodes to test health check logic
 - Run with: `uv run sct.py unit-tests -t test_health_check.py`
+
+### Integration Tests
+- Test with Docker backend: `--backend docker`
+- Verify end-to-end cluster provisioning works with new configuration
+- Run with: `uv run sct.py integration-tests`
+
+### Manual Testing
+- Verify on 10-node cluster with mixed nemesis operations
+- Check monitoring dashboards display new metrics correctly
 ```
 
 ---

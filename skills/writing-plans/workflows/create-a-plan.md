@@ -64,10 +64,12 @@ A 5-phase process for writing an SCT implementation plan following the 7-section
 1. **Break the work into phases.** Each phase should be:
    - Atomic and scoped to a single Pull Request where possible
    - Ordered by dependency (foundational work first)
+   - Marked with Importance level (Critical/Important/Nice-to-have)
 
-2. **Keep PRs small and focused.** Large phases should be split into sub-phases. Within a PR, use separate commits for logically distinct changes (e.g., one commit for refactoring, another for new functionality, another for tests).
+2. **Keep PRs small and focused.** Target ≤200 lines of code per PR. One logical change per PR — don't mix refactoring, new features, and config changes. Split large phases into sub-phases. Within a PR, use separate commits for logically distinct changes.
 
 3. **For each phase, write:**
+   - **Importance**: Critical/Important/Nice-to-have (see heuristics in templates)
    - **Description**: What will be implemented and why
    - **Dependencies**: Which phases must be complete first
    - **Deliverables**: Concrete outputs (files, features, configurations)
@@ -98,10 +100,11 @@ A 5-phase process for writing an SCT implementation plan following the 7-section
 
 **Actions:**
 
-1. **Write Testing Requirements.** Focus on unit tests — what the LLM can write and run:
+1. **Write Testing Requirements.** Testing should be planned upfront, not as an afterthought:
    - **Unit tests**: What to test in isolation, expected location in `unit_tests/`
-   - Key scenarios and edge cases to cover
-   - Do NOT include integration tests or manual testing procedures — those are handled during review
+   - **Integration tests**: What to verify end-to-end, which backends to use
+   - **Manual testing**: What requires human verification (cluster operations, monitoring, etc.)
+   - **Performance tests**: If applicable, specify benchmarks and baselines
 
 2. **Write Success Criteria.** Completing all Definition of Done items across phases constitutes success. Only add plan-level criteria that span multiple phases or cannot be captured in any single phase's DoD.
 

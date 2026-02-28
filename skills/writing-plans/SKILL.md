@@ -70,8 +70,8 @@ Every SCT plan follows this structure. See [plan-templates.md](references/plan-t
 | 1 | Problem Statement | What and why | Include measurable pain points |
 | 2 | Current State | What exists today | MUST reference real files (verify with tools) |
 | 3 | Goals | What success looks like | Numbered, measurable objectives |
-| 4 | Implementation Phases | How to get there | PR-scoped, ordered by dependency, DoD per phase |
-| 5 | Testing Requirements | How to verify | Unit tests the LLM can write and run |
+| 4 | Implementation Phases | How to get there | PR-scoped (≤200 LOC), Importance levels, DoD per phase |
+| 5 | Testing Requirements | How to verify | Unit, integration, and manual testing planned upfront |
 | 6 | Success Criteria | How to know it's done | References DoD items; add plan-level criteria only if needed |
 | 7 | Risk Mitigation | What could go wrong | Likelihood, impact, mitigation for each risk |
 
@@ -139,8 +139,8 @@ A well-written SCT implementation plan:
 - [ ] Has a Problem Statement with measurable pain points
 - [ ] Has a Current State section with verified file/class/method references
 - [ ] Has numbered, measurable goals
-- [ ] Has PR-scoped implementation phases with Definition of Done
-- [ ] Has testing requirements covering unit tests
+- [ ] Has PR-scoped implementation phases with Importance levels and Definition of Done
+- [ ] Has testing requirements covering unit, integration, and manual testing
 - [ ] Has success criteria that reference DoD items (no duplication)
 - [ ] Has risk mitigation with likelihood, impact, and mitigation for each risk
 - [ ] Marks unclear requirements as "Needs Investigation"
