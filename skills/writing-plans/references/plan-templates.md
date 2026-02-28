@@ -201,7 +201,7 @@ between nemesis, this results in extremely bloated class.
 | **Nice-to-have** | Can be deferred or dropped if time is limited | Polish, optimization, or stretch goals |
 
 **PR sizing rules** — based on industry best practices:
-- **Target ≤200 lines of code per PR.** Research shows PRs over 200 lines receive lower-quality reviews ([Google Engineering Practices](https://google.github.io/eng-practices/), [Graphite: PR Size Best Practices](https://www.graphite.com/guides/best-practices-managing-pr-size))
+- **Target ≤200 lines of code per PR.** Research shows PRs over 200 lines receive lower-quality reviews ([Google: Small CLs](https://google.github.io/eng-practices/review/developer/small-cls.html), [Graphite: PR Size Best Practices](https://www.graphite.com/guides/best-practices-managing-pr-size))
 - **One logical change per PR.** Do not mix refactoring, new features, and config changes in a single PR ([Microsoft Engineering Fundamentals](https://microsoft.github.io/code-with-engineering-playbook/code-reviews/pull-requests/))
 - **Split large phases into sub-phases.** If a phase exceeds ~200 lines, break it into multiple PRs that each stand alone
 - **Use separate commits for distinct changes within a PR** (e.g., one commit for refactoring, another for new functionality, another for tests)
