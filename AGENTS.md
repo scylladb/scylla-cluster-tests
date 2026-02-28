@@ -396,6 +396,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | Skill | Description | Path |
 |-------|-------------|------|
 | designing-skills | Meta-skill for creating new AI agent skills for SCT | `skills/designing-skills/SKILL.md` |
+| writing-plans | Guides creation of implementation plans following SCT's 7-section structure | `skills/writing-plans/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 
