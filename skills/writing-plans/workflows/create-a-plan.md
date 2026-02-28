@@ -64,28 +64,29 @@ A 5-phase process for writing an SCT implementation plan following the 7-section
 1. **Break the work into phases.** Each phase should be:
    - Atomic and scoped to a single Pull Request where possible
    - Ordered by dependency (foundational work first)
-   - Marked with Priority (High/Medium/Low)
 
-2. **For each phase, write:**
+2. **Keep PRs small and focused.** Large phases should be split into sub-phases. Within a PR, use separate commits for logically distinct changes (e.g., one commit for refactoring, another for new functionality, another for tests).
+
+3. **For each phase, write:**
    - **Description**: What will be implemented and why
    - **Dependencies**: Which phases must be complete first
    - **Deliverables**: Concrete outputs (files, features, configurations)
-   - **Definition of Done**: Verifiable criteria using checkboxes
+   - **Definition of Done**: Verifiable criteria using checkboxes — these serve as the success criteria for the phase
 
-3. **Mark uncertain steps.** If a requirement or dependency is unclear, mark it as "Needs Investigation" rather than making assumptions.
+4. **Mark uncertain steps.** If a requirement or dependency is unclear, mark it as "Needs Investigation" rather than making assumptions.
 
-4. **Include a documentation update phase.** Every plan should have a phase (or phase deliverable) covering:
+5. **Include a documentation update phase.** Every plan should have a phase (or phase deliverable) covering:
    - Updated or new entries in `docs/` for user-facing changes
    - Configuration documentation regenerated via `uv run sct.py pre-commit`
    - README or guide updates if the feature changes user workflows
 
-5. **Include SCT-specific details:**
+6. **Include SCT-specific details:**
    - Backend-specific impact (which backends are affected?)
    - Configuration changes (`sdcm/sct_config.py` parameters)
    - Default values in `defaults/test_default.yaml`
    - Test case YAML files in `test-cases/`
 
-6. **Add separation lines** (`---`) between phases for readability.
+7. **Add separation lines** (`---`) between phases for readability.
 
 **Exit:** Implementation Phases section complete with Definition of Done for each phase.
 
@@ -97,16 +98,12 @@ A 5-phase process for writing an SCT implementation plan following the 7-section
 
 **Actions:**
 
-1. **Write Testing Requirements.** For each testing level:
+1. **Write Testing Requirements.** Focus on unit tests — what the LLM can write and run:
    - **Unit tests**: What to test in isolation, expected location in `unit_tests/`
-   - **Integration tests**: What to test end-to-end, which backends to use
-   - **Manual testing**: What requires human verification (cluster provisioning, nemesis operations, performance impact)
-   - **Performance tests**: If applicable, specify benchmarks and baselines
+   - Key scenarios and edge cases to cover
+   - Do NOT include integration tests or manual testing procedures — those are handled during review
 
-2. **Write Success Criteria.** Define 3-6 measurable outcomes:
-   - Concrete numbers where possible ("reduce from X to Y")
-   - Verifiable conditions ("all existing tests pass")
-   - User-visible improvements ("new configuration documented")
+2. **Write Success Criteria.** Completing all Definition of Done items across phases constitutes success. Only add plan-level criteria that span multiple phases or cannot be captured in any single phase's DoD.
 
 3. **Write Risk Mitigation.** For each risk:
    - **Name**: Short description of the risk

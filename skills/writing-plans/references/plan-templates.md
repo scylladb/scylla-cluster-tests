@@ -37,7 +37,7 @@ Use this as a starting point for any new plan:
 
 ## Implementation Phases
 
-### Phase 1: <Name> (Priority: High)
+### Phase 1: <Name>
 
 **Description**: <What will be implemented>
 
@@ -51,7 +51,7 @@ Use this as a starting point for any new plan:
 
 ---
 
-### Phase 2: <Name> (Priority: High/Medium/Low)
+### Phase 2: <Name>
 
 **Description**: <What will be implemented>
 
@@ -68,17 +68,11 @@ Use this as a starting point for any new plan:
 ### Unit Tests
 - <What to test at unit level>
 
-### Integration Tests
-- <What to test at integration level>
-
-### Manual Testing
-- <What requires human verification>
-
 ## Success Criteria
 
-1. <Measurable outcome 1>
-2. <Measurable outcome 2>
-3. <Measurable outcome 3>
+Completing all Definition of Done items across phases constitutes success. Add plan-level criteria only if they go beyond individual phase DoD:
+
+1. <Plan-level measurable outcome not captured in any single phase DoD>
 
 ## Risk Mitigation
 
@@ -184,14 +178,17 @@ between nemesis, this results in extremely bloated class.
 
 **Rules**:
 - Phases should be scoped to single Pull Requests where possible
+- Large phases should be split into separate commits within the PR for easier review
 - Order by dependency: foundational work first
 - Each phase needs Description, Deliverables, and Definition of Done
 - Mark unclear steps as "Needs Investigation"
-- Include Priority level (High/Medium/Low) for each phase
+- Definition of Done items should be verifiable and serve as the success criteria for the phase
+
+**PR scoping guidance**: Keep PRs as small and focused as possible. If a phase is too large for a single review, split it into multiple sub-phases. Within a PR, use separate commits for logically distinct changes (e.g., one commit for refactoring, another for new functionality, another for tests).
 
 **Phase template**:
 ```markdown
-### Phase N: <Name> (Priority: High/Medium/Low)
+### Phase N: <Name>
 
 **Description**: <What will be implemented and why>
 
@@ -212,13 +209,14 @@ between nemesis, this results in extremely bloated class.
 
 ### 5. Testing Requirements
 
-**Purpose**: Define unit, integration, and manual testing for each phase.
+**Purpose**: Define what unit tests are needed to verify each phase.
+
+**Focus on unit tests** — these are what the LLM can actually write and run. Integration testing, manual testing, and performance validation are handled during review, not in the plan.
 
 **Must include**:
-- Test types needed (unit, integration, manual, performance)
-- Test coverage goals
-- Manual testing procedures
-- Performance testing requirements (if applicable)
+- What to test at the unit level
+- Test file locations in `unit_tests/`
+- Key scenarios and edge cases to cover
 
 **Pattern**:
 ```markdown
@@ -228,35 +226,27 @@ between nemesis, this results in extremely bloated class.
 - Test configuration parsing with valid/invalid inputs
 - Mock cluster nodes to test health check logic
 - Run with: `uv run sct.py unit-tests -t test_health_check.py`
-
-### Integration Tests
-- Test with Docker backend: `--backend docker`
-- Verify end-to-end cluster provisioning
-
-### Manual Testing
-- 10-node cluster with mixed nemesis operations
-- Verify monitoring dashboards display new metrics
 ```
 
 ---
 
 ### 6. Success Criteria
 
-**Purpose**: Define how to determine if the implementation is successful.
+**Purpose**: Confirm overall plan completion. Completing all Definition of Done items across phases constitutes success.
 
 **Rules**:
-- Measurable outcomes (not vague "it works")
-- Acceptance criteria that can be verified
-- Validation steps someone can follow
+- Avoid duplicating DoD items — reference them instead
+- Only add plan-level criteria that span multiple phases or cannot be captured in a single phase's DoD
+- If all DoD items cover success fully, this section can simply state that
 
 **Good example**:
 ```markdown
 ## Success Criteria
 
-1. Health check time for 60-node cluster drops from ~120 to <12 minutes
-2. No health checks run after skipped nemesis operations
-3. Split-brain detection still catches known scenarios
-4. Configuration options documented in `docs/configuration_options.md`
+All Definition of Done items across phases are met. Additionally:
+
+1. Configuration options documented in `docs/configuration_options.md`
+2. No regressions in existing unit tests
 ```
 
 ---

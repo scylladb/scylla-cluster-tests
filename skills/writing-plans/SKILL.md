@@ -30,7 +30,7 @@ Use file-reading tools to inspect actual code before writing Current State. Do n
 
 **Each implementation phase should be scoped to a single Pull Request.**
 
-Large phases that span multiple PRs are hard to review and test. Break work into atomic phases with clear Definition of Done criteria. Order phases by dependency — foundational refactoring before feature implementation.
+Large phases that span multiple PRs are hard to review and test. Break work into atomic phases with clear Definition of Done criteria. Within a PR, split logically distinct changes into separate commits for easier review. Order phases by dependency — foundational refactoring before feature implementation.
 
 ### Measurable Goals
 
@@ -71,8 +71,8 @@ Every SCT plan follows this structure. See [plan-templates.md](references/plan-t
 | 2 | Current State | What exists today | MUST reference real files (verify with tools) |
 | 3 | Goals | What success looks like | Numbered, measurable objectives |
 | 4 | Implementation Phases | How to get there | PR-scoped, ordered by dependency, DoD per phase |
-| 5 | Testing Requirements | How to verify | Unit, integration, manual, performance |
-| 6 | Success Criteria | How to know it's done | Measurable outcomes, not vague "it works" |
+| 5 | Testing Requirements | How to verify | Unit tests the LLM can write and run |
+| 6 | Success Criteria | How to know it's done | References DoD items; add plan-level criteria only if needed |
 | 7 | Risk Mitigation | What could go wrong | Likelihood, impact, mitigation for each risk |
 
 ## Plan File Conventions
@@ -140,8 +140,8 @@ A well-written SCT implementation plan:
 - [ ] Has a Current State section with verified file/class/method references
 - [ ] Has numbered, measurable goals
 - [ ] Has PR-scoped implementation phases with Definition of Done
-- [ ] Has testing requirements covering unit, integration, and manual testing
-- [ ] Has measurable success criteria (not vague)
+- [ ] Has testing requirements covering unit tests
+- [ ] Has success criteria that reference DoD items (no duplication)
 - [ ] Has risk mitigation with likelihood, impact, and mitigation for each risk
 - [ ] Marks unclear requirements as "Needs Investigation"
 - [ ] Is saved in `docs/plans/` with a kebab-case filename
