@@ -20,6 +20,8 @@ from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
 
+
+LOGGER = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.usefixtures("events"),
     pytest.mark.integration,
@@ -85,8 +87,7 @@ def test_01_kcl_with_ycsb(request, docker_scylla, events, params):
     assert float(output[0]["latency 99th percentile"]) > 0
 
     output = kcl_thread.get_results()
-    logging.debug(output)
-
+    LOGGER.debug(output)
     error_log_content_before = events.get_event_log_file("error.log")
 
     # 2. do read with dataintegrity=true
