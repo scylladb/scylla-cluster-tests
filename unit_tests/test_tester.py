@@ -14,7 +14,7 @@ import re
 import time
 import threading
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import logging
 import pytest
 
@@ -533,7 +533,7 @@ class TestSaveSchema:
         tester.save_schema()
 
     def test_save_schema_saves_all_tables(self, tmp_path):
-        """Test that save_schema saves all expected tables including system.tablets."""
+        """Test that save_schema saves all expected tables and uploads compaction_history to S3."""
         tester = ClusterTesterForTests()
         tester._init_logging(tmp_path / "test_save_schema")
         tester.logdir = str(tmp_path)
@@ -551,22 +551,38 @@ class TestSaveSchema:
         tester.db_cluster = MagicMock()
         tester.db_cluster.nodes = [mock_node]
 
-        # Run save_schema
-        tester.save_schema()
+        # Mock the upload_system_table_to_s3 function and argus_collect_logs
+        with patch('sdcm.tester.upload_system_table_to_s3') as mock_upload, \
+             patch.object(tester, 'argus_collect_logs') as mock_argus_logs:
+            mock_upload.return_value = "https://s3.amazonaws.com/test-bucket/test.json.zst"
+            
+            # Run save_schema
+            tester.save_schema()
 
-        # Verify run_cqlsh was called with expected commands
+            # Verify upload_system_table_to_s3 was called for compaction_history
+            mock_upload.assert_called_once()
+            call_args = mock_upload.call_args
+            assert call_args[1]['node'] == mock_node
+            assert call_args[1]['table_name'] == "system.compaction_history"
+
+            # Verify argus_collect_logs was called with the S3 link
+            mock_argus_logs.assert_called_once_with({"system.compaction_history": "https://s3.amazonaws.com/test-bucket/test.json.zst"})
+
+        # Verify run_cqlsh was called with expected commands (but NOT for compaction_history)
         cqlsh_calls = [call[0][0] for call in mock_node.run_cqlsh.call_args_list]
         assert "desc schema" in cqlsh_calls
         assert "select JSON * from system_schema.tables" in cqlsh_calls
         assert "select JSON * from system.truncated" in cqlsh_calls
         assert "select JSON * from system.tablets" in cqlsh_calls
+        assert "select JSON * from system.compaction_history" not in cqlsh_calls  # Now uploaded directly to S3
         assert "desc schema with internals" in cqlsh_calls
 
-        # Verify files were created
+        # Verify files were created (except compaction_history which goes to S3)
         assert (tmp_path / "schema.log").exists()
         assert (tmp_path / "system_schema_tables.log").exists()
         assert (tmp_path / "system_truncated.log").exists()
         assert (tmp_path / "system_tablets.log").exists()
+        assert not (tmp_path / "system_compaction_history.log").exists()  # Not saved locally anymore
         assert (tmp_path / "schema_with_internals.log").exists()
 
     def test_save_schema_node_not_ready(self, tmp_path):

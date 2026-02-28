@@ -192,6 +192,7 @@ from sdcm.logcollector import (
 from sdcm.send_email import build_reporter, save_email_data_to_file
 from sdcm.utils import alternator
 from sdcm.utils.profiler import ProfilerFactory
+from sdcm.utils.sstable.s3_uploader import upload_system_table_to_s3
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER
 from sdcm.utils.gce_utils import get_gce_compute_instances_client
 from sdcm.utils.auth_context import temp_authenticator
@@ -3769,6 +3770,11 @@ class ClusterTester(unittest.TestCase):
             self.save_cqlsh_output_in_file(
                 node=node, cmd="select JSON * from system.tablets", log_file="system_tablets.log"
             )
+            # Upload system.compaction_history directly to S3 to avoid loading large data into memory
+            s3_link = upload_system_table_to_s3(node=node, table_name="system.compaction_history", test_id=self.test_config.test_id())
+            if s3_link:
+                # Report to Argus for visibility
+                self.argus_collect_logs({"system.compaction_history": s3_link})
             self.save_cqlsh_output_in_file(
                 node=node, cmd="desc schema with internals", log_file="schema_with_internals.log"
             )
