@@ -1,0 +1,134 @@
+# Latency decorator error thresholds for latte gradual throughput tests with tablets enabled
+# These thresholds are based on latte's performance characteristics which differ from cassandra-stress
+# Values will be updated after initial performance testing on i8g.4xlarge instances
+
+latency_decorator_error_thresholds:
+  write:
+    unthrottled:
+      P90 write:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      Throughput write:
+        # Fixed throughput limit in operations per second (ops/sec).
+        # This value should be determined based on performance testing with latte.
+        # Expected to be similar to cassandra-stress but may vary due to different client implementation.
+        fixed_limit: null  # To be set after baseline testing
+
+  read:
+    "150000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: 1
+    "300000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: 1
+    "450000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: 3
+    "600000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: 40
+    "700000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: 50
+    unthrottled:
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+      Throughput read:
+        # Fixed throughput limit in operations per second (ops/sec).
+        # Expected to be similar to cassandra-stress. Latte may achieve slightly higher
+        # throughput due to more efficient connection handling.
+        fixed_limit: null  # To be set after baseline testing
+
+
+  read_disk_only:
+    "80000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "165000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "250000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "300000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    unthrottled:
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+      Throughput read:
+        # Fixed throughput limit in operations per second (ops/sec).
+        fixed_limit: null  # To be set after baseline testing
+
+  mixed:
+    "50000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 3
+      P99 read:
+        fixed_limit: 3
+    "150000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 3
+      P99 read:
+        fixed_limit: 3
+    "300000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 5
+      P99 read:
+        fixed_limit: 5
+    "450000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 8
+      P99 read:
+        fixed_limit: 8
+    unthrottled:
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+      Throughput write:
+        # Fixed throughput limit in operations per second (ops/sec).
+        fixed_limit: null  # To be set after baseline testing
