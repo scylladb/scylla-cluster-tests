@@ -305,6 +305,8 @@ def provision_resources(backend, test_name: str, config: str):
             layout.provision()
         elif backend == "azure":
             provision_sct_resources(params=params, test_config=test_config)
+        elif backend == "gce":
+            provision_sct_resources(params=params, test_config=test_config)
         elif backend == "xcloud":
             cloud_provider = params.get("xcloud_provider").lower()
             original_backend = params.get("cluster_backend")
