@@ -324,6 +324,9 @@ mgmt_snapshots_preparer_params:
   threads_num: 500
   col_size: 1024
   col_n: 1
+  # Number of keyspaces to distribute the data across. The total backup size will be divided equally among them.
+  # For example, with num_keyspaces=10 and backup_size=1000 (1TB), each keyspace will contain ~100GB of data.
+  num_keyspaces: 1
   # Defined in a runtime based on backup size, number of loaders, scylla version, etc
   ks_name: ''
   num_of_rows: ''
