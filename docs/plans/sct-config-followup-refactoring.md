@@ -6,14 +6,16 @@
 
 Key pain points identified during the PR #13104 review ([comment by @soyacz](https://github.com/scylladb/scylla-cluster-tests/pull/13104#issuecomment-3971791016), [response by @pehala](https://github.com/scylladb/scylla-cluster-tests/pull/13104#issuecomment-3971881663)):
 
-1. **Validation in `__init__`**: ~180 lines of inline validation checks (steps 11–21) inside `__init__` make the constructor fragile and hard to test in isolation.
-2. **Image resolution in `__init__`**: ~150 lines (steps 5–6.1) call external cloud APIs (AWS, GCE, Azure) during construction, preventing lightweight instantiation for utilities or testing.
+1. **Validation in `__init__`**: ~180 lines of inline validation checks inside `__init__` (the numbered validation blocks, e.g., "step 11: validate instance_provision" through "step 21: validate performance params") make the constructor fragile and hard to test in isolation.
+2. **Image resolution in `__init__`**: ~150 lines call external cloud APIs (AWS, GCE, Azure) during construction to resolve `scylla_version` into concrete image IDs, preventing lightweight instantiation for utilities or testing.
 3. **Monolithic file**: 4,500+ lines in a single file with 430+ configuration options make it hard for both humans and LLMs to navigate.
 4. **Vague `.get()` access**: ~1,000+ `params.get("string_key")` calls across the codebase bypass IDE type checking and provide no autocomplete or type safety.
 
 ## Current State
 
 ### File: `sdcm/sct_config.py` (~4,500 lines)
+
+> **Note**: Line numbers below reference the current `master` branch as of commit `eb82fef`. They will shift as PR #13104 and other changes are merged, but the logical sections remain the same.
 
 **Class structure:**
 - `SCTConfiguration(dict)` — line 237 (current master), migrated to `SCTConfiguration(BaseModel)` in PR #13104
@@ -254,7 +256,7 @@ sdcm/sct_config/
 **Sub-phase 3c**: Extract validators and image resolution
 **Sub-phase 3d**: Extract defaults and backend configuration
 
-**Open Question**: Whether to use Pydantic model composition (nested models) or keep all fields flat on `SCTConfiguration` and just organize the source code into modules. The recommendation from the PR #13104 review ([comment by @pehala](https://github.com/scylladb/scylla-cluster-tests/pull/13104#issuecomment-3971881663)) is to go "deep not wide" — restructuring prefixed fields (e.g., `nemesis_*`) into nested config objects (e.g., `config.nemesis.class_name`). This is a larger change that should be evaluated with a PoC.
+**Open Question**: Whether to use Pydantic model composition (nested models) or keep all fields flat on `SCTConfiguration` and just organize the source code into modules. The recommendation from the PR #13104 review ([comment by @pehala](https://github.com/scylladb/scylla-cluster-tests/pull/13104#issuecomment-3971881663)) is to go "deep not wide" — restructuring prefixed fields (e.g., `nemesis_*`) into nested config objects (e.g., `config.nemesis.class_name`). However, **Phase 3 should proceed with flat fields** — only reorganizing source code into modules without changing the public API. The nested model restructuring is deferred to Phase 5, which requires a separate PoC to validate the approach and assess impact on ~430 YAML config files.
 
 **Definition of Done:**
 - [ ] `sdcm/sct_config/` package exists with sub-modules
@@ -324,7 +326,7 @@ class SCTConfiguration(BaseModel):
    - Handle `self.params.get("key", default)` cases by ensuring defaults are in YAML files
    - Pyright/mypy to validate correctness after migration
 
-4. **Address `params.get("key", default)` anti-pattern**: Per the [SCT Configuration Guide](https://github.com/scylladb/scylla-cluster-tests/blob/master/docs/sct-configuration.md), defaults should live in `defaults/*.yaml`, not scattered in code. Each `.get("key", default)` should be reviewed — the default should move to YAML if it's not there already.
+4. **Address `params.get("key", default)` anti-pattern**: Per the SCT configuration best practices (see `docs/sct-configuration.md` introduced in PR #13104), defaults should live in `defaults/*.yaml`, not scattered in code. Each `.get("key", default)` should be reviewed — the default should move to YAML if it's not there already.
 
 **Definition of Done:**
 - [ ] All `params.get("key")` calls in `sdcm/` replaced with `params.key`
