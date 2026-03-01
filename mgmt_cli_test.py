@@ -266,9 +266,11 @@ class ManagerBackupTests(ManagerRestoreTests):
     def test_enospc_before_restore(self):
         if is_tablets_feature_enabled(self.db_cluster.nodes[0]):
             # TODO: Get back to this restriction after https://github.com/scylladb/scylla-manager/issues/4275 resolution
+            # NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
             self.log.info(
                 "Skipping test_enospc_before_restore due to enabled tablets. "
                 "For details https://github.com/scylladb/scylla-manager/issues/4276"
+                # NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
             )
             return
 
@@ -343,6 +345,7 @@ class ManagerBackupTests(ManagerRestoreTests):
         Otherwise, new set of SSTables is created what ends up in the situation that almost no deduplication is applied.
 
         For more details https://github.com/scylladb/scylla-manager/issues/3936#issuecomment-2277611709
+        NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
         """
         self.log.info("starting test_consecutive_backups")
 

@@ -613,6 +613,7 @@ class RestoreTask(ManagerTask):
         else:
             # Overall repair duration is defined as a sum of all the durations (last column) in the table
             # because of the issue https://github.com/scylladb/scylla-manager/issues/4046
+            # NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
             repair_by_tables = repair_res[repair_res.index(["Keyspace", "Table", "Progress", "Duration"]) + 1 :]
             per_table_duration_timedelta = [duration_to_timedelta(table[-1]) for table in repair_by_tables]
             duration_timedelta = sum(per_table_duration_timedelta, datetime.timedelta(0))

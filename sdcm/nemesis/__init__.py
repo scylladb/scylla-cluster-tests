@@ -501,6 +501,7 @@ class NemesisRunner:
                 "scylladb/scylla-manager#2813", params=self.tester.params
             ):
                 # Workaround for https://github.com/scylladb/scylla-manager/issues/2813
+                # NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
                 # When scylla take too long time to bring api port up
                 #  scylla-manager-agent fails to start and never go up
                 self.target_node.start_service(service_name="scylla-manager-agent", timeout=600, ignore_status=True)
@@ -3320,7 +3321,9 @@ class NemesisRunner:
 
         skip_issues = [
             "https://github.com/scylladb/scylla-manager/issues/3829",
+            # NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
             "https://github.com/scylladb/scylla-manager/issues/4049",
+            # NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
         ]
         is_multi_dc = (
             len(self.cluster.params.region_names) > 1 or (self.cluster.params.get("simulated_regions") or 0) > 1
@@ -3360,8 +3363,10 @@ class NemesisRunner:
                 self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
 
             # TODO: Bring it back after the implementation of https://github.com/scylladb/scylla-manager/issues/4049
+            # NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
             # which will unblock schema restore into a different DC. For now, we can restore schema only within one DC.
             # According to https://github.com/scylladb/scylla-manager/issues/4041#issuecomment-2565489699, the step
+            # NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
             # below is not needed if restoring the schema within one DC.
             #
             # self.tester.set_ks_strategy_to_network_and_rf_according_to_cluster(
@@ -3408,7 +3413,9 @@ class NemesisRunner:
             )
 
     @decorate_with_context_if_issues_open(
-        ignore_take_snapshot_failing, issue_refs=["https://github.com/scylladb/scylla-manager/issues/3389"]
+        ignore_take_snapshot_failing,
+        # NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
+        issue_refs=["https://github.com/scylladb/scylla-manager/issues/3389"]
     )
     def _mgmt_backup(self, backup_specific_tables):
         if not self.cluster.params.get("use_mgmt") and not self.cluster.params.get("use_cloud_manager"):

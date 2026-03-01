@@ -417,9 +417,13 @@ def test_scylla_cluster_monitoring_type_platform(db_cluster: ScyllaPodCluster):
 
 # NOTE: Scylla manager versions notes:
 #       - '2.6.3' is broken: https://github.com/scylladb/scylla-manager/issues/3156
+#         NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
 #       - '2.5.4' is broken: https://github.com/scylladb/scylla-manager/issues/3147
+#         NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
 #       - '2.5.3' is broken: https://github.com/scylladb/scylla-manager/issues/3150
+#         NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
 #       - '2.5.2' is broken: https://github.com/scylladb/scylla-manager/issues/3150
+#         NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
 #       - '2.3.x' will fail with following error:
 #         invalid character '\\x1f' looking for beginning of value
 #       - '2.3.x' and ''2.4.x' are not covered as old ones.
@@ -442,9 +446,13 @@ def test_mgmt_repair(db_cluster, manager_version):
 
 # NOTE: Scylla manager versions notes:
 #       - '2.6.3' is broken: https://github.com/scylladb/scylla-manager/issues/3156
+#         NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
 #       - '2.5.4' is broken: https://github.com/scylladb/scylla-manager/issues/3147
+#         NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
 #       - '2.5.3' is broken: https://github.com/scylladb/scylla-manager/issues/3150
+#         NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
 #       - '2.5.2' is broken: https://github.com/scylladb/scylla-manager/issues/3150
+#         NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
 #       - '2.3.x' will fail with following error:
 #         invalid character '\\x1f' looking for beginning of value
 #       - '2.3.x' and ''2.4.x' are not covered as old ones.

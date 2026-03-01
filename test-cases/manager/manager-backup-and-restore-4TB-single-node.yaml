@@ -1,6 +1,7 @@
 test_duration: 4320
 
 # TODO: When https://github.com/scylladb/scylla-manager/issues/3298 will be solved, we will split this scenario into two: One backup only scenario and one scenario that only restores said backup
+# NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
 
 # Using cl=ALL opposed to cl=ONE so that in the future, when we will use multi node setup, the stress will work all the same.
 prepare_write_cmd: ["cassandra-stress write cl=ALL n=1006632960 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..1006632960",
@@ -15,6 +16,7 @@ stress_read_cmd: ["cassandra-stress read cl=ONE n=1006632960 -schema 'replicatio
                   "cassandra-stress read cl=ONE n=1006632960 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=3019898881..4026531840"]
 
 # TODO: Lowering data size to 4TB until https://github.com/scylladb/scylla-manager/issues/3308 and https://github.com/scylladb/scylla-manager/issues/3298 are solved
+# NOTE: scylladb/scylla-manager GitHub issues are no longer accessible; replace with a Jira issue if still relevant.
 
 round_robin: true
 
