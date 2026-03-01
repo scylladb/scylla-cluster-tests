@@ -2986,11 +2986,7 @@ class SCTConfiguration(BaseModel):
             and is_multitenant_field(field)
             and isinstance(param_value, list)
             and len(param_value) > 1
-        ) or (
-            field_name == "nemesis_selector"
-            and isinstance(self.get("nemesis_class_name"), str)
-            and len(self.get("nemesis_class_name").split(" ")) > 1
-        ):
+        ) or (field_name == "nemesis_selector" and len(self.get("nemesis_class_name")) > 1):
             for list_element in param_value:
                 try:
                     from_env_func(list_element)

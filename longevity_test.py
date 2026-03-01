@@ -552,7 +552,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             {
                 "node_benchmarks": benchmarks_results,
                 "nemesis_details": nemeses_stats,
-                "nemesis_name": self.params.get("nemesis_class_name"),
+                "nemesis_name": str(self.params.get("nemesis_class_name")),
                 "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
             }
         )
