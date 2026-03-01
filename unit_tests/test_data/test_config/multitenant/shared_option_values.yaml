@@ -33,7 +33,7 @@ nemesis_selector: [
 nemesis_interval: 5
 nemesis_sequence_sleep_between_ops: 3
 nemesis_during_prepare: False
-nemesis_seed: "013"
+nemesis_seed: 13
 nemesis_add_node_cnt: 1
 space_node_threshold: 13531
 nemesis_filter_seeds: False

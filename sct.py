@@ -54,7 +54,7 @@ from sdcm.provision import AzureProvisioner
 from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis.monkey.runners import SisyphusMonkey
-from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config
+from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config, available_backends
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import (
@@ -162,14 +162,6 @@ SCT_RUNNER_HOST = get_sct_runner_ip()
 LOGGER = setup_stdout_logger()
 
 
-def sct_option(name, sct_name, **kwargs):
-    sct_opt = SCTConfiguration.get_config_option(sct_name)
-    multimple_use = kwargs.pop("multiple", False)
-    return click.option(
-        name, type=kwargs.get("type", sct_opt["type"]), help=kwargs.get("help", sct_opt["help"]), multiple=multimple_use
-    )
-
-
 def install_callback(ctx, _, value):
     if not value or ctx.resilient_parsing:
         return value
@@ -259,7 +251,7 @@ def cli(ctx):
 
 
 @cli.command("provision-resources", help="Provision resources for the test")
-@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
+@click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
 @click.option("-t", "--test-name", type=str, help="Test name")
 @click.option(
     "-c",
@@ -372,10 +364,10 @@ def clean_aws_kms_aliases(ctx, regions, time_delta_h, dry_run):
 @click.option("--post-behavior", is_flag=True, default=False, help="clean all resources according to post behavior")
 @click.option("--user", type=str, help="user name to filter instances by")
 @click.option("--billing-project", type=str, help="billing project to filter instances by")
-@sct_option("--test-id", "test_id", help="test id to filter by. Could be used multiple times", multiple=True)
+@click.option("--test-id", "test_id", help="test id to filter by. Could be used multiple times", multiple=True)
 @click.option("--logdir", type=str, help="directory with test run")
 @click.option("--dry-run", is_flag=True, default=False, help="dry run")
-@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
+@click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
 @click.option(
     "--clean-runners",
     is_flag=True,
@@ -492,13 +484,13 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
 @click.option("--billing-project", type=str, help="billing project to filter instances by")
 @click.option("--get-all", is_flag=True, default=False, help="All resources")
 @click.option("--get-all-running", is_flag=True, default=False, help="All running resources")
-@sct_option("--test-id", "test_id", help="test id to filter by")
+@click.option("--test-id", "test_id", help="test id to filter by")
 @click.option("--verbose", is_flag=True, default=False, help="if enable, will log progress")
 @click.option(
     "-b",
     "--backend",
     "backend_type",
-    type=click.Choice(SCTConfiguration.available_backends + ["all"]),
+    type=click.Choice(available_backends + ["all"]),
     default="all",
     help="use specific backend",
 )
@@ -1277,7 +1269,7 @@ def list_repos(dist_type, dist_version):
 @click.option("-r", "--scylla-repo", type=str, help="Scylla repo")
 @click.option("-d", "--linux-distro", type=str, help="Linux Distribution type")
 @click.option("-o", "--only-print-versions", type=bool, default=False, required=False, help="")
-@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
+@click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
 @click.option(
     "--base_version_all_sts_versions",
     is_flag=True,
@@ -1327,7 +1319,7 @@ def get_scylla_base_versions(
 
 @cli.command("output-conf", help="Output test configuration readed from the file")
 @click.argument("config_files", type=str, default="")
-@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends))
+@click.option("-b", "--backend", type=click.Choice(available_backends))
 def output_conf(config_files, backend):
     add_file_logger()
 
@@ -1363,7 +1355,7 @@ def _run_yaml_test(backend, full_path, env):
 
 
 @cli.command(help="Test yaml in test-cases directory")
-@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), default="aws")
+@click.option("-b", "--backend", type=click.Choice(available_backends), default="aws")
 @click.option("-i", "--include", type=str, default="")
 @click.option("-e", "--exclude", type=str, default="")
 def lint_yamls(backend, exclude: str, include: str):
@@ -1415,7 +1407,7 @@ def lint_yamls(backend, exclude: str, include: str):
 
 @cli.command(help="Check test configuration file")
 @click.argument("config_file", type=str, default="")
-@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), default="aws")
+@click.option("-b", "--backend", type=click.Choice(available_backends), default="aws")
 def conf(config_file, backend):
     add_file_logger()
 
@@ -1690,7 +1682,7 @@ class OutputLogger:
 
 @cli.command("run-test", help="Run SCT test using unittest")
 @click.argument("argv")
-@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
+@click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
 @click.option(
     "-c",
     "--config",
@@ -1729,7 +1721,7 @@ def run_test(argv, backend, config, logdir):
 
 @cli.command("run-pytest", help="Run tests using pytest")
 @click.argument("target")
-@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
+@click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
 @click.option(
     "-c",
     "--config",
@@ -2258,10 +2250,10 @@ def set_runner_tags(runner_ip, tags):
 @cli.command("clean-runner-instances", help="Clean all unused SCT runner instances")
 @click.option("-ip", "--runner-ip", required=False, type=str, default="")
 @click.option("-ts", "--test-status", type=str, help="The result of the test run")
-@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Specific backend to use")
+@click.option("-b", "--backend", type=click.Choice(available_backends), help="Specific backend to use")
 @click.option("--user", type=str, help="user name to filter instances by")
 @click.option("--billing-project", type=str, help="billing project to filter instances by")
-@sct_option("--test-id", "test_id", help="test id to filter by. Could be used multiple times", multiple=True)
+@click.option("--test-id", "test_id", help="test id to filter by. Could be used multiple times", multiple=True)
 @click.option("--dry-run", is_flag=True, default=False, help="dry run")
 @click.option("--force", is_flag=True, default=False, help="Skip cleaning logic and terminate the instance")
 def clean_runner_instances(runner_ip, test_status, backend, user, billing_project, test_id, dry_run, force):
@@ -2298,7 +2290,7 @@ def configure_jenkins_builders(cloud_provider, regions):
 
 
 @cli.command("nemesis-list", help="get the list of select disrupt function for SisyphusMonkey")
-@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
+@click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
 @click.option(
     "-c",
     "--config",
@@ -2392,7 +2384,7 @@ def finish_argus_test_run(jenkins_status):
 @click.option(
     "-b",
     "--backend",
-    type=click.Choice(SCTConfiguration.available_backends),
+    type=click.Choice(available_backends),
     help="Allows to skip making backend detection API calls.",
 )
 def fetch_junit(runner_ip, backend):

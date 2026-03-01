@@ -108,7 +108,7 @@ def test_03_provision(aws_region: AwsRegion, instance_provision: str) -> None:
         SCT_AMI_ID_DB_SCYLLA="ami-760aaa0f",
         SCT_INSTANCE_TYPE_DB="m5.xlarge",
         SCT_N_DB_NODES="3",
-        SCT_N_MONITORS_NODES="1",
+        SCT_N_MONITOR_NODES="1",
         SCT_N_LOADERS="1",
         SCT_LOGS_TRANSPORT="ssh",
         SCT_INSTANCE_PROVISION=instance_provision,

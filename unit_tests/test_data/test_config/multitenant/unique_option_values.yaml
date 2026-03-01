@@ -16,37 +16,55 @@ stress_cmd: [
 ]
 stress_read_cmd: "fake__stress_read_cmd__all_tenants__single_str"
 stress_cmd_w: "fake__stress_cmd_w__all_tenants__single_str"
-stress_cmd_r: [[
-    "fake__stress_cmd_r__tenant1__part1",
-    "fake__stress_cmd_r__tenant1__part2"
-], [
-    "fake__stress_cmd_r__tenant2__single_str_in_list"
-]]
-stress_cmd_m: [[
-    "fake__stress_cmd_m__tenant1__part1",
-    "fake__stress_cmd_m__tenant1__part2"
-],
-    "fake__stress_cmd_m__tenant2__single_str"
-]
+stress_cmd_r:
+  tenant1:
+    - "fake__stress_cmd_r__tenant1__part1"
+    - "fake__stress_cmd_r__tenant1__part2"
+  tenant2:
+    - "fake__stress_cmd_r__tenant2__single_str_in_list"
+stress_cmd_m:
+  tenant1:
+    - "fake__stress_cmd_m__tenant1__part1"
+    - "fake__stress_cmd_m__tenant1__part2"
+  tenant2: "fake__stress_cmd_m__tenant2__single_str"
 
 # Non-stress options
-nemesis_class_name: [
-    "FakeNemesisClassNameForTenant1",
-    "FakeNemesisClassNameForTenant2"
-]
-nemesis_selector: [[
-    "fake__nemesis_selector__tenant1__part1",
-    "fake__nemesis_selector__tenant1__part2"
-], [
-    "fake__nemesis_selector__tenant2"
-]]
-nemesis_interval: [5, 7]
-nemesis_sequence_sleep_between_ops: [3, 5]
-nemesis_during_prepare: [False, True]
-nemesis_seed: ["024", "135"]
-nemesis_add_node_cnt: [1, 2]
-space_node_threshold: [1357, "2468"]
-nemesis_filter_seeds: [False, True]
-nemesis_exclude_disabled: [True, False]
-nemesis_multiply_factor: [5, 6]
-round_robin: [True, False]
+nemesis_class_name:
+  tenant1: "FakeNemesisClassNameForTenant1"
+  tenant2: "FakeNemesisClassNameForTenant2"
+nemesis_selector:
+  tenant1:
+    - "fake__nemesis_selector__tenant1__part1"
+    - "fake__nemesis_selector__tenant1__part2"
+  tenant2:
+    - "fake__nemesis_selector__tenant2"
+nemesis_interval:
+  tenant1: 5
+  tenant2: 7
+nemesis_sequence_sleep_between_ops:
+  tenant1: 3
+  tenant2: 5
+nemesis_during_prepare:
+  tenant1: False
+  tenant2: True
+nemesis_seed:
+  tenant1: 24
+  tenant2: 135
+nemesis_add_node_cnt:
+  tenant1: 1
+  tenant2: 2
+space_node_threshold:
+  tenant1: 1357
+  tenant2: 2468
+nemesis_filter_seeds:
+  tenant1: False
+  tenant2: True
+nemesis_exclude_disabled:
+  tenant1: True
+  tenant2: False
+nemesis_multiply_factor:
+  tenant1: 5
+  tenant2: 6
+round_robin:
+  tenant1: True
+  tenant2: False

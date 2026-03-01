@@ -130,9 +130,9 @@ class DefinitionBuilder(abc.ABC):
         """Builds all instances definitions in all regions based on SCT test configuration."""
         region_definitions = []
         availability_zone = self.params.get("availability_zone")
-        n_db_nodes = self._get_node_count_for_each_region(str(self.params.get("n_db_nodes")))
-        n_loader_nodes = self._get_node_count_for_each_region(str(self.params.get("n_loaders")))
-        n_monitor_nodes = self._get_node_count_for_each_region(str(self.params.get("n_monitor_nodes")))
+        n_db_nodes = self._get_node_count_for_each_region(self.params.get("n_db_nodes"))
+        n_loader_nodes = self._get_node_count_for_each_region(self.params.get("n_loaders"))
+        n_monitor_nodes = self._get_node_count_for_each_region(self.params.get("n_monitor_nodes"))
 
         # skip DB node provisioning for Scylla Cloud
         if self.params.get("cluster_backend") == "xcloud" or self.params.get("xcloud_provisioning_mode"):
@@ -156,14 +156,16 @@ class DefinitionBuilder(abc.ABC):
     def _get_ssh_key(self) -> SSHKey:
         return KeyStore().get_ssh_key_pair(name=Path(self.params.get("user_credentials_path")).name)
 
-    def _get_node_count_for_each_region(self, n_str: str) -> List[int]:
+    def _get_node_count_for_each_region(self, n_list_or_int: list[int] | int) -> List[int]:
         """generates node count for each region from configuration parameter string (e.g. n_db_nodes).
         When parameter string has less regions defined than regions, fills with zero for each missing region.
 
         E.g. regions: 'eastus westus centralus' and n_db_nodes: '2 1' - will generate [2, 1, 0] list"""
         regions = self.params.get(self.REGION_MAP)
         region_count = len(regions)
-        return ([int(v) for v in str(n_str).split()] + [0] * region_count)[:region_count]
+        return ((n_list_or_int if isinstance(n_list_or_int, list) else [n_list_or_int]) + [0] * region_count)[
+            :region_count
+        ]
 
     def _get_user_data_objects(self, instance_name: str, node_type: NodeTypeType) -> List[SctUserDataObject]:
         user_data_object_classes: List[Type[SctUserDataObject]] = [

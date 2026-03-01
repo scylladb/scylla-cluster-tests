@@ -216,7 +216,10 @@ All the test run configurations are stored in `test-cases` directory.
 Important: Some tests use custom hardcoded operations due to their nature,
 so those tests won't honor what is set in `test-cases/your_config.yaml`.
 
-the available configuration options are listed in [configuration_options](./docs/configuration_options.md)
+### Configuration Documentation
+
+- **[SCT Configuration Guide](./docs/sct-configuration.md)** - Comprehensive guide on how the configuration system works and how to add new options
+- **[Configuration Options Reference](./docs/configuration_options.md)** - Auto-generated list of all available configuration options
 
 
 ## Types of Tests
