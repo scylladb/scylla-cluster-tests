@@ -106,7 +106,7 @@ class GrowClusterTest(ClusterTester):
         # Run 2 more minutes before start nemesis
         time.sleep(2 * 60)
 
-        if self.params.get("nemesis_class_name").lower() != "noopmonkey":
+        if not "NoOpMonkey" in self.params.get("nemesis_class_name"):
             self.db_cluster.start_nemesis()
 
         if not skip_optional_stage("main_load"):
