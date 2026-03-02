@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from sdcm.utils.raft import Group0Member, TokenRingMember
 
 
-CHECK_NODE_HEALTH_RETRIES = 10
+CHECK_NODE_HEALTH_RETRIES = 5
 CHECK_NODE_HEALTH_RETRY_DELAY = 15
 
 LOGGER = logging.getLogger(__name__)
@@ -236,7 +236,7 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
         )
 
 
-def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_HEALTH_RETRIES) -> str:
+def check_schema_agreement_in_gossip_and_peers(node, retries: int = 3) -> str:
     err = ""
     for retry_n in range(retries):
         if retry_n:

@@ -2445,6 +2445,15 @@ When true, start cluster health checker for all nodes
 **type:** boolean
 
 
+## **cluster_health_check_parallel_workers** / SCT_CLUSTER_HEALTH_CHECK_PARALLEL_WORKERS
+
+Number of parallel workers for health checks.<br>Default: 5, maximum: 10 (enforced).<br>Higher values provide faster health checks but may increase cluster load.<br>Expected impact: 5 workers = ~80% time reduction, 10 workers = ~90% time reduction.<br>See docs/plans/health-check-optimization.md for details.
+
+**default:** 5
+
+**type:** int
+
+
 ## **data_validation** / SCT_DATA_VALIDATION
 
 A group of sub-parameters: validate_partitions, table_name, primary_key_column,<br>partition_range_with_data_validation, max_partitions_in_test_table.<br>1. validate_partitions - when true, validating the same number of rows-per-partition before/after a Nemesis.<br>2. table_name - table name to check for the validate_partitions check.<br>3. primary_key_column - primary key of the table to check for the validate_partitions check<br>4. partition_range_with_data_validation - Relevant for scylla-bench. A range (min - max) of PK values<br>for partitions to be validated by reads and not to be deleted during test. Example: 0-250.<br>5. max_partitions_in_test_table - Relevant for scylla-bench. Max partition keys (partition-count)<br>in the scylla_bench.test table.
