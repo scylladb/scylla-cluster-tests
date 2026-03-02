@@ -349,8 +349,6 @@ class NemesisRunner:
         # Example usage: partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.num_deletions_factor
         self.num_deletions_factor = 5
         if stress_cmds := self.cluster.params.get("stress_cmd"):
-            if not isinstance(stress_cmds, list):
-                stress_cmds = [stress_cmds]
             for stress_cmd in stress_cmds:
                 stress_cmd_splitted = stress_cmd.split()
                 # In case background load has writes, we can delete all available partitions,
@@ -3428,8 +3426,8 @@ class NemesisRunner:
 
             backup_bucket_backend = self.cluster.params.get("backup_bucket_backend")
             region = next(iter(self.cluster.params.region_names), "")
-            backup_bucket_location = self.cluster.params.get("backup_bucket_location").format(region=region)
-            location = f"{backup_bucket_backend}:{backup_bucket_location.split()[0]}"
+            backup_bucket_location = self.cluster.params.get("backup_bucket_location")[0].format(region=region)
+            location = f"{backup_bucket_backend}:{backup_bucket_location}"
         self._delete_existing_backups(mgr_cluster)
         if backup_specific_tables:
             non_test_keyspaces = [cql_unquote_if_needed(ks) for ks in self.cluster.get_test_keyspaces()]

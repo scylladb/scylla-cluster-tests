@@ -120,8 +120,6 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
                 clean_instances_gce(tags_dict, dry_run=dry_run)
     if cluster_backend in ("azure", ""):
         azure_regions = config.get("azure_region_name") or []
-        if isinstance(azure_regions, str):
-            azure_regions = [region for azure_region in azure_regions for region in azure_region.split(" ")]
         clean_instances_azure(tags_dict, regions=azure_regions, dry_run=dry_run)
     # Always clean local Docker resources for all backends (except k8s-local which has no resources)
     # Tests on any backend may create local Docker containers for stress tools, monitoring, etc.
