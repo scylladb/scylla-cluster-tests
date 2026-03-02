@@ -309,7 +309,7 @@ def latency_calculator_decorator(
             result["reactor_stalls_stats"] = reactor_stall_stats
             LOGGER.debug("Reactor stalls stats: %s", reactor_stall_stats)
             error_thresholds = tester.params.get("latency_decorator_error_thresholds")
-            print(f"QWERTY {result}")
+            LOGGER.info(f"QWERTY {result}")
             if "steady" in func_name.lower():
                 if "Steady State" not in latency_results:
                     latency_results["Steady State"] = result
