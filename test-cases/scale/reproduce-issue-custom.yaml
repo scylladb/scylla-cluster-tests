@@ -8,8 +8,8 @@ region_aware_loader: true
 
 user_prefix: 'reproduce-issue'
 
-nemesis_class_name: "SisyphusMonkey"
-nemesis_selector: 'GrowShrinkClusterNemesis'
+nemesis_class_name: "SisyphusMonkey:1 SisyphusMonkey:1"
+nemesis_selector: ['GrowShrinkClusterNemesis', 'AddRemoveMvNemesis']
 nemesis_seed: '777'
 nemesis_interval: 15
 nemesis_add_node_cnt: 3
