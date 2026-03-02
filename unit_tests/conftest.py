@@ -353,7 +353,7 @@ def fake_remoter():
 
 
 @pytest.fixture(scope="session", autouse=True)
-def mock_cloud_services():
+def mock_cloud_services(tmp_path_factory):
     """Prevent unit tests from making real AWS/GCE/Azure API calls.
 
     This session-scoped fixture mocks cloud service calls that would otherwise
@@ -369,19 +369,17 @@ def mock_cloud_services():
     Session scope ensures mocks are active for module-scoped fixtures too.
     Integration tests are unaffected — they run in a separate pytest session.
     """
-
-    # Create dummy SSH key files so pydantic ExistingFile validator passes.
+    # Redirect HOME to a temp directory (inspired by pytest-home) so dummy SSH
+    # key files are created there instead of polluting the real home directory.
     # Backend defaults set user_credentials_path to ~/.ssh/scylla_test_id_ed25519
-    # (or ~/.ssh/scylla-test for baremetal) which don't exist in CI.
-    # The _file validator checks file existence on disk.
-    ssh_dir = Path.home() / ".ssh"
-    ssh_dir.mkdir(parents=True, exist_ok=True)
-    created_keys = []
+    # (or ~/.ssh/scylla-test for baremetal). The pydantic ExistingFile validator
+    # expands ~ via HOME, so pointing HOME to a fake dir with these files works.
+    fake_home = tmp_path_factory.mktemp("home")
+    ssh_dir = fake_home / ".ssh"
+    ssh_dir.mkdir()
     for key_name in ("scylla_test_id_ed25519", "scylla-test"):
-        dummy_key = ssh_dir / key_name
-        if not dummy_key.exists():
-            dummy_key.touch(mode=0o600)
-            created_keys.append(dummy_key)
+        (ssh_dir / key_name).touch(mode=0o600)
+    orig_home = os.environ.get("HOME")
 
     def fake_find_scylla_repo(scylla_version, dist_type="centos", dist_version=None):
         """Return a plausible repo URL without accessing S3."""
@@ -411,6 +409,7 @@ def mock_cloud_services():
         return json.loads(fake_get_file_contents(self, json_file))
 
     mock_ssh_key = MagicMock()
+    os.environ["HOME"] = str(fake_home)
 
     with (
         patch("sdcm.utils.common.convert_name_to_ami_if_needed", side_effect=lambda param, region_names: param),
@@ -431,8 +430,10 @@ def mock_cloud_services():
     ):
         yield
 
-    for key_path in created_keys:
-        key_path.unlink(missing_ok=True)
+    if orig_home is not None:
+        os.environ["HOME"] = orig_home
+    else:
+        os.environ.pop("HOME", None)
 
 
 @pytest.fixture(scope="session", autouse=True)
