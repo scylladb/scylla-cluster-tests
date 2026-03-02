@@ -189,6 +189,7 @@ def test_12_scylla_version_ami(monkeypatch):
     assert all(ami.startswith("ami-") for ami in amis)
 
 
+@pytest.mark.integration
 def test_12_scylla_version_ami_case1(monkeypatch):
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -354,6 +355,7 @@ def test_14_check_rackaware_config_no_rack_without_loader(monkeypatch):
     monkeypatch.setenv("SCT_N_LOADERS", "2 2")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
+    monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     monkeypatch.setenv(
         "SCT_TEARDOWN_VALIDATORS",
@@ -396,6 +398,7 @@ def test_14_check_rackaware_config_multi_region(monkeypatch):
     monkeypatch.setenv("SCT_N_LOADERS", "1 0")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
+    monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     monkeypatch.setenv(
         "SCT_TEARDOWN_VALIDATORS",
@@ -417,6 +420,7 @@ def test_14_check_rackaware_config_multi_az_and_region(monkeypatch):
     monkeypatch.setenv("SCT_N_LOADERS", "1 1")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
+    monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     monkeypatch.setenv(
         "SCT_TEARDOWN_VALIDATORS",
@@ -429,6 +433,7 @@ def test_14_check_rackaware_config_multi_az_and_region(monkeypatch):
     conf.verify_configuration()
 
 
+@pytest.mark.integration
 def test_conf_check_required_files(monkeypatch):  # pylint: disable=no-self-use
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     ami_id = get_ssm_ami(
@@ -895,6 +900,7 @@ def test_28_number_of_nodes_per_az_must_be_divisable_by_number_of_az(monkeypatch
     monkeypatch.setenv("SCT_AVAILABILITY_ZONE", "a,b,c")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy ami-dummy")
+    monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2 ami-loader3")
     with pytest.raises(AssertionError) as context:
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()

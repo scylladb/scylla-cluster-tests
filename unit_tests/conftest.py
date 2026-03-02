@@ -403,6 +403,7 @@ def mock_cloud_services():
             "email_config.json": b'{"user": "test", "password": "test"}',
             "azure.json": b'{"subscription_id": "test", "tenant_id": "test", "client_id": "test", "client_secret": "test"}',
             "backup_azure_blob.json": b'{"account": "test", "key": "test"}',
+            "azure_kms_config.json": b'{"shared_vault_name": "test-vault", "resource_group": "test-rg", "identity_name": "test-identity", "managed_identity_principal_id": "test-principal-id", "sct_service_principal_id": "test-sct-principal", "num_of_keys": 1}',
         }
         return defaults.get(file_name, b"{}")
 
