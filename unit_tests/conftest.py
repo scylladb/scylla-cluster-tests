@@ -363,10 +363,25 @@ def mock_cloud_services():
     - get_s3_scylla_repos_mapping: lists S3 buckets for version-to-repo mapping
     - get_arch_from_instance_type: calls EC2 DescribeInstanceTypes
     - KeyStore: accesses S3 for credentials and SSH keys
+    - _file validator: SCTConfiguration uses ExistingFile (pydantic BeforeValidator)
+      to check user_credentials_path exists on disk
 
     Session scope ensures mocks are active for module-scoped fixtures too.
     Integration tests are unaffected — they run in a separate pytest session.
     """
+
+    # Create dummy SSH key files so pydantic ExistingFile validator passes.
+    # Backend defaults set user_credentials_path to ~/.ssh/scylla_test_id_ed25519
+    # (or ~/.ssh/scylla-test for baremetal) which don't exist in CI.
+    # The _file validator checks file existence on disk.
+    ssh_dir = Path.home() / ".ssh"
+    ssh_dir.mkdir(parents=True, exist_ok=True)
+    created_keys = []
+    for key_name in ("scylla_test_id_ed25519", "scylla-test"):
+        dummy_key = ssh_dir / key_name
+        if not dummy_key.exists():
+            dummy_key.touch(mode=0o600)
+            created_keys.append(dummy_key)
 
     def fake_find_scylla_repo(scylla_version, dist_type="centos", dist_version=None):
         """Return a plausible repo URL without accessing S3."""
@@ -414,6 +429,9 @@ def mock_cloud_services():
         patch.object(KeyStore, "s3_client", new_callable=PropertyMock, return_value=MagicMock()),
     ):
         yield
+
+    for key_path in created_keys:
+        key_path.unlink(missing_ok=True)
 
 
 @pytest.fixture(scope="session", autouse=True)
