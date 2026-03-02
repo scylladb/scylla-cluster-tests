@@ -349,6 +349,17 @@ def fake_remoter():
     return FakeRemoter
 
 
+@pytest.fixture(autouse=True)
+def mock_aws_ami_resolution(monkeypatch):
+    """Prevent unit tests from making real AWS API calls to resolve AMI names.
+
+    SCTConfiguration.__init__ calls convert_name_to_ami_if_needed() which
+    resolves 'resolve:ssm:' and image name patterns via real AWS EC2/SSM APIs.
+    Unit tests should never call real cloud APIs, so we return the input unchanged.
+    """
+    monkeypatch.setattr("sdcm.utils.common.convert_name_to_ami_if_needed", lambda param, region_names: param)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def fake_provisioner():
     provisioner_factory.register_provisioner(backend="fake", provisioner_class=FakeProvisioner)
