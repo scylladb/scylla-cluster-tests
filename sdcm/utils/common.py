@@ -1913,6 +1913,9 @@ def s3_download_dir(bucket, path, target):
             # Make sure directories exist
             local_file_dir = os.path.dirname(local_file_path)
             os.makedirs(local_file_dir, exist_ok=True)
+            if os.path.exists(local_file_path):
+                LOGGER.info("File %s already exists, skipping download", local_file_path)
+                continue
             LOGGER.info("Downloading %s from s3 to %s", key["Key"], local_file_path)
             _s3_download_file(client, bucket, key["Key"], local_file_path)
 

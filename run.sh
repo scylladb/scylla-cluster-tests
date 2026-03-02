@@ -2,17 +2,18 @@
 
 clear
 
-DOCKERS=$(docker ps -q)
+DOCKERS=$(docker ps -q -a)
 if [ -n "$DOCKERS" ]; then
     echo "Killing running Docker containers..."
-    docker kill $DOCKERS
+    docker stop $DOCKERS
+    docker rm -f $DOCKERS
 fi
 (
-    SCT_APPEND_SCYLLA_ARGS="--smp 2 --memory 2G" SCT_VECTOR_STORE_VERSION=latest ./docker/env/hydra.sh run-test vector_store_test.VectorStoreTest.test_noop \
+    SCT_APPEND_SCYLLA_ARGS="--smp 2 --memory 2G" SCT_SCYLLA_VERSION=latest SCT_VECTOR_STORE_VERSION=latest ./docker/env/hydra.sh run-test vector_store_test.VectorStoreTest.test_noop \
       --backend docker \
       --config test-cases/vector-search/vector-search-test.yaml \
       2>&1
-) | tee vector_store_test.log | grep "QWERTY QWERTY"
+) | tee vector_store_test.log | grep -n "QWERTY QWERTY"
 echo "Done"
 
 

@@ -4,7 +4,7 @@ use latte::*;
 const KEYSPACE = latte::param!("keyspace", "vdb_bench");
 const TABLE = latte::param!("table", "vdb_bench_collection");
 const INDEX = latte::param!("index", "vdb_bench_collection_vector_idx");
-const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
+const REPLICATION_FACTOR = latte::param!("replication_factor", 1);
 
 const ANN_LIMIT = latte::param!("ann_limit", 10);
 const MIN_RECALL_THRESHOLD = latte::param!("min_recall_threshold", 0.9);
@@ -69,6 +69,9 @@ pub async fn prepare(db) {
 // User functions //
 ////////////////////
 
+pub async fn insert_test(db, i) {
+    println!("QWERTY runnning #{}", i);
+}
 pub async fn insert(db, i) {
     // Get the line for this iteration (dataset loaded in prepare phase)
     let row_to_insert = db.data.dataset[i];

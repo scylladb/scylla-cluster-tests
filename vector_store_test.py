@@ -19,6 +19,7 @@ import string
 import tempfile
 import itertools
 import contextlib
+import time
 from typing import List, Dict
 
 import yaml
@@ -35,7 +36,7 @@ from sdcm.utils import loader_utils
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.cluster_tools import group_nodes_by_dc_idx
-from sdcm.utils.decorators import optional_stage
+from sdcm.utils.decorators import optional_stage, latency_calculator_decorator
 from sdcm.utils.operations_thread import ThreadParams
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.sct_events import Severity
@@ -43,6 +44,10 @@ from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
 
 
 class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
+    Index = 'vdb_bench_collection_vector_idx'
+    Table = 'vdb_bench_collection'
+    Keyspace = 'vdb_bench_perf'
+
     def setUp(self):
         super().setUp()
 
@@ -136,10 +141,58 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     #     if not res:
     #         InfoEvent("Did not find expected log message warning: {}".format(msg), severity=Severity.ERROR)
 
+    def create_index(self):
+        execution_node = self.db_cluster.nodes[0]
+        vs_node = self._get_vector_store_nodes()[0]
+        self.log.info(f"Creating index {self.Index} on {self.Keyspace}.{self.Table} on node {execution_node}")
+        start_time = time.time()
+        with self.db_cluster.cql_connection_patient(execution_node) as session:
+            cmd = f"CREATE CUSTOM INDEX {self.Index} ON {self.Keyspace}.{self.Table}(vector) USING 'vector_index'"
+            execution_result = session.execute(cmd)
+            self.log.info(f"Created index {self.Index} on {self.Keyspace}.{self.Table} with statement: {cmd}")
+
+        for x in range(0, 60):
+            res = vs_node.remoter.run(f"curl http://localhost:6080/api/v1/indexes/{self.Keyspace}/{self.Index}/status", ignore_status=True)
+            if '"status":"SERVING"' in res.stdout:
+                self.log.info(f"Index {self.Index} is SERVING")
+                break
+            self.log.info(f"Index status response: {res.stdout}")
+            self.log.info(f"Index status response: {res.stderr}")
+            time.sleep(0.1)
+        end_time = time.time()
+
+        self.log.info("Index built successfully, took {:.2f} seconds".format(end_time - start_time))
+
+    def run_workload(self):
+        stress_cmd = self.params.get("stress_cmd")
+        assert len(stress_cmd) == 1
+        stress_cmd = stress_cmd[0]
+        self.log.info(f"Running run command: {stress_cmd}")
+        
+        @latency_calculator_decorator(cycle_name="qwerty run", row_name="qwerty row")
+        def run(self):
+            stress = self.run_stress_thread(
+                stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False
+            )
+            results = self.get_stress_results(queue=stress, store_results=False)
+
+            if self.params.get("use_hdrhistogram"):
+                self.build_histogram("READ", hdr_tags=["fn--execute_query"])
+        
+        run(self)
+        self.log.info(f"Finished running run command: {stress_cmd}")
+
+
     def test_noop(self):  # noqa: PLR0914
+        #self.vector_store_cluster
+        self.log.info("QWERTY QWERTY QWERTY start")
         self.download_artifacts_from_s3()
 
-        self.log.info("QWERTY QWERTY QWERTY")
+        self.run_prepare_write_cmd()
+        self.create_index()
+        self.run_workload()
+
+        self.log.info("QWERTY QWERTY QWERTY end")
 
     # def test_batch_custom_time(self):
     #     """
