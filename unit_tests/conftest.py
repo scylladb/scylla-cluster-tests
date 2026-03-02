@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import json
 import os
 import logging
 import collections
@@ -20,7 +21,7 @@ import uuid
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, PropertyMock
 
 from sdcm.utils.mp_start import ensure_start_method
 
@@ -29,6 +30,7 @@ ensure_start_method()
 import pytest
 
 from sdcm import wait, sct_config
+from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
 from sdcm.cluster import BaseNode
 from sdcm.cluster_docker import VectorStoreSetDocker
@@ -365,21 +367,6 @@ def mock_cloud_services():
     Session scope ensures mocks are active for module-scoped fixtures too.
     Integration tests are unaffected — they run in a separate pytest session.
     """
-    mock_keystore = MagicMock()
-    mock_keystore.get_email_credentials.return_value = {"user": "test", "password": "test"}
-    mock_keystore.get_azure_credentials.return_value = {
-        "subscription_id": "test",
-        "tenant_id": "test",
-        "client_id": "test",
-        "client_secret": "test",
-    }
-    mock_keystore.get_backup_azure_blob_credentials.return_value = {"account": "test", "key": "test"}
-    mock_keystore.get_gcp_credentials.return_value = {}
-    mock_keystore.get_argus_rest_credentials_per_provider.return_value = {
-        "token": "test",
-        "baseUrl": "http://test",
-        "extra_headers": {},
-    }
 
     def fake_find_scylla_repo(scylla_version, dist_type="centos", dist_version=None):
         """Return a plausible repo URL without accessing S3."""
@@ -395,15 +382,36 @@ def mock_cloud_services():
             return f"https://s3.amazonaws.com/{bucket}/deb/debian/scylla-{version_prefix}.list"
         raise ValueError(f"repo for scylla version {scylla_version} wasn't found")
 
+    def mock_get_file_contents(self, file_name):
+        """Return fake content for common KeyStore files."""
+        defaults = {
+            "email_config.json": b'{"user": "test", "password": "test"}',
+            "azure.json": b'{"subscription_id": "test", "tenant_id": "test", "client_id": "test", "client_secret": "test"}',
+            "backup_azure_blob.json": b'{"account": "test", "key": "test"}',
+        }
+        return defaults.get(file_name, b"{}")
+
+    def mock_get_json(self, json_file):
+        return json.loads(mock_get_file_contents(self, json_file))
+
+    mock_ssh_key = MagicMock()
+
     with (
         patch("sdcm.utils.common.convert_name_to_ami_if_needed", side_effect=lambda param, region_names: param),
+        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda param, region_names: param),
         patch("sdcm.utils.version_utils.find_scylla_repo", side_effect=fake_find_scylla_repo),
         patch("sdcm.sct_config.find_scylla_repo", side_effect=fake_find_scylla_repo),
         patch("sdcm.mgmt.common.find_scylla_repo", side_effect=fake_find_scylla_repo),
         patch("sdcm.utils.version_utils.get_s3_scylla_repos_mapping", return_value={}),
         patch("sdcm.utils.aws_utils.get_arch_from_instance_type", return_value="x86_64"),
         patch("sdcm.sct_config.get_arch_from_instance_type", return_value="x86_64"),
-        patch("sdcm.keystore.KeyStore", return_value=mock_keystore),
+        patch.object(KeyStore, "get_file_contents", mock_get_file_contents),
+        patch.object(KeyStore, "get_json", mock_get_json),
+        patch.object(KeyStore, "get_ssh_key_pair", return_value=mock_ssh_key),
+        patch.object(KeyStore, "download_file", return_value=None),
+        patch.object(KeyStore, "sync", return_value=None),
+        patch.object(KeyStore, "s3", new_callable=PropertyMock, return_value=MagicMock()),
+        patch.object(KeyStore, "s3_client", new_callable=PropertyMock, return_value=MagicMock()),
     ):
         yield
 
