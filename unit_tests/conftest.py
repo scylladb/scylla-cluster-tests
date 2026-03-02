@@ -20,6 +20,7 @@ import uuid
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch, MagicMock
 
 from sdcm.utils.mp_start import ensure_start_method
 
@@ -349,15 +350,62 @@ def fake_remoter():
     return FakeRemoter
 
 
-@pytest.fixture(autouse=True)
-def mock_aws_ami_resolution(monkeypatch):
-    """Prevent unit tests from making real AWS API calls to resolve AMI names.
+@pytest.fixture(scope="session", autouse=True)
+def mock_cloud_services():
+    """Prevent unit tests from making real AWS/GCE/Azure API calls.
 
-    SCTConfiguration.__init__ calls convert_name_to_ami_if_needed() which
-    resolves 'resolve:ssm:' and image name patterns via real AWS EC2/SSM APIs.
-    Unit tests should never call real cloud APIs, so we return the input unchanged.
+    This session-scoped fixture mocks cloud service calls that would otherwise
+    require real credentials. It covers:
+    - convert_name_to_ami_if_needed: resolves 'resolve:ssm:' AMI patterns via AWS SSM
+    - find_scylla_repo: calls get_s3_scylla_repos_mapping which lists S3 buckets
+    - get_s3_scylla_repos_mapping: lists S3 buckets for version-to-repo mapping
+    - get_arch_from_instance_type: calls EC2 DescribeInstanceTypes
+    - KeyStore: accesses S3 for credentials and SSH keys
+
+    Session scope ensures mocks are active for module-scoped fixtures too.
+    Integration tests are unaffected — they run in a separate pytest session.
     """
-    monkeypatch.setattr("sdcm.utils.common.convert_name_to_ami_if_needed", lambda param, region_names: param)
+    mock_keystore = MagicMock()
+    mock_keystore.get_email_credentials.return_value = {"user": "test", "password": "test"}
+    mock_keystore.get_azure_credentials.return_value = {
+        "subscription_id": "test",
+        "tenant_id": "test",
+        "client_id": "test",
+        "client_secret": "test",
+    }
+    mock_keystore.get_backup_azure_blob_credentials.return_value = {"account": "test", "key": "test"}
+    mock_keystore.get_gcp_credentials.return_value = {}
+    mock_keystore.get_argus_rest_credentials_per_provider.return_value = {
+        "token": "test",
+        "baseUrl": "http://test",
+        "extra_headers": {},
+    }
+
+    def fake_find_scylla_repo(scylla_version, dist_type="centos", dist_version=None):
+        """Return a plausible repo URL without accessing S3."""
+        bucket = "downloads.scylladb.com"
+        version_prefix = scylla_version.split(":")[0] if ":" in scylla_version else scylla_version
+        # Strip any patch version (e.g. "2025.4.1" -> "2025.4")
+        parts = version_prefix.split(".")
+        if len(parts) > 2:
+            version_prefix = ".".join(parts[:2])
+        if dist_type in ("centos", "rocky", "rhel"):
+            return f"https://s3.amazonaws.com/{bucket}/rpm/centos/scylla-{version_prefix}.repo"
+        elif dist_type in ("ubuntu", "debian"):
+            return f"https://s3.amazonaws.com/{bucket}/deb/debian/scylla-{version_prefix}.list"
+        raise ValueError(f"repo for scylla version {scylla_version} wasn't found")
+
+    with (
+        patch("sdcm.utils.common.convert_name_to_ami_if_needed", side_effect=lambda param, region_names: param),
+        patch("sdcm.utils.version_utils.find_scylla_repo", side_effect=fake_find_scylla_repo),
+        patch("sdcm.sct_config.find_scylla_repo", side_effect=fake_find_scylla_repo),
+        patch("sdcm.mgmt.common.find_scylla_repo", side_effect=fake_find_scylla_repo),
+        patch("sdcm.utils.version_utils.get_s3_scylla_repos_mapping", return_value={}),
+        patch("sdcm.utils.aws_utils.get_arch_from_instance_type", return_value="x86_64"),
+        patch("sdcm.sct_config.get_arch_from_instance_type", return_value="x86_64"),
+        patch("sdcm.keystore.KeyStore", return_value=mock_keystore),
+    ):
+        yield
 
 
 @pytest.fixture(scope="session", autouse=True)
