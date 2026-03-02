@@ -23,7 +23,7 @@ instance_type_db: 'i4i.large'
 # # docker_image: scylladb/scylla-nightly
 # vector_store_docker_image: scylladb/scylla-nightly
 scylla_version: master:latest
-# # ami_id_vector_store: vector-store-1-4-0-amd64-2026-01-20t09-48-49z # x64
+ami_id_vector_store: vector-store-1-4-0-amd64-2026-01-20t09-48-49z # x64
 # ami_id_vector_store: vector-store-1-4-0-arm64-2026-01-20t09-33-37z #arm
 enable_argus: true
 use_mgmt: false
