@@ -11,8 +11,8 @@ stress_cmd:
     latte run --function execute_query --connections 2 --rate 50 --duration 30s data_dir/latte/vector_search/vector_search_perf_run.rn
 
 # n_db_nodes: 3
-# instance_type_loader: 'c6i.2xlarge'
-# instance_type_db: 'i4i.large'
+instance_type_loader: 'c6i.2xlarge'
+instance_type_db: 'i4i.large'
 # gce_instance_type_loader: 'n2-highmem-2'
 # gce_instance_type_db: 'n2-highmem-2'
 # n_loaders: 1
@@ -25,7 +25,7 @@ stress_cmd:
 scylla_version: master:latest
 # # ami_id_vector_store: vector-store-1-4-0-amd64-2026-01-20t09-48-49z # x64
 # ami_id_vector_store: vector-store-1-4-0-arm64-2026-01-20t09-33-37z #arm
-enable_argus: false
+enable_argus: true
 use_mgmt: false
 n_vector_store_nodes: 1
 n_loaders: 1
