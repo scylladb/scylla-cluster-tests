@@ -171,11 +171,15 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         
         @latency_calculator_decorator(cycle_name="qwerty run", row_name="qwerty row")
         def run(self):
+            self.log.info("QWERTY starting stress thread")
             stress = self.run_stress_thread(
                 stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False
             )
+            self.log.info("QWERTY trying to wait for results")
             #results = self.get_stress_results(queue=stress, store_results=False)
-            stress.get_results()
+            res = stress.parse_results()
+            self.log.info(f"QWERTY results {res}")
+            self.log.info("QWERTY completed waiting for results")
         run(self)
         self.log.info(f"Finished running run command: {stress_cmd}")
 
