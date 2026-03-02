@@ -1,0 +1,69 @@
+use latte::*;
+
+
+const KEYSPACE = latte::param!("keyspace", "vdb_bench_perf");
+const TABLE = latte::param!("table", "vdb_bench_collection");
+const VECTOR_DATA_DIR = latte::param!("vector_data_dir", "data_dir/latte/vector_search/");
+const ANN_LIMIT = latte::param!("ann_limit", 10);
+
+const PARSING_DELIMITER = ", ";
+
+const P_STMT = #{
+    "GET": #{
+        "NAME": "p_stmt_vdb_bench_collection__get",
+        "CQL": `SELECT * FROM ${KEYSPACE}.${TABLE} ORDER BY vector ANN OF :vector LIMIT ${ANN_LIMIT}`,
+    }
+};
+
+
+pub async fn schema(db) {
+}
+
+pub async fn erase(db) {
+}
+
+pub async fn prepare(db) {
+    // Run different preparation steps based on the function type
+    db.prepare(P_STMT.GET.NAME, P_STMT.GET.CQL).await?;
+    prepare_test_vectors(db).await?;
+    Ok(())
+}
+
+////////////////////
+// User functions //
+////////////////////
+
+pub async fn execute_query(db, i) {
+    // Get a vector and ground truth IDs from test_data
+    let idx = latte::hash(i) % db.data.test_vectors.len();
+    let vector = db.data.test_vectors[idx];
+
+    // Execute ANN query with the vector
+    let params = #{ "vector": vector };
+    db.execute_prepared_with_result(P_STMT.GET.NAME, params).await?;
+    Ok(())
+}
+
+///////////////////////
+// Utility functions //
+///////////////////////
+
+pub async fn prepare_test_vectors(db) {
+    let test_data_path = VECTOR_DATA_DIR + "vs_sanity_test_vectors_1k_1536dim.txt";
+    let file_iterator = fs::read_split_lines_iter(test_data_path, [PARSING_DELIMITER])?;
+
+    db.data.test_vectors = [];
+    while let Some(_vectors) = file_iterator.next() {
+        let raw_vectors = _vectors?;
+        if !raw_vectors.is_empty() {
+            let vectors = [];
+            for vector in raw_vectors {
+                vectors.push(f64::parse(vector)?);
+            }
+            db.data.test_vectors.push(vectors)
+        }
+    }
+    println!("Loaded {} test vector lines", db.data.test_vectors.len());
+
+    Ok(())
+}
