@@ -58,7 +58,7 @@ fn strip_surrounding_brackets(s) {
 }
 
 pub async fn load_dataset(db) {
-    let dataset_path = VECTOR_DATA_DIR + "vs_sanity_dataset_1k_1536dim.txt";
+    let dataset_path = VECTOR_DATA_DIR + "vs_sanity_dataset_50k_1536dim.txt";
     let maxsplit = 1;
     let file_iterator = fs::read_split_lines_iter(dataset_path, [PARSING_DELIMITER, maxsplit])?;
 
