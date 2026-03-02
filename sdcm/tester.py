@@ -1039,7 +1039,7 @@ class ClusterTester(unittest.TestCase):
             logging.debug("Skip configuring Azure KMS, test uses mixed scylla versions")
             return
         try:
-            scylla_version = ComparableScyllaVersion(self.params.scylla_version)
+            scylla_version = ComparableScyllaVersion(self.params.artifact_scylla_version)
             if not (scylla_version >= "2025.4.0~dev"):
                 logging.debug(f"Skip configuring Azure KMS, Scylla version {scylla_version} does not support KMS")
                 return
