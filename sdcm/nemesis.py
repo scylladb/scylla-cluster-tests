@@ -3590,7 +3590,7 @@ class Nemesis(NemesisFlags):
                     # force_terminate_repair only aborts running repair tasks
                     # it is possible that it will be called just after a task has ended and just before the next task starts
                     zero_jobs_log = self.target_node.follow_system_log(
-                        r"repair - Started to abort repair jobs=\{\}, nr_jobs=0"
+                        [r"repair - Started to abort repair jobs=\{\}, nr_jobs=0"]
                     )
 
                     self.target_node.remoter.run(
