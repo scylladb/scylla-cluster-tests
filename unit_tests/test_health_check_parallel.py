@@ -132,8 +132,8 @@ def test_parallel_execution_completes_all_nodes(mock_cluster, mock_nodes):
             node = futures[future]
             try:
                 future.result()
-            except Exception:
-                pass
+            except Exception as exc:
+                pytest.fail(f"Health check for {node.name} raised an exception: {exc}")
 
     # Verify all 10 nodes were checked
     for node in mock_cluster.nodes:
