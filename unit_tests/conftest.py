@@ -377,9 +377,10 @@ def mock_cloud_services(tmp_path_factory):
     fake_home = tmp_path_factory.mktemp("home")
     ssh_dir = fake_home / ".ssh"
     ssh_dir.mkdir()
+    orig_home = os.environ.get("HOME")
+    os.environ["HOME"] = str(fake_home)
     for key_name in ("scylla_test_id_ed25519", "scylla-test"):
         (ssh_dir / key_name).touch(mode=0o600)
-    orig_home = os.environ.get("HOME")
 
     def fake_find_scylla_repo(scylla_version, dist_type="centos", dist_version=None):
         """Return a plausible repo URL without accessing S3."""
@@ -409,7 +410,6 @@ def mock_cloud_services(tmp_path_factory):
         return json.loads(fake_get_file_contents(self, json_file))
 
     mock_ssh_key = MagicMock()
-    os.environ["HOME"] = str(fake_home)
 
     with (
         patch("sdcm.utils.common.convert_name_to_ami_if_needed", side_effect=lambda param, region_names: param),
