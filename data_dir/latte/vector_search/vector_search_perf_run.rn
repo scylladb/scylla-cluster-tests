@@ -33,7 +33,7 @@ pub async fn prepare(db) {
 // User functions //
 ////////////////////
 
-pub async fn execute_query(db, i) {
+pub async fn execute_read_query(db, i) {
     // Get a vector and ground truth IDs from test_data
     let idx = latte::hash(i) % db.data.test_vectors.len();
     let vector = db.data.test_vectors[idx];

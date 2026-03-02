@@ -8,7 +8,7 @@ prepare_write_cmd:
 # # Latte don't have access to non-custom parameters in runtime of prepare function
 stress_cmd:
   - >-
-    latte run --function execute_query --connections 2 --rate 50 --duration 30s data_dir/latte/vector_search/vector_search_perf_run.rn
+    latte run --function execute_read_query --connections 2 --rate 50 --duration 30s data_dir/latte/vector_search/vector_search_perf_run.rn
 
 # n_db_nodes: 3
 instance_type_loader: 'c6i.2xlarge'
