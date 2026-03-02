@@ -330,7 +330,7 @@ class NemesisRunner:
             # TODO: issue https://github.com/scylladb/scylla/issues/6074. Waiting for dev conclusions
             "cqlstress_lwt_example": "*",  # Ignore LWT user-profile tables
         }
-        self._init_num_deletions_factor()
+        self._init_partition_deletion_divisor()
         self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
         self.hdr_tags = []
 
@@ -340,23 +340,23 @@ class NemesisRunner:
 
         self.log.debug("Instantiated %s nemesis with %d seed", self.__class__.__name__, self.nemesis_seed)
 
-    def _init_num_deletions_factor(self):
-        # num_deletions_factor is a numeric divisor. It's a factor by which the available-partitions-for-deletion
-        # is divided. This is in order to specify choose_partitions_for_delete(partitions_amount) a reasonable number
-        # of partitions to delete. We prefer not to delete "too many" partitions at once in a single nemesis.
-        # In case 'stress_cmd' has a write-mode and partitions are rewritten, then it is OK to delete all,
-        # (so this factor is set to - 1)
-        # Example usage: partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.num_deletions_factor
-        self.num_deletions_factor = 5
+    def _init_partition_deletion_divisor(self):
+        # partition_deletion_divisor is used to limit how many partitions are deleted at once.
+        # The available partitions count is divided by this value to get the actual number to delete.
+        # Higher value = fewer partitions deleted per operation.
+        # Example: partitions_amount = non_validated_partitions // self.partition_deletion_divisor
+        self.partition_deletion_divisor = 5
         if stress_cmds := self.cluster.params.get("stress_cmd"):
             if not isinstance(stress_cmds, list):
                 stress_cmds = [stress_cmds]
             for stress_cmd in stress_cmds:
                 stress_cmd_splitted = stress_cmd.split()
-                # In case background load has writes, we can delete all available partitions,
-                # since they are rewritten. Otherwise, we can only delete some of them.
+                # In case background load has writes, we can delete more partitions since they are rewritten.
+                # Use divisor of 3 to ensure enough partitions remain available for subsequent delete
+                # operations (e.g., delete_range_in_few_partitions after delete_by_range_using_timestamp)
+                # to avoid "No partitions for deletion found" errors, even if nemesis deletes twice in a row.
                 if "scylla-bench" in stress_cmd_splitted and "-mode=write" in stress_cmd_splitted:
-                    self.num_deletions_factor = 1
+                    self.partition_deletion_divisor = 3
                     break
 
     def use_nemesis_seed(self):
@@ -2572,7 +2572,7 @@ class NemesisRunner:
         self.log.debug("Delete by range - using timestamp")
 
         partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.num_deletions_factor,
+            partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.partition_deletion_divisor,
             ks_cf=ks_cf,
             with_clustering_key_data=False,
         )
@@ -2607,7 +2607,7 @@ class NemesisRunner:
 
         partitions_for_exclude = list(partitions_for_exclude_dict.keys())
         partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.num_deletions_factor,
+            partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.partition_deletion_divisor,
             ks_cf=ks_cf,
             with_clustering_key_data=True,
             exclude_partitions=partitions_for_exclude,
@@ -2667,7 +2667,7 @@ class NemesisRunner:
         self.verify_initial_inputs_for_delete_nemesis()
         ks_cf = "scylla_bench.test"
         partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.num_deletions_factor,
+            partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.partition_deletion_divisor,
             ks_cf=ks_cf,
             with_clustering_key_data=True,
         )
