@@ -174,7 +174,8 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             stress = self.run_stress_thread(
                 stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False
             )
-            results = self.get_stress_results(queue=stress, store_results=False)
+            #results = self.get_stress_results(queue=stress, store_results=False)
+            stress.get_results()
         run(self)
         self.log.info(f"Finished running run command: {stress_cmd}")
 
