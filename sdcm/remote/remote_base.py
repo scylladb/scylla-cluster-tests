@@ -738,6 +738,7 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         :param timestamp_logs: If True, log entries will be timestamped
         :return:
         """
+        self.log.info(f"QWERTY running command {cmd}")
 
         watchers = self._setup_watchers(
             verbose=verbose, log_file=log_file, additional_watchers=watchers, timestamp_logs=timestamp_logs

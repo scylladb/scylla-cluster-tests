@@ -239,6 +239,7 @@ class ContainerManager:
             run_args = {
                 "detach": True,
                 "labels": instance.tags,
+                "privileged": True,
             }
             if image_tag := cls._get_container_image_tag(instance, name):
                 run_args["image"] = image_tag

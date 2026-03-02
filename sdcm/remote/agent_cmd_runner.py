@@ -201,6 +201,7 @@ class AgentCmdRunner(CommandRunner, RetryMixin):
 
         :return: result object with stdout, stderr, exit code
         """
+        self.log.info(f"QWERTY running command {cmd}")
         watcher_list = self._setup_watchers(verbose, log_file, watchers or [], timestamp_logs)
 
         @retrying(**self._get_retry_params(retry))

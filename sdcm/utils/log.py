@@ -10,7 +10,7 @@ import json
 LOGGER = logging.getLogger(__name__)
 
 
-def setup_stdout_logger(log_level=logging.INFO):
+def setup_stdout_logger(log_level=logging.DEBUG):
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
     root_logger.addHandler(logging.StreamHandler(sys.stdout))
