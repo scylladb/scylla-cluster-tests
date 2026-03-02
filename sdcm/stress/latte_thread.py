@@ -271,7 +271,7 @@ class LatteStressThread(DockerBasedStressThread):
         )
         hosts = " ".join([i.cql_address for i in self.node_list])
         stress_cmd = self.build_stress_cmd(cmd_runner, loader, hosts)
-        if self.params.get("use_hdrhistogram"):
+        if self.params.get("use_hdrhistogram") and "latte schema" not in self.stress_cmd:
             stress_cmd += f" --hdrfile={remote_hdr_file_name}"
             hdrh_logger_context = HDRHistogramFileLogger(
                 node=loader,
