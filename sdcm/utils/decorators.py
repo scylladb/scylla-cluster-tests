@@ -229,6 +229,7 @@ def latency_calculator_decorator(
                 )
 
             # Keep for debug purposes
+            LOGGER.info("QWERTY latency_calculator_decorator cluster: %s", cluster)
             LOGGER.debug("latency_calculator_decorator cluster: %s", cluster)
             start_node_list = cluster.nodes[:]
             func_name = cycle_name or func.__name__

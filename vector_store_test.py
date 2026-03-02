@@ -175,10 +175,6 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False
             )
             results = self.get_stress_results(queue=stress, store_results=False)
-
-            if self.params.get("use_hdrhistogram"):
-                self.build_histogram("READ", hdr_tags=["fn--execute_query"])
-        
         run(self)
         self.log.info(f"Finished running run command: {stress_cmd}")
 
