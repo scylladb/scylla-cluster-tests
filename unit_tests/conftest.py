@@ -382,7 +382,7 @@ def mock_cloud_services():
             return f"https://s3.amazonaws.com/{bucket}/deb/debian/scylla-{version_prefix}.list"
         raise ValueError(f"repo for scylla version {scylla_version} wasn't found")
 
-    def mock_get_file_contents(self, file_name):
+    def fake_get_file_contents(self, file_name):
         """Return fake content for common KeyStore files."""
         defaults = {
             "email_config.json": b'{"user": "test", "password": "test"}',
@@ -391,8 +391,8 @@ def mock_cloud_services():
         }
         return defaults.get(file_name, b"{}")
 
-    def mock_get_json(self, json_file):
-        return json.loads(mock_get_file_contents(self, json_file))
+    def fake_get_json(self, json_file):
+        return json.loads(fake_get_file_contents(self, json_file))
 
     mock_ssh_key = MagicMock()
 
@@ -405,8 +405,8 @@ def mock_cloud_services():
         patch("sdcm.utils.version_utils.get_s3_scylla_repos_mapping", return_value={}),
         patch("sdcm.utils.aws_utils.get_arch_from_instance_type", return_value="x86_64"),
         patch("sdcm.sct_config.get_arch_from_instance_type", return_value="x86_64"),
-        patch.object(KeyStore, "get_file_contents", mock_get_file_contents),
-        patch.object(KeyStore, "get_json", mock_get_json),
+        patch.object(KeyStore, "get_file_contents", fake_get_file_contents),
+        patch.object(KeyStore, "get_json", fake_get_json),
         patch.object(KeyStore, "get_ssh_key_pair", return_value=mock_ssh_key),
         patch.object(KeyStore, "download_file", return_value=None),
         patch.object(KeyStore, "sync", return_value=None),
