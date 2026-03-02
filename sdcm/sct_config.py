@@ -2464,10 +2464,7 @@ class SCTConfiguration(BaseModel):
                 self["gce_image_db"] = gce_image.self_link
             elif not self.get("azure_image_db") and self.get("cluster_backend") == "azure":
                 scylla_azure_images = []
-                if isinstance(self.get("azure_region_name"), list):
-                    azure_region_names = self.get("azure_region_name")
-                else:
-                    azure_region_names = [self.get("azure_region_name")]
+                azure_region_names = self.get("azure_region_name")
 
                 for region in azure_region_names:
                     try:
@@ -3002,10 +2999,8 @@ class SCTConfiguration(BaseModel):
         stress_tools = set()
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
-            if not (isinstance(stress_cmds, (list, str)) and stress_cmds):
+            if not stress_cmds:
                 continue
-            if isinstance(stress_cmds, str):
-                stress_cmds = [stress_cmds]
 
             for stress_cmd in stress_cmds:
                 if not stress_cmd:
@@ -3021,10 +3016,8 @@ class SCTConfiguration(BaseModel):
     def check_required_files(self):
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
-            if stress_cmds is None:
+            if not stress_cmds:
                 continue
-            if isinstance(stress_cmds, str):
-                stress_cmds = [stress_cmds]
             for stress_cmd in stress_cmds:
                 if not stress_cmd:
                     continue
@@ -3198,7 +3191,7 @@ class SCTConfiguration(BaseModel):
         )
 
     def _validate_nemesis_can_run_on_non_seed(self) -> None:
-        if self.get("nemesis_filter_seeds") is False or self.get("nemesis_class_name") == "NoOpMonkey":
+        if self.get("nemesis_filter_seeds") is False or self.get("nemesis_class_name") == ["NoOpMonkey"]:
             return
         seeds_num = self.get("seeds_num")
         num_of_db_nodes = sum(
@@ -3279,9 +3272,7 @@ class SCTConfiguration(BaseModel):
                             ), f"Instance type[{instance_type}] not supported in zone [{_zone}]"
                 case "azure":
                     if azure_region_names := self.get("azure_region_name"):
-                        if not isinstance(azure_region_names, list):
-                            azure_region_names = [self.get("azure_region_name")]
-                        for region in self.get("azure_region_name"):
+                        for region in azure_region_names:
                             assert azure_check_instance_type_available(instance_type, region), (
                                 f"Instance type [{instance_type}] not supported in region [{region}]"
                             )
@@ -3761,10 +3752,8 @@ class SCTConfiguration(BaseModel):
     def _verify_scylla_bench_mode_and_workload_parameters(self):
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
-            if stress_cmds is None:
+            if not stress_cmds:
                 continue
-            if isinstance(stress_cmds, str):
-                stress_cmds = [stress_cmds]
             for stress_cmd in stress_cmds:
                 if not stress_cmd:
                     continue

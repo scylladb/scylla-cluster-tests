@@ -1502,9 +1502,7 @@ class ClusterTester(unittest.TestCase):
         nemesis_selectors = self.params.get("nemesis_selector")
         nemesis_seeds = self.params.get("nemesis_seed")
 
-        if nemesis_selectors and isinstance(nemesis_selectors, str):
-            nemesis_selectors = [nemesis_selectors]
-        if nemesis_selectors and isinstance(nemesis_selectors, list):
+        if nemesis_selectors:
             nemesis_selectors = nemesis_selectors[:]
         if nemesis_seeds and isinstance(nemesis_seeds, int):
             nemesis_seeds = [nemesis_seeds]

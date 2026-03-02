@@ -325,7 +325,7 @@ class SnapshotOperations(ClusterTester):
 
     def get_all_snapshot_files(self, cluster_id):
         region_name = next(iter(self.params.region_names), "")
-        bucket_name = self.params.get("backup_bucket_location").split()[0].format(region=region_name)
+        bucket_name = self.params.get("backup_bucket_location")[0].format(region=region_name)
         if self.params.get("backup_bucket_backend") == "s3":
             return self._get_all_snapshot_files_s3(
                 cluster_id=cluster_id, bucket_name=bucket_name, region_name=region_name
@@ -628,11 +628,8 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
         throttle_per_node = 14666
         throttle_per_loader = int(throttle_per_node * number_of_nodes / number_of_loaders)
 
-        # Handle list of stress commands - replace placeholder in each command
-        if isinstance(stress_cmd, list):
-            stress_cmd = [cmd.replace("<THROTTLE_PLACE_HOLDER>", str(throttle_per_loader)) for cmd in stress_cmd]
-        else:
-            stress_cmd = stress_cmd.replace("<THROTTLE_PLACE_HOLDER>", str(throttle_per_loader))
+        # Replace placeholder in each command (stress_read_cmd is always a list)
+        stress_cmd = [cmd.replace("<THROTTLE_PLACE_HOLDER>", str(throttle_per_loader)) for cmd in stress_cmd]
 
         # Handle list of stress commands using the pattern from LoaderUtilsMixin._run_all_stress_cmds
         stress_queue = []
@@ -724,11 +721,7 @@ class ManagerTestFunctionsMixIn(
         region = next(iter(self.params.region_names), "")
         bucket_locations = self.params.get("backup_bucket_location")
 
-        buckets = (
-            [bucket.format(region=region) for bucket in bucket_locations]
-            if isinstance(bucket_locations, list)
-            else bucket_locations.format(region=region).split()
-        )
+        buckets = [bucket.format(region=region) for bucket in bucket_locations]
 
         # FIXME: Make it works with multiple locations or file a bug for scylla-manager.
         return [f"{backend}:{location}" for location in buckets[:1]]

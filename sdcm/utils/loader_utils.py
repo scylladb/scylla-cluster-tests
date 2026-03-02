@@ -98,8 +98,6 @@ class LoaderUtilsMixin:
 
     def _run_all_stress_cmds(self, stress_queue, params):
         stress_cmds = params["stress_cmd"]
-        if not isinstance(stress_cmds, list):
-            stress_cmds = [stress_cmds]
         # In some cases we want the same stress_cmd to run several times (can be used with round_robin or not).
         stress_multiplier = self.params.get("stress_multiplier")
         if stress_multiplier > 1:
@@ -355,8 +353,6 @@ class LoaderUtilsMixin:
             for stress_op in workload_names:
                 stress_cmds = []
                 stress_params = params.get(stress_op)
-                if isinstance(stress_params, str):
-                    stress_params = [stress_params]
 
                 if not stress_params:
                     continue
