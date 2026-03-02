@@ -400,7 +400,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             if condition
         )
 
-        single_test_duration_in_seconds = int(60 * self.params.get("stress_duration") / len(tests_to_run))
+        single_test_duration_in_seconds = int(60 * (self.params.get("stress_duration") - 5) / len(tests_to_run))
         target_ops_per_sec_for_unlimited_scenario = 999999
         try:
             rate = self.params.get("alternator_stress_rate")
