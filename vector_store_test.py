@@ -168,7 +168,6 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             return
 
         self.log.debug(f"building histograms for tags {hdr_tags}")
-        start_time = self.get_test_start_time() or self.start_time
         end_time = time.time()
 
         histogram_total_data = self.get_hdrhistogram(
