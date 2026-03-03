@@ -401,6 +401,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | Skill | Description | Path |
 |-------|-------------|------|
 | designing-skills | Meta-skill for creating new AI agent skills for SCT | `skills/designing-skills/SKILL.md` |
+| profiling-sct-code | Profile Python code in SCT to find CPU, memory, and concurrency bottlenecks using standard 3rd party tools. | `skills/profiling-sct-code/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 
