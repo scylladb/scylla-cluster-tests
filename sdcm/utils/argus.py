@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import re
@@ -133,7 +134,12 @@ def report_scylla_yaml_to_argus(tester):
 
 def report_stress_command(client: ArgusSCTClient, stress_cmd: str, loader_name: str, log_path: str):
     try:
-        client.add_stress_command(command=stress_cmd, log_name=Path(log_path).name, loader_name=loader_name)
+        client.add_stress_command(
+            command=stress_cmd,
+            ts=datetime.datetime.now(datetime.UTC).timestamp(),
+            log_name=Path(log_path).name,
+            loader_name=loader_name,
+        )
     except ArgusClientError:
         LOGGER.warning("Backend exception reporting a stress command to Argus", exc_info=True)
     except Exception:  # noqa: BLE001
