@@ -278,15 +278,15 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         self.log.info("Dataset has been populated")
 
     def prepare_schema(self, workload: Workload):
-        if workload.prepare_schema and (prepare_stress_cmd := self.params.get("prepare_stress_cmd")):
-            self.log.info("Preparing schema using command: %s", prepare_stress_cmd)
-            params = {"stress_cmd": prepare_stress_cmd, "round_robin": True, "stats_aggregate_cmds": False}
-            try:
-                stress_result = self.run_stress_thread(**params)
-                self.get_stress_results(queue=stress_result, store_results=False)
-            except Exception as exc:  # noqa: BLE001
-                self.log.error("Failed to prepare schema using command: %s. Exception: %s", prepare_stress_cmd, exc)
-                raise
+        if workload.prepare_schema and (prepare_stress_cmds := self.params.get("prepare_stress_cmd")):
+            stress_queue = []
+            for stress_cmd in prepare_stress_cmds:
+                self.log.info("Preparing schema using command: %s", stress_cmd)
+                params = {"stress_cmd": stress_cmd, "round_robin": True, "stats_aggregate_cmds": False}
+                stress_queue.append(self.run_stress_thread(**params))
+
+            for stress in stress_queue:
+                self.get_stress_results(queue=stress, store_results=False)
 
             self.log.info("Schema has been prepared")
             self.run_post_prepare_cql(workload=workload)
