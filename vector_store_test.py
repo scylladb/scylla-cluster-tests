@@ -22,7 +22,8 @@ import contextlib
 import time
 from tracemalloc import start
 from typing import List, Dict
-from sdcm.argus_results import send_result_to_argus
+from sdcm.argus_results import VectorStoreIndexBuildingTimeResult, submit_results_to_argus
+from argus.client.generic_result import Status
 
 import yaml
 from cassandra import AlreadyExists, InvalidRequest
@@ -170,25 +171,11 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         duration = f'%02d:%02d:%02d' % (
             building_time // 3600, (building_time % 3600) // 60, building_time % 60
         )
-        send_result_to_argus(
-            argus_client=self.test_config.argus_client(),
-            workload='read',
-            name=str(load_size),
-            description="Vector store index building time",
-            cycle='Vector store index building',
-            result={
-                'Scylla P99_read - node-1': 1.69, 
-                'screenshots': [],
-                'duration': duration,
-                'duration_in_sec': int(building_time),
-                'hdr': [],
-                'hdr_summary': {},
-                'cycle_hdr_throughput': 1,
-                'reactor_stalls_stats': {}
-            },
-            start_time=start_time,
-            error_thresholds={},
-        )
+        self.log.info(f'Sending index building results to Argus with load size: {load_size}, building time: {duration}')
+        table = VectorStoreIndexBuildingTimeResult()
+        table.add_result(column='building time', value=building_time, row=str(load_size), status=Status.UNSET)
+        submit_results_to_argus(argus_client=self.test_config.argus_client(), result_table=table)
+        self.log.info(f'Sent index building results to Argus with load size: {load_size}, building time: {duration}')
 
     # {'Scylla P99_read - node-1': 1.69, 
     # 'screenshots': ['https://cloudius-jenkins-test.s3.amazonaws.com/7dacda89-e0b8-4c27-b732-d94809b5c48c/20260303_121813/grafana-screenshot-overview-20260303_121813-ubuntu-monitor-node-7dacda89-1.png', 'https://cloudius-jenkins-test.s3.amazonaws.com/7dacda89-e0b8-4c27-b732-d94809b5c48c/20260303_121813/grafana-screenshot-rc-scylla-master-vector-store-test-scylla-per-server-metrics-nemesis-20260303_121842-ubuntu-monitor-node-7dacda89-1.png'],
@@ -239,7 +226,7 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         self.run_prepare_write_cmd()
         building_time, start_time = self.create_index()
-        self.run_workload(start_time)
+        self.run_workload(load_size)
         self.send_index_results_to_argus(load_size, building_time, start_time)
 
         self.log.info("QWERTY QWERTY QWERTY end")

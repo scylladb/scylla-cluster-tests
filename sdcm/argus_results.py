@@ -175,6 +175,15 @@ class ManagerBackupReadResult(StaticGenericResultTable):
         ]
 
 
+class VectorStoreIndexBuildingTimeResult(StaticGenericResultTable):
+    class Meta:
+        name = "Vector Store Index Building Time"
+        description = "Vector Store Index Building Time"
+        Columns = [
+            ColumnMetadata(name="building time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+        ]
+
+
 class ManagerSnapshotDetails(StaticGenericResultTable):
     class Meta:
         name = "Snapshot details"
