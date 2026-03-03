@@ -12,6 +12,7 @@
 - CorruptThenRepairMonkey
 - CorruptThenScrubMonkey
 - CreateIndexNemesis
+- CreateMaterializedViewNemesis
 - DecommissionMonkey
 - DecommissionSeedNode
 - DecommissionStreamingErrMonkey
