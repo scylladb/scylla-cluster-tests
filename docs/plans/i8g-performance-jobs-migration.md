@@ -17,7 +17,7 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 
 ### Existing Infrastructure
 
-**Primary Test Jobs:**
+**Primary Test Jobs (x86_64/i4i - Current):**
 - **Location:** `/jenkins-pipelines/performance/branch-perf-v17/scylla-enterprise/perf-regression/`
 - **Vnodes job:** `scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes.jenkinsfile`
   - Config: Uses `test-cases/performance/perf-regression-predefined-throughput-steps.yaml`
@@ -39,6 +39,18 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 - **Tablets write job:** `scylla-enterprise-perf-regression-predefined-throughput-steps-write-tablets.jenkinsfile`
   - Same config as tablets job
   - Sub-tests: test_write_gradual_increase_load (separate job for write workload)
+
+**New i8g Jobs (ARM64 - Phase 1):**
+- **Location:** `/jenkins-pipelines/performance/branch-perf-v17/scylla-enterprise/perf-regression/`
+- **Vnodes i8g job:** `scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-vnodes.jenkinsfile`
+  - Config: Adds `configurations/arm_instance_types/i8g_4xlarge.yaml` and `configurations/arm/ubuntu2204.yaml`
+  - Instance type: i8g.4xlarge (ARM64/Graviton)
+  - Sub-tests: All 4 tests in single job (test_read_gradual_increase_load, test_mixed_gradual_increase_load, test_read_disk_only_gradual_increase_load, test_write_gradual_increase_load)
+
+- **Tablets i8g job:** `scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets.jenkinsfile`
+  - Config: Adds `configurations/arm_instance_types/i8g_4xlarge.yaml` and `configurations/arm/ubuntu2204.yaml`
+  - Instance type: i8g.4xlarge (ARM64/Graviton)
+  - Sub-tests: All 4 tests in single job (test_read_gradual_increase_load, test_mixed_gradual_increase_load, test_read_disk_only_gradual_increase_load, test_write_gradual_increase_load)
 
 **Master Trigger:**
 - **Location:** `/jenkins-pipelines/master-triggers/sct_triggers/perf-regression-trigger.jenkinsfile`
@@ -121,22 +133,22 @@ The migration impacts critical weekly performance testing jobs for both vnodes a
 
 **Definition of Done:**
 - [x] Create `configurations/arm_instance_types/i8g_4xlarge.yaml` configuration file - **COMPLETED** (minimal config without --no-ec2-check flag, as performance tests install from SMI, not artifacts)
-- [ ] Create new Jenkins jobs for i8g:
-  - [ ] `scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes-i8g.jenkinsfile`
-  - [ ] `scylla-enterprise-perf-regression-predefined-throughput-steps-write-vnodes-i8g.jenkinsfile`
-  - [ ] `scylla-enterprise-perf-regression-predefined-throughput-steps-tablets-i8g.jenkinsfile`
-  - [ ] `scylla-enterprise-perf-regression-predefined-throughput-steps-write-tablets-i8g.jenkinsfile`
-- [ ] Jobs reference i8g configuration with ARM64 AMIs instead of i4i
-- [ ] Jobs use existing throughput steps from `cassandra_stress_gradual_load_steps_enterprise.yaml`
-- [ ] Jobs use existing latency thresholds (vnodes/tablets)
-- [ ] Jobs can be triggered manually (not yet in master trigger)
-- [ ] Documentation: Add comments explaining these are validation jobs
+- [x] Create new Jenkins jobs for i8g - **COMPLETED** (consolidated approach: 2 jobs instead of 4, each running all subtests):
+  - [x] `scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-vnodes.jenkinsfile` (runs all 4 subtests including write)
+  - [x] `scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets.jenkinsfile` (runs all 4 subtests including write)
+- [x] Jobs reference i8g configuration with ARM64 AMIs (i8g_4xlarge.yaml + arm/ubuntu2204.yaml) - **COMPLETED**
+- [x] Jobs use existing throughput steps from `cassandra_stress_gradual_load_steps_enterprise.yaml` - **COMPLETED**
+- [x] Jobs use existing latency thresholds (vnodes/tablets) - **COMPLETED**
+- [x] Jobs can be triggered manually (not yet in master trigger) - **COMPLETED**
+- [x] Documentation: Updated plan to reflect consolidated job approach - **COMPLETED**
 
 **Dependencies:** None
 
 **Deliverables:**
-- New configuration file for i8g.4xlarge
-- Four new Jenkins job files (vnodes, vnodes-write, tablets, tablets-write)
+- [x] New configuration file for i8g.4xlarge - **COMPLETED**
+- [x] Two new Jenkins job files (vnodes, tablets) running all 4 subtests each - **COMPLETED**
+
+**Note:** This phase consolidates the write subtest into the main jobs, aligning with the suggestion from @juliayakovlev and @fruch to run all subtests within the same job instead of executing write separately.
 
 ### Phase 2: Validation with Last Week's AMIs
 
