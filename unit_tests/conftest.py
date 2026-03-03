@@ -30,7 +30,7 @@ ensure_start_method()
 import pytest
 
 from sdcm import wait, sct_config
-from sdcm.keystore import KeyStore
+from sdcm.keystore import KeyStore, SSHKey
 from sdcm.localhost import LocalHost
 from sdcm.cluster import BaseNode
 from sdcm.cluster_docker import VectorStoreSetDocker
@@ -409,7 +409,11 @@ def mock_cloud_services(tmp_path_factory):
     def fake_get_json(self, json_file):
         return json.loads(fake_get_file_contents(self, json_file))
 
-    mock_ssh_key = MagicMock()
+    mock_ssh_key = SSHKey(
+        name="scylla_test_id_ed25519",
+        public_key=b"ssh-rsa AAAA fake-public-key scylla_test_id_ed25519\n",
+        private_key=b"dummy-key\n",
+    )
 
     with (
         patch("sdcm.utils.common.convert_name_to_ami_if_needed", side_effect=lambda param, region_names: param),

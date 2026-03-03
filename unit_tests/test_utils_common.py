@@ -90,15 +90,11 @@ class TestDownloadDir(unittest.TestCase):
 
         self.clear_cloud_downloaded_path(sct_update_db_packages)
         test_file_names = ["sct_test/", "sct_test/bentsi.txt", "sct_test/charybdis.fs"]
-        with (
-            unittest.mock.patch(
-                "google.cloud.storage.Client.list_blobs",
-                return_value=[FakeObject(name=fname) for fname in test_file_names],
-            ),
-            unittest.mock.patch(
-                "sdcm.utils.gce_utils.get_gce_storage_client",
-                return_value=(unittest.mock.MagicMock(), {}),
-            ),
+        fake_client = unittest.mock.MagicMock()
+        fake_client.list_blobs.return_value = [FakeObject(name=fname) for fname in test_file_names]
+        with unittest.mock.patch(
+            "sdcm.utils.common.get_gce_storage_client",
+            return_value=(fake_client, {}),
         ):
             update_db_packages = download_dir_from_cloud(sct_update_db_packages)
         for fname in test_file_names:
