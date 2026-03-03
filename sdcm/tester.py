@@ -3827,8 +3827,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.save_email_data()
         self.argus_collect_gemini_results()
         self.destroy_localhost()
-        with silence(parent=self, name="Cleaning up SSL config directory"):
-            cleanup_ssl_config()
+        if not self.test_config.KEEP_ALIVE_DB_NODES:
+            with silence(parent=self, name="Cleaning up SSL config directory"):
+                cleanup_ssl_config()
 
         try:
             ElasticRunReporter().report_run(run_id=self.test_config.test_id(), status=self.get_test_status())
