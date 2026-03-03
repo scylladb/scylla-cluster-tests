@@ -614,6 +614,35 @@ def ignore_ipv6_failure_to_assign():
         yield
 
 
+NODE_UNAVAILABLE_CONTEXTS: list[Callable[[], ContextManager]] = [
+    ignore_raft_topology_cmd_failing,
+    ignore_raft_transport_failing,
+    ignore_ycsb_connection_refused,
+    ignore_stream_mutation_fragments_errors,
+    ignore_compaction_stopped_exceptions,
+    ignore_reactor_stall_errors,
+]
+
+
+@contextmanager
+def suppress_expected_errors(extra_contexts: Sequence[Callable[[], ContextManager] | ContextManager] | None = None):
+    """Unified context manager for suppressing expected errors during node unavailability.
+
+    Activates a core set of event filters that cover the most common errors seen when
+    a Scylla node becomes temporarily unreachable (restart, shutdown, network block, etc.).
+
+    Args:
+        extra_contexts: Additional context managers (or callables returning them)
+            to activate alongside the core set. Use this for scenario-specific filters
+    """
+    with ExitStack() as stack:
+        for ctx_factory in NODE_UNAVAILABLE_CONTEXTS:
+            stack.enter_context(ctx_factory())
+        for ctx in extra_contexts or []:
+            stack.enter_context(ctx() if callable(ctx) else ctx)
+        yield
+
+
 def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):
     """
     helper to decorate a function to run with a list of callables that return context managers
