@@ -120,7 +120,7 @@ def report_scylla_yaml_to_argus(tester):
         LOGGER.warning("Unable to report scylla yaml - remoter is not available.")
         return
     with node.remote_scylla_yaml() as scylla_yml:
-        content = json.dumps(scylla_yml.model_dump())
+        content = json.dumps(scylla_yml.dict())
         client = node.test_config.argus_client()
         try:
             client.sct_submit_config(name="scylla_yaml", content=content)
