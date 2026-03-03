@@ -210,7 +210,7 @@ def latency_calculator_decorator(
         @wraps(func)
         def wrapped(*args, **kwargs):  # noqa: PLR0914
             try:
-                LOGGER.info(f"QWERTY started: {func.__name__}")
+                LOGGER.info(f"QWERTY latency_calculator_decorator started: {func.__name__}")
                 from sdcm.tester import ClusterTester  # noqa: PLC0415
                 from sdcm.nemesis import NemesisRunner  # noqa: PLC0415
 
@@ -245,6 +245,7 @@ def latency_calculator_decorator(
                 end = time.time()
                 test_name = tester.__repr__().split("testMethod=")[-1].split(">")[0]
                 if not monitoring_set or not monitoring_set.nodes:
+                    LOGGER.info("QWERTY latency_calculator_decorator: No monitoring set or nodes found, exiting")
                     return res
                 monitor = monitoring_set.nodes[0]
                 screenshots = monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)
@@ -261,6 +262,7 @@ def latency_calculator_decorator(
                 elif tester.params.get("workload_name"):
                     workload = tester.params["workload_name"]
                 else:
+                    LOGGER.info("QWERTY latency_calculator_decorator: exiting")
                     return res
 
                 latency_results_file_path = tester.latency_results_file
@@ -284,6 +286,7 @@ def latency_calculator_decorator(
 
                 try:
                     hdr_tags = _find_hdr_tags(kwargs, res, _self)
+                    LOGGER.info("QWERTY latency_calculator_decorator: found hdr_tags: %s", hdr_tags)
                 except Exception as err:  # noqa: BLE001
                     LOGGER.error("Failed to find 'hdr_tags': %s", err)
                     hdr_tags = []
@@ -346,13 +349,13 @@ def latency_calculator_decorator(
                 with open(latency_results_file_path, "w", encoding="utf-8") as file:
                     json.dump(latency_results, file)
                 LOGGER.debug("Results written into file")
-
+                LOGGER.info("QWERTY latency_calculator_decorator: completed")
                 return res
             except Exception as err:  # noqa: BLE001
-                LOGGER.error(f"QWERTY failed: {err}")
+                LOGGER.info(f"QWERTY latency_calculator_decorator: failed: {err}")
                 raise
             finally:
-                LOGGER.info(f"QWERTY completed {func.__name__}")
+                LOGGER.info(f"QWERTY latency_calculator_decorator: completed {func.__name__}")
         return wrapped
 
     if original_function:

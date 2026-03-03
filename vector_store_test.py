@@ -163,47 +163,26 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         self.log.info("Index built successfully, took {:.2f} seconds".format(end_time - start_time))
 
-    def build_histogram(self, workload: str, hdr_tags: list, start_time: float = None):
-        if not self.params["use_hdrhistogram"]:
-            return
-
-        self.log.debug(f"building histograms for tags {hdr_tags}")
-        end_time = time.time()
-
-        histogram_total_data = self.get_hdrhistogram(
-            hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time
-        )
-        self.update_hdrhistograms(histogram_name="test_histogram", histogram_data=histogram_total_data)
-
-        histogram_data_by_interval = self.get_hdrhistogram_by_interval(
-            hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time
-        )
-
-        self.update_hdrhistograms(
-            histogram_name="test_histogram_by_interval", histogram_data=histogram_data_by_interval
-        )
-        self.log.debug(f"building histograms for tags {hdr_tags} completed")
-
     def run_workload(self):
         stress_cmd = self.params.get("stress_cmd")
         assert len(stress_cmd) == 1
         stress_cmd = stress_cmd[0]
         self.log.info(f"Running run command: {stress_cmd}")
         
+        # hdr_tags is used by `latency_calculator_decorator` decorator
         @latency_calculator_decorator(cycle_name="qwerty run", row_name="qwerty row")
-        def run(self):
+        def run(self, hdr_tags):
             self.log.info("QWERTY starting stress thread")
             start_time = time.time()
             stress = self.run_stress_thread(
                 stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False
             )
             self.log.info("QWERTY trying to wait for results")
-            #results = self.get_stress_results(queue=stress, store_results=False)
             res = stress.parse_results()
             self.log.info(f"QWERTY results {res}")
             self.log.info("QWERTY completed waiting for results")
-            self.build_histogram(hdr_tags=['fn--execute_read_query'], workload="run", start_time=start_time)
-        run(self)
+            #self.build_histogram(hdr_tags=['fn--execute_read_query'], workload="run", start_time=start_time)
+        run(self, hdr_tags=['fn--execute_read_query'])
         self.log.info(f"Finished running run command: {stress_cmd}")
 
 
