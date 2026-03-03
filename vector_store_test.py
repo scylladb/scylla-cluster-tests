@@ -20,7 +20,9 @@ import tempfile
 import itertools
 import contextlib
 import time
+from tracemalloc import start
 from typing import List, Dict
+from sdcm.argus_results import send_result_to_argus
 
 import yaml
 from cassandra import AlreadyExists, InvalidRequest
@@ -162,38 +164,83 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         end_time = time.time()
 
         self.log.info("Index built successfully, took {:.2f} seconds".format(end_time - start_time))
+        return end_time - start_time, start_time
 
-    def run_workload(self):
+    def send_index_results_to_argus(self, load_size, building_time, start_time):
+        duration = f'%02d:%02d:%02d' % (
+            building_time // 3600, (building_time % 3600) // 60, building_time % 60
+        )
+        send_result_to_argus(
+            argus_client=self.test_config.argus_client(),
+            workload='read',
+            name=str(load_size),
+            description="Vector store index building time",
+            cycle='Vector store index building',
+            result={
+                'Scylla P99_read - node-1': 1.69, 
+                'screenshots': [],
+                'duration': duration,
+                'duration_in_sec': int(building_time),
+                'hdr': [],
+                'hdr_summary': {},
+                'cycle_hdr_throughput': 1,
+                'reactor_stalls_stats': {}
+            },
+            start_time=start_time,
+            error_thresholds={},
+        )
+
+    # {'Scylla P99_read - node-1': 1.69, 
+    # 'screenshots': ['https://cloudius-jenkins-test.s3.amazonaws.com/7dacda89-e0b8-4c27-b732-d94809b5c48c/20260303_121813/grafana-screenshot-overview-20260303_121813-ubuntu-monitor-node-7dacda89-1.png', 'https://cloudius-jenkins-test.s3.amazonaws.com/7dacda89-e0b8-4c27-b732-d94809b5c48c/20260303_121813/grafana-screenshot-rc-scylla-master-vector-store-test-scylla-per-server-metrics-nemesis-20260303_121842-ubuntu-monitor-node-7dacda89-1.png'],
+    # 'duration': '0:01:06',
+    # 'duration_in_sec': 66,
+    # 'hdr': [{'READ--fn--execute_read_query': {'start_time': 1772540258529.0, 'end_time': 1772540288490.0002, 'stddev': 328954.968328411, 'percentile_50': 4.22, 'percentile_90': 4.63, 'percentile_95': 4.71, 'percentile_99': 5.16, 'percentile_99_9': 5.47, 'percentile_99_99': 6.35, 'percentile_99_999': 6.35, 'throughput': 50}}],
+    # 'hdr_summary': {'READ--fn--execute_read_query': {'start_time': 1772540258529.0, 'end_time': 1772540288490.0002, 'stddev': 328954.968328411, 'percentile_50': 4.22, 'percentile_90': 4.63, 'percentile_95': 4.71, 'percentile_99': 5.16, 'percentile_99_9': 5.47, 'percentile_99_99': 6.35, 'percentile_99_999': 6.35, 'throughput': 50}},
+    # 'cycle_hdr_throughput': 50, 'reactor_stalls_stats': {}}
+
+    def run_workload(self, load_size):
         stress_cmd = self.params.get("stress_cmd")
         assert len(stress_cmd) == 1
         stress_cmd = stress_cmd[0]
         self.log.info(f"Running run command: {stress_cmd}")
         
         # hdr_tags is used by `latency_calculator_decorator` decorator
-        @latency_calculator_decorator(cycle_name="qwerty run", row_name="qwerty row", workload_type='read')
+        @latency_calculator_decorator(cycle_name=str(load_size), row_name="select", workload_type='read')
         def run(self, hdr_tags):
-            self.log.info("QWERTY starting stress thread")
-            start_time = time.time()
+            self.log.info("Starting stress thread")
             stress = self.run_stress_thread(
                 stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False
             )
-            self.log.info("QWERTY trying to wait for results")
             res = stress.parse_results()
-            self.log.info(f"QWERTY results {res}")
-            self.log.info("QWERTY completed waiting for results")
-            #self.build_histogram(hdr_tags=['fn--execute_read_query'], workload="run", start_time=start_time)
+            self.log.info("Completed waiting for results for stress thread")
         run(self, hdr_tags=['fn--execute_read_query'])
         self.log.info(f"Finished running run command: {stress_cmd}")
 
-
+    def find_load_size_from_stress_cmd(self, stress_cmd):
+        load_size_match = re.search(r"--duration\s+(\S+)", stress_cmd)
+        rate_match = re.search(r"--rate\s+(\S+)", stress_cmd)
+        if load_size_match:
+            load_size_match = load_size_match.group(1)
+            if load_size_match.endswith("s"):
+                if not rate_match:
+                    raise ValueError("Rate parameter is required when duration in seconds is specified in stress command")
+                rate_match = int(rate_match.group(1))
+                return int(load_size_match[:-1]) * rate_match
+            return int(load_size_match)
+        else:
+            raise ValueError("Load size not found in stress command")
+        
     def test_noop(self):  # noqa: PLR0914
         #self.vector_store_cluster
         self.log.info("QWERTY QWERTY QWERTY start")
+        load_size = self.find_load_size_from_stress_cmd(self.params.get("stress_cmd")[0])
+        self.log.info(f'Determined load size: {load_size}')
         self.download_artifacts_from_s3()
 
         self.run_prepare_write_cmd()
-        self.create_index()
-        self.run_workload()
+        building_time, start_time = self.create_index()
+        self.run_workload(start_time)
+        self.send_index_results_to_argus(load_size, building_time, start_time)
 
         self.log.info("QWERTY QWERTY QWERTY end")
 
