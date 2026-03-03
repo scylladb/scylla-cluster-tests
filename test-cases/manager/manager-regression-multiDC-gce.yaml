@@ -1,9 +1,9 @@
-test_duration: 360
+test_duration: 240
 
-stress_cmd: "cassandra-stress write cl=QUORUM n=4000000 -schema 'replication(strategy=NetworkTopologyStrategy,us-east1us_east1=2,us-west1us_west1=1)' -mode cql3 native -rate threads=200 -pop seq=400000000..600000000"
-stress_read_cmd: "cassandra-stress read cl=QUORUM n=4000000 -schema 'replication(strategy=NetworkTopologyStrategy,us-east1us_east1=2,us-west1us_west1=1)' -mode cql3 native -rate threads=200 -pop seq=400000000..600000000"
+stress_cmd: "cassandra-stress write cl=LOCAL_QUORUM n=4000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=400 -pop seq=400000000..600000000"
+stress_read_cmd: "cassandra-stress read cl=LOCAL_QUORUM n=4000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=400 -pop seq=400000000..600000000"
 
-n_db_nodes: "2 1"
+n_db_nodes: "3 3"
 n_loaders: 1
 simulated_racks: 0
 
