@@ -173,7 +173,7 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             building_time // 3600, (building_time % 3600) // 60, int(building_time % 60), int((building_time - math.floor(building_time)) * 1000)
         )
         self.log.info(f'Sending index building results to Argus with load size: {load_size}, building time: {duration}')
-        table = VectorStoreIndexBuildingTimeResult()
+        table = VectorStoreIndexBuildingTimeResult(sut_timestamp=start_time)
         table.add_result(column='building time', value=building_time, row=str(load_size), status=Status.UNSET)
         submit_results_to_argus(argus_client=self.test_config.argus_client(), result_table=table)
         self.log.info(f'Sent index building results to Argus with load size: {load_size}, building time: {duration}')
