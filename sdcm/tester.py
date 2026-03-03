@@ -433,6 +433,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.info("Submitted SCTConfiguration to Argus.")
         except ArgusClientError:
             self.log.error("Failed to submit data to Argus", exc_info=True)
+        except Exception:  # noqa: BLE001
+            self.log.error("General Error submitting data to Argus", exc_info=True)
 
     def start_argus_heartbeat_thread(self) -> threading.Event:
         def send_argus_heartbeat(client: ArgusSCTClient, stop_signal: threading.Event):
