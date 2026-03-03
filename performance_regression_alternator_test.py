@@ -173,7 +173,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             for stress in stress_queue:
                 self.get_stress_results(queue=stress, store_results=False)
             self.log.debug("Loaders completed.")
-            self.build_histogram("<unused>", hdr_tags=["_tag_"])
         else:
             self.log.warning("No prepare command defined in YAML!")
 
