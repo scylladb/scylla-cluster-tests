@@ -10,17 +10,20 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+import logging
 from contextlib import contextmanager, ExitStack, ContextDecorator
 from functools import wraps
 from typing import ContextManager, Callable, Sequence
 
 from sdcm.cluster import TestConfig
 from sdcm.sct_events import Severity
+from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter, EventsFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
-from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 from sdcm.utils.issues import SkipPerIssues
+
+LOGGER = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -611,6 +614,33 @@ def ignore_ipv6_failure_to_assign():
                 extra_time_to_expiration=60,
             )
         )
+        yield
+
+
+NODE_UNAVAILABLE_CONTEXTS: list[Callable[[], ContextManager]] = [
+    ignore_raft_topology_cmd_failing,
+    ignore_raft_transport_failing,
+    ignore_ycsb_connection_refused,
+    ignore_stream_mutation_fragments_errors,
+    ignore_compaction_stopped_exceptions,
+]
+
+
+@contextmanager
+def suppress_expected_unavailability_errors():
+    """Unified context manager for suppressing expected errors during node unavailability.
+
+    Activates a core set of event filters that cover the most common errors seen when
+    a Scylla node becomes temporarily unreachable (restart, shutdown, network block, etc.).
+
+    Args:
+        extra_contexts: Additional context managers (or callables returning them)
+            to activate alongside the core set. Use this for scenario-specific filters
+    """
+    LOGGER.debug("Entered the context of suppressing expected errors")
+    with ExitStack() as stack:
+        for ctx_factory in NODE_UNAVAILABLE_CONTEXTS:
+            stack.enter_context(ctx_factory())
         yield
 
 
