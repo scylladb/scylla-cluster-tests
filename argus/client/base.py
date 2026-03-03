@@ -51,7 +51,7 @@ class ArgusClient:
             status=0,
             backoff_factor=1,
             status_forcelist=(),
-            allowed_methods=["GET"],
+            allowed_methods=["GET", "POST"],
         )
 
         # Mount adapter with retry strategy for both http and https
