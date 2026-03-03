@@ -487,7 +487,7 @@ class ClusterTester(unittest.TestCase):
                     "scylla-enterprise-server",
                     "scylla-enterprise-tools",
                 ]:
-                    match = re.search(r"(%s-(\S+)-(0.)?([0-9]{8,8}).(\w+).)" % package, line)
+                    match = re.search(r"(%s-(\S+)-(0.)?([0-9]{8,8})\.([0-9a-f]{4,12}))" % package, line, re.IGNORECASE)
                     if match:
                         versions[package.replace("-enterprise", "")] = {
                             "version": match.group(2),
