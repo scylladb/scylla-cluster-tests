@@ -169,14 +169,11 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         return end_time - start_time, start_time
 
     def send_index_results_to_argus(self, load_size, building_time, start_time):
-        duration = f'%02d:%02d:%02d.%03d' % (
-            building_time // 3600, (building_time % 3600) // 60, int(building_time % 60), int((building_time - math.floor(building_time)) * 1000)
-        )
-        self.log.info(f'Sending index building results to Argus with load size: {load_size}, building time: {duration}')
+        self.log.info(f'Sending index building results to Argus with load size: {load_size}, building time: {building_time}')
         table = VectorStoreIndexBuildingTimeResult(sut_timestamp=start_time)
-        table.add_result(column='building time', value=building_time, row=str(load_size), status=Status.UNSET)
+        table.add_result(column='building time', value=int(building_time + 0.5), row=str(load_size), status=Status.UNSET)
         submit_results_to_argus(argus_client=self.test_config.argus_client(), result_table=table)
-        self.log.info(f'Sent index building results to Argus with load size: {load_size}, building time: {duration}')
+        self.log.info(f'Sent index building results to Argus with load size: {load_size}, building time: {building_time}')
 
     # {'Scylla P99_read - node-1': 1.69, 
     # 'screenshots': ['https://cloudius-jenkins-test.s3.amazonaws.com/7dacda89-e0b8-4c27-b732-d94809b5c48c/20260303_121813/grafana-screenshot-overview-20260303_121813-ubuntu-monitor-node-7dacda89-1.png', 'https://cloudius-jenkins-test.s3.amazonaws.com/7dacda89-e0b8-4c27-b732-d94809b5c48c/20260303_121813/grafana-screenshot-rc-scylla-master-vector-store-test-scylla-per-server-metrics-nemesis-20260303_121842-ubuntu-monitor-node-7dacda89-1.png'],
