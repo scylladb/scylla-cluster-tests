@@ -170,7 +170,7 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.log.info(f"Running run command: {stress_cmd}")
         
         # hdr_tags is used by `latency_calculator_decorator` decorator
-        @latency_calculator_decorator(cycle_name="qwerty run", row_name="qwerty row")
+        @latency_calculator_decorator(cycle_name="qwerty run", row_name="qwerty row", workload_type='read')
         def run(self, hdr_tags):
             self.log.info("QWERTY starting stress thread")
             start_time = time.time()
