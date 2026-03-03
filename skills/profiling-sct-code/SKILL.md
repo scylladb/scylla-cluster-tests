@@ -1,5 +1,5 @@
 ---
-name: Profiling SCT Code
+name: profiling-sct-code
 description: Profile Python code in SCT to find CPU, memory, and concurrency bottlenecks using standard 3rd party tools.
 ---
 
