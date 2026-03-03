@@ -13,6 +13,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 import json
+import math
 import os
 import re
 import string
@@ -168,8 +169,8 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         return end_time - start_time, start_time
 
     def send_index_results_to_argus(self, load_size, building_time, start_time):
-        duration = f'%02d:%02d:%02d' % (
-            building_time // 3600, (building_time % 3600) // 60, building_time % 60
+        duration = f'%02d:%02d:%02d.%03d' % (
+            building_time // 3600, (building_time % 3600) // 60, int(building_time % 60), int((building_time - math.floor(building_time)) * 1000)
         )
         self.log.info(f'Sending index building results to Argus with load size: {load_size}, building time: {duration}')
         table = VectorStoreIndexBuildingTimeResult()
