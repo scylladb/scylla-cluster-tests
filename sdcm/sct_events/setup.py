@@ -211,6 +211,15 @@ def enable_teardown_filters():
         regex=r".*Error response from daemon: No such container.*",
         extra_time_to_expiration=60,
     ).publish()
+    # During cluster shutdown, it's possible that some nodes will be stopped before others
+    # and the remaining nodes will log raft topology errors with connection closed.
+    # This is expected and should not be treated as an error.
+    EventsSeverityChangerFilter(
+        new_severity=Severity.WARNING,
+        event_class=DatabaseLogEvent,
+        regex=r".*raft_topology - topology change coordinator fiber got error std::runtime_error.*connection is closed",
+        extra_time_to_expiration=60,
+    ).publish()
 
 
 __all__ = ("start_events_device", "stop_events_device", "enable_default_filters")
