@@ -33,6 +33,10 @@ def wait_cloud_init_completes(remoter: RemoteCmdRunnerBase, instance: VmInstance
     LOGGER.info("Waiting for cloud-init to complete on node %s...", instance.name)
     errors_found = False
     remoter.is_up(60 * 5)
+    # Check if cloud-init is installed before trying to use it
+    if not remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:
+        LOGGER.info("cloud-init is not installed on node %s, skipping cloud-init check.", instance.name)
+        return
     # examples: 24.1.3-0ubuntu3.3, 19.3-46.amzn2.0.2
     cloud_init_version = Version(remoter.run("cloud-init --version 2>&1").stdout.split()[1].split("-")[0])
     # cloud-init supports json output from version 23.4, see:
