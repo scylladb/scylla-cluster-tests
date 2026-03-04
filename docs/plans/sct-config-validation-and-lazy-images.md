@@ -82,17 +82,20 @@ Unit tests already mock cloud APIs via the `mock_cloud_services` autouse fixture
 
 ## Goals
 
-1. **Declarative validation**: All inline validation blocks in `__init__` (steps 11–21) are replaced by Pydantic `@field_validator` / `@model_validator` methods, making them independently testable and consistent with the Pydantic BaseModel pattern introduced in PR #13104.
+1. **Declarative validation (no network calls)**: Inline validation blocks in `__init__` (steps 11–21) that perform **pure data checks** (no network/cloud API calls) are replaced by Pydantic `@field_validator` / `@model_validator` methods. Any validation that requires network access stays out of Pydantic validators and runs in its own explicit stage (e.g., inside `resolve_images()` or `verify_configuration()`).
 2. **Lean constructor**: `__init__` should only load and merge configuration data — no inline validation beyond what Pydantic handles declaratively.
-3. **Lazy image resolution**: Cloud image lookups (AWS AMI, GCE images, Azure images) happen in an explicit `resolve_images()` step, not during construction. `SCTConfiguration()` can be instantiated without network access.
-4. **Testable in isolation**: Configuration can be constructed for unit tests without mocking cloud APIs for image resolution.
-5. **Incremental migration**: Each phase is a standalone PR that doesn't break existing functionality.
+3. **Disableable validators for testing**: Provide a mechanism to skip or disable Pydantic validators when constructing `SCTConfiguration` in tests, so unit tests can create config objects with partial/invalid data without triggering cross-field validation.
+4. **Lazy image resolution**: Cloud image lookups (AWS AMI, GCE images, Azure images) happen in an explicit `resolve_images()` step, not during construction. `SCTConfiguration()` can be instantiated without network access.
+5. **Testable in isolation**: Configuration can be constructed for unit tests without mocking cloud APIs for image resolution.
+6. **Incremental migration**: Each phase is a standalone PR that doesn't break existing functionality.
 
 ## Implementation Phases
 
 ### Phase 1: Extract Validation from `__init__` into Pydantic Validators
 
-**Objective**: Move all inline validation blocks (steps 11–21 in `__init__`) into proper Pydantic `@model_validator` and `@field_validator` methods, making them declarative and independently testable.
+**Objective**: Move all inline validation blocks (steps 11–21 in `__init__`) into proper Pydantic `@model_validator` and `@field_validator` methods, making them declarative and independently testable. **Only pure data validators** (no network/cloud API calls) become Pydantic validators.
+
+**Constraint — no network calls in validators**: All 11 validation blocks (steps 11–21) have been audited and confirmed to be pure data checks — none make network calls. Any future validation that requires network access must **not** be added as a `@field_validator` or `@model_validator`; it should live in a separate explicit stage (e.g., `resolve_images()` or `verify_configuration()`).
 
 **What moves out of `__init__`:**
 
@@ -116,6 +119,19 @@ Unit tests already mock cloud APIs via the `mock_cloud_services` autouse fixture
 - Keep the validation logic identical — move it from imperative `__init__` code to declarative validators
 - Preserve existing error messages to avoid breaking any downstream error handling
 
+**Disabling validators for testing:**
+Provide a way to construct `SCTConfiguration` in tests without triggering Pydantic validators. Recommended approach — use `model_construct()`:
+
+```python
+# In tests: bypass all validators (including field/model validators)
+config = SCTConfiguration.model_construct(**partial_data)
+
+# In production: normal construction with full validation
+config = SCTConfiguration(**data)
+```
+
+Pydantic v2's `model_construct()` skips all validation entirely, which is ideal for unit tests that need to set up config objects with partial or intentionally invalid data. For tests that need *some* validators to run but not others, a class-level flag (e.g., `_skip_cross_field_validation: ClassVar[bool] = False`) can be checked inside `@model_validator` methods and toggled in test fixtures.
+
 **Relationship with `verify_configuration()`:**
 The existing `verify_configuration()` method (line 3056) runs *after* `__init__` and handles a different set of concerns: checking for unexpected SCT variables, validating variable value types against schema, checking backend-specific required values, and verifying Docker/xcloud parameters. The inline validation blocks in `__init__` (steps 11–21) are *complementary* — they check field value constraints and cross-field consistency. After Phase 1, the split remains: Pydantic validators handle field-level and cross-field validation declaratively, while `verify_configuration()` continues to handle schema-level and backend-specific checks that depend on the fully-loaded configuration.
 
@@ -126,6 +142,8 @@ The existing `verify_configuration()` method (line 3056) runs *after* `__init__`
 **Definition of Done:**
 - [ ] All 11 validation blocks (steps 11–21) removed from `__init__`
 - [ ] Equivalent Pydantic validators added with identical error messages
+- [ ] No Pydantic validator makes network/cloud API calls (enforced by convention + documented)
+- [ ] `model_construct()` works for tests that need to bypass validation
 - [ ] `__init__` reduced by ~180 lines (validation removed, loading + image resolution remains)
 - [ ] Existing unit tests in `unit_tests/test_config.py` pass without changes
 - [ ] New unit tests validate each extracted validator independently (valid and invalid inputs)
@@ -252,10 +270,11 @@ Note: `get_version_based_on_conf()` is removed from the orchestrator — its log
 ## Success Criteria
 
 1. **`__init__` under ~150 lines** — contains only configuration file loading and merging
-2. **All validation is declarative** — Pydantic `@field_validator` / `@model_validator` methods, not inline `if/raise` blocks
-3. **`SCTConfiguration()` instantiable without network access** — no cloud API calls during construction
-4. **Existing tests pass** without modifications (beyond test-specific config access updates)
-5. **Each phase is a standalone PR** — can be reviewed and merged independently
+2. **All validation is declarative and network-free** — Pydantic `@field_validator` / `@model_validator` methods with no network/cloud API calls; not inline `if/raise` blocks
+3. **Validators disableable for testing** — `model_construct()` bypasses all validation; optional `ClassVar` flag for selective disabling
+4. **`SCTConfiguration()` instantiable without network access** — no cloud API calls during construction
+5. **Existing tests pass** without modifications (beyond test-specific config access updates)
+6. **Each phase is a standalone PR** — can be reviewed and merged independently
 
 ## Risk Mitigation
 
@@ -263,6 +282,8 @@ Note: `get_version_based_on_conf()` is removed from the orchestrator — its log
 |------|--------|-----------|
 | Pydantic validator execution order differs from `__init__` order | Medium | Pydantic v2 runs `@field_validator` in definition order, `@model_validator(mode='after')` after all fields. Verify with tests that cross-field validators see the expected state. |
 | Validators running on every assignment (`validate_assignment=True`) | Medium | `model_config` has `validate_assignment=True`. Ensure extracted validators handle partial state gracefully (e.g., during `merge_dicts_append_strings` updates in `__init__`). May need to temporarily disable validation during bulk loading. |
+| Network-calling code accidentally added as Pydantic validator | High | Document the "no network calls in validators" rule in code comments and plan. Code review must enforce this. Any validation requiring network access goes into `resolve_images()` or `verify_configuration()`. |
+| Tests need config objects with partial/invalid data | Medium | Use `model_construct()` to bypass all Pydantic validation in tests. For selective disabling, add a `ClassVar` flag checked by `@model_validator` methods. |
 | `resolve_images()` called too late or not at all | High | Add a guard in image-accessing code paths (e.g., `verify_configuration()`) that checks whether resolution has been performed. Document the required call order in `init_and_verify_sct_config()`. |
 | Breaking error messages that downstream tools parse | Low | Preserve exact error message strings. Add tests that assert on error message content. |
 | Merge conflicts with parallel development on `sct_config.py` | High | Small, focused PRs. Coordinate with team on merge order. Phase 1 before Phase 2. |
