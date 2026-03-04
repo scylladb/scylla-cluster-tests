@@ -6,8 +6,9 @@ After [PR #13104](https://github.com/scylladb/scylla-cluster-tests/pull/13104) m
 
 1. **Bypasses IDE support** — no autocomplete, no type checking, no go-to-definition
 2. **Returns `Any`** — callers get no static type information, hiding bugs until runtime
-3. **Scatters implicit defaults** — a handful of `.get("key", fallback)` calls duplicate defaults that should live in `defaults/*.yaml`
-4. **Blocks future refactoring** — the `.get()` method contains special-case logic (multi-region string joining, dotted-key dict traversal) that complicates reasoning about configuration access
+3. **Misleading `.get()` signature** — the `.get()` method does not accept a fallback/default parameter, but developers and LLMs frequently attempt `.get("key", fallback)` expecting `dict.get()` semantics, leading to silent bugs when the second argument is ignored
+4. **No linting or typo detection** — string-key access like `params.get("tset_duration")` cannot be caught by linters or static analysis; typed attribute access (`params.tset_duration`) would immediately raise an `AttributeError` and be flagged by IDEs and type checkers
+5. **Blocks future refactoring** — the `.get()` method contains special-case logic (multi-region string joining, dotted-key dict traversal) that complicates reasoning about configuration access
 
 Converting these to direct attribute access (`params.key`) will fully leverage the Pydantic migration and make the codebase safer, more navigable, and easier to maintain.
 
@@ -108,7 +109,7 @@ This confirms that attribute access works today for any field and the codebase a
 ## Goals
 
 1. **Typed attribute access**: All configuration access should use `params.key` (with IDE autocomplete and type checking) instead of `params.get("key")`
-2. **Eliminate implicit defaults**: The ~4 `.get("key", fallback)` calls should move their defaults into `defaults/*.yaml` configuration files
+2. **Eliminate misleading `.get()` calls**: The ~4 `.get("key", fallback)` calls incorrectly pass a fallback argument (which is silently ignored); these should be replaced with direct attribute access, with defaults moved to `defaults/*.yaml`
 3. **Preserve dynamic access**: The ~30 call sites using variable keys (e.g., `params.get(param_name)`) should use `getattr(params, key)` with explicit handling
 4. **Preserve dotted-key access**: The ~6 dotted-key call sites (e.g., `params.get("stress_image.ycsb")`) should use explicit dict traversal on the parent attribute
 5. **No runtime behavior changes**: The migration must be purely mechanical — same values, same defaults, same error handling
@@ -151,7 +152,7 @@ This confirms that attribute access works today for any field and the codebase a
 - [ ] `uv run sct.py unit-tests` passes (warnings don't fail tests)
 - [ ] Migration progress trackable via warning count
 
-**Dependencies**: [PR #13104](https://github.com/scylladb/scylla-cluster-tests/pull/13104) merged (Pydantic `BaseModel` foundation)
+**Dependencies**: [PR #13104](https://github.com/scylladb/scylla-cluster-tests/pull/13104) (Pydantic `BaseModel` foundation) — merged to master
 
 ---
 
@@ -178,7 +179,7 @@ This confirms that attribute access works today for any field and the codebase a
 | Dynamic key (variable) | `self.params.get(param_name)` | `getattr(self.params, param_name)` |
 | Dynamic key (f-string) | `self.params.get(f"post_behavior_{key}_nodes")` | `getattr(self.params, f"post_behavior_{key}_nodes")` |
 | Dotted key | `self.params.get("stress_image.ycsb")` | `self.params.stress_image["ycsb"]` |
-| With explicit default | `self.params.get("key", False)` | `self.params.key` (move default to YAML) |
+| With ignored fallback | `self.params.get("key", False)` | `self.params.key` (fallback is silently ignored; move default to YAML) |
 
 **Note on dotted-key access alternatives**: Pydantic does not natively support dotted-string key traversal (e.g., `params.get("stress_image.ycsb")`). Third-party libraries that do:
 - **[glom](https://glom.readthedocs.io/)** — `glom(params.model_dump(), "stress_image.ycsb")`, read-only, powerful path expressions
