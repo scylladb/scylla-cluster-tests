@@ -1579,8 +1579,8 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):  # legacy type
                 loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
-                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
+            elif isinstance(n_loader_nodes, list):
+                loader_info["n_nodes"] = n_loader_nodes
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
         gce_image = self.params.get("gce_image_db").strip()
@@ -1741,8 +1741,8 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):  # legacy type
                 loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
-                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
+            elif isinstance(n_loader_nodes, list):
+                loader_info["n_nodes"] = n_loader_nodes
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
         if loader_info["type"] is None:
@@ -2357,8 +2357,8 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):
                 loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, str):
-                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
+            elif isinstance(n_loader_nodes, list):  # latest type to support multiple datacenters
+                loader_info["n_nodes"] = n_loader_nodes
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
 
