@@ -137,7 +137,7 @@ The existing `verify_configuration()` method (line 3056) runs *after* `__init__`
 
 ### Phase 2: Make Image Resolution Lazy / Explicit
 
-**Objective**: Extract cloud image resolution (AMI, GCE, Azure lookups) from `__init__` into a separate `resolve_images()` method, so `SCTConfiguration` can be constructed without network access.
+**Objective**: Extract cloud image resolution (AMI, GCE, Azure lookups) **and** version detection from `__init__` and `get_version_based_on_conf()` into a single `resolve_images()` method, so `SCTConfiguration` can be constructed without network access.
 
 **What moves out of `__init__`:**
 
@@ -150,6 +150,14 @@ The existing `verify_configuration()` method (line 3056) runs *after* `__init__`
 | Step 7 | 2552–2559 | `new_version` → repo lookup | `resolve_images()` |
 | Step 8 | 2561–2567 | Repo symlink resolution | `resolve_images()` |
 
+**What gets consolidated from `get_version_based_on_conf()`** (line 3405):
+
+`get_version_based_on_conf()` reads cloud image tags (AWS AMI tags via `get_ami_tags`, GCE image tags via `get_gce_image_tags`, Azure image tags via `azure_utils.get_image_tags`) to determine the Scylla version and whether it's enterprise. This is tightly coupled with image resolution — it depends on resolved image IDs and also makes cloud API calls. It should be consolidated into `resolve_images()` so all cloud-provider lookups live in one place.
+
+| Method | Lines | Resolution | Target |
+|--------|-------|-----------|--------|
+| `get_version_based_on_conf` | 3405–3491 | Image tags → `scylla_version` + `is_enterprise` | `resolve_images()` |
+
 **Implementation approach** — Explicit `resolve_images()` method (recommended):
 
 ```python
@@ -159,7 +167,11 @@ class SCTConfiguration(BaseModel):
         ...
 
     def resolve_images(self):
-        """Resolve version strings to cloud provider image IDs.
+        """Resolve version strings to cloud provider image IDs and detect version.
+
+        Consolidates all cloud API calls:
+        - Image resolution from __init__ (steps 5–8)
+        - Version detection from get_version_based_on_conf()
 
         Call this explicitly when cloud image resolution is needed.
         Not called during unit tests or utility usage.
@@ -170,6 +182,7 @@ class SCTConfiguration(BaseModel):
         self._resolve_vector_store_images()
         self._resolve_upgrade_repos()
         self._resolve_repo_symlinks()
+        self._resolve_version_from_images()   # <-- was get_version_based_on_conf()
 ```
 
 Update the orchestrator to call `resolve_images()` explicitly:
@@ -177,15 +190,16 @@ Update the orchestrator to call `resolve_images()` explicitly:
 ```python
 def init_and_verify_sct_config() -> SCTConfiguration:
     sct_config = SCTConfiguration()
-    sct_config.resolve_images()     # <-- new explicit step
+    sct_config.resolve_images()     # <-- consolidates image resolution + version detection
     sct_config.log_config()
     sct_config.verify_configuration()
     sct_config.verify_configuration_urls_validity()
-    sct_config.get_version_based_on_conf()
     sct_config.update_config_based_on_version()
     sct_config.check_required_files()
     return sct_config
 ```
+
+Note: `get_version_based_on_conf()` is removed from the orchestrator — its logic moves into `resolve_images()` as `_resolve_version_from_images()`. The `update_config_based_on_version()` call remains since it operates on the already-resolved version data.
 
 **Why explicit over lazy**: An explicit `resolve_images()` method makes it clear when network calls happen, keeps the resolution order deterministic, and allows `init_and_verify_sct_config()` to control the flow. Lazy properties would hide network calls behind attribute access and make debugging harder.
 
@@ -194,9 +208,10 @@ def init_and_verify_sct_config() -> SCTConfiguration:
 - [ ] `__init__` is reduced to ~150 lines (config loading and merging only)
 - [ ] `SCTConfiguration()` can be instantiated without network access or cloud API mocks
 - [ ] New `resolve_images()` method contains all image resolution logic
-- [ ] `init_and_verify_sct_config()` calls `resolve_images()` explicitly
+- [ ] `get_version_based_on_conf()` logic consolidated into `resolve_images()` as `_resolve_version_from_images()`
+- [ ] `init_and_verify_sct_config()` calls `resolve_images()` explicitly (no separate `get_version_based_on_conf()` call)
 - [ ] Unit tests can create `SCTConfiguration` without mocking cloud APIs for image resolution
-- [ ] Integration tests verify that image resolution still works end-to-end
+- [ ] Integration tests verify that image resolution and version detection still work end-to-end
 - [ ] `uv run sct.py pre-commit` passes
 
 **Dependencies**: Phase 1 (clean `__init__` — validation already extracted)
@@ -223,10 +238,12 @@ def init_and_verify_sct_config() -> SCTConfiguration:
 - Test that `resolve_images()` correctly calls cloud APIs and sets image fields
 - Test that `resolve_images()` raises appropriate errors for invalid versions
 - Test that skipping `resolve_images()` leaves image fields at their default values
+- Test that `_resolve_version_from_images()` (consolidated from `get_version_based_on_conf`) correctly detects version and enterprise status per backend
 
 **Integration tests:**
 - `init_and_verify_sct_config()` still works end-to-end with Docker backend
 - At least one artifact test (AWS or Docker) to verify end-to-end config loading
+- Verify that version detection (`artifact_scylla_version`, `is_enterprise`) is correct after `resolve_images()`
 
 **Manual tests:**
 - Verify AWS/GCE/Azure artifact tests still resolve images correctly
