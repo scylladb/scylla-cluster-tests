@@ -8,8 +8,9 @@ region_aware_loader: true
 
 user_prefix: 'reproduce-issue'
 
-nemesis_class_name: "SisyphusMonkey:1 SisyphusMonkey:1"
-nemesis_selector: ['GrowShrinkClusterNemesis', 'CreateMaterializedViewNemesis']
+# nemesis_class_name: "SisyphusMonkey:1 SisyphusMonkey:1"
+# nemesis_selector: ['GrowShrinkClusterNemesis', 'CreateMaterializedViewNemesis']
+nemesis_class_name: "NoOpMonkey"
 nemesis_seed: '777'
 nemesis_interval: 15
 nemesis_add_node_cnt: 3
@@ -176,3 +177,8 @@ append_scylla_yaml:
   tablets_mode_for_new_keyspaces: enabled
   internode_compression_enable_advanced: true
   internode_compression_zstd_max_cpu_fraction: 0.05
+  write_request_timeout_in_ms: 6000000
+  error_injections_at_startup:
+    - name: "database_apply_wait"
+      one_shot: true
+      table: "table1"
