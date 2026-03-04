@@ -2936,15 +2936,13 @@ class Nemesis(NemesisFlags):
 
     def disrupt_modify_table_compression(self):
         """
-        The compression algorithm. Valid values are LZ4Compressor, SnappyCompressor, DeflateCompressor and
-        ZstdCompressor
+        The compression algorithm. Valid values are LZ4Compressor, SnappyCompressor, and ZstdCompressor
         default: compression = {}
         """
         algos = (
             "",  # no compression
             "LZ4Compressor",
             "SnappyCompressor",
-            "DeflateCompressor",
             "ZstdCompressor",
         )
         algo = random.choice(algos)
