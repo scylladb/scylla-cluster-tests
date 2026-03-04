@@ -1579,7 +1579,9 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):  # legacy type
                 loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
+            elif isinstance(n_loader_nodes, list):
+                loader_info["n_nodes"] = n_loader_nodes
+            elif isinstance(n_loader_nodes, str):
                 loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
@@ -1741,7 +1743,9 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):  # legacy type
                 loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
+            elif isinstance(n_loader_nodes, list):
+                loader_info["n_nodes"] = n_loader_nodes
+            elif isinstance(n_loader_nodes, str):
                 loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
@@ -2357,6 +2361,8 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):
                 loader_info["n_nodes"] = [n_loader_nodes]
+            elif isinstance(n_loader_nodes, list):
+                loader_info["n_nodes"] = n_loader_nodes
             elif isinstance(n_loader_nodes, str):
                 loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
