@@ -46,6 +46,21 @@ def _make_info(n_nodes=None, type_=None, disk_size=None, disk_type=None,
     }
 
 
+def _call_ignoring_infra_errors(func, *args, **kwargs):
+    """Call a ``get_cluster_*`` method, suppressing errors after node counting.
+
+    The ``get_cluster_*`` methods perform extensive infrastructure setup
+    (provisioner creation, cluster instantiation, etc.) which is intentionally
+    not mocked in these tests.  We only care about the node-counting logic
+    at the top of each method, so any exception raised *after* that point is
+    expected and safely ignored.
+    """
+    try:
+        func(*args, **kwargs)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 # ---------------------------------------------------------------------------
 # init_resources – backend dispatch
 # ---------------------------------------------------------------------------
@@ -136,15 +151,12 @@ class TestNodeCountingAWS:
         tester.fail.side_effect = AssertionError
 
         loader_info = _make_info()
-        # trigger only the loader branch; pass pre-filled db/monitor
         db_info = _make_info(n_nodes=[3])
         monitor_info = _make_info(n_nodes=0)
 
-        try:
-            ClusterTester.get_cluster_aws(tester, loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
-        except Exception:  # noqa: BLE001
-            # The method does many things beyond node counting; we only care about the info dicts.
-            pass
+        _call_ignoring_infra_errors(
+            ClusterTester.get_cluster_aws, tester,
+            loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
 
         assert loader_info["n_nodes"] == expected
 
@@ -162,10 +174,9 @@ class TestNodeCountingAWS:
         db_info = _make_info(n_nodes=[3])
         monitor_info = _make_info(n_nodes=0)
 
-        try:
-            ClusterTester.get_cluster_aws(tester, loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
-        except Exception:  # noqa: BLE001
-            pass
+        _call_ignoring_infra_errors(
+            ClusterTester.get_cluster_aws, tester,
+            loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
 
         tester.fail.assert_not_called()
 
@@ -198,11 +209,9 @@ class TestNodeCountingGCE:
         monitor_info = _make_info(n_nodes=0)
 
         with patch("sdcm.tester.provisioner_factory"):
-            try:
-                ClusterTester.get_cluster_gce(
-                    tester, loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
-            except Exception:  # noqa: BLE001
-                pass
+            _call_ignoring_infra_errors(
+                ClusterTester.get_cluster_gce, tester,
+                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
 
         assert loader_info["n_nodes"] == expected
 
@@ -231,11 +240,9 @@ class TestNodeCountingGCE:
         monitor_info = _make_info(n_nodes=0)
 
         with patch("sdcm.tester.provisioner_factory"):
-            try:
-                ClusterTester.get_cluster_gce(
-                    tester, loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
-            except Exception:  # noqa: BLE001
-                pass
+            _call_ignoring_infra_errors(
+                ClusterTester.get_cluster_gce, tester,
+                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
 
         assert db_info["n_nodes"] == expected
 
@@ -260,11 +267,9 @@ class TestNodeCountingGCE:
         monitor_info = _make_info(n_nodes=0)
 
         with patch("sdcm.tester.provisioner_factory"):
-            try:
-                ClusterTester.get_cluster_gce(
-                    tester, loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
-            except Exception:  # noqa: BLE001
-                pass
+            _call_ignoring_infra_errors(
+                ClusterTester.get_cluster_gce, tester,
+                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
 
         tester.fail.assert_not_called()
 
@@ -294,11 +299,9 @@ class TestNodeCountingAzure:
         monitor_info = _make_info(n_nodes=0)
 
         with patch("sdcm.tester.provisioner_factory"):
-            try:
-                ClusterTester.get_cluster_azure(
-                    tester, loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
-            except Exception:  # noqa: BLE001
-                pass
+            _call_ignoring_infra_errors(
+                ClusterTester.get_cluster_azure, tester,
+                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
 
         assert loader_info["n_nodes"] == expected
 
@@ -324,11 +327,9 @@ class TestNodeCountingAzure:
         monitor_info = _make_info(n_nodes=0)
 
         with patch("sdcm.tester.provisioner_factory"):
-            try:
-                ClusterTester.get_cluster_azure(
-                    tester, loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
-            except Exception:  # noqa: BLE001
-                pass
+            _call_ignoring_infra_errors(
+                ClusterTester.get_cluster_azure, tester,
+                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
 
         assert db_info["n_nodes"] == expected
 
@@ -356,11 +357,9 @@ class TestNodeCountingCloud:
         monitor_info = _make_info(n_nodes=0)
 
         with patch("sdcm.tester.ScyllaCloudAPIClient"):
-            try:
-                ClusterTester.get_cluster_cloud(
-                    tester, loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
-            except Exception:  # noqa: BLE001
-                pass
+            _call_ignoring_infra_errors(
+                ClusterTester.get_cluster_cloud, tester,
+                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
 
         assert loader_info["n_nodes"] == expected
 
@@ -384,11 +383,9 @@ class TestNodeCountingCloud:
         monitor_info = _make_info(n_nodes=0)
 
         with patch("sdcm.tester.ScyllaCloudAPIClient"):
-            try:
-                ClusterTester.get_cluster_cloud(
-                    tester, loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
-            except Exception:  # noqa: BLE001
-                pass
+            _call_ignoring_infra_errors(
+                ClusterTester.get_cluster_cloud, tester,
+                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
 
         assert db_info["n_nodes"] == expected
 
@@ -408,11 +405,9 @@ class TestNodeCountingCloud:
         monitor_info = _make_info(n_nodes=0)
 
         with patch("sdcm.tester.ScyllaCloudAPIClient"):
-            try:
-                ClusterTester.get_cluster_cloud(
-                    tester, loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
-            except Exception:  # noqa: BLE001
-                pass
+            _call_ignoring_infra_errors(
+                ClusterTester.get_cluster_cloud, tester,
+                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
 
         tester.fail.assert_not_called()
 
