@@ -31,7 +31,7 @@ def get(self, key: str | None):
 ```
 
 1. **`None` guard** — returns `None` when called with `key=None` (no call sites actually use this today)
-2. **Dotted-key traversal** (`_dotted_get`) — handles `params.get("stress_image.ycsb")` by splitting on `.` and traversing nested dicts (4 unique dotted keys used: `stress_image.cassandra-stress`, `stress_image.scylla-bench`, `stress_image.alternator-dns`, `stress_image.ycsb`)
+2. **Dotted-key traversal** (`_dotted_get`) — handles `params.get("stress_image.ycsb")` by splitting on `.` and traversing nested dicts (4 unique dotted keys used across 6 call sites: `stress_image.cassandra-stress`, `stress_image.scylla-bench`, `stress_image.alternator-dns`, `stress_image.ycsb`). All dotted keys access sub-keys of the `stress_image: DictOrStr` field, which is a `dict` at runtime.
 3. **Multi-region string joining** — when the key is in `multi_region_params` (`region_name`, `ami_id_db_scylla`, `ami_id_loader`, `gce_datacenter`) and the value is a list, it joins elements with spaces
 
 ### Dict-like access methods — `sdcm/sct_config.py:2266–2298`
@@ -179,6 +179,13 @@ This confirms that attribute access works today for any field and the codebase a
 | Dynamic key (f-string) | `self.params.get(f"post_behavior_{key}_nodes")` | `getattr(self.params, f"post_behavior_{key}_nodes")` |
 | Dotted key | `self.params.get("stress_image.ycsb")` | `self.params.stress_image["ycsb"]` |
 | With explicit default | `self.params.get("key", False)` | `self.params.key` (move default to YAML) |
+
+**Note on dotted-key access alternatives**: Pydantic does not natively support dotted-string key traversal (e.g., `params.get("stress_image.ycsb")`). Third-party libraries that do:
+- **[glom](https://glom.readthedocs.io/)** — `glom(params.model_dump(), "stress_image.ycsb")`, read-only, powerful path expressions
+- **[python-box](https://github.com/cdgriffith/Box)** — wraps dicts for attribute access (`Box(d).stress_image.ycsb`), but adds a runtime wrapper
+- **[dotty-dict](https://dotty-dict.readthedocs.io/)** — `dotty(d)["stress_image.ycsb"]`, supports get/set
+
+However, since all 6 dotted-key call sites access sub-keys of a single `dict` field (`stress_image`), introducing a dependency for this is unnecessary. Direct dict access (`self.params.stress_image["ycsb"]`) is clearer, has zero dependencies, and provides the same functionality. If future phases introduce nested Pydantic sub-models (see Phase 5 of the [follow-up plan](https://github.com/scylladb/scylla-cluster-tests/pull/13845)), dotted access would become native attribute chaining (`self.params.stress.image.ycsb`).
 
 **Sub-phase 2b — Cluster backend files** (~120 calls, ~8 files):
 
