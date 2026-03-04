@@ -222,6 +222,34 @@ def test_02_insert_data(docker_scylla):
 
 ---
 
+### P-8: Tests Calling Real Cloud APIs Without Integration Marker
+
+If a test calls functions that make real AWS/GCE/Azure API calls (e.g., `get_latest_scylla_release()`, `get_ssm_ami()`, or `KeyStore` methods that can't be mocked by the session fixture), it must be marked as `@pytest.mark.integration`. Otherwise, it breaks when CI disables cloud credentials for unit tests.
+
+**Symptom:** `NoCredentialsError` or `ValueError: OKTA isn't configured` during unit test runs in CI.
+
+❌ **Bad:**
+```python
+# Runs as a unit test but calls real AWS SSM
+def test_ami_resolution(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    ami = get_ssm_ami(region="us-east-1", ...)  # real AWS call
+    assert ami.startswith("ami-")
+```
+
+✅ **Good:**
+```python
+@pytest.mark.integration
+def test_ami_resolution(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    ami = get_ssm_ami(region="us-east-1", ...)
+    assert ami.startswith("ami-")
+```
+
+**Rule:** If a test fundamentally requires real cloud credentials, mark it as integration. The `conftest.py` autouse fixtures block SSH (`fake_remoter`) and provisioning (`fake_provisioner`), but HTTP-based cloud API calls (boto3, requests) are NOT auto-blocked and must be mocked per-test or marked as integration.
+
+---
+
 ## Anti-Patterns
 
 ### AP-1: Testing External Services Instead of SCT Code

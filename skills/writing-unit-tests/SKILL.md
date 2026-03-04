@@ -64,10 +64,12 @@ These fixtures from `unit_tests/conftest.py` run automatically for every test:
 
 | Fixture | Scope | Purpose |
 |---------|-------|---------|
-| `fake_remoter` | function | Blocks real SSH; sets `FakeRemoter` as default remoter |
+| `fake_remoter` | function | Blocks real SSH; sets `FakeRemoter` as default remoter (returns the **class**, not an instance) |
 | `fake_provisioner` | session | Registers `FakeProvisioner` for cloud provisioning |
 | `fake_region_definition_builder` | session | Registers `FakeDefinitionBuilder` for regions |
 | `fixture_cleanup_continuous_events_registry` | function | Cleans up event registry between tests |
+
+**Important:** AWS, GCE, and Azure HTTP calls are **NOT** auto-blocked. You must mock them per-test using `unittest.mock.patch`, `patch.object`, `monkeypatch`, or `moto`. Common functions to patch include `convert_name_to_ami_if_needed`, `find_scylla_repo`, `get_arch_from_instance_type`, and `KeyStore` methods. Use `patch.object(KeyStore, "method_name", ...)` for `KeyStore` since it's imported via `from sdcm.keystore import KeyStore` in 20+ modules.
 
 ### On-Demand Fixtures
 
@@ -135,6 +137,8 @@ import re
 from invoke import Result
 
 def test_node_command(fake_remoter):
+    # fake_remoter is the FakeRemoter CLASS (not an instance).
+    # Setting result_map here sets a class attribute, affecting all instances.
     fake_remoter.result_map = {
         re.compile(r"nodetool status"): Result(stdout="UN 10.0.0.1", exited=0),
         re.compile(r"cat /etc/scylla/scylla.yaml"): Result(stdout="cluster_name: test", exited=0),
@@ -177,6 +181,22 @@ SCT has many dependencies. If a test fails with `ModuleNotFoundError`, ensure:
 1. Your virtualenv is active: `uv sync`
 2. The import is at the top of the file, not inline
 
+## Test Naming Convention
+
+Use the pattern `test_<function>_<scenario>_<expected>`:
+
+```python
+# Good — describes behavior, condition, and expectation
+def test_parse_version_invalid_string_returns_none(): ...
+def test_config_missing_backend_raises_value_error(): ...
+def test_health_check_single_node_failure_does_not_block_others(): ...
+
+# Bad — generic, unclear what's being tested
+def test_parse(): ...
+def test_config_1(): ...
+def test_it_works(): ...
+```
+
 ## Running Tests
 
 ```bash
@@ -191,6 +211,12 @@ uv run python -m pytest unit_tests/test_config.py::test_function_name -v -s
 
 # Run with parallel execution disabled (for debugging)
 uv run python -m pytest unit_tests/test_config.py -v -s -n0
+
+# Run with coverage report
+uv run python -m pytest unit_tests/ --cov=sdcm --cov-report=term-missing
+
+# Run specific file with coverage for a single module
+uv run python -m pytest unit_tests/test_config.py --cov=sdcm.sct_config --cov-report=term-missing
 ```
 
 ## Reference Index

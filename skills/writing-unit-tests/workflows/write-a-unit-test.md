@@ -34,9 +34,8 @@ A 4-phase process for creating a new unit test in the SCT repository.
 1. **Use existing fixtures when available.** Check `unit_tests/conftest.py` for shared fixtures:
    - `params` — SCT configuration (auto-sets `SCT_CLUSTER_BACKEND=docker`)
    - `events` / `events_function_scope` — Event system setup
-   - `fake_remoter` — Blocks real SSH (autouse, always active)
+   - `fake_remoter` — Blocks real SSH (autouse, always active; returns the FakeRemoter **class**)
    - `prom_address` — Prometheus metrics server
-   - `docker_scylla` — Real Scylla container (integration tests only)
 
 2. **Mock external services at the boundary.** Use `unittest.mock.patch` or `monkeypatch`:
    ```python
@@ -130,9 +129,17 @@ A 4-phase process for creating a new unit test in the SCT repository.
    self.assertEqual(result, expected)
    ```
 
-5. **Keep tests focused.** One behavior per test function. Test name should describe the expected behavior: `test_parse_version_returns_none_for_invalid_input`.
+5. **Keep tests focused.** One behavior per test function. Use the naming pattern `test_<function>_<scenario>_<expected>`:
+   - `test_parse_version_invalid_string_returns_none`
+   - `test_config_missing_backend_raises_value_error`
 
-**Exit:** All test functions written with clear assertions.
+6. **Test edge cases, not just the happy path.** Consider:
+   - Empty inputs (`""`, `[]`, `{}`, `None`)
+   - Boundary values (0, -1, max int, empty string)
+   - Invalid types or malformed data
+   - Error conditions (`pytest.raises`)
+
+**Exit:** All test functions written with clear assertions, including edge cases.
 
 ---
 
