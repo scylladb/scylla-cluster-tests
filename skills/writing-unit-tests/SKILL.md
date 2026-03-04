@@ -64,10 +64,13 @@ These fixtures from `unit_tests/conftest.py` run automatically for every test:
 
 | Fixture | Scope | Purpose |
 |---------|-------|---------|
+| `mock_cloud_services` | session | Blocks real AWS/GCE/Azure API calls; mocks KeyStore, AMI resolution, repo lookups; redirects HOME to temp dir for pydantic `ExistingFile` validators |
 | `fake_remoter` | function | Blocks real SSH; sets `FakeRemoter` as default remoter |
 | `fake_provisioner` | session | Registers `FakeProvisioner` for cloud provisioning |
 | `fake_region_definition_builder` | session | Registers `FakeDefinitionBuilder` for regions |
 | `fixture_cleanup_continuous_events_registry` | function | Cleans up event registry between tests |
+
+**What `mock_cloud_services` blocks:** `convert_name_to_ami_if_needed` (AWS SSM), `find_scylla_repo` (S3 bucket listing), `get_arch_from_instance_type` (EC2 DescribeInstanceTypes), `KeyStore` methods (S3 access, SSH keys, credentials). It uses `patch.object(KeyStore, ...)` to mock at the class level (works regardless of import style) and patches functions at **both** source and import sites. Returns proper `SSHKey` namedtuple (not `MagicMock`) to avoid serialization errors.
 
 ### On-Demand Fixtures
 
