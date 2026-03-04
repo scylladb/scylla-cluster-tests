@@ -136,21 +136,19 @@ def test_cql_query(docker_scylla):
 
 ### AWS Tests (Service: aws)
 
-For tests that can use mocked AWS, use `moto`:
+For tests using `moto` (fully mocked AWS — no real credentials needed), write them as **unit tests** without the integration marker:
 ```python
 import boto3
 from moto import mock_aws
 
-@pytest.mark.integration
 @mock_aws
 def test_s3_operations():
-    """Test S3 storage operations with mocked AWS.
-
-    External services: AWS S3 (mocked via moto)
-    """
+    """Test S3 storage operations with mocked AWS (no real credentials needed)."""
     s3 = boto3.client("s3", region_name="us-east-1")
     s3.create_bucket(Bucket="test-bucket")
 ```
+
+> **Note:** `@mock_aws` intercepts all boto3 calls — no real AWS access occurs. These tests can run as unit tests. Only use `@pytest.mark.integration` for tests that need **real** AWS credentials.
 
 For tests that need real AWS:
 ```python
