@@ -116,6 +116,9 @@ Unit tests already mock cloud APIs via the `mock_cloud_services` autouse fixture
 - Keep the validation logic identical — move it from imperative `__init__` code to declarative validators
 - Preserve existing error messages to avoid breaking any downstream error handling
 
+**Relationship with `verify_configuration()`:**
+The existing `verify_configuration()` method (line 3056) runs *after* `__init__` and handles a different set of concerns: checking for unexpected SCT variables, validating variable value types against schema, checking backend-specific required values, and verifying Docker/xcloud parameters. The inline validation blocks in `__init__` (steps 11–21) are *complementary* — they check field value constraints and cross-field consistency. After Phase 1, the split remains: Pydantic validators handle field-level and cross-field validation declaratively, while `verify_configuration()` continues to handle schema-level and backend-specific checks that depend on the fully-loaded configuration.
+
 **Items that stay in `__init__`:**
 - Lines 2703–2704 (`SCTCapacityReservation.get_cr_from_aws`, `SCTDedicatedHosts.reserve`) — these are side-effectful resource reservations, not validation
 - Lines 2763–2765 (random `c_s_driver_version` selection) — this is configuration mutation, not validation
