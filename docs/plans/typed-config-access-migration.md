@@ -63,7 +63,7 @@ These enable backward-compatible dict-style access and are used in ~40 `self.par
 | File | `.get()` calls | Access pattern |
 |------|---------------|----------------|
 | `sdcm/tester.py` | ~287 | `self.params.get(...)` |
-| `sdcm/cluster.py` | ~142 | `self.params.get(...)` |
+| `sdcm/cluster.py` | ~142 | ~108 `self.params.get(...)` + ~34 `X.params.get(...)` (non-self) |
 | `sdcm/cluster_k8s/__init__.py` | ~85 | `self.params.get(...)` |
 | `sdcm/nemesis/__init__.py` | ~72 | `self.cluster.params.get(...)`, `self.tester.params.get(...)` |
 | `upgrade_test.py` | ~59 | `self.params.get(...)` |
@@ -164,7 +164,7 @@ This confirms that attribute access works today for any field and the codebase a
 | File | Calls | Notes |
 |------|-------|-------|
 | `sdcm/tester.py` | ~287 | Straightforward literal key conversion |
-| `sdcm/cluster.py` | ~108 | Contains multi-region and f-string dynamic keys — convert literals, keep `getattr()` for dynamic |
+| `sdcm/cluster.py` | ~108 | `self.params.get()` calls only; ~34 additional `X.params.get()` calls from non-self access are handled alongside their respective callers. Contains multi-region and f-string dynamic keys — convert literals, keep `getattr()` for dynamic |
 | `sdcm/cluster_k8s/__init__.py` | ~76 | Mix of literal and some dynamic keys |
 
 **Conversion rules**:
@@ -275,8 +275,8 @@ These are intentionally dynamic (the key is resolved via class hierarchy) and sh
 | `sdcm/tester.py` | ~12 | Mix of read and write: `self.params["key"] = value` |
 | `sdcm/ycsb_thread.py` | ~3 | Read-only bracket access |
 | `sdcm/stress/latte_thread.py` | ~3 | Read-only bracket access |
-| `sdcm/cluster_k8s/mini_k8s.py` | ~1 | Read-only |
-| `sdcm/cluster.py` | ~1 | Read-only |
+| `sdcm/cluster_k8s/mini_k8s.py` | ~1 | Bracket access `[]` only (`.get()` calls covered in Phase 2b) |
+| `sdcm/cluster.py` | ~1 | Bracket access `[]` only (`.get()` calls covered in Phase 2a) |
 
 **Conversion rules**:
 
