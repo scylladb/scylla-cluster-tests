@@ -131,7 +131,7 @@ The existing `verify_configuration()` method (line 3056) runs *after* `__init__`
 - [ ] New unit tests validate each extracted validator independently (valid and invalid inputs)
 - [ ] `uv run sct.py pre-commit` passes
 
-**Dependencies**: PR #13104 merged (Pydantic BaseModel foundation)
+**Dependencies**: None (PR #13104 — Pydantic BaseModel foundation — is already merged)
 
 ---
 
