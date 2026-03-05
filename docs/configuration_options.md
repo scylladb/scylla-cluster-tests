@@ -12,7 +12,7 @@ Jobs to compare performance results with, for example if running in staging,<br>
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -22,7 +22,7 @@ Extra command line options to pass to perf_simple_query
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -50,7 +50,7 @@ a list of config files that would be used
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 
 
 ## **cluster_backend** / SCT_CLUSTER_BACKEND
@@ -59,7 +59,7 @@ backend that will be used, aws/gce/azure/docker/xcloud
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **test_method** / SCT_TEST_METHOD
@@ -68,7 +68,7 @@ class.method used to run the test. Filled automatically with run-test sct comman
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **test_duration** / SCT_TEST_DURATION
@@ -86,7 +86,7 @@ Db type to install into db nodes, scylla/cassandra
 
 **default:** scylla
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -132,7 +132,7 @@ Number list of database nodes in multiple data centers.
 
 **default:** N/A
 
-**type:** int | list[int]
+**type:** [int, list[int]]
 
 
 ## **n_test_oracle_db_nodes** / SCT_N_TEST_ORACLE_DB_NODES
@@ -141,7 +141,7 @@ Number list of oracle test nodes in multiple data centers.
 
 **default:** 1
 
-**type:** int | list[int]
+**type:** [int, list[int]]
 
 
 ## **n_loaders** / SCT_N_LOADERS
@@ -150,7 +150,7 @@ Number list of loader nodes in multiple data centers
 
 **default:** N/A
 
-**type:** int | list[int]
+**type:** [int, list[int]]
 
 
 ## **n_monitor_nodes** / SCT_N_MONITOR_NODES
@@ -159,7 +159,7 @@ Number list of monitor nodes in multiple data centers
 
 **default:** 1
 
-**type:** int | list[int]
+**type:** [int, list[int]]
 
 
 ## **intra_node_comm_public** / SCT_INTRA_NODE_COMM_PUBLIC
@@ -177,7 +177,7 @@ The snitch class scylla would use<br><br>'GossipingPropertyFileSnitch' - default
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -196,7 +196,7 @@ Path to your user credentials. qa key are downloaded automatically from S3 bucke
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -215,7 +215,7 @@ scylla cloud promproxy bearer_token to federate monitoring data into our monitor
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -225,7 +225,7 @@ scylla cloud promproxy path to federate monitoring data into our monitoring inst
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -235,7 +235,7 @@ scylla cloud promproxy hostname to federate monitoring data into our monitoring 
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -254,7 +254,7 @@ Url to the repo of scylla version to install scylla. Can provide specific versio
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -264,7 +264,7 @@ APT keys for ScyllaDB repos
 
 **default:** ['17723034C56D4B19', '5E08FBD8B5D6EC9C', 'D0A112E067426AB2', '491C93B9DE7496A7', 'A43E06657BAC99E3', 'C503C686B007F39E']
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -274,7 +274,7 @@ Url to the unified package of scylla version to install scylla
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -293,7 +293,7 @@ Scylla install mode, repo/offline/web
 
 **default:** repo
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **scylla_version** / SCT_SCYLLA_VERSION
@@ -302,7 +302,7 @@ Version of scylla to install, ex. '2.3.1'<br>Automatically lookup AMIs and repo 
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **user_data_format_version** / SCT_USER_DATA_FORMAT_VERSION
@@ -311,7 +311,7 @@ Format version of the user-data to use for scylla images,<br>default to what tag
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **oracle_user_data_format_version** / SCT_ORACLE_USER_DATA_FORMAT_VERSION
@@ -320,7 +320,7 @@ Format version of the user-data to use for scylla images,<br>default to what tag
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **oracle_scylla_version** / SCT_ORACLE_SCYLLA_VERSION
@@ -329,7 +329,7 @@ Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'<br>Au
 
 **default:** 2024.1
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **scylla_linux_distro** / SCT_SCYLLA_LINUX_DISTRO
@@ -338,7 +338,7 @@ The distro name and family name to use. Example: 'ubuntu-jammy' or 'debian-bookw
 
 **default:** ubuntu-focal
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **scylla_linux_distro_loader** / SCT_SCYLLA_LINUX_DISTRO_LOADER
@@ -347,7 +347,7 @@ The distro name and family name to use. Example: 'ubuntu-jammy' or 'debian-bookw
 
 **default:** ubuntu-jammy
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **assert_linux_distro_features** / SCT_ASSERT_LINUX_DISTRO_FEATURES
@@ -356,7 +356,7 @@ List of distro features relevant to SCT test. Example: 'fips'.<br>This is used t
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -366,7 +366,7 @@ Url to the repo of scylla version to install scylla from for management tests
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -376,7 +376,7 @@ Url to the repo of scylla manager version to install for management tests
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -386,7 +386,7 @@ Url to the repo of scylla manager agent version to install for management tests
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -396,7 +396,7 @@ Version of Scylla Manager server and agent to install
 
 **default:** 3.8
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **target_manager_version** / SCT_TARGET_MANAGER_VERSION
@@ -405,7 +405,7 @@ Version of Scylla Manager server and agent to upgrade to
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **manager_scylla_backend_version** / SCT_MANAGER_SCYLLA_BACKEND_VERSION
@@ -414,7 +414,7 @@ Version of ScyllaDB to install as Manager backend
 
 **default:** 2025.4
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **scylla_mgmt_agent_version** / SCT_SCYLLA_MGMT_AGENT_VERSION
@@ -423,7 +423,7 @@ Version of Scylla Manager agent to install for management tests
 
 **default:** 3.8.0
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **scylla_mgmt_pkg** / SCT_SCYLLA_MGMT_PKG
@@ -432,7 +432,7 @@ Url to the scylla manager packages to install for management tests
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -442,7 +442,7 @@ The object storage transfer method to use by Scylla Manager in backup or restore
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -470,7 +470,7 @@ Configuration for SCT agent - a lightweight service for remote command execution
 
 **default:** {'enabled': False, 'port': 16000, 'binary_url': '', 'max_concurrent_jobs': 10, 'log_level': 'info'}
 
-**type:** dict | str
+**type:** [dict, str]
 
 
 ## **manager_prometheus_port** / SCT_MANAGER_PROMETHEUS_PORT
@@ -488,7 +488,7 @@ Url to the repo of scylla manager version used to upgrade the manager server
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -498,7 +498,7 @@ Url to the repo of scylla manager version used to upgrade the manager agents
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -544,7 +544,7 @@ This option indicates which server is going to be used for LDAP operations. [ope
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -563,7 +563,7 @@ A local directory of rpms to install a custom version on top of<br>the scylla in
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -573,7 +573,7 @@ The port of scylla management
 
 **default:** branch-4.14
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -583,7 +583,7 @@ the prefix of the name of the cloud instances, defaults to username
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -593,7 +593,7 @@ version name to report stats to Elasticsearch and tagged on cloud instances
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -603,7 +603,7 @@ Override the default hostname address of the sct test runner,<br>for the monitor
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -640,7 +640,7 @@ Override the default hostname address of the sct test runner, using ngrok server
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -668,7 +668,7 @@ Regex pattern to disable backtrace decoding for specific event types. If an even
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -705,7 +705,7 @@ If reuse_cluster is set it should hold test_id of the cluster that will be reuse
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -715,7 +715,7 @@ Set the test_id of the run manually. Use only from the env before running Hydra
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -725,7 +725,7 @@ Billing project for the test run. Used for cost tracking and reporting
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -762,7 +762,7 @@ list of email of send the performance regression test to
 
 **default:** ['qa@scylladb.com']
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -772,7 +772,7 @@ Email subject postfix
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -791,7 +791,7 @@ unlock specified experimental features
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -819,7 +819,7 @@ when enable or disable scylla hinted handoff (enabled/disabled)
 
 **default:** disabled
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -847,7 +847,7 @@ the username if PasswordAuthenticator is used
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -857,7 +857,7 @@ the password if PasswordAuthenticator is used
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -912,7 +912,7 @@ Set the write isolation for the alternator table, see https://github.com/scyllad
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -940,7 +940,7 @@ Dictionary of a test alternator table features:<br>name: str - the name of the t
 
 **default:** N/A
 
-**type:** dict | str
+**type:** [dict, str]
 
 
 ## **alternator_enforce_authorization** / SCT_ALTERNATOR_ENFORCE_AUTHORIZATION
@@ -958,7 +958,7 @@ the aws_access_key_id that would be used for alternator
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -968,7 +968,7 @@ the aws_secret_access_key that would be used for alternator
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -996,7 +996,7 @@ More arguments to append to scylla command line
 
 **default:** --blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1006,7 +1006,7 @@ More arguments to append to oracle command line
 
 **default:** --enable-cache false
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1016,7 +1016,7 @@ More configuration to append to /etc/scylla/scylla.yaml
 
 **default:** {'rf_rack_valid_keyspaces': True}
 
-**type:** dict | str | pydantic.main.BaseModel
+**type:** [dict, str, pydantic.main.BaseModel]
 
 
 ## **append_scylla_node_exporter_args** / SCT_APPEND_SCYLLA_NODE_EXPORTER_ARGS
@@ -1025,7 +1025,7 @@ More arguments to append to scylla-node-exporter command line
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1035,7 +1035,7 @@ Nemesis class to use (possible types in sdcm.nemesis).<br>Next syntax supporting
 
 **default:** NoOpMonkey
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -1045,7 +1045,7 @@ Nemesis sleep interval to use if None provided specifically in the test
 
 **default:** 5
 
-**type:** int | list[int]
+**type:** [int, list[int]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -1055,7 +1055,7 @@ Sleep interval between nemesis operations for use in unique_sequence nemesis kin
 
 **default:** N/A
 
-**type:** int | list[int]
+**type:** [int, list[int]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -1065,7 +1065,7 @@ Run nemesis during prepare stage of the test
 
 **default:** True
 
-**type:** bool | list[bool]
+**type:** [bool, list[bool]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -1075,7 +1075,7 @@ A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
 
 **default:** N/A
 
-**type:** int | list[int]
+**type:** [int, list[int]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -1085,7 +1085,7 @@ Add/remove nodes during GrowShrinkCluster nemesis
 
 **default:** 3
 
-**type:** int | list[int]
+**type:** [int, list[int]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -1095,7 +1095,7 @@ Instance type to use for adding/removing nodes during GrowShrinkCluster nemesis
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1105,7 +1105,7 @@ Used for scale test: max size of the cluster
 
 **default:** N/A
 
-**type:** int | list[int]
+**type:** [int, list[int]]
 
 
 ## **space_node_threshold** / SCT_SPACE_NODE_THRESHOLD
@@ -1114,7 +1114,7 @@ Space node threshold before starting nemesis (bytes)<br>The default value is 6GB
 
 **default:** N/A
 
-**type:** int | list[int]
+**type:** [int, list[int]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -1124,7 +1124,7 @@ If true runs the nemesis only on non seed nodes
 
 **default:** N/A
 
-**type:** bool | list[bool]
+**type:** [bool, list[bool]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -1134,7 +1134,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -1144,7 +1144,7 @@ Url of the schema/configuration the gemini tool would use
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1154,7 +1154,7 @@ gemini command to run (for now used only in GeminiTest)
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1200,7 +1200,7 @@ AWS image type of the loader node
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1210,7 +1210,7 @@ AWS image type of the monitor node
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1220,7 +1220,7 @@ AWS image type of the db node
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1230,7 +1230,17 @@ AWS image type of the oracle node
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
+* appendable
+
+
+## **instance_type_db_target** / SCT_INSTANCE_TYPE_DB_TARGET
+
+Target AWS instance type for platform migration (e.g., i8g.2xlarge for ARM)
+
+**default:** N/A
+
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1240,7 +1250,7 @@ instance type of the sct-runner node
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1250,7 +1260,7 @@ AWS regions to use
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 
 
 ## **use_placement_group** / SCT_USE_PLACEMENT_GROUP
@@ -1268,7 +1278,7 @@ AMS AMI id to use for scylla db node
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1278,7 +1288,7 @@ AMS AMI id to use for loader node
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1288,7 +1298,7 @@ AMS AMI id to use for monitor node
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1298,7 +1308,7 @@ AMS AMI id to use for cassandra node
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1308,7 +1318,7 @@ AMS AMI id to use for oracle node
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1318,7 +1328,7 @@ AMS AMI id to use for vector store node
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1328,7 +1338,7 @@ AWS/GCP cloud provider instance type for Vector Store nodes
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1374,7 +1384,7 @@ root disk size in Gb for sct-runner
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1384,7 +1394,7 @@ root disk size in Gb for sct-runner
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1394,7 +1404,7 @@ root disk size in Gb for sct-runner
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1404,7 +1414,7 @@ root disk size in Gb for sct-runner
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1414,7 +1424,7 @@ root disk size in Gb for sct-runner
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1442,7 +1452,7 @@ This is the name of the instance profile to set on all db instances
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1452,7 +1462,7 @@ This is the name of the instance profile to set on all loader instances
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1462,7 +1472,7 @@ the backend to be used for backup (e.g., 's3', 'gcs' or 'azure')
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1472,7 +1482,7 @@ the bucket name to be used for backup (e.g., 'manager-backup-tests')
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -1482,7 +1492,7 @@ the AWS region of a bucket to be used for backup (e.g., 'eu-west-1')
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1501,7 +1511,7 @@ list of files that should upload to /etc/scylla.d/ directory to override scylla 
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -1511,7 +1521,7 @@ gcp project name to use
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1521,7 +1531,7 @@ Supported regions: us-east1, us-east4, us-west1, us-central1. Specifying just th
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 
 
 ## **gce_network** / SCT_GCE_NETWORK
@@ -1530,7 +1540,7 @@ gce network to use
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1540,7 +1550,7 @@ gce image to use for db nodes
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1550,7 +1560,7 @@ gce image to use for monitor nodes
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1569,7 +1579,7 @@ Google Compute Engine image to use for loader nodes
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1579,7 +1589,7 @@ Username for the Google Compute Engine image
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1589,7 +1599,7 @@ Instance type for loader nodes in Google Compute Engine
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1599,7 +1609,7 @@ Root disk type for loader nodes in Google Compute Engine
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1618,7 +1628,7 @@ Instance type for monitor nodes in Google Compute Engine
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1628,7 +1638,7 @@ Root disk type for monitor nodes in Google Compute Engine
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1656,7 +1666,7 @@ Validators to use during teardown phase
 
 **default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}, 'rackaware': {'enabled': False}}
 
-**type:** dict | str
+**type:** [dict, str]
 
 
 ## **use_capacity_reservation** / SCT_USE_CAPACITY_RESERVATION
@@ -1683,7 +1693,7 @@ List of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -1702,7 +1712,7 @@ Start date for bisecting test runs to find regressions
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1712,7 +1722,7 @@ End date for bisecting test runs to find regressions
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1749,7 +1759,7 @@ Scylla Doctor version to use for artifact tests. Set to specific version (e.g., 
 
 **default:** 1.9
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1759,7 +1769,7 @@ Skip selected stages of a test scenario
 
 **default:** N/A
 
-**type:** dict | str
+**type:** [dict, str]
 
 
 ## **use_zero_nodes** / SCT_USE_ZERO_NODES
@@ -1777,7 +1787,7 @@ Number of zero token nodes in cluster. Value should be set as '0 1 1' for multid
 
 **default:** N/A
 
-**type:** int | list[int]
+**type:** [int, list[int]]
 
 
 ## **zero_token_instance_type_db** / SCT_ZERO_TOKEN_INSTANCE_TYPE_DB
@@ -1786,7 +1796,7 @@ Instance type for zero token node
 
 **default:** i4i.large
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1796,7 +1806,7 @@ AWS account id on behalf of which the test is run
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1806,7 +1816,7 @@ Error thresholds for latency decorator. Defined by dict: {<write, read, mixed>: 
 
 **default:** {'write': {'default': {'P90 write': {'fixed_limit': None}, 'P99 write': {'fixed_limit': 10}}}, 'read': {'default': {'P90 read': {'fixed_limit': None}, 'P99 read': {'fixed_limit': 10}}}, 'read_disk_only': {'default': {'P90 read': {'fixed_limit': None}, 'P99 read': {'fixed_limit': 10}}}, 'mixed': {'default': {'P90 write': {'fixed_limit': None}, 'P90 read': {'fixed_limit': None}, 'P99 write': {'fixed_limit': 10}, 'P99 read': {'fixed_limit': 10}}}}
 
-**type:** dict | str
+**type:** [dict, str]
 
 
 ## **workload_name** / SCT_WORKLOAD_NAME
@@ -1815,7 +1825,7 @@ Workload name, can be: write|read|mixed|unset. Used for e.g. latency_calculator_
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1843,7 +1853,7 @@ Instance type for database nodes in Google Compute Engine
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1853,7 +1863,7 @@ Root disk type for database nodes in Google Compute Engine
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1917,7 +1927,7 @@ Azure region(s) where the resources will be deployed. Supports single or multipl
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 
 
 ## **azure_instance_type_loader** / SCT_AZURE_INSTANCE_TYPE_LOADER
@@ -1926,7 +1936,7 @@ The Azure virtual machine size to be used for loader nodes.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1936,7 +1946,7 @@ The Azure virtual machine size to be used for monitor nodes.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1946,7 +1956,7 @@ The Azure virtual machine size to be used for database nodes.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1956,7 +1966,7 @@ The Azure virtual machine size to be used for Oracle database nodes.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1966,7 +1976,7 @@ The Azure image to be used for database nodes.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1976,7 +1986,7 @@ The Azure image to be used for monitor nodes.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1986,7 +1996,7 @@ The Azure image to be used for loader nodes.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -1996,7 +2006,7 @@ The username for the Azure image.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2006,7 +2016,7 @@ EKS service IPv4 CIDR block
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2016,7 +2026,7 @@ EKS VPC CNI plugin version
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2026,7 +2036,7 @@ ARN of the IAM role for EKS
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2036,7 +2046,7 @@ ARN(s) of the IAM user or role to be granted cluster admin access
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2046,7 +2056,7 @@ EKS cluster Kubernetes version
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2056,7 +2066,7 @@ ARN of the IAM role for EKS node groups
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2066,7 +2076,7 @@ Specifies the version of the GKE cluster to be used.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2076,7 +2086,7 @@ K8S release channel name to be used. Expected values are: 'rapid', 'regular', 's
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2086,7 +2096,7 @@ Docker image to be used by Scylla operator to tune K8S nodes for performance. Us
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2114,7 +2124,7 @@ Defines the type of the K8S local volume provisioner to be deployed. It may be e
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2124,7 +2134,7 @@ Docker image to be used for installation of Scylla operator.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2134,7 +2144,7 @@ Docker image to be used for upgrade of Scylla operator.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2144,7 +2154,7 @@ Link to the Helm repository where to get 'scylla-operator' charts from.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2154,7 +2164,7 @@ Link to the Helm repository where to get 'scylla-operator' charts for upgrade.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2164,7 +2174,7 @@ Version of 'scylla-operator' Helm chart to use. If not set then latest one will 
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2174,7 +2184,7 @@ Version of 'scylla-operator' Helm chart to use for upgrade.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2184,7 +2194,7 @@ Defines whether dataset uses for pre-fill cluster in functional test. Defined in
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2194,7 +2204,7 @@ The CPU limit that will be set for each Scylla cluster deployed in K8S. If not s
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2204,7 +2214,7 @@ The memory limit that will be set for each Scylla cluster deployed in K8S. If no
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2214,7 +2224,7 @@ Specifies the name of the Scylla cluster to be deployed in K8S.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2242,7 +2252,7 @@ Specifies the disk class for Scylla pods.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2252,7 +2262,7 @@ Specifies the name of the loader cluster.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2271,7 +2281,7 @@ Defines how the loader pods must run. It may be either 'static' (default, run st
 
 **default:** dynamic
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2281,7 +2291,7 @@ Instance type for the nodes of the K8S auxiliary/default node pool.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2291,7 +2301,7 @@ Instance type for the nodes of the K8S monitoring node pool.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2301,7 +2311,7 @@ Specifies the version of the mini K8S cluster to be used.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2311,7 +2321,7 @@ Specifies the version of the cert-manager to be used in K8S.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2321,7 +2331,7 @@ Specifies the storage size for MinIO deployment in K8S.
 
 **default:** 10Gi
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2376,7 +2386,7 @@ Serverless configuration bundle file.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2386,7 +2396,7 @@ Defines the type of the K8S 'Service' objects type used for ScyllaDB pods. Empty
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2396,7 +2406,7 @@ Defines the source of the IP address to be used for the 'broadcast_address' conf
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2406,7 +2416,7 @@ Defines the source of the IP address to be used for the 'broadcast_rpc_address' 
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2443,7 +2453,7 @@ Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'
 
 **default:** scylladb/scylla-manager:3.8.0
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2453,7 +2463,7 @@ Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from 
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2463,7 +2473,7 @@ Local docker network to use, if there's need to have db cluster connect to other
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2473,7 +2483,7 @@ Vector Store docker image repo, i.e. 'scylladb/vector-store', if omitted is calc
 
 **default:** scylladb/vector-store
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2483,7 +2493,7 @@ Vector Store version / docker image tag
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2493,7 +2503,7 @@ Configuration for S3 in baremetal setups. This includes details such as endpoint
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2503,7 +2513,7 @@ Private IP addresses of DB nodes. Can be a single IP, a list of IPs, or an expre
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2513,7 +2523,7 @@ Public IP addresses of DB nodes. Can be a single IP, a list of IPs, or an expres
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2523,7 +2533,7 @@ Private IP addresses of loader nodes. Loaders are used for running stress tests 
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2533,7 +2543,7 @@ Public IP addresses of loader nodes. These IPs are used for accessing the loader
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2543,7 +2553,7 @@ Private IP addresses of monitor nodes. Monitoring nodes host monitoring tools li
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2553,7 +2563,7 @@ Public IP addresses of monitor nodes. These IPs are used for accessing the monit
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2635,7 +2645,7 @@ Enable or disable running full partition scans during tests
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2645,7 +2655,7 @@ Enable or disable tombstone garbage collection verification during tests
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2664,7 +2674,7 @@ Enable or disable round robin selection of nodes for operations
 
 **default:** N/A
 
-**type:** bool | list[bool]
+**type:** [bool, list[bool]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -2692,7 +2702,7 @@ Command to create keyspace to be pre-created before running workload
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2702,7 +2712,7 @@ CQL Commands to run after prepare stage finished (relevant only to longevity_tes
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2721,7 +2731,7 @@ Compaction strategy to use for pre-created schema
 
 **default:** SizeTieredCompactionStrategy
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2749,7 +2759,7 @@ Specify the type of data validation to perform
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2759,7 +2769,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2769,7 +2779,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2797,7 +2807,7 @@ Url to the repo of scylla manager version to upgrade to for management tests
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2807,7 +2817,7 @@ Manager agent backup general configuration: checkers, transfers, low_level_retri
 
 **default:** N/A
 
-**type:** sdcm.mgmt.common.AgentBackupParameters
+**type:** [sdcm.mgmt.common.AgentBackupParameters, NoneType]
 
 
 ## **mgmt_restore_extra_params** / SCT_MGMT_RESTORE_EXTRA_PARAMS
@@ -2816,7 +2826,7 @@ Manager restore operation extra parameters: batch-size, parallel, etc. For examp
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2826,7 +2836,7 @@ Name of backup snapshot to use in Manager restore benchmark test, for example, 5
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2845,7 +2855,7 @@ Nodetool refresh extra options like --load-and-stream or --primary-replica-only
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2864,7 +2874,7 @@ Custom parameters of c-s write operation used in snapshots preparer
 
 **default:** {'cs_cmd_template': "cassandra-stress {operation} cl={cl} n={num_of_rows} -schema 'keyspace={ks_name} replication(strategy={replication},replication_factor={rf}) compaction(strategy={compaction})' -mode cql3 native -rate threads={threads_num} -col 'size=FIXED({col_size}) n=FIXED({col_n})' -pop seq={sequence_start}..{sequence_end}", 'operation': 'write', 'cl': 'QUORUM', 'replication': 'NetworkTopologyStrategy', 'rf': 3, 'compaction': 'IncrementalCompactionStrategy', 'threads_num': 500, 'col_size': 1024, 'col_n': 1, 'ks_name': '', 'num_of_rows': '', 'sequence_start': '', 'sequence_end': ''}
 
-**type:** dict | str
+**type:** [dict, str]
 
 
 ## **stress_cmd_w** / SCT_STRESS_CMD_W
@@ -2873,7 +2883,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -2883,7 +2893,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -2893,7 +2903,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -2903,7 +2913,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -2913,7 +2923,7 @@ cassandra-stress commands for warm-up before read workload.<br>You can specify e
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -2923,8 +2933,28 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
+
+
+## **stress_before_migration** / SCT_STRESS_BEFORE_MIGRATION
+
+Stress command to write data for post-migration validation
+
+**default:** N/A
+
+**type:** [str, NoneType]
+* appendable
+
+
+## **verify_stress_after_migration** / SCT_VERIFY_STRESS_AFTER_MIGRATION
+
+Stress command to verify data after migration
+
+**default:** N/A
+
+**type:** [str, NoneType]
+* appendable
 
 
 ## **stress_cmd_no_mv** / SCT_STRESS_CMD_NO_MV
@@ -2933,7 +2963,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2943,7 +2973,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2953,7 +2983,7 @@ cassandra-stress user-profiles list. Executed in test step
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2963,7 +2993,7 @@ cassandra-stress user-profiles list. Executed in prepare step
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -2973,7 +3003,7 @@ cassandra-stress user-profiles list. Executed in prepare step
 
 **default:** 50m
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -2992,7 +3022,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3002,7 +3032,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3012,7 +3042,7 @@ Threads amount of stress load for gradual performance test per sub-test. Example
 
 **default:** N/A
 
-**type:** dict | str
+**type:** [dict, str]
 
 
 ## **perf_gradual_throttle_steps** / SCT_PERF_GRADUAL_THROTTLE_STEPS
@@ -3021,7 +3051,7 @@ Used for gradual performance test. Define throttle for load step in ops. Example
 
 **default:** N/A
 
-**type:** dict | str
+**type:** [dict, str]
 
 
 ## **perf_gradual_step_duration** / SCT_PERF_GRADUAL_STEP_DURATION
@@ -3030,7 +3060,7 @@ Step duration of c-s load for gradual performance test per sub-test. Example: {'
 
 **default:** N/A
 
-**type:** dict | str
+**type:** [dict, str]
 
 
 ## **stress_cmd_lwt_i** / SCT_STRESS_CMD_LWT_I
@@ -3039,7 +3069,7 @@ Stress command for LWT performance test for INSERT baseline
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3049,7 +3079,7 @@ Stress command for LWT performance test for DELETE baseline
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3059,7 +3089,7 @@ Stress command for LWT performance test for UPDATE baseline
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3069,7 +3099,7 @@ Stress command for LWT performance test for INSERT with IF NOT EXISTS
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3079,7 +3109,7 @@ Stress command for LWT performance test for UPDATE with IF <condition>
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3089,7 +3119,7 @@ Stress command for LWT performance test for UPDATE with IF EXISTS
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3099,7 +3129,7 @@ Stress command for LWT performance test for DELETE with IF EXISTS
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3109,7 +3139,7 @@ Stress command for LWT performance test for DELETE with IF <condition>
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3119,7 +3149,7 @@ Stress command for LWT performance test for mixed lwt load
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3129,7 +3159,7 @@ Stress command for LWT performance test for mixed lwt load baseline
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3148,7 +3178,7 @@ Stress command for LWT performance test for mixed lwt load baseline
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3158,7 +3188,7 @@ Stress command for LWT performance test for mixed lwt load baseline
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3168,7 +3198,7 @@ Stress command for LWT performance test for mixed lwt load baseline
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3196,7 +3226,7 @@ URL to the Scylla repository for new versions.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3206,7 +3236,7 @@ Assign new upgrade version, use it to upgrade to specific minor release. eg: 3.0
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3216,7 +3246,7 @@ The target version to upgrade Scylla to.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3253,7 +3283,7 @@ Specifies the packages to be upgraded on the node.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3272,7 +3302,7 @@ Primary stress command to be executed.
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3282,7 +3312,7 @@ Stress command for complex preparation steps.
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3292,7 +3322,7 @@ Stress command to prepare write operations.
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3302,7 +3332,7 @@ Stress command to perform read operations for 10 minutes.
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3312,7 +3342,7 @@ Stress command to perform read operations with consistency level ONE.
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3322,7 +3352,7 @@ Stress command to perform read operations for 60 minutes.
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3332,7 +3362,7 @@ Stress command to verify complex read operations.
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3342,7 +3372,7 @@ Additional stress command to verify complex operations.
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3352,7 +3382,7 @@ Stress command to perform write operations throughout the entire test.
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3362,7 +3392,7 @@ Stress command to verify data integrity after the entire test.
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3372,7 +3402,7 @@ Stress command to perform read operations with consistency level QUORUM.
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3382,7 +3412,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3392,7 +3422,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3402,7 +3432,7 @@ options will be used for enable encryption at-rest for tables
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3520,7 +3550,7 @@ Scylla option: internode_compression.
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3530,7 +3560,7 @@ Scylla sub option of server_encryption_options: internode_encryption.
 
 **default:** all
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3567,7 +3597,7 @@ More arguments to append to scylla_setup command line
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3586,7 +3616,7 @@ cdc-stressor command to read cdc_log table.<br>You can specify everything but th
 
 **default:** cdc-stressor -stream-query-round-duration 30s
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3632,7 +3662,7 @@ Availability zone to use. Specify multiple (comma separated) to deploy resources
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3678,7 +3708,7 @@ Stress command to be run before upgrade (prepare stage)
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3688,7 +3718,7 @@ Stress command to be run during the upgrade - user should take care for suitable
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3698,7 +3728,7 @@ Stress command to be run after full upgrade - usually used to read the dataset f
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3708,7 +3738,7 @@ Link to the git repository with Jepsen Scylla tests
 
 **default:** https://github.com/jepsen-io/scylla.git
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3718,7 +3748,7 @@ Jepsen test command (e.g., 'test-all')
 
 **default:** ['test-all -w cas-register --concurrency 10n', 'test-all -w counter --concurrency 10n', 'test-all -w cmap --concurrency 10n', 'test-all -w cset --concurrency 10n', 'test-all -w write-isolation --concurrency 10n', 'test-all -w list-append --concurrency 10n', 'test-all -w wr-register --concurrency 10n']
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3746,7 +3776,7 @@ Limit severity level for event types
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * appendable
 
 
@@ -3819,7 +3849,7 @@ nemesis_selector gets a list of "nemesis properties" and filters IN all the neme
 
 **default:** N/A
 
-**type:** str | list[str]
+**type:** [str, list[str]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -3829,7 +3859,7 @@ nemesis_exclude_disabled determines whether 'disabled' nemeses are filtered out 
 
 **default:** True
 
-**type:** bool | list[bool]
+**type:** [bool, list[bool]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -3839,7 +3869,7 @@ Multiply the list of nemesis to execute by the specified factor
 
 **default:** 2
 
-**type:** int | list[int]
+**type:** [int, list[int]]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
@@ -3867,7 +3897,7 @@ Dict of the images to use for the stress tools
 
 **default:** N/A
 
-**type:** dict | str
+**type:** [dict, str]
 
 
 ## **enable_argus** / SCT_ENABLE_ARGUS
@@ -3885,7 +3915,7 @@ set c-s parameter '-pop' with gauss/uniform distribution for performance gradual
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -3895,7 +3925,7 @@ Optional. Allows to pass through custom rune script parameters to the 'latte sch
 
 **default:** N/A
 
-**type:** dict | str
+**type:** [dict, str]
 
 
 ## **num_loaders_step** / SCT_NUM_LOADERS_STEP
@@ -3931,7 +3961,7 @@ Duration of time for stress round
 
 **default:** 15m
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -4022,7 +4052,7 @@ Path to Scylla Cloud credentials file, if stored locally
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -4032,7 +4062,7 @@ Scylla Cloud environment (e.g., lab).
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -4042,7 +4072,7 @@ Cloud provider for Scylla Cloud deployment (aws, gce)
 
 **default:** N/A
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
@@ -4070,7 +4100,7 @@ Scaling policy configuration. The payload should follow the following structure:
 
 **default:** N/A
 
-**type:** dict
+**type:** [dict, NoneType]
 
 
 ## **n_vector_store_nodes** / SCT_N_VECTOR_STORE_NODES
@@ -4124,7 +4154,7 @@ Path to the email report template used for sending argus email reports
 
 **default:** email_report_template_basic.yaml
 
-**type:** str
+**type:** [str, NoneType]
 * appendable
 
 
