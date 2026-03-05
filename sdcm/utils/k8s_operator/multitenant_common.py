@@ -43,7 +43,7 @@ class TenantMixin:
         self.cluster_index = str(cluster_index)
         self._test_id = self.test_config.test_id() + f"--{cluster_index}"
         self._test_index = self.get_str_index()
-        self.start_time = self.get_test_start_time() or time.time()
+        self.start_time = time.time()
         self.timeout_thread = self._init_test_timeout_thread()
         self.test_config.reuse_cluster(False)
         self.validate_large_collections = self.params.get("validate_large_collections")
