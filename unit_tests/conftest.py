@@ -369,9 +369,11 @@ def mock_cloud_services(tmp_path_factory, request):
     Session scope ensures mocks are active for module-scoped fixtures too.
     Skipped for integration tests (``-m "integration"``) which need real credentials.
     """
-    # Skip mocking for integration tests — they need real cloud credentials
+    # Skip mocking for integration tests — they need real cloud credentials.
+    # sct.py runs unit tests with -m "not integration" and integration tests
+    # with -m "integration", so checking for that exact pattern is sufficient.
     markexpr = request.config.getoption("-m", default="")
-    if markexpr and "integration" in markexpr and "not integration" not in markexpr:
+    if markexpr == "integration":
         yield
         return
 
