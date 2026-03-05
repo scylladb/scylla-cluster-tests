@@ -33,8 +33,8 @@ from sdcm.tester import ClusterTester
 # helpers
 # ---------------------------------------------------------------------------
 
-def _make_info(n_nodes=None, type_=None, disk_size=None, disk_type=None,
-               n_local_ssd=None, device_mappings=None):
+
+def _make_info(n_nodes=None, type_=None, disk_size=None, disk_type=None, n_local_ssd=None, device_mappings=None):
     """Return a fresh ``*_info`` dict matching what ``init_resources`` builds."""
     return {
         "n_nodes": n_nodes,
@@ -64,6 +64,7 @@ def _call_ignoring_infra_errors(func, *args, **kwargs):
 # ---------------------------------------------------------------------------
 # init_resources – backend dispatch
 # ---------------------------------------------------------------------------
+
 
 @patch("sdcm.tester.start_posting_grafana_annotations")
 class TestInitResourcesDispatch:
@@ -132,14 +133,18 @@ class TestInitResourcesDispatch:
 # Node-counting logic inside get_cluster_* methods
 # ---------------------------------------------------------------------------
 
+
 class TestNodeCountingAWS:
     """Node counting in ``get_cluster_aws``."""
 
-    @pytest.mark.parametrize("n_loaders,expected", [
-        (1, [1]),
-        ([2, 3], [2, 3]),
-        ([1, 1, 1, 1, 1], [1, 1, 1, 1, 1]),
-    ])
+    @pytest.mark.parametrize(
+        "n_loaders,expected",
+        [
+            (1, [1]),
+            ([2, 3], [2, 3]),
+            ([1, 1, 1, 1, 1], [1, 1, 1, 1, 1]),
+        ],
+    )
     def test_loader_node_count(self, n_loaders, expected):
         tester = MagicMock(spec=ClusterTester)
         tester.params = MagicMock()
@@ -155,8 +160,8 @@ class TestNodeCountingAWS:
         monitor_info = _make_info(n_nodes=0)
 
         _call_ignoring_infra_errors(
-            ClusterTester.get_cluster_aws, tester,
-            loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
+            ClusterTester.get_cluster_aws, tester, loader_info=loader_info, db_info=db_info, monitor_info=monitor_info
+        )
 
         assert loader_info["n_nodes"] == expected
 
@@ -175,8 +180,8 @@ class TestNodeCountingAWS:
         monitor_info = _make_info(n_nodes=0)
 
         _call_ignoring_infra_errors(
-            ClusterTester.get_cluster_aws, tester,
-            loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
+            ClusterTester.get_cluster_aws, tester, loader_info=loader_info, db_info=db_info, monitor_info=monitor_info
+        )
 
         tester.fail.assert_not_called()
 
@@ -184,10 +189,13 @@ class TestNodeCountingAWS:
 class TestNodeCountingGCE:
     """Node counting in ``get_cluster_gce``."""
 
-    @pytest.mark.parametrize("n_loaders,expected", [
-        (1, [1]),
-        ([2, 3], [2, 3]),
-    ])
+    @pytest.mark.parametrize(
+        "n_loaders,expected",
+        [
+            (1, [1]),
+            ([2, 3], [2, 3]),
+        ],
+    )
     def test_loader_node_count(self, n_loaders, expected):
         tester = MagicMock(spec=ClusterTester)
         tester.params = MagicMock()
@@ -210,15 +218,22 @@ class TestNodeCountingGCE:
 
         with patch("sdcm.tester.provisioner_factory"):
             _call_ignoring_infra_errors(
-                ClusterTester.get_cluster_gce, tester,
-                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
+                ClusterTester.get_cluster_gce,
+                tester,
+                loader_info=loader_info,
+                db_info=db_info,
+                monitor_info=monitor_info,
+            )
 
         assert loader_info["n_nodes"] == expected
 
-    @pytest.mark.parametrize("n_db_nodes,expected", [
-        (3, [3]),
-        ([3, 3, 3], [3, 3, 3]),
-    ])
+    @pytest.mark.parametrize(
+        "n_db_nodes,expected",
+        [
+            (3, [3]),
+            ([3, 3, 3], [3, 3, 3]),
+        ],
+    )
     def test_db_node_count(self, n_db_nodes, expected):
         tester = MagicMock(spec=ClusterTester)
         tester.params = MagicMock()
@@ -241,8 +256,12 @@ class TestNodeCountingGCE:
 
         with patch("sdcm.tester.provisioner_factory"):
             _call_ignoring_infra_errors(
-                ClusterTester.get_cluster_gce, tester,
-                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
+                ClusterTester.get_cluster_gce,
+                tester,
+                loader_info=loader_info,
+                db_info=db_info,
+                monitor_info=monitor_info,
+            )
 
         assert db_info["n_nodes"] == expected
 
@@ -268,8 +287,12 @@ class TestNodeCountingGCE:
 
         with patch("sdcm.tester.provisioner_factory"):
             _call_ignoring_infra_errors(
-                ClusterTester.get_cluster_gce, tester,
-                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
+                ClusterTester.get_cluster_gce,
+                tester,
+                loader_info=loader_info,
+                db_info=db_info,
+                monitor_info=monitor_info,
+            )
 
         tester.fail.assert_not_called()
 
@@ -277,10 +300,13 @@ class TestNodeCountingGCE:
 class TestNodeCountingAzure:
     """Node counting in ``get_cluster_azure`` (already correct, testing as baseline)."""
 
-    @pytest.mark.parametrize("n_loaders,expected", [
-        (1, [1]),
-        ([2, 3], [2, 3]),
-    ])
+    @pytest.mark.parametrize(
+        "n_loaders,expected",
+        [
+            (1, [1]),
+            ([2, 3], [2, 3]),
+        ],
+    )
     def test_loader_node_count(self, n_loaders, expected):
         tester = MagicMock(spec=ClusterTester)
         tester.params = MagicMock()
@@ -300,15 +326,22 @@ class TestNodeCountingAzure:
 
         with patch("sdcm.tester.provisioner_factory"):
             _call_ignoring_infra_errors(
-                ClusterTester.get_cluster_azure, tester,
-                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
+                ClusterTester.get_cluster_azure,
+                tester,
+                loader_info=loader_info,
+                db_info=db_info,
+                monitor_info=monitor_info,
+            )
 
         assert loader_info["n_nodes"] == expected
 
-    @pytest.mark.parametrize("n_db_nodes,expected", [
-        (3, [3]),
-        ([3, 3], [3, 3]),
-    ])
+    @pytest.mark.parametrize(
+        "n_db_nodes,expected",
+        [
+            (3, [3]),
+            ([3, 3], [3, 3]),
+        ],
+    )
     def test_db_node_count(self, n_db_nodes, expected):
         tester = MagicMock(spec=ClusterTester)
         tester.params = MagicMock()
@@ -328,8 +361,12 @@ class TestNodeCountingAzure:
 
         with patch("sdcm.tester.provisioner_factory"):
             _call_ignoring_infra_errors(
-                ClusterTester.get_cluster_azure, tester,
-                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
+                ClusterTester.get_cluster_azure,
+                tester,
+                loader_info=loader_info,
+                db_info=db_info,
+                monitor_info=monitor_info,
+            )
 
         assert db_info["n_nodes"] == expected
 
@@ -337,10 +374,13 @@ class TestNodeCountingAzure:
 class TestNodeCountingCloud:
     """Node counting in ``get_cluster_cloud`` (xcloud backend)."""
 
-    @pytest.mark.parametrize("n_loaders,expected", [
-        (1, [1]),
-        ([2, 3], [2, 3]),
-    ])
+    @pytest.mark.parametrize(
+        "n_loaders,expected",
+        [
+            (1, [1]),
+            ([2, 3], [2, 3]),
+        ],
+    )
     def test_loader_node_count(self, n_loaders, expected):
         tester = MagicMock(spec=ClusterTester)
         tester.params = MagicMock()
@@ -358,15 +398,22 @@ class TestNodeCountingCloud:
 
         with patch("sdcm.tester.ScyllaCloudAPIClient"):
             _call_ignoring_infra_errors(
-                ClusterTester.get_cluster_cloud, tester,
-                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
+                ClusterTester.get_cluster_cloud,
+                tester,
+                loader_info=loader_info,
+                db_info=db_info,
+                monitor_info=monitor_info,
+            )
 
         assert loader_info["n_nodes"] == expected
 
-    @pytest.mark.parametrize("n_db_nodes,expected", [
-        (3, [3]),
-        ([3, 3, 3], [3, 3, 3]),
-    ])
+    @pytest.mark.parametrize(
+        "n_db_nodes,expected",
+        [
+            (3, [3]),
+            ([3, 3, 3], [3, 3, 3]),
+        ],
+    )
     def test_db_node_count(self, n_db_nodes, expected):
         tester = MagicMock(spec=ClusterTester)
         tester.params = MagicMock()
@@ -384,8 +431,12 @@ class TestNodeCountingCloud:
 
         with patch("sdcm.tester.ScyllaCloudAPIClient"):
             _call_ignoring_infra_errors(
-                ClusterTester.get_cluster_cloud, tester,
-                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
+                ClusterTester.get_cluster_cloud,
+                tester,
+                loader_info=loader_info,
+                db_info=db_info,
+                monitor_info=monitor_info,
+            )
 
         assert db_info["n_nodes"] == expected
 
@@ -406,8 +457,12 @@ class TestNodeCountingCloud:
 
         with patch("sdcm.tester.ScyllaCloudAPIClient"):
             _call_ignoring_infra_errors(
-                ClusterTester.get_cluster_cloud, tester,
-                loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
+                ClusterTester.get_cluster_cloud,
+                tester,
+                loader_info=loader_info,
+                db_info=db_info,
+                monitor_info=monitor_info,
+            )
 
         tester.fail.assert_not_called()
 
@@ -416,14 +471,18 @@ class TestNodeCountingCloud:
 # _get_total_loaders / _get_total_db_nodes  (sdcm.mgmt.operations)
 # ---------------------------------------------------------------------------
 
+
 class TestGetTotalLoadersSnapshotOperations:
     """``SnapshotOperations._get_total_loaders`` handles int, list, and str."""
 
-    @pytest.mark.parametrize("n_loaders,expected", [
-        (5, 5),
-        ([3, 3, 3], 9),
-        ([1, 2, 3, 4, 5], 15),
-    ])
+    @pytest.mark.parametrize(
+        "n_loaders,expected",
+        [
+            (5, 5),
+            ([3, 3, 3], 9),
+            ([1, 2, 3, 4, 5], 15),
+        ],
+    )
     def test_returns_correct_total(self, n_loaders, expected):
         obj = MagicMock(spec=SnapshotOperations)
         obj.params = MagicMock()
@@ -436,11 +495,14 @@ class TestGetTotalLoadersSnapshotOperations:
 class TestGetTotalLoadersStressLoadOperations:
     """``StressLoadOperations._get_total_loaders`` handles int, list, and str."""
 
-    @pytest.mark.parametrize("n_loaders,expected", [
-        (5, 5),
-        ([3, 3, 3], 9),
-        ([1, 2, 3, 4, 5], 15),
-    ])
+    @pytest.mark.parametrize(
+        "n_loaders,expected",
+        [
+            (5, 5),
+            ([3, 3, 3], 9),
+            ([1, 2, 3, 4, 5], 15),
+        ],
+    )
     def test_returns_correct_total(self, n_loaders, expected):
         obj = MagicMock(spec=StressLoadOperations)
         obj.params = MagicMock()
@@ -453,11 +515,14 @@ class TestGetTotalLoadersStressLoadOperations:
 class TestGetTotalDbNodesStressLoadOperations:
     """``StressLoadOperations._get_total_db_nodes`` handles int, list, and str."""
 
-    @pytest.mark.parametrize("n_db_nodes,expected", [
-        (6, 6),
-        ([3, 3, 3], 9),
-        ([1, 2, 3, 4, 5], 15),
-    ])
+    @pytest.mark.parametrize(
+        "n_db_nodes,expected",
+        [
+            (6, 6),
+            ([3, 3, 3], 9),
+            ([1, 2, 3, 4, 5], 15),
+        ],
+    )
     def test_returns_correct_total(self, n_db_nodes, expected):
         obj = MagicMock(spec=StressLoadOperations)
         obj.params = MagicMock()
