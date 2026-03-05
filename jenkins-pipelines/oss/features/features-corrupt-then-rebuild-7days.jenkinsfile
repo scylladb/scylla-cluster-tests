@@ -6,8 +6,20 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
+<<<<<<< HEAD:jenkins-pipelines/oss/features/features-corrupt-then-rebuild-7days.jenkinsfile
     test_name: 'corrupt_then_rebuild.CorruptThenRebuildTest.test_corrupt_then_rebuild_nodes',
     test_config: 'test-cases/features/corrupt-then-rebuild.yaml',
 
     timeout: [time: 10080, unit: 'MINUTES']
+||||||| parent of 0373951d6 (fix(jenkins-pipeline): missing comma in vnodes pipeline for Gemini):jenkins-pipelines/oss/vnodes/tier1/gemini-1tb-10h.jenkinsfile
+    test_name: 'gemini_test.GeminiTest.test_load_random_with_nemesis',
+    test_config: '''["test-cases/gemini/gemini-1tb-10h.yaml", "configurations/tablets_disabled.yaml"]'''
+
+
+    email_recipients: 'qa@scylladb.com'
+=======
+    test_name: 'gemini_test.GeminiTest.test_load_random_with_nemesis',
+    test_config: '''["test-cases/gemini/gemini-1tb-10h.yaml", "configurations/tablets_disabled.yaml"]''',
+    email_recipients: 'qa@scylladb.com',
+>>>>>>> 0373951d6 (fix(jenkins-pipeline): missing comma in vnodes pipeline for Gemini):jenkins-pipelines/oss/vnodes/tier1/gemini-1tb-10h.jenkinsfile
 )
