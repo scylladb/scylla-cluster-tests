@@ -454,7 +454,6 @@ class GCECluster(cluster.BaseCluster):
         return instances
 
     def _create_node(self, instance, node_index, dc_idx, rack):
-        node = None
         try:
             node = GCENode(
                 gce_instance=instance,
@@ -472,13 +471,6 @@ class GCECluster(cluster.BaseCluster):
             node.init()
             return node
         except Exception as ex:  # noqa: BLE001
-            if node is not None:
-                self.log.error("Failed to initialize node %s, collecting logs and terminating", node.name)
-                try:
-                    # Pass scylla_shards=0 to avoid SSH calls on a node that may not have a working connection
-                    self.terminate_node(node, scylla_shards=0)
-                except Exception:  # noqa: BLE001
-                    self.log.error("Failed to terminate node %s after init failure", node.name)
             raise CreateGCENodeError("Failed to create node: %s" % ex) from ex
 
     @mark_new_nodes_as_running_nemesis

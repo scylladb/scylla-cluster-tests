@@ -532,16 +532,7 @@ class AWSCluster(cluster.BaseCluster):
             dc_idx=dc_idx,
             rack=rack,
         )
-        try:
-            node.init()
-        except Exception:  # noqa: BLE001
-            self.log.error("Failed to initialize node %s, collecting logs and terminating", node.name)
-            try:
-                # Pass scylla_shards=0 to avoid SSH calls on a node that may not have a working connection
-                self.terminate_node(node, scylla_shards=0)
-            except Exception:  # noqa: BLE001
-                self.log.error("Failed to terminate node %s after init failure", node.name)
-            raise
+        node.init()
         return node
 
 
