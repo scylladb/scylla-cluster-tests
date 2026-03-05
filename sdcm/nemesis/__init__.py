@@ -4627,7 +4627,7 @@ class NemesisRunner:
 
     @latency_calculator_decorator(legend="Adding new nodes")
     def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:
-        nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type)
+        nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type, timeout=96000)
         self.actions_log.info(f"New nodes added: {', '.join(node.name for node in nodes)}")
         wait_no_tablets_migration_running(nodes[0])
         return nodes
@@ -4701,14 +4701,15 @@ class NemesisRunner:
         if not self.has_steady_run and sleep_time_between_ops:
             self.steady_state_latency()
             self.has_steady_run = True
-        new_nodes = self._grow_cluster(rack=None)
+        self._grow_cluster(rack=None)
+        # new_nodes = self._grow_cluster(rack=None)
 
-        # pass on the exact nodes only if we have specific types for them
-        new_nodes = new_nodes if self.tester.params.get("nemesis_grow_shrink_instance_type") else None
-        if duration := self.tester.params.get("nemesis_double_load_during_grow_shrink_duration"):
-            with self.action_log_scope("Double load after grow cluster"):
-                self._double_cluster_load(duration)
-        self._shrink_cluster(rack=None, new_nodes=new_nodes)
+        # # pass on the exact nodes only if we have specific types for them
+        # new_nodes = new_nodes if self.tester.params.get("nemesis_grow_shrink_instance_type") else None
+        # if duration := self.tester.params.get("nemesis_double_load_during_grow_shrink_duration"):
+        #     with self.action_log_scope("Double load after grow cluster"):
+        #         self._double_cluster_load(duration)
+        # self._shrink_cluster(rack=None, new_nodes=new_nodes)
 
     # NOTE: version limitation is caused by the following:
     #       - https://github.com/scylladb/scylla-enterprise/issues/3211
@@ -5649,6 +5650,53 @@ class NemesisRunner:
                 ):
                     self.actions_log.info(f"Drop {index_name} index")
                     drop_index(session, ks, index_name)
+
+    def disrupt_create_materialized_view(self):
+        """
+        Create a Materialized view on an existing table.
+        Wait until it gets build. Then verify it can be used in a query. Finally, drop the MV.
+        """
+
+        free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
+        if not free_nodes:
+            raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
+        cql_query_executor_node = random.choice(free_nodes)
+        with self.node_allocator.nodes_running_nemesis(cql_query_executor_node, self.current_disruption):
+            ks_cfs = self.cluster.get_non_system_ks_cf_list(
+                db_node=cql_query_executor_node,
+                filter_empty_tables=True,
+                filter_out_mv=True,
+                filter_out_table_with_counter=True,
+            )
+            if not ks_cfs:
+                raise UnsupportedNemesis("Non-system keyspace and table are not found. nemesis can't be run")
+            ks_name, base_table_name = random.choice(ks_cfs).split(".")
+            view_name = f"{base_table_name}_view"
+
+            with self.cluster.cql_connection_patient(node=cql_query_executor_node, connect_timeout=600) as session:
+                try:
+                    create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
+                except Exception as error:
+                    self.log.warning("Failed creating a materialized view: %s", error)
+                    raise
+                try:
+                    with (
+                        adaptive_timeout(
+                            operation=Operations.CREATE_MV, node=self.target_node, timeout=14400
+                        ) as timeout,
+                        self.action_log_scope(
+                            f"Wait for {ks_name}.{view_name} materialized view to be built on "
+                            f"{self.target_node.name} node"
+                        ),
+                    ):
+                        wait_for_view_to_be_built(self.target_node, ks_name, view_name, timeout=timeout * 2)
+                    session.execute(SimpleStatement(f"SELECT * FROM {ks_name}.{view_name} limit 1", fetch_size=10))
+                    sleep_for_percent_of_duration(
+                        self.tester.test_duration * 60, percent=1, min_duration=300, max_duration=2400
+                    )
+                finally:
+                    with self.action_log_scope("Drop materialized view"):
+                        drop_materialized_view(session, ks_name, view_name)
 
     def disrupt_add_remove_mv(self):
         """

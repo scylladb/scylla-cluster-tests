@@ -19,6 +19,7 @@ import string
 import tempfile
 import itertools
 import contextlib
+import time
 from typing import List, Dict
 
 import yaml
@@ -40,6 +41,7 @@ from sdcm.utils.operations_thread import ThreadParams
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.sct_events import Severity
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
+from sdcm.utils.raft.common import get_topology_coordinator_node
 
 
 class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
@@ -590,3 +592,64 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 params_list.append(params)
 
         return params_list
+
+
+class LongevityTestReproduce(LongevityTest):
+    """
+    This class is used for reproducing longevity test failures. It inherits from LongevityTest and can override any of its methods if needed.
+    """
+
+    def test_custom_time(self):  # noqa: PLR0914
+        """
+        Run cassandra-stress with params defined in data_dir/scylla.yaml
+        """
+
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
+
+        self.download_artifacts_from_s3()
+
+        # stress_queue = []
+
+        # prepare write workload
+        # prepare_write_cmd = self.params.get("prepare_write_cmd")
+        # keyspace_num = self.params.get("keyspace_num")
+
+        self.pre_create_alternator_tables()
+
+        self.run_pre_create_keyspace()
+        self.run_pre_create_schema()
+
+        self.kafka_configure()
+
+        if scan_operation_params := self._get_scan_operation_params():
+            for scan_param in scan_operation_params:
+                self.log.info("Starting fullscan operation thread with the following params: %s", scan_param)
+                self.run_fullscan_thread(
+                    fullscan_params=scan_param, thread_name=str(scan_operation_params.index(scan_param))
+                )
+
+        if tombstone_gc_verification_params := self._get_tombstone_gc_verification_params():
+            self.run_tombstone_gc_verification_thread(**tombstone_gc_verification_params)
+
+        self.run_prepare_write_cmd()
+
+        with self.db_cluster.cql_connection_patient(node=self.db_cluster.data_nodes[0]) as session:
+            query = "CREATE KEYSPACE ks1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 1} and tablets = {'enabled': false};"
+            session.execute(query)
+            query = "CREATE TABLE ks1.table1 (id int primary key, val int);"
+            session.execute(query)
+            self.log.info("Pre-created table ks1.table1")
+            self.log.info("Send single request to trigger bootstrap hanging")
+            session.execute("INSERT INTO ks1.table1 (id, val) VALUES (1, 1);")
+        self.log.info("Waiting for 3 minutes and start bootstrap")
+        time.sleep(180)
+
+        self.log.info("Start bootstrap new node")
+        new_nodes = self.db_cluster.add_nodes(count=1, enable_auto_bootstrap=True)
+        self.monitors.reconfigure_scylla_monitoring()
+        up_timeout = 86400
+        coordinator_node = get_topology_coordinator_node(self.db_cluster.nodes[0])
+        self.log.info("Coordinator node for bootstrap is: %s", coordinator_node.name)
+        with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.nodes[0], timeout=up_timeout):
+            self.db_cluster.wait_for_init(node_list=new_nodes, timeout=up_timeout, check_node_health=False)
+        self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes, timeout=up_timeout)
