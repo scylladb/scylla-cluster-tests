@@ -305,7 +305,6 @@ class NemesisRunner:
         self.stats = {}
         self.nemesis_selector = nemesis_selector
         self.last_nemesis_event = None  # Track last nemesis event for this nemesis instance
-        self._current_nemesis_name = None  # Name of the nemesis being currently executed
         # NOTE: 'cluster_index' is set in K8S multitenant case
         if hasattr(self.tester, "cluster_index"):
             tenant_short_name = f"db{self.tester.cluster_index}"
@@ -430,9 +429,7 @@ class NemesisRunner:
         if interval:
             self.interval = interval * 60
         self.log.info("Interval: %s s", self.interval)
-        total_consecutive_skips = 0
-        same_nemesis_consecutive_skips = 0
-        last_skipped_nemesis_name = None
+        consecutive_skips = []
         try:
             while not self.termination_event.is_set():
                 if cycles_count == 0:
@@ -442,32 +439,24 @@ class NemesisRunner:
                 cur_interval = self.interval
                 try:
                     self.call_next_nemesis()
-                    total_consecutive_skips = 0
-                    same_nemesis_consecutive_skips = 0
-                    last_skipped_nemesis_name = None
+                    consecutive_skips.clear()
                 except (UnsupportedNemesis, MethodVersionNotFound) as exc:
-                    nemesis_name = self._current_nemesis_name
-                    self.log.warning("Skipping unsupported nemesis %s: %s", nemesis_name, exc)
-                    total_consecutive_skips += 1
-                    if nemesis_name == last_skipped_nemesis_name:
-                        same_nemesis_consecutive_skips += 1
-                    else:
-                        same_nemesis_consecutive_skips = 1
-                        last_skipped_nemesis_name = nemesis_name
-                    if same_nemesis_consecutive_skips >= 3:
+                    self.log.warning("Skipping unsupported nemesis %s: %s", self.current_disruption, exc)
+                    consecutive_skips.append(self.current_disruption)
+                    if len(self.disruptions_list) == 1 and len(consecutive_skips) >= 3:
                         InfoEvent(
                             message=(
-                                f"Nemesis '{nemesis_name}' has been skipped {same_nemesis_consecutive_skips} times "
-                                f"in a row. Stopping nemesis thread. Reason: {exc}"
+                                f"Nemesis '{self.current_disruption}' has been skipped {len(consecutive_skips)} "
+                                f"times in a row. Stopping nemesis thread. Reason: {exc}"
                             ),
                             severity=Severity.CRITICAL,
                         ).publish()
                         cur_interval = 0
                         break
-                    if total_consecutive_skips >= 50:
+                    if len(consecutive_skips) >= 50:
                         InfoEvent(
                             message=(
-                                f"{total_consecutive_skips} nemesis have been skipped in a row. "
+                                f"{len(consecutive_skips)} nemesis have been skipped in a row. "
                                 f"Stopping nemesis thread."
                             ),
                             severity=Severity.CRITICAL,
@@ -2054,9 +2043,7 @@ class NemesisRunner:
     def call_next_nemesis(self):
         """Calls next nemesis in the order"""
         assert self.disruptions_list, "no nemesis were selected"
-        nemesis = next(self.infinite_cycle)
-        self._current_nemesis_name = nemesis.__class__.__name__
-        self.execute_nemesis(nemesis=nemesis)
+        self.execute_nemesis(nemesis=next(self.infinite_cycle))
 
     # End of Nemesis running code
     @latency_calculator_decorator(legend="Run repair process with nodetool repair", cycle_name="repair_nodetool_repair")
