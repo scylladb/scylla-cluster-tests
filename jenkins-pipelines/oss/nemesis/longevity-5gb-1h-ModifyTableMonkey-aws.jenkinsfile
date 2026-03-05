@@ -6,7 +6,19 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
+<<<<<<< HEAD:jenkins-pipelines/oss/nemesis/longevity-5gb-1h-ModifyTableMonkey-aws.jenkinsfile
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: """['configurations/nemesis/longevity-5gb-1h-nemesis.yaml', 'configurations/nemesis/ModifyTableMonkey.yaml']"""
 
+||||||| parent of 0373951d6 (fix(jenkins-pipeline): missing comma in vnodes pipeline for Gemini):jenkins-pipelines/oss/vnodes/tier1/gemini-1tb-10h.jenkinsfile
+    test_name: 'gemini_test.GeminiTest.test_load_random_with_nemesis',
+    test_config: '''["test-cases/gemini/gemini-1tb-10h.yaml", "configurations/tablets_disabled.yaml"]'''
+
+
+    email_recipients: 'qa@scylladb.com'
+=======
+    test_name: 'gemini_test.GeminiTest.test_load_random_with_nemesis',
+    test_config: '''["test-cases/gemini/gemini-1tb-10h.yaml", "configurations/tablets_disabled.yaml"]''',
+    email_recipients: 'qa@scylladb.com',
+>>>>>>> 0373951d6 (fix(jenkins-pipeline): missing comma in vnodes pipeline for Gemini):jenkins-pipelines/oss/vnodes/tier1/gemini-1tb-10h.jenkinsfile
 )
