@@ -353,7 +353,7 @@ def fake_remoter():
 
 
 @pytest.fixture(scope="session", autouse=True)
-def mock_cloud_services(tmp_path_factory):
+def mock_cloud_services(tmp_path_factory, request):
     """Prevent unit tests from making real AWS/GCE/Azure API calls.
 
     This session-scoped fixture mocks cloud service calls that would otherwise
@@ -367,8 +367,14 @@ def mock_cloud_services(tmp_path_factory):
       to check user_credentials_path exists on disk
 
     Session scope ensures mocks are active for module-scoped fixtures too.
-    Integration tests are unaffected — they run in a separate pytest session.
+    Skipped for integration tests (``-m "integration"``) which need real credentials.
     """
+    # Skip mocking for integration tests — they need real cloud credentials
+    markexpr = request.config.getoption("-m", default="")
+    if markexpr and "integration" in markexpr and "not integration" not in markexpr:
+        yield
+        return
+
     # Redirect HOME to a temp directory (inspired by pytest-home) so dummy SSH
     # key files are created there instead of polluting the real home directory.
     # Backend defaults set user_credentials_path to ~/.ssh/scylla_test_id_ed25519
