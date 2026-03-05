@@ -272,7 +272,8 @@ class AzureCluster(cluster.BaseCluster):
             if node is not None:
                 self.log.error("Failed to initialize node %s, collecting logs and terminating", node.name)
                 try:
-                    self.terminate_node(node)
+                    # Pass scylla_shards=0 to avoid SSH calls on a node that may not have a working connection
+                    self.terminate_node(node, scylla_shards=0)
                 except Exception:  # noqa: BLE001
                     self.log.error("Failed to terminate node %s after init failure", node.name)
             raise CreateAzureNodeError("Failed to create node: %s" % ex) from ex
