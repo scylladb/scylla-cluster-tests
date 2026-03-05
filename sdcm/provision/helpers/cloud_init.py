@@ -82,7 +82,12 @@ def log_user_data_scripts_errors(remoter: RemoteCmdRunnerBase) -> bool:
 
 
 def collect_cloud_init_scripts(remoter: RemoteCmdRunnerBase, logdir: str | None) -> None:
-    """Copy cloud-init scripts from /var/lib/sct/cloud-init/ to the node's logdir for investigation."""
+    """Copy cloud-init scripts from /var/lib/sct/cloud-init/ to the node's logdir for investigation.
+
+    Args:
+        remoter: Remote command runner for the node.
+        logdir: Local log directory for the node. If None, collection is skipped.
+    """
     if not logdir:
         LOGGER.debug("No logdir available, skipping cloud-init scripts collection.")
         return
