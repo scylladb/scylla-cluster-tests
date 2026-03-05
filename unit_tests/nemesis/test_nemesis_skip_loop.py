@@ -30,25 +30,30 @@ class TestNemesisRunnerForSkip(NemesisRunner):
         self.nemesis_registry = NemesisRegistry(base_class=TestBaseClass, flag_class=TestBaseClass)
         self._call_count = 0
         self._skip_sequence = []
+        self._nemesis_names = ["TestDisruption"]
 
-    def set_skip_sequence(self, sequence):
+    def set_skip_sequence(self, sequence, nemesis_names=None):
         """Set a repeating sequence of True/False for skip behavior.
 
         True means the nemesis will raise UnsupportedNemesis (skip),
         False means it will succeed.
+        nemesis_names: list of nemesis names to cycle through (default: single name).
         """
         self._skip_sequence = sequence
+        if nemesis_names:
+            self._nemesis_names = nemesis_names
         self._call_count = 0
 
     def call_next_nemesis(self):
         idx = self._call_count % len(self._skip_sequence)
         self._call_count += 1
-        self.current_disruption = f"TestDisruption-{self._call_count:04d}"
+        nemesis_name = self._nemesis_names[idx % len(self._nemesis_names)]
+        self.current_disruption = f"{nemesis_name}-{self._call_count:04d}"
         if self._skip_sequence[idx]:
             raise UnsupportedNemesis("nemesis not supported in this configuration")
 
 
-def make_runner(skip_sequence, num_disruptions=None, params=None):
+def make_runner(skip_sequence, num_disruptions=None, nemesis_names=None, params=None):
     """Helper to create a NemesisRunner with controlled skip behavior."""
     all_params = dict(PARAMS)
     if params:
@@ -59,7 +64,7 @@ def make_runner(skip_sequence, num_disruptions=None, params=None):
     if num_disruptions is None:
         num_disruptions = len(skip_sequence)
     runner.disruptions_list = [MagicMock() for _ in range(num_disruptions)]
-    runner.set_skip_sequence(skip_sequence)
+    runner.set_skip_sequence(skip_sequence, nemesis_names=nemesis_names)
     return runner, termination_event
 
 
@@ -105,7 +110,8 @@ class TestNemesisSkipLoop:
 
     def test_50_consecutive_skips_sends_critical_and_stops(self):
         """When 50 nemesis are skipped in a row, CRITICAL event is published."""
-        runner, _ = make_runner(skip_sequence=[True] * 10, num_disruptions=10)
+        names = [f"Nemesis{i}" for i in range(10)]
+        runner, _ = make_runner(skip_sequence=[True] * 10, num_disruptions=10, nemesis_names=names)
 
         with patch("sdcm.nemesis.InfoEvent") as mock_info_event:
             mock_event_instance = MagicMock()

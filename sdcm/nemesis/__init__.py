@@ -429,7 +429,7 @@ class NemesisRunner:
         if interval:
             self.interval = interval * 60
         self.log.info("Interval: %s s", self.interval)
-        consecutive_skips = []
+        consecutive_skips = {}
         try:
             while not self.termination_event.is_set():
                 if cycles_count == 0:
@@ -442,21 +442,23 @@ class NemesisRunner:
                     consecutive_skips.clear()
                 except (UnsupportedNemesis, MethodVersionNotFound) as exc:
                     self.log.warning("Skipping unsupported nemesis %s: %s", self.current_disruption, exc)
-                    consecutive_skips.append(self.current_disruption)
-                    if len(self.disruptions_list) == 1 and len(consecutive_skips) >= 3:
+                    nemesis_name = self.base_disruption_name
+                    consecutive_skips[nemesis_name] = consecutive_skips.get(nemesis_name, 0) + 1
+                    total_skips = sum(consecutive_skips.values())
+                    if len(self.disruptions_list) == 1 and consecutive_skips[nemesis_name] >= 3:
                         InfoEvent(
                             message=(
-                                f"Nemesis '{self.current_disruption}' has been skipped {len(consecutive_skips)} "
+                                f"Nemesis '{nemesis_name}' has been skipped {consecutive_skips[nemesis_name]} "
                                 f"times in a row. Stopping nemesis thread. Reason: {exc}"
                             ),
                             severity=Severity.CRITICAL,
                         ).publish()
                         cur_interval = 0
                         break
-                    if len(consecutive_skips) >= 50:
+                    if total_skips >= 50:
                         InfoEvent(
                             message=(
-                                f"{len(consecutive_skips)} nemesis have been skipped in a row. "
+                                f"{total_skips} nemesis have been skipped in a row. "
                                 f"Stopping nemesis thread."
                             ),
                             severity=Severity.CRITICAL,
