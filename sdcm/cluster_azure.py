@@ -254,6 +254,7 @@ class AzureCluster(cluster.BaseCluster):
         return nodes
 
     def _create_node(self, instance, node_index, dc_idx, rack):
+        node = None
         try:
             node = AzureNode(
                 azure_instance=instance,
@@ -268,6 +269,12 @@ class AzureCluster(cluster.BaseCluster):
             node.init()
             return node
         except Exception as ex:  # noqa: BLE001
+            if node is not None:
+                self.log.error("Failed to initialize node %s, collecting logs and terminating", node.name)
+                try:
+                    self.terminate_node(node)
+                except Exception:  # noqa: BLE001
+                    self.log.error("Failed to terminate node %s after init failure", node.name)
             raise CreateAzureNodeError("Failed to create node: %s" % ex) from ex
 
     def _create_instances(self, count, dc_idx=0, instance_type=None) -> List[VmInstance]:
