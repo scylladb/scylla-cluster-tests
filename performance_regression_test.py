@@ -298,7 +298,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self.db_cluster.start_nemesis(interval=interval)
         results = self.get_stress_results(queue=stress_queue)
 
-        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.display_results(results, test_name="test_latency" if not nemesis else "test_latency_with_nemesis")
 
     def run_write_workload(self, nemesis=False):
@@ -312,7 +311,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             )
             self.db_cluster.start_nemesis(interval=self.params.get("nemesis_interval"))
         results = self.get_stress_results(queue=stress_queue)
-        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.display_results(results, test_name="test_latency")
 
     def run_mixed_workload(self, nemesis=False):
@@ -326,7 +324,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             )
             self.db_cluster.start_nemesis(interval=self.params.get("nemesis_interval"))
         results = self.get_stress_results(queue=stress_queue)
-        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.display_results(results, test_name="test_latency")
 
     def run_workload(self, stress_cmd, nemesis=False, sub_type=None):
@@ -585,7 +582,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         )
         results = self.get_stress_results(queue=stress_queue)
 
-        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.display_results(results, test_name="test_write")
 
     def test_read(self):
@@ -615,7 +611,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         )
         results = self.get_stress_results(queue=stress_queue)
 
-        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.display_results(results, test_name="test_read")
 
     def test_mixed(self):
@@ -644,7 +639,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         )
         results = self.get_stress_results(queue=stress_queue)
 
-        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.display_results(results, test_name="test_mixed")
 
     def test_latency(self):
@@ -879,28 +873,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         results = self.get_stress_results_bench(queue=stress_queue)
         self.display_results(results, test_name="test_timeseries_read_bench")
         self.kill_stress_thread()
-
-    def build_histogram(self, workload: str, hdr_tags: list):
-        if not self.params["use_hdrhistogram"]:
-            return
-
-        self.log.debug(f"building histograms for tags {hdr_tags}")
-        start_time = self.get_test_start_time() or self.start_time
-        end_time = time.time()
-
-        histogram_total_data = self.get_hdrhistogram(
-            hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time
-        )
-        self.update_hdrhistograms(histogram_name="test_histogram", histogram_data=histogram_total_data)
-
-        histogram_data_by_interval = self.get_hdrhistogram_by_interval(
-            hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time
-        )
-
-        self.update_hdrhistograms(
-            histogram_name="test_histogram_by_interval", histogram_data=histogram_data_by_interval
-        )
-        self.log.debug(f"building histograms for tags {hdr_tags} completed")
 
 
 class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):

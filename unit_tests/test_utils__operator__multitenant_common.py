@@ -20,15 +20,6 @@ from sdcm.utils.operator.multitenant_common import get_tenants
 
 
 class FakeTestBase:
-    def _init_stats(self):
-        pass
-
-    def create_test_stats(self):
-        pass
-
-    def get_test_start_time(self):
-        pass
-
     def _init_test_timeout_thread(self):
         pass
 
