@@ -66,7 +66,13 @@ class TestDownloadDir(unittest.TestCase):
         def touch_file(client, bucket, key, local_file_path):
             Path(local_file_path).touch()
 
-        with unittest.mock.patch("sdcm.utils.common._s3_download_file", new=touch_file):
+        with (
+            unittest.mock.patch("sdcm.utils.common._s3_download_file", new=touch_file),
+            unittest.mock.patch("sdcm.utils.common.boto3.client") as mock_s3_client,
+        ):
+            mock_s3_client.return_value.list_objects_v2.return_value = {
+                "Contents": [{"Key": "rpm/centos/scylladb-nightly/scylla/7/x86_64/repodata/repomd.xml"}]
+            }
             update_db_packages = download_dir_from_cloud(sct_update_db_packages)
 
         assert os.path.exists(os.path.join(update_db_packages, "repomd.xml"))
@@ -84,8 +90,11 @@ class TestDownloadDir(unittest.TestCase):
 
         self.clear_cloud_downloaded_path(sct_update_db_packages)
         test_file_names = ["sct_test/", "sct_test/bentsi.txt", "sct_test/charybdis.fs"]
+        fake_client = unittest.mock.MagicMock()
+        fake_client.list_blobs.return_value = [FakeObject(name=fname) for fname in test_file_names]
         with unittest.mock.patch(
-            "google.cloud.storage.Client.list_blobs", return_value=[FakeObject(name=fname) for fname in test_file_names]
+            "sdcm.utils.common.get_gce_storage_client",
+            return_value=(fake_client, {}),
         ):
             update_db_packages = download_dir_from_cloud(sct_update_db_packages)
         for fname in test_file_names:
