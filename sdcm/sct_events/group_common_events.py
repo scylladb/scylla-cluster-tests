@@ -460,14 +460,6 @@ def ignore_raft_topology_cmd_failing():
             EventsSeverityChangerFilter(
                 new_severity=Severity.WARNING,
                 event_class=DatabaseLogEvent,
-                regex=r".*raft_topology - topology change coordinator fiber got error.*connection is closed",
-                extra_time_to_expiration=30,
-            )
-        )
-        stack.enter_context(
-            EventsSeverityChangerFilter(
-                new_severity=Severity.WARNING,
-                event_class=DatabaseLogEvent,
                 regex=r".*raft_topology - topology change coordinator fiber got error.*failed status returned from",
                 extra_time_to_expiration=30,
             )
