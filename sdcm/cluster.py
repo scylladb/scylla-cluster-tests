@@ -293,6 +293,30 @@ class TokenRingMember:
         return getattr(self, item)
 
 
+def terminate_on_failure(func):
+    """Decorator for node init() that terminates the node if initialization fails.
+
+    If initialization raises, the node's parent_cluster.terminate_node() is called
+    (which collects logs and destroys the cloud instance) before re-raising.
+    scylla_shards=0 is passed to avoid SSH calls on a node that never completed init.
+    """
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except Exception:  # noqa: BLE001
+            if self.parent_cluster:
+                self.log.error("Failed to initialize node %s, collecting logs and terminating", self.name)
+                try:
+                    self.parent_cluster.terminate_node(self, scylla_shards=0)
+                except Exception:  # noqa: BLE001
+                    self.log.error("Failed to terminate node %s after init failure", self.name)
+            raise
+
+    return wrapper
+
+
 class BaseNode(AutoSshContainerMixin):
     CQL_PORT = 9042
     CQL_SSL_PORT = 9142
