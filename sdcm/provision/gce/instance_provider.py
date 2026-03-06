@@ -203,7 +203,7 @@ class VirtualMachineProvider:
         """Build instance configuration and initiate creation (non-blocking)."""
         # Disk configuration based on machine type
         is_z3 = "z3-highmem" in definition.type
-        root_disk_type = "hyperdisk-balanced" if is_z3 else DISK_TYPE_PD_STANDARD
+        root_disk_type = "hyperdisk-balanced" if is_z3 else (definition.root_disk_type or DISK_TYPE_PD_STANDARD)
         data_disks = (
             [d for d in (definition.data_disks or []) if d.type != DISK_TYPE_LOCAL_SSD]
             if is_z3
