@@ -29,7 +29,7 @@ class PerformanceRegressionManagerBackupTest(PerformanceRegressionTest, ManagerT
 
     def test_stress_steady_state(self, stress_cmd: str):
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
-        time.sleep(60)  # postpone measure steady state latency to skip c-s start period when latency is high
+        time.sleep(300)  # postpone measure steady state latency to skip c-s start period when latency is high
         self.steady_state_latency(hdr_tags=stress_queue.hdr_tags, sleep_time=30 * 60)  # 30 minutes
         with EventsSeverityChangerFilter(
             new_severity=Severity.NORMAL, event_class=CassandraStressEvent, extra_time_to_expiration=60
