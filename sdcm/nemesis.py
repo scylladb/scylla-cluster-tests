@@ -4143,6 +4143,7 @@ class Nemesis(NemesisFlags):
             text=f"Wait other nodes see {node_to_remove.name} as DOWN...",
         )
 
+        @decorate_with_context(ignore_raft_topology_cmd_failing)
         @retrying(n=3, sleep_time=5, message="Removing node from cluster...")
         def remove_node():
             removenode_reject_msg = r"Rejected removenode operation.*the node being removed is alive"
