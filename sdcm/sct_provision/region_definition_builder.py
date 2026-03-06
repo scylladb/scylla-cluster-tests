@@ -57,6 +57,7 @@ class ConfigParamsMap:
     user_name: str
     root_disk_size: str
     local_ssd_count: str | None = None  # Maps to gce_n_local_ssd_disk_* parameters
+    root_disk_type: str | None = None  # Maps to gce_root_disk_type_* parameters
 
 
 class DefinitionBuilder(abc.ABC):
@@ -133,6 +134,7 @@ class DefinitionBuilder(abc.ABC):
             type=instance_type or self.params.get(mapper.type),
             user_name=self.params.get(mapper.user_name),
             root_disk_size=self.params.get(mapper.root_disk_size),
+            root_disk_type=self.params.get(mapper.root_disk_type) if mapper.root_disk_type else None,
             data_disks=data_disks or None,
             tags=tags,
             ssh_key=self._get_ssh_key(),

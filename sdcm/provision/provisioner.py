@@ -49,6 +49,7 @@ class InstanceDefinition:
     tags: Dict[str, str] = field(default_factory=dict)
     arch: VmArch = VmArch.X86
     root_disk_size: int | None = None
+    root_disk_type: str | None = None
     data_disks: List[DataDisk] | None = None
     user_data: List[UserDataObject] | None = field(
         default_factory=list, repr=False
