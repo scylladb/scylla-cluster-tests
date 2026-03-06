@@ -40,7 +40,6 @@
 | MgmtCorruptThenRepair | Skipped | Currently the backend can't run manager server
 | MgmtRepair | Skipped | Currently the backend can't run manager server
 | MgmtRestore | Skipped | Currently the backend can't run manager server
-| ModifyTableMonkey | Pass |
 | MultipleHardRebootNodeMonkey | Skipped | Backend doesn't support hard reboot
 | NemesisSequence | Pass |
 | NoCorruptRepairMonkey | Pass |

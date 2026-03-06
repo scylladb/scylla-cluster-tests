@@ -1,10 +1,22 @@
+"""
+Module containing logic for generating nemesis related files
+Generates nemesis.yaml and nemesis_classes.yml, which serve as a list of current disruptions
+Generates configs/pipelines for each nemesis
+
+"""
+
+import logging
+from functools import cached_property
 from pathlib import Path
 
 import yaml
+import logging
+from functools import cached_property
 from jinja2 import Template
 
-from sdcm import sct_abs_path
-from sdcm.nemesis import *
+from sdcm import sct_abs_path, nemesis
+from sdcm.nemesis import NemesisBaseClass, NemesisFlags
+from sdcm.nemesis.registry import NemesisRegistry
 
 DEFAULT_JOB_NAME = "longevity-5gb-1h"
 TEST_CASE_TEMPLATE_DIR = "test_config"
@@ -15,9 +27,9 @@ LOGGER = logging.getLogger(__name__)
 
 def generate_nemesis_yaml(file_opener=open):
     """Generates both nemesis.yaml and nemesis_classes.yml"""
-    registry = NemesisRegistry(Nemesis, NemesisFlags, COMPLEX_NEMESIS)
-    class_properties, method_properties = registry.gather_properties()
-    sorted_dict = dict(sorted(method_properties.items(), key=lambda d: d[0]))
+    registry = NemesisRegistry(NemesisBaseClass, flag_class=NemesisFlags)
+    class_properties = registry.gather_properties()
+    sorted_dict = dict(sorted(class_properties.items(), key=lambda d: d[0]))
     with file_opener(sct_abs_path("data_dir/nemesis.yml"), "w", encoding="utf-8") as outfile1:
         yaml.dump(sorted_dict, outfile1, default_flow_style=False)
 
@@ -100,7 +112,7 @@ class NemesisJobGenerator:
 
     def create_job_files_from_template(self):
         for cls in self.nemesis_class_list:
-            clazz = globals()[cls]
+            clazz = getattr(nemesis, cls)
             additional_configs = clazz.additional_configs or []
             additional_params = clazz.additional_params or {}
             for backend in self.backends:

@@ -1,4 +1,4 @@
-disrupt_abort_repair:
+AbortRepairMonkey:
   config_changes: false
   delete_rows: false
   disruptive: false
@@ -7,6 +7,7 @@ disrupt_abort_repair:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -14,7 +15,7 @@ disrupt_abort_repair:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_add_drop_column:
+AddDropColumnMonkey:
   config_changes: false
   delete_rows: false
   disruptive: false
@@ -23,14 +24,15 @@ disrupt_add_drop_column:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_add_remove_dc:
+AddRemoveDcNemesis:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -39,14 +41,15 @@ disrupt_add_remove_dc:
   kubernetes: false
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
   topology_changes: true
   zero_node_changes: false
-disrupt_add_remove_mv:
+AddRemoveMvNemesis:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -55,6 +58,7 @@ disrupt_add_remove_mv:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -62,7 +66,41 @@ disrupt_add_remove_mv:
   supports_high_disk_utilization: false
   topology_changes: false
   zero_node_changes: false
-disrupt_bootstrap_streaming_error:
+AddRemoveRackNemesis:
+  config_changes: true
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+BlockNetworkMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: true
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+BootstrapStreamingErrorNemesis:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -71,6 +109,7 @@ disrupt_bootstrap_streaming_error:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -78,23 +117,7 @@ disrupt_bootstrap_streaming_error:
   supports_high_disk_utilization: true
   topology_changes: true
   zero_node_changes: false
-disrupt_corrupt_then_scrub:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: false
-  topology_changes: false
-  zero_node_changes: false
-disrupt_create_index:
+CDCStressorMonkey:
   config_changes: false
   delete_rows: false
   disruptive: false
@@ -103,6 +126,109 @@ disrupt_create_index:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ClusterRollingRestart:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ClusterRollingRestartRandomOrder:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+CorruptThenRebuildMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+CorruptThenRepairMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+CorruptThenScrubMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: false
+  topology_changes: false
+  zero_node_changes: false
+CreateIndexNemesis:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -110,7 +236,24 @@ disrupt_create_index:
   supports_high_disk_utilization: false
   topology_changes: false
   zero_node_changes: false
-disrupt_decommission_streaming_err:
+DecommissionMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: true
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: false
+  topology_changes: true
+  zero_node_changes: false
+DecommissionSeedNode:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -119,6 +262,24 @@ disrupt_decommission_streaming_err:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: false
+  topology_changes: true
+  zero_node_changes: false
+DecommissionStreamingErrMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -126,7 +287,7 @@ disrupt_decommission_streaming_err:
   supports_high_disk_utilization: true
   topology_changes: true
   zero_node_changes: false
-disrupt_delete_10_full_partitions:
+DeleteByPartitionsMonkey:
   config_changes: false
   delete_rows: true
   disruptive: false
@@ -135,6 +296,7 @@ disrupt_delete_10_full_partitions:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -142,7 +304,7 @@ disrupt_delete_10_full_partitions:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_delete_by_rows_range:
+DeleteByRowsRangeMonkey:
   config_changes: false
   delete_rows: true
   disruptive: false
@@ -151,6 +313,7 @@ disrupt_delete_by_rows_range:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -158,7 +321,7 @@ disrupt_delete_by_rows_range:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_delete_overlapping_row_ranges:
+DeleteOverlappingRowRangesMonkey:
   config_changes: false
   delete_rows: true
   disruptive: false
@@ -167,6 +330,7 @@ disrupt_delete_overlapping_row_ranges:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -174,7 +338,7 @@ disrupt_delete_overlapping_row_ranges:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_destroy_data_then_rebuild:
+DisableBinaryGossipExecuteMajorCompaction:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -183,6 +347,7 @@ disrupt_destroy_data_then_rebuild:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -190,7 +355,7 @@ disrupt_destroy_data_then_rebuild:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_destroy_data_then_repair:
+DrainKubernetesNodeThenDecommissionAndAddScyllaNode:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -199,6 +364,7 @@ disrupt_destroy_data_then_repair:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -206,7 +372,7 @@ disrupt_destroy_data_then_repair:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_disable_binary_gossip_execute_major_compaction:
+DrainKubernetesNodeThenReplaceScyllaNode:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -215,6 +381,7 @@ disrupt_disable_binary_gossip_execute_major_compaction:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -222,111 +389,16 @@ disrupt_disable_binary_gossip_execute_major_compaction:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_disable_enable_ldap_authorization:
+DrainerMonkey:
   config_changes: false
   delete_rows: false
   disruptive: true
   free_tier_set: false
   has_steady_run: false
-  kubernetes: false
+  kubernetes: true
   limited: true
   manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_drain_kubernetes_node_then_replace_scylla_node:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_end_of_quota_nemesis:
-  config_changes: true
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_grow_shrink_cluster:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -334,23 +406,7 @@ disrupt_grow_shrink_cluster:
   supports_high_disk_utilization: true
   topology_changes: true
   zero_node_changes: false
-disrupt_grow_shrink_new_rack:
-  config_changes: true
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_grow_shrink_zero_nodes:
+EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -359,6 +415,109 @@ disrupt_grow_shrink_zero_nodes:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+EndOfQuotaNemesis:
+  config_changes: true
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+EnospcAllNodesMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+EnospcMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+GrowShrinkClusterNemesis:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: true
+  zero_node_changes: false
+GrowShrinkZeroTokenNode:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -366,7 +525,7 @@ disrupt_grow_shrink_zero_nodes:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: true
-disrupt_hard_reboot_node:
+HardRebootNodeMonkey:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -375,6 +534,7 @@ disrupt_hard_reboot_node:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -382,23 +542,7 @@ disrupt_hard_reboot_node:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_hot_reloading_internode_certificate:
-  config_changes: true
-  delete_rows: false
-  disruptive: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_increase_shares_by_attach_another_sl_during_load:
+IsolateNodeWithIptableRuleNemesis:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -407,22 +551,7 @@ disrupt_increase_shares_by_attach_another_sl_during_load:
   kubernetes: false
   limited: false
   manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: true
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_kill_mv_building_coordinator:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -430,55 +559,41 @@ disrupt_kill_mv_building_coordinator:
   supports_high_disk_utilization: true
   topology_changes: true
   zero_node_changes: false
-disrupt_kill_scylla:
+IsolateNodeWithProcessSignalNemesis:
   config_changes: false
   delete_rows: false
   disruptive: true
-  free_tier_set: true
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_ldap_connection_toggle:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
-  limited: true
+  limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
-  topology_changes: false
+  topology_changes: true
   zero_node_changes: false
-disrupt_load_and_stream:
+KillMVBuildingCoordinator:
   config_changes: false
   delete_rows: false
-  disruptive: false
+  disruptive: true
   free_tier_set: false
   has_steady_run: false
-  kubernetes: true
-  limited: true
+  kubernetes: false
+  limited: false
   manager_operation: false
+  modify_table: false
   networking: false
-  run_with_gemini: false
+  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
-  topology_changes: false
+  topology_changes: true
   zero_node_changes: false
-disrupt_major_compaction:
+LoadAndStreamMonkey:
   config_changes: false
   delete_rows: false
   disruptive: false
@@ -487,6 +602,7 @@ disrupt_major_compaction:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -494,39 +610,24 @@ disrupt_major_compaction:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_manager_backup:
+MajorCompactionMonkey:
   config_changes: false
   delete_rows: false
   disruptive: false
   free_tier_set: false
   has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: true
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: false
-  topology_changes: false
-  zero_node_changes: false
-disrupt_maximum_allowed_sls_with_max_shares_during_load:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
+  kubernetes: true
+  limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
-  sla: true
+  sla: false
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_memory_stress:
+MemoryStressMonkey:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -535,6 +636,7 @@ disrupt_memory_stress:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -542,7 +644,7 @@ disrupt_memory_stress:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_mgmt_backup:
+MgmtBackup:
   config_changes: false
   delete_rows: false
   disruptive: false
@@ -551,6 +653,7 @@ disrupt_mgmt_backup:
   kubernetes: false
   limited: true
   manager_operation: true
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -558,7 +661,7 @@ disrupt_mgmt_backup:
   supports_high_disk_utilization: false
   topology_changes: false
   zero_node_changes: false
-disrupt_mgmt_backup_specific_keyspaces:
+MgmtBackupSpecificKeyspaces:
   config_changes: false
   delete_rows: false
   disruptive: false
@@ -567,6 +670,7 @@ disrupt_mgmt_backup_specific_keyspaces:
   kubernetes: false
   limited: true
   manager_operation: true
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -574,7 +678,7 @@ disrupt_mgmt_backup_specific_keyspaces:
   supports_high_disk_utilization: false
   topology_changes: false
   zero_node_changes: false
-disrupt_mgmt_corrupt_then_repair:
+MgmtCorruptThenRepair:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -583,6 +687,7 @@ disrupt_mgmt_corrupt_then_repair:
   kubernetes: true
   limited: false
   manager_operation: true
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -590,7 +695,7 @@ disrupt_mgmt_corrupt_then_repair:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_mgmt_repair_cli:
+MgmtRepair:
   config_changes: false
   delete_rows: false
   disruptive: false
@@ -599,6 +704,7 @@ disrupt_mgmt_repair_cli:
   kubernetes: true
   limited: true
   manager_operation: true
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -606,7 +712,7 @@ disrupt_mgmt_repair_cli:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_mgmt_restore:
+MgmtRestore:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -615,6 +721,7 @@ disrupt_mgmt_restore:
   kubernetes: true
   limited: true
   manager_operation: true
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -622,7 +729,7 @@ disrupt_mgmt_restore:
   supports_high_disk_utilization: false
   topology_changes: false
   zero_node_changes: false
-disrupt_modify_table:
+ModifyTableBloomFilterFpChanceMonkey:
   config_changes: false
   delete_rows: false
   disruptive: false
@@ -631,6 +738,7 @@ disrupt_modify_table:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -638,584 +746,228 @@ disrupt_modify_table:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_multiple_hard_reboot_node:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: true
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_network_block:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: true
-  run_with_gemini: false
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_network_random_interruptions:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: true
-  run_with_gemini: false
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_network_reject_inter_node_communication:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: true
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: true
-  run_with_gemini: false
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_network_reject_node_exporter:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: true
-  run_with_gemini: false
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_network_reject_thrift:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: true
-  run_with_gemini: false
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_network_start_stop_interface:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: true
-  run_with_gemini: false
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_no_corrupt_repair:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: true
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_nodetool_cleanup:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: true
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_nodetool_decommission:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: true
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: false
-  topology_changes: true
-  zero_node_changes: false
-disrupt_nodetool_drain:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: true
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: true
-  zero_node_changes: false
-disrupt_nodetool_enospc:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_nodetool_flush_and_reshard_on_kubernetes:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_nodetool_refresh:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: false
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_nodetool_seed_decommission:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: false
-  topology_changes: true
-  zero_node_changes: false
-disrupt_rebuild_streaming_err:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_refuse_connection_with_block_scylla_ports_on_banned_node:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: true
-  zero_node_changes: false
-disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: true
-  zero_node_changes: false
-disrupt_remove_node_then_add_node:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: false
-  topology_changes: true
-  zero_node_changes: false
-disrupt_remove_service_level_while_load:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: true
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_repair_streaming_err:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_replace_scylla_node_on_kubernetes:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: true
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_replace_service_level_using_detach_during_load:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: true
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_replace_service_level_using_drop_during_load:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: true
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_resetlocalschema:
-  config_changes: true
-  delete_rows: false
-  disruptive: false
-  free_tier_set: true
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_restart_then_repair_node:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_restart_with_resharding:
-  config_changes: true
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: true
-  zero_node_changes: false
-disrupt_rolling_config_change_internode_compression:
-  config_changes: true
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  full_cluster_restart: true
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_rolling_restart_cluster:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: true
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_run_cdcstressor_tool:
+ModifyTableCachingMonkey:
   config_changes: false
   delete_rows: false
   disruptive: false
   free_tier_set: true
   has_steady_run: false
-  kubernetes: false
-  limited: false
+  kubernetes: true
+  limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
-  schema_changes: false
+  schema_changes: true
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_run_unique_sequence:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: false
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_serial_restart_elected_topology_coordinator:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: true
-  zero_node_changes: false
-disrupt_show_toppartitions:
+ModifyTableCommentMonkey:
   config_changes: false
   delete_rows: false
   disruptive: false
-  free_tier_set: false
+  free_tier_set: true
   has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
-  schema_changes: false
+  schema_changes: true
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_sla_decrease_shares_during_load:
+ModifyTableCompactionMonkey:
   config_changes: false
   delete_rows: false
   disruptive: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: true
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_sla_increase_shares_during_load:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: true
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_snapshot_operations:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: false
+  free_tier_set: true
   has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
   networking: false
   run_with_gemini: true
-  schema_changes: false
+  schema_changes: true
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_soft_reboot_node:
+ModifyTableCompressionMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  run_with_gemini: true
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ModifyTableCrcCheckChanceMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  run_with_gemini: true
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ModifyTableDclocalReadRepairChanceMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  run_with_gemini: true
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ModifyTableDefaultTimeToLiveMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  run_with_gemini: true
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ModifyTableGcGraceTimeMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  run_with_gemini: true
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ModifyTableMaxIndexIntervalMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  run_with_gemini: true
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ModifyTableMemtableFlushPeriodInMsMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  run_with_gemini: true
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ModifyTableMinIndexIntervalMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  run_with_gemini: true
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ModifyTableReadRepairChanceMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  run_with_gemini: true
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ModifyTableSpeculativeRetryMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: true
+  networking: false
+  run_with_gemini: true
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ModifyTableTwcsWindowSizeMonkey:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -1224,6 +976,24 @@ disrupt_soft_reboot_node:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: true
+  networking: false
+  run_with_gemini: true
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+MultipleHardRebootNodeMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1231,79 +1001,16 @@ disrupt_soft_reboot_node:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_start_stop_cleanup_compaction:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_start_stop_major_compaction:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_start_stop_scrub_compaction:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_start_stop_validation_compaction:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: false
-  topology_changes: false
-  zero_node_changes: false
-disrupt_stop_start_scylla_server:
+NemesisSequence:
   config_changes: false
   delete_rows: false
   disruptive: true
   free_tier_set: false
   has_steady_run: false
-  kubernetes: true
-  limited: true
+  kubernetes: false
+  limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1311,23 +1018,24 @@ disrupt_stop_start_scylla_server:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_stop_wait_start_scylla_server:
+NoCorruptRepairMonkey:
   config_changes: false
   delete_rows: false
-  disruptive: true
+  disruptive: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
   topology_changes: false
-  zero_node_changes: true
-disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back:
+  zero_node_changes: false
+NodeRestartWithResharding:
   config_changes: true
   delete_rows: false
   disruptive: true
@@ -1336,14 +1044,15 @@ disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_ba
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
-  topology_changes: false
+  topology_changes: true
   zero_node_changes: false
-disrupt_terminate_and_replace_node:
+NodeTerminateAndReplace:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -1352,6 +1061,7 @@ disrupt_terminate_and_replace_node:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1359,7 +1069,41 @@ disrupt_terminate_and_replace_node:
   supports_high_disk_utilization: true
   topology_changes: true
   zero_node_changes: true
-disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node:
+NodeToolCleanupMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+OperatorNodeReplace:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+OperatorNodetoolFlushAndReshard:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -1368,6 +1112,7 @@ disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1375,7 +1120,24 @@ disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_terminate_kubernetes_host_then_replace_scylla_node:
+PauseLdapNemesis:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: true
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+RandomInterruptionNetworkMonkey:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -1384,6 +1146,24 @@ disrupt_terminate_kubernetes_host_then_replace_scylla_node:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
+  networking: true
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+RebuildStreamingErrMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1391,7 +1171,551 @@ disrupt_terminate_kubernetes_host_then_replace_scylla_node:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_toggle_audit_syslog:
+RefreshBigMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+RefreshMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+RejectInterNodeNetworkMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: true
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+RejectNodeExporterNetworkMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: true
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+RejectThriftNetworkMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: true
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+RemoveServiceLevelMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: true
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+RepairStreamingErrMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ResetLocalSchemaMonkey:
+  config_changes: true
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+RestartThenRepairNodeMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+RollingRestartConfigChangeInternodeCompression:
+  config_changes: true
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ScyllaKillMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+SerialRestartOfElectedTopologyCoordinatorNemesis:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: true
+  zero_node_changes: false
+SlaDecreaseSharesDuringLoad:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: true
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+SlaIncreaseSharesByAttachAnotherSlDuringLoad:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: true
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+SlaIncreaseSharesDuringLoad:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: true
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+SlaMaximumAllowedSlsWithMaxSharesDuringLoad:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: true
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+SlaReplaceUsingDetachDuringLoad:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: true
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+SlaReplaceUsingDropDuringLoad:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: true
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+SnapshotOperations:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+SoftRebootNodeMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+SslHotReloadingNemesis:
+  config_changes: true
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+StartStopCleanupCompaction:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+StartStopMajorCompaction:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+StartStopScrubCompaction:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+StartStopValidationCompaction:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: false
+  topology_changes: false
+  zero_node_changes: false
+StopStartInterfacesNetworkMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: true
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+StopStartMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+StopWaitStartMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: true
+SwitchBetweenPasswordAuthAndSaslauthdAuth:
+  config_changes: true
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+TerminateAndRemoveNodeMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: false
+  topology_changes: true
+  zero_node_changes: false
+TerminateKubernetesHostThenDecommissionAndAddScyllaNode:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+TerminateKubernetesHostThenReplaceScyllaNode:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ToggleAuditNemesisSyslog:
   config_changes: true
   delete_rows: false
   disruptive: true
@@ -1400,6 +1724,7 @@ disrupt_toggle_audit_syslog:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -1407,7 +1732,7 @@ disrupt_toggle_audit_syslog:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_toggle_cdc_feature_properties_on_table:
+ToggleCDCMonkey:
   config_changes: true
   delete_rows: false
   disruptive: false
@@ -1416,6 +1741,7 @@ disrupt_toggle_cdc_feature_properties_on_table:
   kubernetes: false
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -1423,7 +1749,7 @@ disrupt_toggle_cdc_feature_properties_on_table:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_toggle_table_gc_mode:
+ToggleGcModeMonkey:
   config_changes: false
   delete_rows: false
   disruptive: false
@@ -1432,6 +1758,7 @@ disrupt_toggle_table_gc_mode:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -1439,7 +1766,24 @@ disrupt_toggle_table_gc_mode:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_toggle_table_ics:
+ToggleLdapConfiguration:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: true
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+ToggleTableIcsMonkey:
   config_changes: false
   delete_rows: false
   disruptive: false
@@ -1448,6 +1792,7 @@ disrupt_toggle_table_ics:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: true
@@ -1455,7 +1800,41 @@ disrupt_toggle_table_ics:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_truncate:
+TopPartitions:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: true
+  limited: true
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+TruncateLargeParititionMonkey:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: true
+  has_steady_run: false
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+TruncateMonkey:
   config_changes: false
   delete_rows: false
   disruptive: false
@@ -1464,6 +1843,7 @@ disrupt_truncate:
   kubernetes: true
   limited: true
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
@@ -1471,23 +1851,7 @@ disrupt_truncate:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_truncate_large_partition:
-  config_changes: false
-  delete_rows: false
-  disruptive: false
-  free_tier_set: true
-  has_steady_run: false
-  kubernetes: true
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  zero_node_changes: false
-disrupt_validate_hh_short_downtime:
+ValidateHintedHandoffShortDowntime:
   config_changes: false
   delete_rows: false
   disruptive: true
@@ -1496,6 +1860,7 @@ disrupt_validate_hh_short_downtime:
   kubernetes: true
   limited: false
   manager_operation: false
+  modify_table: false
   networking: false
   run_with_gemini: true
   schema_changes: false
