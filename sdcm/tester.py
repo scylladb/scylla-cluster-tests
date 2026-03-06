@@ -3802,8 +3802,9 @@ class ClusterTester(unittest.TestCase):
         time.sleep(1)  # Sleep is needed to let events from save_email_data being processed
         self.argus_collect_gemini_results()
         self.destroy_localhost()
-        with silence(parent=self, name="Cleaning up SSL config directory"):
-            cleanup_ssl_config()
+        if not self.test_config.KEEP_ALIVE_DB_NODES:
+            with silence(parent=self, name="Cleaning up SSL config directory"):
+                cleanup_ssl_config()
 
         self.log.info("Test ID: {}".format(self.test_config.test_id()))
 
