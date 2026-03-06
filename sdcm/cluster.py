@@ -469,7 +469,6 @@ class BaseNode(AutoSshContainerMixin):
         # TODO: consider moving this to cloud-init, since it's has nothing todo with scylla
         self.install_package("rsync")
 
-    @terminate_on_failure
     def init(self) -> None:
         if self.logdir:
             os.makedirs(self.logdir, exist_ok=True)
