@@ -26,6 +26,7 @@ db_map = ConfigParamsMap(
     user_name="gce_image_username",
     root_disk_size="root_disk_size_db",
     local_ssd_count="gce_n_local_ssd_disk_db",
+    root_disk_type="gce_root_disk_type_db",
 )
 
 loader_map = ConfigParamsMap(
@@ -34,6 +35,7 @@ loader_map = ConfigParamsMap(
     user_name="gce_image_username",
     root_disk_size="root_disk_size_loader",
     local_ssd_count="gce_n_local_ssd_disk_loader",
+    root_disk_type="gce_root_disk_type_loader",
 )
 
 monitor_map = ConfigParamsMap(
@@ -42,6 +44,7 @@ monitor_map = ConfigParamsMap(
     user_name="gce_image_username",
     root_disk_size="root_disk_size_monitor",
     local_ssd_count="gce_n_local_ssd_disk_monitor",
+    root_disk_type="gce_root_disk_type_monitor",
 )
 
 mapper: Dict[NodeTypeType, ConfigParamsMap] = {
