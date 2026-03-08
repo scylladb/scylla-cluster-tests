@@ -23,7 +23,6 @@ stress_cmd:
     -p fieldcount=2 -p fieldlength=8
     -p insertstart=10049672 -p insertcount=10049672 -p table=usertable_no_lwt -p dynamodb.ttlKey=ttl -p dynamodb.ttlDuration=2160
 
-
 round_robin: true
 
 dynamodb_primarykey_type: HASH_AND_RANGE
@@ -41,14 +40,15 @@ alternator_port: 8080
 alternator_use_dns_routing: true
 docker_network: 'ycsb_net'
 
+# NOTE: authenticator/authorizer settings below are just to ease the test case lint and the validation code
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'
+
 alternator_enforce_authorization: true
 alternator_access_key_id: 'alternator'
 alternator_secret_access_key: 'password'
-
-authenticator: 'PasswordAuthenticator'
-authenticator_user: cassandra
-authenticator_password: cassandra
-authorizer: 'CassandraAuthorizer'
 
 # Set Alternator TTL parameters
 # ---------------------------------------------

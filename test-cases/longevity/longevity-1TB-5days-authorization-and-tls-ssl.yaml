@@ -25,21 +25,14 @@ root_disk_size_runner: 120
 instance_type_loader: 'c6i.4xlarge'
 gce_instance_type_loader: 'c2-standard-16'
 
-
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '031'
 nemesis_interval: 30
-
 
 user_prefix: 'longevity-tls-1tb-7d'
 space_node_threshold: 644245094
 server_encrypt: true
 client_encrypt: true
-
-authenticator: 'PasswordAuthenticator'
-authenticator_user: 'cassandra'
-authenticator_password: 'cassandra'
-authorizer: 'CassandraAuthorizer'
 
 nemesis_during_prepare: false
 use_preinstalled_scylla: true
