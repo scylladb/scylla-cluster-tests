@@ -42,6 +42,10 @@ class SCTProvisionLayout:
         return self._params.get("db_type") == "mixed_scylla"
 
     @property
+    def _provision_destination_cluster(self):
+        return self._params.has_destination_cluster
+
+    @property
     def db_cluster(self):
         return None
 
@@ -55,6 +59,10 @@ class SCTProvisionLayout:
 
     @property
     def cs_db_cluster(self):
+        return None
+
+    @property
+    def destination_db_cluster(self):
         return None
 
     def provision(self):

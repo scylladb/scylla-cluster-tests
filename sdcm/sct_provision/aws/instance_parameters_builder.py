@@ -198,6 +198,12 @@ class OracleScyllaInstanceParamsBuilder(ScyllaInstanceParamsBuilder):
     _ROOT_DISK_SIZE_PARAM_NAME = "root_disk_size_db"
 
 
+class DestinationScyllaInstanceParamsBuilder(ScyllaInstanceParamsBuilder):
+    _INSTANCE_TYPE_PARAM_NAME = "instance_type_db_destination"
+    _IMAGE_ID_PARAM_NAME = "ami_id_db_destination"
+    _ROOT_DISK_SIZE_PARAM_NAME = "root_disk_size_db"
+
+
 class ScyllaZeroTokenParamsBuilder(ScyllaInstanceParamsBuilder):
     _INSTANCE_TYPE_PARAM_NAME = "zero_token_instance_type_db"
 

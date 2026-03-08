@@ -517,6 +517,9 @@ class SCTConfiguration(BaseModel):
     n_test_oracle_db_nodes: IntOrList = SctField(
         description="Number list of oracle test nodes in multiple data centers.",
     )
+    n_db_destination_nodes: IntOrList = SctField(
+        description="Number list of destination cluster database nodes in multiple data centers.",
+    )
     n_loaders: IntOrList = SctField(
         description="Number list of loader nodes in multiple data centers",
     )
@@ -604,6 +607,17 @@ class SCTConfiguration(BaseModel):
         description="""Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'
                  Automatically lookup AMIs for formal versions.
                  WARNING: can't be used together with 'ami_id_db_oracle'""",
+        appendable=False,
+    )
+    destination_scylla_version: String = SctField(
+        description="""Version of scylla to use for the destination cluster, ex. '2024.1'
+                 Automatically lookup AMIs for formal versions.
+                 WARNING: can't be used together with 'ami_id_db_destination'""",
+        appendable=False,
+    )
+    destination_user_data_format_version: String = SctField(
+        description="""Format version of the user-data to use for destination cluster scylla images,
+                       default to what tagged on the image used""",
         appendable=False,
     )
     scylla_linux_distro: String = SctField(
@@ -866,6 +880,9 @@ class SCTConfiguration(BaseModel):
     append_scylla_args_oracle: String = SctField(
         description="More arguments to append to oracle command line",
     )
+    append_scylla_args_destination: String = SctField(
+        description="More arguments to append to destination cluster scylla command line",
+    )
     append_scylla_yaml: DictOrStrOrPydantic = SctField(
         description="More configuration to append to /etc/scylla/scylla.yaml",
     )
@@ -954,6 +971,9 @@ class SCTConfiguration(BaseModel):
     instance_type_db_oracle: String = SctField(
         description="AWS image type of the oracle node",
     )
+    instance_type_db_destination: String = SctField(
+        description="AWS image type of the destination cluster db node",
+    )
     instance_type_runner: String = SctField(
         description="instance type of the sct-runner node",
     )
@@ -979,6 +999,9 @@ class SCTConfiguration(BaseModel):
     )
     ami_id_db_oracle: String = SctField(
         description="AMS AMI id to use for oracle node",
+    )
+    ami_id_db_destination: String = SctField(
+        description="AMS AMI id to use for destination cluster db node",
     )
     ami_id_vector_store: String = SctField(
         description="AMS AMI id to use for vector store node",
@@ -1209,6 +1232,9 @@ class SCTConfiguration(BaseModel):
     )
     azure_instance_type_db_oracle: String = SctField(
         description="The Azure virtual machine size to be used for Oracle database nodes.",
+    )
+    azure_instance_type_db_destination: String = SctField(
+        description="The Azure virtual machine size to be used for destination cluster database nodes.",
     )
     azure_image_db: String = SctField(
         description="The Azure image to be used for database nodes.",
@@ -1746,6 +1772,15 @@ class SCTConfiguration(BaseModel):
     post_behavior_vector_store_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
         description="""
         Failure/post test behavior, i.e. what to do with the vector store cloud instances at the end of the test.
+
+        'destroy' - Destroy instances and credentials (default)
+        'keep' - Keep instances running and leave credentials alone
+        'keep-on-failure' - Keep instances if testrun failed
+        """,
+    )
+    post_behavior_destination_db_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the destination cluster db cloud instances at the end of the test.
 
         'destroy' - Destroy instances and credentials (default)
         'keep' - Keep instances running and leave credentials alone
@@ -2529,6 +2564,37 @@ class SCTConfiguration(BaseModel):
             else:
                 raise ValueError("'oracle_scylla_version' and 'ami_id_db_oracle' can't used together")
 
+        # 6.1.1) handle destination_scylla_version if exists
+        if destination_scylla_version := self.get("destination_scylla_version"):
+            if self.get("ami_id_db_destination") and self.get("cluster_backend") == "aws":
+                raise ValueError("'destination_scylla_version' and 'ami_id_db_destination' can't be used together")
+            if not self.get("ami_id_db_destination") and self.get("cluster_backend") == "aws":
+                ami_list = []
+                for region in region_names:
+                    instance_type = self.get("instance_type_db_destination") or self.get("instance_type_db")
+                    aws_arch = get_arch_from_instance_type(instance_type, region_name=region)
+                    try:
+                        if ":" in destination_scylla_version:
+                            ami = get_branched_ami(
+                                scylla_version=destination_scylla_version, region_name=region, arch=aws_arch
+                            )[0]
+                        else:
+                            ami = get_scylla_ami_versions(
+                                version=destination_scylla_version, region_name=region, arch=aws_arch
+                            )[0]
+                    except Exception as ex:  # noqa: BLE001
+                        raise ValueError(
+                            f"AMIs for destination_scylla_version='{destination_scylla_version}' "
+                            f"not found in {region} arch={aws_arch}"
+                        ) from ex
+
+                    self.log.debug(
+                        "Found AMI %s for destination_scylla_version='%s' in %s",
+                        ami.image_id, destination_scylla_version, region,
+                    )
+                    ami_list.append(ami)
+                self["ami_id_db_destination"] = " ".join(ami.image_id for ami in ami_list)
+
         # 6.2) handle vector_store_version if exists
         if vs_version := self.get("vector_store_version"):
             if self.get("ami_id_vector_store"):
@@ -2857,6 +2923,22 @@ class SCTConfiguration(BaseModel):
     @property
     def environment(self) -> dict:
         return self._load_environment_variables()
+
+    @property
+    def has_destination_cluster(self) -> bool:
+        """Check if a destination cluster is configured for this test.
+
+        Returns True if n_db_destination_nodes is set and greater than 0,
+        indicating a dual-cluster (source/destination) test setup.
+        """
+        n_dest = self.get("n_db_destination_nodes")
+        if n_dest is None:
+            return False
+        if isinstance(n_dest, int):
+            return n_dest > 0
+        if isinstance(n_dest, list):
+            return any(n > 0 for n in n_dest)
+        return False
 
     def get_default_value(self, key, include_backend=False):
         default_config_files = [sct_abs_path("defaults/test_default.yaml")]

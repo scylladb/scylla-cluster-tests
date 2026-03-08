@@ -29,6 +29,7 @@ from sdcm.sct_provision.aws.instance_parameters_builder import (
     LoaderInstanceParamsBuilder,
     MonitorInstanceParamsBuilder,
     OracleScyllaInstanceParamsBuilder,
+    DestinationScyllaInstanceParamsBuilder,
     ScyllaZeroTokenParamsBuilder,
 )
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder, AWSInstanceUserDataBuilder
@@ -380,6 +381,25 @@ class OracleDBCluster(ClusterBase):
             params=self.params,
             cluster_name=self.cluster_name,
             user_data_format_version=self.params.get("oracle_user_data_format_version"),
+            syslog_host_port=self._test_config.get_logging_service_host_port(),
+            test_config=self._test_config,
+        ).to_string()
+
+
+class DestinationDBCluster(ClusterBase):
+    _NODE_TYPE = "destination-db"
+    _NODE_PREFIX = "destination"
+    _INSTANCE_TYPE_PARAM_NAME = "instance_type_db_destination"
+    _NODE_NUM_PARAM_NAME = "n_db_destination_nodes"
+    _INSTANCE_PARAMS_BUILDER = DestinationScyllaInstanceParamsBuilder
+    _USER_PARAM = "ami_db_scylla_user"
+
+    @property
+    def _user_data(self) -> str:
+        return ScyllaUserDataBuilder(
+            params=self.params,
+            cluster_name=self.cluster_name,
+            user_data_format_version=self.params.get("destination_user_data_format_version"),
             syslog_host_port=self._test_config.get_logging_service_host_port(),
             test_config=self._test_config,
         ).to_string()

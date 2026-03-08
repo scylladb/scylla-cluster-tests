@@ -1253,6 +1253,7 @@ class ClusterTester(unittest.TestCase):
         self.prometheus_db_multitenant = []
 
         self.cs_db_cluster = None
+        self.destination_cluster = None
         self.loaders = None
         self.monitors = None
         self.siren_manager = None
@@ -1855,6 +1856,16 @@ class ClusterTester(unittest.TestCase):
                     node_type="oracle-db",
                     **(common_params | {"user_prefix": user_prefix + "-oracle"}),
                 )
+            elif db_type == "destination_scylla":
+                return ScyllaAWSCluster(
+                    ec2_ami_id=self.params.get("ami_id_db_destination").split(),
+                    ec2_ami_username=self.params.get("ami_db_scylla_user"),
+                    ec2_instance_type=self.params.get("instance_type_db_destination") or self.params.get("instance_type_db"),
+                    ec2_block_device_mappings=db_info["device_mappings"],
+                    n_nodes=[self.params.get("n_db_destination_nodes")],
+                    node_type="destination-db",
+                    **(common_params | {"user_prefix": user_prefix + "-destination"}),
+                )
             elif db_type == "cloud_scylla":
                 cloud_credentials = self.params.get("cloud_credentials_path")
 
@@ -1883,6 +1894,9 @@ class ClusterTester(unittest.TestCase):
             self.db_cluster = create_cluster("cloud_scylla")
         else:
             self.log.error("Incorrect parameter db_type: %s", self.params.get("db_type"))
+
+        if self.params.has_destination_cluster:
+            self.destination_cluster = create_cluster("destination_scylla")
 
         self.loaders = LoaderSetAWS(
             ec2_ami_id=self.params.get("ami_id_loader").split(),
@@ -3530,6 +3544,10 @@ class ClusterTester(unittest.TestCase):
             self.stop_resources_stop_tasks_threads(self.db_cluster)
             self.get_backtraces(self.db_cluster)
 
+        if self.destination_cluster:
+            self.stop_resources_stop_tasks_threads(self.destination_cluster)
+            self.get_backtraces(self.destination_cluster)
+
         if self.loaders:
             self.get_backtraces(self.loaders)
             self.stop_resources_stop_tasks_threads(self.loaders)
@@ -3599,6 +3617,17 @@ class ClusterTester(unittest.TestCase):
                 self.set_keep_alive_on_failure(self.db_cluster)
                 if self.cs_db_cluster:
                     self.set_keep_alive_on_failure(self.cs_db_cluster)
+
+        if self.destination_cluster is not None:
+            action = actions_per_cluster_type["destination_db_nodes"]["action"]
+            self.log.info("Action for destination db nodes is %s", action)
+            if (action == "destroy") or (action == "keep-on-failure" and not critical_events):
+                self.destroy_cluster(self.destination_cluster)
+                self.destination_cluster = None
+            elif action == "keep-on-failure" and critical_events:
+                self.log.info("Critical errors found. Set keep flag for destination db nodes")
+                self.test_config.keep_cluster(node_type="destination_db_nodes", val="keep")
+                self.set_keep_alive_on_failure(self.destination_cluster)
 
         if self.loaders is not None:
             action = actions_per_cluster_type["loader_nodes"]["action"]
