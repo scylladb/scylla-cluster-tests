@@ -399,7 +399,12 @@ All Definition of Done items across phases are met. Additionally:
 
 ## Open Questions
 
-- **Needs Investigation**: What is the minimum IAM policy set required for EMR cluster creation in the SCT AWS account?
-- **Needs Investigation**: Should spark-migrator testing also support EMR Serverless as an alternative to EMR on EC2 for simpler, pay-per-query workloads?
-- **Needs Investigation**: What is the preferred S3 bucket structure for storing spark-migrator JARs and EMR logs within the SCT infrastructure?
+- **Resolved**: EMR requires two IAM roles per AWS account (created once via `aws emr create-default-roles` or `AwsRegion.ensure_emr_roles()`):
+  - `EMR_DefaultRole` — service role with managed policy `AmazonEMRServicePolicy_v2`
+  - `EMR_EC2_DefaultRole` — EC2 instance profile with managed policy `AmazonEMREC2InstancePolicy_v2`
+  - See [AWS docs: Configure IAM service roles for Amazon EMR](https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-iam-roles.html)
+- **Resolved — S3 bucket structure**: Create a dedicated S3 bucket (e.g., `sct-emr-spark-migrator-{region}`) with the following layout:
+  - `jars/{migrator-version}/` — spark-migrator JAR files, organized per release version of scylla-spark-migrator
+  - `logs/{test-id}/` — EMR cluster logs, partitioned per SCT test run ID for easy correlation and cleanup
+  - Bucket lifecycle policy: auto-expire log prefixes after 30 days; JAR prefixes are retained indefinitely
 - **Nice-to-have**: EMR cluster reuse across multiple test cases (similar to `SCT_REUSE_CLUSTER` for Scylla clusters). Reusing an EMR cluster independently of the Scylla test cluster is even lower priority.
