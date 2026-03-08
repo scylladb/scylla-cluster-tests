@@ -2151,6 +2151,7 @@ def get_post_behavior_actions(config):
         "loader_nodes": {"node_types": ["loader"], "action": None},
         "vector_store_nodes": {"node_types": ["vector-store"], "action": None},
         "k8s_cluster": {"node_types": ["k8s"], "action": None},
+        "emr_cluster": {"node_types": ["emr"], "action": None},
     }
 
     for key, value in action_per_type.items():

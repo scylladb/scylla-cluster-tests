@@ -27,6 +27,7 @@ from mypy_boto3_ec2 import EC2Client
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, ScyllaCloudAPIError
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
+from sdcm.provision.aws.emr_provisioner import list_emr_clusters
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_kms import AwsKms
@@ -101,6 +102,8 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
                 clean_clusters_gke(tags_dict, dry_run=dry_run)
                 clean_orphaned_gke_disks(tags_dict, dry_run=dry_run)
 
+    if cluster_backend in ("aws", ""):
+        clean_emr_clusters(tags_dict, regions=aws_regions, dry_run=dry_run)
     if cluster_backend in ("aws", "k8s-eks", ""):
         clean_instances_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         if config.region_names:
@@ -533,6 +536,42 @@ def clean_clusters_eks(tags_dict: dict, regions: list = None, dry_run: bool = Fa
                 LOGGER.error(exc)
 
     ParallelObject(eks_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
+
+
+def clean_emr_clusters(tags_dict: dict, regions: list = None, dry_run: bool = False) -> None:
+    """Discover and terminate EMR clusters matching the given tags.
+
+    Args:
+        tags_dict: Dictionary of tags to filter resources (must include TestId or RunByUser).
+        regions: List of AWS regions to search. If None, searches all regions.
+        dry_run: If True, only log what would be deleted without terminating.
+    """
+    assert tags_dict, "tags_dict not provided (can't clean all EMR clusters)"
+    regions = regions or all_aws_regions()
+
+    for region in regions:
+        matching_clusters = list_emr_clusters(tags_dict=tags_dict, region_name=region)
+        if not matching_clusters:
+            LOGGER.info("No EMR clusters to clean up in %s", region)
+            continue
+
+        emr_client = boto3.client("emr", region_name=region)
+        for cluster_info in matching_clusters:
+            cluster_id = cluster_info["ClusterId"]
+            cluster_name = cluster_info.get("Name", "N/A")
+            LOGGER.info(
+                "Going to terminate EMR cluster '%s' (ID: %s) in %s [state: %s]",
+                cluster_name,
+                cluster_id,
+                region,
+                cluster_info.get("State", "unknown"),
+            )
+            if not dry_run:
+                try:
+                    emr_client.terminate_job_flows(JobFlowIds=[cluster_id])
+                    LOGGER.info("EMR cluster %s termination initiated", cluster_id)
+                except Exception as exc:  # noqa: BLE001
+                    LOGGER.error("Failed to terminate EMR cluster %s: %s", cluster_id, exc)
 
 
 def clean_resources_according_post_behavior(params, config, logdir, dry_run=False):
