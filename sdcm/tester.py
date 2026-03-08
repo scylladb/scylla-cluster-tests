@@ -80,6 +80,7 @@ from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThre
 from sdcm.mgmt import get_scylla_manager_tool
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
+from sdcm.provision.aws.emr_provisioner import EmrClusterProvisioner
 from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
@@ -1184,6 +1185,9 @@ class ClusterTester(unittest.TestCase):
         post_behavior_vector_store_nodes = self.params.get("post_behavior_vector_store_nodes")
         self.log.debug("Post behavior for vector store nodes %s", post_behavior_vector_store_nodes)
         self.test_config.keep_cluster(node_type="vector_store_nodes", val=post_behavior_vector_store_nodes)
+        post_behavior_emr_cluster = self.params.get("post_behavior_emr_cluster")
+        self.log.debug("Post behavior for EMR cluster %s", post_behavior_emr_cluster)
+        self.test_config.keep_cluster(node_type="emr_cluster", val=post_behavior_emr_cluster)
         self.test_config.set_duration(self._duration)
         cluster_backend = self.params.get("cluster_backend")
         if cluster_backend in ("aws", "k8s-eks"):
@@ -1264,6 +1268,7 @@ class ClusterTester(unittest.TestCase):
         self.monitors = None
         self.siren_manager = None
         self.kafka_cluster = None
+        self.emr_cluster = None
         self.k8s_clusters = []
         self.connections = []
         make_threads_be_daemonic_by_default()
@@ -2180,6 +2185,36 @@ class ClusterTester(unittest.TestCase):
             else:
                 raise NotImplementedError(f"{kafka_backend=} not implemented")
 
+    def get_cluster_emr(self):
+        """Provision an EMR cluster if emr_release_label is configured."""
+        if not self.params.get("emr_release_label"):
+            return
+        region_name = self.params.region_names[0]
+        self.log.info("Provisioning EMR cluster in region %s...", region_name)
+
+        aws_region = AwsRegion(region_name=region_name)
+        aws_region.ensure_emr_roles()
+
+        self.emr_cluster = EmrClusterProvisioner(
+            region_name=region_name,
+            params=self.params,
+        )
+
+        # Get VPC subnet for same-network placement with Scylla cluster
+        subnet_id = None
+        if aws_region.sct_vpc:
+            subnets = aws_region.sct_subnet(region_name + (self.params.get("availability_zone") or "a"))
+            if subnets:
+                subnet_id = subnets.id
+
+        self.emr_cluster.create_emr_cluster(
+            test_id=self.test_config.test_id(),
+            user=self.params.get("email_recipients")[0] if self.params.get("email_recipients") else "unknown",
+            vpc_subnet_id=subnet_id,
+        )
+        self.emr_cluster.wait_for_emr_cluster_ready()
+        self.log.info("EMR cluster %s is ready", self.emr_cluster.cluster_id)
+
     @staticmethod
     def _add_and_wait_for_cluster_nodes_in_parallel(clusters):
         def _add_and_wait_for_cluster_nodes(cluster):
@@ -2637,6 +2672,7 @@ class ClusterTester(unittest.TestCase):
             cluster_backend = "aws"
 
         self.get_cluster_kafka()
+        self.get_cluster_emr()
 
         if cluster_backend in ("aws", "aws-siren"):
             self.get_cluster_aws(loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
@@ -3709,6 +3745,16 @@ class ClusterTester(unittest.TestCase):
                 self.log.info("Critical errors found. Set keep flag for monitor nodes")
                 self.test_config.keep_cluster(node_type="monitor_nodes", val="keep")
                 self.set_keep_alive_on_failure(self.monitors)
+
+        if self.emr_cluster and self.emr_cluster.cluster_id:
+            action = actions_per_cluster_type["emr_cluster"]["action"]
+            self.log.info("Action for EMR cluster is %s", action)
+            if (action == "destroy") or (action == "keep-on-failure" and not critical_events):
+                self.emr_cluster.terminate_emr_cluster()
+                self.emr_cluster = None
+            elif action == "keep-on-failure" and critical_events:
+                self.log.info("Critical errors found. Keeping EMR cluster %s", self.emr_cluster.cluster_id)
+                self.test_config.keep_cluster(node_type="emr_cluster", val="keep")
 
         self.destroy_credentials()
 

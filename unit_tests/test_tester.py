@@ -24,7 +24,9 @@ from sdcm.tester import ClusterTester, silence, TestResultEvent
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events.file_logger import get_events_grouped_by_category
+from sdcm.test_config import TestConfig
 from sdcm.utils.action_logger import get_action_logger
+from sdcm.utils.common import get_post_behavior_actions
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
@@ -625,3 +627,89 @@ class TestSaveSchema:
         assert mock_nodes[0].run_cqlsh.called
         assert not mock_nodes[1].run_cqlsh.called
         assert not mock_nodes[2].run_cqlsh.called
+
+
+class TestEmrCleanResources:
+    """Tests for EMR cluster conditional cleanup in clean_resources."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_test_config(self):
+        """Reset EMR keep-alive flag between tests."""
+        original = TestConfig.KEEP_ALIVE_EMR_CLUSTER
+        yield
+        TestConfig.KEEP_ALIVE_EMR_CLUSTER = original
+
+    @staticmethod
+    def _make_params(emr_action):
+        mock_params = MagicMock()
+        mock_params.get.side_effect = lambda key, default=None: {
+            "execute_post_behavior": True,
+            "post_behavior_db_nodes": "keep",
+            "post_behavior_loader_nodes": "keep",
+            "post_behavior_monitor_nodes": "keep",
+            "post_behavior_vector_store_nodes": "keep",
+            "post_behavior_k8s_cluster": "keep",
+            "post_behavior_emr_cluster": emr_action,
+            "db_type": "scylla",
+        }.get(key, default)
+        return mock_params
+
+    @staticmethod
+    def _make_tester(mock_params, emr_cluster=None):
+        tester = MagicMock(spec=ClusterTester)
+        tester.params = mock_params
+        tester.test_config = TestConfig
+        tester.log = logging.getLogger("test_emr")
+        tester.logdir = "/tmp/test"
+        tester.db_cluster = tester.loaders = tester.monitors = None
+        tester.emr_cluster = emr_cluster
+        return tester
+
+    @staticmethod
+    def _run_clean_resources(tester, critical_events):
+        actions = get_post_behavior_actions(tester.params)
+        with (
+            unittest.mock.patch("sdcm.tester.get_testrun_status", return_value=critical_events),
+            unittest.mock.patch("sdcm.tester.get_post_behavior_actions", return_value=actions),
+        ):
+            ClusterTester.clean_resources(tester)
+
+    @pytest.mark.parametrize(
+        "action, critical_events, expect_terminated",
+        [
+            pytest.param("destroy", False, True, id="destroy-no-critical"),
+            pytest.param("destroy", True, True, id="destroy-with-critical"),
+            pytest.param("keep-on-failure", False, True, id="keep-on-failure-no-critical"),
+            pytest.param("keep-on-failure", True, False, id="keep-on-failure-with-critical"),
+            pytest.param("keep", False, False, id="keep-no-critical"),
+            pytest.param("keep", True, False, id="keep-with-critical"),
+        ],
+    )
+    def test_emr_clean_resources_conditional_termination(self, action, critical_events, expect_terminated):
+        """Test that clean_resources terminates EMR cluster based on post-behavior action and critical events."""
+        mock_emr = MagicMock()
+        mock_emr.cluster_id = "j-TEST123"
+        tester = self._make_tester(self._make_params(action), emr_cluster=mock_emr)
+
+        self._run_clean_resources(tester, critical_events)
+
+        if expect_terminated:
+            mock_emr.terminate_emr_cluster.assert_called_once()
+        else:
+            mock_emr.terminate_emr_cluster.assert_not_called()
+
+    def test_emr_clean_resources_keeps_on_failure_sets_keep_alive(self):
+        """Test that keep-on-failure with critical events sets KEEP_ALIVE_EMR_CLUSTER flag."""
+        mock_emr = MagicMock()
+        mock_emr.cluster_id = "j-KEEPME"
+        tester = self._make_tester(self._make_params("keep-on-failure"), emr_cluster=mock_emr)
+
+        self._run_clean_resources(tester, critical_events=True)
+
+        mock_emr.terminate_emr_cluster.assert_not_called()
+        assert TestConfig.KEEP_ALIVE_EMR_CLUSTER is True
+
+    def test_emr_clean_resources_no_emr_cluster(self):
+        """Test that clean_resources handles None emr_cluster gracefully."""
+        tester = self._make_tester(self._make_params("destroy"))
+        self._run_clean_resources(tester, critical_events=False)

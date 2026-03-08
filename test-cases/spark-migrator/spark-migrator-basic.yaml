@@ -1,0 +1,31 @@
+test_duration: 120
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i4i.large'
+instance_type_loader: 'c6i.xlarge'
+instance_type_monitor: 't3.large'
+
+# EMR cluster configuration
+emr_release_label: 'emr-7.8.0'
+emr_instance_type_master: 'm5.xlarge'
+emr_instance_type_core: 'm5.xlarge'
+emr_instance_count_core: 2
+emr_instance_count_task: 0
+emr_applications:
+  - 'Spark'
+emr_keep_alive: true
+
+# spark-migrator JAR location (must be set before running)
+emr_spark_migrator_jar_path: ''
+
+user_prefix: 'spark-migrator-basic'
+
+argus_email_report_template: 'email_report_spark_migrator.yaml'
+
+post_behavior_db_nodes: 'destroy'
+post_behavior_loader_nodes: 'destroy'
+post_behavior_monitor_nodes: 'destroy'
+post_behavior_emr_cluster: 'destroy'
