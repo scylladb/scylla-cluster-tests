@@ -416,7 +416,11 @@ class ScyllaYaml(BaseModel):
                 attrs = {*fields_names, *obj.model_extra.keys()}
                 for attr_name in attrs:
                     attr_value = getattr(obj, attr_name, None)
-                    if attr_value is not None and attr_value != getattr(self, attr_name, None):
+                    if attr_value is None:
+                        continue
+                    # Always apply if the source had it explicitly set,
+                    # or if the value differs from what we currently have
+                    if attr_name in obj.model_fields_set or attr_value != getattr(self, attr_name, None):
                         setattr(self, attr_name, attr_value)
             elif isinstance(obj, dict):
                 for attr_name, attr_value in obj.items():
@@ -427,14 +431,14 @@ class ScyllaYaml(BaseModel):
 
     def diff(self, other: "ScyllaYaml") -> str:
         self_str = yaml.safe_dump(
-            self.model_dump(exclude_defaults=True, exclude_unset=True, exclude_none=True)
+            self.model_dump(exclude_unset=True, exclude_none=True)
         ).splitlines(keepends=True)
         other_str = yaml.safe_dump(
-            other.model_dump(exclude_defaults=True, exclude_unset=True, exclude_none=True)
+            other.model_dump(exclude_unset=True, exclude_none=True)
         ).splitlines(keepends=True)
         return "".join(unified_diff(self_str, other_str))
 
     def __copy__(self):
-        return self.__class__(**self.model_dump(exclude_defaults=True, exclude_unset=True))
+        return self.__class__(**self.model_dump(exclude_unset=True))
 
     copy = __copy__

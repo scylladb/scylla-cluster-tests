@@ -1986,7 +1986,8 @@ class BaseNode(AutoSshContainerMixin):
                     exclude_defaults=True,
                     # NOTE: explicit fields included into yaml no matter what,
                     #  they are needed for nodetool to operate properly
-                    explicit=["partitioner", "commitlog_sync", "commitlog_sync_period_in_ms", "endpoint_snitch"],
+                    explicit=["partitioner", "commitlog_sync", "commitlog_sync_period_in_ms", "endpoint_snitch",
+                             "auth_superuser_name", "auth_superuser_salted_password"],
                 )
             )
             ScyllaYamlUpdateEvent(
