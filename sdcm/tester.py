@@ -2564,17 +2564,7 @@ class ClusterTester(unittest.TestCase):
         #       for each of the Grafana instances (may be more than 1 in case of K8S multi-tenant setup)
         start_posting_grafana_annotations()
 
-    def _cs_add_node_flag(self, stress_cmd):
-        if "-node" not in stress_cmd:
-            if self.test_config.INTRA_NODE_COMM_PUBLIC:
-                ip = ",".join(self.db_cluster.get_node_public_ips())
-            else:
-                ip = self.db_cluster.get_node_private_ips()[0]
-            stress_cmd = "%s -node %s" % (stress_cmd, ip)
-        return stress_cmd
-
     def run_stress(self, stress_cmd, duration=None):
-        stress_cmd = self._cs_add_node_flag(stress_cmd)
         cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd, duration=duration)
         self.verify_stress_thread(cs_thread_pool)
 
@@ -2654,7 +2644,6 @@ class ClusterTester(unittest.TestCase):
         params=None,
         **_,
     ):
-        # stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration:
             timeout = self.get_duration(duration)
             if " duration" in stress_cmd:
