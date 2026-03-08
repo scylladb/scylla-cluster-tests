@@ -141,8 +141,8 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 - [ ] EMR cluster can be created, waited on, and terminated
 - [ ] All EMR instances are tagged for cleanup discovery
 - [ ] Spot/On-Demand instance configuration works correctly
-- [ ] Unit tests with mocked boto3 EMR client verify provisioning logic
-- [ ] Integration test creates and destroys an EMR cluster (mark with `@pytest.mark.integration`)
+- [ ] Unit tests using `moto` (via `ThreadedMotoServer`) verify provisioning logic against mocked EMR APIs
+- [ ] Integration test with `moto` verifies full EMR cluster lifecycle (mark with `@pytest.mark.integration`)
 
 ---
 
@@ -164,7 +164,7 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 - [ ] `clean_emr_clusters()` discovers and terminates EMR clusters by tags
 - [ ] `clean_cloud_resources()` calls EMR cleanup for AWS backends
 - [ ] `dry_run=True` logs what would be deleted without terminating
-- [ ] Unit tests verify cleanup logic with mocked boto3 responses
+- [ ] Unit tests using `moto` verify cleanup logic against mocked EMR APIs
 - [ ] No orphaned EMR clusters after test teardown
 
 ---
@@ -192,7 +192,7 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 - [ ] Spark migrator job can be submitted and monitored on an EMR cluster
 - [ ] Job logs are retrieved and stored in the SCT log directory
 - [ ] Job success/failure is correctly detected and reported
-- [ ] Unit tests with mocked EMR Step API verify submission logic
+- [ ] Unit tests using `moto` with mocked EMR Step API verify submission logic
 - [ ] Configuration model validates inputs correctly
 
 ---
@@ -298,11 +298,11 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 
 - **Configuration parsing**: Verify EMR config fields parse correctly (valid/invalid inputs, defaults, type validation)
   - Location: `unit_tests/test_config.py` (extend existing config tests)
-- **EMR provisioner**: Mock `boto3.client('emr')` to test cluster creation, status polling, and termination logic
+- **EMR provisioner**: Use `moto` (already a project dependency — `moto[server]==5.1.1` in `pyproject.toml`) to mock EMR APIs (`run_job_flow`, `describe_cluster`, `terminate_job_flows`). Follow the existing `ThreadedMotoServer` pattern in `unit_tests/test_aws_services.py`.
   - Location: `unit_tests/provision/test_emr_provisioner.py`
-- **EMR cleanup**: Mock EMR API responses to verify tag-based discovery and termination
+- **EMR cleanup**: Use `moto` to mock EMR API responses (`list_clusters`, `describe_cluster`, `terminate_job_flows`) for tag-based discovery and termination
   - Location: `unit_tests/test_clean_cloud_resources_func.py` (extend existing cleanup tests)
-- **Spark job submission**: Mock EMR Steps API to verify job submission and monitoring
+- **Spark job submission**: Use `moto` to mock EMR Steps API (`add_job_flow_steps`, `describe_step`, `list_steps`) for job submission and monitoring
   - Location: `unit_tests/test_spark_migrator.py`
 - **Email reporter**: Verify data building and template rendering for migration-specific fields
   - Location: `unit_tests/test_send_email.py` (extend existing email tests)
@@ -310,9 +310,9 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 
 ### Integration Tests
 
-- **EMR lifecycle**: Create and destroy a real EMR cluster (small instance types, `m5.xlarge`, 1 Core node)
+- **EMR lifecycle**: Use `moto` with `ThreadedMotoServer` (following the pattern in `unit_tests/test_aws_services.py`) to test the full EMR provisioner lifecycle — create cluster, wait for ready state, submit steps, and terminate. Moto supports the needed EMR APIs: `run_job_flow`, `describe_cluster`, `add_job_flow_steps`, `list_clusters`, `terminate_job_flows`.
   - Mark with: `@pytest.mark.integration`
-  - Requires: AWS credentials, IAM roles (`EMR_DefaultRole`, `EMR_EC2_DefaultRole`)
+  - No real AWS credentials required — moto provides a fully mocked AWS environment
 - **End-to-end migration**: Run spark-migrator on a Docker or small AWS Scylla cluster
   - Run with: `uv run sct.py integration-tests`
 
