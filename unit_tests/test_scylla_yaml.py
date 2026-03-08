@@ -172,6 +172,8 @@ class ScyllaYamlTest(unittest.TestCase):
                 "audit_categories": None,
                 "audit_keyspaces": None,
                 "audit_tables": None,
+                "auth_superuser_name": None,
+                "auth_superuser_salted_password": None,
                 "authenticator": None,
                 "authenticator_password": None,
                 "authenticator_user": None,

@@ -10,8 +10,3 @@ user_prefix: 'sl-workloads'
 
 space_node_threshold: 64424
 round_robin: true
-
-authenticator: 'PasswordAuthenticator'
-authenticator_user: cassandra
-authenticator_password: cassandra
-authorizer: 'CassandraAuthorizer'

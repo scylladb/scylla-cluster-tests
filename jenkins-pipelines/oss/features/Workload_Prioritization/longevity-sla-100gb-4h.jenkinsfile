@@ -7,6 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_sla_test.LongevitySlaTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-sla-100gb-4h.yaml'
+    test_config: '''["test-cases/longevity/longevity-sla-100gb-4h.yaml", "configurations/auth_cassandra.yaml"]'''
 
 )

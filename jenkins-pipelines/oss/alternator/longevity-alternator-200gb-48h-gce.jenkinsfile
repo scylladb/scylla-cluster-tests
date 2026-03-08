@@ -7,5 +7,5 @@ longevityPipeline(
     backend: 'gce',
     region: 'us-east1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-alternator-200GB-48h.yaml',
+    test_config: '''["test-cases/longevity/longevity-alternator-200GB-48h.yaml", "configurations/auth_cassandra.yaml"]''',
 )

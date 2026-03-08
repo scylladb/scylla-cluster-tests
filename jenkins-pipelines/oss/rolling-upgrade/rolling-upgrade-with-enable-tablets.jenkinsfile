@@ -9,6 +9,6 @@ rollingUpgradePipeline(
     linux_distro: 'ubuntu-focal',
     use_preinstalled_scylla: true,
     test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
-    test_config: '''["test-cases/upgrades/rolling-upgrade.yaml", "configurations/gce/n2-highmem-32.yaml", "configurations/tablets_disabled.yaml", "configurations/enable_tablets_on_upgrade.yaml"]''',
+    test_config: '''["test-cases/upgrades/rolling-upgrade.yaml", "configurations/gce/n2-highmem-32.yaml", "configurations/tablets_disabled.yaml", "configurations/enable_tablets_on_upgrade.yaml", "configurations/auth_cassandra.yaml"]''',
     internode_compression: 'all',
 )
