@@ -14,14 +14,15 @@ stress_after_cluster_upgrade: >-2
   -p fieldcount=10 -p fieldlength=512 -p operationcount=1005010 -p table=usertable
 
 dynamodb_primarykey_type: HASH_AND_RANGE
+# NOTE: authenticator/authorizer settings below are just to ease the test case lint and the validation code
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'
+
 alternator_enforce_authorization: true
 alternator_access_key_id: 'alternator'
 alternator_secret_access_key: 'password'
-
-authenticator: 'PasswordAuthenticator'
-authenticator_user: cassandra
-authenticator_password: cassandra
-authorizer: 'CassandraAuthorizer'
 
 alternator_port: 8080
 alternator_use_dns_routing: true

@@ -6554,7 +6554,7 @@ class PauseLdapNemesis(Nemesis):
     disruptive = False
     limited = True
 
-    additional_configs = ["configurations/ldap-authorization.yaml"]
+    additional_configs = ["configurations/ldap-authorization.yaml", "configurations/auth_cassandra.yaml"]
 
     def disrupt(self):
         self.disrupt_ldap_connection_toggle()
@@ -6564,7 +6564,7 @@ class ToggleLdapConfiguration(Nemesis):
     disruptive = True
     limited = True
 
-    additional_configs = ["configurations/ldap-authorization.yaml"]
+    additional_configs = ["configurations/ldap-authorization.yaml", "configurations/auth_cassandra.yaml"]
 
     def disrupt(self):
         self.disrupt_disable_enable_ldap_authorization()
