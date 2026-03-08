@@ -7,7 +7,7 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'sla_per_user_system_test.SlaPerUserTest.test_read_throughput_vs_latency_cache_and_disk',
-    test_config: '''["test-cases/features/system-sla-test.yaml", "configurations/tablets_disabled.yaml"]''',
+    test_config: '''["test-cases/features/system-sla-test.yaml", "configurations/tablets_disabled.yaml", "configurations/auth_cassandra.yaml"]''',
 
     timeout: [time: 480, unit: 'MINUTES']
 )

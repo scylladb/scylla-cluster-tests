@@ -205,6 +205,9 @@ class ScyllaYaml(BaseModel):
     request_scheduler_options: RequestSchedulerOptions = None  # None
     thrift_framed_transport_size_in_mb: int = None  # 15
     thrift_max_message_length_in_mb: int = None  # 16
+    auth_superuser_name: str = None
+    auth_superuser_salted_password: str = None
+
     authenticator: Literal[
         "org.apache.cassandra.auth.PasswordAuthenticator",
         "org.apache.cassandra.auth.AllowAllAuthenticator",

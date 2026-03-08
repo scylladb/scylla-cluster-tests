@@ -6258,6 +6258,7 @@ class SslHotReloadingNemesis(Nemesis):
 class PauseLdapNemesis(Nemesis):
     disruptive = False
     limited = True
+    additional_configs = ["configurations/ldap-authorization.yaml", "configurations/auth_cassandra.yaml"]
 
     def disrupt(self):
         self.disrupt_ldap_connection_toggle()
@@ -6266,6 +6267,7 @@ class PauseLdapNemesis(Nemesis):
 class ToggleLdapConfiguration(Nemesis):
     disruptive = True
     limited = True
+    additional_configs = ["configurations/ldap-authorization.yaml", "configurations/auth_cassandra.yaml"]
 
     def disrupt(self):
         self.disrupt_disable_enable_ldap_authorization()
@@ -7211,6 +7213,10 @@ class StartStopValidationCompaction(Nemesis):
 class SlaIncreaseSharesDuringLoad(Nemesis):
     disruptive = False
     sla = True
+    additional_configs = [
+        "configurations/nemesis/additional_configs/sla_config.yaml",
+        "configurations/auth_cassandra.yaml",
+    ]
 
     def disrupt(self):
         self.disrupt_sla_increase_shares_during_load()
@@ -7219,6 +7225,10 @@ class SlaIncreaseSharesDuringLoad(Nemesis):
 class SlaDecreaseSharesDuringLoad(Nemesis):
     disruptive = False
     sla = True
+    additional_configs = [
+        "configurations/nemesis/additional_configs/sla_config.yaml",
+        "configurations/auth_cassandra.yaml",
+    ]
 
     def disrupt(self):
         self.disrupt_sla_decrease_shares_during_load()
@@ -7230,6 +7240,10 @@ class SlaReplaceUsingDetachDuringLoad(Nemesis):
     #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
     disruptive = True
     sla = True
+    additional_configs = [
+        "configurations/nemesis/additional_configs/sla_config.yaml",
+        "configurations/auth_cassandra.yaml",
+    ]
 
     def disrupt(self):
         self.disrupt_replace_service_level_using_detach_during_load()
@@ -7241,6 +7255,10 @@ class SlaReplaceUsingDropDuringLoad(Nemesis):
     #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
     disruptive = True
     sla = True
+    additional_configs = [
+        "configurations/nemesis/additional_configs/sla_config.yaml",
+        "configurations/auth_cassandra.yaml",
+    ]
 
     def disrupt(self):
         self.disrupt_replace_service_level_using_drop_during_load()
@@ -7252,6 +7270,10 @@ class SlaIncreaseSharesByAttachAnotherSlDuringLoad(Nemesis):
     #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
     disruptive = True
     sla = True
+    additional_configs = [
+        "configurations/nemesis/additional_configs/sla_config.yaml",
+        "configurations/auth_cassandra.yaml",
+    ]
 
     def disrupt(self):
         self.disrupt_increase_shares_by_attach_another_sl_during_load()
@@ -7260,6 +7282,10 @@ class SlaIncreaseSharesByAttachAnotherSlDuringLoad(Nemesis):
 class SlaMaximumAllowedSlsWithMaxSharesDuringLoad(Nemesis):
     disruptive = False
     sla = True
+    additional_configs = [
+        "configurations/nemesis/additional_configs/sla_config.yaml",
+        "configurations/auth_cassandra.yaml",
+    ]
 
     def disrupt(self):
         self.disrupt_maximum_allowed_sls_with_max_shares_during_load()
