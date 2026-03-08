@@ -20,14 +20,14 @@ The existing Scylla SUT cluster (`self.db_cluster`) is the **source** cluster by
 
 ### Cluster Reuse for Spark and External Workloads (Future)
 
-For Spark-related tests and other scenarios where the source and/or destination clusters are **already running** (not provisioned by SCT), the existing `reuse_cluster` mechanism (`sdcm/sct_config.py:752–758`, documented in `docs/reuse_cluster.md`) provides a path to point at pre-existing clusters by `test_id`. A future extension could allow specifying a `reuse_cluster` identifier per source or destination independently, e.g.:
+For Spark-related tests and other scenarios where the source and/or destination clusters are **already running** (not provisioned by SCT), the existing `reuse_cluster` mechanism (`sdcm/sct_config.py:752–758`, documented in `docs/reuse_cluster.md`) provides a path to point at pre-existing clusters by `test_id`. Since `reuse_cluster` is based on the shared `test_id` (a top-level field), a future extension would add a **top-level** `reuse_cluster_destination` field (rather than nesting it inside `destination:`), e.g.:
 
 ```yaml
-destination:
-  reuse_cluster: "7dc6db84-eb01-4b61-a946-b5c72e0f6d71"
+# Top-level — not inside destination: block
+reuse_cluster_destination: "7dc6db84-eb01-4b61-a946-b5c72e0f6d71"
 ```
 
-This would skip provisioning for that cluster and instead attach to the existing running infrastructure. **No implementation is planned for this in the current scope** — it is documented here as a known future need to ensure the configuration design does not preclude it.
+This would skip provisioning for the destination cluster and instead attach to the existing running infrastructure. **No implementation is planned for this in the current scope** — it is documented here as a known future need to ensure the configuration design does not preclude it.
 
 ## Current State
 
@@ -409,9 +409,9 @@ Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration._
 
 ## Open Questions
 
-1. **GCE image fields**: Does `destination_scylla_version` auto-resolve GCE images, or do we need `gce_image_db_destination`? Needs investigation when implementing Phase 4.
+1. **GCE image fields** (resolved): Yes, `destination_scylla_version` should auto-resolve GCE images using the same resolution logic as the source cluster. Both source and destination clusters resolve their versions independently, supporting different Scylla versions on each. Implementation details (field naming, resolution function reuse) to be finalized in Phase 4.
 2. **Networking scope**: What level of cross-cluster networking is needed in Phase 5? This depends on the first cross-cluster feature being tested.
 3. **Log collection**: Should destination cluster logs go to a separate directory, or be co-located with source cluster logs under a `destination/` subdirectory?
 4. **Argus reporting** (resolved): Both clusters report as a single test run. The source version is `scylla-server-target` (existing), the destination version is `scylla-server-destination` (new), submitted via `submit_packages()`. Accumulation behavior needs verification during implementation — if Argus replaces rather than appends packages, a follow-up Argus change will be needed. Note: the oracle cluster currently only reports its version inside Gemini-specific results — not as a general package. The destination cluster approach improves on this by reporting both versions as first-class packages.
-5. **Environment variable mapping**: How should nested `destination:` block fields map to `SCT_*` environment variables? Options: `SCT_DESTINATION_SCYLLA_VERSION` or `SCT_DESTINATION__SCYLLA_VERSION` (double underscore for nesting).
-6. **Spark / cluster reuse**: When implementing `reuse_cluster` per cluster role, should it be `destination.reuse_cluster` in the nested block, or a separate top-level field? Deferred to future implementation.
+5. **Environment variable mapping** (resolved): SCT already supports dot-based nesting for environment variables in `_load_environment_variables()` (`sdcm/sct_config.py:2900–2914`). For example, `SCT_STRESS_READ_CMD.0` and `SCT_STRESS_IMAGE.cassandra-stress` use a `SCT_<FIELD>.<nested_key>` convention. The `destination:` block should use this existing mechanism: `SCT_DESTINATION.scylla_version`, `SCT_DESTINATION.n_db_nodes`, etc. This avoids both the flat `SCT_DESTINATION_SCYLLA_VERSION` approach (ambiguous — is it a nested key or a flat field?) and the pydantic double-underscore `SCT_DESTINATION__SCYLLA_VERSION` convention (not used anywhere in SCT). The dot-nesting code already parses these into a dict value, which maps directly to the `destination:` YAML block.
+6. **Spark / cluster reuse** (resolved): `reuse_cluster` is based on `test_id`, which is a shared top-level field. Therefore, cluster reuse configuration should remain at the top level rather than nested inside `destination:`. A future implementation could add `reuse_cluster_destination` as a top-level field (parallel to the existing `reuse_cluster`) to allow reusing a different pre-existing cluster as the destination. Deferred to future implementation.
