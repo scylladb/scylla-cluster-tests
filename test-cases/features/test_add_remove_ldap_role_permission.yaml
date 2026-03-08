@@ -3,10 +3,6 @@ test_duration: 120
 use_ldap: true
 ldap_server_type: 'openldap'
 use_ldap_authorization: true
-authenticator: 'PasswordAuthenticator'
-authenticator_user: cassandra
-authenticator_password: cassandra
-authorizer: 'CassandraAuthorizer'
 
 n_db_nodes: 3
 n_loaders: 1

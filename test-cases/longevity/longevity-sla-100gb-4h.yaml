@@ -32,9 +32,4 @@ space_node_threshold: 64424
 pre_create_schema: True
 sstable_size: 100
 
-authenticator: 'PasswordAuthenticator'
-authenticator_user: cassandra
-authenticator_password: cassandra
-authorizer: 'CassandraAuthorizer'
-
 service_level_shares: [200, 800]

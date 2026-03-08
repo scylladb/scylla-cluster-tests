@@ -57,14 +57,15 @@ k8s_enable_sni: false
 k8s_enable_alternator: true
 # NOTE: by default scylla-operator uses 8043 port for secure connections and 8000 for insecure ones.
 alternator_port: 8000
+# NOTE: authenticator/authorizer settings below are just to ease the test case lint and the validation code
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'
+
 alternator_enforce_authorization: true
 alternator_access_key_id: "alternator"
 alternator_secret_access_key: "password"
-
-authenticator: 'PasswordAuthenticator'
-authenticator_user: cassandra
-authenticator_password: cassandra
-authorizer: 'CassandraAuthorizer'
 
 dynamodb_primarykey_type: HASH_AND_RANGE
 # NOTE: 'alternator_use_dns_routing' is not applicable in K8S case and will be ignored.

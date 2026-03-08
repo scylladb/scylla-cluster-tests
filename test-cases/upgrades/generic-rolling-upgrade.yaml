@@ -14,9 +14,6 @@ scylla_linux_distro: 'centos'
 user_prefix: 'rolling-upgrade'
 
 server_encrypt: true
-authenticator: 'PasswordAuthenticator'
-authenticator_user: 'cassandra'
-authenticator_password: 'cassandra'
 
 use_legacy_cluster_init: false
 internode_compression: 'all'

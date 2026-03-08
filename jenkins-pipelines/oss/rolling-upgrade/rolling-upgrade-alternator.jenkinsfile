@@ -10,5 +10,5 @@ rollingUpgradePipeline(
     gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts',
 
     test_name: 'upgrade_test.UpgradeTest.test_generic_cluster_upgrade',
-    test_config: '''["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-alternator.yaml"]'''
+    test_config: '''["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-alternator.yaml", "configurations/auth_cassandra.yaml"]'''
 )

@@ -10,7 +10,6 @@ prepare_write_cmd:
     -p fieldcount=8 -p fieldlength=128
     -p insertstart=200200300 -p insertcount=200200300  -p table=usertable -p dynamodb.ttlKey=ttl -p dynamodb.ttlDuration=300
 
-
 round_robin: true
 
 dynamodb_primarykey_type: HASH_AND_RANGE
@@ -30,14 +29,15 @@ alternator_port: 8080
 
 docker_network: 'ycsb_net'
 
+# NOTE: authenticator/authorizer settings below are just to ease the test case lint and the validation code
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'
+
 alternator_enforce_authorization: true
 alternator_access_key_id: 'alternator'
 alternator_secret_access_key: 'password'
-
-authenticator: 'PasswordAuthenticator'
-authenticator_user: cassandra
-authenticator_password: cassandra
-authorizer: 'CassandraAuthorizer'
 
 # Set Alternator TTL parameters
 # ---------------------------------------------
