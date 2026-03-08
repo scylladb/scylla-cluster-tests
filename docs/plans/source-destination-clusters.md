@@ -154,16 +154,22 @@ The `destination:` block maps to a set of dedicated fields in `SCTConfiguration`
 **Parsing logic** (in `SCTConfiguration.__init__()`):
 
 ```python
+# Mapping of destination fields to their global fallback fields
+_DESTINATION_INHERITABLE_FIELDS = {
+    "scylla_version": "destination_scylla_version",
+    "instance_type_db": "destination_instance_type_db",
+    "append_scylla_args": "destination_append_scylla_args",
+    "azure_instance_type_db": "destination_azure_instance_type_db",
+}
+
 # After loading and merging all config sources:
 if destination_block := merged_config.pop("destination", None):
     for key, value in destination_block.items():
         self[f"destination_{key}"] = value
     # For any destination field not explicitly set, inherit from global:
-    if not self.get("destination_scylla_version"):
-        self["destination_scylla_version"] = self.get("scylla_version")
-    if not self.get("destination_instance_type_db"):
-        self["destination_instance_type_db"] = self.get("instance_type_db")
-    # ... etc for each inheritable field
+    for global_key, dest_key in _DESTINATION_INHERITABLE_FIELDS.items():
+        if not self.get(dest_key):
+            self[dest_key] = self.get(global_key)
 ```
 
 **`has_destination_cluster` property**:
@@ -177,7 +183,7 @@ def has_destination_cluster(self) -> bool:
     if isinstance(n_dest, int):
         return n_dest > 0
     if isinstance(n_dest, list):
-        return any(n > 0 for n in n_dest)
+        return any(int(n) > 0 for n in n_dest)
     return False
 ```
 
