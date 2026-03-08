@@ -7,7 +7,7 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'sla_per_user_system_test.SlaPerUserTest.test_workload_types',
-    test_config: 'test-cases/features/sl-workloads-test.yaml',
+    test_config: '''["test-cases/features/sl-workloads-test.yaml", "configurations/auth_cassandra.yaml"]''',
 
     timeout: [time: 480, unit: 'MINUTES']
 )

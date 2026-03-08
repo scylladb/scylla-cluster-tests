@@ -20,8 +20,3 @@ keyspace_num: 50
 
 user_prefix: 'longevity-many-clients-4h'
 space_node_threshold: 64424
-
-authenticator: 'PasswordAuthenticator'
-authenticator_user: cassandra
-authenticator_password: cassandra
-authorizer: 'CassandraAuthorizer'

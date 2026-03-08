@@ -7,7 +7,7 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_alternator_ttl_test.AlternatorTtlLongevityTest.test_custom_time_repeat_stress_cmd',
-    test_config: 'test-cases/features/alternator-ttl/longevity-alternator-4m-scan-36m-ttl-8m-grace-sisyphus-rewrite-expired-data.yaml',
+    test_config: '''["test-cases/features/alternator-ttl/longevity-alternator-4m-scan-36m-ttl-8m-grace-sisyphus-rewrite-expired-data.yaml", "configurations/auth_cassandra.yaml"]''',
 
     email_recipients: 'qa@scylladb.com'
 )
