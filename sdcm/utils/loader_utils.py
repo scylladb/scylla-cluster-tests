@@ -122,12 +122,6 @@ class LoaderUtilsMixin:
                 else:
                     self._create_counter_table()
 
-            if "compression" in stress_cmd:
-                if "keyspace_name" not in stress_params and "keyspace=" not in stress_cmd:
-                    compression_prefix = re.search("compression=(.*)Compressor", stress_cmd).group(1)
-                    keyspace_name = "keyspace_{}".format(compression_prefix.lower())
-                    stress_params.update({"keyspace_name": keyspace_name})
-
             # Run all stress commands
             self.log.debug("stress cmd: {}".format(stress_cmd))
             if stress_cmd.startswith("scylla-bench"):
