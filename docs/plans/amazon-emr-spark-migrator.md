@@ -402,4 +402,4 @@ All Definition of Done items across phases are met. Additionally:
 - **Needs Investigation**: What is the minimum IAM policy set required for EMR cluster creation in the SCT AWS account?
 - **Needs Investigation**: Should spark-migrator testing also support EMR Serverless as an alternative to EMR on EC2 for simpler, pay-per-query workloads?
 - **Needs Investigation**: What is the preferred S3 bucket structure for storing spark-migrator JARs and EMR logs within the SCT infrastructure?
-- **Needs Investigation**: Should EMR cluster reuse be supported across multiple test cases (similar to `SCT_REUSE_CLUSTER` for Scylla clusters)?
+- **Nice-to-have**: EMR cluster reuse across multiple test cases (similar to `SCT_REUSE_CLUSTER` for Scylla clusters). Reusing an EMR cluster independently of the Scylla test cluster is even lower priority.
