@@ -270,6 +270,18 @@ Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration._
 
 5. **`sdcm/utils/common.py` — `get_post_behavior_actions()`**: Add `"destination_db_nodes"` with node type `["destination-db"]` to `action_per_type`.
 
+6. **Argus reporting** — Report metadata from both clusters with role labels:
+
+   **Current oracle cluster reporting** (for context): The oracle cluster version is only reported inside `argus_submit_gemini_results()` as a Gemini-specific field (`oracle_node_scylla_version`). It is **not** reported as a general package to Argus. The main `argus_get_scylla_version()` only reads from `self.db_cluster.nodes[0]`, and `update_argus_with_version()` in `sct_config.py` reports a single `scylla-server-target` package.
+
+   **What to implement for destination clusters**:
+
+   a. **`sdcm/sct_config.py` — `update_argus_with_version()`**: When `has_destination_cluster` is True and `destination_scylla_version` is set, also submit a package with name `scylla-server-destination` (alongside the existing `scylla-server-target` for the source). This ensures Argus receives version metadata for both clusters at config resolution time.
+
+   b. **`sdcm/tester.py` — `argus_get_scylla_version()`**: After reporting the source cluster version (existing `self.db_cluster.nodes[0]`), if `self.destination_cluster` is not None, also call `update_scylla_version()` or `submit_packages()` with a `scylla-server-destination` package from `self.destination_cluster.nodes[0].get_scylla_binary_version()`.
+
+   c. **Argus accumulation**: Argus already supports multiple packages per test run via `submit_packages([...])`. The destination cluster package will appear alongside the source package with a distinct name. Argus may need a minor update to display dual-cluster metadata in the UI, but the submission mechanism works today.
+
 **Backwards Compatibility**:
 - `self.db_cluster` remains the source cluster — existing tests referencing `self.db_cluster.nodes` are unaffected.
 - `self.destination_cluster` is `None` by default; only tests with a `destination:` block and `n_db_nodes > 0` will have it.
@@ -280,6 +292,8 @@ Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration._
 - `stop_resources()` handles destination cluster gracefully
 - `clean_resources()` applies `post_behavior_destination_db_nodes` to destination cluster
 - `get_post_behavior_actions()` includes `destination_db_nodes` entry
+- Destination cluster version reported to Argus as `scylla-server-destination` package
+- Both cluster versions visible in Argus test run metadata
 - Unit tests verify post-behavior actions include destination_db_nodes
 - Existing tests pass without modification
 
@@ -398,6 +412,6 @@ Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration._
 1. **GCE image fields**: Does `destination_scylla_version` auto-resolve GCE images, or do we need `gce_image_db_destination`? Needs investigation when implementing Phase 4.
 2. **Networking scope**: What level of cross-cluster networking is needed in Phase 5? This depends on the first cross-cluster feature being tested.
 3. **Log collection**: Should destination cluster logs go to a separate directory, or be co-located with source cluster logs under a `destination/` subdirectory?
-4. **Argus reporting**: How should dual-cluster test results be reported — as a single test run with metadata from both clusters, or as linked runs?
+4. **Argus reporting** (resolved): Both clusters report as a single test run. The source version is `scylla-server-target` (existing), the destination version is `scylla-server-destination` (new). Argus's `submit_packages()` already supports multiple packages. Argus UI may need updates to display dual-cluster metadata. Note: the oracle cluster currently only reports its version inside Gemini-specific results — not as a general package. The destination cluster approach improves on this by reporting both versions as first-class packages.
 5. **Environment variable mapping**: How should nested `destination:` block fields map to `SCT_*` environment variables? Options: `SCT_DESTINATION_SCYLLA_VERSION` or `SCT_DESTINATION__SCYLLA_VERSION` (double underscore for nesting).
 6. **Spark / cluster reuse**: When implementing `reuse_cluster` per cluster role, should it be `destination.reuse_cluster` in the nested block, or a separate top-level field? Deferred to future implementation.
