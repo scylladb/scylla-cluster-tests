@@ -105,9 +105,8 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
   - `emr_applications` — List of EMR applications to install (default: `["Spark"]`)
   - `emr_spark_migrator_jar_path` — S3 path or local path to the spark-migrator JAR
   - `emr_log_uri` — S3 URI for EMR cluster logs
-  - `emr_service_role` — IAM role for EMR service (default: `"EMR_DefaultRole"`)
-  - `emr_ec2_instance_profile` — Instance profile for EMR EC2 instances (default: `"EMR_EC2_DefaultRole"`)
   - `emr_keep_alive` — Whether EMR cluster stays alive after job completion (default: `true` for reuse during testing)
+- EMR IAM roles (`EMR_DefaultRole`, `EMR_EC2_DefaultRole`) are **not configurable** — they are standard AWS-managed roles created once per account. `AwsRegion` (in `sdcm/utils/aws_region.py`) will obtain them by name, following the existing pattern for VPCs, subnets, security groups, and keypairs.
 - New default config: `defaults/aws_emr_config.yaml`
 - Backend mapping entry for `"aws"` backend (EMR is an add-on resource, not a separate backend)
 
@@ -134,6 +133,10 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
   - `terminate_emr_cluster()` — Terminates EMR cluster by cluster ID
   - `get_emr_cluster_status()` — Returns current cluster state
   - `get_emr_master_dns()` — Returns master node public DNS for Spark UI/SSH access
+- `AwsRegion` extensions in `sdcm/utils/aws_region.py`:
+  - `emr_service_role` property — Obtains `EMR_DefaultRole` IAM role by name
+  - `emr_ec2_instance_profile` property — Obtains `EMR_EC2_DefaultRole` instance profile by name
+  - `ensure_emr_roles()` — Creates default EMR roles if they don't exist (equivalent to `aws emr create-default-roles`)
 - Tag propagation: All EMR instances tagged with `TestId`, `RunByUser`, `NodeType: "emr"` via EMR API `Tags` parameter
 - Instance fleet configuration: Master (On-Demand), Core (configurable), Task (Spot with bid percentage)
 
@@ -370,9 +373,10 @@ All Definition of Done items across phases are met. Additionally:
 **Likelihood**: High
 **Impact**: EMR cluster creation fails due to missing IAM roles or policies
 **Mitigation**:
-- Document required IAM roles (`EMR_DefaultRole`, `EMR_EC2_DefaultRole`) and policies
-- Provide CloudFormation/Terraform template for IAM setup in `docs/`
+- EMR IAM roles (`EMR_DefaultRole`, `EMR_EC2_DefaultRole`) are obtained by `AwsRegion` by their well-known names — not user-configurable
+- `AwsRegion` will provide an `ensure_emr_roles()` method that checks for role existence and creates them if missing (via `aws emr create-default-roles` equivalent using boto3 IAM API), following the pattern of `create_sct_key_pair()` / `create_sct_vpc()`
 - Add pre-flight check that validates IAM roles exist before attempting EMR creation
+- Document IAM prerequisites in `docs/`
 
 ### Risk: Cost Overrun from Orphaned EMR Clusters
 
