@@ -111,7 +111,7 @@ append_scylla_args_destination: ''
 post_behavior_destination_db_nodes: 'destroy'
 ```
 
-Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration.__init__()`, following the existing oracle pattern at lines 2504–2530. The destination version should fall back to `instance_type_db` if `instance_type_db_destination` is not set.
+Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration.__init__()`, following the existing oracle pattern at lines 2504–2530. When resolving AMIs, the architecture lookup should fall back to `instance_type_db` if `instance_type_db_destination` is not set (since the architecture is derived from the instance type).
 
 **Definition of Done**:
 - All fields are defined in `SCTConfiguration` with `SctField` descriptors
@@ -295,7 +295,7 @@ Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration._
 | Risk | Impact | Mitigation |
 |------|--------|------------|
 | Existing tests break | High | Default `n_db_destination_nodes: 0` ensures no provisioning; `destination_cluster` is `None` by default |
-| AMI resolution failure for destination version | Medium | Fall back to `instance_type_db` if `instance_type_db_destination` is not set; validate in config `__init__` |
+| AMI resolution failure for destination version | Medium | Use same resolution logic as oracle; fall back to `instance_type_db` for architecture detection when `instance_type_db_destination` is not set; raise clear error on resolution failure |
 | Cross-cluster networking complexity | Medium | Phase 5 is isolated; early phases work with clusters in the same VPC/region |
 | Resource leaks (destination cluster not cleaned up) | High | Independent `post_behavior_destination_db_nodes` with default `destroy`; explicit teardown in `clean_resources()` |
 | Configuration explosion (too many new fields) | Low | Follow established oracle pattern; fields are optional with sensible defaults |
