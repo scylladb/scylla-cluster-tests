@@ -1213,6 +1213,9 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         The test suggests two flows - populate the cluster with data, create the backup, and then restore it or
         restore from a pre-created backup.
         """
+        # If the tested restore cluster setup requires mixed instance types, add the extra nodes with different instance types
+        if self.params.get("nemesis_grow_shrink_instance_type"):
+            self.expand_cluster_heterogeneous()
         if manager_backup_restore_method := self.params.get("manager_backup_restore_method"):
             manager_backup_restore_method = ObjectStorageUploadMode(manager_backup_restore_method)
         if reuse_snapshot_name := self.params.get("mgmt_reuse_backup_snapshot_name"):
