@@ -15,7 +15,7 @@ from functools import cached_property
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
-from sdcm.sct_provision.aws.cluster import OracleDBCluster, DestinationDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup
+from sdcm.sct_provision.aws.cluster import OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.test_config import TestConfig
 
@@ -44,8 +44,6 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
             self.loader_cluster.provision()
         if self.cs_db_cluster:
             self.cs_db_cluster.provision()
-        if self.destination_db_cluster:
-            self.destination_db_cluster.provision()
 
     @cached_property
     def db_cluster(self):
@@ -76,16 +74,6 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
         if not self._provision_another_scylla_cluster:
             return None
         return OracleDBCluster(
-            params=self._params,
-            common_tags=self._test_config.common_tags(),
-            test_id=self._test_config.test_id(),
-        )
-
-    @cached_property
-    def destination_db_cluster(self):
-        if not self._provision_destination_cluster:
-            return None
-        return DestinationDBCluster(
             params=self._params,
             common_tags=self._test_config.common_tags(),
             test_id=self._test_config.test_id(),

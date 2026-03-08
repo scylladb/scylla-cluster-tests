@@ -124,11 +124,6 @@ oracle_scylla_version: '2024.1'
 append_scylla_args_oracle: '--enable-cache false'
 run_gemini_in_rolling_upgrade: false
 
-# destination cluster defaults
-n_db_destination_nodes: 0
-append_scylla_args_destination: ''
-post_behavior_destination_db_nodes: 'destroy'
-
 # cassandra-stress defaults
 stress_multiplier: 1
 stress_multiplier_w: 1
