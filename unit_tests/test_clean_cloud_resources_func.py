@@ -223,6 +223,7 @@ class CleanCloudResourcesTest(unittest.TestCase):
         "sdcm.utils.resources_cleanup.clean_resources_docker",
         "sdcm.utils.resources_cleanup.clean_test_security_groups",
         "sdcm.utils.resources_cleanup.clean_load_balancers_aws",
+        "sdcm.utils.resources_cleanup.clean_emr_clusters",
     )
 
     @pytest.fixture(autouse=True)
