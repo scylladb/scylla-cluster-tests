@@ -14,6 +14,21 @@ SCT currently supports a single System-Under-Test (SUT) cluster per test run (wi
 
 ScyllaDB's roadmap includes features that operate across two independent clusters (e.g., CDC-based replication, live migrations). SCT must be able to natively provision, connect, and tear down both a **source** and a **destination** cluster within a single test run — using different Scylla versions, instance types, or configurations for each.
 
+### Source-First Design Principle
+
+The existing Scylla SUT cluster (`self.db_cluster`) is the **source** cluster by default. In a single-cluster test, it also acts as the implicit target — no additional configuration is required. The destination cluster is purely opt-in: only tests that explicitly define a destination block will provision a second cluster. This keeps all existing tests unchanged and introduces no new concepts to single-cluster workflows.
+
+### Cluster Reuse for Spark and External Workloads (Future)
+
+For Spark-related tests and other scenarios where the source and/or destination clusters are **already running** (not provisioned by SCT), the existing `reuse_cluster` mechanism (`sdcm/sct_config.py:752–758`, documented in `docs/reuse_cluster.md`) provides a path to point at pre-existing clusters by `test_id`. A future extension could allow specifying a `reuse_cluster` identifier per source or destination independently, e.g.:
+
+```yaml
+destination:
+  reuse_cluster: "7dc6db84-eb01-4b61-a946-b5c72e0f6d71"
+```
+
+This would skip provisioning for that cluster and instead attach to the existing running infrastructure. **No implementation is planned for this in the current scope** — it is documented here as a known future need to ensure the configuration design does not preclude it.
+
 ## Current State
 
 SCT already supports a dual-cluster pattern via its **Gemini oracle cluster**. This pattern is the foundation for the destination-cluster design.
@@ -72,54 +87,120 @@ In `sdcm/sct_config.py`, the `__init__` method (lines 2504–2530) automatically
 
 ## Goals
 
-1. **Add configuration fields** for a destination cluster (version, node count, instance type, AMI, etc.) following the oracle pattern.
-2. **Implement a trigger mechanism** — the presence of `n_db_destination_nodes > 0` enables dual-cluster provisioning (no `db_type` change required).
-3. **Add provisioning classes** (`DestinationDBCluster`, `DestinationScyllaInstanceParamsBuilder`) for AWS, modeled after `OracleDBCluster`.
-4. **Integrate destination cluster lifecycle** into `ClusterTester` (initialization, stop, cleanup, log collection).
-5. **Maintain 100% backwards compatibility** — all existing single-cluster tests must work without any changes.
-6. **Expose the destination cluster** as `self.destination_cluster` in `ClusterTester`, separate from `self.db_cluster` (the source).
+1. **Source-first design** — the existing SUT cluster (`self.db_cluster`) is the source cluster. When no destination is configured, it also serves as the default target. No new concepts are introduced to single-cluster tests.
+2. **Support nested configuration** — destination cluster properties are defined in a `destination:` YAML block, with inheritance from global defaults. This avoids a proliferation of prefixed flat fields and keeps test YAMLs readable.
+3. **Implement a trigger mechanism** — the presence of a `destination:` block with `n_db_nodes > 0` enables dual-cluster provisioning (no `db_type` change required).
+4. **Add provisioning classes** (`DestinationDBCluster`, `DestinationScyllaInstanceParamsBuilder`) for AWS, modeled after `OracleDBCluster`.
+5. **Integrate destination cluster lifecycle** into `ClusterTester` (initialization, stop, cleanup, log collection).
+6. **Maintain 100% backwards compatibility** — all existing single-cluster tests must work without any changes.
+7. **Expose the destination cluster** as `self.destination_cluster` in `ClusterTester`, separate from `self.db_cluster` (the source).
+8. **Keep the design extensible** — the nested configuration and cluster references should not preclude future use of `reuse_cluster` per cluster role (for Spark and similar scenarios).
 
 ## Implementation Phases
 
-### Phase 1: Configuration Fields and Defaults
+### Phase 1: Nested Configuration and Defaults
 
-**Objective**: Add all configuration fields and defaults for the destination cluster.
+**Objective**: Add destination cluster configuration using a nested YAML layout, with defaults inherited from global (source) settings.
 
-**Deliverables**:
+#### Configuration Layout: Nested YAML
 
-Add the following fields to `SCTConfiguration` in `sdcm/sct_config.py`:
+Rather than adding many flat `destination_*` prefixed fields (which is error-prone for users and hard to maintain), the destination cluster is configured using a **nested `destination:` block**. Properties inside this block override the corresponding global (source) defaults. Any property not specified in the `destination:` block is inherited from the top-level configuration.
 
-| New Field | Type | Modeled After | Description |
-|-----------|------|---------------|-------------|
-| `n_db_destination_nodes` | `IntOrList` | `n_test_oracle_db_nodes` | Node count for destination cluster |
-| `destination_scylla_version` | `String` | `oracle_scylla_version` | Scylla version for destination |
-| `instance_type_db_destination` | `String` | `instance_type_db_oracle` | AWS instance type |
-| `ami_id_db_destination` | `String` | `ami_id_db_oracle` | AMI ID (auto-resolved from version) |
-| `append_scylla_args_destination` | `String` | `append_scylla_args_oracle` | Extra CLI arguments |
-| `destination_user_data_format_version` | `String` | `oracle_user_data_format_version` | User-data format override |
-| `azure_instance_type_db_destination` | `String` | `azure_instance_type_db_oracle` | Azure VM size |
-| `post_behavior_destination_db_nodes` | `Literal["destroy","keep","keep-on-failure"]` | `post_behavior_vector_store_nodes` | Independent post-behavior control |
+**YAML Example**:
 
-Add a `has_destination_cluster` property to `SCTConfiguration` that returns `True` when `n_db_destination_nodes` is set and greater than 0.
+```yaml
+# Global settings — these define the source cluster (SUT)
+scylla_version: "2024.2"
+instance_type_db: "i4i.large"
+n_db_nodes: 3
+cluster_backend: "aws"
+
+# Destination cluster — only overrides what differs from source
+destination:
+  scylla_version: "2025.1"     # different version for destination
+  n_db_nodes: 3                # required: how many destination nodes
+  instance_type_db: "i3.large" # optional: different instance type
+  # inherits cluster_backend, region_name, etc. from global
+```
+
+**Single-cluster test (no change)**:
+
+```yaml
+# No 'destination:' block — standard single-cluster test
+scylla_version: "2024.2"
+instance_type_db: "i4i.large"
+n_db_nodes: 3
+```
+
+The source cluster (`self.db_cluster`) is always the SUT. When no `destination:` block is present, the source cluster is also the implicit target — the test behaves identically to today.
+
+#### Implementation in SCTConfiguration
+
+The `destination:` block maps to a set of dedicated fields in `SCTConfiguration` in `sdcm/sct_config.py`. Internally, during `__init__()`, when a `destination:` key is present in the merged YAML, its values are unpacked into these fields. Any value not provided in the `destination:` block falls back to the corresponding global field.
+
+**Fields to add to `SCTConfiguration`**:
+
+| New Field | Type | Inherits From (global) | Description |
+|-----------|------|------------------------|-------------|
+| `destination_n_db_nodes` | `IntOrList` | `n_db_nodes` | Node count for destination cluster |
+| `destination_scylla_version` | `String` | `scylla_version` | Scylla version for destination |
+| `destination_instance_type_db` | `String` | `instance_type_db` | AWS instance type |
+| `destination_ami_id_db` | `String` | `ami_id_db_scylla` | AMI ID (auto-resolved from version) |
+| `destination_append_scylla_args` | `String` | `append_scylla_args` | Extra CLI arguments |
+| `destination_user_data_format_version` | `String` | `user_data_format_version` | User-data format override |
+| `destination_azure_instance_type_db` | `String` | `azure_instance_type_db` | Azure VM size |
+| `post_behavior_destination_db_nodes` | `Literal["destroy","keep","keep-on-failure"]` | — | Independent post-behavior control |
+
+**Parsing logic** (in `SCTConfiguration.__init__()`):
+
+```python
+# After loading and merging all config sources:
+if destination_block := merged_config.pop("destination", None):
+    for key, value in destination_block.items():
+        self[f"destination_{key}"] = value
+    # For any destination field not explicitly set, inherit from global:
+    if not self.get("destination_scylla_version"):
+        self["destination_scylla_version"] = self.get("scylla_version")
+    if not self.get("destination_instance_type_db"):
+        self["destination_instance_type_db"] = self.get("instance_type_db")
+    # ... etc for each inheritable field
+```
+
+**`has_destination_cluster` property**:
+
+```python
+@property
+def has_destination_cluster(self) -> bool:
+    n_dest = self.get("destination_n_db_nodes")
+    if n_dest is None:
+        return False
+    if isinstance(n_dest, int):
+        return n_dest > 0
+    if isinstance(n_dest, list):
+        return any(n > 0 for n in n_dest)
+    return False
+```
+
+**Trigger**: The presence of a `destination:` block with `n_db_nodes > 0` triggers dual-cluster provisioning. If `destination:` is absent or `n_db_nodes` is 0, no destination cluster is provisioned.
 
 Add defaults to `defaults/test_default.yaml`:
 
 ```yaml
 # destination cluster defaults
-n_db_destination_nodes: 0
-append_scylla_args_destination: ''
 post_behavior_destination_db_nodes: 'destroy'
 ```
 
-Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration.__init__()`, following the existing oracle pattern at lines 2504–2530. When resolving AMIs, the architecture lookup should fall back to `instance_type_db` if `instance_type_db_destination` is not set (since the architecture is derived from the instance type).
+Note: No default for `destination_n_db_nodes` is needed — the absence of the `destination:` block means no destination cluster.
+
+Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration.__init__()`, following the existing oracle pattern at lines 2504–2530. When resolving AMIs, the architecture lookup uses `destination_instance_type_db` (which falls back to `instance_type_db` via inheritance).
 
 **Definition of Done**:
-- All fields are defined in `SCTConfiguration` with `SctField` descriptors
-- Defaults are present in `defaults/test_default.yaml`
-- `has_destination_cluster` property works correctly (False by default, True when nodes > 0)
+- Nested `destination:` YAML block is parsed and mapped to `destination_*` fields
+- Inheritance from global config works for unspecified destination properties
+- `has_destination_cluster` property works correctly (False when no destination block, True when nodes > 0)
 - AMI auto-resolution works for `destination_scylla_version` on AWS
 - `docs/configuration_options.md` is auto-generated (via pre-commit hook)
-- Unit tests cover: field existence, default values, `has_destination_cluster` with 0/positive/list values
+- Unit tests cover: nested parsing, inheritance, `has_destination_cluster` with various inputs, absence of destination block
 
 **Dependencies**: None (first phase)
 
@@ -131,13 +212,13 @@ Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration._
 
 **Deliverables**:
 
-1. **`sdcm/sct_provision/aws/instance_parameters_builder.py`** — Add `DestinationScyllaInstanceParamsBuilder(ScyllaInstanceParamsBuilder)` mapping `instance_type_db_destination`, `ami_id_db_destination`, `root_disk_size_db`.
+1. **`sdcm/sct_provision/aws/instance_parameters_builder.py`** — Add `DestinationScyllaInstanceParamsBuilder(ScyllaInstanceParamsBuilder)` mapping `destination_instance_type_db`, `destination_ami_id_db`, `root_disk_size_db`.
 
 2. **`sdcm/sct_provision/aws/cluster.py`** — Add `DestinationDBCluster(ClusterBase)`:
    - `_NODE_TYPE = "destination-db"`
    - `_NODE_PREFIX = "destination"`
-   - `_INSTANCE_TYPE_PARAM_NAME = "instance_type_db_destination"`
-   - `_NODE_NUM_PARAM_NAME = "n_db_destination_nodes"`
+   - `_INSTANCE_TYPE_PARAM_NAME = "destination_instance_type_db"`
+   - `_NODE_NUM_PARAM_NAME = "destination_n_db_nodes"`
    - `_INSTANCE_PARAMS_BUILDER = DestinationScyllaInstanceParamsBuilder`
    - `_USER_PARAM = "ami_db_scylla_user"`
    - `_user_data` property using `destination_user_data_format_version`
@@ -160,11 +241,13 @@ Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration._
 
 **Objective**: Wire the destination cluster into `ClusterTester`'s initialization, lifecycle, and teardown.
 
+**Source-First Principle**: `self.db_cluster` is always the source cluster. In single-cluster tests it also serves as the implicit target — no code changes needed. Only when `self.params.has_destination_cluster` is True does a second cluster get created.
+
 **Deliverables**:
 
 1. **`sdcm/tester.py` — `setUp()`** (around line 1255): Initialize `self.destination_cluster = None`.
 
-2. **`sdcm/tester.py` — `get_cluster_aws()`**: Add a `"destination_scylla"` branch in the `create_cluster()` inner function that builds a `ScyllaAWSCluster` using destination-specific params. After the `db_type` branching logic (line ~1886), add:
+2. **`sdcm/tester.py` — `get_cluster_aws()`**: Add a `"destination_scylla"` branch in the `create_cluster()` inner function that builds a `ScyllaAWSCluster` using destination-specific params (`destination_ami_id_db`, `destination_instance_type_db`, `destination_n_db_nodes`). After the `db_type` branching logic (line ~1886), add:
    ```python
    if self.params.has_destination_cluster:
        self.destination_cluster = create_cluster("destination_scylla")
@@ -183,7 +266,7 @@ Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration._
 
 **Backwards Compatibility**:
 - `self.db_cluster` remains the source cluster — existing tests referencing `self.db_cluster.nodes` are unaffected.
-- `self.destination_cluster` is `None` by default; only tests that set `n_db_destination_nodes > 0` will have it.
+- `self.destination_cluster` is `None` by default; only tests with a `destination:` block and `n_db_nodes > 0` will have it.
 - The `db_type` field and existing oracle/mixed_scylla logic are untouched.
 
 **Definition of Done**:
@@ -266,7 +349,9 @@ Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration._
 
 ### Unit Tests (Phases 1–3)
 
-- **Configuration tests**: Verify all new fields exist in `SCTConfiguration`, default values are correct, `has_destination_cluster` property returns correct values for 0, positive int, and list inputs.
+- **Nested config parsing**: Verify `destination:` YAML block is correctly parsed into `destination_*` fields.
+- **Inheritance tests**: Verify that omitting a field in `destination:` inherits the global value (e.g., `instance_type_db`).
+- **`has_destination_cluster`**: Returns False when no `destination:` block, True when `destination.n_db_nodes > 0`, False when `destination.n_db_nodes: 0`.
 - **Post-behavior tests**: Verify `get_post_behavior_actions()` includes `destination_db_nodes` with correct node type and action.
 - **Provisioning class tests**: Verify `DestinationDBCluster` and `DestinationScyllaInstanceParamsBuilder` have correct class attributes.
 - **Backwards compatibility**: Run full existing unit test suite — no test should break.
@@ -284,21 +369,23 @@ Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration._
 
 ## Success Criteria
 
-1. A test YAML with `n_db_destination_nodes: 3` and `destination_scylla_version: "2024.1"` provisions two independent Scylla clusters.
-2. Existing tests with `n_db_destination_nodes: 0` (default) behave identically to today — zero regressions.
-3. `self.destination_cluster` is available in test methods for cross-cluster operations.
-4. Both clusters' logs are collected and reported to Argus.
-5. Post-behavior settings independently control source and destination cluster lifecycle.
+1. A test YAML with a `destination:` block containing `n_db_nodes: 3` and `scylla_version: "2024.1"` provisions two independent Scylla clusters.
+2. Destination properties inherit from global config — e.g., omitting `instance_type_db` in the `destination:` block uses the global `instance_type_db`.
+3. Existing tests without a `destination:` block behave identically to today — zero regressions.
+4. `self.db_cluster` is always the source; `self.destination_cluster` is available for cross-cluster operations.
+5. Both clusters' logs are collected and reported to Argus.
+6. Post-behavior settings independently control source and destination cluster lifecycle.
 
 ## Risk Mitigation
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Existing tests break | High | Default `n_db_destination_nodes: 0` ensures no provisioning; `destination_cluster` is `None` by default |
-| AMI resolution failure for destination version | Medium | Use same resolution logic as oracle; fall back to `instance_type_db` for architecture detection when `instance_type_db_destination` is not set; raise clear error on resolution failure |
+| Existing tests break | High | No `destination:` block means no destination cluster; `destination_cluster` is `None` by default |
+| AMI resolution failure for destination version | Medium | Use same resolution logic as oracle; inherit `instance_type_db` for architecture detection when `destination_instance_type_db` is not set; raise clear error on resolution failure |
 | Cross-cluster networking complexity | Medium | Phase 5 is isolated; early phases work with clusters in the same VPC/region |
 | Resource leaks (destination cluster not cleaned up) | High | Independent `post_behavior_destination_db_nodes` with default `destroy`; explicit teardown in `clean_resources()` |
-| Configuration explosion (too many new fields) | Low | Follow established oracle pattern; fields are optional with sensible defaults |
+| Nested config parsing complexity | Medium | Keep parsing logic simple — `destination:` is a flat dict of overrides, not deeply nested; validate against known field names |
+| Configuration explosion (too many new fields) | Low | Nested block with inheritance reduces visible config surface; only overridden fields need to be specified |
 
 ## Open Questions
 
@@ -306,3 +393,5 @@ Add AMI resolution logic for `destination_scylla_version` in `SCTConfiguration._
 2. **Networking scope**: What level of cross-cluster networking is needed in Phase 5? This depends on the first cross-cluster feature being tested.
 3. **Log collection**: Should destination cluster logs go to a separate directory, or be co-located with source cluster logs under a `destination/` subdirectory?
 4. **Argus reporting**: How should dual-cluster test results be reported — as a single test run with metadata from both clusters, or as linked runs?
+5. **Environment variable mapping**: How should nested `destination:` block fields map to `SCT_*` environment variables? Options: `SCT_DESTINATION_SCYLLA_VERSION` or `SCT_DESTINATION__SCYLLA_VERSION` (double underscore for nesting).
+6. **Spark / cluster reuse**: When implementing `reuse_cluster` per cluster role, should it be `destination.reuse_cluster` in the nested block, or a separate top-level field? Deferred to future implementation.
