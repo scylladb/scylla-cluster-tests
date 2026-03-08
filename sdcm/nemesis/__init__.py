@@ -429,6 +429,7 @@ class NemesisRunner:
         if interval:
             self.interval = interval * 60
         self.log.info("Interval: %s s", self.interval)
+        consecutive_skips = {}
         try:
             while not self.termination_event.is_set():
                 if cycles_count == 0:
@@ -438,8 +439,32 @@ class NemesisRunner:
                 cur_interval = self.interval
                 try:
                     self.call_next_nemesis()
+                    consecutive_skips.clear()
                 except (UnsupportedNemesis, MethodVersionNotFound) as exc:
-                    self.log.warning("Skipping unsupported nemesis: %s", exc)
+                    self.log.warning("Skipping unsupported nemesis %s: %s", self.current_disruption, exc)
+                    nemesis_name = self.base_disruption_name
+                    consecutive_skips[nemesis_name] = consecutive_skips.get(nemesis_name, 0) + 1
+                    total_skips = sum(consecutive_skips.values())
+                    if len(self.disruptions_list) == 1 and consecutive_skips[nemesis_name] >= 3:
+                        InfoEvent(
+                            message=(
+                                f"Nemesis '{nemesis_name}' has been skipped {consecutive_skips[nemesis_name]} "
+                                f"times in a row. Stopping nemesis thread. Reason: {exc}"
+                            ),
+                            severity=Severity.CRITICAL,
+                        ).publish()
+                        cur_interval = 0
+                        break
+                    if total_skips >= 50:
+                        InfoEvent(
+                            message=(
+                                f"{total_skips} nemesis have been skipped in a row. "
+                                f"Stopping nemesis thread."
+                            ),
+                            severity=Severity.CRITICAL,
+                        ).publish()
+                        cur_interval = 0
+                        break
                     cur_interval = 0
                 finally:
                     self.node_allocator.unset_running_nemesis_from_all_nodes(self.current_disruption)
