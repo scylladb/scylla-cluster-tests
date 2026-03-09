@@ -7,15 +7,18 @@ on:
     types: [created]
   issues:
     types: [opened, assigned]
-  pull_request_review:
-    types: [submitted]
+  # NOTE: pull_request_review trigger is temporarily disabled.
+  # When Copilot submits a review, github.actor is set to "Copilot" which
+  # causes OIDC token exchange to fail with 401. Re-enable once upstream
+  # fix lands: https://github.com/anthropics/claude-code-action/issues/1017
+  # pull_request_review:
+  #   types: [submitted]
 
 jobs:
   claude:
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
     permissions:
