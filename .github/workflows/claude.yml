@@ -7,160 +7,38 @@ on:
     types: [created]
   issues:
     types: [opened, assigned]
-  # NOTE: pull_request_review trigger is temporarily disabled.
-  # When Copilot submits a review, github.actor is set to "Copilot" which
-  # causes OIDC token exchange to fail with 401. Re-enable once upstream
-  # fix lands: https://github.com/anthropics/claude-code-action/issues/1017
-  # pull_request_review:
-  #   types: [submitted]
+  pull_request_review:
+    types: [submitted]
 
 jobs:
   claude:
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
-      issues: write
+      contents: read
+      pull-requests: read
+      issues: read
       id-token: write
       actions: read # Required for Claude to read CI results on PRs
     steps:
-      - name: Check org membership
-        id: membership
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          COMMENT_LOGIN: ${{ github.event.comment.user.login }}
-          COMMENT_ASSOC: ${{ github.event.comment.author_association }}
-          REVIEW_LOGIN: ${{ github.event.review.user.login }}
-          REVIEW_ASSOC: ${{ github.event.review.author_association }}
-          ISSUE_LOGIN: ${{ github.event.issue.user.login }}
-          ISSUE_ASSOC: ${{ github.event.issue.author_association }}
-          ISSUE_ACTION: ${{ github.event.action }}
-          GITHUB_ACTOR: ${{ github.actor }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "$EVENT_NAME" = "issue_comment" ]; then
-            ACTOR="$COMMENT_LOGIN"
-            ASSOC="$COMMENT_ASSOC"
-          elif [ "$EVENT_NAME" = "pull_request_review_comment" ]; then
-            ACTOR="$COMMENT_LOGIN"
-            ASSOC="$COMMENT_ASSOC"
-          elif [ "$EVENT_NAME" = "pull_request_review" ]; then
-            ACTOR="$REVIEW_LOGIN"
-            ASSOC="$REVIEW_ASSOC"
-          elif [ "$EVENT_NAME" = "issues" ]; then
-            if [ "$ISSUE_ACTION" = "assigned" ]; then
-              # For assigned events, the actor is the person who assigned the issue,
-              # not the issue creator. Query the assignor's actual permission level.
-              ACTOR="$GITHUB_ACTOR"
-              ASSOC=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$GITHUB_ACTOR/permission" \
-                --jq 'if .role_name == "admin" then "OWNER" elif .role_name == "write" then "MEMBER" elif .role_name == "read" then "COLLABORATOR" else "NONE" end' 2>/dev/null || echo "NONE")
-            else
-              ACTOR="$ISSUE_LOGIN"
-              ASSOC="$ISSUE_ASSOC"
-            fi
-          else
-            ACTOR="$GITHUB_ACTOR"
-            ASSOC="NONE"
-          fi
-          echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
-
-          case "$ASSOC" in
-            OWNER|MEMBER|COLLABORATOR)
-              echo "is_member=true" >> "$GITHUB_OUTPUT"
-              echo "✅ $ACTOR has association $ASSOC — proceeding"
-              ;;
-            *)
-              echo "is_member=false" >> "$GITHUB_OUTPUT"
-              echo "❌ $ACTOR has association $ASSOC — not authorized"
-              ;;
-          esac
-
-      - name: Post denial comment
-        if: steps.membership.outputs.is_member != 'true' && steps.membership.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          ACTOR: ${{ steps.membership.outputs.actor }}
-        run: |
-          if [ "$EVENT_NAME" = "issue_comment" ]; then
-            NUMBER="$ISSUE_NUMBER"
-          elif [ "$EVENT_NAME" = "pull_request_review_comment" ] || [ "$EVENT_NAME" = "pull_request_review" ]; then
-            NUMBER="$PR_NUMBER"
-          elif [ "$EVENT_NAME" = "issues" ]; then
-            NUMBER="$ISSUE_NUMBER"
-          fi
-
-          if [ -n "$NUMBER" ]; then
-            DENIAL_BODY="⚠️ @${ACTOR}: \`@claude\` is restricted to scylladb organization members and collaborators. If you believe this is an error, please contact a repository maintainer."
-            # Avoid posting duplicate denial comments
-            LAST_BODY="$(gh api "repos/$GITHUB_REPOSITORY/issues/$NUMBER/comments" --jq '.[-1].body // ""' 2>/dev/null || echo "")"
-            if [ "$LAST_BODY" != "$DENIAL_BODY" ]; then
-              gh issue comment "$NUMBER" --body "$DENIAL_BODY"
-            else
-              echo "Skipping duplicate denial comment on #$NUMBER"
-            fi
-          fi
-
       - name: Checkout repository
-        if: steps.membership.outputs.is_member == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Fetch fork PR branch
-        if: |
-          steps.membership.outputs.is_member == 'true' && (
-            (github.event_name == 'issue_comment' && github.event.issue.pull_request) ||
-            github.event_name == 'pull_request_review_comment' ||
-            github.event_name == 'pull_request_review'
-          )
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          # Determine PR number based on event type
-          if [ "$EVENT_NAME" = "issue_comment" ]; then
-            PR_NUMBER="$ISSUE_NUMBER"
-          else
-            PR_NUMBER="$PULL_REQUEST_NUMBER"
-          fi
-
-          # Get the fork's clone URL and head branch name
-          PR_JSON=$(gh pr view "$PR_NUMBER" --json headRefName,headRepository,headRepositoryOwner)
-          HEAD_REF=$(echo "$PR_JSON" | jq -r '.headRefName')
-          HEAD_OWNER=$(echo "$PR_JSON" | jq -r '.headRepositoryOwner.login')
-          HEAD_REPO=$(echo "$PR_JSON" | jq -r '.headRepository.name')
-          ORIGIN_OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f1)
-
-          # If the PR is from a fork, redirect origin fetch URL to the fork
-          # so that claude-code-action's internal "git fetch origin <branch>" succeeds.
-          # Keep push URL pointing at the base repo for branch creation.
-          # NOTE: After this step, "git fetch origin" pulls from the fork. If the
-          # fork contains adversarial prompt-injection content, Claude could be
-          # manipulated to take unintended actions against the base repo (which has
-          # contents:write). This risk is mitigated by the auth check above ensuring
-          # only org members/collaborators can trigger this workflow.
-          if [ "$HEAD_OWNER" != "$ORIGIN_OWNER" ]; then
-            echo "PR #$PR_NUMBER is from fork $HEAD_OWNER/$HEAD_REPO, fetching branch $HEAD_REF"
-            ORIGIN_URL=$(git remote get-url origin)
-            git remote set-url origin "https://github.com/$HEAD_OWNER/$HEAD_REPO.git"
-            git config remote.origin.pushurl "$ORIGIN_URL"
-          fi
-
       - name: Run Claude Code
-        if: steps.membership.outputs.is_member == 'true'
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          # This is an optional setting that allows Claude to read CI results on PRs
+          additional_permissions: |
+            actions: read
 
           # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
           # prompt: 'Update the pull request description to include a summary of changes.'
@@ -169,3 +47,4 @@ jobs:
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
           # claude_args: '--allowed-tools Bash(gh pr:*)'
+
