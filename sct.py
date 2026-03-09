@@ -1327,11 +1327,17 @@ def _run_yaml_test(backend, full_path, env):
     return error, output
 
 
-@cli.command(help="Test yaml in test-cases directory")
+@cli.command(help="[DEPRECATED] Test yaml in test-cases directory. Use 'lint-pipelines' instead.")
 @click.option("-b", "--backend", type=click.Choice(available_backends), default="aws")
 @click.option("-i", "--include", type=str, default="")
 @click.option("-e", "--exclude", type=str, default="")
 def lint_yamls(backend, exclude: str, include: str):
+    click.secho(
+        "WARNING: 'lint-yamls' is deprecated. Use 'lint-pipelines' instead.\n"
+        "  For single-file validation: sct.py lint-pipelines --pipeline-file <path>\n"
+        "  For full validation: sct.py lint-pipelines\n",
+        fg="yellow",
+    )
     if not include:
         raise ValueError("You did not provide include filters")
 
@@ -1376,6 +1382,97 @@ def lint_yamls(backend, exclude: str, include: str):
             click.secho("\n".join(pp_output), fg="green")
     print()
     sys.exit(1 if failed else 0)
+
+
+def _validate_single_pipeline(pipeline_path, env):
+    """Worker function for lint-pipelines ProcessPoolExecutor."""
+    # Deferred import: runs in worker process to avoid importing heavy deps in main process
+    from sdcm.utils.lint.validator import validate_pipeline  # noqa: PLC0415
+
+    return str(pipeline_path), validate_pipeline(Path(pipeline_path), env)
+
+
+def _discover_and_parse_pipelines(pipeline_dir, pipeline_file, include_filter, exclude_filter):
+    """Discover pipeline files, parse them, and build validation environments."""
+    # Deferred imports: only needed when lint-pipelines command is invoked
+    from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile, discover_pipeline_files  # noqa: PLC0415
+    from sdcm.utils.lint.env_builder import build_env  # noqa: PLC0415
+
+    original_env = {**os.environ}
+
+    include_re = re.compile(include_filter) if include_filter else None
+    exclude_re = re.compile(exclude_filter) if exclude_filter else None
+
+    if pipeline_file:
+        pipeline_files = [Path(pipeline_file)]
+    else:
+        pipeline_files = discover_pipeline_files(Path(pipeline_dir))
+
+    if include_re:
+        pipeline_files = [f for f in pipeline_files if include_re.search(str(f))]
+    if exclude_re:
+        pipeline_files = [f for f in pipeline_files if not exclude_re.search(str(f))]
+
+    tasks = []
+    skipped = 0
+    for path in pipeline_files:
+        config = parse_jenkinsfile(path)
+        if config is None:
+            skipped += 1
+            continue
+        env = build_env(config)
+        merged_env = {**original_env, **env}
+        tasks.append((str(path), merged_env))
+
+    return tasks, skipped
+
+
+@cli.command("lint-pipelines", help="Validate configurations from Jenkins pipeline files")
+@click.option("--pipeline-dir", default="jenkins-pipelines", help="Root directory of pipeline files")
+@click.option("--pipeline-file", default=None, help="Validate a single pipeline file (ad-hoc mode)")
+@click.option("--workers", default=None, type=int, help="Number of parallel workers (default: CPU count)")
+@click.option("-i", "--include", "include_filter", default="", help="Regex filter to include specific pipeline files")
+@click.option("-e", "--exclude", "exclude_filter", default="", help="Regex filter to exclude specific pipeline files")
+def lint_pipelines(pipeline_dir, pipeline_file, workers, include_filter, exclude_filter):
+    tasks, skipped = _discover_and_parse_pipelines(
+        pipeline_dir,
+        pipeline_file,
+        include_filter,
+        exclude_filter,
+    )
+
+    if not tasks:
+        click.echo("No pipeline files to validate.")
+        sys.exit(0)
+
+    worker_count = workers or os.cpu_count() or 4
+    process_pool = ProcessPoolExecutor(max_workers=worker_count)
+
+    futures = [process_pool.submit(_validate_single_pipeline, path, env) for path, env in tasks]
+
+    failed_count = 0
+    passed_count = 0
+    for future in futures:
+        path, (is_error, error_msg) = future.result()
+        if is_error:
+            failed_count += 1
+            click.secho(f"FAIL: {path}", fg="red", bold=True)
+            lines = error_msg.strip().splitlines()
+            if lines:
+                click.secho(f"  {lines[-1]}", fg="red")
+            click.echo()
+        else:
+            passed_count += 1
+
+    total = passed_count + failed_count
+    click.echo("---")
+    summary = f"{passed_count}/{total} pipelines passed"
+    if skipped:
+        summary += f" ({skipped} skipped)"
+    if failed_count:
+        summary += f" ({failed_count} failed)"
+    click.secho(summary, fg="green" if failed_count == 0 else "red")
+    sys.exit(1 if failed_count else 0)
 
 
 @cli.command(help="Check test configuration file")
