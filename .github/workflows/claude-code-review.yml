@@ -1,12 +1,14 @@
 name: Claude Code Review
 
 on:
-  # Use pull_request_target so OIDC tokens and secrets are available for fork PRs
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
 
 jobs:
   claude-review:
+    # Skip fork PRs — OIDC tokens and secrets are not available for them.
+    # Fork contributors can still get reviews by tagging @claude in a comment.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -18,7 +20,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
 
       - name: Run Claude Code Review
