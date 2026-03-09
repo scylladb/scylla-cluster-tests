@@ -10,7 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2023 ScyllaDB
-import os
 import logging
 
 import pytest
@@ -29,8 +28,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 @pytest.fixture(name="kafka_cluster", scope="function")
-def fixture_kafka_cluster(tmp_path_factory, params):
-    os.environ["_SCT_TEST_LOGDIR"] = str(tmp_path_factory.mktemp("logs"))
+def fixture_kafka_cluster(tmp_path_factory, params, monkeypatch):
+    monkeypatch.setenv("_SCT_TEST_LOGDIR", str(tmp_path_factory.mktemp("logs")))
     kafka = LocalKafkaCluster(params=params)
 
     kafka.start()
