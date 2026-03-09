@@ -19,3 +19,4 @@ from sdcm.sct_provision.region_definition_builder import RegionDefinitionBuilder
 region_definition_builder = RegionDefinitionBuilder()
 region_definition_builder.register_builder(backend="azure", builder_class=AzureDefinitionBuilder)
 region_definition_builder.register_builder(backend="gce", builder_class=GceDefinitionBuilder)
+region_definition_builder.register_builder(backend="k8s-gke", builder_class=GceDefinitionBuilder)

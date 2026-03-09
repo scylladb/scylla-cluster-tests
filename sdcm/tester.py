@@ -2177,6 +2177,18 @@ class ClusterTester(unittest.TestCase):
 
         # Deploy main VM-based monitoring
         if self.params.get("n_monitor_nodes") > 0:
+            test_id = str(self.test_config.test_id())
+            provisioners: List[GceProvisioner] = []
+            for datacenter in gce_datacenters:
+                provisioners.append(
+                    provisioner_factory.create_provisioner(
+                        backend="k8s-gke",
+                        test_id=test_id,
+                        region=datacenter,
+                        availability_zone=self.params.get("availability_zone"),
+                        network_name=self.params.get("gce_network"),
+                    )
+                )
             for i in range(self.k8s_clusters[0].tenants_number):
                 self.log.debug("Create monitor for the DB cluster №%s", i + 1)
                 self.monitors_multitenant.append(
@@ -2191,6 +2203,7 @@ class ClusterTester(unittest.TestCase):
                         gce_datacenter=gce_datacenters,
                         gce_service=get_gce_compute_instances_client(),
                         credentials=self.credentials,
+                        provisioners=provisioners,
                         user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
                         n_nodes=self.params.get("n_monitor_nodes"),
                         targets={

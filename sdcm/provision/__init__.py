@@ -16,3 +16,4 @@ from sdcm.provision.provisioner import provisioner_factory
 
 provisioner_factory.register_provisioner(backend="azure", provisioner_class=AzureProvisioner)
 provisioner_factory.register_provisioner(backend="gce", provisioner_class=GceProvisioner)
+provisioner_factory.register_provisioner(backend="k8s-gke", provisioner_class=GceProvisioner)

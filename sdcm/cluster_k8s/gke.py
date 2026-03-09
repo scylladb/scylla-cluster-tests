@@ -38,6 +38,7 @@ from sdcm.utils.ci_tools import get_test_name
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
 from sdcm.cluster_gce import MonitorSetGCE
+from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.keystore import KeyStore
 from sdcm.remote import LOCALRUNNER
 
@@ -654,7 +655,13 @@ class MonitorSetGKE(MonitorSetGCE):
         instances_by_nodetype = list_instances_gce(tags_dict={"MonitorId": self.monitor_id, "NodeType": self.node_type})
         instances_by_zone = self._get_instances_by_prefix(dc_idx)
         instances = []
-        ip_addresses = gce_public_addresses if self._node_public_ips else gce_private_addresses
+        # Use ssh_connection_ip_type from params if _node_public_ips is not yet set (during __init__)
+        # If _node_public_ips exists, use it; otherwise fallback to ssh_connection_ip_type
+        if hasattr(self, "_node_public_ips"):
+            use_public_ips = bool(self._node_public_ips)
+        else:
+            use_public_ips = ssh_connection_ip_type(self.params) == "public"
+        ip_addresses = gce_public_addresses if use_public_ips else gce_private_addresses
         for node_zone in instances_by_zone:
             # Filter nodes by zone and by ip addresses
             if not ip_addresses(node_zone):
