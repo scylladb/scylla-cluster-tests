@@ -128,7 +128,8 @@ def _parse_test_config(raw_value: str) -> list[str]:
             parsed = json.loads(json_str)
             if isinstance(parsed, list):
                 return [str(item).strip() for item in parsed if str(item).strip()]
-        except json.JSONDecodeError, ValueError:
+        except (json.JSONDecodeError, ValueError):
+            # Fall back to treating as a single file string
             pass
 
     # Single file string
