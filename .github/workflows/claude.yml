@@ -30,6 +30,26 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Fetch fork PR branch
+        if: github.event_name == 'issue_comment' && github.event.issue.pull_request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER=${{ github.event.issue.number }}
+          # Get the fork's clone URL and head branch name
+          PR_JSON=$(gh pr view "$PR_NUMBER" --json headRefName,headRepository,headRepositoryOwner)
+          HEAD_REF=$(echo "$PR_JSON" | jq -r '.headRefName')
+          HEAD_OWNER=$(echo "$PR_JSON" | jq -r '.headRepositoryOwner.login')
+          HEAD_REPO=$(echo "$PR_JSON" | jq -r '.headRepository.name')
+          ORIGIN_OWNER=$(echo "${{ github.repository }}" | cut -d/ -f1)
+          # If the PR is from a fork, add the fork as a remote and fetch the branch
+          if [ "$HEAD_OWNER" != "$ORIGIN_OWNER" ]; then
+            echo "PR #$PR_NUMBER is from fork $HEAD_OWNER/$HEAD_REPO, fetching branch $HEAD_REF"
+            git remote add fork "https://github.com/$HEAD_OWNER/$HEAD_REPO.git"
+            git fetch fork "$HEAD_REF"
+            git branch "$HEAD_REF" "fork/$HEAD_REF"
+          fi
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
