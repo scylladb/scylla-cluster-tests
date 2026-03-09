@@ -2785,10 +2785,18 @@ class SCTConfiguration(BaseModel):
         zero_nodes_num = self.get("n_db_zero_token_nodes")
         data_nodes_num = self.get("n_db_nodes")
         zero_nodes_num = (
-            [zero_nodes_num] if isinstance(zero_nodes_num, int) else [int(i) for i in str(zero_nodes_num).split()]
+            zero_nodes_num
+            if isinstance(zero_nodes_num, list)
+            else [zero_nodes_num]
+            if isinstance(zero_nodes_num, int)
+            else [int(i) for i in str(zero_nodes_num).split()]
         )
         data_nodes_num = (
-            [data_nodes_num] if isinstance(data_nodes_num, int) else [int(i) for i in str(data_nodes_num).split()]
+            data_nodes_num
+            if isinstance(data_nodes_num, list)
+            else [data_nodes_num]
+            if isinstance(data_nodes_num, int)
+            else [int(i) for i in str(data_nodes_num).split()]
         )
         total_nodes = data_nodes_num[:]
         if use_zero_nodes and zero_nodes_num:
