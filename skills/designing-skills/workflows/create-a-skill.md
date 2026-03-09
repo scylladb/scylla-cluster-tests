@@ -1,26 +1,34 @@
 # Creating a New SCT Skill
 
-A 5-phase process for creating a skill from scratch in the SCT repository.
+A 6-phase process for creating a skill from scratch in the SCT repository.
 
 ---
 
-## Phase 1: Define Scope
+## Phase 1: Capture Intent and Define Scope
 
 **Entry:** You have a task domain in mind (e.g., "unit testing", "code review", "writing plans").
 
 **Actions:**
 
-1. **Draft the `description` first.** This is the most important field. Claude Code uses it to decide activation. Use third-person voice, include trigger keywords and exclusions. Test it: would this description activate for the right requests and stay silent for wrong ones?
+1. **Gather concrete intent.** Before writing anything, collect:
+   - 5-10 example user prompts that should trigger this skill
+   - 3-5 example prompts that are related but should NOT trigger
+   - 2-3 examples of expected output (what does "good" look like?)
+   - Known failure modes (what would "bad" output look like?)
 
-2. **Write the "When to Use" section.** List 4-6 specific scenarios where the skill applies. Be concrete: "when writing a new unit test file in `unit_tests/`" not "when doing testing."
+   This step prevents writing generic skills that don't match real usage. If you're creating the skill for yourself, write the examples from your own experience. If for a team, ask for examples.
 
-3. **Write the "When NOT to Use" section.** List 3-5 scenarios where a different approach is better. Name the alternative: "use integration-testing skill for backend-specific tests" not "not for complex tests."
+2. **Draft the `description` first.** This is the most important field. Claude Code uses it to decide activation. Use third-person voice, include trigger keywords and exclusions. Verify: under 1024 characters, no angle brackets.
 
-4. **Define 3-5 essential principles.** These are non-negotiable rules for every invocation. Ask: "What mistake would ruin the output if the LLM made it?" Each principle guards against a specific failure mode.
+3. **Write the "When to Use" section.** List 4-6 specific scenarios where the skill applies. Draw from the example prompts gathered in step 1. Be concrete: "when writing a new unit test file in `unit_tests/`" not "when doing testing."
 
-5. **Verify SCT alignment.** Check that your scope aligns with SCT conventions in `AGENTS.md` and `.github/copilot-instructions.md`.
+4. **Write the "When NOT to Use" section.** List 3-5 scenarios where a different approach is better. Draw from the should-NOT-trigger prompts. Name the alternative: "use integration-testing skill for backend-specific tests" not "not for complex tests."
 
-**Exit:** Draft description, When to Use, When NOT to Use, and essential principles documented.
+5. **Define 3-5 essential principles.** These are non-negotiable rules for every invocation. Ask: "What mistake would ruin the output if the LLM made it?" Each principle guards against a specific failure mode. Every principle must explain WHY — reasoning helps the LLM generalize to cases the rule didn't explicitly cover.
+
+6. **Verify SCT alignment.** Check that your scope aligns with SCT conventions in `AGENTS.md` and `.github/copilot-instructions.md`.
+
+**Exit:** Example prompts collected, draft description, When to Use, When NOT to Use, and essential principles documented.
 
 ---
 
@@ -122,13 +130,17 @@ A 5-phase process for creating a skill from scratch in the SCT repository.
 
 1. **Verify all file references.** Every path in SKILL.md must resolve to an existing file.
 
-2. **Check frontmatter.** Valid YAML with `name` (kebab-case, matches directory) and `description` (third-person, trigger keywords).
+2. **Check frontmatter.** Valid YAML with:
+   - `name`: kebab-case, matches directory, max 64 characters
+   - `description`: third-person, trigger keywords, max 1024 characters, no angle brackets
 
 3. **Read the description in isolation.** Would it activate for the right requests and stay silent for wrong ones?
 
 4. **Read SKILL.md as a fresh reader.** Is the structure clear? Could an LLM follow it without prior context?
 
-5. **Scan for anti-patterns.** Check against the anti-pattern catalog (see SKILL.md → Reference Index → anti-patterns.md):
+5. **Check every instruction has a WHY.** Scan for rules that only say WHAT to do. Add reasoning where missing.
+
+6. **Scan for anti-patterns.** Check against the anti-pattern catalog (see SKILL.md → Reference Index → anti-patterns.md):
    - No monolithic SKILL.md (AP-2)
    - No reference chains (AP-3)
    - No unnumbered phases (AP-4)
@@ -138,11 +150,35 @@ A 5-phase process for creating a skill from scratch in the SCT repository.
    - No missing discovery configuration (AP-9)
    - No description summarizing workflow steps (AP-11)
    - No SCT convention violations in examples (AP-12)
+   - No missing trigger tests (AP-14)
+   - No description constraint violations (AP-15)
+   - No missing intent capture (AP-16)
+   - No instructions without reasoning (AP-17)
 
-6. **Run pre-commit (if environment supports it).** Execute `uv run sct.py pre-commit` to verify no formatting issues. This requires a working Python environment with dependencies installed; if unavailable, manually verify trailing whitespace, end-of-file newlines, and YAML validity.
+7. **Run pre-commit (if environment supports it).** Execute `uv run sct.py pre-commit` to verify no formatting issues. This requires a working Python environment with dependencies installed; if unavailable, manually verify trailing whitespace, end-of-file newlines, and YAML validity.
 
-7. **Verify dual-platform registration:**
+8. **Verify dual-platform registration:**
    - `AGENTS.md` has the skill in its Skills table
    - `CLAUDE.md` has the `@skills/<name>/SKILL.md` import
 
-**Exit:** All checks pass. Skill is ready for use.
+**Exit:** All structural checks pass.
+
+---
+
+## Phase 6: Test Triggers and Iterate
+
+**Entry:** Phase 5 complete. Skill passes structural validation.
+
+**Actions:**
+
+1. **Use eval queries from Phase 1.** Take the example prompts gathered during intent capture. If you didn't gather them, write them now (5-10 should-trigger, 3-5 should-NOT-trigger).
+
+2. **Test the description against each query.** Read only the description field. For each query, decide: would Claude activate this skill? Score pass/fail.
+
+3. **Fix any failures.** For false negatives, add missing trigger keywords. For false positives, narrow scope with exclusions or more specific terms. See [test-and-iterate.md](test-and-iterate.md) for the full process.
+
+4. **Apply the lean test.** Re-read every instruction in the skill. Remove anything that doesn't improve output quality — bloated skills dilute LLM attention.
+
+5. **Final verification.** Re-run Phase 5 checks after any changes made during iteration.
+
+**Exit:** All trigger eval queries pass. Skill is lean and well-reasoned. Ready for use.
