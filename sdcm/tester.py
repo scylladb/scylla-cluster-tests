@@ -3393,8 +3393,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.argus_collect_gemini_results()
         self.destroy_localhost()
         self.stop_event_device()
-        with silence(parent=self, name="Cleaning up SSL config directory"):
-            cleanup_ssl_config()
+        if not self.test_config.KEEP_ALIVE_DB_NODES:
+            with silence(parent=self, name="Cleaning up SSL config directory"):
+                cleanup_ssl_config()
 
         self.finalize_teardown()
         self.argus_finalize_test_run()
