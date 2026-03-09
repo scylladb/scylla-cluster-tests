@@ -114,6 +114,7 @@ class GCENode(cluster.BaseNode):
     def is_gce() -> bool:
         return True
 
+    @cluster.terminate_on_failure
     def init(self):
         self._wait_public_ip()
 
