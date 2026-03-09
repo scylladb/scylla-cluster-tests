@@ -1,14 +1,15 @@
 name: Claude Code Review
 
 on:
-  pull_request:
+  # Use pull_request_target so the workflow runs in the base repo context,
+  # giving it access to secrets even for fork PRs. The code-review plugin
+  # fetches the diff via the GitHub API — fork code is never checked out
+  # or executed.
+  pull_request_target:
     types: [opened, synchronize, ready_for_review, reopened]
 
 jobs:
   claude-review:
-    # Skip fork PRs — OIDC tokens and secrets are not available for them.
-    # Fork contributors can still get reviews by tagging @claude in a comment.
-    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -17,12 +18,51 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout repository
+      - name: Check author authorization
+        id: authz
+        env:
+          ASSOC: ${{ github.event.pull_request.author_association }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          IS_FORK="true"
+          if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+            IS_FORK="false"
+          fi
+          echo "author=$AUTHOR" >> "$GITHUB_OUTPUT"
+          echo "is_fork=$IS_FORK" >> "$GITHUB_OUTPUT"
+
+          if [ "$IS_FORK" = "false" ]; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Non-fork PR from $AUTHOR — auto-review enabled"
+            exit 0
+          fi
+
+          case "$ASSOC" in
+            OWNER|MEMBER|COLLABORATOR)
+              echo "authorized=true" >> "$GITHUB_OUTPUT"
+              echo "✅ Fork PR from $AUTHOR (association: $ASSOC) — auto-review enabled"
+              ;;
+            *)
+              echo "authorized=false" >> "$GITHUB_OUTPUT"
+              echo "⏭️ Fork PR from $AUTHOR (association: $ASSOC) — skipping auto-review"
+              echo "   Please contact a maintainer to request a review."
+              ;;
+          esac
+
+      - name: Checkout base repository
+        if: steps.authz.outputs.authorized == 'true'
         uses: actions/checkout@v6
         with:
+          # Always checkout the specific base commit, NEVER the fork's head ref.
+          # Using base.sha (not base.ref) prevents drift if the base branch advances
+          # while the workflow is running.
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 1
 
       - name: Run Claude Code Review
+        if: steps.authz.outputs.authorized == 'true'
         id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
