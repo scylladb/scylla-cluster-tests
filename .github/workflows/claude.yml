@@ -25,16 +25,78 @@ jobs:
       id-token: write
       actions: read # Required for Claude to read CI results on PRs
     steps:
+      - name: Check org membership
+        id: membership
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Determine who triggered this event and their association with the repo.
+          # author_association is set by GitHub and indicates the user's relationship
+          # to the repository — OWNER, MEMBER, or COLLABORATOR mean the user is trusted.
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            ACTOR="${{ github.event.comment.user.login }}"
+            ASSOC="${{ github.event.comment.author_association }}"
+          elif [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+            ACTOR="${{ github.event.comment.user.login }}"
+            ASSOC="${{ github.event.comment.author_association }}"
+          elif [ "${{ github.event_name }}" = "pull_request_review" ]; then
+            ACTOR="${{ github.event.review.user.login }}"
+            ASSOC="${{ github.event.review.author_association }}"
+          elif [ "${{ github.event_name }}" = "issues" ]; then
+            ACTOR="${{ github.event.issue.user.login }}"
+            ASSOC="${{ github.event.issue.author_association }}"
+          else
+            ACTOR="${{ github.actor }}"
+            ASSOC="NONE"
+          fi
+          echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
+
+          # Allow org members, repo owners, and collaborators
+          case "$ASSOC" in
+            OWNER|MEMBER|COLLABORATOR)
+              echo "is_member=true" >> "$GITHUB_OUTPUT"
+              echo "✅ $ACTOR has association $ASSOC — proceeding"
+              ;;
+            *)
+              echo "is_member=false" >> "$GITHUB_OUTPUT"
+              echo "❌ $ACTOR has association $ASSOC — not authorized"
+              ;;
+          esac
+
+      - name: Post denial comment
+        if: steps.membership.outputs.is_member != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Determine the issue/PR number for the comment
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            NUMBER="${{ github.event.issue.number }}"
+          elif [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+            NUMBER="${{ github.event.pull_request.number }}"
+          elif [ "${{ github.event_name }}" = "pull_request_review" ]; then
+            NUMBER="${{ github.event.pull_request.number }}"
+          elif [ "${{ github.event_name }}" = "issues" ]; then
+            NUMBER="${{ github.event.issue.number }}"
+          fi
+
+          if [ -n "$NUMBER" ]; then
+            gh issue comment "$NUMBER" \
+              --body "⚠️ @${{ steps.membership.outputs.actor }}: \`@claude\` is restricted to scylladb organization members. If you believe this is an error, please contact a repository maintainer."
+          fi
+
       - name: Checkout repository
+        if: steps.membership.outputs.is_member == 'true'
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
       - name: Fetch fork PR branch
         if: |
-          (github.event_name == 'issue_comment' && github.event.issue.pull_request) ||
-          github.event_name == 'pull_request_review_comment' ||
-          github.event_name == 'pull_request_review'
+          steps.membership.outputs.is_member == 'true' && (
+            (github.event_name == 'issue_comment' && github.event.issue.pull_request) ||
+            github.event_name == 'pull_request_review_comment' ||
+            github.event_name == 'pull_request_review'
+          )
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -63,6 +125,7 @@ jobs:
           fi
 
       - name: Run Claude Code
+        if: steps.membership.outputs.is_member == 'true'
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
