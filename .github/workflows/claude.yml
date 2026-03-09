@@ -28,30 +28,43 @@ jobs:
       - name: Check org membership
         id: membership
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_LOGIN: ${{ github.event.comment.user.login }}
+          COMMENT_ASSOC: ${{ github.event.comment.author_association }}
+          REVIEW_LOGIN: ${{ github.event.review.user.login }}
+          REVIEW_ASSOC: ${{ github.event.review.author_association }}
+          ISSUE_LOGIN: ${{ github.event.issue.user.login }}
+          ISSUE_ASSOC: ${{ github.event.issue.author_association }}
+          ISSUE_ACTION: ${{ github.event.action }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Determine who triggered this event and their association with the repo.
-          # author_association is set by GitHub and indicates the user's relationship
-          # to the repository — OWNER, MEMBER, or COLLABORATOR mean the user is trusted.
-          if [ "${{ github.event_name }}" = "issue_comment" ]; then
-            ACTOR="${{ github.event.comment.user.login }}"
-            ASSOC="${{ github.event.comment.author_association }}"
-          elif [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
-            ACTOR="${{ github.event.comment.user.login }}"
-            ASSOC="${{ github.event.comment.author_association }}"
-          elif [ "${{ github.event_name }}" = "pull_request_review" ]; then
-            ACTOR="${{ github.event.review.user.login }}"
-            ASSOC="${{ github.event.review.author_association }}"
-          elif [ "${{ github.event_name }}" = "issues" ]; then
-            ACTOR="${{ github.event.issue.user.login }}"
-            ASSOC="${{ github.event.issue.author_association }}"
+          if [ "$EVENT_NAME" = "issue_comment" ]; then
+            ACTOR="$COMMENT_LOGIN"
+            ASSOC="$COMMENT_ASSOC"
+          elif [ "$EVENT_NAME" = "pull_request_review_comment" ]; then
+            ACTOR="$COMMENT_LOGIN"
+            ASSOC="$COMMENT_ASSOC"
+          elif [ "$EVENT_NAME" = "pull_request_review" ]; then
+            ACTOR="$REVIEW_LOGIN"
+            ASSOC="$REVIEW_ASSOC"
+          elif [ "$EVENT_NAME" = "issues" ]; then
+            if [ "$ISSUE_ACTION" = "assigned" ]; then
+              # For assigned events, the actor is the person who assigned the issue,
+              # not the issue creator. Query the assignor's actual permission level.
+              ACTOR="$GITHUB_ACTOR"
+              ASSOC=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$GITHUB_ACTOR/permission" \
+                --jq 'if .role_name == "admin" then "OWNER" elif .role_name == "write" then "MEMBER" elif .role_name == "read" then "COLLABORATOR" else "NONE" end' 2>/dev/null || echo "NONE")
+            else
+              ACTOR="$ISSUE_LOGIN"
+              ASSOC="$ISSUE_ASSOC"
+            fi
           else
-            ACTOR="${{ github.actor }}"
+            ACTOR="$GITHUB_ACTOR"
             ASSOC="NONE"
           fi
           echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
 
-          # Allow org members, repo owners, and collaborators
           case "$ASSOC" in
             OWNER|MEMBER|COLLABORATOR)
               echo "is_member=true" >> "$GITHUB_OUTPUT"
@@ -64,24 +77,31 @@ jobs:
           esac
 
       - name: Post denial comment
-        if: steps.membership.outputs.is_member != 'true'
+        if: steps.membership.outputs.is_member != 'true' && steps.membership.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          ACTOR: ${{ steps.membership.outputs.actor }}
         run: |
-          # Determine the issue/PR number for the comment
-          if [ "${{ github.event_name }}" = "issue_comment" ]; then
-            NUMBER="${{ github.event.issue.number }}"
-          elif [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
-            NUMBER="${{ github.event.pull_request.number }}"
-          elif [ "${{ github.event_name }}" = "pull_request_review" ]; then
-            NUMBER="${{ github.event.pull_request.number }}"
-          elif [ "${{ github.event_name }}" = "issues" ]; then
-            NUMBER="${{ github.event.issue.number }}"
+          if [ "$EVENT_NAME" = "issue_comment" ]; then
+            NUMBER="$ISSUE_NUMBER"
+          elif [ "$EVENT_NAME" = "pull_request_review_comment" ] || [ "$EVENT_NAME" = "pull_request_review" ]; then
+            NUMBER="$PR_NUMBER"
+          elif [ "$EVENT_NAME" = "issues" ]; then
+            NUMBER="$ISSUE_NUMBER"
           fi
 
           if [ -n "$NUMBER" ]; then
-            gh issue comment "$NUMBER" \
-              --body "⚠️ @${{ steps.membership.outputs.actor }}: \`@claude\` is restricted to scylladb organization members. If you believe this is an error, please contact a repository maintainer."
+            DENIAL_BODY="⚠️ @${ACTOR}: \`@claude\` is restricted to scylladb organization members and collaborators. If you believe this is an error, please contact a repository maintainer."
+            # Avoid posting duplicate denial comments
+            LAST_BODY="$(gh api "repos/$GITHUB_REPOSITORY/issues/$NUMBER/comments" --jq '.[-1].body // ""' 2>/dev/null || echo "")"
+            if [ "$LAST_BODY" != "$DENIAL_BODY" ]; then
+              gh issue comment "$NUMBER" --body "$DENIAL_BODY"
+            else
+              echo "Skipping duplicate denial comment on #$NUMBER"
+            fi
           fi
 
       - name: Checkout repository
@@ -99,12 +119,15 @@ jobs:
           )
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           # Determine PR number based on event type
-          if [ "${{ github.event_name }}" = "issue_comment" ]; then
-            PR_NUMBER=${{ github.event.issue.number }}
+          if [ "$EVENT_NAME" = "issue_comment" ]; then
+            PR_NUMBER="$ISSUE_NUMBER"
           else
-            PR_NUMBER=${{ github.event.pull_request.number }}
+            PR_NUMBER="$PULL_REQUEST_NUMBER"
           fi
 
           # Get the fork's clone URL and head branch name
@@ -112,11 +135,16 @@ jobs:
           HEAD_REF=$(echo "$PR_JSON" | jq -r '.headRefName')
           HEAD_OWNER=$(echo "$PR_JSON" | jq -r '.headRepositoryOwner.login')
           HEAD_REPO=$(echo "$PR_JSON" | jq -r '.headRepository.name')
-          ORIGIN_OWNER=$(echo "${{ github.repository }}" | cut -d/ -f1)
+          ORIGIN_OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f1)
 
           # If the PR is from a fork, redirect origin fetch URL to the fork
           # so that claude-code-action's internal "git fetch origin <branch>" succeeds.
           # Keep push URL pointing at the base repo for branch creation.
+          # NOTE: After this step, "git fetch origin" pulls from the fork. If the
+          # fork contains adversarial prompt-injection content, Claude could be
+          # manipulated to take unintended actions against the base repo (which has
+          # contents:write). This risk is mitigated by the auth check above ensuring
+          # only org members/collaborators can trigger this workflow.
           if [ "$HEAD_OWNER" != "$ORIGIN_OWNER" ]; then
             echo "PR #$PR_NUMBER is from fork $HEAD_OWNER/$HEAD_REPO, fetching branch $HEAD_REF"
             ORIGIN_URL=$(git remote get-url origin)
@@ -130,10 +158,6 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-          # This is an optional setting that allows Claude to read CI results on PRs
-          additional_permissions: |
-            actions: read
 
           # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
           # prompt: 'Update the pull request description to include a summary of changes.'
