@@ -53,19 +53,32 @@ description: >-
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes | kebab-case skill name matching the directory name |
-| `description` | Yes | Controls Claude Code activation; helps Copilot understand purpose |
+| `name` | Yes | kebab-case, matches directory name, max 64 characters |
+| `description` | Yes | Max 1024 characters, no angle brackets, third-person voice |
+
+### Validation Rules
+
+These constraints ensure skills work reliably across platforms:
+
+| Rule | Constraint | Reason |
+|------|-----------|--------|
+| Name format | kebab-case only | Consistent directory naming across platforms |
+| Name length | Max 64 characters | Filesystem and tool compatibility |
+| Description length | Max 1024 characters | Context window efficiency; forces conciseness |
+| No angle brackets | `<` and `>` forbidden in description | Breaks YAML parsing in some tool chains |
+| Valid YAML | Frontmatter must parse as valid YAML | Both platforms read frontmatter programmatically |
 
 ### Writing Effective Descriptions
 
-The `description` field is the most important part of the skill for Claude Code — it determines when the skill activates.
+The `description` field is the most important part of the skill for Claude Code — it determines when the skill activates. Think of it as a search index: it must contain the right keywords for Claude to match against user requests.
 
 **Rules:**
 1. Use third-person voice: "Guides the creation of..." not "I help with..."
-2. Include trigger keywords that match user requests
+2. Include trigger keywords that match user requests — add synonyms users might use
 3. List specific scenarios: "Use when creating unit tests, refactoring test files, or adding pytest fixtures"
-4. Keep it under 5 lines
+4. Stay under 1024 characters (hard limit) — aim for 200-400 characters
 5. Do NOT include workflow steps — only triggering conditions
+6. Include exclusions where the boundary is ambiguous: "Use when X. Not for Y."
 
 **Good example:**
 ```yaml
@@ -73,7 +86,8 @@ description: >-
   Guides writing unit tests for the SCT framework using pytest
   conventions. Use when creating new test files, adding test cases,
   refactoring tests from unittest to pytest, or reviewing test
-  coverage for SCT components.
+  coverage for SCT components. Not for integration tests or
+  performance benchmarks.
 ```
 
 **Bad example:**
@@ -82,6 +96,20 @@ description: >-
   First reads the file, then creates a test class, then adds
   fixtures and assertions. Outputs a complete test file.
 ```
+
+**Why this matters:** Claude reads every skill's description at session start and decides which to activate. A description that summarizes the workflow (bad example) causes Claude to follow the description as instructions and skip the actual SKILL.md body. A description that lists triggering conditions (good example) lets Claude correctly match user intent.
+
+### Optimizing Descriptions Iteratively
+
+If a skill isn't triggering correctly:
+
+1. **Write trigger eval queries** — 5-10 prompts that should trigger, 3-5 that shouldn't
+2. **Test the description in isolation** — read only the description, check each query
+3. **Fix false negatives** — add missing keywords, synonyms, or scenario phrases
+4. **Fix false positives** — narrow scope with exclusions or more specific terms
+5. **Re-test** — repeat until all queries pass
+
+See [test-and-iterate.md](../workflows/test-and-iterate.md) for the full process.
 
 ---
 
