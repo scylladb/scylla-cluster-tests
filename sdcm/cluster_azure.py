@@ -75,6 +75,7 @@ class AzureNode(cluster.BaseNode):
             rack=rack,
         )
 
+    @cluster.terminate_on_failure
     def init(self) -> None:
         super().init()
         # disable auditd service
