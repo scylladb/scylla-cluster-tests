@@ -120,6 +120,7 @@ _IMAGE_PLACEHOLDER_BACKENDS = {
     "aws": {"SCT_AMI_ID_DB_SCYLLA": "ami-placeholder"},
     "gce": {"SCT_GCE_IMAGE_DB": "https://placeholder-image"},
     "azure": {"SCT_AZURE_IMAGE_DB": "azure-placeholder-image"},
+    "docker": {"SCT_DOCKER_IMAGE": "scylladb/scylla"},
 }
 
 # Placeholder for scylla repo when needed

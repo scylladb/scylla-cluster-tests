@@ -1446,23 +1446,23 @@ def lint_pipelines(pipeline_dir, pipeline_file, workers, include_filter, exclude
         sys.exit(0)
 
     worker_count = workers or os.cpu_count() or 4
-    process_pool = ProcessPoolExecutor(max_workers=worker_count)
-
-    futures = [process_pool.submit(_validate_single_pipeline, path, env) for path, env in tasks]
 
     failed_count = 0
     passed_count = 0
-    for future in futures:
-        path, (is_error, error_msg) = future.result()
-        if is_error:
-            failed_count += 1
-            click.secho(f"FAIL: {path}", fg="red", bold=True)
-            lines = error_msg.strip().splitlines()
-            if lines:
-                click.secho(f"  {lines[-1]}", fg="red")
-            click.echo()
-        else:
-            passed_count += 1
+    with ProcessPoolExecutor(max_workers=worker_count) as process_pool:
+        futures = [process_pool.submit(_validate_single_pipeline, path, env) for path, env in tasks]
+
+        for future in futures:
+            path, (is_error, error_msg) = future.result()
+            if is_error:
+                failed_count += 1
+                click.secho(f"FAIL: {path}", fg="red", bold=True)
+                lines = error_msg.strip().splitlines()
+                if lines:
+                    click.secho(f"  {lines[-1]}", fg="red")
+                click.echo()
+            else:
+                passed_count += 1
 
     total = passed_count + failed_count
     click.echo("---")
