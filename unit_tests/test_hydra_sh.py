@@ -3,7 +3,6 @@ import dataclasses
 import os
 import re
 import tempfile
-import unittest
 from functools import cached_property
 from typing import Dict, Union, Tuple, Iterable, Sequence, List
 
@@ -399,7 +398,7 @@ class LongevityPipelineTest:
         )
 
 
-class TestHydraSh(unittest.TestCase):
+class TestHydraSh:
     cmd_runner = LocalCmdRunner()
 
     @pytest.fixture(autouse=True)

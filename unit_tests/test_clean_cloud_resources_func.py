@@ -11,8 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
 
@@ -35,9 +34,10 @@ SCT_RUNNER_AWS = {
 
 
 @patch("boto3.client")
-class CleanInstanceAwsTest(unittest.TestCase):
+class TestCleanInstanceAws:
     def test_empty_tags_dict(self, _):
-        self.assertRaisesRegex(AssertionError, "not provided", clean_instances_aws, {})
+        with pytest.raises(AssertionError, match="not provided"):
+            clean_instances_aws({})
 
     def test_empty_list(self, ec2_client):
         with patch.object(resources_cleanup, "list_instances_aws", Mock(return_value={})) as list_instances_aws:
@@ -90,9 +90,10 @@ class CleanInstanceAwsTest(unittest.TestCase):
 
 
 @patch("boto3.client")
-class CleanElasticIpsAws(unittest.TestCase):
+class TestCleanElasticIpsAws:
     def test_empty_tags_dict(self, _):
-        self.assertRaisesRegex(AssertionError, "not provided", clean_elastic_ips_aws, {})
+        with pytest.raises(AssertionError, match="not provided"):
+            clean_elastic_ips_aws({})
 
     def test_empty_list(self, ec2_client):
         with patch.object(resources_cleanup, "list_elastic_ips_aws", Mock(return_value={})) as list_elastic_ips_aws:
@@ -138,9 +139,10 @@ class CleanElasticIpsAws(unittest.TestCase):
         ec2_client().release_address.assert_called_once_with(AllocationId=3333)
 
 
-class CleanClustersGkeTest(unittest.TestCase):
+class TestCleanClustersGke:
     def test_empty_tags_dict(self):
-        self.assertRaisesRegex(AssertionError, "not provided", clean_clusters_gke, {})
+        with pytest.raises(AssertionError, match="not provided"):
+            clean_clusters_gke({})
 
     def test_destroy(self):
         cluster = MagicMock()
@@ -158,9 +160,10 @@ class CleanClustersGkeTest(unittest.TestCase):
         cluster.destroy.assert_called_once_with()
 
 
-class CleanInstancesGceTest(unittest.TestCase):
+class TestCleanInstancesGce:
     def test_empty_tags_dict(self):
-        self.assertRaisesRegex(AssertionError, "not provided", clean_instances_gce, {})
+        with pytest.raises(AssertionError, match="not provided"):
+            clean_instances_gce({})
 
     def test_destroy(self):
         instance = MagicMock()
@@ -180,12 +183,13 @@ class CleanInstancesGceTest(unittest.TestCase):
                 "TestId": 1111,
             }
         )
-        instance.delete.assert_called_once_with(instance=instance.name, project="test", zone=unittest.mock.ANY)
+        instance.delete.assert_called_once_with(instance=instance.name, project="test", zone=ANY)
 
 
-class CleanResourcesDockerTest(unittest.TestCase):
+class TestCleanResourcesDocker:
     def test_empty_tags_dict(self):
-        self.assertRaisesRegex(AssertionError, "not provided", clean_resources_docker, {})
+        with pytest.raises(AssertionError, match="not provided"):
+            clean_resources_docker({})
 
     @staticmethod
     def test_destroy():
@@ -210,7 +214,7 @@ class CleanResourcesDockerTest(unittest.TestCase):
         image.client.images.remove.assert_called_once_with(image=image.id, force=True)
 
 
-class CleanCloudResourcesTest(unittest.TestCase):
+class TestCleanCloudResources:
     integration = False  # set it to True if you want to run test with actual cloud operations.
     functions_to_patch = (
         "sdcm.utils.resources_cleanup.clean_instances_aws",
@@ -241,29 +245,29 @@ class CleanCloudResourcesTest(unittest.TestCase):
     def test_no_tag_testid_and_runbyuser(self):
         params = {}
         res = clean_cloud_resources(params, self.config)
-        self.assertFalse(res)
+        assert not res
 
     def test_other_tags_and_no_testid_and_runbyuser(self):
         params = {"NodeType": "scylla-db"}
         res = clean_cloud_resources(params, self.config)
-        self.assertFalse(res)
+        assert not res
 
     def test_tag_testid_only(self):
         params = {"RunByUser": "test"}
         res = clean_cloud_resources(params, self.config)
-        self.assertTrue(res)
+        assert res
 
     def test_tag_runbyuser_only(self):
         params = {"TestId": "1111"}
         res = clean_cloud_resources(params, self.config)
-        self.assertTrue(res)
+        assert res
 
     def test_tags_testid_and_runbyuser(self):
         params = {"RunByUser": "test", "TestId": "1111"}
         res = clean_cloud_resources(params, self.config)
-        self.assertTrue(res)
+        assert res
 
     def test_tags_testid_and_runbyuser_with_other(self):
         params = {"RunByUser": "test", "TestId": "1111", "NodeType": "monitor"}
         res = clean_cloud_resources(params, self.config)
-        self.assertTrue(res)
+        assert res

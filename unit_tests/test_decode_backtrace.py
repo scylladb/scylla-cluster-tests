@@ -14,7 +14,6 @@
 import os
 import json
 from multiprocessing import Queue
-import unittest
 from functools import cached_property
 
 import pytest
@@ -33,13 +32,13 @@ class DecodeDummyNode(DummyNode):
         return "scylla_debug_info_file"
 
 
-class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
+class TestDecodeBactraces(EventsUtilsMixin):
     @classmethod
-    def setUpClass(cls):
+    def setup_class(cls):
         cls.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
 
     @classmethod
-    def tearDownClass(cls):
+    def teardown_class(cls):
         cls.teardown_events_processes()
 
     @cached_property
@@ -102,7 +101,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
     def _read_and_publish_events_no_decoding(self):
         self._db_log_reader_no_decoding._read_and_publish_events()
 
-    def setUp(self):
+    def setup_method(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
 
     def test_01_reactor_stall_is_not_decoded_if_disabled(self):
@@ -122,7 +121,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
         for event in events:
             if event.get("raw_backtrace"):
-                self.assertIsNone(event["backtrace"])
+                assert event["backtrace"] is None
 
     def test_02_reactor_stalls_is_decoded_if_enabled(self):
         self.test_config.BACKTRACE_DECODING = True
@@ -143,9 +142,8 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
         for event in events:
             if event.get("backtrace") and event.get("raw_backtrace"):
-                self.assertEqual(
-                    event["backtrace"].strip(),
-                    "addr2line -Cpife scylla_debug_info_file {}".format(" ".join(event["raw_backtrace"].split("\n"))),
+                assert event["backtrace"].strip() == "addr2line -Cpife scylla_debug_info_file {}".format(
+                    " ".join(event["raw_backtrace"].split("\n"))
                 )
 
     def test_03_decode_interlace_reactor_stall(self):
@@ -169,9 +167,8 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
         for event in events:
             if event.get("backtrace") and event.get("raw_backtrace"):
-                self.assertEqual(
-                    event["backtrace"].strip(),
-                    "addr2line -Cpife scylla_debug_info_file {}".format(" ".join(event["raw_backtrace"].split("\n"))),
+                assert event["backtrace"].strip() == "addr2line -Cpife scylla_debug_info_file {}".format(
+                    " ".join(event["raw_backtrace"].split("\n"))
                 )
 
     def test_04_decode_backtraces_core(self):
@@ -195,9 +192,8 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
         for event in events:
             if event.get("backtrace") and event.get("raw_backtrace"):
-                self.assertEqual(
-                    event["backtrace"].strip(),
-                    "addr2line -Cpife scylla_debug_info_file {}".format(" ".join(event["raw_backtrace"].split("\n"))),
+                assert event["backtrace"].strip() == "addr2line -Cpife scylla_debug_info_file {}".format(
+                    " ".join(event["raw_backtrace"].split("\n"))
                 )
 
 

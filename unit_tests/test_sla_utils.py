@@ -1,7 +1,8 @@
 import logging
 import time
-import unittest
 from typing import NamedTuple
+
+import pytest
 
 from sdcm.cluster import BaseNode
 from sdcm.utils.distro import Distro
@@ -98,7 +99,7 @@ class FakeSession:
     default_timeout = 0
 
 
-class TestSlaUtilsTest(unittest.TestCase, SlaUtils):
+class TestSlaUtilsTest(SlaUtils):
     def test_less_operations_than_expected_error(self):
         node = DummyNode(name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla-test"))
 
@@ -114,7 +115,7 @@ class TestSlaUtilsTest(unittest.TestCase, SlaUtils):
             {"role": role_high, "service_level": role_high.attached_service_level},
         ]
 
-        with self.assertRaises(SchedulerRuntimeUnexpectedValue) as error:
+        with pytest.raises(SchedulerRuntimeUnexpectedValue) as error:
             self.validate_io_queue_operations(
                 start_time=time.time(),
                 end_time=time.time() + 60,
@@ -123,7 +124,7 @@ class TestSlaUtilsTest(unittest.TestCase, SlaUtils):
                 db_cluster=db_cluster,
                 publish_wp_error_event=False,
             )
-        assert str(error.exception) == str(
+        assert str(error.value) == str(
             "\n(Node 127.0.0.1) - Service level with higher shares got less resources "
             "unexpectedly. CPU%: 100. Runtime per service level group:\n  sl:sl50_abc "
             "(shares 50): 479.57\n  sl:sl200_abc (shares 200): 179.57"
