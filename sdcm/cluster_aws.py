@@ -629,6 +629,7 @@ class AWSNode(cluster.BaseNode):
         self.log.debug("Sorted interfaces: %s", interfaces)
         return interfaces
 
+    @cluster.terminate_on_failure
     def init(self):
         LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
         self._instance_wait_safe(self._instance.wait_until_running)
