@@ -1288,9 +1288,8 @@ class Nemesis(NemesisFlags):
             self.cluster.set_seeds()
             self.cluster.update_seed_provider()
         except (NodeSetupFailed, NodeSetupTimeout):
-            self.log.warning("TestConfig of the '%s' failed, removing it from list of nodes" % new_node)
-            self.cluster.nodes.remove(new_node)
-            self.log.warning("Node will not be terminated. Please terminate manually!!!")
+            self.log.warning("TestConfig of the '%s' failed, collecting logs and terminating node" % new_node)
+            self.cluster.terminate_node(new_node)
             raise
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
         new_node.wait_node_fully_start()
@@ -1335,10 +1334,9 @@ class Nemesis(NemesisFlags):
             self.cluster.set_seeds()
             self.cluster.update_seed_provider()
         except (NodeSetupFailed, NodeSetupTimeout):
-            self.log.warning("TestConfig of the '%s' failed, removing them from list of nodes" % new_nodes)
+            self.log.warning("TestConfig of the '%s' failed, collecting logs and terminating nodes" % new_nodes)
             for node in new_nodes:
-                self.cluster.nodes.remove(node)
-            self.log.warning("Nodes will not be terminated. Please terminate manually!!!")
+                self.cluster.terminate_node(node)
             raise
         for new_node in new_nodes:
             new_node.wait_native_transport()
