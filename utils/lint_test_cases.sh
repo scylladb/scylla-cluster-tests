@@ -1,4 +1,7 @@
 #! /bin/bash
+# DEPRECATED: This script is replaced by 'sct.py lint-pipelines'.
+# It is kept for one release cycle as a rollback option.
+# Use instead: ./sct.py lint-pipelines
 
 OUT=0
 SCT_AMI_ID_DB_SCYLLA=ami-1234 ./sct.py lint-yamls -i '.yaml' -e 'azure,multi-dc,multiDC,multidc,multiple-dc,3dcs,5dcs,rolling,docker,artifacts,private-repo,ics/long,scylla-operator,gce,custom-d3,jepsen,repair-based-operations,add-new-dc,baremetal'
