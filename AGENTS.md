@@ -420,6 +420,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | Skill | Description | Path |
 |-------|-------------|------|
 | designing-skills | Meta-skill for creating new AI agent skills for SCT | `skills/designing-skills/SKILL.md` |
+| fix-backport-conflicts | Fix inline merge conflict markers in backport PRs by resolving conflicts and recommitting cleanly with original metadata preserved. | `skills/fix-backport-conflicts/SKILL.md` |
 | profiling-sct-code | Profile Python code in SCT to find CPU, memory, and concurrency bottlenecks using standard 3rd party tools. | `skills/profiling-sct-code/SKILL.md` |
 | writing-plans | Guides creation of implementation plans following SCT's 7-section structure | `skills/writing-plans/SKILL.md` |
 
