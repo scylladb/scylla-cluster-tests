@@ -79,6 +79,17 @@ PARAM_TO_ENV: dict[str, str] = {
     "pytest_addopts": "PYTEST_ADDOPTS",
     "test_email_title": "SCT_EMAIL_SUBJECT_POSTFIX",
     "stop_on_hw_perf_failure": "SCT_STOP_ON_HW_PERF_FAILURE",
+    # Provisioning (direct param name)
+    "instance_provision": "SCT_INSTANCE_PROVISION",
+    # GCE project
+    "gce_project": "SCT_GCE_PROJECT",
+    # Nonroot install
+    "nonroot_offline_install": "SCT_NONROOT_OFFLINE_INSTALL",
+    # Manager extras
+    "mgmt_restore_extra_params": "SCT_MGMT_RESTORE_EXTRA_PARAMS",
+    "mgmt_agent_backup_config": "SCT_MGMT_AGENT_BACKUP_CONFIG",
+    # aws_region is an alias for region used in some performance pipelines
+    "aws_region": "SCT_REGION_NAME",
 }
 
 # Parameters that are not mapped to environment variables — used for
@@ -94,6 +105,12 @@ NON_ENV_PARAMS = frozenset(
         "downstream_jobs_to_run",
         "mgmt_reuse_backup_snapshot_name",
         "backup_bucket_location",
+        # base_version_all_sts_versions is a CLI flag for get_supported_scylla_base_versions.py,
+        # not an SCT env var
+        "base_version_all_sts_versions",
+        # post_behaviour is a pipeline orchestration shorthand (British spelling alias);
+        # individual post_behavior_* params are the canonical SCT env vars
+        "post_behaviour",
     }
 )
 
@@ -120,7 +137,8 @@ def _count_regions(config: PipelineConfig) -> int:
         regions = json.loads(region_str.replace("'", '"'))
         if isinstance(regions, list):
             return len(regions)
-    except json.JSONDecodeError, ValueError:
+    except (json.JSONDecodeError, ValueError):
+        # Fall back to space-separated parsing if JSON parsing fails
         pass
 
     # Space-separated regions

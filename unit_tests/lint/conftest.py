@@ -13,4 +13,5 @@ def pytest_configure(config):
 
         docker.DockerClient.from_env = MagicMock(return_value=MagicMock())
     except ImportError:
+        # docker package is optional for lint tests; skip patching if unavailable
         pass
