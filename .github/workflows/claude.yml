@@ -31,23 +31,35 @@ jobs:
           fetch-depth: 1
 
       - name: Fetch fork PR branch
-        if: github.event_name == 'issue_comment' && github.event.issue.pull_request
+        if: |
+          (github.event_name == 'issue_comment' && github.event.issue.pull_request) ||
+          github.event_name == 'pull_request_review_comment' ||
+          github.event_name == 'pull_request_review'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          PR_NUMBER=${{ github.event.issue.number }}
+          # Determine PR number based on event type
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            PR_NUMBER=${{ github.event.issue.number }}
+          else
+            PR_NUMBER=${{ github.event.pull_request.number }}
+          fi
+
           # Get the fork's clone URL and head branch name
           PR_JSON=$(gh pr view "$PR_NUMBER" --json headRefName,headRepository,headRepositoryOwner)
           HEAD_REF=$(echo "$PR_JSON" | jq -r '.headRefName')
           HEAD_OWNER=$(echo "$PR_JSON" | jq -r '.headRepositoryOwner.login')
           HEAD_REPO=$(echo "$PR_JSON" | jq -r '.headRepository.name')
           ORIGIN_OWNER=$(echo "${{ github.repository }}" | cut -d/ -f1)
-          # If the PR is from a fork, add the fork as a remote and fetch the branch
+
+          # If the PR is from a fork, redirect origin fetch URL to the fork
+          # so that claude-code-action's internal "git fetch origin <branch>" succeeds.
+          # Keep push URL pointing at the base repo for branch creation.
           if [ "$HEAD_OWNER" != "$ORIGIN_OWNER" ]; then
             echo "PR #$PR_NUMBER is from fork $HEAD_OWNER/$HEAD_REPO, fetching branch $HEAD_REF"
-            git remote add fork "https://github.com/$HEAD_OWNER/$HEAD_REPO.git"
-            git fetch fork "$HEAD_REF"
-            git branch "$HEAD_REF" "fork/$HEAD_REF"
+            ORIGIN_URL=$(git remote get-url origin)
+            git remote set-url origin "https://github.com/$HEAD_OWNER/$HEAD_REPO.git"
+            git config remote.origin.pushurl "$ORIGIN_URL"
           fi
 
       - name: Run Claude Code
