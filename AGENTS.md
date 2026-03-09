@@ -16,14 +16,6 @@ export UV_PROJECT_ENVIRONMENT=.venv
 uv sync
 ```
 
-> **⚠️ PROTECTED FILE — `.python-version`**
-> Never commit changes to `.python-version`. This file is managed by the project maintainers and
-> controls the Python version used across CI and all developer environments. If you need a different
-> Python version locally to work around a dependency build failure, make the change temporarily in
-> your local workspace **without staging or committing it**. Instead, add a PR comment describing
-> the compatibility issue (e.g. "fastavro 1.11.1 fails to build on Python 3.14; tests were run
-> locally with Python 3.12") so maintainers can decide whether to update the pinned version.
-
 ### Using Hydra (Docker/Podman container environment)
 ```bash
 # Install hydra
@@ -378,17 +370,6 @@ Critical environment variables:
 
 ## Common Issues and Solutions
 
-### Python Version Compatibility
-
-`.python-version` is pinned to a specific version (currently `3.14`) and **must never be modified in a commit**.
-If a dependency fails to build with the pinned version (e.g. `fastavro` wheel not yet available for `3.14`):
-
-1. Temporarily override it in your local workspace only: `echo "3.12" > .python-version` (do **not** stage this file)
-2. Create the venv and run tests: `uv sync && .venv/bin/python -m pytest …`
-3. Restore the original value: `git checkout -- .python-version`
-4. Add a comment to the PR explaining the compatibility issue so a maintainer can update
-   the pinned version if needed.
-
 ### AWS/Cloud Authentication
 - Use OKTA for AWS access (preferred)
 - Or configure AWS CLI: `aws configure`
@@ -420,11 +401,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | Skill | Description | Path |
 |-------|-------------|------|
 | designing-skills | Meta-skill for creating new AI agent skills for SCT | `skills/designing-skills/SKILL.md` |
-| fix-backport-conflicts | Fix inline merge conflict markers in backport PRs by resolving conflicts and recommitting cleanly with original metadata preserved. | `skills/fix-backport-conflicts/SKILL.md` |
 | profiling-sct-code | Profile Python code in SCT to find CPU, memory, and concurrency bottlenecks using standard 3rd party tools. | `skills/profiling-sct-code/SKILL.md` |
-| writing-plans | Guides creation of implementation plans following SCT's 7-section structure | `skills/writing-plans/SKILL.md` |
-| writing-unit-tests | Guides writing isolated unit tests with mocking and no external services | `skills/writing-unit-tests/SKILL.md` |
-| writing-integration-tests | Guides writing integration tests with labeled external service dependencies | `skills/writing-integration-tests/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 

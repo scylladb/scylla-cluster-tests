@@ -27,3 +27,8 @@ stop_test_on_stress_failure: false
 
 user_prefix: 'longevity-sla-system-24h'
 space_node_threshold: 64424
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'

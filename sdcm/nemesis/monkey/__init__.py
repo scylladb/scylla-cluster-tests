@@ -21,7 +21,7 @@ class PauseLdapNemesis(NemesisBaseClass):
     disruptive = False
     limited = True
 
-    additional_configs = ["configurations/ldap-authorization.yaml", "configurations/auth_cassandra.yaml"]
+    additional_configs = ["configurations/ldap-authorization.yaml"]
 
     def disrupt(self):
         self.runner.disrupt_ldap_connection_toggle()
@@ -32,7 +32,7 @@ class ToggleLdapConfiguration(NemesisBaseClass):
     disruptive = True
     limited = True
 
-    additional_configs = ["configurations/ldap-authorization.yaml", "configurations/auth_cassandra.yaml"]
+    additional_configs = ["configurations/ldap-authorization.yaml"]
 
     def disrupt(self):
         self.runner.disrupt_disable_enable_ldap_authorization()
@@ -809,10 +809,7 @@ class SlaIncreaseSharesDuringLoad(NemesisBaseClass):
     disruptive = False
     sla = True
 
-    additional_configs = [
-        "configurations/nemesis/additional_configs/sla_config.yaml",
-        "configurations/auth_cassandra.yaml",
-    ]
+    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
 
     def disrupt(self):
         self.runner.disrupt_sla_increase_shares_during_load()
@@ -822,10 +819,7 @@ class SlaDecreaseSharesDuringLoad(NemesisBaseClass):
     disruptive = False
     sla = True
 
-    additional_configs = [
-        "configurations/nemesis/additional_configs/sla_config.yaml",
-        "configurations/auth_cassandra.yaml",
-    ]
+    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
 
     def disrupt(self):
         self.runner.disrupt_sla_decrease_shares_during_load()
@@ -838,10 +832,7 @@ class SlaReplaceUsingDetachDuringLoad(NemesisBaseClass):
     disruptive = True
     sla = True
 
-    additional_configs = [
-        "configurations/nemesis/additional_configs/sla_config.yaml",
-        "configurations/auth_cassandra.yaml",
-    ]
+    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
 
     def disrupt(self):
         self.runner.disrupt_replace_service_level_using_detach_during_load()
@@ -854,10 +845,7 @@ class SlaReplaceUsingDropDuringLoad(NemesisBaseClass):
     disruptive = True
     sla = True
 
-    additional_configs = [
-        "configurations/nemesis/additional_configs/sla_config.yaml",
-        "configurations/auth_cassandra.yaml",
-    ]
+    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
 
     def disrupt(self):
         self.runner.disrupt_replace_service_level_using_drop_during_load()
@@ -870,10 +858,7 @@ class SlaIncreaseSharesByAttachAnotherSlDuringLoad(NemesisBaseClass):
     disruptive = True
     sla = True
 
-    additional_configs = [
-        "configurations/nemesis/additional_configs/sla_config.yaml",
-        "configurations/auth_cassandra.yaml",
-    ]
+    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
 
     def disrupt(self):
         self.runner.disrupt_increase_shares_by_attach_another_sl_during_load()
@@ -883,10 +868,7 @@ class SlaMaximumAllowedSlsWithMaxSharesDuringLoad(NemesisBaseClass):
     disruptive = False
     sla = True
 
-    additional_configs = [
-        "configurations/nemesis/additional_configs/sla_config.yaml",
-        "configurations/auth_cassandra.yaml",
-    ]
+    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
 
     def disrupt(self):
         self.runner.disrupt_maximum_allowed_sls_with_max_shares_during_load()

@@ -78,45 +78,6 @@ hydra create-operator-test-release-jobs \
 
 ### [Docker Based Loaders](./docker-loaders.md)
 
-### AI-Assisted Development (Skills & Prompts)
-
-This project includes reusable AI prompts for common development tasks. They are available
-for both **Claude Code** and **GitHub Copilot**.
-
-#### Available prompts
-
-| Prompt | Description |
-|--------|-------------|
-| `fix-backport-conflicts` | Resolve inline merge conflict markers in backport PRs and recommit cleanly with original authorship preserved |
-
-#### Using with Claude Code
-
-Claude Code skills live in `.claude/skills/`. Invoke them as slash commands:
-
-```
-/fix-backport-conflicts 13920
-```
-
-This will check out the PR, find inline conflict markers, resolve them, and recommit
-with the original author and commit messages preserved.
-
-#### Using with GitHub Copilot (VS Code)
-
-Copilot reusable prompts live in `.github/prompts/`. To use them:
-
-1. Open **Copilot Chat** (`Ctrl+Shift+I`)
-2. Switch to **Agent mode** (drop-down at the top of the chat panel)
-3. Type `#` and select `fix-backport-conflicts` from the list
-4. Add context, e.g.: `#fix-backport-conflicts fix PR 13920`
-
-#### Adding new prompts
-
-To add a new reusable prompt:
-
-1. Create a Claude Code skill in `.claude/skills/<name>/SKILL.md` (with YAML frontmatter)
-2. Create a matching Copilot prompt in `.github/prompts/<name>.prompt.md` (plain markdown)
-3. Add an entry to the table above in this document
-
 ### Directory Structure of the project
 
 1. A library, called `sdcm` (stands for scylla distributed cluster

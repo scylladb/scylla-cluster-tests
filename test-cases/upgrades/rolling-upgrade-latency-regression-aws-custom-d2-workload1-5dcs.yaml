@@ -37,6 +37,13 @@ use_mgmt: false
 client_encrypt: true
 internode_compression: 'all'
 server_encrypt: true
+authenticator: 'PasswordAuthenticator'
+# NOTE: the 'authenticator_user' and 'authenticator_password' values will be used in following cases:
+#       - 'schema creation' commands
+#       - 'run' commands which do not have explicit values for '--user' and '--password' parameters.
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'
 
 append_scylla_yaml:
   # consistent_cluster_management: false

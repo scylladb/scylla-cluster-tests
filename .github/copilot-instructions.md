@@ -192,14 +192,6 @@ uv run sct.py unit-tests -t test_config.py
 uv run sct.py integration-tests
 ```
 
-### Testing Workflow
-
-When you edit or create a file matching `unit_tests/test_*.py`, always suggest running:
-```bash
-uv run python -m pytest <file> -x -q --no-header --tb=short -n0
-```
-and wait for the results before proceeding to the next change.
-
 ## Backend-Specific Provision Tests
 
 ### When to Add Provision Test Labels

@@ -75,8 +75,8 @@ JKS_TRUSTSTORE_FILE = Path(get_data_dir_path("ssl_conf", TLSAssets.JKS_TRUSTSTOR
 
 
 @retrying(n=3, sleep_time=10, allowed_exceptions=(Exception,), message="Retrying SSL certificate installation")
-def install_client_certificate(remoter, node_identifier, force=False):
-    if not force and remoter.run(f"ls {SCYLLA_SSL_CONF_DIR}", ignore_status=True).ok:
+def install_client_certificate(remoter, node_identifier):
+    if remoter.run(f"ls {SCYLLA_SSL_CONF_DIR}", ignore_status=True).ok:
         return
     dst = "/tmp/ssl_conf"
     remoter.run(f"mkdir -p {dst}")

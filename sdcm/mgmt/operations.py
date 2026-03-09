@@ -253,12 +253,10 @@ class SnapshotData:
 
 class SnapshotOperations(ClusterTester):
     def _get_total_loaders(self) -> int:
-        """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string or list) formats."""
+        """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string) formats."""
         n_loaders = self.params.get("n_loaders")
         if isinstance(n_loaders, int):
             return n_loaders
-        if isinstance(n_loaders, list):
-            return sum(n_loaders)
         return sum(int(n) for n in n_loaders.split())
 
     @staticmethod
@@ -589,21 +587,17 @@ class DatabaseOperations(ClusterTester):
 
 class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
     def _get_total_loaders(self) -> int:
-        """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string or list) formats."""
+        """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string) formats."""
         n_loaders = self.params.get("n_loaders")
         if isinstance(n_loaders, int):
             return n_loaders
-        if isinstance(n_loaders, list):
-            return sum(n_loaders)
         return sum(int(n) for n in n_loaders.split())
 
     def _get_total_db_nodes(self) -> int:
-        """Get total number of db nodes, handling both single-DC (int) and multi-DC (list or space-separated string) formats."""
+        """Get total number of db nodes, handling both single-DC (int) and multi-DC (space-separated string) formats."""
         n_db_nodes = self.params.get("n_db_nodes")
         if isinstance(n_db_nodes, int):
             return n_db_nodes
-        if isinstance(n_db_nodes, list):
-            return sum(n_db_nodes)
         return sum(int(n) for n in n_db_nodes.split())
 
     def _generate_load(self, keyspace_name: str = None):

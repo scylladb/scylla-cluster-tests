@@ -23,6 +23,7 @@ test_duration: 800
 #   total_connections_per_node = 2 * 9 * 400 = 7200
 #   connections_per_shard      = 7200 / 8    = 900 ≈ 1000 conn/shard
 
+
 pre_create_keyspace: ["CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};",
                       "CREATE TABLE keyspace1.standard2 (key blob, c0 blob, c1 blob, c2 blob, c3 blob, c4 blob, PRIMARY KEY (key))  WITH compaction = {'class': 'LeveledCompactionStrategy'} AND compression = {'chunk_length_in_kb': '64', 'sstable_compression': 'org.apache.cassandra.io.compress.ZstdCompressor'};",
                       "CREATE ROLE IF NOT EXISTS stress_user1 WITH LOGIN = true AND PASSWORD = 'stress_user1' AND SUPERUSER = false;",
@@ -38,6 +39,7 @@ pre_create_keyspace: ["CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication 
                       "ATTACH SERVICE_LEVEL sl_test_2 TO stress_user2;",
                       "ATTACH SERVICE_LEVEL sl_test_3 TO stress_user3;",
                       ]
+
 
 prepare_write_cmd:  ["cassandra-stress write cl=LOCAL_QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native connectionsPerHost=2000 -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
                      "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1)' cl=LOCAL_QUORUM n=3000000 -mode cql3 native connectionsPerHost=2000 -rate threads=40 -log interval=5"
@@ -58,6 +60,7 @@ availability_zone: 'a,b,c'
 n_db_nodes: '6 6'
 n_loaders: '2 2'
 
+
 region_aware_loader: true
 simulated_racks: 0
 
@@ -68,6 +71,7 @@ nemesis_selector: ["topology_changes", "schema_changes and not disruptive"]
 nemesis_seed: '253 328'
 nemesis_interval: 10
 nemesis_during_prepare: false
+nemesis_multiply_factor: 18
 
 seeds_num: 3
 # disabled the round robin, to each command would run on every loader.
@@ -79,3 +83,7 @@ internode_encryption: 'dc'
 user_prefix: 'parallel-topology-schema-changes-multidc-12h'
 
 # auth for connections per host
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'

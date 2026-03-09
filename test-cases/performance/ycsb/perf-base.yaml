@@ -50,6 +50,11 @@ n_loaders: 1
 instance_type_db: 'i4i.4xlarge'
 instance_type_loader: 'c5.9xlarge'
 
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
+
 user_prefix: 'perf-ycsb-latency-nemesis'
 email_subject_postfix: 'YCSB workloads'
 

@@ -22,5 +22,9 @@ space_node_threshold: 644245094
 
 server_encrypt: true
 client_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
 
 use_preinstalled_scylla: true

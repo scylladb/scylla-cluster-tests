@@ -38,7 +38,7 @@ from uuid import UUID
 import pytest
 import click
 import yaml
-from rich.table import Table
+from prettytable import PrettyTable
 from argus.client.sct.types import LogLink
 from argus.client.base import ArgusClientError
 from argus.common.enums import TestStatus
@@ -80,7 +80,6 @@ from sdcm.utils.common import (
     aws_tags_to_dict,
     create_pretty_table,
     format_timestamp,
-    rich_table_to_string,
     get_ami_images,
     get_ami_images_versioned,
     get_gce_images,
@@ -536,82 +535,88 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
         aws_instances = list_instances_aws(tags_dict=params, running=get_all_running, verbose=verbose)
 
         if aws_instances:
-            aws_table = Table(*table_header, show_lines=False)
-            for instance in sorted(aws_instances, key=lambda i: i.get("LaunchTime", "")):
+            aws_table = PrettyTable(table_header)
+            aws_table.align = "l"
+            aws_table.sortby = "LaunchTime"
+            for instance in aws_instances:
                 tags = aws_tags_to_dict(instance.get("Tags"))
                 name = tags.get("Name", "N/A")
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project = tags.get("billing_project", "N/A")
                 aws_table.add_row(
-                    name,
-                    instance["Placement"]["AvailabilityZone"],
-                    instance.get("PublicIpAddress", "N/A") if get_all_running else instance["State"]["Name"],
-                    test_id,
-                    run_by_user,
-                    billing_project,
-                    str(instance["LaunchTime"].ctime()),
+                    [
+                        name,
+                        instance["Placement"]["AvailabilityZone"],
+                        instance.get("PublicIpAddress", "N/A") if get_all_running else instance["State"]["Name"],
+                        test_id,
+                        run_by_user,
+                        billing_project,
+                        instance["LaunchTime"].ctime(),
+                    ]
                 )
-            click.echo(rich_table_to_string(aws_table, title="Instances used on AWS"))
+            click.echo(aws_table.get_string(title="Instances used on AWS"))
         else:
             click.secho("Nothing found for selected filters in AWS!", fg="yellow")
 
         click.secho("Checking AWS Elastic IPs...", fg="green")
         elastic_ips_aws = list_elastic_ips_aws(tags_dict=params, verbose=verbose)
         if elastic_ips_aws:
-            aws_table = Table(
-                "AllocationId",
-                "PublicIP",
-                "TestId",
-                "RunByUser",
-                "billing_project",
-                "InstanceId (attached to)",
-                show_lines=False,
+            aws_table = PrettyTable(
+                ["AllocationId", "PublicIP", "TestId", "RunByUser", "billing_project", "InstanceId (attached to)"]
             )
-            for eip in sorted(elastic_ips_aws, key=lambda e: e.get("AllocationId", "")):
+            aws_table.align = "l"
+            aws_table.sortby = "AllocationId"
+            for eip in elastic_ips_aws:
                 tags = aws_tags_to_dict(eip.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project = tags.get("billing_project", "N/A")
                 aws_table.add_row(
-                    eip["AllocationId"],
-                    eip["PublicIp"],
-                    test_id,
-                    run_by_user,
-                    billing_project,
-                    eip.get("InstanceId", "N/A"),
+                    [
+                        eip["AllocationId"],
+                        eip["PublicIp"],
+                        test_id,
+                        run_by_user,
+                        billing_project,
+                        eip.get("InstanceId", "N/A"),
+                    ]
                 )
-            click.echo(rich_table_to_string(aws_table, title="EIPs used on AWS"))
+            click.echo(aws_table.get_string(title="EIPs used on AWS"))
         else:
             click.secho("No elastic ips found for selected filters in AWS!", fg="yellow")
 
         click.secho("Checking AWS Security Groups...", fg="green")
         security_groups = list_test_security_groups(tags_dict=params, verbose=verbose)
         if security_groups:
-            aws_table = Table("Name", "Id", "TestId", "RunByUser", "billing_project", show_lines=False)
-            for group in sorted(security_groups, key=lambda g: g.get("GroupId", "")):
+            aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser", "billing_project"])
+            aws_table.align = "l"
+            aws_table.sortby = "Id"
+            for group in security_groups:
                 tags = aws_tags_to_dict(group.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project = tags.get("billing_project", "N/A")
                 name = tags.get("Name", "N/A")
-                aws_table.add_row(name, group["GroupId"], test_id, run_by_user, billing_project)
-            click.echo(rich_table_to_string(aws_table, title="SGs used on AWS"))
+                aws_table.add_row([name, group["GroupId"], test_id, run_by_user, billing_project])
+            click.echo(aws_table.get_string(title="SGs used on AWS"))
         else:
             click.secho("No security groups found for selected filters in AWS!", fg="yellow")
 
         click.secho("Checking AWS Placement Groups...", fg="green")
         placement_groups = list_placement_groups_aws(tags_dict=params, available=get_all_running, verbose=verbose)
         if placement_groups:
-            aws_table = Table("Name", "Id", "TestId", "RunByUser", "billing_project", show_lines=False)
-            for group in sorted(placement_groups, key=lambda g: g.get("GroupId", "")):
+            aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser", "billing_project"])
+            aws_table.align = "l"
+            aws_table.sortby = "Id"
+            for group in placement_groups:
                 tags = aws_tags_to_dict(group.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project = tags.get("billing_project", "N/A")
                 name = tags.get("Name", "N/A")
-                aws_table.add_row(name, group["GroupId"], test_id, run_by_user, billing_project)
-            click.echo(rich_table_to_string(aws_table, title="SGs used on AWS"))
+                aws_table.add_row([name, group["GroupId"], test_id, run_by_user, billing_project])
+            click.echo(aws_table.get_string(title="SGs used on AWS"))
         else:
             click.secho("No placement groups found for selected filters in AWS!", fg="yellow")
 
@@ -621,21 +626,25 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                 click.secho(f"Checking GCE ({project})...", fg="green")
                 gce_instances = list_instances_gce(tags_dict=params, running=get_all_running, verbose=verbose)
                 if gce_instances:
-                    gce_table = Table(*table_header, show_lines=False)
-                    for instance in sorted(gce_instances, key=lambda i: i.creation_timestamp or ""):
+                    gce_table = PrettyTable(table_header)
+                    gce_table.align = "l"
+                    gce_table.sortby = "LaunchTime"
+                    for instance in gce_instances:
                         tags = gce_meta_to_dict(instance.metadata)
                         public_ips = gce_public_addresses(instance)
                         public_ips = ", ".join(public_ips) if None not in public_ips else "N/A"
                         gce_table.add_row(
-                            instance.name,
-                            instance.zone.split("/")[-1],
-                            public_ips if get_all_running else instance.status,
-                            tags.get("TestId", "N/A") if tags else "N/A",
-                            tags.get("RunByUser", "N/A") if tags else "N/A",
-                            tags.get("billing_project", "N/A") if tags else "N/A",
-                            str(instance.creation_timestamp),
+                            [
+                                instance.name,
+                                instance.zone.split("/")[-1],
+                                public_ips if get_all_running else instance.status,
+                                tags.get("TestId", "N/A") if tags else "N/A",
+                                tags.get("RunByUser", "N/A") if tags else "N/A",
+                                tags.get("billing_project", "N/A") if tags else "N/A",
+                                instance.creation_timestamp,
+                            ]
                         )
-                    click.echo(rich_table_to_string(gce_table, title="Resources used on GCE"))
+                    click.echo(gce_table.get_string(title="Resources used on GCE"))
                 else:
                     click.secho("Nothing found for selected filters in GCE!", fg="yellow")
 
@@ -643,62 +652,72 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
         click.secho("Checking EKS...", fg="green")
         eks_clusters = list_clusters_eks(tags_dict=params, verbose=verbose)
         if eks_clusters:
-            eks_table = Table(
-                "Name", "TestId", "Region", "RunByUser", "billing_project", "CreateTime", show_lines=False
-            )
-            for cluster in sorted(eks_clusters, key=lambda c: str(c.create_time or "")):
+            eks_table = PrettyTable(["Name", "TestId", "Region", "RunByUser", "billing_project", "CreateTime"])
+            eks_table.align = "l"
+            eks_table.sortby = "CreateTime"
+            for cluster in eks_clusters:
                 tags = cluster.metadata
                 eks_table.add_row(
-                    cluster.name,
-                    tags.get("TestId", "N/A") if tags else "N/A",
-                    cluster.region_name,
-                    tags.get("RunByUser", "N/A") if tags else "N/A",
-                    tags.get("billing_project", "N/A") if tags else "N/A",
-                    str(cluster.create_time),
+                    [
+                        cluster.name,
+                        tags.get("TestId", "N/A") if tags else "N/A",
+                        cluster.region_name,
+                        tags.get("RunByUser", "N/A") if tags else "N/A",
+                        tags.get("billing_project", "N/A") if tags else "N/A",
+                        cluster.create_time,
+                    ]
                 )
-            click.echo(rich_table_to_string(eks_table, title="EKS clusters"))
+            click.echo(eks_table.get_string(title="EKS clusters"))
         else:
             click.secho("Nothing found for selected filters in EKS!", fg="yellow")
 
         click.secho("Checking AWS Load Balancers...", fg="green")
         load_balancers = list_load_balancers_aws(tags_dict=params, verbose=verbose)
         if load_balancers:
-            aws_table = Table("Name", "Region", "TestId", "RunByUser", "billing_project", show_lines=False)
-            for elb in sorted(load_balancers, key=lambda e: e.get("ResourceARN", "").split(":")[-1]):
+            aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser", "billing_project"])
+            aws_table.align = "l"
+            aws_table.sortby = "Name"
+            for elb in load_balancers:
                 tags = aws_tags_to_dict(elb.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project = tags.get("billing_project", "N/A")
                 _, _, _, region, _, name = elb["ResourceARN"].split(":")
                 aws_table.add_row(
-                    name,
-                    region,
-                    test_id,
-                    run_by_user,
-                    billing_project,
+                    [
+                        name,
+                        region,
+                        test_id,
+                        run_by_user,
+                        billing_project,
+                    ]
                 )
-            click.echo(rich_table_to_string(aws_table, title="ELBs used on AWS"))
+            click.echo(aws_table.get_string(title="ELBs used on AWS"))
         else:
             click.secho("No load balancers found for selected filters in AWS!", fg="yellow")
 
         click.secho("Checking AWS Cloudformation Stacks ...", fg="green")
         cfn_stacks = list_cloudformation_stacks_aws(tags_dict=params, verbose=verbose)
         if cfn_stacks:
-            aws_table = Table("Name", "Region", "TestId", "RunByUser", "billing_project", show_lines=False)
-            for stack in sorted(cfn_stacks, key=lambda s: s.get("ResourceARN", "").split(":")[-1]):
+            aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser", "billing_project"])
+            aws_table.align = "l"
+            aws_table.sortby = "Name"
+            for stack in cfn_stacks:
                 tags = aws_tags_to_dict(stack.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project = tags.get("billing_project", "N/A")
                 _, _, _, region, _, name = stack["ResourceARN"].split(":")
                 aws_table.add_row(
-                    name,
-                    region,
-                    test_id,
-                    run_by_user,
-                    billing_project,
+                    [
+                        name,
+                        region,
+                        test_id,
+                        run_by_user,
+                        billing_project,
+                    ]
                 )
-            click.echo(rich_table_to_string(aws_table, title="Cloudformation Stacks used on AWS"))
+            click.echo(aws_table.get_string(title="Cloudformation Stacks used on AWS"))
         else:
             click.secho("No Cloudformation stacks found for selected filters in AWS!", fg="yellow")
 
@@ -706,20 +725,22 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
         click.secho("Checking GKE...", fg="green")
         gke_clusters = list_clusters_gke(tags_dict=params, verbose=verbose)
         if gke_clusters:
-            gke_table = Table(
-                "Name", "Region-AZ", "TestId", "RunByUser", "billing_project", "CreateTime", show_lines=False
-            )
-            for cluster in sorted(gke_clusters, key=lambda c: str(c.cluster_info.get("createTime", ""))):
+            gke_table = PrettyTable(["Name", "Region-AZ", "TestId", "RunByUser", "billing_project", "CreateTime"])
+            gke_table.align = "l"
+            gke_table.sortby = "CreateTime"
+            for cluster in gke_clusters:
                 tags = gce_meta_to_dict(cluster.metadata)
                 gke_table.add_row(
-                    cluster.name,
-                    cluster.zone,
-                    tags.get("TestId", "N/A") if tags else "N/A",
-                    tags.get("RunByUser", "N/A") if tags else "N/A",
-                    tags.get("billing_project", "N/A") if tags else "N/A",
-                    str(cluster.cluster_info["createTime"]),
+                    [
+                        cluster.name,
+                        cluster.zone,
+                        tags.get("TestId", "N/A") if tags else "N/A",
+                        tags.get("RunByUser", "N/A") if tags else "N/A",
+                        tags.get("billing_project", "N/A") if tags else "N/A",
+                        cluster.cluster_info["createTime"],
+                    ]
                 )
-            click.echo(rich_table_to_string(gke_table, title="GKE clusters"))
+            click.echo(gke_table.get_string(title="GKE clusters"))
         else:
             click.secho("Nothing found for selected filters in GKE!", fg="yellow")
 
@@ -729,46 +750,53 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
 
         if any(docker_resources.values()):
             if docker_resources.get("containers"):
-                docker_table = Table(
-                    "Name",
-                    "Builder",
-                    "Public IP" if get_all_running else "Status",
-                    "TestId",
-                    "RunByUser",
-                    "billing_project",
-                    "Created",
-                    show_lines=False,
+                docker_table = PrettyTable(
+                    [
+                        "Name",
+                        "Builder",
+                        "Public IP" if get_all_running else "Status",
+                        "TestId",
+                        "RunByUser",
+                        "billing_project",
+                        "Created",
+                    ]
                 )
+                docker_table.align = "l"
+                docker_table.sortby = "Created"
                 for builder_name, docker_containers in docker_resources["containers"].items():
                     for container in docker_containers:
                         container.reload()
                         docker_table.add_row(
-                            container.name,
-                            builder_name,
-                            get_ip_address_of_container(container) if get_all_running else container.status,
-                            container.labels.get("TestId", "N/A"),
-                            container.labels.get("RunByUser", "N/A"),
-                            container.labels.get("billing_project", "N/A"),
-                            str(container.attrs.get("Created", "N/A")),
+                            [
+                                container.name,
+                                builder_name,
+                                get_ip_address_of_container(container) if get_all_running else container.status,
+                                container.labels.get("TestId", "N/A"),
+                                container.labels.get("RunByUser", "N/A"),
+                                container.labels.get("billing_project", "N/A"),
+                                container.attrs.get("Created", "N/A"),
+                            ]
                         )
-                click.echo(rich_table_to_string(docker_table, title="Containers used on Docker"))
+                click.echo(docker_table.get_string(title="Containers used on Docker"))
             if docker_resources.get("images"):
-                docker_table = Table(
-                    "Name", "Builder", "TestId", "RunByUser", "billing_project", "Created", show_lines=False
-                )
+                docker_table = PrettyTable(["Name", "Builder", "TestId", "RunByUser", "billing_project", "Created"])
+                docker_table.align = "l"
+                docker_table.sortby = "Created"
                 for builder_name, docker_images in docker_resources["images"].items():
                     for image in docker_images:
                         image.reload()
                         for tag in image.tags:
                             docker_table.add_row(
-                                tag,
-                                builder_name,
-                                image.labels.get("TestId", "N/A"),
-                                image.labels.get("RunByUser", "N/A"),
-                                image.labels.get("billing_project", "N/A"),
-                                str(image.attrs.get("Created", "N/A")),
+                                [
+                                    tag,
+                                    builder_name,
+                                    image.labels.get("TestId", "N/A"),
+                                    image.labels.get("RunByUser", "N/A"),
+                                    image.labels.get("billing_project", "N/A"),
+                                    image.attrs.get("Created", "N/A"),
+                                ]
                             )
-                click.echo(rich_table_to_string(docker_table, title="Images used on Docker"))
+                click.echo(docker_table.get_string(title="Images used on Docker"))
         else:
             click.secho("Nothing found for selected filters in Docker!", fg="yellow")
 
@@ -783,18 +811,13 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
         if params.get("billing_project"):
             instances = [inst for inst in instances if inst.tags.get("billing_project") == params["billing_project"]]
         if instances:
-            azure_table = Table(
-                "Name",
-                "Region-AZ",
-                "PublicIP",
-                "TestId",
-                "RunByUser",
-                "billing_project",
-                "LaunchTime",
-                show_lines=False,
+            azure_table = PrettyTable(
+                ["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "billing_project", "LaunchTime"]
             )
+            azure_table.align = "l"
+            azure_table.sortby = "RunByUser"
 
-            for instance in sorted(instances, key=lambda i: i.tags.get("RunByUser", "")):
+            for instance in instances:
                 creation_time = (
                     instance.creation_time.isoformat(sep=" ", timespec="seconds") if instance.creation_time else "N/A"
                 )
@@ -803,15 +826,17 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project_value = tags.get("billing_project", "N/A")
                 azure_table.add_row(
-                    instance.name,
-                    instance.region,
-                    str(instance.public_ip_address),
-                    test_id,
-                    run_by_user,
-                    billing_project_value,
-                    creation_time,
+                    [
+                        instance.name,
+                        instance.region,
+                        instance.public_ip_address,
+                        test_id,
+                        run_by_user,
+                        billing_project_value,
+                        creation_time,
+                    ]
                 )
-            click.echo(rich_table_to_string(azure_table, title="Instances used on Azure"))
+            click.echo(azure_table.get_string(title="Instances used on Azure"))
         else:
             click.secho("Nothing found for selected filters in Azure!", fg="yellow")
 
@@ -850,19 +875,22 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                         filtered_clusters.append(cluster_details)
 
                     if filtered_clusters:
-                        xcloud_table = Table(
-                            "Name",
-                            "Environment",
-                            "Status",
-                            "Provider",
-                            "TestId",
-                            "RunByUser",
-                            "billing_project",
-                            "CreatedAt",
-                            show_lines=False,
+                        xcloud_table = PrettyTable(
+                            [
+                                "Name",
+                                "Environment",
+                                "Status",
+                                "Provider",
+                                "TestId",
+                                "RunByUser",
+                                "billing_project",
+                                "CreatedAt",
+                            ]
                         )
+                        xcloud_table.align = "l"
+                        xcloud_table.sortby = "CreatedAt"
 
-                        for cluster in sorted(filtered_clusters, key=lambda c: str(c.get("createdAt", ""))):
+                        for cluster in filtered_clusters:
                             cluster_name = cluster.get("clusterName", "N/A")
                             cluster_status = cluster.get("status", "N/A")
                             cloud_provider = cluster.get("cloudProvider", {}).get("name", "N/A")
@@ -877,17 +905,19 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                             cluster_billing_project = "N/A"
 
                             xcloud_table.add_row(
-                                cluster_name,
-                                environment,
-                                cluster_status,
-                                cloud_provider,
-                                short_test_id,
-                                cluster_user,
-                                cluster_billing_project,
-                                str(created_at),
+                                [
+                                    cluster_name,
+                                    environment,
+                                    cluster_status,
+                                    cloud_provider,
+                                    short_test_id,
+                                    cluster_user,
+                                    cluster_billing_project,
+                                    created_at,
+                                ]
                             )
 
-                        click.echo(rich_table_to_string(xcloud_table, title=f"ScyllaDB Cloud clusters ({environment})"))
+                        click.echo(xcloud_table.get_string(title=f"ScyllaDB Cloud clusters ({environment})"))
                     else:
                         click.secho(
                             f"Nothing found for selected filters in ScyllaDB Cloud ({environment})!", fg="yellow"
@@ -983,9 +1013,8 @@ def list_images(  # noqa: PLR0912, PLR0914
                     rows = get_ami_images_versioned(region_name=region, arch=arch_enum, version=version)
                     if output_format == "table":
                         click.echo(
-                            rich_table_to_string(
-                                create_pretty_table(rows=rows, field_names=version_fields_aws),
-                                title=f"AWS Machine Images by Version in region {region}",
+                            create_pretty_table(rows=rows, field_names=version_fields_aws).get_string(
+                                title=f"AWS Machine Images by Version in region {region}"
                             )
                         )
                     elif output_format == "json":
@@ -995,9 +1024,8 @@ def list_images(  # noqa: PLR0912, PLR0914
                     rows = get_gce_images_versioned(version=version, arch=arch_enum)
                     if output_format == "table":
                         click.echo(
-                            rich_table_to_string(
-                                create_pretty_table(rows=rows, field_names=version_fields),
-                                title="GCE Machine Images by version",
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="GCE Machine Images by version"
                             )
                         )
                     elif output_format == "json":
@@ -1040,9 +1068,8 @@ def list_images(  # noqa: PLR0912, PLR0914
 
                     if output_format == "table":
                         click.echo(
-                            rich_table_to_string(
-                                create_pretty_table(rows=rows, field_names=version_fields),
-                                title="Azure Machine Images by version",
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="Azure Machine Images by version"
                             )
                         )
                     elif output_format == "json":
@@ -1061,9 +1088,8 @@ def list_images(  # noqa: PLR0912, PLR0914
                     ami_images = get_ami_images(branch=branch, region=region, arch=arch_enum)
                     if output_format == "table":
                         click.echo(
-                            rich_table_to_string(
-                                create_pretty_table(rows=ami_images, field_names=branch_fields_aws),
-                                title=f"AMI Machine Images for {branch} in region {region}",
+                            create_pretty_table(rows=ami_images, field_names=branch_fields_aws).get_string(
+                                title=f"AMI Machine Images for {branch} in region {region}"
                             )
                         )
                     elif output_format == "json":
@@ -1073,9 +1099,8 @@ def list_images(  # noqa: PLR0912, PLR0914
                     gce_images = get_gce_images(branch=branch, arch=arch_enum)
                     if output_format == "table":
                         click.echo(
-                            rich_table_to_string(
-                                create_pretty_table(rows=gce_images, field_names=branch_fields),
-                                title=f"GCE Machine Images for {branch}",
+                            create_pretty_table(rows=gce_images, field_names=branch_fields).get_string(
+                                title=f"GCE Machine Images for {branch}"
                             )
                         )
                     elif output_format == "json":
@@ -1091,9 +1116,8 @@ def list_images(  # noqa: PLR0912, PLR0914
 
                     if output_format == "table":
                         click.echo(
-                            rich_table_to_string(
-                                create_pretty_table(rows=rows, field_names=version_fields),
-                                title="Azure Machine Images by version",
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="Azure Machine Images by version"
                             )
                         )
                     elif output_format == "json":
@@ -1163,25 +1187,28 @@ def find_ami_equivalent(
             "Build ID",
             "Owner ID",
         ]
-        table = Table(*field_names, show_lines=False)
+        table = PrettyTable(field_names)
+        table.align = "l"
 
         for result in results:
             table.add_row(
-                result["region"],
-                result["ami_id"],
-                result["name"],
-                result["architecture"],
-                result["creation_date"],
-                result["name_tag"],
-                result["scylla_version"],
-                result["build_id"][:6] if result["build_id"] else "N/A",
-                result["owner_id"],
+                [
+                    result["region"],
+                    result["ami_id"],
+                    result["name"],
+                    result["architecture"],
+                    result["creation_date"],
+                    result["name_tag"],
+                    result["scylla_version"],
+                    result["build_id"][:6] if result["build_id"] else "N/A",
+                    result["owner_id"],
+                ]
             )
 
         title = f"Equivalent AMIs for {ami_id} (source: {source_region})"
         if target_arch:
             title += f" - Target arch: {target_arch}"
-        click.echo(rich_table_to_string(table, title=title))
+        click.echo(table.get_string(title=title))
 
     elif output_format == "json":
         # Create JSON output for pipeline usage
@@ -1230,12 +1257,13 @@ def list_repos(dist_type, dist_version):
 
     repo_maps = get_s3_scylla_repos_mapping(dist_type, dist_version)
 
-    tbl = Table("Version Family", "Repo Url", show_lines=False)
+    tbl = PrettyTable(["Version Family", "Repo Url"])
+    tbl.align = "l"
 
     for version_prefix, repo_url in repo_maps.items():
-        tbl.add_row(version_prefix, repo_url)
+        tbl.add_row([version_prefix, repo_url])
 
-    click.echo(rich_table_to_string(tbl, title="Scylla Repos"))
+    click.echo(tbl.get_string(title="Scylla Repos"))
 
 
 @cli.command("get-scylla-base-versions", help="Get Scylla base versions of upgrade")
@@ -1283,10 +1311,11 @@ def get_scylla_base_versions(
         click.echo(f"Base Versions: {' '.join(version_list)}")
         return
 
-    tbl = Table("Version Family", "Repo Url", show_lines=False)
+    tbl = PrettyTable(["Version Family", "Repo Url"])
+    tbl.align = "l"
     for version in version_list:
-        tbl.add_row(version, version_detector.repo_maps[version])
-    click.echo(rich_table_to_string(tbl, title="Base Versions"))
+        tbl.add_row([version, version_detector.repo_maps[version]])
+    click.echo(tbl.get_string(title="Base Versions"))
     return
 
 
@@ -1438,10 +1467,11 @@ def show_log(test_id, output_format, update_argus: bool):
     files = list_logs_by_test_id(test_id)
 
     if output_format == "table":
-        table = Table("Date", "Log type", "Link", show_lines=False)
+        table = PrettyTable(["Date", "Log type", "Link"])
+        table.align = "l"
         for log in files:
-            table.add_row(log["date"].strftime("%Y%m%d_%H%M%S"), log["type"], log["link"])
-        click.echo(rich_table_to_string(table, title="Log links for testrun with test id {}".format(test_id)))
+            table.add_row([log["date"].strftime("%Y%m%d_%H%M%S"), log["type"], log["link"]])
+        click.echo(table.get_string(title="Log links for testrun with test id {}".format(test_id)))
     elif output_format == "markdown":
         click.echo("\n## Logs\n")
         for log in files:
@@ -1483,10 +1513,10 @@ def show_monitor(test_id, date_time, kill, cluster_name):
             continue
 
         click.echo(f"Monitoring stack for cluster {cluster} restored")
-        table = Table("Service", "Container", "Link", show_lines=False)
+        table = PrettyTable(["Service", "Container", "Link"], align="l")
         for docker in get_monitoring_stack_services(ports=containers_ports):
-            table.add_row(docker["service"], docker["name"], f"http://{SCT_RUNNER_HOST}:{docker['port']}")
-        click.echo(rich_table_to_string(table, title=f"Monitoring stack services for cluster {cluster}"))
+            table.add_row([docker["service"], docker["name"], f"http://{SCT_RUNNER_HOST}:{docker['port']}"])
+        click.echo(table.get_string(title=f"Monitoring stack services for cluster {cluster}"))
         click.echo("")
         if kill:
             kill_running_monitoring_stack_services(ports=containers_ports)
@@ -1519,11 +1549,12 @@ def search_builder(test_id):
     add_file_logger()
 
     results = get_builder_by_test_id(test_id)
-    tbl = Table("Builder Name", "Public IP", "path", show_lines=False)
+    tbl = PrettyTable(["Builder Name", "Public IP", "path"])
+    tbl.align = "l"
     for result in results:
-        tbl.add_row(result["builder"]["name"], result["builder"]["public_ip"], result["path"])
+        tbl.add_row([result["builder"]["name"], result["builder"]["public_ip"], result["path"]])
 
-    click.echo(rich_table_to_string(tbl, title="Found builders for Test-id: {}".format(test_id)))
+    click.echo(tbl.get_string(title="Found builders for Test-id: {}".format(test_id)))
 
 
 @investigate.command("show-events", help="Return content of file events_log/events for running job by test-id")
@@ -1782,7 +1813,8 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
     collected_logs, collection_error = collector.run()
 
-    table = Table("Cluster set", "Link", show_lines=False)
+    table = PrettyTable(["Cluster set", "Link"])
+    table.align = "l"
     for cluster_type, s3_links in collected_logs.items():
         for link in s3_links:
             current_cluster_type = cluster_type
@@ -1794,10 +1826,10 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
             if cluster_type == "sct-runner" and cluster_type not in link:
                 current_cluster_type = link.split("/")[-1].split("-")[0]
             table.add_row(
-                current_cluster_type, create_proxy_argus_s3_url(link).format(collector.test_id, link.split("/")[-1])
+                [current_cluster_type, create_proxy_argus_s3_url(link).format(collector.test_id, link.split("/")[-1])]
             )
 
-    click.echo(rich_table_to_string(table, title="Collected logs by test-id: {}".format(collector.test_id)))
+    click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
     update_sct_runner_tags(backend=backend, test_id=collector.test_id, tags={"logs_collected": True})
 
     # Always send collected logs to Argus, even if there were collection errors
@@ -2533,15 +2565,16 @@ def hdr_investigate(
                 p99[f"{dt_start} - {dt_end}"] = operation["percentile_99"]
             summaries.append({"tag": tag, "spikes": p99})
 
-    hdr_table = Table("Tag", "Timeframe", "P99", show_lines=False)
+    hdr_table = PrettyTable(["Tag", "Timeframe", "P99"])
+    hdr_table.align = "l"
     for group in summaries:
         # Example: group: {'tag': 'READ-st', 'spikes': {'2025-08-25 10:22:40 - 2025-08-25 10:32:40': 487.85}}
         for time_frame, p99 in group["spikes"].items():
-            hdr_table.add_row(group["tag"], time_frame, str(p99))
+            hdr_table.add_row([group["tag"], time_frame, p99])
     click.echo(
         f"\nFound P99 spikes higher than {error_threshold_ms} ms for tags {hdr_tags} with interval {hdr_summary_interval_sec} seconds\n"
     )
-    click.echo(rich_table_to_string(hdr_table, title="HDR Latency Spikes"))
+    click.echo(hdr_table.get_string(title="HDR Latency Spikes"))
 
 
 cli.add_command(sct_ssh.ssh)

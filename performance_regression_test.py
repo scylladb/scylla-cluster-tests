@@ -299,6 +299,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self.db_cluster.start_nemesis(interval=interval)
         results = self.get_stress_results(queue=stress_queue)
 
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.display_results(results, test_name="test_latency" if not nemesis else "test_latency_with_nemesis")
 
     def run_write_workload(self, nemesis=False):
@@ -312,6 +313,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             )
             self.db_cluster.start_nemesis(interval=self.params.get("nemesis_interval"))
         results = self.get_stress_results(queue=stress_queue)
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.display_results(results, test_name="test_latency")
 
     def run_mixed_workload(self, nemesis=False):
@@ -325,6 +327,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             )
             self.db_cluster.start_nemesis(interval=self.params.get("nemesis_interval"))
         results = self.get_stress_results(queue=stress_queue)
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.display_results(results, test_name="test_latency")
 
     def run_workload(self, stress_cmd, nemesis=False, sub_type=None):
@@ -583,6 +586,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         )
         results = self.get_stress_results(queue=stress_queue)
 
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.display_results(results, test_name="test_write")
 
     def test_read(self):
@@ -612,6 +616,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         )
         results = self.get_stress_results(queue=stress_queue)
 
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.display_results(results, test_name="test_read")
 
     def test_mixed(self):
@@ -640,6 +645,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         )
         results = self.get_stress_results(queue=stress_queue)
 
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.display_results(results, test_name="test_mixed")
 
     def test_latency(self):
@@ -875,6 +881,28 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.display_results(results, test_name="test_timeseries_read_bench")
         self.kill_stress_thread()
 
+    def build_histogram(self, workload: str, hdr_tags: list):
+        if not self.params["use_hdrhistogram"]:
+            return
+
+        self.log.debug(f"building histograms for tags {hdr_tags}")
+        start_time = self.get_test_start_time() or self.start_time
+        end_time = time.time()
+
+        histogram_total_data = self.get_hdrhistogram(
+            hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time
+        )
+        self.update_hdrhistograms(histogram_name="test_histogram", histogram_data=histogram_total_data)
+
+        histogram_data_by_interval = self.get_hdrhistogram_by_interval(
+            hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time
+        )
+
+        self.update_hdrhistograms(
+            histogram_name="test_histogram_by_interval", histogram_data=histogram_data_by_interval
+        )
+        self.log.debug(f"building histograms for tags {hdr_tags} completed")
+
 
 class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
     def get_email_data(self):
@@ -907,12 +935,11 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
         self.tester = self
         self.monitoring_set = self.monitors
 
-        stress_queues = self._run_all_stress_cmds(
-            [], params={"stress_cmd": stress_cmd, "stress_num": 1, "stats_aggregate_cmds": False}
-        )
-        all_hdr_tags = [tag for queue in stress_queues for tag in queue.hdr_tags]
+        if sub_type is None:
+            sub_type = "read" if " read " in stress_cmd else "write" if " write " in stress_cmd else "mixed"
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
         time.sleep(60)  # postpone measure steady state latency to skip c-s start period when latency is high
-        self.steady_state_latency(hdr_tags=all_hdr_tags)
+        self.steady_state_latency(hdr_tags=stress_queue.hdr_tags)
 
         def _get_version_and_build_id_from_node(node):
             version = node.remoter.run("scylla --version")
@@ -922,7 +949,7 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
         for node in self.db_cluster.nodes:
             base_version, base_build_id = _get_version_and_build_id_from_node(node)
             self.log.debug("Upgrading node %s with version %s and build id %S", node.name, base_version, base_build_id)
-            self.upgrade_node(node, hdr_tags=all_hdr_tags)
+            self.upgrade_node(node, hdr_tags=stress_queue.hdr_tags)
             target_version, target_build_id = _get_version_and_build_id_from_node(node)
             self.log.debug(
                 "Finished upgrading node %s. Current version is %s and build id is %S",
@@ -931,14 +958,13 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
                 target_build_id,
             )
             time.sleep(120)  # sleeping 2 min to give time for cache to re-heat
-        self.post_upgrades_steady_state(hdr_tags=all_hdr_tags)
+        self.post_upgrades_steady_state(hdr_tags=stress_queue.hdr_tags)
 
         # TODO: check if all `base_version` and all `target_version` are the same
         self._stop_stress_when_finished()
-        for stress_queue in stress_queues:
-            results = self.get_stress_results(queue=stress_queue)
-            self.display_results(results, test_name="test_latency_with_upgrade")
-            self.display_results(results, test_name="test_latency_during_upgrade")
+        results = self.get_stress_results(queue=stress_queue)
+        self.display_results(results, test_name="test_latency_with_upgrade")
+        self.display_results(results, test_name="test_latency_during_upgrade")
 
     def _prepare_latency_with_upgrade(self):
         self.run_fstrim_on_all_db_nodes()

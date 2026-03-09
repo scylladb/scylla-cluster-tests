@@ -113,6 +113,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.log.error(traceback.format_exc())
             raise
         self.log.info(f"Completed stress cmd: {stress_cmd}")
+        self.build_histogram(self.params["workload_name"], hdr_tags=self.hdr_tags)
 
     def create_cql_ks_and_table(self, field_number):
         node = self.db_cluster.nodes[0]

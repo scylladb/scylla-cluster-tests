@@ -59,8 +59,7 @@ from google.cloud.storage import Blob as GceBlob
 from google.cloud.compute_v1.types import Metadata as GceMetadata, Instance as GceInstance
 from google.cloud.compute_v1 import ListImagesRequest, Image as GceImage
 from packaging.version import Version
-from rich.console import Console
-from rich.table import Table
+from prettytable import PrettyTable
 
 from sdcm.provision.provisioner import VmArch
 from sdcm.sct_events import Severity
@@ -1654,27 +1653,11 @@ def get_gce_images(branch: str, arch: VmArch) -> list:
     return rows
 
 
-def rich_table_to_string(table: Table, title: str | None = None) -> str:
-    """Render a Rich Table to a plain-text string.
-
-    Uses the actual terminal width so that columns fold automatically on
-    narrow screens.  When no terminal is detected (e.g. CI / piped output)
-    the fallback width is 120 columns.
-    """
-    if title:
-        table.title = title
-    width = shutil.get_terminal_size(fallback=(120, 24)).columns
-    console = Console(width=width, no_color=True)
-    with console.capture() as capture:
-        console.print(table)
-    return capture.get()
-
-
-def create_pretty_table(rows: list[str] | list[list[str]], field_names: list[str]) -> Table:
-    tbl = Table(*field_names, show_lines=False)
+def create_pretty_table(rows: list[str] | list[list[str]], field_names: list[str]) -> PrettyTable:
+    tbl = PrettyTable(field_names=field_names, align="l")
 
     for row in rows:
-        tbl.add_row(*[str(cell) for cell in row])
+        tbl.add_row(row)
 
     return tbl
 

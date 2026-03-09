@@ -48,15 +48,14 @@ alternator_port: 8080
 
 docker_network: 'ycsb_net'
 
-# NOTE: authenticator/authorizer settings below are just to ease the test case lint and the validation code
-authenticator: 'PasswordAuthenticator'
-authenticator_user: 'cassandra'
-authenticator_password: 'cassandra'
-authorizer: 'CassandraAuthorizer'
-
 alternator_enforce_authorization: true
 alternator_access_key_id: 'alternator'
 alternator_secret_access_key: 'password'
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
 
 # Set Alternator TTL parameters
 # ---------------------------------------------
@@ -68,5 +67,6 @@ experimental_features:
   - alternator-ttl
 append_scylla_yaml:
   alternator_ttl_period_in_seconds: 3600
+
 
 post_prepare_cql_cmds: "ALTER TABLE alternator_usertable_no_lwt.usertable_no_lwt with gc_grace_seconds = 43200;"

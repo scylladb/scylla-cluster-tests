@@ -3837,7 +3837,7 @@ nemesis_exclude_disabled determines whether 'disabled' nemeses are filtered out 
 
 Multiply the list of nemesis to execute by the specified factor
 
-**default:** 2
+**default:** 6
 
 **type:** int | list[int]
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)

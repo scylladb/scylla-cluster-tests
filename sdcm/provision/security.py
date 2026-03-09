@@ -15,13 +15,11 @@ from enum import Enum
 
 
 class ScyllaOpenPorts(Enum):
-    API = 10000
     SSH = 22
     GRAFANA = 3000
     CQL = 9042
     CQL_SSL = 9142
     CQL_SHARD_AWARE = 19042
-    CQL_SHARD_AWARE_SSL = 19142
     NODE_EXPORTER = 9100
     ALTERNATOR = 8080
     PROMETHEUS = 9090

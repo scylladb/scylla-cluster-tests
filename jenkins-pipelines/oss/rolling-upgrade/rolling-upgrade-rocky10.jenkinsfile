@@ -11,5 +11,5 @@ rollingUpgradePipeline(
     gce_image_db: 'https://www.googleapis.com/compute/v1/projects/rocky-linux-cloud/global/images/family/rocky-linux-10-optimized-gcp',
     base_version_all_sts_versions: true,
     test_name: 'upgrade_test.UpgradeTest.test_generic_cluster_upgrade',
-    test_config: '''["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml", "configurations/auth_cassandra.yaml"]''',
+    test_config: '''["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml"]''',
 )

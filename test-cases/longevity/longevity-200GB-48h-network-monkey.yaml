@@ -13,6 +13,7 @@ nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'networking'
 nemesis_seed: '002'
 nemesis_interval: 10
+nemesis_multiply_factor: 15
 
 nemesis_during_prepare: false
 
@@ -21,3 +22,7 @@ user_prefix: 'longevity-200gb-48h-network'
 space_node_threshold: 644245094
 
 server_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'

@@ -1579,8 +1579,8 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):  # legacy type
                 loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):
-                loader_info["n_nodes"] = n_loader_nodes
+            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
+                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
         gce_image = self.params.get("gce_image_db").strip()
@@ -1741,8 +1741,8 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):  # legacy type
                 loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):
-                loader_info["n_nodes"] = n_loader_nodes
+            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
+                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
         if loader_info["type"] is None:
@@ -2357,8 +2357,8 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):
                 loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):  # latest type to support multiple datacenters
-                loader_info["n_nodes"] = n_loader_nodes
+            elif isinstance(n_loader_nodes, str):
+                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
 
@@ -2564,7 +2564,17 @@ class ClusterTester(unittest.TestCase):
         #       for each of the Grafana instances (may be more than 1 in case of K8S multi-tenant setup)
         start_posting_grafana_annotations()
 
+    def _cs_add_node_flag(self, stress_cmd):
+        if "-node" not in stress_cmd:
+            if self.test_config.INTRA_NODE_COMM_PUBLIC:
+                ip = ",".join(self.db_cluster.get_node_public_ips())
+            else:
+                ip = self.db_cluster.get_node_private_ips()[0]
+            stress_cmd = "%s -node %s" % (stress_cmd, ip)
+        return stress_cmd
+
     def run_stress(self, stress_cmd, duration=None):
+        stress_cmd = self._cs_add_node_flag(stress_cmd)
         cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd, duration=duration)
         self.verify_stress_thread(cs_thread_pool)
 
@@ -2644,6 +2654,7 @@ class ClusterTester(unittest.TestCase):
         params=None,
         **_,
     ):
+        # stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration:
             timeout = self.get_duration(duration)
             if " duration" in stress_cmd:
@@ -3791,9 +3802,8 @@ class ClusterTester(unittest.TestCase):
         time.sleep(1)  # Sleep is needed to let events from save_email_data being processed
         self.argus_collect_gemini_results()
         self.destroy_localhost()
-        if not self.test_config.KEEP_ALIVE_DB_NODES:
-            with silence(parent=self, name="Cleaning up SSL config directory"):
-                cleanup_ssl_config()
+        with silence(parent=self, name="Cleaning up SSL config directory"):
+            cleanup_ssl_config()
 
         self.log.info("Test ID: {}".format(self.test_config.test_id()))
 

@@ -51,17 +51,15 @@ alternator_port: 8080
 
 docker_network: 'ycsb_net'
 
-# NOTE: authenticator/authorizer settings below are just to ease the test case lint and the validation code
-authenticator: 'PasswordAuthenticator'
-authenticator_user: 'cassandra'
-authenticator_password: 'cassandra'
-authorizer: 'CassandraAuthorizer'
-
 alternator_enforce_authorization: true
 alternator_access_key_id: 'alternator'
 alternator_secret_access_key: 'password'
 
 server_encrypt: true
 client_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
 
 use_preinstalled_scylla: true

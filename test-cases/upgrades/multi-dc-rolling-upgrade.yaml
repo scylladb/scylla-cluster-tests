@@ -16,6 +16,9 @@ region_name: 'eu-west-1 eu-west-2'
 user_prefix: 'multi-dc-rolling-upgrade'
 
 server_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
 
 internode_compression: 'all'
 

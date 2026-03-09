@@ -23,6 +23,9 @@ instance_type_loader: 'c7i.2xlarge'
 user_prefix: 'rolling-upgrade'
 
 server_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
 
 use_mgmt: false
 
