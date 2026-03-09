@@ -24,12 +24,12 @@ A 4-phase process for creating a new integration test in the SCT repository.
    | **GCE** | Google Cloud operations | GCE credentials |
    | **Azure** | Azure provisioning | Azure credentials |
 
-3. **Check if an existing test file covers your area.** Search `unit_tests/` for integration tests on the same module:
+3. **Check if an existing test file covers your area.** Search `unit_tests/` for integration tests on the same module. **Always prefer adding to existing test files** and reusing existing fixtures rather than creating new files:
    ```bash
    grep -rl "@pytest.mark.integration" unit_tests/ | xargs grep "module_name"
    ```
 
-4. **Choose the test file location.** Integration tests live in `unit_tests/` alongside unit tests, distinguished by the `@pytest.mark.integration` marker.
+4. **Choose the test file location.** Integration tests live in `unit_tests/` alongside unit tests, distinguished by the `@pytest.mark.integration` marker. **If an existing file covers your module, add tests to it** — reuse existing fixtures and test utilities.
 
 **Exit:** Decision made: integration test is needed. External services identified and documented.
 
@@ -133,10 +133,14 @@ A 4-phase process for creating a new integration test in the SCT repository.
    )
    ```
 
-4. **Use parametrize for testing multiple configurations:**
+4. **Use parametrize with `pytest.param(id=...)` for testing multiple configurations:**
    ```python
    @pytest.mark.integration
-   @pytest.mark.parametrize("consistency", ["ONE", "QUORUM", "ALL"])
+   @pytest.mark.parametrize("consistency", [
+       pytest.param("ONE", id="consistency-one"),
+       pytest.param("QUORUM", id="consistency-quorum"),
+       pytest.param("ALL", id="consistency-all"),
+   ])
    def test_read_consistency(docker_scylla, consistency):
        ...
    ```

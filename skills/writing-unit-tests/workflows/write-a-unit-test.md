@@ -12,14 +12,14 @@ A 4-phase process for creating a new unit test in the SCT repository.
 
 1. **Locate the source code.** Find the module under `sdcm/` that contains the code to test. Note all public functions and their expected inputs/outputs.
 
-2. **Check for existing tests.** Search `unit_tests/` for tests covering the same module:
+2. **Check for existing tests.** Search `unit_tests/` for tests covering the same module. **Always prefer adding to existing test files** and reusing existing test utilities rather than creating new files:
    ```bash
    grep -rl "from sdcm.module_name import" unit_tests/
    ```
 
 3. **Identify external dependencies.** List any network calls, file I/O, cloud API calls, or remote commands. These must be mocked in the unit test.
 
-4. **Decide the test file name.** Follow the pattern `unit_tests/test_<module_name>.py`. If an existing file covers the module, add tests to it.
+4. **Decide the test file name.** Follow the pattern `unit_tests/test_<module_name>.py`. **If an existing file covers the module, add tests to it** — do not create a new file for the same module. Reuse existing fixtures and test utilities found in `unit_tests/conftest.py` or the existing test file.
 
 **Exit:** You know what to test, what to mock, and where to put the test.
 
@@ -100,12 +100,12 @@ A 4-phase process for creating a new unit test in the SCT repository.
        assert result.minor == 2
    ```
 
-2. **Use `@pytest.mark.parametrize` for multiple cases:**
+2. **Use `@pytest.mark.parametrize` with `pytest.param(id=...)` for multiple cases:**
    ```python
    @pytest.mark.parametrize("input_val,expected", [
-       ("5.2.1", (5, 2, 1)),
-       ("2024.1.0", (2024, 1, 0)),
-       ("invalid", None),
+       pytest.param("5.2.1", (5, 2, 1), id="standard-version"),
+       pytest.param("2024.1.0", (2024, 1, 0), id="year-based-version"),
+       pytest.param("invalid", None, id="invalid-string"),
    ])
    def test_parse_version(input_val, expected):
        assert parse_version(input_val) == expected
