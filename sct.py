@@ -1458,8 +1458,8 @@ def lint_pipelines(pipeline_dir, pipeline_file, workers, include_filter, exclude
                 failed_count += 1
                 click.secho(f"FAIL: {path}", fg="red", bold=True)
                 lines = error_msg.strip().splitlines()
-                if lines:
-                    click.secho(f"  {lines[-1]}", fg="red")
+                for line in lines:
+                    click.secho(f"  {line}", fg="red")
                 click.echo()
             else:
                 passed_count += 1
