@@ -90,7 +90,7 @@ Request these by name in your test function signature:
 |--------|---------|-----------------|
 | `@pytest.mark.integration` | Marks integration tests | **Do NOT use** — unit tests must NOT have this |
 | `@pytest.mark.sct_config(files="...")` | Loads specific SCT config | Use when testing config-dependent code |
-| `@pytest.mark.parametrize` | Test multiple inputs | Use freely for data-driven tests |
+| `@pytest.mark.parametrize` | Test multiple inputs | Use freely for data-driven tests; always use `pytest.param(id=...)` for human-readable names |
 
 ## Quick Reference: Mocking Patterns
 
