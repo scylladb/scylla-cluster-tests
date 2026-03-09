@@ -9,7 +9,9 @@ import traceback
 from dataclasses import dataclass, fields
 from typing import Literal, TYPE_CHECKING, get_type_hints, get_origin
 
-from prettytable import PrettyTable
+from rich.table import Table
+
+from sdcm.utils.common import rich_table_to_string
 
 from sdcm import wait
 
@@ -70,24 +72,23 @@ class OperationThreadStats:
     total_thread_time: int = 0
     stats: list[OneOperationStat] = dataclasses.field(default_factory=list)
 
-    def get_stats_pretty_table(self) -> PrettyTable | None:
+    def get_stats_table_string(self) -> str | None:
         if not self.stats:
             return None
 
-        pretty_table = PrettyTable(field_names=[field.name for field in dataclasses.fields(self.stats[0])])
+        field_names = [field.name for field in dataclasses.fields(self.stats[0])]
+        table = Table(*field_names, show_lines=False)
         for stat in self.stats:
-            pretty_table.add_row(
-                [
-                    stat.op_type,
-                    stat.duration,
-                    "\n".join(stat.exceptions),
-                    stat.nemesis_at_start,
-                    stat.nemesis_at_end,
-                    stat.success,
-                    stat.cmd,
-                ]
+            table.add_row(
+                str(stat.op_type),
+                str(stat.duration),
+                "\n".join(stat.exceptions),
+                str(stat.nemesis_at_start),
+                str(stat.nemesis_at_end),
+                str(stat.success),
+                str(stat.cmd),
             )
-        return pretty_table
+        return rich_table_to_string(table)
 
 
 @dataclass
@@ -165,7 +166,7 @@ class OperationThread:
             self.log.error(traceback.format_exc())
             self.log.error("Encountered exception while performing a operation:\n%s", exc)
 
-        self.log.debug("Thread stats:\n%s", self.thread_stats.get_stats_pretty_table())
+        self.log.debug("Thread stats:\n%s", self.thread_stats.get_stats_table_string())
 
     def run(self):
         end_time = time.time() + self.thread_params.duration
@@ -175,7 +176,7 @@ class OperationThread:
             time.sleep(self.thread_params.interval)
         # summary for Jenkins. may not log because nobody wait the thread.
         # Thread stats logs with debug level in each loop
-        self.log.debug("Thread stats:\n%s", self.thread_stats.get_stats_pretty_table())
+        self.log.debug("Thread stats:\n%s", self.thread_stats.get_stats_table_string())
 
     def start(self):
         self._thread.start()
