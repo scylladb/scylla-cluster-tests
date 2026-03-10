@@ -96,8 +96,8 @@ def call(Map pipelineParams) {
                                 region: 'eu-west-3',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
                                 pre_release: [],
-                                sub_tests: ['"test_latency_mixed_with_nemesis"'],
-                                labels: ['master-weekly']
+                                sub_tests: [],
+                                labels: []
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64',
