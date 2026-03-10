@@ -97,8 +97,9 @@ instance_type_db_oracle: 'i4i.8xlarge'
 1. **Extend oracle support with Cassandra** — add Apache Cassandra 4.1 or 5.0 as a Gemini oracle option alongside the existing Scylla oracle, fulfilling Gemini's original design intent
 2. **Support all backends** — Cassandra oracle clusters on AWS, GCE, Azure, and Docker
 3. **Introduce a new `db_type: "mixed_cassandra"`** — to clearly differentiate from the existing `mixed_scylla` flow, allowing both to coexist
-4. **Minimize node_setup complexity** — use pre-built images/containers where possible rather than installing Cassandra from scratch on generic VMs
+4. **Minimize custom image building** — use official Docker images and standard apt packages rather than maintaining custom AMIs/images per Cassandra version
 5. **Keep the existing `mixed_scylla` flow intact** — no regressions to current Gemini tests
+6. **Fix oracle log collection** — oracle node logs (both `mixed_scylla` and `mixed_cassandra`) are currently not collected during teardown (pre-existing bug); this plan fixes it for both flows
 
 ## Cassandra Image Strategy
 
@@ -125,9 +126,13 @@ instance_type_db_oracle: 'i4i.8xlarge'
 - Use the same base AMI as loaders (`ami_id_loader`) or a clean Ubuntu 22.04/24.04 AMI
 - Install Cassandra in `node_setup()` via the official tarball or apt repository:
   ```
-  # apt-based (Cassandra 4.1/5.0)
+  # apt-based (Cassandra 4.1)
+  curl -o /etc/apt/trusted.gpg.d/cassandra.asc https://downloads.apache.org/cassandra/KEYS
   echo "deb https://debian.cassandra.apache.org 41x main" | sudo tee /etc/apt/sources.list.d/cassandra.sources.list
   sudo apt-get update && sudo apt-get install -y cassandra
+
+  # For Cassandra 5.0, use the 50x distribution:
+  echo "deb https://debian.cassandra.apache.org 50x main" | sudo tee /etc/apt/sources.list.d/cassandra.sources.list
   ```
 - **Pros:** No custom AMI maintenance, always gets latest patch version, reuses existing AMI infrastructure
 - **Cons:** Slower node_setup (~2-5 min install), requires JDK installation (Cassandra 4.x needs JDK 11, Cassandra 5.x needs JDK 11 or 17)
@@ -203,15 +208,18 @@ instance_type_db_oracle: 'i4i.8xlarge'
    - Reuse existing `n_test_oracle_db_nodes` for node count
 
 4. Update `GeminiStressThread` type annotation in `sdcm/gemini_thread.py:71`:
-   - Broaden `oracle_cluster` type to accept the new `CassandraDockerCluster` (or better: use `BaseCluster` as the type)
+   - Change `oracle_cluster` type to `BaseCluster | None` (the current `ScyllaAWSCluster | CassandraAWSCluster | None` is unnecessarily narrow)
 
 5. Create a test config: `test-cases/gemini/gemini-basic-cassandra-oracle-docker.yaml`
+
+**Note:** Phases 1 and 2 should land in the same PR or immediately sequential PRs. If Phase 1 is merged and Phase 2 is delayed, the codebase will have non-mixin `CassandraDockerCluster` as permanent state.
 
 **Definition of Done:**
 - [ ] `CassandraDockerCluster` starts a Cassandra container, waits for CQL, and is reachable
 - [ ] Gemini test runs with `--backend docker` using Cassandra oracle
 - [ ] Gemini successfully compares Scylla (test) vs Cassandra (oracle) reads
-- [ ] Unit test verifying `CassandraDockerCluster` node_setup and connectivity
+- [ ] Unit test verifying `cassandra.yaml` generation and config parameter wiring
+- [ ] Integration test verifying `CassandraDockerCluster` starts and CQL port is reachable
 
 ---
 
@@ -275,8 +283,11 @@ instance_type_db_oracle: 'i4i.8xlarge'
 3. Add config parameters to `sdcm/sct_config.py`:
    - `ami_id_db_cassandra_oracle`: AMI for Cassandra oracle nodes (default: empty, meaning use loader AMI)
    - Reuse `instance_type_db_oracle` and `n_test_oracle_db_nodes`
+   - Note: the existing `instance_type_db_oracle` defaults (e.g., `i4i.8xlarge`) are Scylla-centric (NVMe-optimized). Cassandra as oracle is predominantly memory-bound and does not require NVMe instances — test configs for Cassandra oracle may use smaller/cheaper instance types
 
-4. Create test config: `test-cases/gemini/gemini-basic-cassandra-oracle-aws.yaml`
+4. Update the three KMS skip checks in `sdcm/tester.py` (lines ~981, ~1038, ~1097) to also skip when `db_type == "mixed_cassandra"`, matching the existing `mixed_scylla` exemption. Without this, KMS setup will be attempted against Cassandra nodes and fail.
+
+5. Create test config: `test-cases/gemini/gemini-basic-cassandra-oracle-aws.yaml`
 
 **Definition of Done:**
 - [ ] Cassandra oracle cluster provisions on AWS from a base Ubuntu AMI
@@ -401,7 +412,7 @@ instance_type_db_oracle: 'i4i.8xlarge'
 **Implementation:**
 
 1. Cassandra `cassandra.yaml` tuning for oracle role:
-   - `num_tokens: 256` (match Scylla's token distribution for fair comparison)
+   - `num_tokens: 256` (explicitly set to match Scylla's token distribution — note that Cassandra 4.1+ defaults to `num_tokens: 16`, not 256; this mismatch doesn't affect oracle correctness since the oracle owns all tokens in its own ring, but matching Scylla's distribution is preferred)
    - `concurrent_reads: 32`, `concurrent_writes: 32` (oracle sees lower load)
    - `commitlog_sync: periodic` with `commitlog_sync_period_in_ms: 10000`
    - `memtable_heap_space_in_mb` and `memtable_offheap_space_in_mb` sized for the instance
@@ -445,7 +456,7 @@ instance_type_db_oracle: 'i4i.8xlarge'
 **Definition of Done:**
 - [ ] All Gemini test configs have `mixed_cassandra` variants
 - [ ] CI runs both `mixed_scylla` and `mixed_cassandra` Gemini tests
-- [ ] Decision documented on whether to deprecate `mixed_scylla` oracle
+- [ ] A follow-up issue is filed to track `mixed_scylla` deprecation timeline
 
 ## Testing Requirements
 
@@ -513,11 +524,10 @@ instance_type_db_oracle: 'i4i.8xlarge'
 ### Risk: Monitoring gap for Cassandra nodes
 
 - **Impact:** No visibility into Cassandra oracle health during test runs
-- **Mitigation:** Cassandra exposes metrics via JMX. A JMX-to-Prometheus exporter (e.g., `jmx_exporter` Java agent) can be deployed alongside Cassandra. This can be deferred to Phase 5.
+- **Mitigation:** Cassandra exposes metrics via JMX. A JMX-to-Prometheus exporter (e.g., `jmx_exporter` Java agent) can be deployed alongside Cassandra. This can be deferred to Phase 6.
 
 ## Open Questions
 
 1. **Cassandra version policy:** Should we support only one Cassandra version (e.g., 5.0) or multiple? Supporting one simplifies maintenance. Supporting both 4.1 and 5.0 gives flexibility.
-2. **Legacy cleanup:** The existing `CassandraAWSCluster` (Cassandra 2.1.15) is unused and will be removed. The `db_type: "mixed"` / `db_type: "cassandra"` code paths should also be audited and cleaned up.
-3. **Multi-node oracle:** Current oracle is single-node (RF=1). Is there a need for multi-node Cassandra oracle clusters? Single-node is simpler and sufficient for consistency checking.
-4. **Cassandra authentication:** Should the Cassandra oracle run with authentication enabled (matching Scylla test cluster) or without (simpler setup)?
+2. **Multi-node oracle:** Current oracle is single-node (RF=1). Is there a need for multi-node Cassandra oracle clusters? Single-node is simpler and sufficient for consistency checking.
+3. **Cassandra authentication:** Should the Cassandra oracle run with authentication enabled (matching Scylla test cluster) or without (simpler setup)?
