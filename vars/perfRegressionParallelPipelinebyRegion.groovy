@@ -38,6 +38,7 @@ def call(Map pipelineParams) {
                     0 8 * * 6 %scylla_version=master:latest;labels_selector=alternator-weekly;requested_by_user=radoslawcybulski
                     00 6 * * 0 %scylla_version=master:latest;labels_selector=master-weekly;requested_by_user=juliayakovlev
                     0 23 */21 * * %scylla_version=master:latest;labels_selector=master-3weeks;requested_by_user=juliayakovlev
+                    0 6 1 * * %scylla_version=master:latest;labels_selector=master-monthly;requested_by_user=juliayakovlev
                     13 6 8-14 * 2 %scylla_version=master:latest;labels_selector=gce-custom-monthly;requested_by_user=valerii.ponomarov
                 '''
             )
@@ -64,7 +65,7 @@ def call(Map pipelineParams) {
                                 ignore_versions: [],
                                 pre_release: [],
                                 sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"', '"test_read_disk_only_gradual_increase_load"'],
-                                labels: ['master-weekly']
+                                labels: ['master-monthly']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-vnodes',
@@ -72,7 +73,7 @@ def call(Map pipelineParams) {
                                 ignore_versions: [],
                                 pre_release: [],
                                 sub_tests: ['"test_write_gradual_increase_load"'],
-                                labels: ['master-weekly']
+                                labels: ['master-monthly']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade',
@@ -80,7 +81,7 @@ def call(Map pipelineParams) {
                                 ignore_versions: [],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_upgrade"'],
-                                labels: ['master-weekly'],
+                                labels: ['master-monthly'],
                                 rolling_upgrade_test: true
                             ],
                             [
@@ -89,7 +90,7 @@ def call(Map pipelineParams) {
                                 ignore_versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"'],
-                                labels: ['master-weekly']
+                                labels: ['master-monthly']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis',
@@ -97,7 +98,7 @@ def call(Map pipelineParams) {
                                 versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"', '"test_latency_read_with_nemesis"', '"test_latency_write_with_nemesis"'],
-                                labels: ['master-weekly']
+                                labels: ['master-monthly']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-rbno-disabled',
