@@ -10,7 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2024 ScyllaDB
-import unittest
 from typing import NamedTuple
 
 from sdcm.utils.aws_utils import EC2NetworkConfiguration
@@ -68,45 +67,39 @@ class FakeEC2NetworkConfiguration(EC2NetworkConfiguration):
         )
 
 
-class AWSNetworkConfigurationTests(unittest.TestCase):
+class TestAWSNetworkConfiguration:
     def test_subnets_property_one_region_one_az_one_interface(self):
         net_config = FakeEC2NetworkConfiguration(
             regions=["eu-central-1"], availability_zones=["a"], network_interfaces_count=1
         )
         subnets = net_config.subnets
-        self.assertEqual(subnets, [[["subnet-085db77751694e2a6"]]])
+        assert subnets == [[["subnet-085db77751694e2a6"]]]
 
     def test_subnets_property_one_region_two_az_one_interface(self):
         net_config = FakeEC2NetworkConfiguration(
             regions=["eu-central-1"], availability_zones=["a", "b"], network_interfaces_count=1
         )
         subnets = net_config.subnets
-        self.assertEqual(subnets, [[["subnet-085db77751694e2a6"], ["subnet-084b1d12f9974e61f"]]])
+        assert subnets == [[["subnet-085db77751694e2a6"], ["subnet-084b1d12f9974e61f"]]]
 
     def test_subnets_property_one_region_two_az_two_interface(self):
         net_config = FakeEC2NetworkConfiguration(
             regions=["us-east-1"], availability_zones=["a", "b"], network_interfaces_count=2
         )
         subnets = net_config.subnets
-        self.assertEqual(
-            subnets,
+        assert subnets == [
             [
-                [
-                    ["subnet-0a09ba4421ec6aaa8", "subnet-03d8900174e00a73d"],
-                    ["subnet-06604bf2840958461", "subnet-094ed7c7c3bddd441"],
-                ]
-            ],
-        )
+                ["subnet-0a09ba4421ec6aaa8", "subnet-03d8900174e00a73d"],
+                ["subnet-06604bf2840958461", "subnet-094ed7c7c3bddd441"],
+            ]
+        ]
 
     def test_subnets_property_two_region_two_az_one_interface(self):
         net_config = FakeEC2NetworkConfiguration(
             regions=["us-east-1", "eu-central-1"], availability_zones=["a", "b"], network_interfaces_count=1
         )
         subnets = net_config.subnets
-        self.assertEqual(
-            subnets,
-            [
-                [["subnet-0a09ba4421ec6aaa8"], ["subnet-06604bf2840958461"]],
-                [["subnet-085db77751694e2a6"], ["subnet-084b1d12f9974e61f"]],
-            ],
-        )
+        assert subnets == [
+            [["subnet-0a09ba4421ec6aaa8"], ["subnet-06604bf2840958461"]],
+            [["subnet-085db77751694e2a6"], ["subnet-084b1d12f9974e61f"]],
+        ]
