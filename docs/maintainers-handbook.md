@@ -49,15 +49,12 @@ Each level has clear entry requirements so advancement is transparent and merit-
 | **Contributor** | Submit at least 1 merged PR | Can open issues and PRs, review code, participate in discussions |
 | **Maintainer** | Sustained contributions, demonstrated review quality, broad knowledge of the area, nominated and approved by existing maintainers | Merge access, release authority, CI/CD configuration access, listed in CODEOWNERS |
 
-**Nomination process:**
+**Nomination process (suggested, to be agreed upon by the team):**
 1. An existing maintainer nominates the candidate with a summary of contributions
 2. Other maintainers in the area review the nomination (minimum 2 approvals, no vetoes)
 3. Upon approval, access is granted and the candidate is added to CODEOWNERS and team lists
 
 <!-- TODO: document the nomination process in more detail (where it happens, template, examples) -->
-
-**Expectations at each level are cumulative** — a maintainer is still expected to
-contribute code and review PRs, not just merge.
 
 ### 1.3 Decision-Making Process
 
@@ -119,13 +116,6 @@ Maintainers step down, change roles, or become inactive. The project must handle
 these transitions gracefully to avoid stalled reviews, abandoned areas, and bus-factor
 risks.
 
-**Detecting inactivity:**
-- Prolonged absence of reviews, merges, or commits triggers a check-in
-- A maintainer or project lead reaches out privately to ask about availability
-- If there is no response, the maintainer is moved to emeritus status
-
-<!-- TODO: define the specific inactivity policy (thresholds, who initiates, where it's tracked) -->
-
 **Emeritus status:**
 - Merge access and CODEOWNERS entries are removed
 - The person is acknowledged in a contributors/emeritus list
@@ -134,7 +124,6 @@ risks.
 <!-- TODO: create an emeritus list or section in the repo -->
 
 **Planned transitions:**
-- A stepping-down maintainer should identify and mentor a successor before departing
 - Knowledge transfer includes: undocumented context, ongoing work, known technical debt
 - A transition period with overlapping access is recommended
 
@@ -175,15 +164,119 @@ area needs clearer guidelines or an architecture decision record.
 
 ## 2. Code Review and Merging
 
-| Topic | Description | Inspiration |
-|-------|-------------|-------------|
-| Code review expectations | What reviewers should look for (correctness, style, tests, security) | Kubernetes review guidelines |
-| Review SLAs and response times | Expected turnaround for reviews to avoid stale PRs | Kubernetes oncall rotation |
-| Two-phase review process | Separate technical review from approval to merge | Kubernetes LGTM + Approve model |
-| Merge criteria | What must be true before a PR is merged (CI green, reviews, labels) | CPython development cycle |
-| Handling large PRs | When to ask for PR splitting, how to review incrementally | Linux kernel patch series model |
-| Backport process | How fixes are cherry-picked to release branches, conflict resolution | SCT fix-backport-conflicts skill |
-| Commit message conventions | Format, required metadata, linking to issues | Linux kernel commit guidelines |
+### 2.1 Code Review Expectations
+
+Every pull request must be reviewed before merging. Reviewers should check for:
+
+- **Correctness** — does the code do what the PR description says? Are edge cases handled?
+- **Test coverage** — are there unit tests for new logic? Integration tests where needed?
+  See the [`writing-unit-tests`](../skills/writing-unit-tests/SKILL.md) and
+  [`writing-integration-tests`](../skills/writing-integration-tests/SKILL.md) skills
+  for testing guidance
+- **Style and conventions** — imports at the top (no inline imports), pytest style (not
+  unittest), Google docstrings. See [`AGENTS.md`](../AGENTS.md) for the full style guide
+- **Security** — no credential leaks, no injection vulnerabilities, no secrets in config
+  files. See section 7 (Security) for details
+- **Performance** — no unnecessary loops over large datasets, no blocking calls in async
+  paths, no unmocked network calls in tests
+
+Reviewers should explain *why* something needs to change, not just request a change.
+A good review comment teaches the author something for next time.
+
+### 2.2 Review Turnaround
+
+Stale PRs slow everyone down. To keep the review pipeline healthy:
+
+- Prioritize reviewing others' PRs over opening new ones
+- If you cannot review a PR assigned to you, reassign it or let the author know
+- Authors should keep PRs small and focused to make reviews easier and faster
+
+<!-- TODO: agree on expected review turnaround (e.g., first response within N business days) -->
+
+### 2.3 Merge Criteria
+
+A PR is ready to merge when all of the following are true:
+
+- At least one approval from a reviewer (two for medium/high impact — see section 1.3)
+- CI checks pass (pre-commit, unit tests, any triggered integration tests)
+- No unresolved review comments
+- PR description clearly explains what changed and why
+- Relevant labels are applied
+
+<!-- TODO: document the label taxonomy and which labels are required before merge -->
+
+Pre-commit checks enforce code quality automatically — see
+[`docs/contrib.md`](contrib.md) for setup instructions and
+[`.pre-commit-config.yaml`](../.pre-commit-config.yaml) for the full hook list.
+
+### 2.4 Handling Large PRs
+
+Large PRs are harder to review and more likely to introduce bugs. When a PR is too
+large:
+
+- Ask the author to split it into smaller, self-contained PRs
+- Each PR should be independently reviewable and testable
+- A good split follows logical boundaries: refactoring in one PR, new feature in
+  another, tests in a third if they are substantial
+- If splitting is not practical (e.g., a large migration), review commit-by-commit —
+  each commit should represent a coherent step
+
+For high-impact changes, an implementation plan should define the PR breakdown
+upfront. See [`docs/plans/INSTRUCTIONS.md`](plans/INSTRUCTIONS.md).
+
+### 2.5 Backport Process
+
+When a fix needs to be applied to a release branch:
+
+1. The original fix is merged to the main branch first
+2. A backport PR is created by cherry-picking the commit(s) to the target branch
+3. If cherry-pick produces conflicts, resolve them in the backport PR
+
+The [`fix-backport-conflicts`](../skills/fix-backport-conflicts/SKILL.md) skill
+documents the full workflow for resolving backport conflicts, including how to
+preserve original authorship and commit messages.
+
+<!-- TODO: document which branches are active release branches and the backport policy (what gets backported, who decides) -->
+
+### 2.6 Commit Message Conventions
+
+SCT uses [Conventional Commits](https://www.conventionalcommits.org/) enforced by
+commitlint. See [`commitlint.config.js`](../commitlint.config.js) for the full
+configuration.
+
+**Format:**
+```
+type(scope): subject
+
+Body explaining what changed and why (minimum 30 characters).
+```
+
+**Allowed types:** `ci`, `docs`, `feature`, `fix`, `improvement`, `perf`, `refactor`,
+`revert`, `style`, `test`, `unit-test`, `build`, `chore`
+
+**Rules:**
+- Scope is required and must be at least 3 characters
+- Subject must be 10-120 characters, no trailing period
+- Header (type + scope + subject) must be under 100 characters
+- Body is required, minimum 30 characters, with a blank line after the subject
+- Body lines must be under 120 characters
+
+**Examples:**
+```
+fix(nemesis): handle timeout during node restart
+
+The restart nemesis did not account for slow nodes that take longer than
+the default timeout to rejoin the cluster. Extended the wait and added
+a retry with exponential backoff.
+```
+
+```
+feature(config): add support for custom stress tool parameters
+
+Allow users to pass arbitrary parameters to stress tools via the
+stress_cmd_custom_params configuration option. This enables testing
+with non-standard workload profiles without modifying test code.
+```
 
 ## 3. Release Management
 
