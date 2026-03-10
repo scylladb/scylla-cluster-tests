@@ -6,14 +6,157 @@ CNCF projects, and GitHub's Open Source Guides.
 
 ## 1. Governance and Roles
 
-| Topic | Description | Inspiration |
-|-------|-------------|-------------|
-| Maintainer roles and responsibilities | Define what maintainers, reviewers, and approvers do day-to-day | Kubernetes community-membership.md |
-| Contributor ladder | Path from first-time contributor to maintainer (member, reviewer, approver, maintainer) | CNCF contributor ladder template |
-| Decision-making process | How technical decisions are made, who has final say, consensus vs. authority | CPython Steering Council model |
-| OWNERS / CODEOWNERS files | How code ownership is assigned and what it means for reviews | Kubernetes OWNERS mechanism |
-| Succession planning | What happens when a maintainer steps down or becomes inactive | Linux kernel maintainer handbooks |
-| Conflict resolution | How disagreements between maintainers or contributors are resolved | Apache Software Foundation voting model |
+### 1.1 Maintainer Roles and Responsibilities
+
+The project defines three distinct roles, each with specific day-to-day expectations.
+
+**Contributor** — anyone who submits patches, reports bugs, or participates in discussions.
+No special access required; contributions go through the standard PR process.
+
+**Reviewer** — trusted contributors who review pull requests for correctness, style,
+and test coverage. Reviewers are expected to:
+- Respond to review requests within two business days
+- Verify that tests pass and new code has adequate coverage
+- Check for security concerns (injection, credential leaks, OWASP top 10)
+- Ensure code follows SCT conventions (no inline imports, pytest style, Google docstrings)
+- Leave constructive feedback — explain *why*, not just *what* to change
+
+**Maintainer** — reviewers who also have merge authority and own the long-term health
+of their area. Maintainers are expected to:
+- Merge PRs that meet review and CI criteria
+- Triage and prioritize issues in their area
+- Participate in release planning and backport decisions
+- Mentor new reviewers and contributors
+- Keep documentation and test configurations up to date
+- Attend regular sync meetings or communicate async status updates
+
+Each role carries obligations, not just permissions. Having merge access without
+actively reviewing and triaging is not maintainership — it is dormant access that
+should be re-evaluated (see Succession Planning below).
+
+### 1.2 Contributor Ladder
+
+The contributor ladder defines the path from first-time contributor to maintainer.
+Each level has clear entry requirements so advancement is transparent and merit-based.
+
+| Level | Requirements | Privileges |
+|-------|-------------|------------|
+| **Contributor** | Submit at least 1 merged PR | Can open issues and PRs, participate in discussions |
+| **Reviewer** | 10+ merged PRs, demonstrated review quality, nominated by a maintainer | Added to CODEOWNERS for specific paths, review requests are routed automatically |
+| **Maintainer** | 6+ months as active reviewer, broad knowledge of the area, nominated and approved by existing maintainers | Merge access, release authority, CI/CD configuration access |
+
+**Nomination process:**
+1. An existing maintainer nominates the candidate with a summary of contributions
+2. Other maintainers in the area review the nomination (minimum 2 approvals, no vetoes within 1 week)
+3. Upon approval, access is granted and the candidate is added to CODEOWNERS and team lists
+
+**Expectations at each level are cumulative** — a maintainer is still expected to
+contribute code and review PRs, not just merge.
+
+### 1.3 Decision-Making Process
+
+Technical decisions follow a tiered approach based on impact:
+
+**Low impact** (bug fixes, small refactors, test additions) — a single reviewer
+approval is sufficient. The PR author or a maintainer can merge.
+
+**Medium impact** (new features, API changes, configuration additions, new test
+categories) — requires review from at least two people, including one maintainer
+of the affected area. Discussion happens on the PR itself.
+
+**High impact** (architectural changes, new backends, framework-wide refactors,
+dependency upgrades, deprecations) — requires an implementation plan (see
+`docs/plans/INSTRUCTIONS.md`) posted as a PR for review. The plan must be approved
+by at least two maintainers before implementation begins. Disagreements are resolved
+by discussion; if consensus cannot be reached within two weeks, the project lead
+makes the final call.
+
+**Principles:**
+- Prefer consensus over voting — most decisions should converge through discussion
+- Decisions are documented in the PR or plan that implements them, not in side channels
+- "Silence is not consent" — explicitly confirm agreement for high-impact decisions
+- Reversible decisions can move faster; irreversible ones (public APIs, data formats) need more scrutiny
+
+### 1.4 OWNERS / CODEOWNERS Files
+
+Code ownership determines who is automatically requested for reviews and who has
+authority over specific areas of the codebase.
+
+**How ownership is assigned:**
+- CODEOWNERS entries map file patterns to GitHub teams or individuals
+- Ownership follows expertise — the people who wrote and maintain the code own it
+- Shared ownership (2-3 people per area) prevents single points of failure
+
+**What ownership means:**
+- Owners are automatically added as reviewers on PRs touching their files
+- At least one owner must approve before the PR can be merged
+- Owners are responsible for triaging issues in their area
+- Owners decide the technical direction for their area, within the project's overall architecture
+
+**Example areas and their scope:**
+- `sdcm/cluster_aws.py`, `sdcm/provision/aws/` — AWS backend
+- `sdcm/nemesis.py`, `sdcm/nemesis_registry.py` — Nemesis framework
+- `sdcm/sct_config.py`, `defaults/` — Configuration system
+- `jenkins-pipelines/` — CI/CD pipelines
+- `sdcm/cluster_k8s/` — Kubernetes backends
+
+**Updating ownership:** When a contributor consistently reviews and maintains an area
+but is not listed as owner, a maintainer should propose adding them. When an owner
+becomes inactive (see Succession Planning), they should be removed.
+
+### 1.5 Succession Planning
+
+Maintainers step down, change roles, or become inactive. The project must handle
+these transitions gracefully to avoid stalled reviews, abandoned areas, and bus-factor
+risks.
+
+**Detecting inactivity:**
+- No reviews, merges, or commits for 3 consecutive months triggers a check-in
+- A maintainer or project lead reaches out privately to ask about availability
+- If no response within 2 weeks, the maintainer is moved to emeritus status
+
+**Emeritus status:**
+- Merge access and CODEOWNERS entries are removed
+- The person is acknowledged in a contributors/emeritus list
+- Emeritus maintainers can return to active status by resuming contributions and going through an expedited nomination (1 maintainer approval, no waiting period)
+
+**Planned transitions:**
+- A stepping-down maintainer should identify and mentor a successor before departing
+- Knowledge transfer includes: undocumented context, ongoing work, known technical debt
+- A transition period of 2-4 weeks with overlapping access is recommended
+
+**Bus-factor mitigation:**
+- Every area should have at least 2 owners in CODEOWNERS
+- Critical areas (CI/CD, configuration, core cluster code) should have 3+ owners
+- Regularly review CODEOWNERS for single-owner areas and prioritize finding co-owners
+
+### 1.6 Conflict Resolution
+
+Disagreements are normal and healthy. The project uses a structured escalation path
+to resolve them without damaging relationships.
+
+**Level 1 — Discussion on the PR or issue.** Most disagreements resolve here through
+back-and-forth discussion. Both parties should:
+- Focus on the technical merits, not the person
+- Provide concrete examples or data to support their position
+- Acknowledge valid points from the other side
+- Propose compromise solutions when possible
+
+**Level 2 — Involve a third maintainer.** If the two parties cannot reach agreement
+after 3 rounds of discussion, a third maintainer from the same area (or an adjacent
+area) is asked to weigh in. The third maintainer reviews the arguments and either
+sides with one position or proposes a synthesis.
+
+**Level 3 — Project lead decision.** If Level 2 does not resolve the disagreement
+within 1 week, the project lead makes a binding decision. The decision is documented
+on the PR or issue with the rationale. This is rare and should be treated as a signal
+that the area needs clearer guidelines or an architecture decision record.
+
+**Ground rules for all levels:**
+- No personal attacks, passive aggression, or dismissive language
+- Assume good intent — the other person is trying to improve the project
+- "Disagree and commit" — once a decision is made, everyone supports it
+- Process feedback is welcome after the fact ("we should handle this differently next time") but re-litigating decided issues is not
 
 ## 2. Code Review and Merging
 
