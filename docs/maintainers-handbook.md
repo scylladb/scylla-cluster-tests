@@ -6,28 +6,33 @@ CNCF projects, and GitHub's Open Source Guides.
 
 ## 1. Governance and Roles
 
-### 1.1 Maintainer Roles and Responsibilities
+### 1.1 Roles and Responsibilities
 
-The project defines three distinct roles, each with specific day-to-day expectations.
+The project defines two roles with distinct responsibilities.
 
-**Contributor** — anyone who submits patches, reports bugs, or participates in discussions.
-No special access required; contributions go through the standard PR process.
-
-**Reviewer** — trusted contributors who review pull requests for correctness, style,
-and test coverage. Reviewers are expected to:
-- Respond to review requests within two business days
+**Contributor** — anyone who submits patches, reports bugs, reviews pull requests,
+or participates in discussions. Contributors are expected to:
 - Verify that tests pass and new code has adequate coverage
 - Check for security concerns (injection, credential leaks, OWASP top 10)
-- Ensure code follows SCT conventions (no inline imports, pytest style, Google docstrings)
+- Ensure code follows SCT conventions — see [`AGENTS.md`](../AGENTS.md) for code
+  style guidelines, import rules, pytest conventions, and documentation standards
 - Leave constructive feedback — explain *why*, not just *what* to change
+- Run pre-commit checks before submitting — see
+  [`docs/install-local-env.md`](install-local-env.md) for local setup
 
-**Maintainer** — reviewers who also have merge authority and own the long-term health
-of their area. Maintainers are expected to:
+No special access is required; contributions and reviews go through the standard
+PR process.
+
+**Maintainer** — contributors who also have merge authority and own the long-term
+health of their area. Maintainers are expected to:
 - Merge PRs that meet review and CI criteria
 - Triage and prioritize issues in their area
-- Participate in release planning and backport decisions
-- Mentor new reviewers and contributors
-- Keep documentation and test configurations up to date
+- Participate in release planning and backport decisions — see the
+  [`fix-backport-conflicts`](../skills/fix-backport-conflicts/SKILL.md) skill for
+  the backport workflow
+- Mentor new contributors
+- Keep documentation and test configurations up to date — see
+  [`docs/sct-configuration.md`](sct-configuration.md) for the configuration system
 - Attend regular sync meetings or communicate async status updates
 
 Each role carries obligations, not just permissions. Having merge access without
@@ -41,14 +46,15 @@ Each level has clear entry requirements so advancement is transparent and merit-
 
 | Level | Requirements | Privileges |
 |-------|-------------|------------|
-| **Contributor** | Submit at least 1 merged PR | Can open issues and PRs, participate in discussions |
-| **Reviewer** | 10+ merged PRs, demonstrated review quality, nominated by a maintainer | Added to CODEOWNERS for specific paths, review requests are routed automatically |
-| **Maintainer** | 6+ months as active reviewer, broad knowledge of the area, nominated and approved by existing maintainers | Merge access, release authority, CI/CD configuration access |
+| **Contributor** | Submit at least 1 merged PR | Can open issues and PRs, review code, participate in discussions |
+| **Maintainer** | Sustained contributions, demonstrated review quality, broad knowledge of the area, nominated and approved by existing maintainers | Merge access, release authority, CI/CD configuration access, listed in CODEOWNERS |
 
 **Nomination process:**
 1. An existing maintainer nominates the candidate with a summary of contributions
-2. Other maintainers in the area review the nomination (minimum 2 approvals, no vetoes within 1 week)
+2. Other maintainers in the area review the nomination (minimum 2 approvals, no vetoes)
 3. Upon approval, access is granted and the candidate is added to CODEOWNERS and team lists
+
+<!-- TODO: document the nomination process in more detail (where it happens, template, examples) -->
 
 **Expectations at each level are cumulative** — a maintainer is still expected to
 contribute code and review PRs, not just merge.
@@ -62,14 +68,16 @@ approval is sufficient. The PR author or a maintainer can merge.
 
 **Medium impact** (new features, API changes, configuration additions, new test
 categories) — requires review from at least two people, including one maintainer
-of the affected area. Discussion happens on the PR itself.
+of the affected area. Discussion happens on the PR itself. For adding new
+configuration options, see [`docs/sct-configuration.md`](sct-configuration.md).
 
 **High impact** (architectural changes, new backends, framework-wide refactors,
-dependency upgrades, deprecations) — requires an implementation plan (see
-`docs/plans/INSTRUCTIONS.md`) posted as a PR for review. The plan must be approved
-by at least two maintainers before implementation begins. Disagreements are resolved
-by discussion; if consensus cannot be reached within two weeks, the project lead
-makes the final call.
+dependency upgrades, deprecations) — requires an implementation plan posted as a
+PR for review. The plan must be approved by at least two maintainers before
+implementation begins. See [`docs/plans/INSTRUCTIONS.md`](plans/INSTRUCTIONS.md)
+for the plan format and the [`writing-plans`](../skills/writing-plans/SKILL.md)
+skill for guidance. If consensus cannot be reached, the project lead makes the
+final call.
 
 **Principles:**
 - Prefer consensus over voting — most decisions should converge through discussion
@@ -80,7 +88,8 @@ makes the final call.
 ### 1.4 OWNERS / CODEOWNERS Files
 
 Code ownership determines who is automatically requested for reviews and who has
-authority over specific areas of the codebase.
+authority over specific areas of the codebase. The current ownership map is at
+[`.github/CODEOWNERS`](../.github/CODEOWNERS).
 
 **How ownership is assigned:**
 - CODEOWNERS entries map file patterns to GitHub teams or individuals
@@ -97,8 +106,8 @@ authority over specific areas of the codebase.
 - `sdcm/cluster_aws.py`, `sdcm/provision/aws/` — AWS backend
 - `sdcm/nemesis.py`, `sdcm/nemesis_registry.py` — Nemesis framework
 - `sdcm/sct_config.py`, `defaults/` — Configuration system
-- `jenkins-pipelines/` — CI/CD pipelines
-- `sdcm/cluster_k8s/` — Kubernetes backends
+- `jenkins-pipelines/` — CI/CD pipelines — see [`docs/sct-pipelines.md`](sct-pipelines.md)
+- `sdcm/cluster_k8s/` — Kubernetes backends — see [`docs/kubernetes_backend.md`](kubernetes_backend.md)
 
 **Updating ownership:** When a contributor consistently reviews and maintains an area
 but is not listed as owner, a maintainer should propose adding them. When an owner
@@ -111,19 +120,23 @@ these transitions gracefully to avoid stalled reviews, abandoned areas, and bus-
 risks.
 
 **Detecting inactivity:**
-- No reviews, merges, or commits for 3 consecutive months triggers a check-in
+- Prolonged absence of reviews, merges, or commits triggers a check-in
 - A maintainer or project lead reaches out privately to ask about availability
-- If no response within 2 weeks, the maintainer is moved to emeritus status
+- If there is no response, the maintainer is moved to emeritus status
+
+<!-- TODO: define the specific inactivity policy (thresholds, who initiates, where it's tracked) -->
 
 **Emeritus status:**
 - Merge access and CODEOWNERS entries are removed
 - The person is acknowledged in a contributors/emeritus list
-- Emeritus maintainers can return to active status by resuming contributions and going through an expedited nomination (1 maintainer approval, no waiting period)
+- Emeritus maintainers can return to active status by resuming contributions and going through an expedited nomination
+
+<!-- TODO: create an emeritus list or section in the repo -->
 
 **Planned transitions:**
 - A stepping-down maintainer should identify and mentor a successor before departing
 - Knowledge transfer includes: undocumented context, ongoing work, known technical debt
-- A transition period of 2-4 weeks with overlapping access is recommended
+- A transition period with overlapping access is recommended
 
 **Bus-factor mitigation:**
 - Every area should have at least 2 owners in CODEOWNERS
@@ -135,6 +148,8 @@ risks.
 Disagreements are normal and healthy. The project uses a structured escalation path
 to resolve them without damaging relationships.
 
+<!-- TODO: document a Code of Conduct or link to one -->
+
 **Level 1 — Discussion on the PR or issue.** Most disagreements resolve here through
 back-and-forth discussion. Both parties should:
 - Focus on the technical merits, not the person
@@ -143,14 +158,14 @@ back-and-forth discussion. Both parties should:
 - Propose compromise solutions when possible
 
 **Level 2 — Involve a third maintainer.** If the two parties cannot reach agreement
-after 3 rounds of discussion, a third maintainer from the same area (or an adjacent
-area) is asked to weigh in. The third maintainer reviews the arguments and either
-sides with one position or proposes a synthesis.
+after several rounds of discussion, a third maintainer from the same area (or an
+adjacent area) is asked to weigh in. The third maintainer reviews the arguments and
+either sides with one position or proposes a synthesis.
 
-**Level 3 — Project lead decision.** If Level 2 does not resolve the disagreement
-within 1 week, the project lead makes a binding decision. The decision is documented
-on the PR or issue with the rationale. This is rare and should be treated as a signal
-that the area needs clearer guidelines or an architecture decision record.
+**Level 3 — Project lead decision.** If Level 2 does not resolve the disagreement,
+the project lead makes a binding decision. The decision is documented on the PR or
+issue with the rationale. This is rare and should be treated as a signal that the
+area needs clearer guidelines or an architecture decision record.
 
 **Ground rules for all levels:**
 - No personal attacks, passive aggression, or dismissive language
