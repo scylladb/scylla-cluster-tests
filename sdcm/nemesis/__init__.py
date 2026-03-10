@@ -1937,7 +1937,12 @@ class NemesisRunner:
         with (
             DisruptionEvent(nemesis_name=disruption_name, node=self.target_node, publish_event=True) as nemesis_event,
             self.actions_log.action_scope(f"Disruption {class_name} on {self.target_node.name}"),
-            self.argus_submit(nemesis_name=class_name, start_time=start_time, nemesis_event=nemesis_event),
+            self.argus_submit(
+                nemesis_name=class_name,
+                start_time=start_time,
+                nemesis_event=nemesis_event,
+                description=nemesis.__class__.__doc__,
+            ),
             self.verify_nodes(),
             self.tester.run_nemesis_hooks(),
             self.metrics_srv.event(class_name),
@@ -6259,7 +6264,9 @@ class NemesisRunner:
                     drop_materialized_view(session, ks_name, view_name)
 
     @contextlib.contextmanager
-    def argus_submit(self, nemesis_name: str, start_time: int | float, nemesis_event: DisruptionEvent):
+    def argus_submit(
+        self, nemesis_name: str, start_time: int | float, nemesis_event: DisruptionEvent, description: str | None = None
+    ):
         argus_client = None
         try:
             argus_client = self.cluster.test_config.argus_client()
@@ -6270,6 +6277,7 @@ class NemesisRunner:
                 target_name=self.target_node.name,
                 target_ip=self.target_node.public_ip_address,
                 target_shards=self.target_node.scylla_shards,
+                description=description,
             )
         except Exception:
             self.log.error("Error creating nemesis information in Argus", exc_info=True)
