@@ -923,6 +923,21 @@ class ClusterTester(unittest.TestCase):
         db_cluster.set_seeds()
         db_cluster.update_seed_provider()
 
+    def expand_cluster_heterogeneous(self):
+        """Add nodes with different instance types to the cluster.
+
+        This method adds nodes using the instance type specified by 'nemesis_grow_shrink_instance_type'
+        configuration parameter. The number of nodes to add is controlled by 'nemesis_add_node_cnt'.
+        This is useful for creating heterogeneous clusters with mixed instance types.
+        """
+        from sdcm.utils.cluster_tools import expand_cluster_heterogeneous as _expand_cluster_heterogeneous  # noqa: PLC0415
+
+        return _expand_cluster_heterogeneous(
+            db_cluster=self.db_cluster,
+            monitors=self.monitors,
+            params=self.params,
+        )
+
     @property
     def rack_names_per_datacenter_and_rack_idx_map(self):
         if self.db_cluster is None:
