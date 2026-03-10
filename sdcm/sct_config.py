@@ -1491,7 +1491,7 @@ class SCTConfiguration(BaseModel):
     scylla_mgmt_upgrade_to_repo: String = SctField(
         description="Url to the repo of scylla manager version to upgrade to for management tests",
     )
-    mgmt_agent_backup_config: AgentBackupParameters | None = SctField(
+    mgmt_agent_backup_config: Annotated[AgentBackupParameters | None, BeforeValidator(dict_or_str)] = SctField(
         description="Manager agent backup general configuration: checkers, transfers, low_level_retries. For example, {'checkers': 100, 'transfers': 2, 'low_level_retries': 20}",
     )
     mgmt_restore_extra_params: String = SctField(
