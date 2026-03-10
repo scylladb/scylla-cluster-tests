@@ -39,6 +39,12 @@ class NemesisJobGenerator:
     """Generates Config files and pipelines for all nemesis"""
 
     BACKEND_TO_REGION = {"aws": "eu-west-1", "gce": "us-east1", "azure": "eastus", "docker": "eu-west-1"}
+    BACKEND_TO_REGION_PARAM = {
+        "aws": "region",
+        "gce": "gce_datacenter",
+        "azure": "azure_region_name",
+        "docker": "region",
+    }
 
     BACKEND_CONFIGS = {"docker": ["configurations/nemesis/additional_configs/docker_backend.yaml"]}
 
@@ -122,11 +128,12 @@ class NemesisJobGenerator:
                     *additional_configs,
                 ]
                 job_file_name = f"{self.base_job}-{cls}-{backend}.jenkinsfile"
+                region_param = self.BACKEND_TO_REGION_PARAM.get(backend, "region")
                 nemesis_job_groovy_source = Template(self.nemesis_job_template).render(
                     {
                         "params": {
                             "backend": backend,
-                            "region": self.BACKEND_TO_REGION.get(backend, "eu-west-1"),
+                            region_param: self.BACKEND_TO_REGION.get(backend, "eu-west-1"),
                             "test_name": "longevity_test.LongevityTest.test_custom_time",
                             "test_config": config_name,
                             **additional_params,
