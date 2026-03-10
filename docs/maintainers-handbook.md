@@ -278,16 +278,15 @@ stress_cmd_custom_params configuration option. This enables testing
 with non-standard workload profiles without modifying test code.
 ```
 
-## 3. Release Management
+## 3. Supported Branches and Backports
 
 | Topic | Description | Inspiration |
 |-------|-------------|-------------|
-| Release cadence and versioning | How often releases happen, semantic versioning rules | CPython development cycle |
-| Release branch management | Branch naming, when branches are cut, who manages them | Linux kernel stable releases |
-| Release checklist | Step-by-step process for cutting a release | CNCF project release templates |
-| Release notes and changelogs | How to write and generate release notes | Kubernetes release notes guidelines |
-| Deprecation policy | How to deprecate features, minimum notice period, migration guides | CPython deprecation policy |
-| Hotfix and patch releases | When and how to issue out-of-band fixes | Linux kernel stable patch rules |
+| Supported branches | Which branches are actively maintained, naming conventions | Linux kernel stable releases |
+| Backport policy | What gets backported, who decides, priority criteria | CPython backport guidelines |
+| Cherry-pick workflow | How to cherry-pick commits to supported branches | SCT fix-backport-conflicts skill |
+| Conflict resolution in backports | How to resolve conflicts during cherry-pick | SCT fix-backport-conflicts skill |
+| Branch lifecycle | When branches are created, when they reach end of life | Linux kernel stable branch lifecycle |
 
 ## 4. CI/CD and Test Infrastructure
 
@@ -342,27 +341,10 @@ with non-standard workload profiles without modifying test code.
 | Architecture decision records | How and when to document significant technical decisions | CNCF ADR practices |
 | Runbooks and playbooks | Operational guides for common maintenance tasks | Kubernetes operational guides |
 
-## 9. Maintainer Wellbeing
+## 9. Infrastructure and Operations (provisional)
 
-| Topic | Description | Inspiration |
-|-------|-------------|-------------|
-| Avoiding burnout | Recognizing signs, setting boundaries, taking breaks | opensource.guide maintaining balance |
-| Workload distribution | Sharing oncall, rotating responsibilities, delegation | Kubernetes SIG oncall rotation |
-| Saying no effectively | Declining feature requests, closing issues, setting scope | opensource.guide "Learning to say no" |
-| Celebrating contributions | Recognizing contributor work, shout-outs, attribution | CNCF contributor recognition |
-
-## 10. Development Workflow
-
-| Topic | Description | Inspiration |
-|-------|-------------|-------------|
-| Git workflow | Branch strategy, rebasing vs. merging, pull request flow | Linux kernel rebasing and merging |
-| Local development setup | How to set up a development environment quickly | SCT install-local-env.md |
-| Pre-commit hooks and linting | What checks run locally before commits | SCT pre-commit configuration |
-| Debugging and profiling | Tools and techniques for investigating issues | SCT profiling-sct-code skill |
-| Feature flags and rollout | How new features are gated and gradually enabled | Kubernetes feature gates |
-| Configuration management | How test and framework configuration works | SCT sct_config.py system |
-
-## 11. Infrastructure and Operations
+> **Note:** This section may belong in a separate operational runbook rather than
+> the maintainers handbook. Keeping it here for now until we decide on the right home.
 
 | Topic | Description | Inspiration |
 |-------|-------------|-------------|
