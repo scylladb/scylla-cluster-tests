@@ -33,7 +33,9 @@ def sct_event_registry(tmp_path):
     severities_conf = tmp_path / "severities.yaml"
     severities_conf.write_bytes(SEVERITIES_YAML)
     registry_backup = SctEvent._sct_event_types_registry
-    SctEvent._sct_event_types_registry = SctEventTypesRegistry(severities_conf=str(severities_conf))
+    new_registry = SctEventTypesRegistry(severities_conf=str(severities_conf))
+    new_registry["SctEvent"] = SctEvent  # Re-register base class (normally done via __set_name__ at class creation)
+    SctEvent._sct_event_types_registry = new_registry
     yield
     SctEvent._sct_event_types_registry = registry_backup
 

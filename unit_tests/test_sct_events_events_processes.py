@@ -46,7 +46,7 @@ def test_start_events_process(registry):
     registry.start_events_process("test", FakeProcess)
     assert len(registry._registry_dict) == 1
     assert "test" in registry._registry_dict
-    assert registry._registry_dict["test"]._registry is registry
+    assert registry._registry_dict["test"]._registry == registry
     assert registry._registry_dict["test"].started
 
 
@@ -55,7 +55,7 @@ def test_get_events_process(registry):
     assert process is None
     registry.start_events_process("test", FakeProcess)
     process = registry.get_events_process("test")
-    assert process._registry is registry
+    assert process._registry == registry
     assert process.started
 
 

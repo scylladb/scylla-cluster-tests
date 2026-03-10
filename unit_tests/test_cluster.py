@@ -272,9 +272,17 @@ kernel callstack:
 INFO  2022-07-14 09:28:35,102 [shard 1] database - Flushed non-system tables
         """
 
+        # Track file position before publishing to avoid counting events from other tests in the shared log
+        raw_log = self.get_raw_events_log()
+        try:
+            start_pos = raw_log.stat().st_size
+        except FileNotFoundError:
+            start_pos = 0
+
         self._read_and_publish_events(logs)
 
-        with self.get_raw_events_log().open() as events_file:
+        with raw_log.open() as events_file:
+            events_file.seek(start_pos)
             events = [json.loads(line) for line in events_file]
             reactor_stalls = [event for event in events if event["type"] == "REACTOR_STALLED"]
             assert len(reactor_stalls) == 1
