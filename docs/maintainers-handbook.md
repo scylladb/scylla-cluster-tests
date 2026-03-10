@@ -1,7 +1,7 @@
-# Maintainers Handbook — Topics
+# Maintainers Handbook
 
-High-level topics for an SCT maintainers handbook, organized by category.
-Topics are inspired by handbooks from the Linux kernel, Kubernetes, CPython,
+High-level topics for the SCT maintainers handbook, organized by category.
+Inspired by handbooks from the Linux kernel, Kubernetes, CPython,
 CNCF projects, and GitHub's Open Source Guides.
 
 ## 1. Governance and Roles
