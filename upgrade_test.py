@@ -658,6 +658,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.prepare_keyspaces_and_tables()
         self.actions_log.info("Running s-b to create schemas to avoid #11459")
         large_partition_stress_during_upgrade = self.params.get("stress_before_upgrade")
+        if not isinstance(large_partition_stress_during_upgrade, list):
+            large_partition_stress_during_upgrade = [large_partition_stress_during_upgrade]
         sb_create_schema_cmds = [f"{cmd} -duration=1m" for cmd in large_partition_stress_during_upgrade]
         sb_create_schemas = self._run_all_stress_cmds([], params={"stress_cmd": sb_create_schema_cmds})
         for sb_create_schema in sb_create_schemas:
