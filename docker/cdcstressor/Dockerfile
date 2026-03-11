@@ -1,3 +1,3 @@
-FROM golang:1.13
+FROM golang:1.26
 
 RUN go get -u github.com/piodul/cdc-stressor
