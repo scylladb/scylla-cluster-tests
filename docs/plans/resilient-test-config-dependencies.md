@@ -41,6 +41,100 @@ Tested against SCT configs:
 - `defaults/test_default.yaml` (184 keys) — works
 - **No existing SCT config files contain `{{` or `{%` syntax** that would conflict with Jinja2 template processing
 
+### Real-World Composition Patterns in SCT Jenkinsfiles
+
+SCT Jenkins pipelines compose configs in two fundamentally different ways. Option A (includes) only fits one of them.
+
+#### Pattern 1: Hard Dependencies — Include Fits
+
+Some configs are always paired across every Jenkinsfile that uses a given test case. These are true dependencies — the test cannot run without them.
+
+**Example:** `longevity-200GB-48h-verifier-LimitedMonkey-tls.yaml` appears in 14+ Jenkinsfiles and **every single one** includes `auth_cassandra.yaml`:
+
+```
+longevity-200gb-48h.jenkinsfile:            ["...-tls.yaml", "auth_cassandra.yaml"]
+longevity-200gb-48h-gce.jenkinsfile:        ["...-tls.yaml", "auth_cassandra.yaml"]
+longevity-200gb-48h-azure.jenkinsfile:      ["...-tls.yaml", "auth_cassandra.yaml"]
+longevity-200gb-48h-arm.jenkinsfile:        ["...-tls.yaml", "arm_instance_types/...", "auth_cassandra.yaml"]
+longevity-200gb-48h-rf1.jenkinsfile:        ["...-tls.yaml", "rf1-non-disruptive.yaml", "auth_cassandra.yaml"]
+longevity-200gb-48h-asymmetric.jenkinsfile: ["...-tls.yaml", "db-nodes-shards-random.yaml", "auth_cassandra.yaml"]
+features-ldap-authorization-200gb.jenkinsfile: ["...-tls.yaml", "ldap-authorization.yaml", "auth_cassandra.yaml"]
+```
+
+Here, `{% include 'configurations/auth_cassandra.yaml' %}` inside the test case YAML is correct — auth is not optional, it's part of the test design.
+
+**Rule:** Include in the test YAML if the dependency is present across **all** Jenkinsfiles using that test case.
+
+#### Pattern 2: Orthogonal Feature Composition — Include Does NOT Fit
+
+The second pattern applies optional, orthogonal capabilities to a base test. Different Jenkinsfiles select different combinations:
+
+**Example:** `longevity-200GB-48h-network-monkey.yaml` with varying overlays:
+
+```
+tier2:   ["network-monkey.yaml", "two_interfaces.yaml", "auth_cassandra.yaml"]
+raft:    ["network-monkey.yaml", "raft/enable_raft_experimental.yaml", "two_interfaces.yaml", "auth_cassandra.yaml"]
+vnodes:  ["network-monkey.yaml", "two_interfaces.yaml", "tablets_disabled.yaml", "auth_cassandra.yaml"]
+```
+
+The optional overlays are tiny 1-3 line files that toggle features:
+- `raft/enable_raft_experimental.yaml` → `experimental_features: [consistent-topology-changes]`
+- `tablets_disabled.yaml` → `append_scylla_yaml: {enable_tablets: false, ...}`
+- `db-nodes-shards-random.yaml` → `db_nodes_shards_selection: "random"`
+
+These **cannot** live in the base test case via include because different Jenkinsfiles apply different combinations.
+
+**Rule:** Keep in Jenkinsfile if the config is an optional feature flag applied selectively.
+
+#### Pattern 3: OS/Distro-Specific Overlays — Include Does NOT Fit
+
+The same base test runs with different distro-specific configs:
+
+```
+debian12-manager-install.jenkinsfile: ["manager-installation-set-distro.yaml", "manager/debian12.yaml"]
+rocky9-manager-install.jenkinsfile:   ["manager-installation-set-distro.yaml", "manager/rocky9.yaml"]
+ubuntu24-manager-install.jenkinsfile: ["manager-installation-set-distro.yaml", "manager/ubuntu24.yaml"]
+```
+
+Each distro file is 3-4 lines (AMI ID, SSH user, monitor branch). These are mutually exclusive choices — one per Jenkinsfile.
+
+#### Pattern 4: Complex Multi-Layer Composition (up to 5 configs)
+
+The most complex case found chains 5 configs:
+
+```
+# performance staging with all optimizations
+test_config: ["perf-regression-predefined-throughput-steps.yaml",
+              "cassandra_stress_gradual_load_steps.yaml",
+              "disable_kms.yaml",
+              "tablets_disabled.yaml",
+              "disable_speculative_retry.yaml"]
+```
+
+Breakdown: base test + load profile + 3 independent feature toggles. Only the load profile could be an include candidate (it always pairs with this test). The feature toggles are optional and vary by pipeline.
+
+#### Classification Summary
+
+| Config Type | Example | Include? | Reason |
+|------------|---------|:--------:|--------|
+| Auth for SLA/TLS tests | `auth_cassandra.yaml` in all TLS tests | **Yes** | Always required, present in every variant |
+| Feature toggles | `tablets_disabled.yaml`, `raft/enable_raft_experimental.yaml` | No | Optional, varies by pipeline |
+| OS/distro selection | `manager/debian12.yaml`, `manager/ubuntu24.yaml` | No | Mutually exclusive choice |
+| Instance/storage type | `arm_instance_types/*.yaml`, `ebs/*.yaml` | No | Infrastructure choice per pipeline |
+| Network config | `two_interfaces.yaml` | Depends | Include if always paired; Jenkinsfile if optional |
+| Load profile | `cassandra_stress_gradual_load_steps.yaml` | Depends | Include if 1:1 with base test; Jenkinsfile if shared |
+| LDAP extensions | `ldap-authorization.yaml` | No | Optional feature on top of auth |
+
+#### Merge Order Consideration
+
+`auth_cassandra.yaml` contains `scylla_network_config` (list type). When both auth and network configs are chained:
+
+```
+[auth_cassandra.yaml, two_interfaces.yaml]  →  two_interfaces.yaml overrides network config
+```
+
+If the test case includes `auth_cassandra.yaml` inline and the Jenkinsfile adds `two_interfaces.yaml`, the network settings from auth get overridden — which is the **current intended behavior**. Includes must load **before** Jenkinsfile-provided configs in the merge order. The `anyconfig` list merge behavior (replace, not append) must be verified for double-include scenarios.
+
 ### Example
 
 ```yaml
@@ -83,6 +177,7 @@ files = anyconfig.load(list(config_files), ac_template=True)
 - If future configs contain `{{` or `{%` in values (unlikely but possible), they would be interpreted as Jinja2 — could use `{% raw %}...{% endraw %}` blocks to escape
 - Include paths must be relative to the template search path (project root), not the including file
 - Slightly less explicit than a YAML-native key — looks like template magic rather than config declaration
+- **Only suitable for hard dependencies** — orthogonal feature composition must remain in Jenkinsfiles
 
 ### Sub-option A1: Custom `includes` Key (Original Proposal)
 
@@ -149,22 +244,29 @@ However, this doesn't work well for SCT because:
 - [ ] All tests pass
 - [ ] Edge cases covered
 
-#### Phase 3: Migrate Existing Configs
+#### Phase 3: Migrate Existing Configs (Hard Dependencies Only)
 
 **Entry criteria**: Phase 2 complete
 
+**Scope**: Only configs where the dependency is present in **all** Jenkinsfiles using that test case (Pattern 1 — hard dependencies). Orthogonal feature toggles, OS/distro overlays, and infrastructure choices remain in Jenkinsfiles.
+
 **Actions**:
-1. Add `{% include 'configurations/auth_cassandra.yaml' %}` to configs that need auth:
+1. Audit commit `866d18e70` to classify each of the 53 affected configs as hard dependency vs. orthogonal composition (see Classification Summary above)
+2. Add `{% include 'configurations/auth_cassandra.yaml' %}` only to hard dependency configs:
    - `configurations/rolling-upgrade-with-sla-no-shares.yaml`
    - `configurations/rolling-upgrade-with-sla.yaml`
    - `configurations/nemesis/additional_configs/sla_config.yaml`
    - `configurations/rolling-upgrade-alternator.yaml`
-   - Other configs identified from commit `866d18e70`
-2. Verify with `sct.py lint-pipelines` that all pipelines still pass
-3. Keep `auth_cassandra.yaml` in Jenkinsfile `test_config` arrays for backward compatibility (double-include is harmless — later values override)
+   - Other configs where auth appears in **every** Jenkinsfile variant
+3. Verify `anyconfig` list merge behavior for double-include scenarios (auth's `scylla_network_config` is a list — confirm later Jenkinsfile configs override correctly)
+4. Verify with `sct.py lint-pipelines` that all pipelines still pass
+5. Keep `auth_cassandra.yaml` in Jenkinsfile `test_config` arrays for backward compatibility during migration
+6. In a follow-up, remove now-redundant `auth_cassandra.yaml` entries from Jenkinsfiles where the include makes them unnecessary
 
 **Exit criteria**:
-- [ ] All configs that need auth self-include it
+- [ ] Hard-dependency configs self-include their requirements
+- [ ] Orthogonal composition configs are unchanged (remain Jenkinsfile-driven)
+- [ ] Double-include merge order verified for list-type values
 - [ ] `sct.py lint-pipelines` passes
 - [ ] Manual `sct.py run-test --config` works without explicitly chaining auth
 
