@@ -3,6 +3,7 @@ import unittest
 import tempfile
 import shutil
 import zipfile
+from unittest.mock import patch, MagicMock
 
 from sdcm.send_email import LongevityEmailReporter, read_email_data_from_file
 
@@ -28,7 +29,9 @@ class EmailReporterTest(unittest.TestCase):
             file.extractall(self.temp_dir)
             return read_email_data_from_file(os.path.join(self.temp_dir, "email_data.json"))
 
-    def test_longevity_report_big_file(self):
+    @patch("sdcm.send_email.Email")
+    def test_longevity_report_big_file(self, mock_email_cls):
+        mock_email_cls.return_value = MagicMock()
         test_results = self._get_report_data("test_data/test_send_email/LongevityEmailReporter/big_report.zip")
         self.assertTrue(test_results)
         reporter = LongevityEmailReporterTest(email_recipients="some@host.com", logdir=self.temp_dir)

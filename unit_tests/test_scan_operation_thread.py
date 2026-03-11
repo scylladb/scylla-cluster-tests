@@ -99,6 +99,8 @@ def new_cluster(node):
     def tester_obj():
         class Monitors:
             def __getattribute__(self, item):
+                if item == "params":
+                    return MagicMock(scylla_version=None)
                 if item not in "external_address":
                     return self
                 else:
