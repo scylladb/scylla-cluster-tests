@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:21.0.10_7-jdk AS build
 
 ARG NOSQLBENCH_GIT_TAG="5.21.2-release"
 ARG NOSQLBENCH_GIT_URL="https://github.com/nosqlbench/nosqlbench.git"
@@ -24,7 +24,7 @@ RUN chmod +x change-to-scylladb-driver.sh \
     -Drevision="$NOSQLBENCH_GIT_TAG" \
     package
 
-FROM eclipse-temurin:21-jre-noble AS production
+FROM eclipse-temurin:21.0.10_7-jre-noble AS production
 
 WORKDIR /nosqlbench
 
