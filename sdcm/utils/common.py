@@ -1160,14 +1160,15 @@ def get_latest_scylla_ami_release(region: str = "eu-west-1", product: ScyllaProd
     return str(max(versions))
 
 
-def get_latest_scylla_release(product: Literal["scylla", "scylla-enterprise"]) -> str:
+@lru_cache
+def get_latest_scylla_release(product: Literal["scylla", "scylla-enterprise"], verify: bool = True) -> str:
     """
     get latest advertised scylla version from the same service scylla_setup is getting it
     """
 
     product = product.lstrip("scylla-")
     url = "https://repositories.scylladb.com/scylla/check_version?system={}"
-    version = requests.get(url.format(product)).json()
+    version = requests.get(url.format(product), verify=verify).json()
     return version["version"]
 
 
