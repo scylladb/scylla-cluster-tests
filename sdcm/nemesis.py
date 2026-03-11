@@ -4647,6 +4647,8 @@ class Nemesis:
                         instance_type=self.tester.params.get("nemesis_grow_shrink_instance_type"),
                     )
         time.sleep(self.interval)
+        for node in new_nodes:
+            self.node_allocator.unset_running_nemesis(node, self.current_disruption)
         return new_nodes
 
     def _shrink_cluster(self, rack=None, new_nodes: list[BaseNode] | None = None):
