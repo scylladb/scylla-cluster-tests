@@ -661,10 +661,28 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.actions_log.info("Preparing test keyspaces and tables")
         # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
         self.prepare_keyspaces_and_tables()
+<<<<<<< HEAD
         self.actions_log.info("Running stress-bench to create schemas", metadata={"issue": "#11459"})
         large_partition_stress_during_upgrade = self.params.get("stress_before_upgrade")
         sb_create_schema = self.run_stress_thread(stress_cmd=f"{large_partition_stress_during_upgrade} -duration=1m")
         self.verify_stress_thread(sb_create_schema)
+||||||| parent of 758c83e09 (feature(upgrade): add large_partition_stress_during_upgrade parameter)
+        self.actions_log.info("Running s-b to create schemas to avoid #11459")
+        large_partition_stress_during_upgrade = self.params.get("stress_before_upgrade")
+        sb_create_schema_cmds = [f"{cmd} -duration=1m" for cmd in large_partition_stress_during_upgrade]
+        sb_create_schemas = self._run_all_stress_cmds([], params={"stress_cmd": sb_create_schema_cmds})
+        for sb_create_schema in sb_create_schemas:
+            self.verify_stress_thread(sb_create_schema)
+=======
+        self.actions_log.info("Running s-b to create schemas to avoid #11459")
+        # Use large_partition_stress_during_upgrade for schema creation if defined
+        large_partition_stress_during_upgrade = self.params.get("large_partition_stress_during_upgrade")
+        if large_partition_stress_during_upgrade:
+            sb_create_schema_cmds = [f"{cmd} -duration=1m" for cmd in large_partition_stress_during_upgrade]
+            sb_create_schemas = self._run_all_stress_cmds([], params={"stress_cmd": sb_create_schema_cmds})
+            for sb_create_schema in sb_create_schemas:
+                self.verify_stress_thread(sb_create_schema)
+>>>>>>> 758c83e09 (feature(upgrade): add large_partition_stress_during_upgrade parameter)
         self.fill_and_verify_db_data("BEFORE UPGRADE", pre_fill=True)
 
         # write workload during entire test
@@ -763,8 +781,17 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             read_10m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
 
             self.actions_log.info("Running stress-bench large partitions workload during upgrade")
+<<<<<<< HEAD
             large_partition_stress_during_upgrade = self.params.get("stress_before_upgrade")
             self.run_stress_thread(stress_cmd=large_partition_stress_during_upgrade)
+||||||| parent of 758c83e09 (feature(upgrade): add large_partition_stress_during_upgrade parameter)
+            large_partition_stress_during_upgrade = self.params.get("stress_before_upgrade")
+            self._run_all_stress_cmds([], params={"stress_cmd": large_partition_stress_during_upgrade})
+=======
+            large_partition_stress_during_upgrade = self.params.get("large_partition_stress_during_upgrade")
+            if large_partition_stress_during_upgrade:
+                self._run_all_stress_cmds([], params={"stress_cmd": large_partition_stress_during_upgrade})
+>>>>>>> 758c83e09 (feature(upgrade): add large_partition_stress_during_upgrade parameter)
 
             self.actions_log.info("Waiting for workloads to start before upgrade", metadata={"wait_time_seconds": 60})
             time.sleep(60)
