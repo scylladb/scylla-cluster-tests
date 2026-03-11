@@ -17,7 +17,7 @@ a list of config files that would be used
 
 ## **cluster_backend** / SCT_CLUSTER_BACKEND
 
-backend that will be used, aws/gce/azure/docker/xcloud
+backend that will be used, aws/gce/azure/oci/docker/xcloud
 
 **default:** N/A
 
@@ -1743,6 +1743,87 @@ Supported: eastus
 **type:** str (appendable)
 
 
+## **oci_region_name** / SCT_OCI_REGION_NAME
+
+OCI region where the resources will be deployed
+
+**default:** N/A
+
+**type:** str_or_list_or_eval
+
+
+## **oci_instance_type_loader** / SCT_OCI_INSTANCE_TYPE_LOADER
+
+Oracle Cloud instance shape to use for loader node(s). Usage of flex shapes allows setting of the ocpus, memory. Format is following: <shape-name>:<ocpus>:<ram>
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_instance_type_monitor** / SCT_OCI_INSTANCE_TYPE_MONITOR
+
+Oracle Cloud instance shape to use for monitor node. Usage of flex shapes allows setting of the ocpus, memory. Format is following: <shape-name>:<ocpus>:<ram>
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_instance_type_db** / SCT_OCI_INSTANCE_TYPE_DB
+
+Oracle Cloud instance shape to use for DB node(s). Usage of flex shapes allows setting of the ocpus, memory and nvme disks. Format is following: <shape-name>:<ocpus>:<ram>:<nvmes> . For DenseIO shapes it makes sense to specify only 'ocpus' part, because ram and amount of NVMe disks will be fixed based on the OCPUs count.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_instance_type_db_oracle** / SCT_OCI_INSTANCE_TYPE_DB_ORACLE
+
+Oracle Cloud instance shape to use for 'oracle' (2nd ref cluster) ScylladbDB cluster
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_image_db** / SCT_OCI_IMAGE_DB
+
+Oracle Cloud image to use for DB node(s)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_image_monitor** / SCT_OCI_IMAGE_MONITOR
+
+Oracle Cloud image to use for the monitor node. Empty value results into latest ubuntu image
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_image_loader** / SCT_OCI_IMAGE_LOADER
+
+Oracle Cloud image to use for the loader node(s). Empty value results into latest ubuntu image
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_image_username** / SCT_OCI_IMAGE_USERNAME
+
+Username used in the Oracle Cloud images utilized by the DB node(s)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **eks_service_ipv4_cidr** / SCT_EKS_SERVICE_IPV4_CIDR
 
 
@@ -3338,7 +3419,7 @@ Number of additional data volumes attached to instances<br>if data_volume_disk_n
 
 ## **data_volume_disk_type** / SCT_DATA_VOLUME_DISK_TYPE
 
-Type of addtitional volumes: gp2|gp3|io2|io3
+Type of additional volumes. AWS: gp2|gp3|io2|io3. OCI: lower_cost|balanced|higher_performance|ultra
 
 **default:** N/A
 
