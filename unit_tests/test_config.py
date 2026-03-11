@@ -29,6 +29,10 @@ RPM_URL = (
 )
 
 
+def _get_latest_scylla_release(product="scylla"):
+    return get_latest_scylla_release(product=product, verify=False)
+
+
 @pytest.fixture(scope="module")
 def monkeymodule():
     """Fixture that provides a monkeypatching with module scope."""
@@ -54,7 +58,7 @@ def fixture_env(monkeypatch):
 
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", get_latest_scylla_release(product="scylla"))
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
 
 
@@ -190,7 +194,7 @@ def test_10_mananger_regression(monkeypatch):
 def test_12_scylla_version_ami(monkeypatch):
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", get_latest_scylla_release(product="scylla"))
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
@@ -202,7 +206,7 @@ def test_12_scylla_version_ami(monkeypatch):
 def test_12_scylla_version_ami_case1(monkeypatch):
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", get_latest_scylla_release(product="scylla"))
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
@@ -222,7 +226,7 @@ def test_12_scylla_version_ami_case2(monkeypatch):
 @pytest.mark.integration
 def test_12_scylla_version_repo(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", get_latest_scylla_release(product="scylla"))
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
@@ -230,7 +234,7 @@ def test_12_scylla_version_repo(monkeypatch):
 @pytest.mark.integration
 def test_12_scylla_version_repo_case1(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", get_latest_scylla_release(product="scylla"))
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
@@ -295,7 +299,7 @@ def test_12_k8s_scylla_version_ubuntu_loader_centos(monkeypatch):
 
 @pytest.mark.integration
 def test_13_scylla_version_ami_branch_latest(monkeypatch):
-    latest_branch = ".".join(get_latest_scylla_release(product="scylla").split(".")[0:2])
+    latest_branch = ".".join(_get_latest_scylla_release().split(".")[0:2])
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", f"branch-{latest_branch}:latest")
@@ -616,7 +620,7 @@ def test_16_default_oracle_scylla_version_eu_west_1(monkeypatch):
 @pytest.mark.integration
 def test_16_oracle_scylla_version_us_east_1(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", get_latest_scylla_release(product="scylla"))
+    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", _get_latest_scylla_release())
     monkeypatch.setenv("SCT_REGION_NAME", "us-east-1")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
@@ -632,7 +636,7 @@ def test_16_oracle_scylla_version_us_east_1(monkeypatch):
 def test_16_oracle_scylla_version_eu_west_1(monkeypatch):
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", get_latest_scylla_release(product="scylla"))
+    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", _get_latest_scylla_release())
     monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     monkeypatch.setenv("SCT_DB_TYPE", "mixed_scylla")
@@ -647,7 +651,7 @@ def test_16_oracle_scylla_version_eu_west_1(monkeypatch):
 def test_16_oracle_scylla_version_and_oracle_ami_together(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
-    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", get_latest_scylla_release(product="scylla"))
+    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", _get_latest_scylla_release())
     monkeypatch.setenv("SCT_AMI_ID_DB_ORACLE", "ami-dummy")
     monkeypatch.setenv("SCT_DB_TYPE", "mixed_scylla")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
@@ -761,7 +765,7 @@ def test_20_user_data_format_version_aws(monkeypatch):
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "master:latest")
-    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", get_latest_scylla_release(product="scylla"))
+    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", _get_latest_scylla_release())
     monkeypatch.setenv("SCT_DB_TYPE", "mixed_scylla")
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
@@ -797,7 +801,7 @@ def test_20_user_data_format_version_gce_1(monkeypatch):
 @pytest.mark.integration
 def test_20_user_data_format_version_gce_2(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", get_latest_scylla_release(product="scylla"))
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     conf.verify_configuration_urls_validity()
