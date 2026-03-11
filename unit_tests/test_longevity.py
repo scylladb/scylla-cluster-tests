@@ -6,9 +6,10 @@ import pytest
 
 from longevity_test import LongevityTest
 from sdcm.cluster import NoMonitorSet
-from sdcm.sct_events import events_processes
+from sdcm.sct_events.base import SctEvent
 from unit_tests.test_utils_common import DummyDbCluster, DummyNode
 from unit_tests.test_cluster import DummyDbCluster
+from unit_tests.lib.fake_events import make_fake_events
 
 
 LongevityTest.__test__ = False
@@ -18,9 +19,6 @@ LongevityTest.__test__ = False
 def fixture_mock_calls():
     with unittest.mock.patch("sdcm.tester.validate_raft_on_nodes"), unittest.mock.patch("sdcm.tester.time.sleep"):
         yield
-
-    # clear the events processes registry after each test, so next test would be ableto start it fresh
-    events_processes._EVENTS_PROCESSES = None
 
 
 @pytest.mark.sct_config(files="test-cases/features/elasticity/longevity-elasticity-many-small-tables.yaml")
@@ -37,6 +35,13 @@ class DummyLongevityTest(LongevityTest):
         self.params["nemesis_interval"] = 1
         self.timeout_thread = None
         self.k8s_clusters = []
+
+    @pytest.fixture(autouse=True, name="event_system")
+    def fixture_event_system(self, setup_logging):
+        with make_fake_events() as device:
+            self._fake_device = device
+            self.events_processes_registry = SctEvent._events_processes_registry
+            yield
 
     def _init_params(self):
         pass
