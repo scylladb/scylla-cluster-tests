@@ -28,6 +28,15 @@ from unit_tests.test_utils_common import DummyNode
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
+@pytest.fixture(scope="function")
+def events_function_scope():
+    """Override conftest fake fixture — this module needs the real events infrastructure."""
+    mixin = EventsUtilsMixin()
+    mixin.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
+    yield mixin
+    mixin.teardown_events_processes()
+
+
 class DecodeDummyNode(DummyNode):
     def copy_scylla_debug_info(self, node_name, debug_file):
         return "scylla_debug_info_file"
