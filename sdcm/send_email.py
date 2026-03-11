@@ -678,21 +678,19 @@ def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):
                 ]
             )
     resources = list_resources_docker(tags_dict=tags, running=True)
-    for builder_name, containers in resources.get("containers", {}).items():
-        for container in containers:
-            container.reload()
-            nodes.append(
-                [
-                    container.name,
-                    get_ip_address_of_container(container),
-                    container.status,
-                    "docker container",
-                    builder_name,
-                ]
-            )
-    for builder_name, images in resources.get("images", {}).items():
-        for image in images:
-            nodes.append([", ".join(image.tags), "N/A", "N/A", "docker image", builder_name])
+    for container in resources.get("containers", []):
+        container.reload()
+        nodes.append(
+            [
+                container.name,
+                get_ip_address_of_container(container),
+                container.status,
+                "docker container",
+                "N/A",
+            ]
+        )
+    for image in resources.get("images", []):
+        nodes.append([", ".join(image.tags), "N/A", "N/A", "docker image", "N/A"])
     return nodes
 
 
