@@ -120,8 +120,29 @@ pipeline {
                 script {
                     try {
                         checkoutQaInternal(params)
+<<<<<<< HEAD
 
                         sh './docker/env/hydra.sh unit-tests'
+||||||| parent of c33290236 (improvement(jenkins): add JUnit XML reporting for unit and integration tests)
+                        sh './docker/env/hydra.sh unit-tests'
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
+=======
+                        sh './docker/env/hydra.sh unit-tests --junit-xml unit-tests-junit.xml'
+                    }
+                }
+            }
+            post {
+                always {
+                    junit testResults: 'unit-tests-junit.xml', allowEmptyResults: true, keepProperties: true
+                }
+                success {
+                    script {
+>>>>>>> c33290236 (improvement(jenkins): add JUnit XML reporting for unit and integration tests)
                         pullRequestSetResult('success', 'jenkins/unittests', 'All unit tests are passed')
                     } catch(Exception ex) {
                         pullRequestSetResult('failure', 'jenkins/unittests', 'Some unit tests failed')
@@ -195,13 +216,47 @@ pipeline {
                                     set -xe
                                     echo "start integration-tests ..."
                                     RUNNER_IP=\$(cat sct_runner_ip||echo "")
-                                    ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} integration-tests
+                                    ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} integration-tests --junit-xml integration-tests-junit.xml
                                     echo "end  integration-tests ..."
                                 """
                             }
                             pullRequestSetResult('success', 'jenkins/integration-tests', 'All integration tests are passed')
                         }
+<<<<<<< HEAD
                     } catch(Exception ex) {
+||||||| parent of c33290236 (improvement(jenkins): add JUnit XML reporting for unit and integration tests)
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
+                        pullRequestSetResult('success', 'jenkins/integration-tests', 'All integration tests are passed')
+                    }
+                }
+                failure {
+                    script {
+=======
+                    }
+                }
+                sh """#!/bin/bash
+                    RUNNER_IP=\$(cat scylla-cluster-tests/sct_runner_ip||echo "")
+                    echo "fetching junit report from runner ..."
+                    scp -o StrictHostKeyChecking=no ubuntu@\${RUNNER_IP}:/home/ubuntu/scylla-cluster-tests/integration-tests-junit.xml integration-tests-junit.xml || echo "WARNING: Failed to fetch JUnit XML report"
+                """
+            }
+            post {
+                always {
+                    junit testResults: 'integration-tests-junit.xml', allowEmptyResults: true, keepProperties: true
+                }
+                success {
+                    script {
+                        pullRequestSetResult('success', 'jenkins/integration-tests', 'All integration tests are passed')
+                    }
+                }
+                failure {
+                    script {
+>>>>>>> c33290236 (improvement(jenkins): add JUnit XML reporting for unit and integration tests)
                         pullRequestSetResult('failure', 'jenkins/integration-tests', 'Some integration tests failed')
                     }
                 }
