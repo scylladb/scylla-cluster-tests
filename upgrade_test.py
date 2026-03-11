@@ -1008,6 +1008,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             return
 
         stress_during_entire_upgrade = self.params.get(workloads_with_sla[0])
+        if not isinstance(stress_during_entire_upgrade, list):
+            stress_during_entire_upgrade = [stress_during_entire_upgrade]
         if not [cmd for cmd in stress_during_entire_upgrade if "<sla credentials " in cmd]:
             self.log.debug("No need to set SLA credentials for stress command: %s", stress_during_entire_upgrade)
             return
