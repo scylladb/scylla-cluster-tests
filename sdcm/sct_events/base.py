@@ -186,6 +186,12 @@ class SctEvent:
     def formatted_source_timestamp(self) -> str:
         return self._formatted_timestamp(self.source_timestamp)
 
+    def format_event(self) -> str:
+        """Format the event as a single log line, same layout as EventsFileLogger writes to events.log."""
+        if self.source_timestamp:
+            return f"{self.formatted_event_timestamp} <{self.formatted_source_timestamp}>: {str(self).strip()}"
+        return f"{self.formatted_event_timestamp}: {str(self).strip()}"
+
     @property
     def timestamp(self) -> float:
         """
