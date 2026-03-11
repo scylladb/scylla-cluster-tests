@@ -1,7 +1,13 @@
+import os.path
+import smtplib
 import sys
 from datetime import datetime
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from logging import getLogger
-from sdcm.send_email import Email
+
+from sdcm.keystore import KeyStore
 from sdcm.utils.cloud_monitor.resources.capacity_reservations import get_active_capacity_reservations
 from sdcm.utils.cloud_monitor.resources.instances import CloudInstances
 from sdcm.utils.cloud_monitor.report import (
@@ -15,6 +21,64 @@ from sdcm.utils.cloud_monitor.resources.static_ips import StaticIPs
 from sdcm.utils.cloud_monitor.resources.xcloud import XCloudResources
 
 LOGGER = getLogger(__name__)
+
+
+class Email:
+    """Responsible for sending emails via SMTP."""
+
+    _attachments_size_limit = 10485760  # 10Mb
+    _body_size_limit = 26214400  # 25Mb
+
+    def __init__(self):
+        self.sender = "qa@scylladb.com"
+        self._password = ""
+        self._user = ""
+        self._server_host = "smtp.gmail.com"
+        self._server_port = "587"
+        self.conn = None
+        self._retrieve_credentials()
+        self._connect()
+
+    def _retrieve_credentials(self):
+        keystore = KeyStore()
+        creds = keystore.get_email_credentials()
+        self._user = creds["user"]
+        self._password = creds["password"]
+
+    def _connect(self):
+        self.conn = smtplib.SMTP(host=self._server_host, port=self._server_port)
+        self.conn.ehlo()
+        self.conn.starttls()
+        self.conn.login(user=self._user, password=self._password)
+
+    def send(self, subject, content, recipients, html=True, files=()):
+        msg = MIMEMultipart()
+        msg["subject"] = subject
+        msg["from"] = self.sender
+        assert recipients, "No recipients provided"
+        msg["to"] = ",".join(recipients)
+        if html:
+            text_part = MIMEText(content, "html")
+        else:
+            text_part = MIMEText(content, "plain")
+        msg.attach(text_part)
+        attachment_size = 0
+        for path in files:
+            attachment_size += os.path.getsize(path)
+            if attachment_size >= self._attachments_size_limit:
+                raise RuntimeError(f"Attachment size {attachment_size} exceeds limit {self._attachments_size_limit}")
+            with open(path, "rb") as fil:
+                part = MIMEApplication(fil.read(), Name=os.path.basename(path))
+            part["Content-Disposition"] = 'attachment; filename="%s"' % os.path.basename(path)
+            msg.attach(part)
+        email = msg.as_string()
+        if len(email) >= self._body_size_limit:
+            raise RuntimeError(f"Email body size {len(email)} exceeds limit {self._body_size_limit}")
+        self.conn.sendmail(self.sender, recipients, email)
+
+    def __del__(self):
+        if self.conn:
+            self.conn.quit()
 
 
 def notify_by_email(

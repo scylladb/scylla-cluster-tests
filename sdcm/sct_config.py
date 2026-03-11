@@ -2066,9 +2066,6 @@ class SCTConfiguration(BaseModel):
     argus_email_report_template: String = SctField(
         description="Path to the email report template used for sending argus email reports",
     )
-    enable_argus_email_report: Boolean = SctField(
-        description="Whether or not to send email using argus instead of SCT.",
-    )
     c_s_driver_version: Literal["3", "4", "random"] = SctField(
         description="cassandra-stress driver version to use: 3|4|random",
     )
