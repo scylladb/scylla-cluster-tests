@@ -137,14 +137,7 @@ instance_type_db_oracle: 'i4i.8xlarge'
 - **Pros:** No custom AMI maintenance, always gets latest patch version, reuses existing AMI infrastructure
 - **Cons:** Slower node_setup (~2-5 min install), requires JDK installation (Cassandra 4.x needs JDK 11, Cassandra 5.x needs JDK 11 or 17)
 
-**Option B: Pre-baked Cassandra AMI**
-
-- Build a custom AMI with Cassandra pre-installed using Packer or similar
-- Store AMI IDs in config as `ami_id_db_cassandra_oracle`
-- **Pros:** Fast node startup, deterministic environment
-- **Cons:** AMI maintenance burden, need to rebuild for each Cassandra version, need AMIs in every AWS region
-
-**Recommendation:** Start with **Option A** (tarball install). The oracle cluster is typically 1 node, so the 2-5 minute install overhead is negligible compared to test durations of 3-10 hours. If install time becomes a concern, graduate to pre-baked AMIs later.
+The oracle cluster is typically 1 node, so the 2-5 minute install overhead is negligible compared to test durations of 3-10 hours. No pre-baked images will be maintained — apt install with retry logic is sufficient.
 
 ### GCE Backend
 
