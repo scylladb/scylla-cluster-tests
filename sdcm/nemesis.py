@@ -4762,6 +4762,8 @@ class Nemesis(NemesisFlags):
                         instance_type=self.tester.params.get("nemesis_grow_shrink_instance_type"),
                     )
         time.sleep(self.interval)
+        for node in new_nodes:
+            self.node_allocator.unset_running_nemesis(node, self.current_disruption)
         return new_nodes
 
     def _shrink_cluster(self, rack=None, new_nodes: list[BaseNode] | None = None):
@@ -5050,10 +5052,8 @@ class Nemesis(NemesisFlags):
             InfoEvent(message="FinishEvent - Manager repair was Skipped").publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message="Starting grow disruption").publish()
-        new_nodes = self._grow_cluster(rack=None)
+        self._grow_cluster(rack=None)
         InfoEvent(message="Finished grow disruption").publish()
-        for node in new_nodes:
-            self.node_allocator.unset_running_nemesis(node, self.current_disruption)
         time.sleep(sleep_time_between_ops)
         InfoEvent(message="Starting terminate_and_replace disruption").publish()
         self._terminate_and_replace_node()
