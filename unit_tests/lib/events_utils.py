@@ -25,6 +25,18 @@ from sdcm.sct_events.event_counter import get_events_counter
 
 
 class EventsUtilsMixin:
+    """Mixin that starts the **real** events infrastructure (multiprocessing, ZMQ, file I/O).
+
+    ``setup_events_processes`` launches ``EventsDevice`` plus up to six subscriber
+    processes and sleeps ~4 s for them to initialise.  This is correct for tests
+    that exercise the events subsystem itself, but far too expensive for tests
+    that merely need events to be captured so their side-effects can be asserted.
+
+    For the latter category, prefer the ``events`` / ``events_function_scope``
+    pytest fixtures (defined in ``unit_tests/conftest.py``), which inject a
+    synchronous, in-memory ``FakeEventsDevice`` with zero start-up cost.
+    """
+
     temp_dir = None
     events_processes_registry = None
     events_processes_registry_patcher = None
