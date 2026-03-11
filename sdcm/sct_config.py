@@ -1864,7 +1864,12 @@ class SCTConfiguration(BaseModel):
         description="Enables or disables truncate checks on each node upgrade and rollback",
     )
     stress_before_upgrade: StringOrList = SctField(
-        description="Stress command to be run before upgrade (prepare stage)",
+        description="Stress command to be run before upgrade starts (preload/validation stage). "
+        "This workload runs before any nodes are upgraded and can use CL=ALL for data validation.",
+    )
+    large_partition_stress_during_upgrade: StringOrList = SctField(
+        description="Stress command to be run during rolling upgrade while nodes are being upgraded. "
+        "This workload cannot use CL=ALL as not all nodes may be available during the upgrade.",
     )
     stress_during_entire_upgrade: StringOrList = SctField(
         description="Stress command to be run during the upgrade - user should take care for suitable duration",

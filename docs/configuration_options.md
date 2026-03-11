@@ -3793,7 +3793,17 @@ Enables or disables truncate checks on each node upgrade and rollback
 
 ## **stress_before_upgrade** / SCT_STRESS_BEFORE_UPGRADE
 
-Stress command to be run before upgrade (prepare stage)
+Stress command to be run before upgrade starts (preload/validation stage). This workload runs before any nodes are upgraded and can use CL=ALL for data validation.
+
+**default:** N/A
+
+**type:** str | list[str]
+* appendable
+
+
+## **large_partition_stress_during_upgrade** / SCT_LARGE_PARTITION_STRESS_DURING_UPGRADE
+
+Stress command to be run during rolling upgrade while nodes are being upgraded. This workload cannot use CL=ALL as not all nodes may be available during the upgrade.
 
 **default:** N/A
 
