@@ -1,0 +1,46 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><project>
+  <actions/>
+  <description>Triggers xcloud performance regression tests on weekly basis every Sunday at 01:00 UTC
+
+  Runs comprehensive throughput and latency performance tests on xcloud staging backend
+  to establish baselines and detect regressions.
+
+  Ref: https://scylladb.atlassian.net/browse/QAINFRA-38
+  </description>
+  <scm class="hudson.scm.NullSCM"/>
+  <disabled>false</disabled>
+  <triggers>
+    <hudson.triggers.TimerTrigger>
+      <spec>0 1 * * 0</spec>
+    </hudson.triggers.TimerTrigger>
+  </triggers>
+  <concurrentBuild>false</concurrentBuild>
+  <builders/>
+  <publishers>
+    <hudson.plugins.parameterizedtrigger.BuildTrigger>
+      <configs>
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+              <properties>scylla_version=release:latest
+provision_type=on_demand
+region=us-east-1
+xcloud_provider=aws
+xcloud_env=staging
+post_behavior_db_nodes=destroy
+post_behavior_loader_nodes=destroy
+post_behavior_monitor_nodes=destroy
+requested_by_user=dimakr</properties>
+              <textParamValueOnNewLine>false</textParamValueOnNewLine>
+            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+          </configs>
+          <projects>../scylla-master/perf-regression/scylla-cloud-perf-regression-predefined-throughput-steps-vnodes</projects>
+          <condition>SUCCESS</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+          <triggerFromChildProjects>false</triggerFromChildProjects>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+      </configs>
+    </hudson.plugins.parameterizedtrigger.BuildTrigger>
+  </publishers>
+  <buildWrappers/>
+</project>
