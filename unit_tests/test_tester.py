@@ -19,13 +19,14 @@ import logging
 import pytest
 
 from sdcm.sct_events import Severity
+from sdcm.sct_events.base import SctEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.tester import ClusterTester, silence, TestResultEvent
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events.file_logger import get_events_grouped_by_category
 from sdcm.utils.action_logger import get_action_logger
-from unit_tests.lib.events_utils import EventsUtilsMixin
+from unit_tests.lib.fake_events import make_fake_events
 
 
 class FakeSCTConfiguration(SCTConfiguration):
@@ -40,7 +41,7 @@ class FakeSCTConfiguration(SCTConfiguration):
 ClusterTester.__test__ = False
 
 
-class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
+class ClusterTesterForTests(ClusterTester):
     k8s_clusters = None
 
     def init_argus_run(self):
@@ -119,9 +120,10 @@ class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
 
     @pytest.fixture(autouse=True, name="event_system")
     def fixture_event_system(self, setup_logging):
-        self.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
-        yield
-        self.teardown_events_processes()
+        with make_fake_events() as device:
+            self._fake_device = device
+            self.events_processes_registry = SctEvent._events_processes_registry
+            yield
 
     @pytest.fixture(autouse=True, name="print_output")
     def fixture_print_output(self, event_system, capsys):
@@ -501,29 +503,23 @@ class TestGatherFailureStatistics:
         tester.params = FakeSCTConfiguration()
         tester.start_time = time.time()  # Required by tearDown
 
-        # Setup events before calling tearDown
-        tester.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
+        # Setup fake events before calling tearDown
+        with make_fake_events():
+            tester.events_processes_registry = SctEvent._events_processes_registry
 
-        # Create an error event to make test status FAILED
-        TestFrameworkEvent(
-            source="test", source_method="test", exception=Exception("Test error"), severity=Severity.ERROR
-        ).publish()
+            # Create an error event to make test status FAILED
+            TestFrameworkEvent(
+                source="test", source_method="test", exception=Exception("Test error"), severity=Severity.ERROR
+            ).publish()
 
-        # Brief sleep needed for asynchronous event processing to complete
-        # This ensures the event is registered before get_test_status() is called
-        time.sleep(0.1)
+            # Mock gather_failure_statistics to verify it's called
+            tester.gather_failure_statistics = MagicMock()
 
-        # Mock gather_failure_statistics to verify it's called
-        tester.gather_failure_statistics = MagicMock()
+            # Run tearDown
+            tester.tearDown()
 
-        # Run tearDown
-        tester.tearDown()
-
-        # Verify gather_failure_statistics was called
-        assert tester.gather_failure_statistics.called
-
-        # Cleanup
-        tester.teardown_events_processes()
+            # Verify gather_failure_statistics was called
+            assert tester.gather_failure_statistics.called
 
 
 class TestSaveSchema:

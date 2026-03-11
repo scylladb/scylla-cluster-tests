@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import json
 import logging
 import os.path
 import re
@@ -30,7 +29,6 @@ from invoke import Result
 from sdcm import sct_config
 from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet, BaseScyllaCluster
 from sdcm.db_log_reader import DbLogReader
-from sdcm.sct_events import Severity
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
@@ -46,7 +44,7 @@ from sdcm.utils.version_utils import ComparableScyllaVersion
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_config import SCTConfiguration
 from unit_tests.dummy_remote import DummyRemote, LocalNode
-from unit_tests.lib.events_utils import EventsUtilsMixin
+from unit_tests.lib.fake_events import FakeEventsMixin
 from unit_tests.test_utils_common import DummyNode
 
 
@@ -73,10 +71,16 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):
         pass
 
 
-class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
+class TestBaseNode(unittest.TestCase, FakeEventsMixin):
     @classmethod
-    def setUpClass(cls):
-        cls.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
+    def setup_class(cls):
+        super().setup_class()
+        cls.temp_dir = tempfile.mkdtemp()
+
+    @classmethod
+    def teardown_class(cls):
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
+        super().teardown_class()
 
     @cached_property
     def node(self):
@@ -116,10 +120,6 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
         else:
             self._db_log_reader._read_and_publish_events()
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.teardown_events_processes()
-
     def setUp(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
 
@@ -138,33 +138,32 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
 
         self._read_and_publish_events()
 
-        with self.get_raw_events_log().open() as events_file:
-            events = [json.loads(line) for line in events_file]
+        events = self.events.published_events
 
-            event_a, event_b = events[-2], events[-1]
-            print(event_a)
-            print(event_b)
+        event_a, event_b = events[-2], events[-1]
+        print(event_a)
+        print(event_b)
 
-            assert event_a["type"] == "REACTOR_STALLED"
-            assert event_a["line_number"] == 0
-            assert event_b["type"] == "REACTOR_STALLED"
-            assert event_b["line_number"] == 3
+        assert event_a["type"] == "REACTOR_STALLED"
+        assert event_a["line_number"] == 0
+        assert event_b["type"] == "REACTOR_STALLED"
+        assert event_b["line_number"] == 3
 
     def test_search_kernel_callstack(self):
         self.node.parent_cluster = {"params": {"print_kernel_callstack": True}}
         self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "kernel_callstack.log")
         self._read_and_publish_events()
-        with self.get_raw_events_log().open() as events_file:
-            events = [json.loads(line) for line in events_file]
 
-            event_a, event_b = events[-2], events[-1]
-            print(event_a)
-            print(event_b)
+        events = self.events.published_events
 
-            assert event_a["type"] == "KERNEL_CALLSTACK"
-            assert event_a["line_number"] == 2
-            assert event_b["type"] == "KERNEL_CALLSTACK"
-            assert event_b["line_number"] == 5
+        event_a, event_b = events[-2], events[-1]
+        print(event_a)
+        print(event_b)
+
+        assert event_a["type"] == "KERNEL_CALLSTACK"
+        assert event_a["line_number"] == 2
+        assert event_b["type"] == "KERNEL_CALLSTACK"
+        assert event_b["line_number"] == 5
 
     def test_search_cdc_invalid_request(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_cdc_invalid_request.log")
@@ -174,10 +173,12 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
                 with ignore_upgrade_schema_errors():
                     self._read_and_publish_events()
 
-        time.sleep(0.2)
-        with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
-            cdc_err_events = [line for line in events_file if "cdc - Could not retrieve CDC streams" in line]
-            assert cdc_err_events != []
+        cdc_err_events = [
+            line
+            for line in self.events.get_events_by_category()["ERROR"]
+            if "cdc - Could not retrieve CDC streams" in line
+        ]
+        assert cdc_err_events != []
 
     def test_search_power_off(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "power_off.log")
@@ -191,79 +192,73 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             "longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Powering Off...",
         ).publish()
 
-        time.sleep(0.1)
-        with self.get_events_logger().events_logs_by_severity[Severity.WARNING].open() as events_file:
-            events = [line for line in events_file if "Powering Off" in line]
-            assert events
+        events = [line for line in self.events.get_events_by_category()["WARNING"] if "Powering Off" in line]
+        assert events
 
     def test_search_system_suppressed_messages(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_suppressed_messages.log")
 
         self._read_and_publish_events()
 
-        with self.get_raw_events_log().open() as events_file:
-            events = [json.loads(line) for line in events_file]
+        events = self.events.published_events
 
-            event_a = events[-1]
-            print(event_a)
+        event_a = events[-1]
+        print(event_a)
 
-            assert event_a["type"] == "SUPPRESSED_MESSAGES", "Not expected event type {}".format(event_a["type"])
-            assert event_a["line_number"] == 6, "Not expected event line number {}".format(event_a["line_number"])
+        assert event_a["type"] == "SUPPRESSED_MESSAGES", "Not expected event type {}".format(event_a["type"])
+        assert event_a["line_number"] == 6, "Not expected event line number {}".format(event_a["line_number"])
 
     def test_search_one_line_backtraces(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_one_line_backtrace.log")
 
         self._read_and_publish_events()
 
-        with self.get_raw_events_log().open() as events_file:
-            events = [json.loads(line) for line in events_file]
+        events = self.events.published_events
 
-            backtraces = [event for event in events if event["type"] == "BACKTRACE"]
-            assert len(backtraces) == 2
-            for event_backtrace in backtraces:
-                assert event_backtrace["raw_backtrace"]
+        backtraces = [event for event in events if event["type"] == "BACKTRACE"]
+        assert len(backtraces) == 2
+        for event_backtrace in backtraces:
+            assert event_backtrace["raw_backtrace"]
 
-            oversized_events = [event for event in events if event["type"] == "OVERSIZED_ALLOCATION"]
-            assert len(oversized_events) == 2
-            for event_oversized in oversized_events:
-                print(event_oversized)
-                assert event_oversized["raw_backtrace"]
+        oversized_events = [event for event in events if event["type"] == "OVERSIZED_ALLOCATION"]
+        assert len(oversized_events) == 2
+        for event_oversized in oversized_events:
+            print(event_oversized)
+            assert event_oversized["raw_backtrace"]
 
-            print(events[-1])
+        print(events[-1])
 
     def test_gate_closed_ignored_exception_is_catched(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "gate_closed_ignored_exception.log")
 
         self._read_and_publish_events()
 
-        with self.get_raw_events_log().open() as events_file:
-            events = [json.loads(line) for line in events_file]
+        events = self.events.published_events
 
-            event_backtrace1, event_backtrace2 = events[-2], events[-1]
-            print(event_backtrace1)
-            print(event_backtrace2)
+        event_backtrace1, event_backtrace2 = events[-2], events[-1]
+        print(event_backtrace1)
+        print(event_backtrace2)
 
-            assert event_backtrace1["type"] == "GATE_CLOSED"
-            assert event_backtrace1["line_number"] == 1
-            assert event_backtrace2["type"] == "GATE_CLOSED"
-            assert event_backtrace2["line_number"] == 3
+        assert event_backtrace1["type"] == "GATE_CLOSED"
+        assert event_backtrace1["line_number"] == 1
+        assert event_backtrace2["type"] == "GATE_CLOSED"
+        assert event_backtrace2["line_number"] == 3
 
     def test_compaction_stopped_exception_is_catched(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "compaction_stopped_exception.log")
 
         self._read_and_publish_events()
 
-        with self.get_raw_events_log().open() as events_file:
-            events = [json.loads(line) for line in events_file]
+        events = self.events.published_events
 
-            event_backtrace1, event_backtrace2 = events[-3], events[-2]
-            print(event_backtrace1)
-            print(event_backtrace2)
+        event_backtrace1, event_backtrace2 = events[-3], events[-2]
+        print(event_backtrace1)
+        print(event_backtrace2)
 
-            assert event_backtrace1["type"] == "COMPACTION_STOPPED"
-            assert event_backtrace1["line_number"] == 0
-            assert event_backtrace2["type"] == "COMPACTION_STOPPED"
-            assert event_backtrace2["line_number"] == 1
+        assert event_backtrace1["type"] == "COMPACTION_STOPPED"
+        assert event_backtrace1["line_number"] == 0
+        assert event_backtrace2["type"] == "COMPACTION_STOPPED"
+        assert event_backtrace2["line_number"] == 1
 
     def test_appending_to_log(self):
         logs = """
@@ -275,14 +270,13 @@ INFO  2022-07-14 09:28:35,102 [shard 1] database - Flushed non-system tables
 
         self._read_and_publish_events(logs)
 
-        with self.get_raw_events_log().open() as events_file:
-            events = [json.loads(line) for line in events_file]
-            reactor_stalls = [event for event in events if event["type"] == "REACTOR_STALLED"]
-            assert len(reactor_stalls) == 1
-            event = reactor_stalls[0]
-            assert event["type"] == "REACTOR_STALLED"
-            assert event["line_number"] == 2
-            assert "Reactor stalled for 32 ms on shard 1" in event["line"]
+        events = self.events.published_events
+        reactor_stalls = [event for event in events if event["type"] == "REACTOR_STALLED"]
+        assert len(reactor_stalls) == 1
+        event = reactor_stalls[0]
+        assert event["type"] == "REACTOR_STALLED"
+        assert event["line_number"] == 2
+        assert "Reactor stalled for 32 ms on shard 1" in event["line"]
 
 
 class VersionDummyRemote:

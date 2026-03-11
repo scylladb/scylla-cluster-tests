@@ -12,9 +12,10 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
-import json
-from multiprocessing import Queue
+import shutil
+import tempfile
 import unittest
+from multiprocessing import Queue
 from functools import cached_property
 
 import pytest
@@ -25,7 +26,7 @@ from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.test_utils_common import DummyNode
-from unit_tests.lib.events_utils import EventsUtilsMixin
+from unit_tests.lib.fake_events import FakeEventsMixin
 
 
 class DecodeDummyNode(DummyNode):
@@ -33,14 +34,16 @@ class DecodeDummyNode(DummyNode):
         return "scylla_debug_info_file"
 
 
-class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
+class TestDecodeBactraces(unittest.TestCase, FakeEventsMixin):
     @classmethod
-    def setUpClass(cls):
-        cls.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
+    def setup_class(cls):
+        super().setup_class()
+        cls.temp_dir = tempfile.mkdtemp()
 
     @classmethod
-    def tearDownClass(cls):
-        cls.teardown_events_processes()
+    def teardown_class(cls):
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
+        super().teardown_class()
 
     @cached_property
     def test_config(self):
@@ -114,10 +117,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
 
-        events = []
-        with self.get_raw_events_log().open() as events_file:
-            for line in events_file.readlines():
-                events.append(json.loads(line))
+        events = self.events.published_events
 
         assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
         for event in events:
@@ -135,10 +135,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
 
-        events = []
-        with self.get_raw_events_log().open() as events_file:
-            for line in events_file.readlines():
-                events.append(json.loads(line))
+        events = self.events.published_events
 
         assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
         for event in events:
@@ -161,10 +158,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
 
-        events = []
-        with self.get_raw_events_log().open() as events_file:
-            for line in events_file.readlines():
-                events.append(json.loads(line))
+        events = self.events.published_events
 
         assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
         for event in events:
@@ -187,10 +181,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
 
-        events = []
-        with self.get_raw_events_log().open() as events_file:
-            for line in events_file.readlines():
-                events.append(json.loads(line))
+        events = self.events.published_events
 
         assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
         for event in events:
@@ -311,10 +302,7 @@ def test_backtrace_decoding_configuration(
     monitor_node.wait_till_tasks_threads_are_stopped()
 
     # Validate
-    events = []
-    with open(events_function_scope.get_raw_events_log()) as events_file:
-        for line in events_file.readlines():
-            events.append(json.loads(line))
+    events = events_function_scope.published_events
 
     filtered_events = [e for e in events if event_filter(e)]
     assert len(filtered_events) > 0, "Should have at least one matching event"

@@ -53,7 +53,7 @@ from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
-from unit_tests.lib.events_utils import EventsUtilsMixin
+from unit_tests.lib.fake_events import make_fake_events
 from unit_tests.lib.fake_provisioner import FakeProvisioner
 from unit_tests.lib.fake_region_definition_builder import FakeDefinitionBuilder
 from unit_tests.lib.fake_remoter import FakeRemoter
@@ -106,20 +106,14 @@ def mock_remote_scylla_yaml(scylla_node):
 
 @pytest.fixture(scope="module")
 def events():
-    mixing = EventsUtilsMixin()
-    mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
-    yield mixing
-
-    mixing.teardown_events_processes()
+    with make_fake_events() as device:
+        yield device
 
 
 @pytest.fixture(scope="function")
 def events_function_scope():
-    mixing = EventsUtilsMixin()
-    mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
-    yield mixing
-
-    mixing.teardown_events_processes()
+    with make_fake_events() as device:
+        yield device
 
 
 @pytest.fixture(scope="session")
