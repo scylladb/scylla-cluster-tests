@@ -84,7 +84,24 @@ class DockerClient(docker.DockerClient):
         return res
 
 
-_docker = DockerClient.from_env(timeout=DOCKER_API_CALL_TIMEOUT)
+class _LazyDockerClient:
+    """Descriptor that defers ``DockerClient.from_env()`` until first access.
+
+    Creating the client at import time crashes when Docker is not installed
+    (e.g. in CI environments that only run unit tests). This descriptor
+    creates the client on first attribute access and caches it.  It also
+    supports ``@patch`` in tests — ``unittest.mock.patch`` writes directly
+    to the class ``__dict__``, which shadows the descriptor.
+    """
+
+    def __set_name__(self, owner, name):
+        self._attr = name
+
+    def __get__(self, obj, objtype=None):
+        client = DockerClient.from_env(timeout=DOCKER_API_CALL_TIMEOUT)
+        # Cache on the class so subsequent accesses skip the descriptor
+        setattr(objtype, self._attr, client)
+        return client
 
 
 class _Name(SimpleNamespace):
@@ -163,7 +180,7 @@ class ContainerManager:
     """
 
     keep_alive_suffix = "---KEEPALIVE"
-    default_docker_client = _docker
+    default_docker_client = _LazyDockerClient()
 
     @classmethod
     def get_docker_client(cls, instance: INodeWithContainerManager, name: Optional[str] = None) -> DockerClient:
