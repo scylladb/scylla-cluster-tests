@@ -101,6 +101,16 @@
       "addLabels": [
         "test-integration"
       ]
+    },
+    {
+      "description": "Open PRs for Docker Hub image updates immediately as they appear",
+      "matchDatasources": [
+        "docker"
+      ],
+      "schedule": [
+        "at any time"
+      ],
+      "enabled": true
     }
   ],
   "vulnerabilityAlerts": {
