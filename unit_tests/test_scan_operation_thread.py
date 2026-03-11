@@ -7,8 +7,6 @@ test_scan_negative_operation_timed_out - getting operation_timed_out in scan exe
 test_scan_negative_exception - getting operation_timed_out in scan execution (with and without nemesis)
 """
 
-from pathlib import Path
-import os
 from threading import Event
 from importlib import reload
 from unittest.mock import MagicMock, patch
@@ -56,15 +54,12 @@ class DBCluster(DummyDbCluster):
 
 
 def get_event_log_file(events):
-    if (log_file := Path(events.temp_dir, "events_log", "events.log")).exists():
-        return log_file.read_text(encoding="utf-8").rstrip().split("\n")
-    return ""
+    return events.get_formatted_event_lines() or ""
 
 
 @pytest.fixture(scope="function", autouse=True)
 def cleanup_event_log_file(events):
-    with open(os.path.join(events.temp_dir, "events_log", "events.log"), "r+", encoding="utf-8") as file:
-        file.truncate(0)
+    events.events_main_device.clear()
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -120,8 +115,7 @@ def test_scan_positive(mode, events, cluster):
     default_params = ThreadParams(db_cluster=cluster, ks_cf="a.b", mode=mode, **DEFAULT_PARAMS)
     with patch.object(PrometheusDBStats, "__init__", return_value=None):
         with patch.object(PrometheusDBStats, "query", return_value=[{"values": [[0, "1"], [1, "2"]]}]):
-            with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
-                ScanOperationThread(default_params)._run_next_operation()
+            ScanOperationThread(default_params)._run_next_operation()
             all_events = get_event_log_file(events)
             assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
             assert "Severity.NORMAL" in all_events[1] and "period_type=end" in all_events[1]
@@ -133,8 +127,7 @@ def test_negative_prometheus_validation_error(events, cluster):
     default_params = ThreadParams(db_cluster=cluster, ks_cf="a.b", mode="aggregate", **DEFAULT_PARAMS)
     with patch.object(PrometheusDBStats, "__init__", return_value=None):
         with patch.object(PrometheusDBStats, "query", return_value=[{"values": [[0, "1"], [1, "1"]]}]):
-            with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=30):
-                ScanOperationThread(default_params)._run_next_operation()
+            ScanOperationThread(default_params)._run_next_operation()
             all_events = get_event_log_file(events)
             assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
             severity = "Severity.ERROR"
@@ -180,8 +173,7 @@ def test_scan_negative_execution_errors(mode, exception, events, node):
         full_scan_operation_limit=300,
         **DEFAULT_PARAMS,
     )
-    with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
-        ScanOperationThread(default_params)._run_next_operation()
+    ScanOperationThread(default_params)._run_next_operation()
     all_events = get_event_log_file(events)
     assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
     assert "Severity.WARNING" in all_events[1] and "period_type=end" in all_events[1]
@@ -213,8 +205,7 @@ def test_scan_negative_running_nemesis(mode, severity, running_nemesis, execute_
     db_cluster = DBCluster(connection, [node], {})
     node.parent_cluster = db_cluster
     default_params = ThreadParams(db_cluster=db_cluster, ks_cf="a.b", mode=mode, **DEFAULT_PARAMS)
-    with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
-        ScanOperationThread(default_params)._run_next_operation()
+    ScanOperationThread(default_params)._run_next_operation()
     all_events = get_event_log_file(events)
     assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
     assert f"Severity.{severity}" in all_events[1] and "period_type=end" in all_events[1]
