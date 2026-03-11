@@ -177,7 +177,7 @@ defaults:
   post_behavior_monitor_nodes: "destroy"
 
 jobs:
-  - job_name: "scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes"
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes"
     backend: "aws"
     region: "us-east-1"
     labels:
@@ -186,7 +186,7 @@ jobs:
     params:
       sub_tests: '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_read_disk_only_gradual_increase_load", "test_write_gradual_increase_load"]'
 
-  - job_name: "scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets"
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets"
     backend: "aws"
     region: "us-east-1"
     labels:
@@ -211,29 +211,25 @@ jobs:
   - job_name: "longevity/longevity-100gb-4h-test"
     backend: "aws"
     region: "eu-west-1"
-    labels:
-      - "aws"
+    labels: []
     exclude_versions: []
 
   - job_name: "longevity/longevity-10gb-3h-azure-test"
     backend: "azure"
     region: "eastus"
-    labels:
-      - "azure"
+    labels: []
     exclude_versions: []
 
   - job_name: "longevity/longevity-10gb-3h-gce-test"
     backend: "gce"
     region: "us-east1"
-    labels:
-      - "gce"
+    labels: []
     exclude_versions: []
 
   - job_name: "longevity/longevity-10gb-3h-test"
     backend: "aws"
     region: "eu-west-1"
     labels:
-      - "aws"
       - "additional"
     exclude_versions: []
 
@@ -241,18 +237,53 @@ jobs:
     backend: "aws"
     region: "eu-west-1"
     labels:
-      - "aws"
+      - "additional"
+    exclude_versions: []
+
+  - job_name: "longevity/longevity-twcs-3h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "additional"
+    exclude_versions: []
+
+  - job_name: "alternator/longevity-alternator-3h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "additional"
+    exclude_versions: []
+
+  - job_name: "no_tablets/longevity-cdc-100gb-4h-no-tablets-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "additional"
+    exclude_versions: []
+
+  - job_name: "longevity/longevity-large-partition-asymmetric-cluster-3h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
       - "additional"
     exclude_versions: []
 ```
 
 **Schema notes:**
 
-- `job_name`: Relative path under the job folder. Actual Jenkins path constructed as `{job_folder}/{job_name}` where `job_folder` is derived from the version (e.g., `scylla-master`, `branch-2025.4`).
+- `job_name`: Either a relative path or an absolute path. Relative paths (e.g., `tier1/longevity-50gb-3days-test`) are prefixed with `{job_folder}/` at runtime, where `job_folder` is derived from the version (e.g., `scylla-master`, `branch-2025.4`). Absolute paths start with `/` (e.g., `/scylla-enterprise/perf-regression/...`) and are used as-is (leading `/` stripped).
 - `backend`: Cloud provider (`aws`, `gce`, `azure`, `docker`). Used for filtering.
 - `region`: Default region. Can be overridden at trigger time.
-- `labels`: List of string labels for filtering. A job runs when its labels match the `--labels-selector` filter. The job category (tier1, sanity, perf) is implied by the YAML file name — don't repeat it as a label. Use labels for scheduling cadence (`weekly`, `daily`, `master-weekly`), backend (`aws`, `gce`, `azure`), or subsets (`additional`).
-- `exclude_versions`: List of version prefixes where this job should NOT run. Empty means "run on all versions".
+- `labels`: List of string labels for filtering. The job category (tier1, sanity, perf) is implied by the YAML file name — don't repeat it as a label. Don't repeat the `backend` value as a label either — use `--backend` filter for that. Use labels for scheduling cadence (`weekly`, `daily`, `master-weekly`) or subsets (`additional`).
+  - **Filtering semantics**: `--labels-selector "weekly"` triggers all jobs whose `labels` list contains `"weekly"` (subset match — every label in the selector must be present in the job's labels). `--labels-selector "aws,additional"` triggers jobs that have **both** `"aws"` AND `"additional"`.
+  - **No selector**: When `--labels-selector` is omitted, **all** jobs in the YAML are eligible (no label filtering applied). Backend and version exclusion filters still apply.
+  - **Example**: Given jobs A (`labels: ["weekly"]`), B (`labels: ["additional"]`), C (`labels: ["weekly", "additional"]`):
+    - `--labels-selector "weekly"` → triggers A and C
+    - `--labels-selector "additional"` → triggers B and C
+    - `--labels-selector "weekly,additional"` → triggers only C
+    - No selector → triggers A, B, and C
+- `exclude_versions`: List of version prefixes where this job should NOT run. Empty means "run on all versions". Matching is prefix-based: if `scylla_version` starts with any entry, the job is skipped.
+  - Example: `exclude_versions: ["2024.2", "5.1"]` skips the job for `2024.2.5-0.20250221.xxx-1` (matches prefix `2024.2`) and `5.1.3` (matches prefix `5.1`), but runs for `2025.4.0` (no match).
 - `params`: Additional parameters passed to the downstream job (overrides defaults).
 - `defaults`: Default parameters applied to all jobs. Per-job `params` take precedence.
 
@@ -325,10 +356,11 @@ def trigger_matrix(
 **Key design decisions:**
 
 1. **No image translation**: The trigger passes `scylla_version` only. Each downstream job uses SCT's built-in image lookup (enhanced by PR #13192) to find the correct image for its backend/region/arch.
-2. **Labels filtering**: `--labels-selector "weekly"` means job must have ALL listed labels (AND logic). A single `--labels-selector` value is supported per invocation. To trigger different subsets, run the command multiple times with different selectors. The job category (tier1, sanity, perf) is implied by the YAML file — use labels only for scheduling cadence, backend, or subsets.
+2. **Labels filtering**: `--labels-selector "weekly"` means job must have ALL listed labels (AND logic). A single `--labels-selector` value is supported per invocation. To trigger different subsets, run the command multiple times with different selectors. The job category (tier1, sanity, perf) is implied by the YAML file — use labels only for scheduling cadence or subsets. When no selector is provided, all jobs are eligible.
 3. **Version exclusion**: If `scylla_version` starts with any prefix in `exclude_versions`, the job is skipped.
 4. **Parameter priority**: CLI overrides > per-job params > matrix defaults. This allows the same YAML to work for scheduled runs and manual triggers with custom parameters.
-5. **Jenkins triggering**: Use Jenkins REST API (`/job/{path}/buildWithParameters`) similar to how it's done today. The Jenkins URL and auth token come from environment variables available on the Jenkins agent.
+5. **Jenkins triggering**: Use Jenkins REST API (`/job/{path}/buildWithParameters`) similar to how it's done today. The Jenkins URL and auth token come from environment variables: `JENKINS_URL` (Jenkins instance URL) and `JENKINS_API_TOKEN` (API authentication token). The job uses the Jenkins-provided credentials available in the pipeline context.
+6. **Retry on failure**: `trigger_jenkins_job()` retries up to 3 times with exponential backoff (2s, 4s, 8s) on transient HTTP errors (5xx, connection timeout). Non-retryable errors (4xx) fail immediately. Failed jobs are logged but do not block other jobs from being triggered.
 
 **Definition of Done:**
 - [ ] `filter_jobs()` handles version exclusion, labels matching, backend filtering, skip list
@@ -458,7 +490,8 @@ def call(Map pipelineParams = [:]) {
 - All input parameters are sanitized against regex patterns before shell execution
 - The Groovy pipeline is a thin wrapper — all logic is in Python
 - `matrix_file` can be baked into the Jenkinsfile (e.g., `matrix_file: 'configurations/triggers/tier1.yaml'`)
-- Cron schedules can be defined in the YAML and passed as `pipelineParams.cron`
+- **Cron-to-Jenkins conversion**: The Groovy pipeline reads `cron_triggers` from the YAML at pipeline load time and converts them to Jenkins `parameterizedCron` format. Each YAML entry like `{schedule: "00 06 * * 6", params: {scylla_version: "master:latest", labels_selector: "weekly"}}` becomes a `parameterizedCron` line: `00 06 * * 6 %scylla_version=master:latest;labels_selector=weekly`. This uses the [Parameterized Scheduler Plugin](https://plugins.jenkins.io/parameterized-scheduler/) (prerequisite: must be installed on Jenkins)
+- `sub_tests` values are passed as-is (JSON-encoded strings) to downstream jobs. The YAML stores them as string values in `params`, not as native YAML lists, to match the format downstream Jenkinsfiles expect
 
 **Definition of Done:**
 - [ ] `vars/triggerMatrixPipeline.groovy` created with parameter sanitization
@@ -501,6 +534,7 @@ def call(Map pipelineParams = [:]) {
 - [ ] `configurations/triggers/perf-regression.yaml` — complete with all perf regression jobs
 - [ ] Each YAML validated: loads without errors, dry-run shows correct job list
 - [ ] Cross-reference with existing triggers to ensure no jobs are missing
+- [ ] Unit test asserts job count per YAML matches the source trigger file count (tier1: N jobs, sanity: 9 jobs, perf: 25+ jobs)
 
 **Dependencies**: Phase 1 (schema), Phase 3 (CLI for dry-run validation)
 
@@ -536,9 +570,9 @@ Each is a one-liner that points to its YAML matrix. The pipeline handles paramet
 
 **Definition of Done:**
 - [ ] New trigger Jenkinsfiles created
-- [ ] Jenkins jobs configured to use new Jenkinsfiles (manual step — outside PR scope)
+- [ ] Jenkins jobs configured to use new Jenkinsfiles (manual step — owned by Jenkins admin, tracked in a separate Jira ticket)
 - [ ] Old XML/Groovy trigger files marked for deprecation (not deleted yet)
-- [ ] Documentation for how to switch Jenkins jobs to new triggers
+- [ ] Documentation for how to switch Jenkins jobs to new triggers (step-by-step runbook for Jenkins admin)
 
 **Dependencies**: Phase 4, Phase 5
 
@@ -625,10 +659,7 @@ Each is a one-liner that points to its YAML matrix. The pipeline handles paramet
 | **Full version tag not available for all backends** | PR #13192 is merged and supports all backends. If a backend doesn't have the requested version, SCT's existing error handling reports this. |
 | **Rollback** | Old trigger files are not deleted until Phase 7. Can revert to old triggers at any time during validation. |
 
-### Open Questions
+### Design Decisions
 
-1. **Cron schedule source**: ~~Should cron schedules live in the YAML file or Jenkins UI?~~ **Resolved**: Cron schedules live in the YAML file (as `cron_triggers`). All configuration is managed via code — no Jenkins UI editing.
-2. **Job folder structure**: ~~Which pattern for job names?~~ **Resolved**: Both options are supported. Tier1/sanity jobs follow the pattern `{job_folder}/tier1/longevity-*-test` where `job_folder` is derived from version (e.g., `scylla-master`, `branch-2025.4`). Performance jobs use a fixed structure like `scylla-enterprise/perf-regression/...` that does not change with version. `job_name` in the YAML can be either:
-   - A **relative path** like `tier1/longevity-50gb-3days-test` — prefixed with auto-detected `{job_folder}` at runtime.
-   - An **absolute path** (starting with `/` or containing the enterprise/master prefix already) — used as-is without prefixing.
-   This allows both patterns to coexist in the same YAML. The `determine_job_folder()` function only applies to relative job names.
+1. **Cron schedule source**: Cron schedules live in the YAML file (as `cron_triggers`). All configuration is managed via code — no Jenkins UI editing.
+2. **Job folder structure**: Both relative and absolute paths are supported. Relative paths (e.g., `tier1/longevity-50gb-3days-test`) are prefixed with auto-detected `{job_folder}` at runtime. Absolute paths start with `/` (e.g., `/scylla-enterprise/perf-regression/...`) and are used as-is (leading `/` stripped). The `determine_job_folder()` function only applies to relative job names.
