@@ -1,0 +1,6 @@
+append_scylla_yaml:
+  enable_tablets: false
+  tablets_mode_for_new_keyspaces: 'disabled'
+  stream_throughput_outbound_megabits_per_sec: 800
+
+user_prefix: 'platform-migration-vnodes'
