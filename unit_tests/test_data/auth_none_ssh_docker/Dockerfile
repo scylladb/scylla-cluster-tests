@@ -1,4 +1,4 @@
-FROM ubuntu:25.10
+FROM ubuntu:questing-20251217
 RUN apt-get update && apt-get install -y openssh-server
 RUN echo 'root:root' | chpasswd
 RUN useradd -m test && passwd -d test
