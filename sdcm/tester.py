@@ -497,7 +497,7 @@ class ClusterTester(unittest.TestCase):
                         }
         except Exception:
             self.log.error("Failed getting scylla versions", exc_info=True)
-
+        self.log.debug("Scylla versions found: %s", versions)
         return versions
 
     def generate_scylla_server_package(self) -> Package:
@@ -507,9 +507,10 @@ class ClusterTester(unittest.TestCase):
         scylla_version = self.db_cluster.nodes[0].scylla_version_detailed
 
         expr = re.compile(
-            r"(?P<version>(?P<main>[\w.~]+)-(0.)?(?P<date>[0-9]{8,8}).(?P<commit>\w+).) with build-id (?P<build_id>[\dabcdef]+)"
+            r"(?P<version>(?P<main>[\w.~]+)-(0.)?(?P<date>[0-9]{8,8}).(?P<commit>\w+)) with build-id (?P<build_id>[\dabcdef]+)"
         )
         version_dict = expr.match(scylla_version).groupdict()
+        self.log.debug("Parsed scylla version: %s", version_dict)
 
         return Package(
             name="scylla-server",
@@ -538,6 +539,8 @@ class ClusterTester(unittest.TestCase):
                 packages_to_submit.append(package)
             if len(versions) == 0:
                 packages_to_submit.append(self.generate_scylla_server_package())
+
+            self.log.debug("Collected Scylla and kernel packages: %s", packages_to_submit)
 
             packages_to_submit.extend(self.generate_operator_packages())
 
