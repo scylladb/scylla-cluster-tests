@@ -1305,13 +1305,18 @@ cli.add_command(investigate)
 
 @cli.command("unit-tests", help="Run all the SCT internal unit-tests")
 @click.option("-t", "--test", required=False, default="", help="Run specific test file from unit-tests directory")
-def unit_tests(test):
-    sys.exit(pytest.main(["-v", "-p", "no:warnings", "-m", "not integration", "unit_tests/{}".format(test)]))
+@click.option("--junit-xml", required=False, default="", help="Path to write JUnit XML report")
+def unit_tests(test, junit_xml):
+    args = ["-v", "-p", "no:warnings", "-m", "not integration", "unit_tests/{}".format(test)]
+    if junit_xml:
+        args.append(f"--junit-xml={junit_xml}")
+    sys.exit(pytest.main(args))
 
 
 @cli.command("integration-tests", help="Run all the SCT internal integration-tests")
 @click.option("-t", "--test", required=False, default="", help="Run specific test file from unit-tests directory")
-def integration_tests(test):
+@click.option("--junit-xml", required=False, default="", help="Path to write JUnit XML report")
+def integration_tests(test, junit_xml):
     get_test_config().logdir()
     add_file_logger()
 
@@ -1327,7 +1332,10 @@ def integration_tests(test):
         )
         local_cluster.setup_prerequisites()
 
-    sys.exit(pytest.main(["-v", "-p", "no:warnings", "-m", "integration", "unit_tests/{}".format(test)]))
+    args = ["-v", "-p", "no:warnings", "-m", "integration", "unit_tests/{}".format(test)]
+    if junit_xml:
+        args.append(f"--junit-xml={junit_xml}")
+    sys.exit(pytest.main(args))
 
 
 @cli.command("pre-commit", help="Run pre-commit checkers")
