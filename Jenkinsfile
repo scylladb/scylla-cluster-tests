@@ -149,9 +149,11 @@ pipeline {
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    script {
-                        checkoutQaInternal(params)
-                        sh './docker/env/hydra.sh unit-tests --junit-xml unit-tests-junit.xml'
+                    withEnv(["AWS_ACCESS_KEY_ID=", "AWS_SECRET_ACCESS_KEY="]) {
+                        script {
+                            checkoutQaInternal(params)
+                            sh './docker/env/hydra.sh unit-tests --junit-xml unit-tests-junit.xml'
+                        }
                     }
                 }
             }

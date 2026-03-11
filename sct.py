@@ -238,6 +238,7 @@ def cli(ctx):
         "create-nemesis-pipelines",
         "create-nemesis-yaml",
         "pre-commit",
+        "unit-tests",
     ):
         try_auth_with_okta()
 
