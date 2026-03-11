@@ -13,6 +13,7 @@ sortedcontainers==2.4.0
 jinja2==3.1.5
 prometheus_client==0.11.0
 pre-commit==4.0.1
+virtualenv==20.38.0
 pre-commit-hooks==6.0.0
 anyconfig==0.12.0
 click==8.1.3

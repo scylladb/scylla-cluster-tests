@@ -2416,9 +2416,9 @@ uv==0.2.24 \
     --hash=sha256:f6cc8ed15d8399cfdb83a723a7971ce60ef18497198df54d104ae263a98940a4 \
     --hash=sha256:f9de35cfa2c2c4e7e041442173fbf660a15e2ede10c7f8f038b8cd9b389d2010
     # via -r requirements.in
-virtualenv==20.37.0 \
-    --hash=sha256:5d3951c32d57232ae3569d4de4cc256c439e045135ebf43518131175d9be435d \
-    --hash=sha256:6f7e2064ed470aa7418874e70b6369d53b66bcd9e9fd5389763e96b6c94ccb7c
+virtualenv==20.38.0 \
+    --hash=sha256:94f39b1abaea5185bf7ea5a46702b56f1d0c9aa2f41a6c2b8b0af4ddc74c10a7 \
+    --hash=sha256:d6e78e5889de3a4742df2d3d44e779366325a90cf356f15621fddace82431794
     # via pre-commit
 voluptuous==0.16.0 \
     --hash=sha256:006535e22fed944aec17bef6e8725472476194743c87bd233e912eb463f8ff05 \
