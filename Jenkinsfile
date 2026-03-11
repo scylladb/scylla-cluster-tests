@@ -151,11 +151,14 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     script {
                         checkoutQaInternal(params)
-                        sh './docker/env/hydra.sh unit-tests'
+                        sh './docker/env/hydra.sh unit-tests --junit-xml unit-tests-junit.xml'
                     }
                 }
             }
             post {
+                always {
+                    junit testResults: 'unit-tests-junit.xml', allowEmptyResults: true, keepProperties: true
+                }
                 success {
                     script {
                         pullRequestSetResult('success', 'jenkins/unittests', 'All unit tests are passed')
@@ -224,15 +227,23 @@ pipeline {
                                     set -xe
                                     echo "start integration-tests ..."
                                     RUNNER_IP=\$(cat sct_runner_ip||echo "")
-                                    ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} integration-tests
+                                    ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} integration-tests --junit-xml integration-tests-junit.xml
                                     echo "end  integration-tests ..."
                                 """
                             }
                         }
                     }
                 }
+                sh """#!/bin/bash
+                    RUNNER_IP=\$(cat scylla-cluster-tests/sct_runner_ip||echo "")
+                    echo "fetching junit report from runner ..."
+                    scp -o StrictHostKeyChecking=no ubuntu@\${RUNNER_IP}:/home/ubuntu/scylla-cluster-tests/integration-tests-junit.xml integration-tests-junit.xml || echo "WARNING: Failed to fetch JUnit XML report"
+                """
             }
             post {
+                always {
+                    junit testResults: 'integration-tests-junit.xml', allowEmptyResults: true, keepProperties: true
+                }
                 success {
                     script {
                         pullRequestSetResult('success', 'jenkins/integration-tests', 'All integration tests are passed')
