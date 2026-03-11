@@ -126,7 +126,7 @@ pipeline {
                         dockerLogin(params)
                         // also check the commit-message for the rules we want
                         sh 'touch ./.git/COMMIT_EDITMSG'
-                        sh './docker/env/hydra.sh pre-commit'
+                        sh './docker/env/hydra.sh pre-commit 2>&1 | tee precommit-output.log'
                     }
                 }
             }
@@ -230,6 +230,15 @@ pipeline {
                                     ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} integration-tests --junit-xml integration-tests-junit.xml
                                     echo "end  integration-tests ..."
                                 """
+                                sh """#!/bin/bash
+                                    set -x
+                                    echo "Fetching integration test JUnit XML from runner ..."
+                                    RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                    if [ -n "\${RUNNER_IP}" ]; then
+                                        ./docker/env/hydra.sh fetch-junit-from-runner \${RUNNER_IP} -b docker || true
+                                        cp -f results/junit.xml integration-tests-junit.xml 2>/dev/null || true
+                                    fi
+                                """
                             }
                         }
                     }
@@ -242,7 +251,11 @@ pipeline {
             }
             post {
                 always {
-                    junit testResults: 'integration-tests-junit.xml', allowEmptyResults: true, keepProperties: true
+                    script {
+                        dir('scylla-cluster-tests') {
+                            junit testResults: 'integration-tests-junit.xml', allowEmptyResults: true, keepProperties: true
+                        }
+                    }
                 }
                 success {
                     script {
@@ -418,6 +431,19 @@ pipeline {
                         }
                     }
                     parallel sctParallelTests
+                }
+            }
+        }
+    }
+    post {
+        always {
+            script {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    postTestSummaryComment(
+                        junitXmlPaths: ['unit-tests-junit.xml', 'scylla-cluster-tests/integration-tests-junit.xml'],
+                        precommitLog: 'precommit-output.log',
+                        stageName: 'Test Summary',
+                    )
                 }
             }
         }
