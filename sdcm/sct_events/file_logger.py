@@ -97,11 +97,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
                 self.write_event(event=event)
 
     def write_event(self, event: SctEvent) -> None:
-        if event.source_timestamp:
-            message = f"{event.formatted_event_timestamp} <{event.formatted_source_timestamp}>: {str(event).strip()}"
-        else:
-            message = f"{event.formatted_event_timestamp}: {str(event).strip()}"
-
+        message = event.format_event()
         message_bin = message.encode("utf-8") + b"\n"
 
         if event.severity not in (Severity.DEBUG, Severity.WARNING):
