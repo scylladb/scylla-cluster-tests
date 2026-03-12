@@ -1140,7 +1140,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 ## **gemini_schema_url** / SCT_GEMINI_SCHEMA_URL
 
-Url of the schema/configuration the gemini tool would use
+Path to a local schema JSON file or a remote URL (http/https) that Gemini will use.<br>Local files are uploaded to the loader via send_files and mounted into the Gemini Docker<br>container via --schema.<br>Remote URLs are downloaded on the loader node with curl and then mounted the same way.
 
 **default:** N/A
 

@@ -926,7 +926,10 @@ class SCTConfiguration(BaseModel):
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. multiple commands can passed as a list",
     )
     gemini_schema_url: String = SctField(
-        description="Url of the schema/configuration the gemini tool would use",
+        description="""Path to a local schema JSON file or a remote URL (http/https) that Gemini will use.
+                    Local files are uploaded to the loader via send_files and mounted into the Gemini Docker
+                    container via --schema.
+                    Remote URLs are downloaded on the loader node with curl and then mounted the same way.""",
     )
     gemini_cmd: String = SctField(
         description="gemini command to run (for now used only in GeminiTest)",
