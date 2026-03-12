@@ -35,11 +35,13 @@ then add the markdown with the list of tests that will was triggered.
 this will make it easier and prevent manually copy-pasting and mistakes
 
 
-## refactor function from add_nodes.py
+## ~~refactor function from add_nodes.py~~ (PARTIALLY DONE)
 
-make them use staging_trigger as a library
-this libray should be easily to select from, should also have multi select
-and also use code to populate specific parameters like unified packeges or scylla_repo
+Extracted `aws_bucket_ls()` and `latest_unified_package()` into `utils/staging_trigger/package_lookup.py`.
+Wired `unified_package` suggestions into the interactive parameter editor (`_prompt_for_value()`).
+Created `artifacts.py` (untracked) as an example script using the library for batch artifact triggering.
+
+Remaining: dtest helpers, `create_tree`, XML merge, perf/longevity/manager helpers.
 
 
 ## put description of job parameters when editing params, taken from jenkins
@@ -61,3 +63,20 @@ Implemented `use_search_filter=True` on all `questionary.checkbox()` and `questi
 Users can now type to filter with case-insensitive substring matching. Arrow keys still work for navigation.
 
 ~~in some cases we have a very long list of options or jobs, it would be nice if we could search~~
+
+## generate trigger free style xml based on triggering options
+when we trigger a job, we can generate the XML that would be used for a freestyle job with the same parameters and options,
+
+
+wondering how to expose those trigger as api that would return the results from jobs ? maybe in argus ?
+
+## generate argus views base on this tool ?
+
+
+## have a rebuild option
+when we trigger a job, we can have an option to rebuild the same job with the same parameters and options, this will be useful for cases where the job failed due to some transient issue and we want to quickly retry without going through the whole triggering process again.
+it should stop and let you edit them if you want to change something, but it should pre-fill all the parameters with the previous values to save time.
+
+
+## sync job with a folder
+generate and delete non relevent jobs for folder, maybe an option for generate command ?
