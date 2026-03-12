@@ -54,6 +54,8 @@ def test_value(config):
 
 ### P-3: Inline Imports in Test Code
 
+This includes importing utility modules inside test functions to access module-level state (e.g., resetting caches). Import the module at the top of the file instead.
+
 ❌ **Bad:**
 ```python
 def test_something():
@@ -61,12 +63,27 @@ def test_something():
     path = get_data_dir_path("test_data")
 ```
 
-✅ **Good:**
+❌ **Also bad — importing a module inside a test to access module state:**
 ```python
+def test_presets():
+    import utils.staging_trigger.constants as mod  # inline import
+    mod._PRESETS = None
+    ...
+    mod._PRESETS = None
+```
+
+✅ **Good — import at the top of the file:**
+```python
+import utils.staging_trigger.constants as constants_mod
 from sdcm.utils.common import get_data_dir_path
 
 def test_something():
     path = get_data_dir_path("test_data")
+
+def test_presets():
+    constants_mod._PRESETS = None
+    ...
+    constants_mod._PRESETS = None
 ```
 
 ---
