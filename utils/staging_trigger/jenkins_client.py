@@ -90,6 +90,9 @@ def parse_parameter_definitions(config_xml: str) -> dict[str, ParamDefinition]:
     et = ET.ElementTree(ET.fromstring(config_xml))
     params: dict[str, ParamDefinition] = {}
     for param_def in et.findall(".//parameterDefinitions/*"):
+        # Skip separator elements — they are visual section headers, not real parameters
+        if "SeparatorDefinition" in param_def.tag:
+            continue
         name_el = param_def.find("name")
         if name_el is None or not name_el.text:
             continue

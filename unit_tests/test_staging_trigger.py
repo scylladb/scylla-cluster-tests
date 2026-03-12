@@ -904,6 +904,35 @@ class TestParseParameterDefinitions:
         result = parse_parameter_definitions(xml)
         assert result == {}
 
+    def test_separator_definitions_are_filtered_out(self):
+        """ParameterSeparatorDefinition elements are visual headers, not real params."""
+        xml = """<project>
+          <properties><hudson.model.ParametersDefinitionProperty>
+            <parameterDefinitions>
+              <jenkins.plugins.parameter__separator.ParameterSeparatorDefinition>
+                <name>CLOUD_PROVIDER</name>
+              </jenkins.plugins.parameter__separator.ParameterSeparatorDefinition>
+              <hudson.model.StringParameterDefinition>
+                <name>backend</name>
+                <defaultValue>aws</defaultValue>
+              </hudson.model.StringParameterDefinition>
+              <jenkins.plugins.parameter__separator.ParameterSeparatorDefinition>
+                <name>POST_BEHAVIOR</name>
+              </jenkins.plugins.parameter__separator.ParameterSeparatorDefinition>
+              <hudson.model.StringParameterDefinition>
+                <name>post_behavior_db_nodes</name>
+                <defaultValue>destroy</defaultValue>
+              </hudson.model.StringParameterDefinition>
+            </parameterDefinitions>
+          </hudson.model.ParametersDefinitionProperty></properties>
+        </project>"""
+        result = parse_parameter_definitions(xml)
+        assert "CLOUD_PROVIDER" not in result
+        assert "POST_BEHAVIOR" not in result
+        assert "backend" in result
+        assert "post_behavior_db_nodes" in result
+        assert len(result) == 2
+
 
 # ---------------------------------------------------------------------------
 # Version suggestions
