@@ -15,6 +15,7 @@ from sdcm.utils.version_utils import get_scylla_docker_repo_from_version
 
 from utils.staging_trigger.constants import (
     CUSTOM_VALUE_SENTINEL,
+    KNOWN_PARAM_CHOICES,
     ParamDefinition,
     SCT_REPO,
     _default_folder,
@@ -76,8 +77,9 @@ def _prompt_for_value(key: str, current_value: str, param_meta: dict[str, ParamD
         return picked
 
     meta = param_meta.get(key)
-    if meta and meta.choices:
-        select_choices = [questionary.Choice(c, value=c) for c in meta.choices]
+    choices_list = (meta.choices if meta and meta.choices else None) or KNOWN_PARAM_CHOICES.get(key)
+    if choices_list:
+        select_choices = [questionary.Choice(c, value=c) for c in choices_list]
         select_choices.append(questionary.Choice("Custom value...", value=CUSTOM_VALUE_SENTINEL))
         picked = questionary.select(f"{key}:", choices=select_choices).ask()
         if picked is None:

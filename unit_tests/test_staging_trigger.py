@@ -14,6 +14,7 @@ from utils.staging_trigger.cli import cli
 from utils.staging_trigger.constants import (
     CUSTOM_VALUE_SENTINEL,
     DTEST_TOPOLOGY_FLAGS,
+    KNOWN_PARAM_CHOICES,
     PIPELINE_TO_PRESET,
     PRESET_NAMES,
     ParamDefinition,
@@ -24,6 +25,7 @@ from utils.staging_trigger.constants import (
 from utils.staging_trigger.interactive import (
     _fetch_latest_release,
     _get_version_suggestions,
+    _prompt_for_value,
     _ruff_format,
     _write_jobs_yaml_config,
     generate_python_code,
@@ -937,6 +939,67 @@ class TestGetVersionSuggestions:
         # master:latest should appear only once
         assert values.count("master:latest") == 1
         _fetch_latest_release.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# _prompt_for_value with KNOWN_PARAM_CHOICES fallback
+# ---------------------------------------------------------------------------
+
+
+class TestPromptForValue:
+    """Test that _prompt_for_value uses KNOWN_PARAM_CHOICES when Jenkins metadata has no choices."""
+
+    @patch("utils.staging_trigger.interactive.questionary")
+    def test_known_param_shows_select(self, mock_q):
+        """provision_type should show a select menu from KNOWN_PARAM_CHOICES."""
+        mock_q.select.return_value.ask.return_value = "on_demand"
+        result = _prompt_for_value("provision_type", "spot", param_meta={})
+        mock_q.select.assert_called_once()
+        assert result == "on_demand"
+
+    @patch("utils.staging_trigger.interactive.questionary")
+    def test_known_param_custom_value_fallback(self, mock_q):
+        """Picking 'Custom value...' should fall back to text input."""
+        mock_q.select.return_value.ask.return_value = CUSTOM_VALUE_SENTINEL
+        mock_q.text.return_value.ask.return_value = "spot_fleet"
+        result = _prompt_for_value("provision_type", "spot", param_meta={})
+        mock_q.text.assert_called_once()
+        assert result == "spot_fleet"
+
+    @patch("utils.staging_trigger.interactive.questionary")
+    def test_unknown_param_shows_text(self, mock_q):
+        """Parameters not in KNOWN_PARAM_CHOICES should use text input."""
+        mock_q.text.return_value.ask.return_value = "my-value"
+        result = _prompt_for_value("email_recipients", "qa@scylladb.com", param_meta={})
+        mock_q.text.assert_called_once()
+        assert result == "my-value"
+
+    @patch("utils.staging_trigger.interactive.questionary")
+    def test_jenkins_choices_take_precedence(self, mock_q):
+        """Jenkins metadata choices should be used over KNOWN_PARAM_CHOICES."""
+        jenkins_choices = ["alpha", "beta", "gamma"]
+        meta = {"my_param": ParamDefinition(default="alpha", choices=jenkins_choices)}
+        mock_q.select.return_value.ask.return_value = "beta"
+        result = _prompt_for_value("my_param", "alpha", param_meta=meta)
+        # Verify the select was called (not text)
+        mock_q.select.assert_called_once()
+        assert result == "beta"
+
+    @patch("utils.staging_trigger.interactive.questionary")
+    def test_post_behavior_shows_select(self, mock_q):
+        """post_behavior_db_nodes should show destroy/keep/keep-on-failure."""
+        mock_q.select.return_value.ask.return_value = "keep"
+        result = _prompt_for_value("post_behavior_db_nodes", "destroy", param_meta={})
+        mock_q.select.assert_called_once()
+        assert result == "keep"
+
+    @pytest.mark.parametrize(
+        "param_name",
+        [pytest.param(k, id=k) for k in KNOWN_PARAM_CHOICES],
+    )
+    def test_all_known_params_have_choices(self, param_name):
+        """Every key in KNOWN_PARAM_CHOICES must have a non-empty list."""
+        assert len(KNOWN_PARAM_CHOICES[param_name]) >= 2
 
 
 # ---------------------------------------------------------------------------
