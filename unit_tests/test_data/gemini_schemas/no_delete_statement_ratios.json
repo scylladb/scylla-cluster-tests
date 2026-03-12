@@ -1,0 +1,20 @@
+{
+  "mutation": {
+    "insert": 0.8,
+    "update": 0.2,
+    "delete": 0.0,
+    "insert_subtypes": {
+      "regular_insert": 1.0,
+      "json_insert": 0.0
+    }
+  },
+  "validation": {
+    "select_subtypes": {
+      "single_partition": 1.0,
+      "multiple_partition": 0.0,
+      "clustering_range": 0.0,
+      "multiple_partition_clustering_range": 0.0,
+      "single_index": 0.0
+    }
+  }
+}
