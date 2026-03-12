@@ -12,6 +12,7 @@ from argus.client.sct.types import Package
 from sdcm.cluster import BaseNode
 from sdcm.remote.remote_file import remote_file
 from sdcm.test_config import TestConfig
+from sdcm.utils.issues import SkipPerIssues
 
 LOGGER = logging.getLogger(__name__)
 
@@ -270,6 +271,12 @@ class ScyllaDoctor:
         # https://github.com/scylladb/scylladb/issues/18631
         # if self.node.distro.is_amazon2 and collector in ["CPUSetCollector", "PerftuneSystemConfigurationCollector"]:
         #    return True
+
+        # https://scylladb.atlassian.net/browse/DOCTOR-31
+        if collector == "SystemTopologyCollector" and SkipPerIssues(
+            "jira:DOCTOR-31", self.test_config.tester_obj().params
+        ):
+            return True
 
         return False
 
