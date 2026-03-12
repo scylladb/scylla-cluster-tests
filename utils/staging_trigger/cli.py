@@ -1,5 +1,6 @@
 """Click CLI for the staging trigger tool."""
 
+import os
 from pathlib import Path
 
 import click
@@ -441,3 +442,78 @@ def generate(ctx, pipelines, branch, repo, pr, pipeline_path, suffix, dry_run, o
 
     if created:
         _show_trigger_examples(created, branch=branch, folder=folder, pr=pr)
+
+
+@cli.command("setup-completion")
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]), default=None, required=False)
+def setup_completion(shell):
+    """Print shell completion setup instructions and install the completion script.
+
+    \b
+    Detects your current shell automatically, or specify one explicitly:
+      setup-completion bash
+      setup-completion zsh
+      setup-completion fish
+    """
+    if shell is None:
+        current_shell = os.path.basename(os.environ.get("SHELL", ""))
+        if current_shell in ("bash", "zsh", "fish"):
+            shell = current_shell
+        else:
+            click.secho(f"Could not detect shell (SHELL={current_shell}). Specify: bash, zsh, or fish.", fg="red")
+            raise SystemExit(1)
+
+    prog_name = "staging-trigger"
+    sct_root = get_sct_root_path()
+    wrapper = sct_root / prog_name
+
+    # Create wrapper script if it doesn't exist
+    if not wrapper.exists():
+        wrapper.write_text(
+            "#!/usr/bin/env bash\n"
+            "# Auto-generated wrapper for tab completion support\n"
+            f'exec uv run python "{sct_root}/staging_trigger.py" "$@"\n'
+        )
+        wrapper.chmod(0o755)
+        click.secho(f"Created wrapper script: {wrapper}", fg="green")
+
+    env_var = f"_{prog_name.replace('-', '_').upper()}_COMPLETE"
+
+    if shell == "bash":
+        rc_file = "~/.bashrc"
+        eval_cmd = f'eval "$({env_var}=bash_source {wrapper})"'
+    elif shell == "zsh":
+        rc_file = "~/.zshrc"
+        eval_cmd = f'eval "$({env_var}=zsh_source {wrapper})"'
+    else:
+        rc_file = "~/.config/fish/completions/staging-trigger.fish"
+        eval_cmd = f"{env_var}=fish_source {wrapper} > {rc_file}"
+
+    click.echo()
+    click.secho(f"Shell completion for {shell}:", bold=True)
+    click.echo()
+    click.echo(f"  Add this to {rc_file}:")
+    click.echo()
+    click.secho(f"    {eval_cmd}", fg="cyan")
+    click.echo()
+    click.echo("  Then restart your shell or run:")
+    click.echo()
+    click.secho(f"    source {rc_file}", fg="cyan")
+    click.echo()
+    click.echo(f"  After that, use '{prog_name}' instead of 'python staging_trigger.py':")
+    click.echo()
+    click.secho(f"    {prog_name} trigger <TAB>", fg="cyan")
+    click.secho(f"    {prog_name} generate <TAB>", fg="cyan")
+    click.echo()
+
+    # Try adding to rc file
+    rc_path = Path(os.path.expanduser(rc_file))
+    if rc_path.exists():
+        content = rc_path.read_text()
+        if eval_cmd not in content:
+            if click.confirm(f"Add completion to {rc_file} automatically?", default=True):
+                with rc_path.open("a") as f:
+                    f.write(f"\n# staging-trigger tab completion\n{eval_cmd}\n")
+                click.secho(f"Added to {rc_file}. Run 'source {rc_file}' to activate.", fg="green")
+        else:
+            click.secho(f"Completion already configured in {rc_file}.", fg="green")
