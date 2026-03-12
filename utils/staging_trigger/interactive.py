@@ -210,8 +210,10 @@ def prompt_for_params(preset_name: str, job_name: str | None = None, folder: str
             )
 
         to_edit = questionary.checkbox(
-            "Select parameters to edit (Space to toggle, Enter to confirm):",
+            "Select parameters to edit (Space to toggle, Enter to confirm, type to search):",
             choices=choices,
+            use_search_filter=True,
+            use_jk_keys=False,
         ).ask()
 
         if not to_edit:
@@ -242,8 +244,10 @@ def browse_jenkinsfiles(pipeline_path: str | None = None) -> list[Path]:
             return []
 
         category = questionary.select(
-            "Select pipeline category:",
+            "Select pipeline category (type to search):",
             choices=categories,
+            use_search_filter=True,
+            use_jk_keys=False,
         ).ask()
         if not category:
             return []
@@ -253,8 +257,10 @@ def browse_jenkinsfiles(pipeline_path: str | None = None) -> list[Path]:
         if subdirs:
             choices = ["(all jenkinsfiles in this category)"] + subdirs
             pick = questionary.select(
-                f"Select subcategory under {category}/:",
+                f"Select subcategory under {category}/ (type to search):",
                 choices=choices,
+                use_search_filter=True,
+                use_jk_keys=False,
             ).ask()
             if not pick:
                 return []
