@@ -3891,31 +3891,20 @@ set c-s parameter '-pop' with gauss/uniform distribution for performance gradual
 
 ## **latte_schema_parameters** / SCT_LATTE_SCHEMA_PARAMETERS
 
-Optional. Allows to pass through custom rune script parameters to the 'latte schema' command.<br>Also used as a fallback source for keyspace/table in gradual performance tests when<br>perf_stress_keyspace/perf_stress_table are not set.<br>For example, {'keyspace': 'test_keyspace', 'table': 'test_table'}
+Optional. Allows to pass through custom rune script parameters to the 'latte schema' command.<br>Also used as a fallback source for keyspace/table in gradual performance tests when<br>perf_stress_tables is not set.<br>For example, {'keyspace': 'test_keyspace', 'table': 'test_table'}
 
 **default:** N/A
 
 **type:** dict | str
 
 
-## **perf_stress_keyspace** / SCT_PERF_STRESS_KEYSPACE
+## **perf_stress_tables** / SCT_PERF_STRESS_TABLES
 
-Keyspace name used in performance gradual throughput tests.<br>Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).<br>For latte, if not set, falls back to the 'keyspace' key in latte_schema_parameters.
-
-**default:** N/A
-
-**type:** str
-* appendable
-
-
-## **perf_stress_table** / SCT_PERF_STRESS_TABLE
-
-Table name used in performance gradual throughput tests.<br>Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).<br>For latte, if not set, falls back to the 'table' key in latte_schema_parameters.
+Mapping of keyspace to table name(s) used in performance gradual throughput tests.<br>Supports multiple keyspace.table pairs.<br>Format: {'keyspace1': 'table1', 'keyspace2': 'table2'} or {'keyspace1': ['table1', 'table2']}.<br>Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).<br>For latte, if not set, falls back to 'keyspace'/'table' keys in latte_schema_parameters.
 
 **default:** N/A
 
-**type:** str
-* appendable
+**type:** dict | str
 
 
 ## **num_loaders_step** / SCT_NUM_LOADERS_STEP
