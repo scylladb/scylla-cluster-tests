@@ -39,8 +39,16 @@ def call(Map params, String region){
         export SCT_AZURE_REGION_NAME=${params.azure_region_name}
     fi
 
+    if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
+        export SCT_OCI_REGION_NAME=${params.oci_region_name}
+    fi
+
     if [[ -n "${params.new_version ? params.new_version : ''}" ]] ; then
         export SCT_NEW_VERSION="${params.new_version}"
+    fi
+
+    if [[ -n "${params.oci_instance_type_db ? params.oci_instance_type_db : ''}" ]] ; then
+        export SCT_OCI_INSTANCE_TYPE_DB=${params.oci_instance_type_db}
     fi
 
     if [[ -n "${params.k8s_scylla_operator_docker_image ? params.k8s_scylla_operator_docker_image : ''}" ]] ; then
@@ -78,6 +86,9 @@ def call(Map params, String region){
     fi
     if [[ -n "${params.azure_image_db ? params.azure_image_db : ''}" ]] ; then
         export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
+    fi
+    if [[ -n "${params.oci_image_db ? params.oci_image_db : ''}" ]] ; then
+        export SCT_OCI_IMAGE_DB="${params.oci_image_db}"
     fi
     if [[ -n "${params.scylla_version ? params.scylla_version : ''}" ]] ; then
         export SCT_SCYLLA_VERSION="${params.scylla_version}"
@@ -161,7 +172,7 @@ def call(Map params, String region){
         echo "Scylla Cloud backend selected: provisioning loader nodes only on ${params.xcloud_provider} cloud provider"
     fi
 
-    if [[ "${params.backend}" == "xcloud" ]] || [[ "${params.backend}" == "aws" ]] || [[ "${params.backend}" == "azure" ]] || [[ "${params.backend}" == "gce" ]] ; then
+    if [[ "${params.backend}" == "xcloud" ]] || [[ "${params.backend}" == "aws" ]] || [[ "${params.backend}" == "azure" ]] || [[ "${params.backend}" == "gce" ]] || [[ "${params.backend}" == "oci" ]] ; then
         echo "Starting to resource provision ..."
         RUNNER_IP=\$(cat sct_runner_ip||echo "")
         if [[ -n "\${RUNNER_IP}" ]] ; then
@@ -173,7 +184,7 @@ def call(Map params, String region){
     elif [[ "${params.backend}" == *"docker"* ]] ; then
         echo 'Tests are to be executed on Docker backend in SCT-Runner. No additional resources to be provisioned.'
     else
-        echo 'Skipping because non-AWS/Azure/GCE backends are not supported'
+        echo 'Skipping because non-AWS/Azure/GCE/OCI backends are not supported'
     fi
     """
 }
