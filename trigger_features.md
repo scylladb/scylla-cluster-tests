@@ -3,6 +3,8 @@
 ## tab completion of job names from jenkins, and of filenames/folders
 
 ## tab completion is very slow
+● Yeah, the slowness is because _JobNameType.shell_complete calls client.list_jobs_in_folder() which hits the Jenkins API on every TAB. A local cache with a short TTL (e.g. 5 minutes)
+  would make it instant for repeated presses. For another time.
 
 ## ~~list of suggestion for some parameters~~ (DONE)
 
@@ -49,6 +51,13 @@ especially for parameters that have specific formats or limited choices.
 
 we can also use the separator for better grouping and docs each group
 
-## check if questionary supports searchable in multi choice part
+## ~~check if questionary supports searchable in multi choice part~~ (DONE)
 
-in some cases we have a very long list of options or jobs, it would be nice if we could search
+Implemented `use_search_filter=True` on all `questionary.checkbox()` and `questionary.select()` prompts:
+- Job selection checkbox in `utils/staging_trigger/cli.py` — type to filter 100+ jobs
+- Parameter editing checkbox in `utils/staging_trigger/interactive.py` — type to filter 50+ params
+- Pipeline category/subcategory selects in `browse_jenkinsfiles()` — type to filter categories
+
+Users can now type to filter with case-insensitive substring matching. Arrow keys still work for navigation.
+
+~~in some cases we have a very long list of options or jobs, it would be nice if we could search~~
