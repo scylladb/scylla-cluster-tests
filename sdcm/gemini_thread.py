@@ -17,6 +17,7 @@ import uuid
 import random
 import json
 import time
+from pathlib import Path
 
 
 from sdcm.cluster import BaseCluster, BaseScyllaCluster
@@ -113,8 +114,9 @@ class GeminiStressThread(DockerBasedStressThread):
         self.gemini_test_statements_file = f"gemini_test_statements_{self.unique_id}.log"
         self.gemini_result_file = f"gemini_result_{self.unique_id}.log"
         self.gemini_summary_file = f"gemini-summary-{self.unique_id}.txt"
+        self.gemini_schema_file = f"gemini_schema_{self.unique_id}.json"
 
-    def _generate_gemini_command(self):
+    def generate_gemini_command(self, schema_path=None):
         seed = self.params.get("gemini_seed")
         if seed is None:
             seed = random.randint(1, 100)
@@ -140,6 +142,10 @@ class GeminiStressThread(DockerBasedStressThread):
         if self.oracle_cluster is not None:
             oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips())
             cmd += f'--oracle-cluster="{oracle_nodes}" '
+
+        # schema_path is only set when a local file was uploaded and mounted into Docker
+        if schema_path:
+            cmd += f'--schema="{schema_path}" '
 
         if log_statements:
             cmd += f"--test-statement-log-file=/{self.gemini_test_statements_file} \
@@ -169,6 +175,25 @@ class GeminiStressThread(DockerBasedStressThread):
         return cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
+        schema_url = self.params.get("gemini_schema_url")
+        schema_mount = ""
+        schema_path = None
+        if schema_url:
+            if schema_url.startswith(("http://", "https://")):
+                LOGGER.info("gemini_schema_url %r is a remote URL; downloading to loader.", schema_url)
+                loader.remoter.run(
+                    f"curl -sSfL {schema_url!r} -o $HOME/{self.gemini_schema_file}",
+                    verbose=False,
+                )
+            else:
+                if not Path(schema_url).exists():
+                    raise FileNotFoundError(
+                        f"gemini_schema_url points to a local path that does not exist: {schema_url!r}"
+                    )
+                loader.remoter.send_files(src=schema_url, dst=f"$HOME/{self.gemini_schema_file}")
+            schema_path = f"/{self.gemini_schema_file}"
+            schema_mount = f"-v $HOME/{self.gemini_schema_file}:/{self.gemini_schema_file} "
+
         for file_name in [
             self.gemini_result_file,
             self.gemini_test_statements_file,
@@ -190,7 +215,8 @@ class GeminiStressThread(DockerBasedStressThread):
             f"-v $HOME/{self.gemini_result_file}:/{self.gemini_result_file} "
             f"-v $HOME/{self.gemini_test_statements_file}:/{self.gemini_test_statements_file} "
             f"-v $HOME/{self.gemini_oracle_statements_file}:/{self.gemini_oracle_statements_file} "
-            f"-v $HOME/{self.gemini_summary_file}:/{self.gemini_summary_file} ",
+            f"-v $HOME/{self.gemini_summary_file}:/{self.gemini_summary_file} "
+            f"{schema_mount}",
         )
 
         if not os.path.exists(loader.logdir):
@@ -198,7 +224,7 @@ class GeminiStressThread(DockerBasedStressThread):
         log_file_name = os.path.join(loader.logdir, "gemini-l%s-c%s-%s.log" % (loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug("gemini local log: %s", log_file_name)
 
-        gemini_cmd = self._generate_gemini_command()
+        gemini_cmd = self.generate_gemini_command(schema_path=schema_path)
         try:
             prefix, *_ = gemini_cmd.split("gemini", maxsplit=1)
             reporter = GeminiVersionReporter(docker, prefix, loader.parent_cluster.test_config.argus_client())
@@ -243,8 +269,9 @@ class GeminiStressThread(DockerBasedStressThread):
                     gemini_stress_event.severity = Severity.WARNING
 
             local_gemini_result_file = os.path.join(docker.node.logdir, os.path.basename(self.gemini_result_file))
-            results_copied = docker.receive_files(src=self.gemini_result_file, dst=local_gemini_result_file)
-            assert results_copied, "gemini results aren't available, did gemini even run ?"
+            assert docker.receive_files(src=self.gemini_result_file, dst=local_gemini_result_file), (
+                "gemini results aren't available, did gemini even run ?"
+            )
 
             local_gemini_test_statements_file = os.path.join(
                 docker.node.logdir, os.path.basename(self.gemini_test_statements_file)
@@ -266,7 +293,7 @@ class GeminiStressThread(DockerBasedStressThread):
             assert local_gemini_result_file, "gemini results aren't available, did gemini even run ?"
             with open(local_gemini_result_file, encoding="utf-8") as local_file:
                 content = local_file.read()
-                res = self._parse_gemini_summary_json(content)
+                res = self.parse_gemini_summary_json(content)
                 if res:
                     parsed_results.append(res)
 
@@ -292,7 +319,7 @@ class GeminiStressThread(DockerBasedStressThread):
         return stats
 
     @staticmethod
-    def _parse_gemini_summary_json(json_str):
+    def parse_gemini_summary_json(json_str):
         results = {"result": {}}
         try:
             results = json.loads(json_str)
@@ -303,7 +330,7 @@ class GeminiStressThread(DockerBasedStressThread):
         return results.get("result")
 
     @staticmethod
-    def _parse_gemini_summary(lines):
+    def parse_gemini_summary(lines):
         results = {}
         enable_parse = False
 
