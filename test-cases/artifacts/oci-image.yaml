@@ -1,0 +1,17 @@
+cluster_backend: "oci"
+oci_region_name: "us-ashburn-1"
+use_preinstalled_scylla: true
+backtrace_decoding: false
+
+oci_instance_type_db: "VM.DenseIO.E5.Flex:8"
+
+# NOTE: DenseIO instance shapes are not allowed to be "spot"
+instance_provision: "on_demand"
+
+instance_provision_fallback_on_demand: true
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 0
+nemesis_class_name: 'NoOpMonkey'
+test_duration: 60
+user_prefix: 'artifacts-oci-image'
