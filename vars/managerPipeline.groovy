@@ -37,7 +37,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, null /* oci placeholder */)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
 
     pipeline {
         agent {
@@ -72,6 +72,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
                    description: 'Azure location',
                    name: 'azure_region_name')
+            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
+                   description: 'Oracle Cloud location',
+                   name: 'oci_region_name')
             string(defaultValue: "",
                description: 'Availability zone',
                name: 'availability_zone')
@@ -92,6 +95,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('azure_image_db', '')}",
                    description: '',
                    name: 'azure_image_db')
+            string(defaultValue: "${pipelineParams.get('oci_image_db', '')}",
+                   description: '',
+                   name: 'oci_image_db')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
@@ -264,7 +270,7 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: 30, unit: 'MINUTES') {
-                                        if (params.backend == 'aws' || params.backend == 'azure') {
+                                        if (params.backend == 'aws' || params.backend == 'azure' || params.backend == 'oci') {
                                             provisionResources(params, builder.region)
                                         } else if (params.backend.contains('docker')) {
                                             sh """
@@ -272,7 +278,7 @@ def call(Map pipelineParams) {
                                             """
                                         } else {
                                             sh """
-                                                echo 'Skipping because non-AWS/Azure backends are not supported'
+                                                echo 'Skipping because non-AWS/Azure/OCI backends are not supported'
                                             """
                                         }
                                         completed_stages['provision_resources'] = true
@@ -308,6 +314,9 @@ def call(Map pipelineParams) {
                                         if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
                                             export SCT_AZURE_REGION_NAME=${params.azure_region_name}
                                         fi
+                                        if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
+                                            export SCT_OCI_REGION_NAME=${params.oci_region_name}
+                                        fi
                                         export SCT_CONFIG_FILES=${test_config}
                                         export SCT_COLLECT_LOGS=false
 
@@ -327,6 +336,8 @@ def call(Map pipelineParams) {
                                             export SCT_GCE_IMAGE_DB="${params.gce_image_db}"  #TODO: remove it once scylla_version supports gce image detection
                                         elif [[ ! -z "${params.azure_image_db}" ]] ; then
                                             export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"  #TODO: remove it once scylla_version supports azure image detection
+                                        elif [[ ! -z "${params.oci_image_db}" ]] ; then
+                                            export SCT_OCI_IMAGE_DB="${params.oci_image_db}"
                                         elif [[ ! -z "${params.scylla_repo}" ]] ; then
                                             export SCT_SCYLLA_REPO="${params.scylla_repo}"
                                         else

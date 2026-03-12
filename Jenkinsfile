@@ -3,8 +3,8 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
-def sct_runner_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
+def target_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
+def sct_runner_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
 
 def createRunConfiguration(String backend) {
 	def scylla_version = params.scylla_version ?: getLatestScyllaRelease('scylla')
@@ -24,6 +24,18 @@ def createRunConfiguration(String backend) {
         configuration.gce_datacenter = "us-east1"
     } else if (backend == 'azure') {
         configuration.azure_region_name = 'eastus'
+    } else if (backend == 'oci') {
+        configuration.oci_region_name = 'us-ashburn-1'
+        configuration.availability_zone = 'a' // For now quota allows DenseIO shapes only in 'a' AZ/AD
+        configuration.simulated_racks = 3
+        // TODO: use cheaper and not limited by quota non-dense shapes with 'spot' provisioning
+        //       when automatic PD disks deletion gets implemented?
+        configuration.oci_instance_type_db = "VM.DenseIO.E5.Flex:8" // 8 is minimum
+        configuration.provision_type = 'on_demand' // OCI DenseIO instances cannot be of the 'spot' type
+        // TODO: set scylla version when we have Scylla releases in OCI
+        configuration.scylla_version = ''
+        // TODO: unset the image when 'scylla_version' gets specified
+        configuration.oci_image_db = 'ocid1.image.oc1.iad.aaaaaaaawlq4rpsf5j3blmia6vxuu3d7tdv5ir5x3izs4ogxmdyibskhpoxq'
     } else if (backend.contains('docker')) {
         // use latest version of nightly image for docker backend, until we get rid off rebuilding docker image for SCT
         configuration.scylla_version = 'latest'
@@ -209,7 +221,7 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     script {
                         def curr_params = createRunConfiguration('docker')
-                        def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, null /* oci placeholder */)
+                        def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, curr_params.oci_region_name)
                         dockerLogin(params)
                         withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                             dir('scylla-cluster-tests') {
@@ -265,6 +277,7 @@ pipeline {
                         "test-provision-aws", "test-provision-aws-reuse",
                         "test-provision-gce", "test-provision-gce-reuse",
                         "test-provision-azure", "test-provision-azure-reuse",
+                        "test-provision-oci", "test-provision-oci-reuse",
                         "test-provision-k8s-local-kind-aws", "test-provision-k8s-local-kind-aws-reuse",
                         "test-provision-k8s-eks", "test-provision-k8s-eks-reuse",
                         "test-provision-xcloud-aws", "test-provision-xcloud-aws-reuse",
@@ -284,7 +297,7 @@ pipeline {
                             sctParallelTests["provision test on ${backend}"] = {
                                 def curr_params = createRunConfiguration(backend)
                                 def working_dir = "${backend}/scylla-cluster-tests"
-                                def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, null /* oci placeholder */, curr_params)
+                                def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, curr_params.oci_region_name, curr_params)
                                 withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                                     script {
                                         def result = null
