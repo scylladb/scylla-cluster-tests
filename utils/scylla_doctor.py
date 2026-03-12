@@ -273,7 +273,7 @@ class ScyllaDoctor:
         #    return True
 
         # https://scylladb.atlassian.net/browse/DOCTOR-31
-        if collector == "SystemTopologyCollector" and SkipPerIssues(
+        if collector in ["SystemTopologyCollector", "GossipInfoCollector"] and SkipPerIssues(
             "jira:DOCTOR-31", self.test_config.tester_obj().params
         ):
             return True
