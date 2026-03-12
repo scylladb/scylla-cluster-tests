@@ -1,0 +1,41 @@
+{
+  "keyspace": {
+    "name": "ks1",
+    "replication": {
+      "class": "SimpleStrategy",
+      "replication_factor": 1
+    },
+    "oracle_replication": {
+      "class": "SimpleStrategy",
+      "replication_factor": 1
+    }
+  },
+  "tables": [
+    {
+      "name": "table1",
+      "partition_keys": [
+        {
+          "name": "pk1",
+          "type": "int"
+        },
+        {
+          "name": "pk2",
+          "type": "varchar"
+        }
+      ],
+      "clustering_keys": [],
+      "columns": [
+        {
+          "name": "col1",
+          "type": "int"
+        },
+        {
+          "name": "col2",
+          "type": "varchar"
+        }
+      ],
+      "indexes": [],
+      "known_issues": {}
+    }
+  ]
+}
