@@ -8,3 +8,5 @@ n_loaders: 0
 client_encrypt: true
 
 user_prefix: manager-installation
+
+enable_argus_email_report: true

@@ -20,3 +20,5 @@ post_behavior_loader_nodes: "destroy"
 post_behavior_monitor_nodes: "destroy"
 
 user_prefix: 'manager-restore-benchmark'
+
+enable_argus_email_report: true

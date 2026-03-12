@@ -34,3 +34,5 @@ scylla_linux_distro_loader: 'ubuntu-jammy'
 space_node_threshold: 644245094
 
 nemesis_during_prepare: false
+
+enable_argus_email_report: true

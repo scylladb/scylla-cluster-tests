@@ -20,3 +20,5 @@ user_prefix: manager-regression
 space_node_threshold: 6442
 
 backup_bucket_location: 'manager-backup-tests-us-east1'
+
+enable_argus_email_report: true
