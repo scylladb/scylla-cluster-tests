@@ -1,0 +1,11 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'platform_migration_test.PlatformMigrationTest.test_migrate_platform_batched',
+    test_config: '''["test-cases/platform-migration/x86-to-arm-single-dc-50-perc.yaml", "test-cases/platform-migration/x86-to-arm-batched.yaml"]'''
+)
