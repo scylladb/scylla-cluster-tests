@@ -586,6 +586,17 @@ class PerfSimpleQueryReporter(BaseEmailReporter):
     email_template_file = "results_perf_simple_query.html"
 
 
+class SparkMigratorEmailReporter(BaseEmailReporter):
+    _fields = (
+        "emr_cluster_id",
+        "emr_release_label",
+        "migration_duration",
+        "rows_migrated",
+        "migration_throughput",
+    )
+    email_template_file = "results_spark_migrator.html"
+
+
 def build_reporter(  # noqa: PLR0911
     name: str,
     email_recipients: Sequence[str] = (),
@@ -620,6 +631,8 @@ def build_reporter(  # noqa: PLR0911
         return SnitchEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "PerfSimpleQuery" in name:
         return PerfSimpleQueryReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "SparkMigrator" in name:
+        return SparkMigratorEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "ScaleUp" in name:
         return ScaleUpEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "PerformanceRegressionAlternatorTest" in name:

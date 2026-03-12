@@ -1132,6 +1132,41 @@ class SCTConfiguration(BaseModel):
     kafka_connectors: list[SctKafkaConfiguration] = SctField(
         description="Kafka connectors to use",
     )
+    # Amazon EMR options (for spark-migrator testing)
+    emr_release_label: String = SctField(
+        description="EMR release version (e.g., 'emr-7.8.0'). When set, an EMR cluster is provisioned alongside the Scylla cluster.",
+    )
+    emr_instance_type_master: String = SctField(
+        description="Instance type for EMR master node (e.g., 'm5.xlarge')",
+    )
+    emr_instance_type_core: String = SctField(
+        description="Instance type for EMR core nodes",
+    )
+    emr_instance_count_core: int = SctField(
+        description="Number of EMR core nodes",
+    )
+    emr_instance_type_task: String = SctField(
+        description="Instance type for EMR task nodes (optional, uses Spot instances)",
+    )
+    emr_instance_count_task: int = SctField(
+        description="Number of EMR task nodes",
+    )
+    emr_spot_bid_percentage: int = SctField(
+        description="Max Spot price as percentage of On-Demand for EMR task nodes (default: 100)",
+    )
+    emr_applications: list = SctField(
+        description="List of EMR applications to install (default: ['Spark'])",
+    )
+    emr_spark_migrator_jar_path: String = SctField(
+        description="S3 path or local path to the spark-migrator JAR file",
+    )
+    emr_log_uri: String = SctField(
+        description="S3 URI for EMR cluster logs (e.g., 's3://sct-emr-spark-migrator-{region}/logs/')",
+    )
+    emr_keep_alive: Boolean = SctField(
+        description="Whether EMR cluster stays alive after job completion (default: true for reuse during testing)",
+    )
+
     run_scylla_doctor: Boolean = SctField(
         description="Flag to run Scylla Doctor tool",
     )
@@ -1805,6 +1840,15 @@ class SCTConfiguration(BaseModel):
         'destroy' - Destroy instances and credentials (default)
         'keep' - Keep instances running and leave credentials alone
         'keep-on-failure' - Keep instances if testrun failed
+        """,
+    )
+    post_behavior_emr_cluster: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the EMR cluster at the end of the test.
+
+        'destroy' - Destroy EMR cluster (default)
+        'keep' - Keep EMR cluster running
+        'keep-on-failure' - Keep EMR cluster if testrun failed
         """,
     )
     internode_compression: String = SctField(description="Scylla option: internode_compression.")

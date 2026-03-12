@@ -1,0 +1,32 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>
+        <span>System under test</span>
+    </h3>
+    <div>
+        <ul>
+            <li>Scylla version: {{ scylla_version }}</li>
+            <li>Instance type: {{ scylla_instance_type }}</li>
+            <li>Number of scylladb nodes: {{ number_of_db_nodes }}</li>
+        </ul>
+    </div>
+    <h3>
+        <span>EMR Cluster</span>
+    </h3>
+    <div>
+        <ul>
+            <li>EMR cluster ID: {{ emr_cluster_id }}</li>
+            <li>EMR release label: {{ emr_release_label }}</li>
+        </ul>
+    </div>
+    <h3>
+        <span>Migration Results</span>
+    </h3>
+    <div>
+        <ul>
+            <li>Migration duration: {{ migration_duration }}</li>
+            <li>Rows migrated: {{ rows_migrated }}</li>
+            <li>Migration throughput: {{ migration_throughput }}</li>
+        </ul>
+    </div>
+{% endblock %}

@@ -53,6 +53,7 @@ class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
     def fixture_setup_logging(self, tmp_path):
         self._init_logging(tmp_path / self.__class__.__name__)
         self.kafka_cluster = None
+        self.emr_cluster = None
 
     @pytest.fixture(scope="function", autouse=True)
     def fixture_mock_issues(self):
@@ -485,6 +486,7 @@ class TestGatherFailureStatistics:
         tester.logdir = str(tmp_path)
         tester.monitors = MagicMock()
         tester.kafka_cluster = None  # Required by tearDown
+        tester.emr_cluster = None  # Required by tearDown
 
         # Mock db_cluster
         mock_node = MagicMock()
