@@ -89,7 +89,9 @@ class ReactorStalledMixin(Generic[T_log_event]):
 DatabaseLogEvent.add_subevent_type(
     "OVERSIZED_ALLOCATION", severity=Severity.ERROR, regex="seastar_memory - oversized allocation:"
 )
-DatabaseLogEvent.add_subevent_type("WARNING", severity=Severity.SUPPRESS, regex=r"(^WARNING|!\s*?WARNING).*\[shard.*\]")
+DatabaseLogEvent.add_subevent_type(
+    "WARNING", severity=Severity.SUPPRESS, regex=r"(^WARN(ING)?|!\s*?WARN(ING)?).*\[shard.*\]"
+)
 DatabaseLogEvent.add_subevent_type("NO_SPACE_ERROR", severity=Severity.ERROR, regex="No space left on device")
 DatabaseLogEvent.add_subevent_type(
     "UNKNOWN_VERB", severity=Severity.WARNING, regex="(unknown verb exception|unknown_verb_error)"
