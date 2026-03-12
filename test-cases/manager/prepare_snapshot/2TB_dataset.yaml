@@ -9,3 +9,5 @@ n_loaders: 4
 mgmt_prepare_snapshot_size: 2048  # GB
 
 user_prefix: manager-helper
+
+enable_argus_email_report: true

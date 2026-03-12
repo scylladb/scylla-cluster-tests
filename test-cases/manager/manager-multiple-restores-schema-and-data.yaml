@@ -8,3 +8,5 @@ n_db_nodes: 6
 n_loaders: 1
 
 user_prefix: manager-regression
+
+enable_argus_email_report: true
