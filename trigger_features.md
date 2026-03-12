@@ -2,6 +2,8 @@
 
 ## tab completion of job names from jenkins, and of filenames/folders
 
+## tab completion is very slow
+
 ## ~~list of suggestion for some parameters~~ (DONE)
 
 Implemented in `utils/staging_trigger/interactive.py`:
@@ -36,3 +38,17 @@ this will make it easier and prevent manually copy-pasting and mistakes
 make them use staging_trigger as a library
 this libray should be easily to select from, should also have multi select
 and also use code to populate specific parameters like unified packeges or scylla_repo
+
+
+## put description of job parameters when editing params, taken from jenkins
+
+documentation of those should be available in the jenkins job config XML,
+we can parse it and show it to the user when they are editing the parameters,
+this will help them understand what each parameter does and what values are expected,
+especially for parameters that have specific formats or limited choices.
+
+we can also use the separator for better grouping and docs each group
+
+## check if questionary supports searchable in multi choice part
+
+in some cases we have a very long list of options or jobs, it would be nice if we could search
