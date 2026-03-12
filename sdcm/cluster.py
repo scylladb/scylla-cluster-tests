@@ -6178,6 +6178,9 @@ class BaseLoaderSet:
         node.log.info("Setup in BaseLoaderSet")
         node.wait_ssh_up(verbose=verbose)
 
+        if self.params.get("cluster_backend") == "oci":
+            node.disable_firewall()
+
         if node.distro.is_rhel_like:
             node.install_epel()
 
@@ -6496,6 +6499,26 @@ class BaseMonitorSet:
         else:
             return self.local_metrics_addr
 
+    def _allow_runner_metrics_ports_on_oci(self) -> None:
+        if self.params.get("cluster_backend") != "oci" or not self.sct_ip_port:
+            return
+
+        match = re.search(r"(\d+)$", self.sct_ip_port)
+        if not match:
+            self.log.warning("Failed to parse SCT metrics port from '%s'", self.sct_ip_port)
+            return
+
+        metrics_port = match.group(1)
+        cmd = dedent(f"""
+            sudo iptables -C INPUT -p tcp --dport 9100 -j ACCEPT || sudo iptables -I INPUT -p tcp --dport 9100 -j ACCEPT
+            sudo iptables -C INPUT -p tcp --dport {metrics_port} -j ACCEPT || sudo iptables -I INPUT -p tcp --dport {metrics_port} -j ACCEPT
+            sudo ip6tables -C INPUT -p tcp --dport 9100 -j ACCEPT || sudo ip6tables -I INPUT -p tcp --dport 9100 -j ACCEPT
+            sudo ip6tables -C INPUT -p tcp --dport {metrics_port} -j ACCEPT || sudo ip6tables -I INPUT -p tcp --dport {metrics_port} -j ACCEPT
+            sudo ufw allow 9100/tcp || true
+            sudo ufw allow {metrics_port}/tcp || true
+        """)
+        LOCALRUNNER.run(cmd, ignore_status=True)
+
     @wait_for_init_wrap
     def wait_for_init(self, *args, **kwargs):
         pass
@@ -6757,6 +6780,7 @@ class BaseMonitorSet:
                 )
 
             if self.sct_ip_port:
+                self._allow_runner_metrics_ports_on_oci()
                 sct_targets = [{"targets": [self.sct_ip_port], "labels": {"dc": "sct-runner"}}]
                 update_scrape_configs(scrape_configs, sct_targets)
             with open(local_template, "w", encoding="utf-8") as output_file:
