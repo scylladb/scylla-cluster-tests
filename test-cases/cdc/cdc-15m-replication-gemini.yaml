@@ -32,7 +32,3 @@ gemini_cmd: |
 
 gemini_table_options:
   - "cdc={'enabled': true}"
-
-
-# Required by SCT, although not used:
-gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
