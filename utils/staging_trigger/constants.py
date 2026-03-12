@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from sdcm.keystore import KeyStore
 from sdcm.utils.get_username import get_username
 
+CUSTOM_VALUE_SENTINEL = "__custom_value__"
+
 ARGUS_URL = "https://argus.scylladb.com/tests/scylla-cluster-tests"
 SCT_REPO = "git@github.com:scylladb/scylla-cluster-tests.git"
 
@@ -148,6 +150,14 @@ DTEST_TOPOLOGY_FLAGS = {
     "tablets": "--tablets",
     "gossip": "--force-gossip-topology-changes",
 }
+
+
+@dataclass
+class ParamDefinition:
+    """Metadata for a Jenkins job parameter definition."""
+
+    default: str
+    choices: list[str] | None = None
 
 
 @dataclass

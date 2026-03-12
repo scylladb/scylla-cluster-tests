@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 import jenkins
 
 from sdcm.keystore import KeyStore
+from utils.staging_trigger.constants import ParamDefinition
 
 
 class JenkinsJobTrigger:
@@ -71,17 +72,41 @@ class JenkinsJobTrigger:
     def get_job_url(self, job_name: str) -> str:
         return self.jenkins.get_job_info(job_name)["url"]
 
-    def get_job_parameter_definitions(self, job_name: str) -> dict[str, str]:
-        """Extract parameter definitions (name -> default) from a job's config XML."""
+    def get_job_parameter_definitions(self, job_name: str) -> dict[str, ParamDefinition]:
+        """Extract parameter definitions (name -> ParamDefinition) from a job's config XML."""
         try:
             config_xml = self.jenkins.get_job_config(job_name)
         except Exception:  # noqa: BLE001
             return {}
-        et = ET.ElementTree(ET.fromstring(config_xml))
-        params = {}
-        for param_def in et.findall(".//parameterDefinitions/*"):
-            name_el = param_def.find("name")
-            default_el = param_def.find("defaultValue")
-            if name_el is not None and name_el.text:
-                params[name_el.text] = (default_el.text or "") if default_el is not None else ""
-        return params
+        return parse_parameter_definitions(config_xml)
+
+
+def parse_parameter_definitions(config_xml: str) -> dict[str, ParamDefinition]:
+    """Parse Jenkins job config XML and extract parameter definitions.
+
+    Handles ChoiceParameterDefinition by extracting the list of choices from
+    the ``<choices><a><string>...</string></a></choices>`` structure.
+    """
+    et = ET.ElementTree(ET.fromstring(config_xml))
+    params: dict[str, ParamDefinition] = {}
+    for param_def in et.findall(".//parameterDefinitions/*"):
+        name_el = param_def.find("name")
+        if name_el is None or not name_el.text:
+            continue
+        default_el = param_def.find("defaultValue")
+        default_value = (default_el.text or "") if default_el is not None else ""
+
+        choices = None
+        tag = param_def.tag
+        if "ChoiceParameterDefinition" in tag:
+            choices_el = param_def.find("choices")
+            if choices_el is not None:
+                # Jenkins XML: <choices><a class="..."><string>val</string>...</a></choices>
+                a_el = choices_el.find("a")
+                container = a_el if a_el is not None else choices_el
+                choices = [s.text or "" for s in container.findall("string")]
+            if choices and not default_value:
+                default_value = choices[0]
+
+        params[name_el.text] = ParamDefinition(default=default_value, choices=choices)
+    return params

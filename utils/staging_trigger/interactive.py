@@ -10,7 +10,7 @@ import yaml
 from sdcm.utils.common import get_sct_root_path
 from sdcm.utils.get_username import get_username
 
-from utils.staging_trigger.constants import SCT_REPO, _default_folder, get_presets
+from utils.staging_trigger.constants import ParamDefinition, SCT_REPO, _default_folder, get_presets
 from utils.staging_trigger.jenkins_client import JenkinsJobTrigger
 from utils.staging_trigger.trigger import detect_preset_from_jenkinsfile, detect_preset_from_job_name
 
@@ -36,20 +36,20 @@ def prompt_for_params(preset_name: str, job_name: str | None = None, folder: str
     preset_params = dict(presets.get(preset_name, presets["longevity"]).params)
     preset_keys = set(preset_params.keys())
 
-    jenkins_params: dict[str, str] = {}
+    param_meta: dict[str, ParamDefinition] = {}
     if job_name and folder:
         full_name = f"{folder}/{job_name}"
         click.echo(f"Fetching parameters from Jenkins for {job_name}...")
         client = JenkinsJobTrigger()
         try:
-            jenkins_params = client.get_job_parameter_definitions(full_name)
+            param_meta = client.get_job_parameter_definitions(full_name)
         except Exception:  # noqa: BLE001
             click.secho("  Could not fetch parameters from Jenkins, using preset only.", fg="yellow")
 
     all_params = dict(preset_params)
-    for k, v in jenkins_params.items():
+    for k, v in param_meta.items():
         if k not in all_params:
-            all_params[k] = v
+            all_params[k] = v.default
 
     ordered_keys = list(preset_params.keys()) + [k for k in all_params if k not in preset_params]
 
