@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+  <testsuite name="unit_tests" tests="3" errors="0" failures="0" skipped="0">
+    <testcase classname="unit_tests.test_config" name="test_defaults" file="unit_tests/test_config.py" time="0.5"/>
+    <testcase classname="unit_tests.test_config" name="test_backend" file="unit_tests/test_config.py" time="0.3"/>
+    <testcase classname="unit_tests.test_utils" name="test_helper" file="unit_tests/test_utils.py" time="0.1"/>
+  </testsuite>
+</testsuites>
