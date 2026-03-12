@@ -94,6 +94,7 @@ from sdcm.sct_events.group_common_events import (
     decorate_with_context_if_issues_open,
     ignore_take_snapshot_failing,
     ignore_ipv6_failure_to_assign,
+    ignore_raft_topology_cmd_failing,
     suppress_expected_unavailability_errors,
 )
 from sdcm.sct_events.health import DataValidatorEvent
