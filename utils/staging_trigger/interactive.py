@@ -1,5 +1,7 @@
 """Interactive parameter editing, browsing, YAML and Python code generation."""
 
+import functools
+import logging
 import subprocess
 from pathlib import Path
 
@@ -7,12 +9,88 @@ import click
 import questionary
 import yaml
 
-from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.common import get_latest_scylla_release, get_sct_root_path
 from sdcm.utils.get_username import get_username
 
-from utils.staging_trigger.constants import ParamDefinition, SCT_REPO, _default_folder, get_presets
+from utils.staging_trigger.constants import (
+    CUSTOM_VALUE_SENTINEL,
+    ParamDefinition,
+    SCT_REPO,
+    _default_folder,
+    get_presets,
+)
 from utils.staging_trigger.jenkins_client import JenkinsJobTrigger
 from utils.staging_trigger.trigger import detect_preset_from_jenkinsfile, detect_preset_from_job_name
+
+logger = logging.getLogger(__name__)
+
+
+@functools.lru_cache(maxsize=1)
+def _fetch_latest_release() -> str | None:
+    """Fetch the latest Scylla release version, cached for the session."""
+    try:
+        return get_latest_scylla_release("scylla")
+    except Exception:  # noqa: BLE001
+        logger.debug("Could not fetch latest scylla release", exc_info=True)
+        return None
+
+
+def _get_version_suggestions(current_value: str) -> list[questionary.Choice]:
+    """Build a list of version suggestions for the scylla_version parameter."""
+    choices = [
+        questionary.Choice("master:latest", value="master:latest"),
+    ]
+
+    latest = _fetch_latest_release()
+    if latest:
+        choices.append(questionary.Choice(f"{latest} (latest release)", value=latest))
+
+    if current_value and current_value not in {c.value for c in choices}:
+        choices.append(questionary.Choice(f"{current_value} (current)", value=current_value))
+
+    choices.append(questionary.Choice("Custom value...", value=CUSTOM_VALUE_SENTINEL))
+    return choices
+
+
+def _prompt_for_value(key: str, current_value: str, param_meta: dict[str, ParamDefinition]) -> str:
+    """Prompt for a single parameter value using the appropriate widget.
+
+    Args:
+        key: Parameter name.
+        current_value: Current value of the parameter.
+        param_meta: Dict of parameter metadata from Jenkins.
+
+    Returns:
+        The new value chosen by the user.
+    """
+    if key == "scylla_version":
+        suggestions = _get_version_suggestions(current_value)
+        picked = questionary.select(f"{key}:", choices=suggestions).ask()
+        if picked is None:
+            raise click.Abort()
+        if picked == CUSTOM_VALUE_SENTINEL:
+            picked = questionary.text(f"{key}:", default=current_value).ask()
+            if picked is None:
+                raise click.Abort()
+        return picked
+
+    meta = param_meta.get(key)
+    if meta and meta.choices:
+        select_choices = [questionary.Choice(c, value=c) for c in meta.choices]
+        select_choices.append(questionary.Choice("Custom value...", value=CUSTOM_VALUE_SENTINEL))
+        picked = questionary.select(f"{key}:", choices=select_choices).ask()
+        if picked is None:
+            raise click.Abort()
+        if picked == CUSTOM_VALUE_SENTINEL:
+            picked = questionary.text(f"{key}:", default=current_value).ask()
+            if picked is None:
+                raise click.Abort()
+        return picked
+
+    new_value = questionary.text(f"{key}:", default=current_value).ask()
+    if new_value is None:
+        raise click.Abort()
+    return new_value
 
 
 def _display_params_table(params: dict[str, str], preset_keys: set[str]) -> None:
@@ -31,6 +109,10 @@ def prompt_for_params(preset_name: str, job_name: str | None = None, folder: str
 
     Shows all parameters in a table, lets the user select which ones to modify
     via checkbox, edit those values, then review. Loops until the user is done.
+
+    For ``scylla_version``, offers version suggestions via ``questionary.select``.
+    For Jenkins choice parameters, offers the choices via ``questionary.select``.
+    Otherwise, uses ``questionary.text``.
     """
     presets = get_presets()
     preset_params = dict(presets.get(preset_name, presets["longevity"]).params)
@@ -105,13 +187,7 @@ def prompt_for_params(preset_name: str, job_name: str | None = None, folder: str
             continue
 
         for key in to_edit:
-            new_value = questionary.text(
-                f"{key}:",
-                default=all_params[key],
-            ).ask()
-            if new_value is None:
-                raise click.Abort()
-            all_params[key] = new_value
+            all_params[key] = _prompt_for_value(key, all_params[key], param_meta)
 
     return {k: all_params[k] for k in ordered_keys}
 
