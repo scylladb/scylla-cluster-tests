@@ -11,6 +11,7 @@ import yaml
 
 from sdcm.utils.common import get_latest_scylla_release, get_sct_root_path
 from sdcm.utils.get_username import get_username
+from sdcm.utils.version_utils import get_scylla_docker_repo_from_version
 
 from utils.staging_trigger.constants import (
     CUSTOM_VALUE_SENTINEL,
@@ -91,6 +92,34 @@ def _prompt_for_value(key: str, current_value: str, param_meta: dict[str, ParamD
     if new_value is None:
         raise click.Abort()
     return new_value
+
+
+def maybe_set_docker_image(all_params: dict[str, str]) -> None:
+    """Auto-derive scylla_docker_image when backend is docker and scylla_version is set.
+
+    Modifies ``all_params`` in place. An explicit user-set ``scylla_docker_image``
+    that is non-empty takes precedence.
+    """
+    scylla_version = all_params.get("scylla_version", "")
+    if not scylla_version:
+        return
+
+    # Only auto-set when backend looks like docker (or not specified — safe default)
+    backend = all_params.get("backend", "")
+    if backend and backend != "docker":
+        return
+
+    # Don't overwrite explicit user value
+    existing = all_params.get("scylla_docker_image", "")
+    if existing:
+        return
+
+    try:
+        docker_repo = get_scylla_docker_repo_from_version(scylla_version)
+        all_params["scylla_docker_image"] = docker_repo
+        click.secho(f"  Auto-set scylla_docker_image={docker_repo} (from {scylla_version})", fg="green")
+    except (ValueError, Exception):  # noqa: BLE001
+        logger.debug("Could not derive docker image from version %s", scylla_version, exc_info=True)
 
 
 def _display_params_table(params: dict[str, str], preset_keys: set[str]) -> None:
@@ -188,6 +217,8 @@ def prompt_for_params(preset_name: str, job_name: str | None = None, folder: str
 
         for key in to_edit:
             all_params[key] = _prompt_for_value(key, all_params[key], param_meta)
+
+    maybe_set_docker_image(all_params)
 
     return {k: all_params[k] for k in ordered_keys}
 
