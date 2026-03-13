@@ -914,6 +914,17 @@ class AddRemoveMvNemesis(NemesisBaseClass):
         self.runner.disrupt_add_remove_mv()
 
 
+@target_all_nodes
+class CreateMaterializedViewNemesis(NemesisBaseClass):
+    disruptive = False
+    schema_changes = True
+    free_tier_set = True
+    supports_high_disk_utilization = False  # Creating an MV consumes disk space
+
+    def disrupt(self):
+        self.runner.disrupt_create_materialized_view()
+
+
 class ToggleAuditNemesisSyslog(NemesisBaseClass):
     disruptive = True
     schema_changes = True
