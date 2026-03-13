@@ -4010,7 +4010,16 @@ set c-s parameter '-pop' with gauss/uniform distribution for performance gradual
 
 ## **latte_schema_parameters** / SCT_LATTE_SCHEMA_PARAMETERS
 
-Optional. Allows to pass through custom rune script parameters to the 'latte schema' command.<br>For example, {'keyspace': 'test_keyspace', 'table': 'test_table'}
+Optional. Allows to pass through custom rune script parameters to the 'latte schema' command.<br>Also used as a fallback source for keyspace/table in gradual performance tests when<br>perf_stress_tables is not set.<br>For example, {'keyspace': 'test_keyspace', 'table': 'test_table'}
+
+**default:** N/A
+
+**type:** dict | str
+
+
+## **perf_stress_tables** / SCT_PERF_STRESS_TABLES
+
+Mapping of keyspace to table name(s) used in performance gradual throughput tests.<br>Supports multiple keyspace.table pairs.<br>Format: {'keyspace1': 'table1', 'keyspace2': 'table2'} or {'keyspace1': ['table1', 'table2']}.<br>Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).<br>For latte, if not set, falls back to 'keyspace'/'table' keys in latte_schema_parameters.
 
 **default:** N/A
 

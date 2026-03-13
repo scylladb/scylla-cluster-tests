@@ -10,7 +10,7 @@ from typing import List, Union
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.utils.common import skip_optional_stage
 from sdcm.sct_events import Severity
-from sdcm.sct_events.system import TestFrameworkEvent, InfoEvent
+from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 
@@ -32,17 +32,40 @@ class Workload:
     wait_no_compactions: bool
     step_duration: str
     prepare_schema: bool
-    test_keyspace: str = ""
-    test_table: str = ""
+    test_tables: list[tuple[str, str]] = None  # list of (keyspace, table) pairs
 
     def __post_init__(self):
         if isinstance(self.num_threads, int):
             # If only one thread count is provided, convert it to a list
             self.num_threads = [self.num_threads]
+        if self.test_tables is None:
+            self.test_tables = []
 
 
 def is_latte_command(stress_cmd: str) -> bool:
     return "latte " in stress_cmd and " run " in stress_cmd
+
+
+def _parse_perf_stress_tables(perf_stress_tables: dict) -> list[tuple[str, str]]:
+    """Parse ``perf_stress_tables`` dict into a flat list of ``(keyspace, table)`` tuples.
+
+    Accepted formats::
+
+        # single pair
+        {'keyspace1': 'table1'}
+        # multiple keyspaces
+        {'keyspace1': 'table1', 'keyspace2': 'table2'}
+        # multiple tables per keyspace
+        {'keyspace1': ['table1', 'table2']}
+    """
+    tables: list[tuple[str, str]] = []
+    for keyspace, table_value in perf_stress_tables.items():
+        if isinstance(table_value, list):
+            for tbl in table_value:
+                tables.append((keyspace, tbl))
+        else:
+            tables.append((keyspace, str(table_value)))
+    return tables
 
 
 class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
@@ -81,28 +104,45 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             ).publish()
         return step_duration[workload_type]
 
-    def get_test_table_name(self, stress_cmds) -> (str, str):
-        # TODO: define keyspace and table names as test parameter (https://github.com/scylladb/qa-tasks/issues/2020)
+    def get_test_table_names(self, stress_cmds) -> list[tuple[str, str]]:
+        """Resolve keyspace and table name pairs for a stress command.
+
+        For all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress)
+        the values are read from ``perf_stress_tables`` SCT config option which maps
+        keyspace names to table name(s): ``{'ks1': 'tbl1', 'ks2': ['tbl2a', 'tbl2b']}``.
+
+        For latte commands the values are first looked up in ``perf_stress_tables``,
+        then in ``latte_schema_parameters`` (``keyspace`` / ``table`` keys).
+
+        Returns a list of ``(keyspace, table)`` tuples.
+        """
         stress_cmd = stress_cmds[0] if isinstance(stress_cmds, list) else stress_cmds
         stress_tool = stress_cmd.split(" ")[0]
-        if stress_tool == "scylla-bench":
-            return "scylla_bench", "test"
-        elif stress_tool in ["cassandra-stress", "cql-stress-cassandra-stress"]:
-            return "keyspace1", "standard1"
-        elif is_latte_command(stress_cmds):
-            InfoEvent(
-                message="Make sure that rune script disables speculative retries for its table.",
-                severity=Severity.WARNING,
-            ).publish()
-            keyspace, table_name = "", "footable"
+
+        perf_stress_tables = self.params.get("perf_stress_tables") or {}
+
+        tables: list[tuple[str, str]] = []
+        if perf_stress_tables:
+            tables = _parse_perf_stress_tables(perf_stress_tables)
+
+        if is_latte_command(stress_cmd) and not tables:
             if latte_schema_parameters := self.params.get("latte_schema_parameters"):
-                for key, value in latte_schema_parameters.items():
-                    if key == "keyspace":
-                        keyspace = value
-                        break
-            return keyspace, table_name
-        else:
-            raise ValueError(f"Not supported stress tool in command: {stress_cmds}")
+                keyspace = latte_schema_parameters.get("keyspace", "")
+                table = latte_schema_parameters.get("table", "")
+                if keyspace and table:
+                    tables = [(keyspace, table)]
+                elif keyspace and not table:
+                    raise ValueError(
+                        f"'perf_stress_tables' (or 'latte_schema_parameters.table' for latte) is required for "
+                        f"'{stress_tool}' gradual performance tests. Please add it to your test YAML configuration."
+                    )
+
+        if not tables:
+            raise ValueError(
+                f"'perf_stress_tables' (or 'latte_schema_parameters' for latte) is required for "
+                f"'{stress_tool}' gradual performance tests. Please add it to your test YAML configuration."
+            )
+        return tables
 
     def test_mixed_gradual_increase_load(self):
         """
@@ -112,7 +152,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         2. Run a mixed workload with gradual increase load
         """
         workload_type = "mixed"
-        keyspace, table = self.get_test_table_name(self.params.get("stress_cmd_m"))
+        test_tables = self.get_test_table_names(self.params.get("stress_cmd_m"))
         workload = Workload(
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_m"),
@@ -123,8 +163,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             drop_keyspace=False,
             wait_no_compactions=True,
             step_duration=self.step_duration(workload_type),
-            test_keyspace=keyspace,
-            test_table=table,
+            test_tables=test_tables,
             prepare_schema=False,
         )
         self._base_test_workflow(workload=workload, test_name="test_mixed_gradual_increase_load (read:50%,write:50%)")
@@ -137,7 +176,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         2. Run a write workload with gradual increase load
         """
         workload_type = "write"
-        keyspace, table = self.get_test_table_name(self.params.get("stress_cmd_w"))
+        test_tables = self.get_test_table_names(self.params.get("stress_cmd_w"))
         workload = Workload(
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_w"),
@@ -148,8 +187,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             drop_keyspace=True,
             wait_no_compactions=False,
             step_duration=self.step_duration(workload_type),
-            test_keyspace=keyspace,
-            test_table=table,
+            test_tables=test_tables,
             prepare_schema=True,
         )
         self._base_test_workflow(workload=workload, test_name="test_write_gradual_increase_load (100% writes)")
@@ -162,7 +200,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         2. Run a read workload with gradual increase load
         """
         workload_type = "read"
-        keyspace, table = self.get_test_table_name(self.params.get("stress_cmd_r"))
+        test_tables = self.get_test_table_names(self.params.get("stress_cmd_r"))
         workload = Workload(
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_r"),
@@ -173,8 +211,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             drop_keyspace=False,
             wait_no_compactions=True,
             step_duration=self.step_duration(workload_type),
-            test_keyspace=keyspace,
-            test_table=table,
+            test_tables=test_tables,
             prepare_schema=False,
         )
         self._base_test_workflow(workload=workload, test_name="test_read_gradual_increase_load (100% reads)")
@@ -187,7 +224,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         2. Run a read workload with gradual increase load that reads data only from disk (no cache hits)
         """
         workload_type = "read_disk_only"
-        keyspace, table = self.get_test_table_name(self.params.get("stress_cmd_read_disk"))
+        test_tables = self.get_test_table_names(self.params.get("stress_cmd_read_disk"))
         workload = Workload(
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_read_disk"),
@@ -198,8 +235,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             drop_keyspace=False,
             wait_no_compactions=True,
             step_duration=self.step_duration(workload_type),
-            test_keyspace=keyspace,
-            test_table=table,
+            test_tables=test_tables,
             prepare_schema=False,
         )
         self._base_test_workflow(
@@ -233,13 +269,14 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             post_prepare_cql_cmds = (
                 [post_prepare_cql_cmds] if isinstance(post_prepare_cql_cmds, str) else post_prepare_cql_cmds
             )
-            test_table = f"{workload.test_keyspace}.{workload.test_table}"
+            test_table_names = [f"{ks}.{tbl}" for ks, tbl in workload.test_tables]
             for post_prepare_cql_cmd in post_prepare_cql_cmds:
-                if test_table not in post_prepare_cql_cmd.lower():
+                cmd_lower = post_prepare_cql_cmd.lower()
+                if not any(test_table in cmd_lower for test_table in test_table_names):
                     self.log.error(
-                        "Post prepare cql command '%s' does not match test table '%s', skipping it.",
-                        post_prepare_cql_cmd.lower(),
-                        test_table,
+                        "Post prepare cql command '%s' does not match any test table in %s, skipping it.",
+                        cmd_lower,
+                        test_table_names,
                     )
                     continue
 
@@ -451,7 +488,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             summary_result[current_throttle_step].update({"ops_rate": calculate_result["op rate"] * num_loaders})
             total_summary.update(summary_result)
             if workload.drop_keyspace:
-                self.drop_keyspace(keyspace_name=workload.test_keyspace)
+                for keyspace_name in dict.fromkeys(ks for ks, _ in workload.test_tables):
+                    self.drop_keyspace(keyspace_name=keyspace_name)
             # We want 3 minutes (180 sec) wait between steps.
             # In case of "mixed" workflow - wait for compactions finished.
             # In case of "read" workflow -  it just will wait for 3 minutes

@@ -1961,7 +1961,16 @@ class SCTConfiguration(BaseModel):
     )
     latte_schema_parameters: DictOrStr = SctField(
         description="""Optional. Allows to pass through custom rune script parameters to the 'latte schema' command.
+        Also used as a fallback source for keyspace/table in gradual performance tests when
+        perf_stress_tables is not set.
         For example, {'keyspace': 'test_keyspace', 'table': 'test_table'}""",
+    )
+    perf_stress_tables: DictOrStr = SctField(
+        description="""Mapping of keyspace to table name(s) used in performance gradual throughput tests.
+        Supports multiple keyspace.table pairs.
+        Format: {'keyspace1': 'table1', 'keyspace2': 'table2'} or {'keyspace1': ['table1', 'table2']}.
+        Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).
+        For latte, if not set, falls back to 'keyspace'/'table' keys in latte_schema_parameters.""",
     )
     num_loaders_step: int = SctField(
         description="Number of loaders which should be added per step",
