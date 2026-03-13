@@ -223,6 +223,12 @@ class CleanCloudResourcesTest(unittest.TestCase):
         "sdcm.utils.resources_cleanup.clean_resources_docker",
         "sdcm.utils.resources_cleanup.clean_test_security_groups",
         "sdcm.utils.resources_cleanup.clean_load_balancers_aws",
+        "sdcm.utils.resources_cleanup.clean_launch_templates_aws",
+        "sdcm.utils.resources_cleanup.clean_cloudformation_stacks_aws",
+        "sdcm.utils.resources_cleanup.clean_placement_groups_aws",
+        "sdcm.utils.resources_cleanup.clean_aws_kms_alias",
+        "sdcm.utils.resources_cleanup.SCTCapacityReservation",
+        "sdcm.utils.resources_cleanup.SCTDedicatedHosts",
     )
 
     @pytest.fixture(autouse=True)

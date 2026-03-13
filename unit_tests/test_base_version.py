@@ -17,6 +17,8 @@ import pytest
 from sdcm.utils.version_utils import ComparableScyllaVersion
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
 
+pytestmark = pytest.mark.integration
+
 """
 This module contains tests for the UpgradeBaseVersion class, which is used to determine
 the supported Scylla versions for upgrades based on the provided repository, backend, and Linux distribution.

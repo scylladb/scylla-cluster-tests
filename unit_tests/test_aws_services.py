@@ -21,6 +21,8 @@ from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.utils.context_managers import environment
 from sdcm.utils.version_utils import parse_scylla_version_tag
 
+pytestmark = pytest.mark.integration
+
 AWS_REGION = "us-east-1"
 
 
