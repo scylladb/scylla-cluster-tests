@@ -1,0 +1,15 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    params: params,
+    test_config: 'test-cases/artifacts/oci-image.yaml',
+    backend: 'oci',
+    // NOTE: DenseIO instance shapes are not allowed to be "spot"
+    instance_provision: 'on_demand',
+    timeout: [time: 145, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+    builds_to_keep: '30',
+)
