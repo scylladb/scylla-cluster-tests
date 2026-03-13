@@ -48,11 +48,17 @@ def lookup_pr(pr_number: int, repo: str = "scylladb/scylla-cluster-tests") -> tu
     return f"git@github.com:{owner}/{repo_name}.git", branch
 
 
-def prompt_for_source(branch: str | None = None, repo: str | None = None, pr: int | None = None) -> tuple[str, str]:
+def prompt_for_source(
+    branch: str | None = None,
+    repo: str | None = None,
+    pr: int | None = None,
+) -> tuple[str, str, int | None]:
     """Prompt interactively for repo/branch or PR number.
 
-    Returns (repo_url, branch_name). Uses a cache of recent selections
-    so the user doesn't have to retype the same values every time.
+    Returns (repo_url, branch_name, pr_number). The third element is the
+    PR number when a PR was used, or None when branch mode was used.
+    Uses a cache of recent selections so the user doesn't have to retype
+    the same values every time.
     """
     cache = _load_cache()
 
@@ -62,13 +68,13 @@ def prompt_for_source(branch: str | None = None, repo: str | None = None, pr: in
         cache["last_repo"] = repo_url
         cache["last_branch"] = branch_name
         _save_cache(cache)
-        return repo_url, branch_name
+        return repo_url, branch_name, pr
 
     if branch and repo:
         cache["last_repo"] = repo
         cache["last_branch"] = branch
         _save_cache(cache)
-        return repo, branch
+        return repo, branch, None
 
     # Interactive: ask user to choose PR or repo/branch
     source = questionary.select(
@@ -90,7 +96,7 @@ def prompt_for_source(branch: str | None = None, repo: str | None = None, pr: in
         cache["last_repo"] = repo_url
         cache["last_branch"] = branch_name
         _save_cache(cache)
-        return repo_url, branch_name
+        return repo_url, branch_name, int(pr_num)
 
     # Branch mode
     default_repo = repo or cache.get("last_repo", SCT_REPO)
@@ -113,4 +119,4 @@ def prompt_for_source(branch: str | None = None, repo: str | None = None, pr: in
     cache["last_repo"] = repo_url
     cache["last_branch"] = branch_name
     _save_cache(cache)
-    return repo_url, branch_name
+    return repo_url, branch_name, None

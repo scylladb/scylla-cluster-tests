@@ -25,14 +25,17 @@ Implemented in `utils/staging_trigger/interactive.py` and `utils/staging_trigger
   does the same derivation in `_trigger_one()` and `run_dtest_variants()`
 - Explicit user override of `scylla_docker_image` takes precedence (not overwritten)
 
-## if PR is selected, update the PR description
+## ~~if PR is selected, update the PR description~~ (DONE)
 
-if a user selected a PR for branch/repo selection, we can update the PR description with
-the output markdown from the triggering,
-we should put it under the testing section with a header like `### Testing` or similar and
-then add the markdown with the list of tests that will was triggered.
-
-this will make it easier and prevent manually copy-pasting and mistakes
+Implemented in `utils/staging_trigger/trigger.py` and `utils/staging_trigger/cli.py`:
+- `update_pr_description()` appends or replaces a `### Testing` section in the PR body
+  with the markdown checklist of triggered jobs (idempotent — replaces on re-trigger)
+- PR number is threaded through `prompt_for_source()` (now returns 3-tuple with PR number)
+- Auto-detection of PR from current branch via `gh pr view --json number` when no PR was
+  explicitly provided (works after `gh pr checkout`)
+- `--update-pr / --no-update-pr` flag on the `trigger` command for non-interactive control
+- Interactive prompt asks for confirmation before updating the PR description
+- `run_from_config()` auto-updates the PR when `pr:` is set in the YAML config
 
 
 ## ~~refactor function from add_nodes.py~~ (PARTIALLY DONE)
@@ -79,4 +82,28 @@ it should stop and let you edit them if you want to change something, but it sho
 
 
 ## sync job with a folder
-generate and delete non relevent jobs for folder, maybe an option for generate command ?
+generate and delete non relevant jobs for folder, maybe an option for generate command ?
+
+
+## safety of conflicting parameters
+
+for example if we set `scylla_version` to `master:latest`, and last run had some AMI set, our run would have both
+and the wasn't the intention, we should pass empty string to parameters that are not set by user, to avoid confusion and unintended consequences of conflicting parameters from previous runs or defaults. This way, only the parameters that can be problematic
+we should keep group of mutually exclusive parameters, and when user set one of them, we should clear the other ones in the same group, to avoid confusion and unintended consequences. This will make it more clear and easier to understand for users, and prevent mistakes.
+we can warn users about conflicting parameters when they are setting them, and ask for confirmation before proceeding with the trigger. This will help prevent mistakes and ensure that users are aware of the potential consequences of their choices.
+
+## library usage, run_multi should accumende for extra description per job
+
+so the output markdown template would be more meaningful and useful for users, instead of just listing the job names and ids, it can also include a brief description of each job, the parameters that were used for the trigger, and any other relevant information that can help users understand what was triggered and why. This will make the output more informative and actionable for users, especially when they are triggering multiple jobs at once.
+
+
+## how update from jobs would come back into the PR comment ?
+
+resarch how we how it, maybe passing some parameter to the job, and add a final setup that would edit the comment / description ?
+mayeb there are simple other way for that ?
+
+## consider packaging this as tool of it's own ?
+
+## how to setup credentials for jenkins
+so each user can identify on it's own and not count on a shared credential,
+maybe there some why to use OAuth token from gh cli, or maybe we can use some other way to authenticate with jenkins, this will make it more secure and also allow us to track who is triggering what in jenkins, instead of having all triggers coming from the same user. This will also allow us to have better control over permissions and access to jenkins, and prevent unauthorized access or misuse of the triggering tool.

@@ -1,7 +1,9 @@
 """High-level trigger interface and helpers for staging jobs."""
 
+import json
 import logging
 import re
+import subprocess
 from pathlib import Path
 
 import click
@@ -68,6 +70,56 @@ def format_checklist(triggered_jobs: list[TriggeredJob]) -> str:
         desc = f" ({job.description})" if job.description else ""
         lines.append(f"- [ ] :clock1: [{job.job_name} #{job.build_number}]({build_url}){desc}")
     return "\n".join(lines)
+
+
+def update_pr_description(
+    pr_number: int,
+    checklist_md: str,
+    gh_repo: str = "scylladb/scylla-cluster-tests",
+    section_header: str = "### Testing",
+) -> None:
+    """Append triggered jobs to a Testing section in a PR's description.
+
+    If the section already exists, new checklist items are appended to it.
+    If not, a new section is created. Users can manually remove old entries.
+
+    Args:
+        pr_number: GitHub PR number to update.
+        checklist_md: Markdown checklist content to append.
+        gh_repo: GitHub repository in owner/name format.
+        section_header: Header for the testing section.
+    """
+    result = subprocess.run(
+        ["gh", "pr", "view", str(pr_number), "--repo", gh_repo, "--json", "body"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    body = json.loads(result.stdout).get("body", "") or ""
+
+    # Find the end of the existing Testing section to append there
+    header_pattern = re.compile(rf"^{re.escape(section_header)}\s*$", re.MULTILINE)
+    next_header = re.compile(r"^### ", re.MULTILINE)
+
+    match = header_pattern.search(body)
+    if match:
+        # Find where this section's content ends (next ### or end of body)
+        rest_start = match.end()
+        next_match = next_header.search(body, rest_start)
+        insert_pos = next_match.start() if next_match else len(body)
+        # Append new items at the end of the existing section
+        new_body = body[:insert_pos].rstrip() + "\n" + checklist_md + "\n\n" + body[insert_pos:]
+        new_body = new_body.rstrip() + "\n"
+    else:
+        new_body = body.rstrip() + f"\n\n{section_header}\n\n{checklist_md}\n"
+
+    subprocess.run(
+        ["gh", "pr", "edit", str(pr_number), "--repo", gh_repo, "--body", new_body],
+        check=True,
+    )
+
+    job_count = checklist_md.count("- [ ]")
+    click.secho(f"Updated PR #{pr_number} description with {job_count} triggered job(s)", fg="green")
 
 
 def _make_dry_run_job(full_name: str, short_name: str, description: str = "", jenkins_url: str = "") -> TriggeredJob:
@@ -336,7 +388,7 @@ class StagingTrigger:
         return self.triggered
 
 
-def run_from_config(config_path: str, dry_run: bool = False) -> list[TriggeredJob]:
+def run_from_config(config_path: str, dry_run: bool = False) -> list[TriggeredJob]:  # noqa: PLR0914
     """Run triggers defined in a YAML config file.
 
     YAML structure:
@@ -364,9 +416,7 @@ def run_from_config(config_path: str, dry_run: bool = False) -> list[TriggeredJo
 
     folder = config.get("folder", _default_folder())
     repo = config.get("repo", SCT_REPO)
-    global_params = config.get("params", {})
-    # Ensure all values are strings
-    global_params = {k: str(v) for k, v in global_params.items()}
+    global_params = {k: str(v) for k, v in config.get("params", {}).items()}
 
     # Resolve branch from PR or direct
     pr_number = config.get("pr")
@@ -404,6 +454,10 @@ def run_from_config(config_path: str, dry_run: bool = False) -> list[TriggeredJo
         click.echo()
         header = "=== GitHub Markdown Preview ===" if dry_run else "=== Full checklist ==="
         click.secho(header, bold=True)
-        click.echo(format_checklist(all_triggered))
+        checklist = format_checklist(all_triggered)
+        click.echo(checklist)
+
+        if pr_number and not dry_run:
+            update_pr_description(pr_number, checklist)
 
     return all_triggered
