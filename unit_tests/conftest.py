@@ -20,6 +20,7 @@ import uuid
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from sdcm.utils.mp_start import ensure_start_method
 
@@ -43,6 +44,11 @@ from sdcm.provision.helpers.certificate import (
 )
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
+from sdcm.sct_events.events_processes import (
+    EVENTS_MAIN_DEVICE_ID,
+    EVENTS_FILE_LOGGER_ID,
+    EventsProcessesRegistry,
+)
 from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_data_dir_path
@@ -50,7 +56,7 @@ from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
-from unit_tests.lib.events_utils import EventsUtilsMixin
+from unit_tests.lib.fake_events import FakeEventsDevice
 from unit_tests.lib.fake_provisioner import FakeProvisioner
 from unit_tests.lib.fake_region_definition_builder import FakeDefinitionBuilder
 from unit_tests.lib.fake_remoter import FakeRemoter
@@ -101,22 +107,24 @@ def mock_remote_scylla_yaml(scylla_node):
         logging.error("Error in mock_remote_scylla_yaml: %s", e)
 
 
+def _make_fake_events():
+    """Create a FakeEventsDevice, wire it into the events registry, and patch SctEvent."""
+    device = FakeEventsDevice()
+    registry = EventsProcessesRegistry(log_dir="/dev/null")
+    registry._registry_dict[EVENTS_MAIN_DEVICE_ID] = device
+    registry._registry_dict[EVENTS_FILE_LOGGER_ID] = device
+    with patch("sdcm.sct_events.base.SctEvent._events_processes_registry", registry):
+        yield device
+
+
 @pytest.fixture(scope="module")
 def events():
-    mixing = EventsUtilsMixin()
-    mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
-    yield mixing
-
-    mixing.teardown_events_processes()
+    yield from _make_fake_events()
 
 
 @pytest.fixture(scope="function")
 def events_function_scope():
-    mixing = EventsUtilsMixin()
-    mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
-    yield mixing
-
-    mixing.teardown_events_processes()
+    yield from _make_fake_events()
 
 
 @pytest.fixture(scope="session")

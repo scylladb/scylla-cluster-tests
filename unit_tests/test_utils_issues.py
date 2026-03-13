@@ -9,13 +9,9 @@ pytestmark = pytest.mark.integration
 
 def test_no_existing_issue(events, params):
     params.artifact_scylla_version = "2023.1.3"
-    with events.wait_for_n_events(events.get_events_logger(), count=1, timeout=10):
-        assert not SkipPerIssues(["ABC"], params)
+    assert not SkipPerIssues(["ABC"], params)
 
-    events_list = []
-    with events.get_raw_events_log().open() as events_file:
-        for line in events_file.readlines():
-            events_list.append(json.loads(line))
+    events_list = [json.loads(snap.json) for snap in events.published_events]
 
     assert events_list[-1]["message"] == "couldn't parse issue: ABC"
     assert events_list[-1]["severity"] == "WARNING"
