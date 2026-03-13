@@ -15,7 +15,6 @@ import contextlib
 import json
 import os
 import tempfile
-import unittest
 from typing import List
 from unittest.mock import patch
 
@@ -60,7 +59,7 @@ class FakeNode:
     scylla_network_configuration = None
 
 
-class ScyllaYamlClusterAttrBuilderBase(unittest.TestCase):
+class ScyllaYamlClusterAttrBuilderBase:
     builder_class: ScyllaYamlAttrBuilderBase
 
     def _run_test(self, builder_params: dict, expected_as_dict: dict = None):
@@ -219,7 +218,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
         )
 
     def test_validation_gce(self):
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self._run_test(
                 builder_params={
                     "test_config": TestConfigWithLdap,
@@ -233,7 +232,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
             )
 
     def test_validation_aws(self):
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self._run_test(
                 builder_params={
                     "test_config": TestConfigWithoutLdap,
@@ -550,7 +549,7 @@ class DummyNode(BaseNode):
             )
 
 
-class IntegrationTests(unittest.TestCase):
+class IntegrationTests:
     get_scylla_ami_version_output = ObjectDict(
         Architecture="x86_64",
         CreationDate="2022-10-13T13:17:17.000Z",
