@@ -1362,7 +1362,13 @@ Supported: us-east1 - means that the zone will be selected automatically or you 
 
 **default:** N/A
 
+<<<<<<< HEAD
 **type:** str_or_list_or_eval
+||||||| parent of b10a32c32 (fix(config): update gce_datacenter type to StringOrList)
+**type:** str
+=======
+**type:** str | list[str]
+>>>>>>> b10a32c32 (fix(config): update gce_datacenter type to StringOrList)
 
 
 ## **gce_network** / SCT_GCE_NETWORK
