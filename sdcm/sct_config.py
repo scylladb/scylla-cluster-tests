@@ -1049,7 +1049,7 @@ class SCTConfiguration(BaseModel):
     gce_project: String = SctField(
         description="gcp project name to use",
     )
-    gce_datacenter: String = SctField(
+    gce_datacenter: StringOrList = SctField(
         description="Supported regions: us-east1, us-east4, us-west1, us-central1. Specifying just the region "
         "(e.g., us-east1) means the zone will be selected automatically, or you can mention the zone "
         "explicitly (e.g., us-east1-b)",
