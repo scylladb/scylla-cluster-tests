@@ -5978,6 +5978,9 @@ class NemesisRunner:
             self.set_target_node(rack=target_node_rack)
             self.log.info("Target node rack %s, loader rack %s", self.target_node.rack, loader_rack)
 
+    def _is_single_node_in_rack(self, node: BaseNode) -> bool:
+        return len([n for n in self.cluster.data_nodes if (n.rack == node.rack and n.dc_idx == node.dc_idx)]) == 1
+
     def _refuse_connection_from_banned_node(self, use_iptables=False):
         """Banned node could not connect with rest nodes in cluster
 
@@ -5997,6 +6000,8 @@ class NemesisRunner:
             raise UnsupportedNemesis("Raft feature: consistent-topology-changes is not enabled")
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Skip test for K8S because no supported yet")
+        if self._is_single_node_in_rack(self.target_node):
+            raise UnsupportedNemesis(f"Target node {self.target_node.name} is alone in its rack, cannot remove it.")
 
         if SkipPerIssues("scylladb/scylla-drivers#95", self.cluster.params):
             # until https://github.com/scylladb/scylla-drivers/issues/95 would be solved
