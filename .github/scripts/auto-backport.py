@@ -11,6 +11,7 @@ from github import Github, GithubException
 from git import Repo, GitCommandError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 try:
     github_token = os.environ["GITHUB_TOKEN"]
 except KeyError:
@@ -57,20 +58,20 @@ def create_pull_request(repo, new_branch_name, base_branch_name, pr, backport_pr
             base=base_branch_name,
             draft=is_draft,
         )
-        logging.info(f"Pull request created: {backport_pr.html_url}")
+        logger.info(f"Pull request created: {backport_pr.html_url}")
         backport_pr.add_to_assignees(pr.user)
         if is_draft:
             backport_pr.add_to_labels("conflicts")
             pr_comment = f"@{pr.user.login} - This PR has conflicts, therefore it was moved to `draft` \n"
             pr_comment += "Please resolve them and mark this PR as ready for review"
             backport_pr.create_issue_comment(pr_comment)
-        logging.info(f"Assigned PR to original author: {pr.user}")
+        logger.info(f"Assigned PR to original author: {pr.user}")
         return backport_pr
     except GithubException as e:
         if "A pull request already exists" in str(e):
-            logging.warning(f"A pull request already exists for {pr.user}:{new_branch_name}")
+            logger.warning(f"A pull request already exists for {pr.user}:{new_branch_name}")
         else:
-            logging.error(f"Failed to create PR: {e}")
+            logger.error(f"Failed to create PR: {e}")
 
 
 def get_pr_commits(repo, pr, stable_branch, start_commit=None):
@@ -128,7 +129,7 @@ def backport(repo, pr, version, commits, backport_base_branch):
                 try:
                     repo_local.git.cherry_pick(commit, "-m1", "-x")
                 except GitCommandError as e:
-                    logging.warning(f"Cherry-pick conflict on commit {commit}: {e}")
+                    logger.warning(f"Cherry-pick conflict on commit {commit}: {e}")
                     is_draft = True
                     repo_local.git.add(A=True)
                     repo_local.git.cherry_pick("--continue")
@@ -137,7 +138,7 @@ def backport(repo, pr, version, commits, backport_base_branch):
                 repo, new_branch_name, backport_base_branch, pr, backport_pr_title, commits, is_draft=is_draft
             )
         except GitCommandError as e:
-            logging.warning(f"GitCommandError: {e}")
+            logger.warning(f"GitCommandError: {e}")
 
 
 def main():
@@ -176,7 +177,7 @@ def main():
                 print(f"no backport label: {pr.number}")
                 continue
             if not not scylladbbot_repo.has_in_collaborators(pr.user.login):
-                logging.info(
+                logger.info(
                     f"Sending an invite to {pr.user.login} to become a collaborator to {scylladbbot_repo.full_name} "
                 )
                 scylladbbot_repo.add_to_collaborators(pr.user.login)
@@ -185,7 +186,7 @@ def main():
                 create_pr_comment_and_remove_label(pr, comment)
                 continue
         commits = get_pr_commits(repo, pr, stable_branch, start_commit)
-        logging.info(f"Found PR #{pr.number} with commit {commits} and the following labels: {backport_labels}")
+        logger.info(f"Found PR #{pr.number} with commit {commits} and the following labels: {backport_labels}")
         for backport_label in backport_labels:
             version = backport_label.replace("backport/", "")
             backport_base_branch = backport_label.replace("backport/", "branch-")

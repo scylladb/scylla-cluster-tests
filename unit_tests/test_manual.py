@@ -30,6 +30,8 @@ from sdcm.stress_thread import CassandraStressThread, CassandraStressEventsPubli
 from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
 from sdcm.ycsb_thread import YcsbStressThread
 
+
+LOGGER = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from mypy_boto3_ec2 import EC2Client
 
@@ -246,8 +248,8 @@ class TestCassandraStressHDRExporter(unittest.TestCase):
 
         output = requests.get("http://{}/metrics".format(self.prom_address)).text
         expected_lines = output.split("\n")[-6:]
-        logging.getLogger(__file__).info(output)
-        logging.getLogger(__file__).info(expected_lines)
+        logging.getLogger(__name__).info(output)
+        logging.getLogger(__name__).info(expected_lines)
         assert (
             'collectd_cassandra_stress_hdr_mixed_gauge{cassandra_stress_hdr_mixed="WRITE",cpu_idx="0",instance="127.0.0.1",keyspace="",loader_idx="1",type="lat_perc_50"} 0.62'
             in expected_lines
@@ -300,11 +302,11 @@ class TestStressThread(BaseSCTEventsTest):
         time.sleep(5)
         cstress1.run()
         time.sleep(60)
-        logging.info("killing")
+        LOGGER.info("killing")
         Node().remoter.run(cmd="pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}", ignore_status=True)
 
-        logging.info(cstress.parse_results())
-        logging.info(cstress1.parse_results())
+        LOGGER.info(cstress.parse_results())
+        LOGGER.info(cstress1.parse_results())
 
     @staticmethod
     def test_02():
@@ -355,7 +357,7 @@ class TestYcsbStressThread(BaseSCTEventsTest):
             thread2.run()
             thread1.get_results()
         except Exception:
-            logging.exception("failed")
+            LOGGER.exception("failed")
             raise
 
         finally:
