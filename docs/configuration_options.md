@@ -1542,7 +1542,407 @@ Supported: us-east1 - means that the zone will be selected automatically or you 
 
 **default:** N/A
 
+<<<<<<< HEAD
 **type:** str (appendable)
+||||||| parent of 8bdd3c44b (fix(scylla-doctor): remove DOCTOR-31 workaround and bump to 1.10)
+**type:** str
+* appendable
+
+
+## **validate_large_collections** / SCT_VALIDATE_LARGE_COLLECTIONS
+
+Flag to validate large collections in the database
+
+**default:** N/A
+
+**type:** bool
+
+
+## **run_commit_log_check_thread** / SCT_RUN_COMMIT_LOG_CHECK_THREAD
+
+Flag to run a thread that checks commit logs
+
+**default:** True
+
+**type:** bool
+
+
+## **teardown_validators** / SCT_TEARDOWN_VALIDATORS
+
+Validators to use during teardown phase
+
+**default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}, 'rackaware': {'enabled': False}}
+
+**type:** dict | str
+
+
+## **use_capacity_reservation** / SCT_USE_CAPACITY_RESERVATION
+
+Flag to use capacity reservation for instances
+
+**default:** N/A
+
+**type:** bool
+
+
+## **use_dedicated_host** / SCT_USE_DEDICATED_HOST
+
+Flag to allocate dedicated hosts for the instances for the entire duration of the test run (AWS only)
+
+**default:** N/A
+
+**type:** bool
+
+
+## **aws_dedicated_host_ids** / SCT_AWS_DEDICATED_HOST_IDS
+
+List of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)
+
+**default:** N/A
+
+**type:** str | list[str]
+* appendable
+
+
+## **post_behavior_dedicated_host** / SCT_POST_BEHAVIOR_DEDICATED_HOST
+
+Failure/post test behavior, i.e. what to do with the dedicated hosts at the end of the test.<br><br>'destroy' - Destroy hosts (default)<br>'keep' - Keep hosts allocated
+
+**default:** N/A
+
+**type:** Literal['keep', 'destroy']
+
+
+## **bisect_start_date** / SCT_BISECT_START_DATE
+
+Start date for bisecting test runs to find regressions
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **bisect_end_date** / SCT_BISECT_END_DATE
+
+End date for bisecting test runs to find regressions
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **kafka_backend** / SCT_KAFKA_BACKEND
+
+Type of Kafka backend to use
+
+**default:** N/A
+
+**type:** Literal['localstack', 'vm', 'msk']
+
+
+## **kafka_connectors** / SCT_KAFKA_CONNECTORS
+
+Kafka connectors to use
+
+**default:** N/A
+
+**type:** list[sdcm.kafka.kafka_config.SctKafkaConfiguration]
+
+
+## **run_scylla_doctor** / SCT_RUN_SCYLLA_DOCTOR
+
+Flag to run Scylla Doctor tool
+
+**default:** True
+
+**type:** bool
+
+
+## **scylla_doctor_version** / SCT_SCYLLA_DOCTOR_VERSION
+
+Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.9')<br>to hardcode the version, or leave empty to use the latest available version. For stability,<br>artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.
+
+**default:** 1.9
+
+**type:** str
+* appendable
+
+
+## **skip_test_stages** / SCT_SKIP_TEST_STAGES
+
+Skip selected stages of a test scenario
+
+**default:** N/A
+
+**type:** dict | str
+
+
+## **use_zero_nodes** / SCT_USE_ZERO_NODES
+
+If True, enable support in SCT of zero nodes (configuration, nemesis)
+
+**default:** N/A
+
+**type:** bool
+
+
+## **n_db_zero_token_nodes** / SCT_N_DB_ZERO_TOKEN_NODES
+
+Number of zero token nodes in cluster. Value should be set as '0 1 1' for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions
+
+**default:** N/A
+
+**type:** int | list[int]
+
+
+## **zero_token_instance_type_db** / SCT_ZERO_TOKEN_INSTANCE_TYPE_DB
+
+Instance type for zero token node
+
+**default:** i4i.large
+
+**type:** str
+* appendable
+
+
+## **sct_aws_account_id** / SCT_SCT_AWS_ACCOUNT_ID
+
+AWS account id on behalf of which the test is run
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **latency_decorator_error_thresholds** / SCT_LATENCY_DECORATOR_ERROR_THRESHOLDS
+
+Error thresholds for latency decorator. Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}
+
+**default:** {'write': {'default': {'P90 write': {'fixed_limit': None}, 'P99 write': {'fixed_limit': 10}}}, 'read': {'default': {'P90 read': {'fixed_limit': None}, 'P99 read': {'fixed_limit': 10}}}, 'read_disk_only': {'default': {'P90 read': {'fixed_limit': None}, 'P99 read': {'fixed_limit': 10}}}, 'mixed': {'default': {'P90 write': {'fixed_limit': None}, 'P90 read': {'fixed_limit': None}, 'P99 write': {'fixed_limit': 10}, 'P99 read': {'fixed_limit': 10}}}}
+
+**type:** dict | str
+
+
+## **workload_name** / SCT_WORKLOAD_NAME
+
+Workload name, can be: write|read|mixed|unset. Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true). If unset, workload is taken from test name.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **adaptive_timeout_store_metrics** / SCT_ADAPTIVE_TIMEOUT_STORE_METRICS
+
+Store adaptive timeout metrics in Argus. Disabled for performance tests only.
+
+**default:** True
+
+**type:** bool
+=======
+**type:** str
+* appendable
+
+
+## **validate_large_collections** / SCT_VALIDATE_LARGE_COLLECTIONS
+
+Flag to validate large collections in the database
+
+**default:** N/A
+
+**type:** bool
+
+
+## **run_commit_log_check_thread** / SCT_RUN_COMMIT_LOG_CHECK_THREAD
+
+Flag to run a thread that checks commit logs
+
+**default:** True
+
+**type:** bool
+
+
+## **teardown_validators** / SCT_TEARDOWN_VALIDATORS
+
+Validators to use during teardown phase
+
+**default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}, 'rackaware': {'enabled': False}}
+
+**type:** dict | str
+
+
+## **use_capacity_reservation** / SCT_USE_CAPACITY_RESERVATION
+
+Flag to use capacity reservation for instances
+
+**default:** N/A
+
+**type:** bool
+
+
+## **use_dedicated_host** / SCT_USE_DEDICATED_HOST
+
+Flag to allocate dedicated hosts for the instances for the entire duration of the test run (AWS only)
+
+**default:** N/A
+
+**type:** bool
+
+
+## **aws_dedicated_host_ids** / SCT_AWS_DEDICATED_HOST_IDS
+
+List of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)
+
+**default:** N/A
+
+**type:** str | list[str]
+* appendable
+
+
+## **post_behavior_dedicated_host** / SCT_POST_BEHAVIOR_DEDICATED_HOST
+
+Failure/post test behavior, i.e. what to do with the dedicated hosts at the end of the test.<br><br>'destroy' - Destroy hosts (default)<br>'keep' - Keep hosts allocated
+
+**default:** N/A
+
+**type:** Literal['keep', 'destroy']
+
+
+## **bisect_start_date** / SCT_BISECT_START_DATE
+
+Start date for bisecting test runs to find regressions
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **bisect_end_date** / SCT_BISECT_END_DATE
+
+End date for bisecting test runs to find regressions
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **kafka_backend** / SCT_KAFKA_BACKEND
+
+Type of Kafka backend to use
+
+**default:** N/A
+
+**type:** Literal['localstack', 'vm', 'msk']
+
+
+## **kafka_connectors** / SCT_KAFKA_CONNECTORS
+
+Kafka connectors to use
+
+**default:** N/A
+
+**type:** list[sdcm.kafka.kafka_config.SctKafkaConfiguration]
+
+
+## **run_scylla_doctor** / SCT_RUN_SCYLLA_DOCTOR
+
+Flag to run Scylla Doctor tool
+
+**default:** True
+
+**type:** bool
+
+
+## **scylla_doctor_version** / SCT_SCYLLA_DOCTOR_VERSION
+
+Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.10')<br>to hardcode the version, or leave empty to use the latest available version. For stability,<br>artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.
+
+**default:** 1.10
+
+**type:** str
+* appendable
+
+
+## **skip_test_stages** / SCT_SKIP_TEST_STAGES
+
+Skip selected stages of a test scenario
+
+**default:** N/A
+
+**type:** dict | str
+
+
+## **use_zero_nodes** / SCT_USE_ZERO_NODES
+
+If True, enable support in SCT of zero nodes (configuration, nemesis)
+
+**default:** N/A
+
+**type:** bool
+
+
+## **n_db_zero_token_nodes** / SCT_N_DB_ZERO_TOKEN_NODES
+
+Number of zero token nodes in cluster. Value should be set as '0 1 1' for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions
+
+**default:** N/A
+
+**type:** int | list[int]
+
+
+## **zero_token_instance_type_db** / SCT_ZERO_TOKEN_INSTANCE_TYPE_DB
+
+Instance type for zero token node
+
+**default:** i4i.large
+
+**type:** str
+* appendable
+
+
+## **sct_aws_account_id** / SCT_SCT_AWS_ACCOUNT_ID
+
+AWS account id on behalf of which the test is run
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **latency_decorator_error_thresholds** / SCT_LATENCY_DECORATOR_ERROR_THRESHOLDS
+
+Error thresholds for latency decorator. Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}
+
+**default:** {'write': {'default': {'P90 write': {'fixed_limit': None}, 'P99 write': {'fixed_limit': 10}}}, 'read': {'default': {'P90 read': {'fixed_limit': None}, 'P99 read': {'fixed_limit': 10}}}, 'read_disk_only': {'default': {'P90 read': {'fixed_limit': None}, 'P99 read': {'fixed_limit': 10}}}, 'mixed': {'default': {'P90 write': {'fixed_limit': None}, 'P90 read': {'fixed_limit': None}, 'P99 write': {'fixed_limit': 10}, 'P99 read': {'fixed_limit': 10}}}}
+
+**type:** dict | str
+
+
+## **workload_name** / SCT_WORKLOAD_NAME
+
+Workload name, can be: write|read|mixed|unset. Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true). If unset, workload is taken from test name.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **adaptive_timeout_store_metrics** / SCT_ADAPTIVE_TIMEOUT_STORE_METRICS
+
+Store adaptive timeout metrics in Argus. Disabled for performance tests only.
+
+**default:** True
+
+**type:** bool
+>>>>>>> 8bdd3c44b (fix(scylla-doctor): remove DOCTOR-31 workaround and bump to 1.10)
 
 
 ## **gce_n_local_ssd_disk_monitor** / SCT_GCE_N_LOCAL_SSD_DISK_MONITOR
