@@ -1136,7 +1136,7 @@ class SCTConfiguration(BaseModel):
         description="Flag to run Scylla Doctor tool",
     )
     scylla_doctor_version: String = SctField(
-        description="""Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.9')
+        description="""Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.10')
                 to hardcode the version, or leave empty to use the latest available version. For stability,
                 artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.""",
     )
