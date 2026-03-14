@@ -478,36 +478,20 @@ SCT runner creation, test execution, log collection, and result reporting.
 
 ### 7.1 Key and Secrets Management
 
-SCT stores credentials and keys in an S3 bucket (`scylla-qa-keystore`) accessed
-via the [`KeyStore`](../sdcm/keystore.py) class. This is the current approach but
-has known limitations that need improvement.
+SCT uses a centralized credential store accessed via the
+[`KeyStore`](../sdcm/keystore.py) class. It manages SSH keys, cloud provider
+credentials, service account tokens, and API keys needed for test infrastructure.
 
-**Current state — what `KeyStore` manages:**
+The current approach has known limitations around access control, rotation, and
+auditability. An improvement plan is needed to address these gaps.
 
-| Credential | S3 key | Used for |
-|-----------|--------|----------|
-| SSH key pairs | `scylla_test_id_ed25519`, `*.pub` | SSH access to EC2, GCE, Azure, OCI nodes |
-| GCP service account | `gcp-sct-project-1.json` | GCE provisioning and API access |
-| Azure credentials | `azure.json` | Azure provisioning |
-| OCI credentials | `oci.json` | OCI provisioning |
-| Docker Hub | `docker.json` | Pulling/pushing Docker images |
-| Email config | `email_config.json` | Sending test reports |
-| LDAP credentials | `ldap_ms_ad.json` | LDAP authentication tests |
-| Azure/GCP KMS | `azure_kms_config.json`, `gcp_kms_config.json` | Encryption-at-rest tests |
-| Argus REST | `argus_rest_credentials.json` | Test result reporting |
-| Jira | `scylladb_jira.json` | Jira integration |
-| Housekeeping DB | `housekeeping-db.json` | Housekeeping database access |
-| Backup Azure blob | `backup_azure_blob.json` | Backup/restore tests |
+<!-- TODO: create an implementation plan for key management improvements — detailed inventory and architecture documented in internal Confluence -->
 
-**Known limitations:**
-- All credentials live in a single shared S3 bucket with no per-team access control
-- No automated rotation — keys are rotated manually when needed
-- No audit trail for who accessed which credential and when
-- SSH key is shared across all cloud backends (single `scylla_test_id_ed25519`)
-- Jenkins credentials (`qa-aws-secret-key-id`, etc.) are managed separately from
-  the S3 keystore with no unified view
-
-<!-- TODO: create an implementation plan for key management improvements (per-team access, rotation, audit logging) -->
+Maintainers working with credentials should:
+- Never commit secrets or credential files to the repository
+- Use `KeyStore` for all credential access — do not hardcode keys or paths
+- Coordinate credential changes with the team to avoid breaking CI
+- Report any suspected credential exposure immediately
 
 ### 7.2 Security-Sensitive Changes in PRs
 
