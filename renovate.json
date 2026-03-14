@@ -27,19 +27,25 @@
     "helm-values",
     "custom.regex"
   ],
+  "customDatasources": {
+    "scylla-doctor": {
+      "defaultRegistryUrlTemplate": "https://downloads.scylladb.com/downloads/scylla-doctor/tar/",
+      "format": "html"
+    }
+  },
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Track scylla-doctor versions from GitHub tags",
+      "description": "Track scylla-doctor versions from downloads.scylladb.com",
       "fileMatch": [
         "^defaults/.*\\.ya?ml$"
       ],
       "matchStrings": [
         "scylla_doctor_version:\\s*[\"'](?<currentValue>[\\d.]+)[\"']"
       ],
-      "depNameTemplate": "scylladb/scylla-doctor",
-      "datasourceTemplate": "github-tags",
-      "extractVersionTemplate": "^scylla-doctor-v(?<version>.+)$",
+      "depNameTemplate": "scylla-doctor",
+      "datasourceTemplate": "custom.scylla-doctor",
+      "extractVersionTemplate": "^scylla-doctor-(?<version>[\\d.]+)\\.tar\\.gz$",
       "versioningTemplate": "semver-coerced"
     }
   ],
@@ -82,7 +88,7 @@
     },
     {
       "matchPackageNames": [
-        "scylladb/scylla-doctor"
+        "scylla-doctor"
       ],
       "matchManagers": [
         "custom.regex"
