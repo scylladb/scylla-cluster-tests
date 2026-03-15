@@ -666,7 +666,8 @@ class SCTConfiguration(BaseModel):
             - port: int - agent HTTP API port (default: 16000)
             - binary_url: str - URL to download agent binary
             - max_concurrent_jobs: int - max concurrent jobs per agent (default: 10)
-            - log_level: str - logging level (default: info)""",
+            - log_level: str - logging level (default: info)
+            - tls: bool - enable TLS for agent communication (default: false)""",
     )
     manager_prometheus_port: int = SctField(
         description="Port to be used by the manager to contact Prometheus",

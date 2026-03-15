@@ -1268,13 +1268,17 @@ class ClusterTester(unittest.TestCase):
         self.connections = []
         make_threads_be_daemonic_by_default()
 
-        if not self.params.get("cluster_backend").startswith("k8s") and any(
-            [self.params.get("client_encrypt"), self.params.get("server_encrypt")]
-        ):
+        needs_ca = any(
+            [
+                self.params.get("client_encrypt"),
+                self.params.get("server_encrypt"),
+                self.params.get("agent").get("tls"),
+            ]
+        )
+        if not self.params.get("cluster_backend").startswith("k8s") and needs_ca:
             create_ca(self.localhost)
             if self.params.get("client_encrypt"):
-                cqlshrc_file = get_data_dir_path("ssl_conf", "client", "cqlshrc")
-                update_cqlshrc(cqlshrc_file)
+                update_cqlshrc(get_data_dir_path("ssl_conf", "client", "cqlshrc"))
 
         # download rpms for update_db_packages
         if self.params.get("update_db_packages"):

@@ -97,23 +97,36 @@ class AgentTimeoutError(AgentClientError):
 class AgentClient:
     """HTTP client for SCT agent API"""
 
-    def __init__(self, hostname: str, api_key: str, port: int = 16000, timeout: int = 30):
+    def __init__(
+        self,
+        hostname: str,
+        api_key: str,
+        port: int = 16000,
+        timeout: int = 30,
+        tls: bool = False,
+        ca_cert: Optional[str] = None,
+    ):
         self.hostname = hostname
         self.port = port
         self.api_key = api_key
-        self.base_url = f"http://{hostname}:{port}"
+        self.tls = tls
         self.timeout = timeout
+        self.base_url = f"{'https' if tls else 'http'}://{hostname}:{port}"
 
         self.session = requests.Session()
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET", "POST", "DELETE"],
+        adapter = HTTPAdapter(
+            max_retries=Retry(
+                total=3,
+                backoff_factor=1,
+                status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods=["GET", "POST", "DELETE"],
+            )
         )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
+
+        if tls and ca_cert:
+            self.session.verify = ca_cert
 
         self.session.headers.update(
             {
@@ -250,4 +263,4 @@ class AgentClient:
             raise
 
     def __repr__(self) -> str:
-        return f"AgentClient(hostname={self.hostname}, port={self.port})"
+        return f"AgentClient(hostname={self.hostname}, port={self.port}, tls={self.tls})"

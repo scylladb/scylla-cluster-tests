@@ -50,7 +50,14 @@ class AgentCmdRunner(CommandRunner, RetryMixin):
     default_run_retry = 3
 
     def __init__(
-        self, hostname: str, api_key: str, port: int = 16000, user: str = "root", password: Optional[str] = None
+        self,
+        hostname: str,
+        api_key: str,
+        port: int = 16000,
+        user: str = "root",
+        password: Optional[str] = None,
+        tls: bool = False,
+        ca_cert: Optional[str] = None,
     ):
         """
         Initialize agent command runner.
@@ -60,16 +67,20 @@ class AgentCmdRunner(CommandRunner, RetryMixin):
         :param port: agent HTTP API port
         :param user: not used for agent (added for interface compatibility)
         :param password: not used for agent (added for interface compatibility)
+        :param tls: enable TLS for agent communication
+        :param ca_cert: path to CA certificate file for TLS verification
         """
         super().__init__(hostname=hostname, user=user, password=password)
         self.port = port
         self.api_key = api_key
+        self.tls = tls
+        self.ca_cert = ca_cert
         self._agent_client = None
         self._streaming_jobs: Dict[str, Dict] = {}
         self._streaming_lock = threading.Lock()
 
     def _create_connection(self) -> AgentClient:
-        return AgentClient(self.hostname, self.api_key, self.port, 30)
+        return AgentClient(self.hostname, self.api_key, self.port, 30, tls=self.tls, ca_cert=self.ca_cert)
 
     @property
     def agent_client(self) -> AgentClient:
@@ -386,12 +397,13 @@ class AgentCmdRunner(CommandRunner, RetryMixin):
         return True
 
     def ssh_debug_cmd(self) -> str:
-        """Return debug command for interface compatibiliy (for agent, show API endpoint)"""
-        return f"curl -H 'Authorization: Bearer {self.api_key}' http://{self.hostname}:{self.port}/health"
+        """Return debug command for interface compatibility (for agent, show API endpoint)"""
+        scheme = "https" if self.tls else "http"
+        return f"curl -H 'Authorization: Bearer {self.api_key}' {scheme}://{self.hostname}:{self.port}/health"
 
     def stop(self):
         """Close agent client connection"""
         self._agent_client = None
 
     def __repr__(self) -> str:
-        return f"AgentCmdRunner(hostname={self.hostname}, port={self.port})"
+        return f"AgentCmdRunner(hostname={self.hostname}, port={self.port}, tls={self.tls})"
