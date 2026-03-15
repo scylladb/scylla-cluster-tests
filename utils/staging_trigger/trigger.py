@@ -1,5 +1,6 @@
 """High-level trigger interface and helpers for staging jobs."""
 
+import logging
 import re
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import click
 import yaml
 
 from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.version_utils import get_scylla_docker_repo_from_version
 
 from utils.staging_trigger.cache import lookup_pr
 from utils.staging_trigger.constants import (
@@ -99,6 +101,28 @@ def find_jenkinsfile(name: str) -> Path | None:
         idx = click.prompt("Pick one", type=click.IntRange(1, len(matches)))
         return matches[idx - 1]
     return None
+
+
+logger = logging.getLogger(__name__)
+
+
+def _auto_set_docker_image(params: dict[str, str]) -> None:
+    """Auto-derive scylla_docker_image when backend is docker and version is set.
+
+    Modifies ``params`` in place. Skips if scylla_docker_image is already set.
+    """
+    scylla_version = params.get("scylla_version", "")
+    if not scylla_version:
+        return
+    backend = params.get("backend", "")
+    if backend and backend != "docker":
+        return
+    if params.get("scylla_docker_image"):
+        return
+    try:
+        params["scylla_docker_image"] = get_scylla_docker_repo_from_version(scylla_version)
+    except (ValueError, Exception):  # noqa: BLE001
+        logger.debug("Could not derive docker image from version %s", scylla_version, exc_info=True)
 
 
 class StagingTrigger:
@@ -209,6 +233,7 @@ class StagingTrigger:
 
         last_params = {} if dry_run else self._jenkins.get_last_build_params(full_name)
         merged = {**last_params, **self.preset.params, **self.param_overrides, **extra_params}
+        _auto_set_docker_image(merged)
 
         if dry_run:
             non_empty = {k: v for k, v in sorted(merged.items()) if v}
@@ -285,6 +310,7 @@ class StagingTrigger:
 
             last_params = {} if dry_run else self._jenkins.get_last_build_params(full_name)
             merged = {**last_params, **self.preset.params, **self.param_overrides, **extra}
+            _auto_set_docker_image(merged)
 
             if dry_run:
                 non_empty = {k: v for k, v in sorted(merged.items()) if v}

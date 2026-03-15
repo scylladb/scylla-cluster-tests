@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from sdcm.keystore import KeyStore
 from sdcm.utils.get_username import get_username
 
+CUSTOM_VALUE_SENTINEL = "__custom_value__"
+
 ARGUS_URL = "https://argus.scylladb.com/tests/scylla-cluster-tests"
 SCT_REPO = "git@github.com:scylladb/scylla-cluster-tests.git"
 
@@ -148,6 +150,30 @@ DTEST_TOPOLOGY_FLAGS = {
     "tablets": "--tablets",
     "gossip": "--force-gossip-topology-changes",
 }
+
+# Known choices for parameters that Jenkins stores as StringParameterDefinition
+# but actually have a fixed set of valid values (from SCT config Literal types
+# or Groovy pipeline definitions).
+KNOWN_PARAM_CHOICES: dict[str, list[str]] = {
+    "provision_type": ["spot", "on_demand", "spot_fleet", "spot_low_price"],
+    "instance_provision_fallback_on_demand": ["true", "false"],
+    "post_behavior_db_nodes": ["destroy", "keep", "keep-on-failure"],
+    "post_behavior_loader_nodes": ["destroy", "keep", "keep-on-failure"],
+    "post_behavior_monitor_nodes": ["destroy", "keep", "keep-on-failure"],
+    "post_behavior_k8s_cluster": ["destroy", "keep", "keep-on-failure"],
+    "post_behavior_vector_store_nodes": ["destroy", "keep", "keep-on-failure"],
+    "post_behavior_dedicated_host": ["keep", "destroy"],
+    "ip_ssh_connections": ["private", "public", "IPv6"],
+    "nonroot_offline_install": ["true", "false"],
+}
+
+
+@dataclass
+class ParamDefinition:
+    """Metadata for a Jenkins job parameter definition."""
+
+    default: str
+    choices: list[str] | None = None
 
 
 @dataclass
