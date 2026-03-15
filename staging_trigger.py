@@ -57,4 +57,4 @@ from utils.staging_trigger import __all__  # noqa: F401
 from utils.staging_trigger.cli import cli
 
 if __name__ == "__main__":
-    cli()
+    cli(prog_name="staging-trigger")
