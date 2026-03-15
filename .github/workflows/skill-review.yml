@@ -1,0 +1,39 @@
+name: Skill Quality Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+    paths: ['skills/**']
+
+jobs:
+  skill-review:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install tessl CLI
+        run: curl -fsSL https://get.tessl.io | sh
+
+      - name: Review skills
+        run: |
+          exit_code=0
+          for skill_dir in skills/*/; do
+            if [ -f "$skill_dir/SKILL.md" ]; then
+              echo "Reviewing $skill_dir..."
+              tessl skill review "$skill_dir" || exit_code=1
+            fi
+          done
+          exit $exit_code
+
+      - name: Post results as PR comment
+        if: always()
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "Skill review completed. See workflow logs for details."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
