@@ -181,20 +181,22 @@ class ScyllaDoctor:
             self.node.install_package("ethtool")
             self.node.install_package("tar")
 
-        if self.offline_install or self.node.parent_cluster.cluster_backend == "docker":
-            self.download_scylla_doctor()
-            if self.node.is_nonroot_install:
-                self.python3_path = self.find_local_python3_binary(self.current_dir)
-                self.update_scylla_doctor_config(
-                    self.current_dir, additional_config=self.SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS
-                )
-        else:
-            # Install via package manager (apt/yum/dnf) with configured version
-            if self.configured_version:
-                LOGGER.info("Installing scylla-doctor version %s via package manager", self.configured_version)
-            else:
-                LOGGER.info("Installing latest scylla-doctor via package manager")
-            self.node.install_package("scylla-doctor", package_version=self.configured_version)
+        # Always download from S3 — package repos are not updated at the same
+        # time as S3 releases, and specific versions may not be available via repo.
+        self.download_scylla_doctor()
+        if self.node.is_nonroot_install:
+            self.python3_path = self.find_local_python3_binary(self.current_dir)
+            self.update_scylla_doctor_config(
+                self.current_dir, additional_config=self.SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS
+            )
+
+        # TODO: optionally install via package manager (apt/yum/dnf) instead of S3
+        #  download. Needs an SCT configuration toggle to enable this path.
+        # if self.configured_version:
+        #     LOGGER.info("Installing scylla-doctor version %s via package manager", self.configured_version)
+        # else:
+        #     LOGGER.info("Installing latest scylla-doctor via package manager")
+        # self.node.install_package("scylla-doctor", package_version=self.configured_version)
 
     def argus_collect_sd_package(self):
         try:
