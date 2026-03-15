@@ -37,8 +37,8 @@
     {
       "customType": "regex",
       "description": "Track scylla-doctor versions from downloads.scylladb.com",
-      "fileMatch": [
-        "^defaults/.*\\.ya?ml$"
+      "managerFilePatterns": [
+        "/^defaults/.*\\.ya?ml$/"
       ],
       "matchStrings": [
         "scylla_doctor_version:\\s*[\"'](?<currentValue>[\\d.]+)[\"']"
@@ -52,8 +52,12 @@
   "packageRules": [
     {
       "groupName": "All pip dependencies",
-      "matchManagers": ["pep621"],
-      "packageNames": ["!scylla-driver"],
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchPackageNames": [
+        "!scylla-driver"
+      ],
       "enabled": true
     },
     {
@@ -127,13 +131,13 @@
     "enabled": true
   },
   "helm-values": {
-    "fileMatch": [
-      "(^|/)values_.*\\.ya?ml$"
+    "managerFilePatterns": [
+      "/(^|/)values_.*\\.ya?ml$/"
     ]
   },
   "pip-compile": {
-    "fileMatch": [
-      "(^|/)requirements\\.txt$"
+    "managerFilePatterns": [
+      "/(^|/)requirements\\.txt$/"
     ]
   }
 }
