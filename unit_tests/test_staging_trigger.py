@@ -561,6 +561,65 @@ class TestStagingTrigger:
             constants_mod._PRESETS = None
 
     @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
+    def test_run_multi_with_3_tuple_descriptions(self, _mock_user, mock_jenkins):
+        """3-tuple entries carry per-job descriptions into the checklist."""
+        constants_mod._PRESETS = None
+        try:
+            trigger = StagingTrigger.from_preset("longevity", branch="master", folder="staging/testuser")
+            jobs_with_params = [
+                ("job-a", {"extra": "val_a"}, "first job"),
+                ("job-b", {"extra": "val_b"}, "second job"),
+            ]
+            results = trigger.run_multi(jobs_with_params, dry_run=True)
+            assert len(results) == 2
+            assert results[0].description == "first job"
+            assert results[1].description == "second job"
+        finally:
+            constants_mod._PRESETS = None
+
+    @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
+    def test_run_multi_mixed_2_and_3_tuples(self, _mock_user, mock_jenkins):
+        """Mixing 2-tuples and 3-tuples: 2-tuples get empty description."""
+        constants_mod._PRESETS = None
+        try:
+            trigger = StagingTrigger.from_preset("longevity", branch="master", folder="staging/testuser")
+            jobs_with_params = [
+                ("job-a", {"extra": "val_a"}),
+                ("job-b", {"extra": "val_b"}, "has desc"),
+                ("job-c", {}),
+            ]
+            results = trigger.run_multi(jobs_with_params, dry_run=True)
+            assert len(results) == 3
+            assert results[0].description == ""
+            assert results[1].description == "has desc"
+            assert results[2].description == ""
+        finally:
+            constants_mod._PRESETS = None
+
+    @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
+    def test_run_multi_duplicate_names_different_descriptions(self, _mock_user, mock_jenkins):
+        """Same job name with different descriptions produces distinct checklist entries."""
+        constants_mod._PRESETS = None
+        try:
+            trigger = StagingTrigger.from_preset("longevity", branch="master", folder="staging/testuser")
+            jobs_with_params = [
+                ("artifacts-rocky9-test", {}, "repo install"),
+                ("artifacts-rocky9-test", {"unified_package": "http://example.com/pkg"}, "unified pkg"),
+                ("artifacts-rocky9-test", {"nonroot_offline_install": "true"}, "offline install"),
+            ]
+            results = trigger.run_multi(jobs_with_params, dry_run=True)
+            assert len(results) == 3
+            assert results[0].description == "repo install"
+            assert results[1].description == "unified pkg"
+            assert results[2].description == "offline install"
+            checklist = format_checklist(results)
+            assert "(repo install)" in checklist
+            assert "(unified pkg)" in checklist
+            assert "(offline install)" in checklist
+        finally:
+            constants_mod._PRESETS = None
+
+    @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
     def test_run_dtest_variants_dry_run(self, _mock_user, mock_jenkins):
         constants_mod._PRESETS = None
         try:
@@ -571,6 +630,24 @@ class TestStagingTrigger:
             assert len(results) == 2
             assert results[0].description == "no-tablets"
             assert results[1].description == "tablets"
+        finally:
+            constants_mod._PRESETS = None
+
+    @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
+    def test_run_dtest_variants_with_description_prefix(self, _mock_user, mock_jenkins):
+        """description_prefix is combined with the topology key."""
+        constants_mod._PRESETS = None
+        try:
+            trigger = StagingTrigger.from_preset("dtest", branch="master", folder="staging/testuser")
+            results = trigger.run_dtest_variants(
+                "dtest-pytest-gating",
+                topologies=["no-tablets", "tablets"],
+                dry_run=True,
+                description_prefix="gating",
+            )
+            assert len(results) == 2
+            assert results[0].description == "gating (no-tablets)"
+            assert results[1].description == "gating (tablets)"
         finally:
             constants_mod._PRESETS = None
 
@@ -686,6 +763,70 @@ class TestRunFromConfig:
         try:
             results = run_from_config(str(config_path), dry_run=True)
             assert len(results) == 1
+        finally:
+            constants_mod._PRESETS = None
+
+    @patch("utils.staging_trigger.trigger.JenkinsJobTrigger")
+    @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
+    def test_run_from_config_with_description(self, _mock_user, mock_jenkins_cls, tmp_path):
+        """YAML description field propagates into the checklist."""
+        constants_mod._PRESETS = None
+
+        mock_client = MagicMock()
+        mock_client.url = "http://jenkins.example.com"
+        mock_jenkins_cls.return_value = mock_client
+
+        config = {
+            "branch": "master",
+            "folder": "staging/testuser",
+            "jobs": [
+                {
+                    "name": "longevity-100gb-4h-test",
+                    "preset": "longevity",
+                    "description": "4h longevity",
+                },
+            ],
+        }
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(yaml.dump(config), encoding="utf-8")
+
+        try:
+            results = run_from_config(str(config_path), dry_run=True)
+            assert len(results) == 1
+            assert results[0].description == "4h longevity"
+        finally:
+            constants_mod._PRESETS = None
+
+    @patch("utils.staging_trigger.trigger.JenkinsJobTrigger")
+    @patch("utils.staging_trigger.constants.get_username", return_value="testuser")
+    def test_run_from_config_dtest_description_prefix(self, _mock_user, mock_jenkins_cls, tmp_path):
+        """YAML description is used as prefix for dtest topology descriptions."""
+        constants_mod._PRESETS = None
+
+        mock_client = MagicMock()
+        mock_client.url = "http://jenkins.example.com"
+        mock_jenkins_cls.return_value = mock_client
+
+        config = {
+            "branch": "master",
+            "folder": "staging/testuser",
+            "jobs": [
+                {
+                    "name": "dtest-pytest-gating",
+                    "preset": "dtest",
+                    "description": "gating",
+                    "dtest_topologies": ["no-tablets", "tablets"],
+                },
+            ],
+        }
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(yaml.dump(config), encoding="utf-8")
+
+        try:
+            results = run_from_config(str(config_path), dry_run=True)
+            assert len(results) == 2
+            assert results[0].description == "gating (no-tablets)"
+            assert results[1].description == "gating (tablets)"
         finally:
             constants_mod._PRESETS = None
 
