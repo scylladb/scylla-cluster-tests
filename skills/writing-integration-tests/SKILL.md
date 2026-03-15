@@ -62,22 +62,7 @@ Use `yield` fixtures with teardown blocks, context managers, or `try/finally`. L
 - Testing configuration parsing or value transformation — unit test with `monkeypatch`
 - Testing error handling for known error formats — unit test with fake responses
 - Writing end-to-end longevity or performance tests — those are separate test types in `*_test.py`
-- Full-blown multi-node cluster scenarios, performance benchmarks, or scale testing — see below
-
-### When You Need a Full SCT Test Case Instead
-
-Integration tests in `unit_tests/` run against lightweight local fixtures (single Docker container, mocked services). They **cannot** replace full SCT test cases for:
-
-- **Multi-node cluster behavior** — Replication, consistency, decommission/add-node, rack/DC-aware operations require a real multi-node cluster provisioned by SCT on a cloud backend (AWS, GCE, Azure).
-- **Performance and latency testing** — Throughput regressions, latency percentile checks, and benchmark comparisons need production-like hardware and dedicated performance test infrastructure (`performance_regression_test.py`).
-- **Scale testing** — Large dataset tests, high-partition-count scenarios, and memory-pressure tests need instances with sufficient resources that cannot be replicated locally.
-- **Nemesis / chaos engineering** — Testing resilience under node failures, network partitions, or disk faults requires real infrastructure managed by SCT's nemesis framework (`sdcm/nemesis.py`).
-- **Upgrade and migration testing** — Rolling upgrades across Scylla versions need multi-node clusters with real package installations (`upgrade_test.py`).
-
-For these scenarios, write a full SCT test case (a `*_test.py` file at the repository root) with a matching configuration in `test-cases/`. Run it via:
-```bash
-hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/your-test.yaml
-```
+- Multi-node clusters, nemesis/chaos, scale testing, or upgrades — write a full SCT test case (`*_test.py` at repo root) with a `test-cases/` config instead
 
 ## Quick Reference: Integration Test Fixtures
 
@@ -245,6 +230,11 @@ uv run python -m pytest unit_tests/test_your_module.py::test_function -v -s -m i
 # Run integration tests with more parallel workers
 uv run sct.py integration-tests -n 8
 ```
+
+After running, validate:
+1. **Verify container started:** `docker ps` — confirm the Scylla container is running during the test
+2. **Check test isolation:** Run the test twice in a row — both runs should pass (no leaked state)
+3. **Check cleanup:** After the test finishes, `docker ps -a | grep scylla` should show no leftover containers
 
 ## Reference Index
 

@@ -419,12 +419,12 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 
 | Skill | Description | Path |
 |-------|-------------|------|
-| designing-skills | Meta-skill for creating new AI agent skills for SCT | `skills/designing-skills/SKILL.md` |
-| fix-backport-conflicts | Fix inline merge conflict markers in backport PRs by resolving conflicts and recommitting cleanly with original metadata preserved. | `skills/fix-backport-conflicts/SKILL.md` |
-| profiling-sct-code | Profile Python code in SCT to find CPU, memory, and concurrency bottlenecks using standard 3rd party tools. | `skills/profiling-sct-code/SKILL.md` |
-| writing-plans | Guides creation of implementation plans following SCT's 7-section structure | `skills/writing-plans/SKILL.md` |
-| writing-unit-tests | Guides writing isolated unit tests with mocking and no external services | `skills/writing-unit-tests/SKILL.md` |
-| writing-integration-tests | Guides writing integration tests with labeled external service dependencies | `skills/writing-integration-tests/SKILL.md` |
+| designing-skills | Guides the design and structuring of AI agent skills for SCT. Use when creating new skills, reviewing existing skills, or editing SKILL.md files. | `skills/designing-skills/SKILL.md` |
+| fix-backport-conflicts | Fix inline merge conflict markers in backport PRs. Use when a backport PR has unresolved conflict markers or a cherry-pick produced merge conflicts. | `skills/fix-backport-conflicts/SKILL.md` |
+| profiling-sct-code | Profile Python code in SCT to find CPU, memory, and concurrency bottlenecks. Use when a test or operation is unexpectedly slow or memory usage grows unbounded. | `skills/profiling-sct-code/SKILL.md` |
+| writing-plans | Use when asked to generate an implementation plan, draft a plan, or design a phased feature rollout for SCT. | `skills/writing-plans/SKILL.md` |
+| writing-unit-tests | Guides writing and debugging unit tests for SCT using pytest. Use when creating test files in unit_tests/, adding test cases, or mocking external services. | `skills/writing-unit-tests/SKILL.md` |
+| writing-integration-tests | Guides writing integration tests that interact with real external services. Use when creating tests requiring Docker, AWS, GCE, Azure, OCI, or Kubernetes backends. | `skills/writing-integration-tests/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 

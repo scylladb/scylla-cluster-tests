@@ -4,8 +4,9 @@ description: >-
   Guides the design and structuring of AI agent skills for the SCT
   repository with multi-step phases, progressive disclosure, and
   dual-platform compatibility (GitHub Copilot and Claude Code).
-  Use when creating new skills, reviewing existing skills, or
-  restructuring AI guidance into modular skill directories.
+  Use when creating new skills, reviewing existing skills,
+  restructuring AI guidance into modular skill directories,
+  editing SKILL.md files, or improving agent instructions.
 ---
 
 # Designing Skills for SCT
@@ -113,6 +114,17 @@ After testing a skill, review every instruction. If removing an instruction does
 - Simple one-off documentation updates — edit the relevant file directly
 - Updating `AGENTS.md` or `.github/copilot-instructions.md` without creating a skill
 - Debugging skill logic that's domain-specific (use the domain skill itself)
+
+## High-Level Workflow
+
+The full process is in [create-a-skill.md](workflows/create-a-skill.md). Summary:
+
+1. **Capture intent** — Interview for 5-10 example prompts, expected outputs, and failure modes
+2. **Draft description** — Write trigger-focused frontmatter description; test against eval queries
+3. **Write SKILL.md** — Essential principles, When to Use / When NOT to Use, quick references
+4. **Split content** — Move detailed patterns to `references/`, step-by-step processes to `workflows/`
+5. **Register** — Add entries to `AGENTS.md` table and `CLAUDE.md` imports
+6. **Validate** — Run `tessl skill review`, run unit tests (`test_skills_structure.py`), verify all links resolve
 
 ## Skill Directory Structure
 

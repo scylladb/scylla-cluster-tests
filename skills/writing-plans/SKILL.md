@@ -4,7 +4,10 @@ description: >-
   Use when asked to generate an implementation plan, draft a plan,
   or design a phased feature rollout for the SCT repository.
   Applies to multi-phase changes, refactoring strategies, and
-  complex feature designs that need documented roadmaps.
+  complex feature designs that need documented roadmaps. Produces
+  structured plans with PR-scoped phases, dependency ordering,
+  risk mitigation, and testing requirements following SCT's
+  7-section format in docs/plans/.
 ---
 
 # Writing Implementation Plans for SCT
