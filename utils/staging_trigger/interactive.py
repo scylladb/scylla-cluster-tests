@@ -1,5 +1,7 @@
 """Interactive parameter editing, browsing, YAML and Python code generation."""
 
+import functools
+import logging
 import subprocess
 from pathlib import Path
 
@@ -7,12 +9,119 @@ import click
 import questionary
 import yaml
 
-from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.common import get_latest_scylla_release, get_sct_root_path
 from sdcm.utils.get_username import get_username
+from sdcm.utils.version_utils import get_scylla_docker_repo_from_version
 
-from utils.staging_trigger.constants import SCT_REPO, _default_folder, get_presets
+from utils.staging_trigger.constants import (
+    CUSTOM_VALUE_SENTINEL,
+    KNOWN_PARAM_CHOICES,
+    ParamDefinition,
+    SCT_REPO,
+    _default_folder,
+    get_presets,
+)
 from utils.staging_trigger.jenkins_client import JenkinsJobTrigger
 from utils.staging_trigger.trigger import detect_preset_from_jenkinsfile, detect_preset_from_job_name
+
+logger = logging.getLogger(__name__)
+
+
+@functools.lru_cache(maxsize=1)
+def _fetch_latest_release() -> str | None:
+    """Fetch the latest Scylla release version, cached for the session."""
+    try:
+        return get_latest_scylla_release("scylla")
+    except Exception:  # noqa: BLE001
+        logger.debug("Could not fetch latest scylla release", exc_info=True)
+        return None
+
+
+def _get_version_suggestions(current_value: str) -> list[questionary.Choice]:
+    """Build a list of version suggestions for the scylla_version parameter."""
+    choices = [
+        questionary.Choice("master:latest", value="master:latest"),
+    ]
+
+    latest = _fetch_latest_release()
+    if latest:
+        choices.append(questionary.Choice(f"{latest} (latest release)", value=latest))
+
+    if current_value and current_value not in {c.value for c in choices}:
+        choices.append(questionary.Choice(f"{current_value} (current)", value=current_value))
+
+    choices.append(questionary.Choice("Custom value...", value=CUSTOM_VALUE_SENTINEL))
+    return choices
+
+
+def _prompt_for_value(key: str, current_value: str, param_meta: dict[str, ParamDefinition]) -> str:
+    """Prompt for a single parameter value using the appropriate widget.
+
+    Args:
+        key: Parameter name.
+        current_value: Current value of the parameter.
+        param_meta: Dict of parameter metadata from Jenkins.
+
+    Returns:
+        The new value chosen by the user.
+    """
+    if key == "scylla_version":
+        suggestions = _get_version_suggestions(current_value)
+        picked = questionary.select(f"{key}:", choices=suggestions).ask()
+        if picked is None:
+            raise click.Abort()
+        if picked == CUSTOM_VALUE_SENTINEL:
+            picked = questionary.text(f"{key}:", default=current_value).ask()
+            if picked is None:
+                raise click.Abort()
+        return picked
+
+    meta = param_meta.get(key)
+    choices_list = (meta.choices if meta and meta.choices else None) or KNOWN_PARAM_CHOICES.get(key)
+    if choices_list:
+        select_choices = [questionary.Choice(c, value=c) for c in choices_list]
+        select_choices.append(questionary.Choice("Custom value...", value=CUSTOM_VALUE_SENTINEL))
+        picked = questionary.select(f"{key}:", choices=select_choices).ask()
+        if picked is None:
+            raise click.Abort()
+        if picked == CUSTOM_VALUE_SENTINEL:
+            picked = questionary.text(f"{key}:", default=current_value).ask()
+            if picked is None:
+                raise click.Abort()
+        return picked
+
+    new_value = questionary.text(f"{key}:", default=current_value).ask()
+    if new_value is None:
+        raise click.Abort()
+    return new_value
+
+
+def maybe_set_docker_image(all_params: dict[str, str]) -> None:
+    """Auto-derive scylla_docker_image when backend is docker and scylla_version is set.
+
+    Modifies ``all_params`` in place. An explicit user-set ``scylla_docker_image``
+    that is non-empty takes precedence.
+    """
+    scylla_version = all_params.get("scylla_version", "")
+    if not scylla_version:
+        return
+
+    # Only auto-set when backend looks like docker (or not specified — safe default)
+    backend = all_params.get("backend", "")
+    if backend and backend != "docker":
+        return
+
+    # Don't overwrite explicit user value
+    existing = all_params.get("scylla_docker_image", "")
+    if existing:
+        return
+
+    try:
+        docker_repo = get_scylla_docker_repo_from_version(scylla_version)
+        all_params["scylla_docker_image"] = docker_repo
+        click.secho(f"  Auto-set scylla_docker_image={docker_repo} (from {scylla_version})", fg="green")
+    except (ValueError, Exception):  # noqa: BLE001
+        logger.debug("Could not derive docker image from version %s", scylla_version, exc_info=True)
 
 
 def _display_params_table(params: dict[str, str], preset_keys: set[str]) -> None:
@@ -31,25 +140,29 @@ def prompt_for_params(preset_name: str, job_name: str | None = None, folder: str
 
     Shows all parameters in a table, lets the user select which ones to modify
     via checkbox, edit those values, then review. Loops until the user is done.
+
+    For ``scylla_version``, offers version suggestions via ``questionary.select``.
+    For Jenkins choice parameters, offers the choices via ``questionary.select``.
+    Otherwise, uses ``questionary.text``.
     """
     presets = get_presets()
     preset_params = dict(presets.get(preset_name, presets["longevity"]).params)
     preset_keys = set(preset_params.keys())
 
-    jenkins_params: dict[str, str] = {}
+    param_meta: dict[str, ParamDefinition] = {}
     if job_name and folder:
         full_name = f"{folder}/{job_name}"
         click.echo(f"Fetching parameters from Jenkins for {job_name}...")
         client = JenkinsJobTrigger()
         try:
-            jenkins_params = client.get_job_parameter_definitions(full_name)
+            param_meta = client.get_job_parameter_definitions(full_name)
         except Exception:  # noqa: BLE001
             click.secho("  Could not fetch parameters from Jenkins, using preset only.", fg="yellow")
 
     all_params = dict(preset_params)
-    for k, v in jenkins_params.items():
+    for k, v in param_meta.items():
         if k not in all_params:
-            all_params[k] = v
+            all_params[k] = v.default
 
     ordered_keys = list(preset_params.keys()) + [k for k in all_params if k not in preset_params]
 
@@ -105,13 +218,9 @@ def prompt_for_params(preset_name: str, job_name: str | None = None, folder: str
             continue
 
         for key in to_edit:
-            new_value = questionary.text(
-                f"{key}:",
-                default=all_params[key],
-            ).ask()
-            if new_value is None:
-                raise click.Abort()
-            all_params[key] = new_value
+            all_params[key] = _prompt_for_value(key, all_params[key], param_meta)
+
+    maybe_set_docker_image(all_params)
 
     return {k: all_params[k] for k in ordered_keys}
 
