@@ -223,7 +223,8 @@ uv run python -m pytest unit_tests/test_config.py --cov=sdcm.sct_config --cov-re
 
 | File | Content |
 |------|---------|
-| [common-pitfalls.md](references/common-pitfalls.md) | Detailed pitfalls and anti-patterns with before/after fixes |
+| [common-pitfalls.md](references/common-pitfalls.md) | Pitfalls P-1 through P-15 with before/after fixes |
+| [anti-patterns.md](references/anti-patterns.md) | Anti-patterns AP-1 through AP-3 with before/after fixes |
 
 | Workflow | Purpose |
 |----------|---------|
