@@ -38,8 +38,8 @@ Read the [references/frameworks-summary.md](references/frameworks-summary.md) to
 | Complexity | Frameworks |
 |------------|-----------|
 | Simple (≤3 elements) | APE, ERA, TAG, RTF, BAB, PEE, ELI5 |
-| Medium (4–5 elements) | RACE, CIDI, SPEAR, SPAR, FOCUS, SMART, GOPA, ORID, CARE, PAUSE, TRACE, GRADE, TRACI, RODES |
-| Complex (6+ elements) | RACEF, CRISPE, SCAMPER, Six Thinking Hats, ROSES, PROMPT, RISEN, RASCEF, Atomic Prompting |
+| Medium (4–5 elements) | RACE, CIDI, SPEAR, SPAR, FOCUS, SMART, GOPA, ORID, CARE, RISE, PAUSE, TRACE, GRADE, TRACI, RODES |
+| Complex (6+ elements) | RACEF, CRISPE, SCAMPER, Six Thinking Hats, Five Ws+H, ROSES, PROMPT, RISEN, RASCEF, Atomic Prompting |
 
 **Quick selection by domain:**
 
