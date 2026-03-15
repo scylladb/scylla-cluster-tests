@@ -38,6 +38,8 @@ start_support_backend = {"azure": {"scylla": "5.2", "enterprise": "2023.1"}}
 # list of version that are available, but aren't supported, and we should test upgrades from
 unsupported_versions = [
     "5.3",
+    "6.0",
+    "2024.2",
 ]
 
 
