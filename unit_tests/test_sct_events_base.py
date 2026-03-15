@@ -82,8 +82,7 @@ def test_subclass_with_max_severity():
 
 
 def test_subclass_twice_with_same_name():
-    class Y(SctEvent):
-        pass
+    _ = type("Y", (SctEvent,), {})
 
     with pytest.raises(TypeError, match="is already used"):
         type("Y", (SctEvent,), {})

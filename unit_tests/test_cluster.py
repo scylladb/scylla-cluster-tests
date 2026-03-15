@@ -20,7 +20,6 @@ import tempfile
 import time
 import unittest.mock
 from datetime import datetime
-from functools import cached_property
 from typing import List
 
 import pytest
@@ -45,7 +44,6 @@ from sdcm.utils.version_utils import ComparableScyllaVersion
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_config import SCTConfiguration
 from unit_tests.dummy_remote import DummyRemote, LocalNode
-from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.test_utils_common import DummyNode
 
 
@@ -72,26 +70,31 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):
         pass
 
 
-class TestBaseNode(EventsUtilsMixin):
-    @classmethod
-    def setup_class(cls):
-        cls.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
+class TestBaseNode:
+    @pytest.fixture(autouse=True)
+    def setup_events(self, events_function_scope):
+        """Use per-test events fixture for proper isolation between tests."""
+        self._events = events_function_scope
+        self._init_node()
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
 
-    @cached_property
+    def _init_node(self):
+        if not hasattr(self, "_node"):
+            self._node = DummyNode(
+                name="test_node",
+                parent_cluster=None,
+                base_logdir=self._events.temp_dir,
+                ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
+            )
+            self._node.parent_cluster = DummyDbCluster(nodes=[self._node])
+            self._node.init()
+            self._node.remoter = DummyRemote()
+
+    @property
     def node(self):
-        dummy_node = DummyNode(
-            name="test_node",
-            parent_cluster=None,
-            base_logdir=self.temp_dir,
-            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
-        )
-        dummy_node.parent_cluster = DummyDbCluster(nodes=[dummy_node])
-        dummy_node.init()
-        dummy_node.remoter = DummyRemote()
-        return dummy_node
+        return self._node
 
-    @cached_property
-    def _db_log_reader(self):
+    def _make_db_log_reader(self):
         return DbLogReader(
             system_log=self.node.system_log,
             remoter=self.node.remoter,
@@ -104,6 +107,7 @@ class TestBaseNode(EventsUtilsMixin):
         )
 
     def _read_and_publish_events(self, log_text=None):
+        db_log_reader = self._make_db_log_reader()
         if log_text:
             with tempfile.NamedTemporaryFile(mode="wt") as temp_log:
                 self.node.system_log = temp_log.name
@@ -111,16 +115,9 @@ class TestBaseNode(EventsUtilsMixin):
                 for line in log_text.splitlines(keepends=True):
                     temp_log.write(line)
                     temp_log.flush()
-                    self._db_log_reader._read_and_publish_events()
+                    db_log_reader._read_and_publish_events()
         else:
-            self._db_log_reader._read_and_publish_events()
-
-    @classmethod
-    def teardown_class(cls):
-        cls.teardown_events_processes()
-
-    def setup_method(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
+            db_log_reader._read_and_publish_events()
 
     def test_search_system_log(self):
         critical_errors = list(self.node.follow_system_log(start_from_beginning=True))
@@ -137,7 +134,7 @@ class TestBaseNode(EventsUtilsMixin):
 
         self._read_and_publish_events()
 
-        with self.get_raw_events_log().open() as events_file:
+        with self._events.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
 
             event_a, event_b = events[-2], events[-1]
@@ -153,7 +150,7 @@ class TestBaseNode(EventsUtilsMixin):
         self.node.parent_cluster = {"params": {"print_kernel_callstack": True}}
         self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "kernel_callstack.log")
         self._read_and_publish_events()
-        with self.get_raw_events_log().open() as events_file:
+        with self._events.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
 
             event_a, event_b = events[-2], events[-1]
@@ -174,7 +171,7 @@ class TestBaseNode(EventsUtilsMixin):
                     self._read_and_publish_events()
 
         time.sleep(0.2)
-        with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
+        with self._events.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
             cdc_err_events = [line for line in events_file if "cdc - Could not retrieve CDC streams" in line]
             assert cdc_err_events != []
 
@@ -191,7 +188,7 @@ class TestBaseNode(EventsUtilsMixin):
         ).publish()
 
         time.sleep(0.1)
-        with self.get_events_logger().events_logs_by_severity[Severity.WARNING].open() as events_file:
+        with self._events.get_events_logger().events_logs_by_severity[Severity.WARNING].open() as events_file:
             events = [line for line in events_file if "Powering Off" in line]
             assert events
 
@@ -200,7 +197,7 @@ class TestBaseNode(EventsUtilsMixin):
 
         self._read_and_publish_events()
 
-        with self.get_raw_events_log().open() as events_file:
+        with self._events.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
 
             event_a = events[-1]
@@ -214,7 +211,7 @@ class TestBaseNode(EventsUtilsMixin):
 
         self._read_and_publish_events()
 
-        with self.get_raw_events_log().open() as events_file:
+        with self._events.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
 
             backtraces = [event for event in events if event["type"] == "BACKTRACE"]
@@ -235,7 +232,7 @@ class TestBaseNode(EventsUtilsMixin):
 
         self._read_and_publish_events()
 
-        with self.get_raw_events_log().open() as events_file:
+        with self._events.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
 
             event_backtrace1, event_backtrace2 = events[-2], events[-1]
@@ -252,7 +249,7 @@ class TestBaseNode(EventsUtilsMixin):
 
         self._read_and_publish_events()
 
-        with self.get_raw_events_log().open() as events_file:
+        with self._events.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
 
             event_backtrace1, event_backtrace2 = events[-3], events[-2]
@@ -272,17 +269,9 @@ kernel callstack:
 INFO  2022-07-14 09:28:35,102 [shard 1] database - Flushed non-system tables
         """
 
-        # Track file position before publishing to avoid counting events from other tests in the shared log
-        raw_log = self.get_raw_events_log()
-        try:
-            start_pos = raw_log.stat().st_size
-        except FileNotFoundError:
-            start_pos = 0
-
         self._read_and_publish_events(logs)
 
-        with raw_log.open() as events_file:
-            events_file.seek(start_pos)
+        with self._events.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
             reactor_stalls = [event for event in events if event["type"] == "REACTOR_STALLED"]
             assert len(reactor_stalls) == 1

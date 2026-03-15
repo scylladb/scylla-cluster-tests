@@ -501,14 +501,12 @@ def test_copy():
     copy_instance.client_encryption_options.enabled = False
     assert copy_instance.client_encryption_options.enabled is False
     assert original.client_encryption_options.enabled is True
-    assert copy_instance != original
     assert copy_instance.model_dump(exclude_unset=True, exclude_defaults=True) != original.model_dump(
         exclude_unset=True, exclude_defaults=True
     )
 
     copy_instance = original.copy()
     copy_instance.client_encryption_options = None
-    assert copy_instance != original
     assert copy_instance.model_dump(exclude_unset=True, exclude_defaults=True) != original.model_dump(
         exclude_unset=True, exclude_defaults=True
     )

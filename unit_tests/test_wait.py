@@ -85,26 +85,29 @@ def test_wait_return_value():
     assert len(calls) == 1
 
 
+class EventStopState:
+    """Shared state for event-stop tests: tracks callback calls and controls stop event."""
+
+    def __init__(self):
+        self.calls = []
+        self.callback_return_true_after = 0
+        self.ev = threading.Event()
+
+    def callback(self, arg1, arg2):
+        self.calls.append((arg1, arg2))
+        if len(self.calls) == self.callback_return_true_after:
+            return "what ever"
+        return False
+
+    def set_stop_in_timeout(self, ev, set_after):
+        while not ev.is_set():
+            if len(self.calls) == set_after:
+                ev.set()
+
+
 @pytest.fixture
 def event_stop_state():
-    class State:
-        def __init__(self):
-            self.calls = []
-            self.callback_return_true_after = 0
-            self.ev = threading.Event()
-
-        def callback(self, arg1, arg2):
-            self.calls.append((arg1, arg2))
-            if len(self.calls) == self.callback_return_true_after:
-                return "what ever"
-            return False
-
-        def set_stop_in_timeout(self, ev, set_after):
-            while not ev.is_set():
-                if len(self.calls) == set_after:
-                    ev.set()
-
-    state = State()
+    state = EventStopState()
     yield state
     state.ev.set()
 

@@ -7,7 +7,7 @@ def test_get_random():
         e for e in ALL_COLUMN_TYPES if e not in NOT_EMBEDDABLE_COLUMN_TYPES and e not in COLLECTION_COLUMN_TYPES
     ]
     NON_COLLECTION_TYPES = [e for e in ALL_COLUMN_TYPES if e not in COLLECTION_COLUMN_TYPES]
-    for e in NON_COLLECTION_TYPES:
+    for _ in NON_COLLECTION_TYPES:
         random_type = CQLTypeBuilder.get_random(already_used, allow_levels=0)
         random_type.remember_variant(already_used)
     assert set(already_used.keys()) == set(NON_COLLECTION_TYPES), (

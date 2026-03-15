@@ -25,7 +25,8 @@ class TestWatcher(StreamWatcher):
 
 
 class TestDockerCmdRunner:
-    def setup_method(self):
+    @pytest.fixture(autouse=True)
+    def setup(self):
         self.node = DummyNode()
         self.runner = DockerCmdRunner(self.node)
         self.runner._container = MagicMock()

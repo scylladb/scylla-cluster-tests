@@ -173,69 +173,68 @@ class TestContainerManager:
         self.node = DummyNode()
         self.node._containers["c1"] = self.container = DummyContainer()
 
-    def test_get_docker_client(self):
-        # Default Docker client
+    def test_get_docker_client_default(self):
         assert ContainerManager.get_docker_client(self.node, "c2") == ContainerManager.default_docker_client
 
-        # Docker client without name argument
+    def test_get_docker_client_without_name(self):
         self.node.None_docker_client = Mock()
         self.node.docker_client = sentinel.none_docker_client
         assert ContainerManager.get_docker_client(self.node) == sentinel.none_docker_client
         self.node.None_docker_client.assert_not_called()
 
-        # Docker client from existent container
+    def test_get_docker_client_from_existent_container(self):
         assert ContainerManager.get_docker_client(self.node, "c1") == sentinel.c1_docker_client
 
-        # Node-wide Docker client (None)
+    def test_get_docker_client_node_wide_none(self):
         self.node.docker_client = None
         assert ContainerManager.get_docker_client(self.node, "c2") == ContainerManager.default_docker_client
 
-        # Node-wide Docker client (not callable)
+    def test_get_docker_client_node_wide_not_callable(self):
         self.node.docker_client = sentinel.node_property_docker_client
         assert ContainerManager.get_docker_client(self.node, "c2") == sentinel.node_property_docker_client
 
-        # Node-wide Docker client (callable, return None)
+    def test_get_docker_client_node_wide_callable_returns_none(self):
         self.node.docker_client = Mock(return_value=None)
         assert ContainerManager.get_docker_client(self.node, "c2") == ContainerManager.default_docker_client
         self.node.docker_client.assert_called_once_with()
 
-        # Node-wide Docker client (callable)
+    def test_get_docker_client_node_wide_callable(self):
         self.node.docker_client = Mock(return_value=sentinel.node_callable_docker_client)
         assert ContainerManager.get_docker_client(self.node, "c2") == sentinel.node_callable_docker_client
         self.node.docker_client.assert_called_once_with()
 
-        # Node-wide Docker client (callable, with member)
-        self.node.docker_client.reset_mock()
+    def test_get_docker_client_node_wide_callable_with_member(self):
+        self.node.docker_client = Mock(return_value=sentinel.node_callable_docker_client)
         assert ContainerManager.get_docker_client(self.node, "c2:blah") == sentinel.node_callable_docker_client
         self.node.docker_client.assert_called_once_with()
 
-        # Docker client per container family (None)
-        self.node.docker_client.reset_mock()
+    def test_get_docker_client_per_family_none(self):
+        self.node.docker_client = Mock(return_value=sentinel.node_callable_docker_client)
         self.node.c2_docker_client = None
         assert ContainerManager.get_docker_client(self.node, "c2") == sentinel.node_callable_docker_client
         self.node.docker_client.assert_called_once_with()
 
-        # Docker client per container family (not callable)
-        self.node.docker_client.reset_mock()
+    def test_get_docker_client_per_family_not_callable(self):
+        self.node.docker_client = Mock(return_value=sentinel.node_callable_docker_client)
         self.node.c2_docker_client = sentinel.c2_property_docker_client
         assert ContainerManager.get_docker_client(self.node, "c2") == sentinel.c2_property_docker_client
         self.node.docker_client.assert_not_called()
 
-        # Docker client per container family (callable, return None)
-        self.node.docker_client.reset_mock()
+    def test_get_docker_client_per_family_callable_returns_none(self):
+        self.node.docker_client = Mock(return_value=sentinel.node_callable_docker_client)
         self.node.c2_docker_client = Mock(return_value=None)
         assert ContainerManager.get_docker_client(self.node, "c2") == sentinel.node_callable_docker_client
         self.node.c2_docker_client.assert_called_once_with()
         self.node.docker_client.assert_called_once_with()
 
-        # Docker client per container family (callable)
-        self.node.docker_client.reset_mock()
+    def test_get_docker_client_per_family_callable(self):
+        self.node.docker_client = Mock(return_value=sentinel.node_callable_docker_client)
         self.node.c2_docker_client = Mock(return_value=sentinel.c2_callable_docker_client)
         assert ContainerManager.get_docker_client(self.node, "c2") == sentinel.c2_callable_docker_client
         self.node.c2_docker_client.assert_called_once_with()
         self.node.docker_client.assert_not_called()
 
-        # Docker client per container family (callable, with member)
+    def test_get_docker_client_per_family_callable_with_member(self):
         self.node.docker_client = Mock(return_value=None)
         self.node.c2_docker_client = Mock(return_value=None)
         assert ContainerManager.get_docker_client(self.node, "c2:blah") == ContainerManager.default_docker_client
@@ -450,7 +449,7 @@ class TestContainerManager:
         assert set1 == set2
         assert len(set1) == 5
 
-        # Re-run container
+    def test_rerun_existing_container(self):
         self.container.start = Mock()
         ContainerManager.run_container(self.node, "c1")
         self.container.start.assert_called_once_with()
