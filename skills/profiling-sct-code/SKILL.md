@@ -1,6 +1,12 @@
 ---
 name: profiling-sct-code
-description: Profile Python code in SCT to find CPU, memory, and concurrency bottlenecks using standard 3rd party tools.
+description: >-
+  Profile Python code in SCT to find CPU, memory, and concurrency
+  bottlenecks using cProfile, scalene, memray, and py-spy. Use when
+  a test or framework operation is unexpectedly slow, memory usage
+  grows unbounded, you need to find which functions dominate CPU time,
+  or you want to verify that an optimization actually improved
+  performance. Covers profiling unit tests and full SCT test runs.
 ---
 
 # Profiling SCT Code
@@ -71,6 +77,28 @@ memray run -o ./memray.bin sct.py run-test ...
 # py-spy (attach to running process)
 py-spy record -s -o ./profile.svg --pid <PID>
 ```
+
+## Validating Profile Results
+
+After profiling, verify the output captured the expected code path before acting on results:
+
+```bash
+# cProfile — check the profile file exists and has data
+ls -la ./profile.stats
+python3 -c "import pstats; s = pstats.Stats('./profile.stats'); s.sort_stats('cumulative'); s.print_stats(10)"
+
+# scalene — check the HTML report was generated
+ls -la ./profile.html
+
+# memray — verify the binary output and generate a flamegraph
+ls -la ./memray.bin
+memray flamegraph ./memray.bin -o ./memray-flamegraph.html
+
+# py-spy — verify the SVG flamegraph was generated
+ls -la ./profile.svg
+```
+
+If the output is empty or shows only profiler overhead, the profiled code path was likely not exercised — confirm the test or command actually runs the target code.
 
 ## Key Principles
 

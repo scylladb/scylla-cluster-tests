@@ -1,6 +1,11 @@
 ---
 name: fix-backport-conflicts
-description: Fix inline merge conflict markers in backport PRs by resolving conflicts and recommitting cleanly with original metadata preserved.
+description: >-
+  Fix inline merge conflict markers in backport PRs by resolving
+  conflicts and recommitting cleanly with original metadata preserved.
+  Use when a backport PR has unresolved conflict markers, a cherry-pick
+  produced merge conflicts, or a PR has the 'conflicts' label and needs
+  to be made ready for review.
 disable-model-invocation: true
 argument-hint: <PR-number>
 ---
