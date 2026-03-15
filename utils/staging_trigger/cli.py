@@ -1,6 +1,8 @@
 """Click CLI for the staging trigger tool."""
 
+import json
 import os
+import subprocess
 from pathlib import Path
 
 import click
@@ -26,8 +28,10 @@ from utils.staging_trigger.jenkins_client import JenkinsJobTrigger
 from utils.staging_trigger.trigger import (
     StagingTrigger,
     detect_preset_from_job_name,
+    format_checklist,
     parse_set_params,
     run_from_config,
+    update_pr_description,
 )
 
 
@@ -102,6 +106,38 @@ def cli(ctx, folder):
     ctx.obj["folder"] = folder or _default_folder()
 
 
+def _maybe_update_pr(
+    pr_number: int,
+    triggered: list,
+    update_pr_flag: bool | None,
+) -> None:
+    """Prompt (or auto-decide) whether to update the PR description with the checklist."""
+    if update_pr_flag is False:
+        return
+    if update_pr_flag is None:
+        if not questionary.confirm(
+            f"Update PR #{pr_number} description with {len(triggered)} triggered job(s)?",
+            default=True,
+        ).ask():
+            return
+    checklist = format_checklist(triggered)
+    update_pr_description(pr_number, checklist)
+
+
+def _detect_pr_from_branch() -> int | None:
+    """Try to detect a PR number from the current git branch via gh CLI."""
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "view", "--json", "number"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return json.loads(result.stdout).get("number")
+    except (subprocess.CalledProcessError, Exception):  # noqa: BLE001
+        return None
+
+
 @cli.command()
 @click.argument("jobs", nargs=-1, type=_JobNameType())
 @click.option("--branch", "-b", default=None, help="Git branch.", shell_complete=_complete_branches)
@@ -131,8 +167,13 @@ def cli(ctx, folder):
     type=click.Choice(list(DTEST_TOPOLOGY_FLAGS.keys())),
     help="Dtest topology variants. Repeatable.",
 )
+@click.option(
+    "--update-pr/--no-update-pr",
+    default=None,
+    help="Update PR description with triggered jobs checklist. Prompted if omitted.",
+)
 @click.pass_context
-def trigger(  # noqa: PLR0913, PLR0911, PLR0914
+def trigger(  # noqa: PLR0913, PLR0911, PLR0912, PLR0914
     ctx,
     jobs,
     branch,
@@ -146,6 +187,7 @@ def trigger(  # noqa: PLR0913, PLR0911, PLR0914
     edit_params,
     output_yaml,
     dtest_topologies,
+    update_pr,
 ):
     """Trigger staging Jenkins jobs.
 
@@ -180,7 +222,9 @@ def trigger(  # noqa: PLR0913, PLR0911, PLR0914
         if not preset:
             preset = detect_preset_from_job_name(jobs[0]) or "longevity"
 
-        repo, branch = prompt_for_source(branch=branch, repo=repo, pr=pr)
+        repo, branch, resolved_pr = prompt_for_source(branch=branch, repo=repo, pr=pr)
+        if resolved_pr is None:
+            resolved_pr = _detect_pr_from_branch()
 
         if edit_params:
             overrides = prompt_for_params(preset, job_name=jobs[0], folder=folder)
@@ -189,12 +233,18 @@ def trigger(  # noqa: PLR0913, PLR0911, PLR0914
             preset, branch=branch, repo=repo, folder=folder, param_overrides=overrides or None
         )
 
+        all_triggered = []
         if dtest_topologies:
             for job_name in jobs:
-                strigger.run_dtest_variants(job_name, topologies=list(dtest_topologies), dry_run=dry_run)
+                all_triggered.extend(
+                    strigger.run_dtest_variants(job_name, topologies=list(dtest_topologies), dry_run=dry_run)
+                )
         else:
             strigger.select_jobs(*jobs)
-            strigger.run(dry_run=dry_run)
+            all_triggered.extend(strigger.run(dry_run=dry_run))
+
+        if resolved_pr and all_triggered and not dry_run:
+            _maybe_update_pr(resolved_pr, all_triggered, update_pr)
         return
 
     client = JenkinsJobTrigger()
@@ -237,7 +287,7 @@ def trigger(  # noqa: PLR0913, PLR0911, PLR0914
         click.echo(f"  - {j}  [{preset_hint}]")
 
     if output_yaml:
-        repo, branch = prompt_for_source(branch=branch, repo=repo, pr=pr)
+        repo, branch, _resolved_pr = prompt_for_source(branch=branch, repo=repo, pr=pr)
         _write_jobs_yaml_config(selected, branch=branch, folder=folder, repo=repo, output_path=output_yaml)
         return
 
@@ -253,7 +303,9 @@ def trigger(  # noqa: PLR0913, PLR0911, PLR0914
     if not action:
         return
 
-    repo, branch = prompt_for_source(branch=branch, repo=repo, pr=pr)
+    repo, branch, resolved_pr = prompt_for_source(branch=branch, repo=repo, pr=pr)
+    if resolved_pr is None:
+        resolved_pr = _detect_pr_from_branch()
 
     first_preset = preset or detect_preset_from_job_name(selected[0]) or "longevity"
     want_edit = (
@@ -296,6 +348,7 @@ def trigger(  # noqa: PLR0913, PLR0911, PLR0914
         return
 
     is_dry = action == "dry" or dry_run
+    all_triggered = []
     for job_name in selected:
         preset_name = preset or detect_preset_from_job_name(job_name) or "longevity"
 
@@ -303,7 +356,10 @@ def trigger(  # noqa: PLR0913, PLR0911, PLR0914
             preset_name, branch=branch, repo=repo, folder=folder, param_overrides=all_overrides or None
         )
         strigger.select_jobs(job_name)
-        strigger.run(dry_run=is_dry)
+        all_triggered.extend(strigger.run(dry_run=is_dry))
+
+    if resolved_pr and all_triggered and not is_dry:
+        _maybe_update_pr(resolved_pr, all_triggered, update_pr)
 
 
 @cli.command("run-config")
@@ -397,7 +453,7 @@ def generate(ctx, pipelines, branch, repo, pr, pipeline_path, suffix, dry_run, o
     """
     folder = ctx.obj["folder"]
 
-    repo, branch = prompt_for_source(branch=branch, repo=repo, pr=pr)
+    repo, branch, _resolved_pr = prompt_for_source(branch=branch, repo=repo, pr=pr)
 
     click.echo(f"Folder:  {click.style(folder, fg='cyan')}")
     click.echo(f"Source:  {repo} @ {branch}")

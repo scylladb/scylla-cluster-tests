@@ -22,6 +22,7 @@ from utils.staging_trigger.constants import (
     get_presets,
 )
 from utils.staging_trigger.jenkins_client import JenkinsJobTrigger
+from utils.staging_trigger.package_lookup import latest_unified_package
 from utils.staging_trigger.trigger import detect_preset_from_jenkinsfile, detect_preset_from_job_name
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,37 @@ def _get_version_suggestions(current_value: str) -> list[questionary.Choice]:
     return choices
 
 
+def _get_unified_package_suggestions(current_value: str) -> list[questionary.Choice] | None:
+    """Build a list of unified package suggestions for the unified_package parameter.
+
+    Returns:
+        List of choices, or ``None`` if S3 lookup fails entirely.
+    """
+    choices: list[questionary.Choice] = []
+    try:
+        x86 = latest_unified_package("x86_64")
+        if x86:
+            choices.append(questionary.Choice(f"x86_64: {x86}", value=x86))
+    except Exception:  # noqa: BLE001
+        logger.debug("Could not fetch latest x86_64 unified package", exc_info=True)
+
+    try:
+        arm = latest_unified_package("aarch64")
+        if arm:
+            choices.append(questionary.Choice(f"aarch64: {arm}", value=arm))
+    except Exception:  # noqa: BLE001
+        logger.debug("Could not fetch latest aarch64 unified package", exc_info=True)
+
+    if not choices:
+        return None
+
+    if current_value and current_value not in {c.value for c in choices}:
+        choices.append(questionary.Choice(f"{current_value} (current)", value=current_value))
+
+    choices.append(questionary.Choice("Custom value...", value=CUSTOM_VALUE_SENTINEL))
+    return choices
+
+
 def _prompt_for_value(key: str, current_value: str, param_meta: dict[str, ParamDefinition]) -> str:
     """Prompt for a single parameter value using the appropriate widget.
 
@@ -75,6 +107,19 @@ def _prompt_for_value(key: str, current_value: str, param_meta: dict[str, ParamD
             if picked is None:
                 raise click.Abort()
         return picked
+
+    if key == "unified_package":
+        suggestions = _get_unified_package_suggestions(current_value)
+        if suggestions:
+            picked = questionary.select(f"{key}:", choices=suggestions).ask()
+            if picked is None:
+                raise click.Abort()
+            if picked == CUSTOM_VALUE_SENTINEL:
+                picked = questionary.text(f"{key}:", default=current_value).ask()
+                if picked is None:
+                    raise click.Abort()
+            return picked
+        # S3 unreachable — fall through to plain text input
 
     meta = param_meta.get(key)
     choices_list = (meta.choices if meta and meta.choices else None) or KNOWN_PARAM_CHOICES.get(key)

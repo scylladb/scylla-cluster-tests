@@ -36,6 +36,7 @@ from utils.staging_trigger.interactive import (
 )
 from utils.staging_trigger.jenkins_client import JenkinsJobTrigger
 from utils.staging_trigger.job_generation import generate_from_path, generate_job, generate_jobs
+from utils.staging_trigger.package_lookup import aws_bucket_ls, latest_unified_package
 from utils.staging_trigger.trigger import (
     StagingTrigger,
     detect_preset_from_jenkinsfile,
@@ -50,6 +51,7 @@ __all__ = [
     "ARGUS_URL",
     "DTEST_TOPOLOGY_FLAGS",
     "JenkinsJobTrigger",
+    "aws_bucket_ls",
     "PIPELINE_TO_PRESET",
     "PRESET_NAMES",
     "Preset",
@@ -68,6 +70,7 @@ __all__ = [
     "generate_python_code",
     "generate_yaml_config",
     "get_presets",
+    "latest_unified_package",
     "lookup_pr",
     "parse_set_params",
     "prompt_for_params",
