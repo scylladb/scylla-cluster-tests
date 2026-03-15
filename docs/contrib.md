@@ -53,6 +53,94 @@ Once you have changes in the requirements.in or in Hydra Dockerfile
 - run ``./docker/env/build_n_push.sh`` to build and push to Docker Hub
 
 
+### Staging Trigger — triggering staging Jenkins jobs
+
+The `staging_trigger.py` tool (backed by the `utils/staging_trigger/` package) lets you
+trigger, browse, and generate Jenkins staging jobs from the command line.
+
+#### Quick start
+
+```bash
+# Interactive: browse jobs, select, trigger (default mode)
+python staging_trigger.py trigger
+
+# Filter jobs interactively
+python staging_trigger.py trigger "longevity*"
+
+# Direct trigger (no interaction)
+python staging_trigger.py trigger -b my-branch longevity-100gb-4h-test
+
+# Trigger from a PR (auto-detects repo/branch)
+python staging_trigger.py trigger --pr 12345 manager-ubuntu20-sanity-test
+
+# Dry run — see what would be triggered without actually triggering
+python staging_trigger.py trigger -n
+
+# Override any Jenkins parameter
+python staging_trigger.py trigger -b my-branch longevity-100gb-4h-test \
+    --set scylla_version=2025.1 --set provision_type=spot
+
+# Export selected jobs as YAML config
+python staging_trigger.py trigger -o my_tests.yaml
+
+# Trigger from a YAML config file
+python staging_trigger.py run-config my_tests.yaml
+
+# Generate Jenkins pipeline jobs from jenkinsfiles (interactive)
+python staging_trigger.py generate -b my-branch
+```
+
+#### Library usage
+
+```python
+from staging_trigger import StagingTrigger
+
+trigger = StagingTrigger.from_preset("longevity", branch="my-branch")
+trigger.select_jobs("longevity-100gb-4h-test")
+trigger.run()
+
+# Or from a PR number
+trigger = StagingTrigger.from_pr(12345, preset_name="longevity")
+trigger.select_jobs("longevity-100gb-4h-test")
+trigger.run()
+```
+
+#### Presets
+
+Jobs are configured using presets that set sensible defaults for each category:
+
+| Preset | Description |
+|--------|-------------|
+| `longevity` | Longevity, rolling-upgrade, gemini, and jepsen tests |
+| `manager` | Scylla Manager tests |
+| `artifacts` | Artifact/package deployment tests |
+| `perf` | Performance regression tests |
+| `dtest` | Python dtests (with topology variants) |
+
+#### YAML config files
+
+For mass-triggering, create a YAML config file:
+
+```yaml
+folder: scylla-staging/<username>
+branch: my-feature-branch
+params:
+  scylla_version: "master:latest"
+  email_recipients: user@scylladb.com
+jobs:
+  - name: longevity-100gb-4h-test
+    preset: longevity
+  - name: manager-ubuntu20-sanity-test
+    preset: manager
+    params:
+      manager_version: "3.8"
+  - name: dtest-pytest-gating
+    preset: dtest
+    dtest_topologies: [no-tablets, tablets]
+```
+
+Then trigger with: `python staging_trigger.py run-config my_tests.yaml`
+
 ### Creating pipeline jobs for new branch
 
 Once a new branch is created, we could build all the need job for this branch with the following script ::
