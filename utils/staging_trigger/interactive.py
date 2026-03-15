@@ -362,6 +362,7 @@ def generate_yaml_config(
         job_entry: dict = {"name": job_name, "preset": preset}
         if preset == "dtest":
             job_entry["dtest_topologies"] = ["no-tablets", "tablets"]
+        job_entry["description"] = ""  # optional: shown in the markdown checklist
         preset_params = presets.get(preset, presets["longevity"]).params
         merged = {**preset_params, **(param_overrides or {})}
         non_empty = {k: v for k, v in merged.items() if v}
@@ -415,6 +416,7 @@ def _write_jobs_yaml_config(
         job_entry: dict = {"name": name, "preset": preset}
         if preset == "dtest":
             job_entry["dtest_topologies"] = ["no-tablets", "tablets"]
+        job_entry["description"] = ""  # optional: shown in the markdown checklist
         preset_params = presets.get(preset, presets["longevity"]).params
         merged = {**preset_params, **(param_overrides or {})}
         non_empty = {k: v for k, v in merged.items() if v}
@@ -516,6 +518,9 @@ def generate_python_code(
 
         job_args = ", ".join(f'"{j}"' for j in jobs)
         lines.append(f"trigger.select_jobs({job_args})")
+        lines.append("# descriptions: optional dict mapping job name to a checklist label")
+        desc_dict = ", ".join(f'"{j}": ""' for j in jobs)
+        lines.append(f"# trigger.run(descriptions={{{desc_dict}}})")
         lines.append("trigger.run()")
         lines.append("")
 

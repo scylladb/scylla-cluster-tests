@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 import click
@@ -328,13 +329,26 @@ class StagingTrigger:
         return self.triggered
 
     def run_multi(
-        self, jobs_with_params: list[tuple[str, dict[str, str]]], dry_run: bool = False
+        self,
+        jobs_with_params: Sequence[tuple[str, dict[str, str]] | tuple[str, dict[str, str], str]],
+        dry_run: bool = False,
     ) -> list[TriggeredJob]:
-        """Trigger multiple jobs with per-job param overrides."""
+        """Trigger multiple jobs with per-job param overrides.
+
+        Each entry can be a 2-tuple ``(name, params)`` or a 3-tuple
+        ``(name, params, description)``.  The description is included in
+        the generated markdown checklist, making it easier to distinguish
+        jobs that share the same name but differ in parameters.
+        """
         self.triggered = []
-        for short_name, extra_params in jobs_with_params:
+        for entry in jobs_with_params:
+            if len(entry) == 3:
+                short_name, extra_params, description = entry
+            else:
+                short_name, extra_params = entry
+                description = ""
             full_name = f"{self.preset.folder_prefix}/{short_name}"
-            record = self._trigger_one(full_name, short_name, extra_params, "", dry_run)
+            record = self._trigger_one(full_name, short_name, extra_params, description, dry_run)
             if record:
                 self.triggered.append(record)
         if self.triggered:
@@ -344,9 +358,22 @@ class StagingTrigger:
         return self.triggered
 
     def run_dtest_variants(
-        self, job_short_name: str, topologies: list[str] | None = None, dry_run: bool = False
+        self,
+        job_short_name: str,
+        topologies: list[str] | None = None,
+        dry_run: bool = False,
+        description_prefix: str = "",
     ) -> list[TriggeredJob]:
-        """Trigger a dtest job once per topology variant."""
+        """Trigger a dtest job once per topology variant.
+
+        Args:
+            job_short_name: Job name without folder prefix.
+            topologies: List of topology keys (default: no-tablets, tablets).
+            dry_run: If True, print what would be triggered without acting.
+            description_prefix: Optional prefix combined with the topology
+                key to form the per-variant description, e.g.
+                ``"gating"`` produces ``"gating (no-tablets)"``.
+        """
         if topologies is None:
             topologies = ["no-tablets", "tablets"]
 
@@ -359,6 +386,7 @@ class StagingTrigger:
         for topo_key in topologies:
             flag = DTEST_TOPOLOGY_FLAGS[topo_key]
             extra = {"PYTEST_EXTRA_COMMANDLINE_OPTIONS": flag}
+            desc = f"{description_prefix} ({topo_key})" if description_prefix else topo_key
 
             last_params = {} if dry_run else self._jenkins.get_last_build_params(full_name)
             merged = {**last_params, **self.preset.params, **self.param_overrides, **extra}
@@ -370,15 +398,13 @@ class StagingTrigger:
                 for k, v in non_empty.items():
                     click.echo(f"  {k}: {v}")
                 click.echo()
-                self.triggered.append(
-                    _make_dry_run_job(full_name, job_short_name, topo_key, jenkins_url=self._jenkins.url)
-                )
+                self.triggered.append(_make_dry_run_job(full_name, job_short_name, desc, jenkins_url=self._jenkins.url))
                 continue
 
             job_url = self._jenkins.get_job_url(full_name)
             build_number = self._jenkins.trigger(full_name, merged)
             self.triggered.append(
-                TriggeredJob(job_url=job_url, build_number=build_number, job_name=job_short_name, description=topo_key)
+                TriggeredJob(job_url=job_url, build_number=build_number, job_name=job_short_name, description=desc)
             )
 
         if self.triggered:
@@ -404,11 +430,13 @@ def run_from_config(config_path: str, dry_run: bool = False) -> list[TriggeredJo
         jobs:
           - name: longevity-100gb-4h-test
             preset: longevity              # optional, auto-detected from name
+            description: "4h longevity"    # optional, shown in the markdown checklist
             params:                        # per-job overrides (merged on top of global)
               stress_duration: "90"
 
           - name: dtest-pytest-gating
             preset: dtest
+            description: gating            # combined with topology: "gating (no-tablets)"
             dtest_topologies: [no-tablets, tablets, gossip]
     """
     with open(config_path, encoding="utf-8") as f:
@@ -433,6 +461,7 @@ def run_from_config(config_path: str, dry_run: bool = False) -> list[TriggeredJo
         job_name = job_spec["name"]
         preset_name = job_spec.get("preset") or detect_preset_from_job_name(job_name) or "longevity"
         job_params = {k: str(v) for k, v in job_spec.get("params", {}).items()}
+        description = job_spec.get("description", "")
 
         # Merge: global params + per-job params
         merged_overrides = {**global_params, **job_params}
@@ -443,10 +472,13 @@ def run_from_config(config_path: str, dry_run: bool = False) -> list[TriggeredJo
 
         dtest_topologies = job_spec.get("dtest_topologies")
         if dtest_topologies:
-            results = trigger.run_dtest_variants(job_name, topologies=dtest_topologies, dry_run=dry_run)
+            results = trigger.run_dtest_variants(
+                job_name, topologies=dtest_topologies, dry_run=dry_run, description_prefix=description
+            )
         else:
+            descriptions = {job_name: description} if description else None
             trigger.select_jobs(job_name)
-            results = trigger.run(dry_run=dry_run)
+            results = trigger.run(dry_run=dry_run, descriptions=descriptions)
 
         all_triggered.extend(results)
 
