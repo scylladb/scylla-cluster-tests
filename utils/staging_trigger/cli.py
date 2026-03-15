@@ -221,8 +221,10 @@ def trigger(  # noqa: PLR0913, PLR0911, PLR0914
         )
 
     selected = questionary.checkbox(
-        f"Select jobs ({len(found_jobs)} available, Space to toggle, Enter to confirm):",
+        f"Select jobs ({len(found_jobs)} available, Space to toggle, Enter to confirm, type to search):",
         choices=choices,
+        use_search_filter=True,
+        use_jk_keys=False,
     ).ask()
 
     if not selected:
