@@ -425,6 +425,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | writing-plans | Guides creation of implementation plans following SCT's 7-section structure | `skills/writing-plans/SKILL.md` |
 | writing-unit-tests | Guides writing isolated unit tests with mocking and no external services | `skills/writing-unit-tests/SKILL.md` |
 | writing-integration-tests | Guides writing integration tests with labeled external service dependencies | `skills/writing-integration-tests/SKILL.md` |
+| prompt-optimizer | Prompt engineering expert that helps craft optimized prompts using proven frameworks | `skills/prompt-optimizer/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 
