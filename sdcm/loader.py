@@ -316,6 +316,9 @@ class CassandraStressHDRExporter(StressExporter):
             log_line=line,
             hst_log_start_time=self.log_start_time,
         )
+        if not summary_data:
+            LOGGER.warning("Got empty HDR histogram summary from line: %s", line.strip())
+            return []
         self.current_line_hdr_tag, percentiles = summary_data.popitem()
         return list(percentiles.values())
 
