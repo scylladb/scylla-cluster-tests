@@ -16,6 +16,8 @@ import os
 import secrets
 from textwrap import dedent
 
+import yaml
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -26,10 +28,26 @@ DEFAULT_AGENT_SERVICE_PATH = "/etc/systemd/system/sct-agent.service"
 DEFAULT_AGENT_LOG_PATH = "/var/log/sct-agent.log"
 DEFAULT_AGENT_LOGROTATE_PATH = "/etc/logrotate.d/sct-agent"
 AGENT_API_KEY_FILENAME = "agent_api_key.secret"
+DEFAULT_AGENT_CERTS_DIR = "/etc/sct-agent/certs"
+
+
+def _agent_health_check_cmd(port: int, tls: bool) -> tuple[str, str]:
+    """Return (curl_flags, health_url) for agent health check scripts.
+
+    Uses -k to skip cert verification since health checks run on localhost.
+    """
+    scheme = "https" if tls else "http"
+    return ("-kf" if tls else "-f"), f"{scheme}://localhost:{port}/health"
 
 
 def get_agent_config_yaml(
-    api_keys: list[str], port: int = DEFAULT_AGENT_PORT, max_concurrent_jobs: int = 10, log_level: str = "info"
+    api_keys: list[str],
+    port: int = DEFAULT_AGENT_PORT,
+    max_concurrent_jobs: int = 10,
+    log_level: str = "info",
+    tls: bool = False,
+    tls_cert_file: str = "",
+    tls_key_file: str = "",
 ) -> str:
     """
     Generate agent configuration YAML.
@@ -37,27 +55,38 @@ def get_agent_config_yaml(
     :param api_keys: list of API keys for authentication
     :param port: agent HTTP server port
     :param max_concurrent_jobs: maximum number of concurrent jobs
-    :param log_level: logging level.
+    :param log_level: logging level
+    :param tls: enable TLS
+    :param tls_cert_file: path to TLS certificate file on the node
+    :param tls_key_file: path to TLS key file on the node
 
     :return: YAML configuration as string
     """
-    api_keys = "\n    ".join(f'- "{key}"' for key in api_keys)
-    return dedent(f"""
-        server:
-          host: "0.0.0.0"
-          port: {port}
+    config = {
+        "server": {
+            "host": "0.0.0.0",
+            "port": port,
+        },
+        "security": {
+            "api_keys": api_keys,
+        },
+        "executor": {
+            "max_concurrent_jobs": max_concurrent_jobs,
+            "default_timeout_seconds": 300,
+        },
+        "logging": {
+            "level": log_level,
+        },
+    }
 
-        security:
-          api_keys:
-            {api_keys}
+    if tls:
+        config["security"]["tls"] = {
+            "enabled": True,
+            "cert_file": tls_cert_file,
+            "key_file": tls_key_file,
+        }
 
-        executor:
-          max_concurrent_jobs: {max_concurrent_jobs}
-          default_timeout_seconds: 300
-
-        logging:
-          level: "{log_level}"
-    """)
+    return yaml.dump(config, default_flow_style=False, sort_keys=False)
 
 
 def get_agent_systemd_service(
@@ -144,6 +173,11 @@ def install_agent_script(
     :param log_level: logging level.
 
     :return: bash installation script
+
+    Note: TLS is not configured during initial install - certs require the node IP address for SANs,
+    which is not known at cloud-init time. So the agent starts on plain HTTP and TLS is enabled
+    later in the provisioning process by running the reconfigure_agent_script, when certs are
+    normally generated and agent is restarted with TLS after the node is fully provisioned.
     """
     config_yaml = get_agent_config_yaml(api_keys, port, max_concurrent_jobs, log_level).replace("$", "\\$")
     service_content = get_agent_systemd_service(binary_path, config_path, log_file_path).replace("$", "\\$")
@@ -197,13 +231,14 @@ fi
 """
 
 
-def wait_for_agent_script(port: int = DEFAULT_AGENT_PORT, timeout: int = 60) -> str:
+def wait_for_agent_script(port: int = DEFAULT_AGENT_PORT, timeout: int = 60, tls: bool = False) -> str:
     """Generate script to wait for SCT agent to be ready"""
+    curl_flags, health_url = _agent_health_check_cmd(port, tls)
     return dedent(f"""
         #!/bin/bash
         echo "Waiting for SCT agent to be ready..."
         for i in $(seq 1 {timeout}); do
-            if curl -fs http://localhost:{port}/health >/dev/null 2>&1; then
+            if curl {curl_flags}s {health_url} >/dev/null 2>&1; then
                 echo "SCT agent is ready!"
                 exit 0
             fi
@@ -214,8 +249,9 @@ def wait_for_agent_script(port: int = DEFAULT_AGENT_PORT, timeout: int = 60) -> 
     """).strip()
 
 
-def check_agent_status_script(port: int = DEFAULT_AGENT_PORT) -> str:
+def check_agent_status_script(port: int = DEFAULT_AGENT_PORT, tls: bool = False) -> str:
     """Generate script to check SCT agent status"""
+    curl_flags, health_url = _agent_health_check_cmd(port, tls)
     return dedent(f"""
         #!/bin/bash
         echo "=== SCT agent Status ==="
@@ -234,12 +270,8 @@ def check_agent_status_script(port: int = DEFAULT_AGENT_PORT) -> str:
         fi
 
         echo "=== Health Check ==="
-        if curl -f http://localhost:{port}/health 2>/dev/null; then
-            echo ""
-            echo "Health: OK"
-        else
-            echo "Health: FAILED"
-        fi
+        curl {curl_flags} {health_url} 2>/dev/null && echo -e "\\nHealth: OK" || echo "Health: FAILED"
+
 
         echo "=== Recent Logs ==="
         if [ -f /tmp/sct-agent.log ]; then
@@ -285,6 +317,9 @@ def reconfigure_agent_script(
     config_path: str = DEFAULT_AGENT_CONFIG_PATH,
     max_concurrent_jobs: int = 10,
     log_level: str = "info",
+    tls: bool = False,
+    tls_cert_file: str = "",
+    tls_key_file: str = "",
 ) -> str:
     """
     Generate bash script to reconfigure running SCT agent with a new API key(s).
@@ -292,9 +327,19 @@ def reconfigure_agent_script(
     This script updates the agent configuration file and restarts the service,
     allowing the test to use a new API key with already-provisioned instances.
     """
-    config_yaml = get_agent_config_yaml(api_keys, port, max_concurrent_jobs, log_level).replace("$", "\\$")
+    config_yaml = get_agent_config_yaml(
+        api_keys,
+        port,
+        max_concurrent_jobs,
+        log_level,
+        tls=tls,
+        tls_cert_file=tls_cert_file,
+        tls_key_file=tls_key_file,
+    )
 
-    return f"""echo "Reconfiguring SCT agent with new API key..."
+    curl_flags, health_url = _agent_health_check_cmd(port, tls)
+
+    return f"""echo "Reconfiguring SCT agent..."
 
 [ -f {config_path} ] && cp {config_path} {config_path}.backup
 
@@ -306,15 +351,12 @@ chmod 600 {config_path}
 systemctl restart sct-agent.service
 
 for i in {{1..30}}; do
-    if curl -f http://localhost:{port}/health >/dev/null 2>&1; then
-        echo "SCT agent is ready with new API key!"
-        break
-    fi
+    curl {curl_flags} {health_url} >/dev/null 2>&1 && echo "SCT agent is ready!" && break
     echo "Waiting for agent... ($i/30)"
     sleep 2
 done
 
-if ! curl -f http://localhost:{port}/health >/dev/null 2>&1; then
+if ! curl {curl_flags} {health_url} >/dev/null 2>&1; then
     echo "Warning: Agent may not have restarted successfully"
     systemctl status sct-agent.service || true
 fi

@@ -466,9 +466,9 @@ When define true, will install scylla management
 
 ## **agent** / SCT_AGENT
 
-Configuration for SCT agent - a lightweight service for remote command execution.                 When enabled, replaces SSH-based command execution with RESTful API calls for DB nodes.<br>Configuration options:<br>- enabled: bool - enable agent (required)<br>- port: int - agent HTTP API port (default: 16000)<br>- binary_url: str - URL to download agent binary<br>- max_concurrent_jobs: int - max concurrent jobs per agent (default: 10)<br>- log_level: str - logging level (default: info)
+Configuration for SCT agent - a lightweight service for remote command execution.                 When enabled, replaces SSH-based command execution with RESTful API calls for DB nodes.<br>Configuration options:<br>- enabled: bool - enable agent (required)<br>- port: int - agent HTTP API port (default: 16000)<br>- binary_url: str - URL to download agent binary<br>- max_concurrent_jobs: int - max concurrent jobs per agent (default: 10)<br>- log_level: str - logging level (default: info)<br>- tls: bool - enable TLS for agent communication (default: false)
 
-**default:** {'enabled': False, 'port': 16000, 'binary_url': '', 'max_concurrent_jobs': 10, 'log_level': 'info'}
+**default:** {'enabled': False, 'port': 16000, 'binary_url': '', 'max_concurrent_jobs': 10, 'log_level': 'info', 'tls': False}
 
 **type:** dict | str
 

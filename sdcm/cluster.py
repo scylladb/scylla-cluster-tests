@@ -193,7 +193,7 @@ from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
 from sdcm.utils.raft import get_raft_mode
-from sdcm.utils.sct_agent_installer import reconfigure_agent_script
+from sdcm.utils.sct_agent_installer import reconfigure_agent_script, DEFAULT_AGENT_CERTS_DIR
 from sdcm.coredump import CoredumpExportSystemdThread
 from sdcm.keystore import KeyStore
 from sdcm.paths import (
@@ -563,8 +563,45 @@ class BaseNode(AutoSshContainerMixin):
         except Exception:
             self.log.error("Error saving resource state to Argus", exc_info=True)
 
+    def _setup_agent_tls_certs(self, ssh_remoter):
+        """Generate and push TLS certificates for the SCT agent."""
+        if not CA_CERT_FILE.exists():
+            raise FileNotFoundError(f"CA certificate not found: {CA_CERT_FILE}")
+
+        certs_dir = DEFAULT_AGENT_CERTS_DIR
+        local_cert_dir = Path(get_data_dir_path("ssl_conf")) / "agent" / self.ip_address
+        local_cert_dir.mkdir(parents=True, exist_ok=True)
+
+        cert_file = local_cert_dir / "server.crt"
+        key_file = local_cert_dir / "server.key"
+
+        create_certificate(
+            cert_file=cert_file,
+            key_file=key_file,
+            cname=self.name,
+            ca_cert_file=CA_CERT_FILE,
+            ca_key_file=CA_KEY_FILE,
+            ip_addresses=list({addr for addr in [self.ip_address, self.public_ip_address] if addr}),
+            dns_names=list({name for name in [self.public_dns_name, self.private_dns_name] if name}),
+        )
+
+        ssh_remoter.run(f"sudo mkdir -p {certs_dir}", verbose=False)
+        ssh_remoter.send_files(src=str(cert_file), dst="/tmp/agent_server.crt")
+        ssh_remoter.send_files(src=str(key_file), dst="/tmp/agent_server.key")
+        ssh_remoter.run("chmod 600 /tmp/agent_server.key", verbose=False)
+        ssh_remoter.run(
+            f"sudo mv /tmp/agent_server.crt {certs_dir}/server.crt && "
+            f"sudo mv /tmp/agent_server.key {certs_dir}/server.key && "
+            f"sudo chmod 600 {certs_dir}/server.key && "
+            f"sudo chmod 644 {certs_dir}/server.crt",
+            verbose=False,
+        )
+
+        self.log.info("Agent TLS certificates installed on %s", self.name)
+        return f"{certs_dir}/server.crt", f"{certs_dir}/server.key"
+
     def _reconfigure_agent(self, ssh_remoter):
-        """Reconfigure SCT agent with current API key"""
+        """Reconfigure SCT agent with current API key and optionally enable TLS"""
         agent_config = self.parent_cluster.params.get("agent")
         agent_enabled = agent_config.get("enabled", False) and self.parent_cluster.node_type in (
             "scylla-db",
@@ -576,16 +613,21 @@ class BaseNode(AutoSshContainerMixin):
         if not (agent_enabled and agent_api_key):
             return
 
-        result = ssh_remoter.run("systemctl is-active sct-agent.service", ignore_status=True, verbose=False)
-        if result.exited != 0:
+        if ssh_remoter.run("systemctl is-active sct-agent.service", ignore_status=True, verbose=False).exited != 0:
             return
 
-        self.log.info("Reconfiguring SCT agent on node %s with the current API key", self.name)
+        agent_tls = agent_config.get("tls")
+        tls_cert_file, tls_key_file = self._setup_agent_tls_certs(ssh_remoter) if agent_tls else ("", "")
+
+        self.log.info("Reconfiguring SCT agent on node %s (tls=%s)", self.name, agent_tls)
         script = reconfigure_agent_script(
             api_keys=[agent_api_key],
             port=agent_config.get("port"),
             max_concurrent_jobs=agent_config.get("max_concurrent_jobs"),
             log_level=agent_config.get("log_level"),
+            tls=agent_tls,
+            tls_cert_file=tls_cert_file,
+            tls_key_file=tls_key_file,
         )
 
         ssh_remoter.run(f"sudo bash -cxe {shlex.quote(script)}", verbose=True)
@@ -605,14 +647,22 @@ class BaseNode(AutoSshContainerMixin):
                 if self.test_config.IP_SSH_CONNECTIONS == "public"
                 else self.private_ip_address
             )
-            agent_port = agent_config.get("port")
+            agent_tls = agent_config.get("tls")
+
             self.remoter = AgentCmdRunner(
                 hostname=agent_hostname,
                 api_key=agent_api_key,
-                port=agent_port,
+                port=agent_config.get("port"),
                 user=ssh_login_info.get("user", "root") if ssh_login_info else "root",
+                tls=agent_tls,
+                ca_cert=str(CA_CERT_FILE) if agent_tls else None,
             )
-            self.log.info("Using SCT agent for command execution at %s:%s", agent_hostname, agent_port)
+            self.log.info(
+                "Using SCT agent for command execution at %s:%s (tls=%s)",
+                agent_hostname,
+                agent_config.get("port"),
+                agent_tls,
+            )
         else:
             if agent_enabled:
                 self.log.info("SCT agent is enabled but API key is not available, falling back to SSH")

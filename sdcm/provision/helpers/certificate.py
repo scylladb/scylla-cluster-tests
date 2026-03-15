@@ -87,7 +87,7 @@ def install_client_certificate(remoter, node_identifier, force=False):
         cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
         sed -i '/ssl = true/a hostname = {node_identifier}' ~/.cassandra/cqlshrc
         sudo mkdir -p /root/.cassandra
-        sudo cp ~/.cassandra/cqlshrc /root/.cassandra
+        [ "$HOME" = "/root" ] || sudo cp ~/.cassandra/cqlshrc /root/.cassandra
         sudo mkdir -p /etc/scylla/
         sudo rm -rf {SCYLLA_SSL_CONF_DIR}
         sudo mv -f /tmp/ssl_conf/ /etc/scylla/
