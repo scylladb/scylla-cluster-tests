@@ -93,6 +93,62 @@ This calls `sdcm/utils/common.py:1449` which uses `boto3.resource("ec2").images.
 - **Missing**: `TerminateInstances`, `StopInstances`, `DescribeImages`, EBS volume management
 - **Not enforced**: Security group rules (stored but not enforced in v1)
 
+### EC2 API inventory for artifact test flow
+
+The table below lists every EC2 API action SCT calls during the AMI artifact test (`test_scylla_service` with `ami.yaml`: 1 db node, 0 loaders, 0 monitors). This inventory is needed to evaluate minicloud compatibility before implementation begins — each operation must either be supported by minicloud, handled by real AWS (selective routing), or have a minicloud issue filed.
+
+| EC2 API Action | SCT File | Flow Phase | minicloud status |
+|----------------|----------|------------|-----------------|
+| **Config / AMI resolution — always routed to real AWS** |
+| DescribeImages (filter by name/tag) | sdcm/utils/common.py:1494 | config | real AWS (selective routing) |
+| DescribeImages (SSM resolve) | sdcm/utils/common.py:1475 | config | real AWS (selective routing) |
+| DescribeInstanceTypes | sdcm/utils/aws_utils.py:511 | config | real AWS (selective routing) |
+| **VPC / network setup — routed to minicloud** |
+| DescribeVpcs | sdcm/utils/aws_region.py:57 | network | supported |
+| CreateVpc | sdcm/utils/aws_region.py:73 | network | supported |
+| ModifyVpcAttribute (DNS hostnames) | sdcm/utils/aws_region.py:76 | network | **needs investigation** |
+| CreateTags (VPC, subnet, SG, IGW, RT) | sdcm/utils/aws_region.py (multiple) | network | **needs investigation** |
+| DescribeAvailabilityZones | sdcm/utils/aws_region.py:84 | network | **needs investigation** |
+| DescribeInstanceTypeOfferings | sdcm/utils/aws_region.py:89 | network | **needs investigation** |
+| DescribeSubnets | sdcm/utils/aws_region.py:120 | network | **needs investigation** |
+| CreateSubnet | sdcm/utils/aws_region.py:139 | network | supported |
+| ModifySubnetAttribute (public IP, IPv6) | sdcm/utils/aws_region.py:149 | network | **needs investigation** |
+| DescribeInternetGateways | sdcm/utils/aws_region.py:218 | network | **needs investigation** |
+| CreateInternetGateway | sdcm/utils/aws_region.py:240 | network | **needs investigation** |
+| AttachInternetGateway | sdcm/utils/aws_region.py:250 | network | **needs investigation** |
+| DescribeRouteTables | sdcm/utils/aws_region.py:183 | network | **needs investigation** |
+| CreateRouteTable | sdcm/utils/aws_region.py:295 | network | **needs investigation** |
+| CreateRoute (IPv4/IPv6 to IGW) | sdcm/utils/aws_region.py:302 | network | **needs investigation** |
+| AssociateRouteTable | sdcm/utils/aws_region.py:189 | network | **needs investigation** |
+| DescribeSecurityGroups | sdcm/utils/aws_region.py:336 | network | supported (implied by CreateSecurityGroup) |
+| CreateSecurityGroup | sdcm/utils/aws_region.py:364 | network | supported |
+| AuthorizeSecurityGroupIngress | sdcm/utils/aws_region.py:374 | network | supported (stored, not enforced) |
+| DescribeKeyPairs | sdcm/utils/aws_region.py:673 | network | supported |
+| ImportKeyPair | sdcm/utils/aws_region.py:692 | network | supported (via CreateKeyPair) |
+| **Instance lifecycle — routed to minicloud** |
+| RunInstances | sdcm/cluster_aws.py:183 | instance | supported |
+| DescribeInstances | sdcm/ec2_client.py (multiple) | instance | supported |
+| CreateTags (instance) | sdcm/ec2_client.py:277 | instance | **needs investigation** |
+| AllocateAddress (EIP) | sdcm/cluster_aws.py:818 | instance | skip in minicloud mode (single NIC) |
+| AssociateAddress (EIP) | sdcm/cluster_aws.py:821 | instance | skip in minicloud mode (single NIC) |
+| **Teardown — routed to minicloud** |
+| TerminateInstances | sdcm/cluster_aws.py:990 | teardown | **not supported — file minicloud issue** |
+| ReleaseAddress (EIP) | sdcm/cluster_aws.py:975 | teardown | skip in minicloud mode (no EIP) |
+| **Not called in artifact test (spot disabled)** |
+| RequestSpotInstances | sdcm/ec2_client.py:120 | instance | not needed (on_demand forced) |
+| RequestSpotFleet | sdcm/ec2_client.py:164 | instance | not needed (on_demand forced) |
+| DescribeSpotInstanceRequests | sdcm/ec2_client.py:174 | instance | not needed (on_demand forced) |
+| CancelSpotInstanceRequests | sdcm/ec2_client.py:199 | instance | not needed (on_demand forced) |
+| **Not called in artifact test (0 monitors)** |
+| No monitoring-specific EC2 calls | — | — | — |
+
+**Key finding**: The test itself (`test_scylla_service`) makes zero EC2 API calls — all Scylla checks are via SSH/CQL. The EC2 surface is entirely in setup and teardown.
+
+**Action items from inventory**:
+1. Operations marked **needs investigation** must be tested against minicloud to determine if they work, return stubs, or fail. For unsupported operations, file minicloud issues and evaluate whether SCT can skip them in minicloud mode.
+2. `TerminateInstances` is the most critical missing operation — file a minicloud issue as a priority.
+3. Network setup has ~27 distinct API calls. Many may already work or return acceptable stubs. A quick smoke test against minicloud (calling `AwsRegion.configure()` with minicloud endpoint) will reveal which ones need work.
+
 ## 3. Goals
 
 1. **Run AMI artifact test locally** against minicloud-managed VMs with zero AWS instance costs
@@ -131,7 +187,7 @@ This calls `sdcm/utils/common.py:1449` which uses `boto3.resource("ec2").images.
 
 ### Phase 2: Add minicloud configuration and activation — Importance: HIGH
 
-**Objective**: Add SCT config parameters to enable minicloud mode, define how the minicloud binary is obtained, and add the SCT activation code that prepares the environment using `AwsRegion`.
+**Objective**: Add SCT config parameters to enable minicloud mode, define how the minicloud binary is obtained, and add the activation entry point that will be used by Phase 3 and Phase 4 to prepare the environment.
 
 **Implementation**:
 - Add to `sdcm/sct_config.py`:
@@ -146,20 +202,16 @@ This calls `sdcm/utils/common.py:1449` which uses `boto3.resource("ec2").images.
   ```
 - Add default `minicloud_endpoint_url: ''` in `defaults/test_default.yaml`
 - Support env var override: `SCT_MINICLOUD_ENDPOINT_URL=http://localhost:5000`
-- **Minicloud version sourcing**: Document the expected minicloud version/commit in a pinned reference (e.g. `defaults/minicloud.yaml` or a constant in `sdcm/utils/ec2_services.py`). Initially, developers build minicloud from source at a pinned commit. Future work: provide a pre-built binary via GitHub releases or an SCT helper script (`sct.py setup-minicloud`).
-- **SCT activation code**: Add a minicloud preparation step in the AWS backend init path. When `minicloud_endpoint_url` is set, SCT should:
-  1. Verify minicloud is reachable (HTTP health check to the endpoint)
-  2. Use `AwsRegion` (pointed at the minicloud endpoint) to create VPC, subnets, and security groups — this is the same `AwsRegion` class used for real AWS, but with its EC2 client routed to minicloud via the factory
-  3. Store the created VPC/subnet/SG IDs in the test config so that `AWSCluster` uses them for `RunInstances`
-  This activation logic should live in a helper function (e.g. `sdcm/utils/minicloud.py:prepare_minicloud_environment()`) called early in `get_cluster_aws()` before instance provisioning begins.
+- **Minicloud version sourcing**: Document the expected minicloud version/commit in a pinned reference (e.g. `defaults/minicloud.yaml` or a constant in `sdcm/utils/minicloud.py`). Initially, developers build minicloud from source at a pinned commit. Future work: provide a pre-built binary via GitHub releases or an SCT helper script (`sct.py setup-minicloud`).
+- **SCT activation entry point**: Add `sdcm/utils/minicloud.py` with a `prepare_minicloud_environment()` function. This phase implements only the skeleton and the minicloud reachability check (HTTP health check to the endpoint). The actual VPC/subnet/SG preparation logic is implemented in Phase 3, and the selective endpoint routing is implemented in Phase 4. This function is called early in `get_cluster_aws()` before instance provisioning begins.
 
 **Definition of Done**:
 - [ ] Parameter is recognized by `SCTConfiguration` and can be set via env var, config file, or CLI
 - [ ] Empty string (default) means no minicloud routing
 - [ ] `uv run sct.py conf` shows the new parameter
 - [ ] Minicloud version/commit is pinned in a documented location
-- [ ] Activation helper verifies minicloud reachability and prepares VPC/subnet/SG via `AwsRegion`
-- [ ] Unit test validates parameter loading
+- [ ] `sdcm/utils/minicloud.py` exists with `prepare_minicloud_environment()` skeleton that verifies minicloud reachability
+- [ ] Unit test validates parameter loading and reachability check
 
 **Dependencies**: None (can be done in parallel with Phase 1)
 
@@ -170,17 +222,19 @@ This calls `sdcm/utils/common.py:1449` which uses `boto3.resource("ec2").images.
 **Objective**: Make the AWS region/network setup work against minicloud. This is a prerequisite for all instance-lifecycle operations — VPC, subnet, and security group must exist before `RunInstances` can be called.
 
 **Implementation**:
-- `AwsRegion` (`sdcm/utils/aws_region.py:30`) creates VPCs, subnets, security groups, internet gateways — all supported by minicloud
-- The activation code from Phase 2 calls `AwsRegion` with its EC2 client pointed at minicloud (via the factory from Phase 1). The existing `create_sct_vpc()`, `create_sct_subnets()`, `create_sct_security_group()` methods should work against minicloud's API with minimal changes
-- Handle minicloud stubs: `CreateVpcEndpoint` returns a dummy ID (acceptable), `AuthorizeSecurityGroupIngress` stores rules but doesn't enforce them (acceptable for testing)
-- Verify that any `AwsRegion` methods calling unsupported minicloud APIs (e.g. `ModifyVpcAttribute` for DNS hostnames) are handled gracefully — catch errors and skip non-essential operations when minicloud is active
+- Implement the VPC/subnet/SG preparation logic inside `prepare_minicloud_environment()` (skeleton from Phase 2). This function uses `AwsRegion` with its EC2 client pointed at minicloud (via the factory from Phase 1) to create VPC, subnets, security groups, and key pairs. The created resource IDs are stored in the test config so that `AWSCluster` uses them for `RunInstances`.
+- `AwsRegion` (`sdcm/utils/aws_region.py:30`) creates VPCs, subnets, security groups, internet gateways, and key pairs — all supported by minicloud
+- The existing `create_sct_vpc()`, `create_sct_subnets()`, `create_sct_security_group()`, and `create_sct_key_pair()` methods should work against minicloud's API with minimal changes
+- Handle minicloud stubs: `AuthorizeSecurityGroupIngress` stores rules but doesn't enforce them (acceptable for testing)
+- **Note**: `AwsRegion.__init__` calls `all_aws_regions(cached=True)` (`sdcm/utils/common.py:473`) to compute VPC CIDR from region index. The `cached=True` path uses a hardcoded region list (no AWS API call), so this is safe with minicloud. However, if the configured `region_name` is not in the hardcoded list, the `.index()` call will raise `ValueError`. Verify that `us-east-1` (the default for minicloud) is in the list.
+- Verify that any `AwsRegion` methods calling unsupported minicloud APIs (e.g. `ModifyVpcAttribute` for DNS hostnames, `CreateVpcEndpoint`) are handled gracefully — catch errors and skip non-essential operations when minicloud is active
 
 **Definition of Done**:
-- [ ] VPC, subnet, security group, internet gateway creation succeeds against minicloud
+- [ ] VPC, subnet, security group, internet gateway, and key pair creation succeeds against minicloud
 - [ ] Network interfaces are correctly attached to instances
 - [ ] Unsupported VPC operations (DNS attributes, VPC endpoints) fail gracefully in minicloud mode
 
-**Dependencies**: Phase 1, Phase 2
+**Dependencies**: Phase 1, Phase 2 (can run in parallel with Phase 4 — both depend on Phase 1 + 2 but not on each other)
 
 ---
 
@@ -206,7 +260,7 @@ This calls `sdcm/utils/common.py:1449` which uses `boto3.resource("ec2").images.
 - [ ] `convert_name_to_ami_if_needed` and `get_ami_images` still use real AWS regardless
 - [ ] Unit tests with mocked boto3 verify correct endpoint routing
 
-**Dependencies**: Phase 1, Phase 2
+**Dependencies**: Phase 1, Phase 2 (can run in parallel with Phase 3 — both depend on Phase 1 + 2 but not on each other)
 
 ---
 
@@ -332,6 +386,7 @@ This calls `sdcm/utils/common.py:1449` which uses `boto3.resource("ec2").images.
 | 1 | `test_ec2_factory_default_endpoint` | Factory returns client with no endpoint_url by default |
 | 1 | `test_ec2_factory_custom_endpoint` | Factory passes endpoint_url to boto3 when provided |
 | 2 | `test_minicloud_config_from_env` | `SCT_MINICLOUD_ENDPOINT_URL` is loaded correctly |
+| 2 | `test_prepare_minicloud_reachability_check` | `prepare_minicloud_environment()` raises clear error when minicloud is unreachable |
 | 3 | `test_vpc_creation_against_minicloud` | `AwsRegion` VPC/subnet/SG creation works with minicloud endpoint |
 | 4 | `test_selective_routing_instance_lifecycle` | `EC2ClientWrapper` uses minicloud endpoint when configured |
 | 4 | `test_selective_routing_ami_resolution` | `convert_name_to_ami_if_needed` always uses real AWS |
