@@ -36,19 +36,19 @@ def call(Map args) {
     def cmdParts = ["./docker/env/hydra.sh python sdcm/utils/junit_summary.py"]
 
     if (existingXmls) {
-        def xmlArgs = existingXmls.collect { "'${it}'" }.join(" ")
+        def xmlArgs = existingXmls.collect { "\"${it}\"" }.join(" ")
         cmdParts.add("--junit-xml ${xmlArgs}")
     }
 
     if (hasPrecommitLog) {
-        cmdParts.add("--precommit-log '${precommitLog}'")
+        cmdParts.add("--precommit-log \"${precommitLog}\"")
     }
 
-    cmdParts.add("--stage-name '${stageName}'")
-    cmdParts.add("--build-url '${env.BUILD_URL}'")
+    cmdParts.add("--stage-name \"${stageName}\"")
+    cmdParts.add("--build-url \"${env.BUILD_URL}\"")
 
     def summary = sh(
-        script: "#!/bin/bash\n" + cmdParts.join(" \\\n    "),
+        script: "#!/bin/bash\nset -o pipefail\n" + cmdParts.join(" \\\n    "),
         returnStdout: true,
     ).trim()
 

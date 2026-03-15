@@ -230,8 +230,7 @@ def format_markdown(results: SuiteResults, stage_name: str, build_url: str = "")
     status = "FAILED" if has_failures else "PASSED"
 
     lines = [
-        COMMENT_MARKER,
-        f"## {icon} {stage_name}: {status}",
+        f"### {icon} {stage_name}: {status}",
         "",
         "| Total | Passed | Failed | Errors | Skipped |",
         "|-------|--------|--------|--------|---------|",

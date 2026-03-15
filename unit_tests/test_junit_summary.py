@@ -172,12 +172,13 @@ def test_format_markdown_failing_contains_failure_details():
     assert "https://jenkins/build/1" in output
 
 
-def test_format_markdown_contains_comment_marker():
+def test_format_markdown_uses_subsection_heading():
     results = SuiteResults(passed=1)
 
     output = format_markdown(results, "Tests")
 
-    assert COMMENT_MARKER in output
+    assert "### " in output
+    assert COMMENT_MARKER not in output
 
 
 def test_format_markdown_contains_summary_table():
