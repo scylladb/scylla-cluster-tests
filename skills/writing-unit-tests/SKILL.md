@@ -40,6 +40,18 @@ SCT runs tests with `pytest-xdist` (`-n2` by default) and `pytest-random-order`.
 
 Mocking internal functions makes tests brittle and hides bugs. Mock at the outermost boundary: the HTTP call, the SSH command, the cloud SDK client. This tests the actual logic while isolating from infrastructure.
 
+### No Inline Classes in Fixtures or Tests
+
+**Define helper classes at module level, not inside fixtures or test functions.**
+
+Inline classes (defined inside a function or fixture) are harder to read, cannot be reused, and make diffs confusing. Define helper classes at module level and instantiate them in fixtures. This keeps test code flat and scannable.
+
+### Use Events Fixtures for Event System Tests
+
+**Use `events_function_scope` fixture when tests publish or read SCT events — never manage `EventsUtilsMixin` manually.**
+
+The `events_function_scope` fixture (from `conftest.py`) creates a fully isolated events system per test — fresh temp directory, events device, and registry patcher. This prevents event leakage between tests. Access the raw events log via `events_fixture.get_raw_events_log()` and the events logger via `events_fixture.get_events_logger()`. Use `events` (module scope) only when many tests share expensive event setup and you are certain there is no cross-test interference.
+
 ## When to Use
 
 - Creating a new test file in `unit_tests/`
