@@ -1,3 +1,10 @@
+---
+status: draft
+domain: config
+created: 2026-03-04
+last_updated: 2026-03-17
+owner: null
+---
 # Typed Configuration Access Migration Plan
 
 ## Problem Statement
