@@ -22,4 +22,4 @@ gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
 gemini_log_cql_statements: true
 
 db_type: mixed_scylla
-instance_type_db_oracle: 'i4i.16xlarge'
+instance_type_db_oracle: 'i8ge.3xlarge'
