@@ -1,3 +1,10 @@
+---
+status: draft
+domain: testing
+created: 2026-03-11
+last_updated: 2026-03-17
+owner: null
+---
 # Minicloud Local Testing Integration
 
 ## 1. Problem Statement
