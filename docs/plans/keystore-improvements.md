@@ -1,3 +1,10 @@
+---
+status: draft
+domain: framework
+created: 2026-03-15
+last_updated: 2026-03-17
+owner: null
+---
 # KeyStore Improvements Plan
 
 ## 1. Problem Statement
