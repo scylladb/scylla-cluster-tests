@@ -1,3 +1,10 @@
+---
+status: draft
+domain: ci-cd
+created: 2026-02-08
+last_updated: 2026-03-17
+owner: null
+---
 # Curl Retry/Timeout Linting Implementation Plan
 
 **Primary Implementation**: High-Performance Python AST-Based Checker with Optimization Strategies
