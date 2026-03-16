@@ -594,7 +594,7 @@ def build_reporter(  # noqa: PLR0911
     LOGGER.info("Building email reporter for class: %s", name)
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
-    elif "Longevity" in name:
+    elif "Longevity" or "ScyllaCloud" in name:
         return LongevityEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "SlaPerUser" in name:
         return SlaPerUserEmailReporter(email_recipients=email_recipients, logdir=logdir)
