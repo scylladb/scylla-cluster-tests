@@ -1,0 +1,56 @@
+name: Add ai-assisted label
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  detect-ai:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check for AI assistance markers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          found=false
+
+          # Check PR description for Claude Code marker
+          pr_body=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq '.body // ""')
+          if echo "$pr_body" | grep -qi "Generated with.*Claude Code"; then
+            echo "Found: Claude Code marker in PR description"
+            found=true
+          fi
+
+          # Check commit messages for AI co-authors
+          if [ "$found" = false ]; then
+            commits=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json commits --jq '.commits[].messageBody')
+
+            if echo "$commits" | grep -qi "noreply@anthropic\.com"; then
+              echo "Found: Anthropic co-author in commit trailers"
+              found=true
+            fi
+
+            if echo "$commits" | grep -qi "copilot.*@users\.noreply\.github\.com\|copilot-swe-agent"; then
+              echo "Found: GitHub Copilot co-author in commit trailers"
+              found=true
+            fi
+          fi
+
+          # Check if PR author is a known AI bot
+          pr_author=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json author --jq '.author.login')
+          if [[ "$pr_author" == *"copilot"* ]] || [[ "$pr_author" == *"claude"* ]]; then
+            echo "Found: PR authored by AI bot ($pr_author)"
+            found=true
+          fi
+
+          # Add label if any marker found (idempotent)
+          if [ "$found" = true ]; then
+            echo "Adding 'ai-assisted' label to PR #$PR_NUMBER"
+            gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "ai-assisted"
+          else
+            echo "No AI assistance markers detected in PR #$PR_NUMBER"
+          fi
