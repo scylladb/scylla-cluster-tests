@@ -120,7 +120,7 @@ All secrets are well within the 64KB Secrets Manager limit.
 ## 3. Goals
 
 1. **Migrate credential storage from S3 to AWS Secrets Manager** — all secrets stored in Secrets Manager with KMS encryption, per-secret IAM policies, and CloudTrail audit logging.
-2. **Add in-memory caching** to eliminate redundant API calls within a test run — target: reduce Secrets Manager API calls by 80%+ for a typical test execution.
+2. **Add in-memory caching** to eliminate redundant API calls within a test run — target: reduce API calls by 80%+ for a typical test execution. Cache persists for the `KeyStore` instance lifetime (no TTL).
 3. **Maintain backward compatibility** — existing `KeyStore()` API surface (all public methods) must continue to work unchanged. Callers should not need modification.
 4. **Support S3 fallback during migration** — a configuration flag allows reading from S3 (old) or Secrets Manager (new) to enable gradual rollout without a big-bang cutover.
 5. **Consolidate duplicate SSH key methods** into a single method, eliminating the four identical `get_*_ssh_key_pair()` wrappers.
@@ -128,6 +128,8 @@ All secrets are well within the 64KB Secrets Manager limit.
 7. **Achieve >90% unit test coverage** for the `KeyStore` class with proper mocking (no real AWS calls).
 8. **Provide a singleton/shared instance pattern** so callers don't need to instantiate `KeyStore()` at every call site, while maintaining backward compatibility.
 9. **Add structured logging** for credential access — log which credential was fetched, when, and by which module, enabling audit capability beyond CloudTrail.
+10. **Establish a documented rotation policy** with tiered rotation frequencies (90/180/365 days) based on credential sensitivity, aligned with NIST 800-53 and PCI DSS standards.
+11. **Document all secrets** with standardized tags in Secrets Manager and detailed knowledge base pages in Confluence, covering recreation procedures, access scope, and dependency mapping.
 
 ## 4. Implementation Phases
 
@@ -153,13 +155,55 @@ All secrets are well within the 64KB Secrets Manager limit.
 
 ---
 
-### Phase 2: Secrets Manager Backend with S3 Fallback
+### Phase 2: In-Memory Caching, Shared Instance, and Retry Logic
+
+**Importance**: High — delivers immediate value independent of backend migration.
+
+**Description**: Improve `KeyStore` reliability and performance regardless of which backend is used. This phase can be implemented, reviewed, and shipped before any Secrets Manager work begins.
+
+1. **In-memory caching**: Add a thread-safe in-memory cache to `get_file_contents()`. The cache persists for the lifetime of the `KeyStore` instance — there is no TTL. Credentials do not change during a test run, so expiration adds complexity with no benefit. Since `get_json()` and all credential getters call `get_file_contents()`, this provides caching across the entire API surface without changing any caller. A `clear_cache()` method and `bypass_cache` parameter are available for the rare cases where a forced refresh is needed.
+
+2. **Shared instance**: Add a module-level `get_keystore()` function that returns a shared `KeyStore` instance (lazy, thread-safe initialization). When callers share a single instance, the cache is shared too — maximizing cache hits. Existing `KeyStore()` direct instantiation continues to work. Migrating call sites is deferred to a follow-up effort.
+
+3. **Retry logic**: Add `tenacity` retry to `get_file_contents()` for transient AWS failures. For S3: `SlowDown`, `InternalError`, `ServiceUnavailable`. For Secrets Manager (when enabled later): `ThrottlingException`, `InternalServiceError`. Retry with exponential backoff (3 attempts, 1s/2s/4s delays). Non-transient errors (`NoSuchKey`, `ResourceNotFoundException`, `AccessDenied`) are raised immediately.
+
+4. **SSH key consolidation**: The four identical methods (`get_ec2_ssh_key_pair`, `get_gce_ssh_key_pair`, `get_azure_ssh_key_pair`, `get_oci_ssh_key_pair`) already delegate to `get_ssh_key_pair("scylla_test_id_ed25519")`. Add deprecation warnings to guide callers toward the canonical method.
+
+5. **Structured logging**: Add `logging.getLogger(__name__)` and log each credential access with: credential name, caller module, cache hit/miss, fetch duration, backend used. `DEBUG` for cache hits, `INFO` for API fetches, `WARNING` for slow fetches (>2 seconds).
+
+**Dependencies**: Phase 1
+
+**Deliverables**:
+- Thread-safe cache in `get_file_contents()` using `threading.Lock` and `dict`
+- No TTL — cache lives as long as the `KeyStore` instance
+- `clear_cache()` method and `bypass_cache=False` parameter on `get_file_contents()`
+- `get_keystore() -> KeyStore` module-level function (lazy singleton)
+- `tenacity` retry decorator on `get_file_contents()` with transient error classification
+- Deprecation warnings on `get_ec2_ssh_key_pair()`, `get_gce_ssh_key_pair()`, `get_azure_ssh_key_pair()`, `get_oci_ssh_key_pair()`
+- `LOGGER` with structured log messages at appropriate levels
+- Unit tests for all new behavior
+
+**Definition of Done**:
+- [ ] Repeated calls to same credential return cached value (verified by mock call count)
+- [ ] `bypass_cache=True` forces API fetch
+- [ ] `clear_cache()` empties all cached entries
+- [ ] Thread-safe under concurrent access (tested with `ThreadPoolExecutor`)
+- [ ] `get_keystore()` returns the same instance across calls
+- [ ] Transient errors are retried up to 3 times with exponential backoff
+- [ ] Non-transient errors (`NoSuchKey`, `AccessDenied`) are raised immediately
+- [ ] Deprecation warnings on backend-specific SSH methods
+- [ ] `DEBUG` log for cache hits, `INFO` for API fetches, `WARNING` for slow fetches
+- [ ] Passes `uv run sct.py pre-commit`
+
+---
+
+### Phase 3: Secrets Manager Backend with S3 Fallback
 
 **Importance**: Critical — core migration to AWS Secrets Manager.
 
 **Description**: Add an AWS Secrets Manager backend to `KeyStore` while keeping the S3 backend as a fallback. A configuration flag (`SCT_KEYSTORE_BACKEND`) controls which backend is used. This enables gradual rollout: teams can switch to Secrets Manager individually and roll back to S3 if issues arise.
 
-**Dependencies**: Phase 1 (tests ensure no regressions)
+**Dependencies**: Phase 1 (tests ensure no regressions), Phase 2 (caching and retry apply to both backends)
 
 **Deliverables**:
 - New `_get_from_secrets_manager(secret_name)` method using `boto3.client("secretsmanager").get_secret_value()`
@@ -174,123 +218,26 @@ All secrets are well within the 64KB Secrets Manager limit.
 - [ ] `SCT_KEYSTORE_BACKEND=secretsmanager` reads from Secrets Manager
 - [ ] `SCT_KEYSTORE_BACKEND=s3` (or unset) reads from S3 (existing behavior)
 - [ ] Binary and JSON secrets round-trip correctly through Secrets Manager
+- [ ] Caching and retry logic work identically for both backends
 - [ ] Unit tests cover both backends using `moto`'s `@mock_aws` for Secrets Manager
 - [ ] Passes `uv run sct.py pre-commit`
 
 ---
 
-### Phase 3: In-Memory Caching with TTL
-
-**Importance**: High — the single most impactful performance improvement.
-
-**Description**: Add a thread-safe in-memory cache to `get_file_contents()` with a configurable TTL (default: 5 minutes). Since `get_json()` and all credential getters call `get_file_contents()`, this provides caching across the entire API surface without changing any caller. The cache works identically for both S3 and Secrets Manager backends.
-
-**Dependencies**: Phase 1
-
-**Deliverables**:
-- Thread-safe cache using `threading.Lock` and a dict of `{key: (value, expiry_time)}`
-- `cache_ttl_seconds` parameter on `KeyStore.__init__()` (default 300)
-- `clear_cache()` method for explicit invalidation
-- `get_file_contents(file_name, bypass_cache=False)` parameter for force-refresh
-
-**Definition of Done**:
-- [ ] Repeated calls to same credential return cached value (verified by mock call count)
-- [ ] Cache expires after TTL
-- [ ] `bypass_cache=True` forces API fetch
-- [ ] `clear_cache()` empties all cached entries
-- [ ] Thread-safe under concurrent access (tested with `ThreadPoolExecutor`)
-- [ ] Passes `uv run sct.py pre-commit`
-
----
-
-### Phase 4: Structured Credential Access Logging
-
-**Importance**: Medium — provides application-level audit capability complementing CloudTrail.
-
-**Description**: Add `logging.getLogger(__name__)` to `KeyStore` and log each credential access with structured fields: credential name, caller module, cache hit/miss, fetch duration. CloudTrail provides infrastructure-level auditing; this provides application-level traceability.
-
-**Dependencies**: Phase 3 (cache hit/miss info available)
-
-**Deliverables**:
-- `LOGGER` at module level in `keystore.py`
-- Log at `DEBUG` level for cache hits, `INFO` level for API fetches
-- Include caller info via `inspect.stack()` or module parameter
-- Log warnings for slow fetches (>2 seconds)
-- Log which backend was used (S3 vs Secrets Manager)
-
-**Definition of Done**:
-- [ ] `DEBUG` log for every cache hit: `"KeyStore cache hit for '%s' (caller: %s)"`
-- [ ] `INFO` log for every API fetch: `"KeyStore fetched '%s' from %s in %.2fs (caller: %s)"`
-- [ ] `WARNING` log for slow fetches: `"KeyStore slow fetch for '%s': %.2fs"`
-- [ ] No logging at `INFO` or higher for normal cache-hit operation (avoid log spam)
-- [ ] Passes `uv run sct.py pre-commit`
-
----
-
-### Phase 5: Consolidate SSH Key Methods and Add Retry Logic
-
-**Importance**: Medium — reduces code duplication and improves resilience.
-
-**Description**:
-
-1. **SSH key consolidation**: Replace the four identical methods (`get_ec2_ssh_key_pair`, `get_gce_ssh_key_pair`, `get_azure_ssh_key_pair`, `get_oci_ssh_key_pair`) with a single `get_ssh_key_pair()` call. Keep the old methods as thin wrappers that call the new method for backward compatibility, and add deprecation warnings.
-
-2. **Retry logic**: Add `@retrying` decorator (from `sdcm/utils/decorators.py`) or `tenacity` retry to `get_file_contents()` for transient AWS failures. For Secrets Manager: `ThrottlingException`, `InternalServiceError`. For S3: `SlowDown`, `InternalError`, `ServiceUnavailable`.
-
-**Dependencies**: Phase 1
-
-**Deliverables**:
-- `get_ssh_key_pair()` becomes the canonical method (already exists, takes `name` param)
-- `get_ec2_ssh_key_pair()` etc. become one-liners calling `get_ssh_key_pair("scylla_test_id_ed25519")` (already the case — add deprecation warning)
-- Retry with exponential backoff on transient errors (3 attempts, 1s/2s/4s delays)
-- Unit tests for retry behavior using mocked errors
-
-**Definition of Done**:
-- [ ] Deprecation warnings added to backend-specific SSH methods
-- [ ] Transient errors are retried up to 3 times
-- [ ] Non-transient errors (`ResourceNotFoundException`, `NoSuchKey`, `AccessDenied`) are raised immediately
-- [ ] Unit tests verify retry behavior
-- [ ] Passes `uv run sct.py pre-commit`
-
----
-
-### Phase 6: Shared Instance Pattern
-
-**Importance**: Low — quality-of-life improvement, reduces boilerplate across codebase.
-
-**Description**: Add a module-level function `get_keystore()` that returns a shared `KeyStore` instance (using `threading.Lock` for thread-safe initialization). This avoids the pattern of `KeyStore()` instantiation at every call site. Existing `KeyStore()` direct instantiation continues to work.
-
-**Dependencies**: Phases 2, 3 (configurable backend and caching must be in place)
-
-**Deliverables**:
-- `get_keystore() -> KeyStore` function in `sdcm/keystore.py`
-- Shared instance initialized lazily on first call
-- Migration guide comment in the function docstring
-
-**Definition of Done**:
-- [ ] `get_keystore()` returns the same instance across calls
-- [ ] Thread-safe initialization
-- [ ] Direct `KeyStore()` instantiation still works (backward compatible)
-- [ ] Unit tests verify singleton behavior
-- [ ] Passes `uv run sct.py pre-commit`
-
-**Note**: Migrating existing `KeyStore()` call sites to `get_keystore()` is intentionally deferred to a follow-up effort. This phase only introduces the function — callers can adopt it incrementally.
-
----
-
-### Phase 7: Migration Script and Runbook
+### Phase 4: Migration Script and Runbook
 
 **Importance**: High — enables the actual cutover from S3 to Secrets Manager.
 
-**Description**: Create a one-time migration script that reads all secrets from the S3 bucket and creates corresponding secrets in AWS Secrets Manager. Include a runbook documenting the migration procedure, rollback steps, and validation checks.
+**Description**: Create a one-time migration script that reads all secrets from the S3 bucket and creates corresponding secrets in AWS Secrets Manager. The migration script also applies the tagging and description metadata defined in the Secrets Inventory (Section 2). Include a runbook documenting the migration procedure, rollback steps, and validation checks.
 
-**Dependencies**: Phase 2 (Secrets Manager backend implemented)
+**Dependencies**: Phase 3 (Secrets Manager backend implemented)
 
 **Deliverables**:
 - Migration script `scripts/migrate_keystore_to_secrets_manager.py` that:
   - Lists all objects in the S3 keystore bucket
-  - Creates each as a Secrets Manager secret (binary → `SecretBinary`, JSON → `SecretString`)
+  - Creates each as a Secrets Manager secret (binary -> `SecretBinary`, JSON -> `SecretString`)
   - Applies the configurable prefix (`sct/keystore/`)
+  - Applies tags and description from the secrets documentation schema (see Section 8)
   - Validates round-trip: reads back each secret and compares with S3 original
   - Dry-run mode that only reports what would be created
   - Idempotent: skips secrets that already exist (with option to overwrite)
@@ -304,6 +251,7 @@ All secrets are well within the 64KB Secrets Manager limit.
 
 **Definition of Done**:
 - [ ] Migration script handles all secret types (binary and JSON)
+- [ ] Tags and descriptions applied to every migrated secret
 - [ ] Dry-run mode works without creating any secrets
 - [ ] Round-trip validation passes for all secrets
 - [ ] IAM policy template restricts access to `sct/keystore/*`
@@ -311,11 +259,11 @@ All secrets are well within the 64KB Secrets Manager limit.
 
 ---
 
-### Phase 8: Documentation Update
+### Phase 5: Documentation Update
 
 **Importance**: Medium — ensures the changes are discoverable and usable.
 
-**Dependencies**: Phases 1-7
+**Dependencies**: Phases 1-4
 
 **Deliverables**:
 - Update `AGENTS.md` environment variables section with:
@@ -323,11 +271,13 @@ All secrets are well within the 64KB Secrets Manager limit.
   - `SCT_KEYSTORE_SM_PREFIX` — Secrets Manager secret name prefix (default: `sct/keystore/`)
 - Add docstrings to all `KeyStore` methods following Google format
 - Update the keystore section in repository documentation
+- Create initial Confluence page for secret knowledge base (see Section 9)
 - Archive this plan to `docs/plans/archive/`
 
 **Definition of Done**:
 - [ ] All public methods have Google-format docstrings
 - [ ] New environment variables documented in `AGENTS.md`
+- [ ] Confluence page created with secret knowledge base
 - [ ] Passes `uv run sct.py pre-commit`
 
 ## 5. Testing Requirements
@@ -349,13 +299,13 @@ All secrets are well within the 64KB Secrets Manager limit.
 | ETag check | `get_obj_if_needed` | Skips download when ETag matches |
 | Sync parallel | `sync` | Downloads all keys in parallel |
 | S3 ETag calc | `calculate_s3_etag` | Correct single-part and multi-part ETags |
-| Cache hit | `get_file_contents` (Phase 3) | Second call returns cached, no API call |
-| Cache TTL | `get_file_contents` (Phase 3) | Cache expires after TTL |
-| Cache bypass | `get_file_contents(bypass_cache=True)` | Forces API fetch |
-| Retry transient (S3) | `get_file_contents` (Phase 5) | Retries on `SlowDown`, succeeds |
-| Retry transient (SM) | `get_file_contents` (Phase 5) | Retries on `ThrottlingException`, succeeds |
-| No retry permanent | `get_file_contents` (Phase 5) | No retry on `NoSuchKey`/`ResourceNotFoundException` |
-| Shared instance | `get_keystore()` (Phase 6) | Returns same instance |
+| Cache hit | `get_file_contents` (Phase 2) | Second call returns cached, no API call |
+| Cache persists | `get_file_contents` (Phase 2) | Cache lives for instance lifetime (no TTL) |
+| Cache bypass | `get_file_contents(bypass_cache=True)` (Phase 2) | Forces API fetch |
+| Retry transient (S3) | `get_file_contents` (Phase 2) | Retries on `SlowDown`, succeeds |
+| Retry transient (SM) | `get_file_contents` (Phase 3) | Retries on `ThrottlingException`, succeeds |
+| No retry permanent | `get_file_contents` (Phase 2) | No retry on `NoSuchKey`/`ResourceNotFoundException` |
+| Shared instance | `get_keystore()` (Phase 2) | Returns same instance |
 | Backend switching | `SCT_KEYSTORE_BACKEND` | S3 vs Secrets Manager dispatch |
 | Migration script | `migrate_keystore_to_secrets_manager.py` | Dry-run, create, validate round-trip |
 
@@ -373,24 +323,145 @@ All secrets are well within the 64KB Secrets Manager limit.
 
 1. **Secrets Manager integration**: All credentials readable from AWS Secrets Manager with `SCT_KEYSTORE_BACKEND=secretsmanager`, with KMS encryption and CloudTrail audit logging.
 2. **S3 fallback**: Setting `SCT_KEYSTORE_BACKEND=s3` (or leaving it unset) continues to use the existing S3 bucket — zero disruption during migration.
-3. **API call reduction**: A typical docker backend test run makes ≤5 API calls (down from 40+), verified by counting `INFO`-level fetch logs.
+3. **API call reduction**: A typical docker backend test run makes <=5 API calls (down from 40+), verified by counting `INFO`-level fetch logs.
 4. **Unit test coverage**: `sdcm/keystore.py` has >90% line coverage as reported by `pytest --cov=sdcm.keystore`.
 5. **No behavioral regressions**: All existing unit and integration tests pass without modification (except adding mocks where `KeyStore` was previously unmocked).
 6. **Audit logging**: CloudTrail records every `GetSecretValue` call. Application logs show cache hit/miss for every credential access.
 7. **Resilient fetches**: Transient AWS errors are retried transparently; `ThrottlingException`/`SlowDown` errors no longer cause test failures.
 8. **Migration tooling**: One-command migration from S3 to Secrets Manager with dry-run, validation, and rollback capability.
+9. **Secret metadata**: Every secret in Secrets Manager has the full standard tag schema applied. Every secret has a corresponding Confluence knowledge base page.
+10. **Rotation policy**: Documented rotation schedule with tiered frequencies. `rotation_due` tags set on all secrets. Process documented and tested.
 
 ## 7. Risk Mitigation
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| Secrets Manager API throttling under high concurrency | Medium | Medium | In-memory caching (Phase 3) reduces API calls by 80%+. Default Secrets Manager quota is 10,000 requests/second — far above SCT's needs. Retry logic (Phase 5) handles transient throttling. |
-| Cache serves stale credentials after rotation | Low | High | Default 5-min TTL is short enough for test runs; `bypass_cache=True` and `clear_cache()` available for force-refresh. Secrets Manager versioning allows explicit version pinning if needed. |
+| Secrets Manager API throttling under high concurrency | Medium | Medium | In-memory caching (Phase 2) reduces API calls by 80%+. Default Secrets Manager quota is 10,000 requests/second — far above SCT's needs. Retry logic (Phase 2) handles transient throttling. |
+| Cache serves stale credentials after secret refresh | Low | Low | Credentials do not change during a test run. Cache lives for the `KeyStore` instance lifetime. For the rare case of mid-run refresh: `bypass_cache=True` and `clear_cache()` are available. Between runs, a new `KeyStore` instance starts with a fresh cache. |
 | Migration script misses secrets in S3 bucket | Low | High | Script lists all objects in bucket. Dry-run mode shows what will be migrated. Round-trip validation compares original and migrated values. |
-| Cost increase from Secrets Manager API calls | Low | Low | $0.05 per 10,000 API calls. With caching, a test run makes ~5 calls. Even 1,000 test runs/month = $0.025. Secret storage: 20 × $0.40 = $8/month. |
+| Cost increase from Secrets Manager API calls | Low | Low | $0.05 per 10,000 API calls. With caching, a test run makes ~5 calls. Even 1,000 test runs/month = $0.025. Secret storage: 20 x $0.40 = $8/month. |
 | Shared instance causes issues with parallel test execution | Medium | Medium | `get_keystore()` is optional; direct `KeyStore()` instantiation still works. Cache is per-instance. |
 | Breaking change if callers depend on fresh S3 data per call | Low | Medium | Cache bypass parameter available; existing `KeyStore()` instantiation creates new instance with fresh cache. |
 | S3 `sync()` method doesn't apply to Secrets Manager | Low | Low | `sync()` and `get_obj_if_needed()` remain S3-only (they download files to disk for SSH key distribution). These methods bypass the backend dispatch and always use S3 directly, since their purpose is local file caching, not credential retrieval. |
 | Retry logic masks permanent failures | Low | Medium | Only retry transient error codes (`ThrottlingException`, `InternalServiceError`, `SlowDown`); raise immediately for `ResourceNotFoundException`, `AccessDenied` |
 | `moto` doesn't fully replicate Secrets Manager behavior | Medium | Low | Use `moto` for unit tests but validate with real Secrets Manager via migration script's round-trip check |
 | Deprecation warnings for SSH methods are noisy | Low | Low | Use `warnings.warn(..., DeprecationWarning, stacklevel=2)` which is suppressed by default in production; visible in tests with `-W default` |
+| Secret metadata becomes stale in Confluence/tags | Medium | Medium | Schedule quarterly review as part of rotation process (see Section 8). Assign owner per-secret who is responsible for keeping metadata current. |
+
+## 8. Key Refresh and Rotation Process
+
+### Industry Standards
+
+| Standard | Recommended Rotation Frequency | Notes |
+|----------|-------------------------------|-------|
+| **NIST 800-53 Rev. 5** | Based on risk assessment; 90 days is common baseline | Mandates rotation schedules exist; frequency depends on sensitivity |
+| **PCI DSS v4.0.1** | 90 days for passwords/keys | Sections 8.3.9, 8.6.3 |
+| **CIS Benchmarks** | 90 days | AWS Foundational Security Best Practices |
+| **SOC 2 Type II** | Requires documented rotation policy | Frequency based on organizational risk assessment |
+| **AWS Security Hub** | Flags secrets not rotated within 90 days | Default control: `SecretsManager.4` |
+
+### Recommended Rotation Schedule for SCT
+
+Not all secrets carry equal risk. Rotation frequency should match the sensitivity and blast radius of each credential:
+
+| Tier | Rotation Frequency | Secrets | Rationale |
+|------|-------------------|---------|-----------|
+| **Tier 1 — High sensitivity** | **90 days** | Cloud credentials (`azure.json`, `gcp-sct-project-1.json`, `oci.json`), SSH keys (`scylla_test_id_ed25519`), Docker Hub (`docker.json`) | Direct access to cloud infrastructure or container registries. Compromise enables resource provisioning, data access, or supply chain attacks. |
+| **Tier 2 — Medium sensitivity** | **180 days** | API credentials (`argus_rest_credentials.json`, `scylladb_jira.json`, `scylladb_upload.json`), database credentials (`housekeeping-db.json`), KMS configs (`azure_kms_config.json`, `gcp_kms_config.json`) | Access to internal services. Compromise is contained within SCT's operational scope. |
+| **Tier 3 — Low sensitivity** | **365 days** | Email config (`email_config.json`), LDAP config (`ldap_ms_ad.json`), QA users (`qa_users.json`), backup blob (`backup_azure_blob.json`) | Read-only or low-privilege access. Limited blast radius. |
+
+### Refresh Process
+
+When a secret needs to be refreshed (rotated), follow this process:
+
+1. **Generate new credential** in the source system (e.g., create a new GCP service account key, generate a new SSH key pair, rotate an API token in the provider's UI).
+
+2. **Update in Secrets Manager** using the AWS CLI or console:
+   ```bash
+   aws secretsmanager put-secret-value \
+     --secret-id sct/keystore/<secret_name> \
+     --secret-string '{"new": "credential_json"}'
+   ```
+   For binary secrets (SSH keys):
+   ```bash
+   aws secretsmanager put-secret-value \
+     --secret-id sct/keystore/<secret_name> \
+     --secret-binary fileb://new_key_file
+   ```
+
+3. **Update in all other locations** where this credential exists (see "Where Else This Key Exists" in the secret's Confluence page and the `other_locations` tag in Secrets Manager).
+
+4. **Validate** by running a test that uses the credential:
+   ```bash
+   SCT_KEYSTORE_BACKEND=secretsmanager uv run sct.py run-test \
+     longevity_test.LongevityTest.test_custom_time \
+     --backend docker --config test-cases/PR-provision-test.yaml
+   ```
+
+5. **Revoke the old credential** in the source system after confirming the new one works.
+
+6. **Update the Confluence knowledge base** with rotation date, who performed it, and any issues encountered.
+
+7. **Update the `last_rotated` and `rotated_by` tags** on the secret in Secrets Manager.
+
+### Automation Roadmap
+
+For Phase 1 of this plan, rotation is manual. Future automation options:
+
+- **AWS Secrets Manager native rotation** (Lambda-based) — suitable for credentials where the source system has an API for key generation (e.g., AWS IAM keys, GCP service account keys).
+- **Scheduled CloudWatch Events** — trigger a reminder/alert when a secret approaches its rotation date based on the `rotation_due` tag.
+- **GuardDuty anomaly detection** — alert on unusual access patterns that may indicate a compromised credential.
+
+## 9. Secret Documentation and Metadata
+
+### What to Store in Secrets Manager (Tags and Description)
+
+AWS Secrets Manager supports a `Description` field (free-form text) and up to 50 tags (key-value pairs) per secret. Use these to document operational metadata that is useful when viewing secrets in the AWS Console or via CLI. **Do not store sensitive information in tags or descriptions** — they are not encrypted.
+
+#### Standard Tag Schema
+
+Every secret in Secrets Manager must have these tags:
+
+| Tag Key | Example Value | Purpose |
+|---------|---------------|---------|
+| `team` | `sct` | Which team owns this secret |
+| `environment` | `production` | Environment scope (`production`, `staging`, `development`) |
+| `secret_type` | `cloud_credential` | Category: `cloud_credential`, `ssh_key`, `api_token`, `database`, `config`, `service_account` |
+| `rotation_tier` | `tier1` | Rotation frequency tier from Section 8 (`tier1`, `tier2`, `tier3`) |
+| `last_rotated` | `2026-03-15` | Date of last rotation (ISO 8601) |
+| `rotation_due` | `2026-06-15` | Next rotation due date (ISO 8601) |
+| `rotated_by` | `jsmith` | Who last rotated this secret |
+| `owner` | `@infra-team` | Primary contact responsible for this secret |
+| `source_system` | `gcp-console` | Where the credential was generated (e.g., `gcp-console`, `azure-portal`, `aws-iam`, `jira-admin`) |
+| `other_locations` | `jenkins-credentials` | Where else this credential exists and would need updating on rotation (e.g., `jenkins-credentials`, `github-secrets`, `developer-laptops`) |
+| `confluence_page` | `SCT/KeyStore/azure-credentials` | Link to the Confluence knowledge base page for this secret |
+
+#### Description Field
+
+Use the `Description` field for a one-line summary of what the secret is for:
+
+```
+Azure service principal credentials for SCT cloud provisioning (subscription: scylla-qa)
+```
+
+### What to Store in Confluence (Sensitive Knowledge Base)
+
+Tags and descriptions in Secrets Manager should **not** contain sensitive operational knowledge. For detailed documentation that includes access scope, recreation procedures, and institutional knowledge, maintain a Confluence page per secret (or per secret group).
+
+Each Confluence page should document:
+
+| Section | Content | Example |
+|---------|---------|---------|
+| **Purpose** | What this credential is used for in SCT | "GCP service account used by SCT to provision Scylla clusters on GCE. Used in `sdcm/utils/gce_utils.py` and `sdcm/cluster_k8s/gke.py`." |
+| **Access Scope** | What permissions/roles this credential grants | "Roles: `compute.admin`, `storage.admin` on project `gcp-sct-project-1`" |
+| **Who Has Access** | IAM roles/users that can read this secret | "IAM roles: `sct-jenkins-role`, `sct-developer-role`. Humans: infra-team members via Okta-to-AWS federation." |
+| **How to Recreate** | Step-by-step procedure to generate a new credential | "1. Go to GCP Console > IAM > Service Accounts. 2. Select `sct-provisioner@gcp-sct-project-1`. 3. Keys > Add Key > JSON. 4. Upload to Secrets Manager." |
+| **Where Else It Exists** | All locations where this credential is stored or cached | "1. AWS Secrets Manager (`sct/keystore/gcp-sct-project-1.json`). 2. Jenkins credentials store (`gcp-sct-project-1`). 3. May be cached on developer laptops in `~/.sct/`." |
+| **Dependencies** | What breaks if this credential is revoked | "All GCE-backend test runs. GKE cluster provisioning. GCP KMS encryption tests." |
+| **Rotation History** | Log of past rotations | "2026-03-15: Rotated by @jsmith (quarterly). 2025-12-10: Rotated by @jdoe (emergency — key leaked in logs)." |
+| **Emergency Contact** | Who to contact if this credential stops working | "@infra-team in #sct-infra Slack channel" |
+
+### Why Split Between Secrets Manager and Confluence
+
+- **Secrets Manager tags**: Machine-readable, queryable, visible in AWS Console. Good for: "when was this last rotated?", "who owns this?", "is rotation overdue?" Can be used by automation (CloudWatch alarms on `rotation_due`).
+- **Confluence pages**: Human-readable, detailed, versioned. Good for: "how do I recreate this if it's compromised?", "what breaks if I revoke it?", "who else has a copy?" Contains institutional knowledge that doesn't fit in 255-character tag values.
