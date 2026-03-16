@@ -1,3 +1,10 @@
+---
+status: draft
+domain: monitoring
+created: 2026-01-26
+last_updated: 2026-03-17
+owner: null
+---
 # Kernel Panic Detection for Cloud Providers
 
 ## Problem Statement
@@ -163,7 +170,7 @@ This is a clean re-implementation of PR #12753, addressing all review feedback.
 - Thread lifecycle tests (start/stop, cleanup, timeouts, context manager)
 - Error handling tests (API errors, ResourceNotFoundError for Azure, transient errors)
 
-**Expected Outcome**: 
+**Expected Outcome**:
 - 15+ tests covering all scenarios
 - 100% pass rate
 - ~5-10 second execution time
