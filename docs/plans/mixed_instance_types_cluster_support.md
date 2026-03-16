@@ -1,3 +1,10 @@
+---
+status: draft
+domain: cluster
+created: 2026-02-01
+last_updated: 2026-03-17
+owner: null
+---
 # Mixed Instance Type Cluster Support - Implementation Plan
 
 ## Overview

@@ -1,3 +1,10 @@
+---
+status: draft
+domain: cluster
+created: 2026-02-01
+last_updated: 2026-03-17
+owner: null
+---
 # Mixed Instance Type Clusters - Usage Examples
 
 This document provides practical examples for configuring clusters with multiple instance types using the unified cluster topology format (Option 3).
