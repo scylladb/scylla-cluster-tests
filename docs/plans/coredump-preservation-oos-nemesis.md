@@ -1,3 +1,10 @@
+---
+status: draft
+domain: nemesis
+created: 2026-02-01
+last_updated: 2026-03-17
+owner: null
+---
 # Preserve Coredump Storage During Out-of-Space Nemesis
 
 ## 1. Problem Statement
