@@ -1,3 +1,10 @@
+---
+status: draft
+domain: cluster
+created: 2026-03-08
+last_updated: 2026-03-17
+owner: null
+---
 # Source and Destination Cluster Support
 
 ## Problem Statement
