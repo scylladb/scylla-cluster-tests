@@ -78,12 +78,12 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 
 ## Goals
 
-1. **Provision EMR clusters programmatically** within the SCT framework, following existing patterns for AWS resource management
-2. **Support Spot Instance integration** for EMR Core/Task nodes to minimize cost (On-Demand for Master, Spot for Core/Task)
-3. **Submit and monitor spark-migrator jobs** on provisioned EMR clusters with configurable Spark parameters
-4. **Clean up EMR resources automatically** using the same tag-based approach as existing AWS resources (`TestId`, `RunByUser`)
-5. **Integrate with SCT email reporting** so spark-migrator test results appear in standard SCT reports
-6. **Provide a reusable test base class** for spark-migrator tests that orchestrates Scylla cluster + EMR cluster + migration job lifecycle
+1. **Provision EMR clusters programmatically** — EMR cluster reaches `WAITING` state within 15 minutes of `run_job_flow` call (AWS typical: 5–10 min; 15 min allows for Spot capacity delays)
+2. **Support Spot Instance integration** for EMR Core/Task nodes to minimize cost (On-Demand for Master, Spot for Core/Task), with automatic fallback timeout of 10 minutes before failing the test
+3. **Submit and monitor spark-migrator jobs** on provisioned EMR clusters — step status polling at 30-second intervals, job completion detected within 60 seconds of actual finish
+4. **Clean up EMR resources automatically** — tag-based discovery (`TestId`, `RunByUser`) finds and terminates all orphaned EMR clusters within 5 minutes; cleanup runs as part of `clean_cloud_resources()` on every test teardown
+5. **Integrate with SCT email reporting** so spark-migrator test results (rows migrated, duration, throughput) appear in standard SCT reports
+6. **Provide a reusable test base class** — base scenario: 3-node Scylla cluster + 3-node EMR cluster (1 master + 2 core), migrating ≥1 million rows with post-migration row-count and data-checksum validation. Base scenario completes within 60 minutes end-to-end (provision + migrate + validate + teardown)
 7. **Support configurable EMR release versions** (e.g., `emr-7.x`) and Spark versions to test across multiple environments
 
 ## Implementation Phases
