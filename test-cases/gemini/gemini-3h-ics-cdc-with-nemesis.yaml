@@ -12,7 +12,6 @@ nemesis_selector: "not enospc"
 
 gemini_cmd: |
   --duration 3h
-  --warmup 30m
   --concurrency 50
   --mode write
 

@@ -9,7 +9,6 @@ ami_db_scylla_user: 'centos'
 
 gemini_cmd: |
   --duration 3h
-  --warmup 30m
   --concurrency 50
   --mode mixed
 

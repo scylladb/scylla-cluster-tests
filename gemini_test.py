@@ -17,6 +17,8 @@ import time
 
 from sdcm.tester import ClusterTester
 
+NEMESIS_START_DELAY_SEC = 5 * 60
+
 
 class GeminiTest(ClusterTester):
     """
@@ -47,10 +49,9 @@ class GeminiTest(ClusterTester):
         self.log.debug("Start gemini benchmark")
         gemini_thread = self.run_gemini(cmd=cmd)
         self.gemini_results["cmd"] = gemini_thread.gemini_commands
-        # sleep before run nemesis test_duration * .25
-        sleep_before_start = float(self.params.get("test_duration")) * 60 * 0.1
-        self.log.info("Sleep interval {}".format(sleep_before_start))
-        time.sleep(sleep_before_start)
+        # Allow gemini to populate initial data before starting nemesis
+        self.log.info("Sleeping %s sec before starting nemesis", NEMESIS_START_DELAY_SEC)
+        time.sleep(NEMESIS_START_DELAY_SEC)
 
         self.db_cluster.start_nemesis()
 

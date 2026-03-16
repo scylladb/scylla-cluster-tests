@@ -13,7 +13,6 @@ nemesis_seed: '023'
 
 gemini_cmd: |
   --duration 7h
-  --warmup 1h
   --concurrency 10
   --mode mixed
   --max-partition-keys 12

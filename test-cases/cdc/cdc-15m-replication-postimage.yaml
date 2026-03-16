@@ -24,7 +24,6 @@ extra_network_interface: true
 # to test pre/post-images with concurrent writes happening to a single row.
 gemini_cmd: |
   --duration 15m
-  --warmup 0s
   --concurrency 1
   --mode write
   --cql-features basic

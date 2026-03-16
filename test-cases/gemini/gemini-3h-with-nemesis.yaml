@@ -12,7 +12,6 @@ nemesis_seed: '032'
 
 gemini_cmd: |
   --duration 3h
-  --warmup 30m
   --concurrency 50
   --mode mixed
 

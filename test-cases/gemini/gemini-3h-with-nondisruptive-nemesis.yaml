@@ -11,7 +11,6 @@ nemesis_selector: "not disruptive"
 
 gemini_cmd: |
   --duration 3h
-  --warmup 30m
   --concurrency 50
   --mode mixed
 
