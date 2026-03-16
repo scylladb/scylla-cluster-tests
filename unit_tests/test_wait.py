@@ -13,10 +13,10 @@
 
 
 from __future__ import absolute_import
+
 import logging
 import threading
 import time
-import unittest
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -28,83 +28,70 @@ from sdcm.wait import wait_for, wait_for_log_lines, WaitForTimeoutError, ExitByE
 logging.basicConfig(level=logging.DEBUG)
 
 
-class TestSdcmWait(unittest.TestCase):
-    def test_01_simple(self):
-        calls = []
+def test_wait_simple():
+    calls = []
 
-        def callback(arg1, arg2):
-            calls.append((arg1, arg2))
-            raise Exception("error")
+    def callback(arg1, arg2):
+        calls.append((arg1, arg2))
+        raise Exception("error")
 
-        wait_for(callback, timeout=1, step=0.5, arg1=1, arg2=3, throw_exc=False)
-        self.assertEqual(len(calls), 3)
-
-    def test_02_throw_exc(self):
-        calls = []
-
-        def callback(arg1, arg2):
-            calls.append((arg1, arg2))
-            raise Exception("error")
-
-        self.assertRaisesRegex(
-            Exception, r"error", wait_for, callback, throw_exc=True, timeout=2, step=0.5, arg1=1, arg2=3
-        )
-        self.assertEqual(len(calls), 5)
-
-    def test_03_false_return(self):
-        calls = []
-
-        def callback(arg1, arg2):
-            calls.append((arg1, arg2))
-            return False
-
-        wait_for(callback, timeout=1, step=0.5, arg1=1, arg2=3, throw_exc=False)
-        self.assertEqual(len(calls), 3)
-
-    def test_03_false_return_rerise(self):
-        calls = []
-
-        def callback(arg1, arg2):
-            calls.append((arg1, arg2))
-            return False
-
-        self.assertRaisesRegex(
-            Exception,
-            "callback: timeout - 2 seconds - expired",
-            wait_for,
-            callback,
-            timeout=2,
-            throw_exc=True,
-            step=0.5,
-            arg1=1,
-            arg2=3,
-        )
-        self.assertEqual(len(calls), 5)
-
-    def test_03_return_value(self):
-        calls = []
-
-        def callback(arg1, arg2):
-            calls.append((arg1, arg2))
-            return "what ever"
-
-        self.assertEqual(wait_for(callback, timeout=2, step=0.5, arg1=1, arg2=3, throw_exc=False), "what ever")
-        self.assertEqual(len(calls), 1)
+    wait_for(callback, timeout=1, step=0.5, arg1=1, arg2=3, throw_exc=False)
+    assert len(calls) == 3
 
 
-from parameterized import parameterized
+def test_wait_throw_exc():
+    calls = []
+
+    def callback(arg1, arg2):
+        calls.append((arg1, arg2))
+        raise Exception("error")
+
+    with pytest.raises(Exception, match=r"error"):
+        wait_for(callback, throw_exc=True, timeout=2, step=0.5, arg1=1, arg2=3)
+    assert len(calls) == 5
 
 
-class TestSdcmWaitWithEventStop(unittest.TestCase):
-    def setUp(self):
+def test_wait_false_return():
+    calls = []
+
+    def callback(arg1, arg2):
+        calls.append((arg1, arg2))
+        return False
+
+    wait_for(callback, timeout=1, step=0.5, arg1=1, arg2=3, throw_exc=False)
+    assert len(calls) == 3
+
+
+def test_wait_false_return_reraise():
+    calls = []
+
+    def callback(arg1, arg2):
+        calls.append((arg1, arg2))
+        return False
+
+    with pytest.raises(Exception, match="callback: timeout - 2 seconds - expired"):
+        wait_for(callback, timeout=2, throw_exc=True, step=0.5, arg1=1, arg2=3)
+    assert len(calls) == 5
+
+
+def test_wait_return_value():
+    calls = []
+
+    def callback(arg1, arg2):
+        calls.append((arg1, arg2))
+        return "what ever"
+
+    assert wait_for(callback, timeout=2, step=0.5, arg1=1, arg2=3, throw_exc=False) == "what ever"
+    assert len(calls) == 1
+
+
+class EventStopState:
+    """Shared state for event-stop tests: tracks callback calls and controls stop event."""
+
+    def __init__(self):
         self.calls = []
         self.callback_return_true_after = 0
         self.ev = threading.Event()
-
-    def tearDown(self):
-        self.calls = []
-        self.callback_return_true_after = 0
-        self.ev.set()
 
     def callback(self, arg1, arg2):
         self.calls.append((arg1, arg2))
@@ -112,133 +99,145 @@ class TestSdcmWaitWithEventStop(unittest.TestCase):
             return "what ever"
         return False
 
-    def set_stop_in_timeout(self, ev: threading.Event, set_after: int):
+    def set_stop_in_timeout(self, ev, set_after):
         while not ev.is_set():
             if len(self.calls) == set_after:
                 ev.set()
 
-    @parameterized.expand([(True,), (False,)])
-    def test_04_stop_by_event(self, throw_exc):
-        self.callback_return_true_after = 3
-        th = threading.Thread(target=self.set_stop_in_timeout, kwargs={"ev": self.ev, "set_after": 1})
-        th.start()
-        if throw_exc:
-            self.assertRaisesRegex(
-                ExitByEventError,
-                "callback: stopped by Event",
-                wait_for,
-                self.callback,
+
+@pytest.fixture
+def event_stop_state():
+    state = EventStopState()
+    yield state
+    state.ev.set()
+
+
+@pytest.mark.parametrize("throw_exc", [pytest.param(True, id="throw_exc"), pytest.param(False, id="no_throw_exc")])
+def test_stop_by_event(event_stop_state, throw_exc):
+    state = event_stop_state
+    state.callback_return_true_after = 3
+    th = threading.Thread(target=state.set_stop_in_timeout, kwargs={"ev": state.ev, "set_after": 1})
+    th.start()
+    if throw_exc:
+        with pytest.raises(ExitByEventError, match="callback: stopped by Event"):
+            wait_for(
+                state.callback,
                 timeout=3,
                 throw_exc=throw_exc,
-                stop_event=self.ev,
+                stop_event=state.ev,
                 step=0.5,
                 arg1=1,
                 arg2=3,
             )
-        else:
-            res = wait_for(self.callback, timeout=3, step=0.5, throw_exc=throw_exc, stop_event=self.ev, arg1=1, arg2=3)
-            self.assertFalse(res)
+    else:
+        res = wait_for(state.callback, timeout=3, step=0.5, throw_exc=throw_exc, stop_event=state.ev, arg1=1, arg2=3)
+        assert not res
 
-        self.assertTrue(len(self.calls) < 6, f"{len(self.calls)}")
+    assert len(state.calls) < 6, f"{len(state.calls)}"
 
-    def test_04_stop_by_event_in_main_thread(self):
-        self.callback_return_true_after = 3
-        th = ThreadPoolExecutor(max_workers=1).submit(
-            wait_for,
-            func=self.callback,
-            timeout=self.callback_return_true_after,
-            step=0.5,
-            throw_exc=False,
-            stop_event=self.ev,
-            arg1=1,
-            arg2=3,
-        )
 
-        self.set_stop_in_timeout(self.ev, set_after=1)
-        res = th.result()
-        exc = th.exception()
-        self.assertFalse(exc, f"{exc}")
-        self.assertFalse(res, f"{res}")
-        self.assertTrue(len(self.calls) < 5)
+def test_stop_by_event_in_main_thread(event_stop_state):
+    state = event_stop_state
+    state.callback_return_true_after = 3
+    th = ThreadPoolExecutor(max_workers=1).submit(
+        wait_for,
+        func=state.callback,
+        timeout=state.callback_return_true_after,
+        step=0.5,
+        throw_exc=False,
+        stop_event=state.ev,
+        arg1=1,
+        arg2=3,
+    )
 
-    def test_04_return_result_before_stop_event_and_wait_timeout(self):
-        self.callback_return_true_after = 2
-        th = threading.Thread(target=self.set_stop_in_timeout, kwargs={"ev": self.ev, "set_after": 4})
-        th.start()
-        res = wait_for(self.callback, timeout=3, step=0.5, throw_exc=False, stop_event=self.ev, arg1=1, arg2=3)
-        self.assertEqual(res, "what ever")
-        self.assertEqual(len(self.calls), 2)
+    state.set_stop_in_timeout(state.ev, set_after=1)
+    res = th.result()
+    exc = th.exception()
+    assert not exc, f"{exc}"
+    assert not res, f"{res}"
+    assert len(state.calls) < 5
 
-    def test_04_raise_by_timeout_before_set_event(self):
-        self.callback_return_true_after = 8
 
-        th = threading.Thread(target=self.set_stop_in_timeout, kwargs={"ev": self.ev, "set_after": 7})
-        th.start()
-        self.assertRaisesRegex(
-            WaitForTimeoutError,
-            "callback: timeout - 3 seconds - expired",
-            wait_for,
-            self.callback,
+def test_return_result_before_stop_event_and_wait_timeout(event_stop_state):
+    state = event_stop_state
+    state.callback_return_true_after = 2
+    th = threading.Thread(target=state.set_stop_in_timeout, kwargs={"ev": state.ev, "set_after": 4})
+    th.start()
+    res = wait_for(state.callback, timeout=3, step=0.5, throw_exc=False, stop_event=state.ev, arg1=1, arg2=3)
+    assert res == "what ever"
+    assert len(state.calls) == 2
+
+
+def test_raise_by_timeout_before_set_event(event_stop_state):
+    state = event_stop_state
+    state.callback_return_true_after = 8
+
+    th = threading.Thread(target=state.set_stop_in_timeout, kwargs={"ev": state.ev, "set_after": 7})
+    th.start()
+    with pytest.raises(WaitForTimeoutError, match="callback: timeout - 3 seconds - expired"):
+        wait_for(
+            state.callback,
             timeout=3,
             throw_exc=True,
-            stop_event=self.ev,
+            stop_event=state.ev,
             step=0.5,
             arg1=1,
             arg2=3,
         )
-        self.assertEqual(len(self.calls), 7)
+    assert len(state.calls) == 7
 
-    @parameterized.expand([(True,), (False,)])
-    def test_04_raise_exception_in_func_before_set_event(self, throw_exc):
-        def callback(arg1, arg2):
-            self.calls.append((arg1, arg2))
-            if len(self.calls) == 3:
-                raise Exception("Raise before event")
 
-            if len(self.calls) == 10:
-                return "what ever"
-            return False
+@pytest.mark.parametrize("throw_exc", [pytest.param(True, id="throw_exc"), pytest.param(False, id="no_throw_exc")])
+def test_raise_exception_in_func_before_set_event(event_stop_state, throw_exc):
+    state = event_stop_state
 
-        th = threading.Thread(target=self.set_stop_in_timeout, kwargs={"ev": self.ev, "set_after": 5})
-        th.start()
-        if throw_exc == True:
-            self.assertRaisesRegex(
-                ExitByEventError,
-                "callback: stopped by Event",
-                wait_for,
+    def callback(arg1, arg2):
+        state.calls.append((arg1, arg2))
+        if len(state.calls) == 3:
+            raise Exception("Raise before event")
+
+        if len(state.calls) == 10:
+            return "what ever"
+        return False
+
+    th = threading.Thread(target=state.set_stop_in_timeout, kwargs={"ev": state.ev, "set_after": 5})
+    th.start()
+    if throw_exc:
+        with pytest.raises(ExitByEventError, match="callback: stopped by Event"):
+            wait_for(
                 callback,
                 timeout=4,
                 throw_exc=throw_exc,
-                stop_event=self.ev,
+                stop_event=state.ev,
                 step=0.5,
                 arg1=1,
                 arg2=3,
             )
-        else:
-            res = wait_for(callback, timeout=4, throw_exc=throw_exc, stop_event=self.ev, step=0.5, arg1=1, arg2=3)
-            self.assertFalse(res)
-        self.assertEqual(len(self.calls), 6)
+    else:
+        res = wait_for(callback, timeout=4, throw_exc=throw_exc, stop_event=state.ev, step=0.5, arg1=1, arg2=3)
+        assert not res
+    assert len(state.calls) == 6
 
-    def test_04_set_event_timeout_at_same_time(self):
-        """if event was set at same time as timeout exceed
-        and throw_exc is true wait_for will raise Exception with
-        message wait_for stopped by event"""
-        self.callback_return_true_after = 8
-        th = threading.Thread(target=self.set_stop_in_timeout, kwargs={"ev": self.ev, "set_after": 4})
-        th.start()
-        self.assertRaisesRegex(
-            ExitByEventError,
-            "callback: stopped by Event",
-            wait_for,
-            self.callback,
+
+def test_set_event_timeout_at_same_time(event_stop_state):
+    """If event was set at same time as timeout exceeds
+    and throw_exc is true wait_for will raise Exception with
+    message wait_for stopped by event."""
+    state = event_stop_state
+    state.callback_return_true_after = 8
+    th = threading.Thread(target=state.set_stop_in_timeout, kwargs={"ev": state.ev, "set_after": 4})
+    th.start()
+    with pytest.raises(ExitByEventError, match="callback: stopped by Event"):
+        wait_for(
+            state.callback,
             timeout=4,
             throw_exc=True,
-            stop_event=self.ev,
+            stop_event=state.ev,
             step=0.5,
             arg1=1,
             arg2=3,
         )
-        self.assertEqual(len(self.calls), 5)
+    assert len(state.calls) == 5
 
 
 class DummyNode(BaseNode):

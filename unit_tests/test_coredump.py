@@ -1,4 +1,3 @@
-import unittest
 import os
 import time
 import tempfile
@@ -86,7 +85,7 @@ class CoredumpExportFileTestThread(CoredumpExportFileThread):
 
 
 @pytest.mark.usefixtures("events")
-class CoredumpExportTestBase(unittest.TestCase):
+class CoredumpExportTestBase:
     maxDiff = None
     test_data_folder: str = None
 
@@ -100,7 +99,7 @@ class CoredumpExportTestBase(unittest.TestCase):
         time.sleep(1)
         coredump_thread.stop()
         coredump_thread.join(20)
-        self.assertFalse(coredump_thread.is_alive(), "CoredumpExportThread thread did not stop in 20 seconds")
+        assert not coredump_thread.is_alive(), "CoredumpExportThread thread did not stop in 20 seconds"
         results = coredump_thread.get_results()
         expected_results = coredump_thread.load_expected_results(
             os.path.join(
@@ -114,7 +113,7 @@ class CoredumpExportTestBase(unittest.TestCase):
         for coredump_status, expected_coredump_list in expected_results.items():
             result_coredump_list = results[coredump_status]
             try:
-                self.assertEqual(expected_coredump_list, result_coredump_list)
+                assert expected_coredump_list == result_coredump_list
             except Exception as exc:  # noqa: BLE001
                 raise AssertionError(
                     f"Got unexpected results for {coredump_status}: {str(result_coredump_list)}\n{str(exc)}"
