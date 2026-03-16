@@ -19,7 +19,6 @@ extra_network_interface: True
 
 gemini_cmd: |
   --duration 30m
-  --warmup 0s
   --concurrency 4
   --mode write
   --cql-features basic

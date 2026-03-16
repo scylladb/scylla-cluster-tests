@@ -8,7 +8,6 @@ user_prefix: 'gemini-basic-3h'
 
 gemini_cmd: |
   --duration 3h
-  --warmup 5m
   --concurrency 50
   --mode mixed
   --io-worker-pool 2048

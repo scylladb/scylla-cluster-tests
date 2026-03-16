@@ -13,7 +13,6 @@ nemesis_seed: '041'
 
 gemini_cmd: |
   --duration 8h
-  --warmup 2h
   --concurrency 50
   --mode mixed
   --io-worker-pool 2048
