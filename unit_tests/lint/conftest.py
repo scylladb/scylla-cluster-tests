@@ -4,7 +4,10 @@ from unittest.mock import MagicMock
 
 
 def pytest_configure(config):
-    """Patch Docker client before any sdcm imports to handle missing daemon."""
+    """Patch Docker client before any sdcm imports to handle missing daemon.
+
+    TODO: remove this hack once https://github.com/scylladb/scylla-cluster-tests/pull/13947 is merged
+    """
     try:
         import docker.client  # noqa: PLC0415
 

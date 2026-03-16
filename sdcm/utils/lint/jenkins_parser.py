@@ -125,6 +125,9 @@ def _parse_test_config(raw_value: str) -> list[str]:
         try:
             # Replace single quotes with double quotes for JSON compatibility
             json_str = value.replace("'", '"')
+            # Fix common Groovy JSON quirks: trailing commas and double commas
+            json_str = re.sub(r",\s*,", ",", json_str)
+            json_str = re.sub(r",\s*]", "]", json_str)
             parsed = json.loads(json_str)
             if isinstance(parsed, list):
                 return [str(item).strip() for item in parsed if str(item).strip()]

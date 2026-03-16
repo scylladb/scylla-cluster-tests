@@ -178,6 +178,10 @@ def build_env(config: PipelineConfig) -> dict[str, str]:
     env: dict[str, str] = {}
     need_placeholders = _needs_image_placeholders()
 
+    # Pipeline functions default backend to 'aws' when not specified (see longevityPipeline.groovy)
+    if not config.backend:
+        env["SCT_CLUSTER_BACKEND"] = "aws"
+
     for param_name, param_value in config.params.items():
         if not param_value:
             continue
@@ -226,11 +230,11 @@ def build_env(config: PipelineConfig) -> dict[str, str]:
 
     # Generate placeholder images for backends that require them
     if need_placeholders:
-        backend = config.backend or ""
-        _add_image_placeholders(env, backend, _count_regions(config))
+        effective_backend = env.get("SCT_CLUSTER_BACKEND", "")
+        _add_image_placeholders(env, effective_backend, _count_regions(config))
 
     # Handle baremetal placeholder IPs
-    if config.backend == "baremetal" and "SCT_DB_NODES_PUBLIC_IP" not in env:
+    if effective_backend == "baremetal" and "SCT_DB_NODES_PUBLIC_IP" not in env:
         env["SCT_DB_NODES_PUBLIC_IP"] = json.dumps(["127.0.0.1", "127.0.0.2"])
 
     return env
@@ -267,11 +271,15 @@ def _add_image_placeholders(env: dict[str, str], backend: str, num_regions: int)
     placeholders = _IMAGE_PLACEHOLDER_BACKENDS.get(base_backend, {})
     for env_var, placeholder in placeholders.items():
         if env_var not in env:
-            if env_var == "SCT_AMI_ID_DB_SCYLLA" and num_regions > 1:
+            if num_regions > 1 and env_var in ("SCT_AMI_ID_DB_SCYLLA",):
                 # Multi-region needs matching number of AMI placeholders
                 env[env_var] = " ".join([placeholder] * num_regions)
             else:
                 env[env_var] = placeholder
+
+    # Multi-region AWS also needs loader AMI placeholders to match region count
+    if base_backend == "aws" and num_regions > 1 and "SCT_AMI_ID_LOADER" not in env:
+        env["SCT_AMI_ID_LOADER"] = " ".join(["ami-placeholder"] * num_regions)
 
     # Add scylla_repo placeholder if not set and backend needs it
     if base_backend in ("aws", "gce", "azure") and "SCT_SCYLLA_REPO" not in env and "SCT_SCYLLA_VERSION" not in env:
