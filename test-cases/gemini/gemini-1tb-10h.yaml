@@ -22,6 +22,7 @@ gemini_log_cql_statements: true
 
 db_type: mixed_scylla
 <<<<<<< HEAD
+<<<<<<< HEAD
 instance_type_db_oracle: 'i4i.16xlarge'
 
 # enable vector.dev logging for all tier1
@@ -32,3 +33,7 @@ instance_type_db_oracle: 'i4i.16xlarge'
 =======
 instance_type_db_oracle: 'i8ge.3xlarge'
 >>>>>>> 73fc473cb (feature(gemini): use storage optimized instance types for Oracle)
+||||||| parent of 8f3c45da1 (feat(gemini): upgrade oracle to 2025.4)
+instance_type_db_oracle: 'i8ge.3xlarge'
+=======
+>>>>>>> 8f3c45da1 (feat(gemini): upgrade oracle to 2025.4)
