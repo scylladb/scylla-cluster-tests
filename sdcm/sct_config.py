@@ -2713,11 +2713,15 @@ class SCTConfiguration(BaseModel):
                 zero_nodes_num = (
                     [zero_nodes_num]
                     if isinstance(zero_nodes_num, int)
+                    else [int(i) for i in zero_nodes_num]
+                    if isinstance(zero_nodes_num, list)
                     else [int(i) for i in str(zero_nodes_num).split()]
                 )
                 data_nodes_num = (
                     [data_nodes_num]
                     if isinstance(data_nodes_num, int)
+                    else [int(i) for i in data_nodes_num]
+                    if isinstance(data_nodes_num, list)
                     else [int(i) for i in str(data_nodes_num).split()]
                 )
                 assert len(zero_nodes_num) == len(data_nodes_num), (
@@ -3220,7 +3224,14 @@ class SCTConfiguration(BaseModel):
     def _validate_placement_group_required_values(self):
         if self.get("use_placement_group"):
             az_count = len(self.get("availability_zone").split(",")) if self.get("availability_zone") else 1
-            regions_count = len(self.region_names)
+            backend = self.get("cluster_backend")
+            if backend == "azure":
+                azure_regions = self.get("azure_region_name")
+                regions_count = len(azure_regions) if isinstance(azure_regions, list) else 1
+            elif backend == "gce":
+                regions_count = len(self.gce_datacenters)
+            else:
+                regions_count = len(self.region_names)
             assert az_count == 1 and regions_count == 1, (
                 f"Number of Regions({regions_count}) and AZ({az_count}) should be 1 "
                 f"when param use_placement_group is used"
