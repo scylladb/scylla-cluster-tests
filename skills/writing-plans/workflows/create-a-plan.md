@@ -20,9 +20,9 @@ A 5-phase process for writing an SCT implementation plan following the 7-section
    - Test files in `unit_tests/` related to the area
    - Existing documentation in `docs/`
 
-4. **Check for existing plans.** Look in `docs/plans/` for related plans that may overlap or provide context.
+4. **Check MASTER.md for existing plans in the same domain.** Read `docs/plans/MASTER.md` and look for plans in the same domain that may overlap, depend on, or provide context for the new plan.
 
-5. **Review reference plans.** Read at least one existing plan (e.g., `docs/plans/health-check-optimization.md`) to calibrate quality expectations.
+5. **Review reference plans.** Read at least one existing plan (e.g., `docs/plans/infrastructure/health-check-optimization.md`) to calibrate quality expectations.
 
 **Exit:** You understand the problem, have inspected relevant code, and know the plan structure.
 
@@ -147,10 +147,16 @@ A 5-phase process for writing an SCT implementation plan following the 7-section
 
 5. **Check Definition of Done criteria.** Each criterion should be verifiable (someone can check it off), not vague ("it works").
 
-6. **Review against an existing plan.** Compare structure and quality with `docs/plans/health-check-optimization.md` or another reference plan.
+6. **Review against an existing plan.** Compare structure and quality with `docs/plans/infrastructure/health-check-optimization.md` or another reference plan.
 
 7. **Verify filename.** Plan should be saved as `docs/plans/<kebab-case-name>.md` with a descriptive name.
 
-8. **Run pre-commit (if available).** Execute `uv run sct.py pre-commit` to verify no formatting issues. If unavailable, manually check trailing whitespace and end-of-file newlines.
+8. **Verify YAML frontmatter.** Confirm the plan starts with valid frontmatter containing `status`, `domain`, `created`, `last_updated`, and `owner` fields. See [frontmatter-fields.md](../references/frontmatter-fields.md) for valid values.
 
-**Exit:** All 7 sections present, code references verified, phases ordered correctly, plan saved in `docs/plans/`.
+9. **Register in MASTER.md.** Add the plan to the correct domain table in `docs/plans/MASTER.md` with appropriate status.
+
+10. **Add progress.json entry.** Add an entry to `docs/plans/progress.json` with the plan's id, title, file, domain, status, created date, phases_total, and phases_done.
+
+11. **Run pre-commit (if available).** Execute `uv run sct.py pre-commit` to verify no formatting issues. If unavailable, manually check trailing whitespace and end-of-file newlines.
+
+**Exit:** All 7 sections present, code references verified, phases ordered correctly, plan saved in `docs/plans/`, registered in MASTER.md, and tracked in progress.json.

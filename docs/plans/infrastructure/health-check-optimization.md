@@ -1,3 +1,11 @@
+---
+status: draft
+domain: framework
+created: 2026-01-11
+last_updated: 2026-03-15
+owner: fruch
+---
+
 # Health Check Optimization Plan
 
 ## Problem Statement
@@ -337,7 +345,7 @@ cluster_health_check_exclude_running_nemesis: true  # default: true
    - Default configuration files in `defaults/test_default.yaml` and backend-specific defaults
 
 2. **Plan and Design Documentation**:
-   - This document (`docs/plans/health-check-optimization.md`) - Keep updated with implementation progress
+   - This document (`docs/plans/infrastructure/health-check-optimization.md`) - Keep updated with implementation progress
    - Add migration guide for users of older health check configurations
    - Document breaking changes or behavioral differences from previous versions
 

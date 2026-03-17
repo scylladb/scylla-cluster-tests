@@ -1,3 +1,11 @@
+---
+status: draft
+domain: ai-tooling
+created: 2025-02-25
+last_updated: 2026-03-15
+owner: fruch
+---
+
 # AI Skills Framework Plan
 
 ## Problem Statement
@@ -40,11 +48,11 @@ The [coodie](https://github.com/fruch/coodie) project demonstrates a skill-based
 
 ### Existing Plan Examples
 
-- `docs/plans/health-check-optimization.md` — Performance optimization plan
-- `docs/plans/nemesis-rework.md` — Feature refactoring plan
-- `docs/plans/docker-cleanup-all-backends.md` — Infrastructure cleanup plan
-- `docs/plans/full-version-tag-lookup.md` — Feature implementation plan
-- `docs/plans/jenkins-uno-choice-billing-project.md` — CI/CD plan
+- `docs/plans/infrastructure/health-check-optimization.md` — Performance optimization plan
+- `docs/plans/nemesis/nemesis-rework.md` — Feature refactoring plan
+- `docs/plans/infrastructure/docker-cleanup-all-backends.md` — Infrastructure cleanup plan
+- `docs/plans/config/full-version-tag-lookup.md` — Feature implementation plan
+- `docs/plans/jenkins/jenkins-uno-choice-billing-project.md` — CI/CD plan
 
 ### What's Missing
 

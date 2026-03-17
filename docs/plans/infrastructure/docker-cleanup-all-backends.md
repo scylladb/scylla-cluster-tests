@@ -1,3 +1,11 @@
+---
+status: draft
+domain: cluster
+created: 2026-02-19
+last_updated: 2026-03-15
+owner: fruch
+---
+
 # Docker Cleanup for All Backends Plan
 
 ## Problem Statement

@@ -1,3 +1,11 @@
+---
+status: draft
+domain: ci-cd
+created: 2026-02-11
+last_updated: 2026-03-15
+owner: fruch
+---
+
 # Implementation Plan: Dynamic Billing Project Selection using Jenkins Uno-Choice Plugin
 
 ## 1. Problem Statement

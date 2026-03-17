@@ -1,3 +1,11 @@
+---
+status: draft
+domain: cluster
+created: 2026-01-05
+last_updated: 2026-03-15
+owner: fruch
+---
+
 # GCE Provisioning Implementation Plan
 
 ## Overview

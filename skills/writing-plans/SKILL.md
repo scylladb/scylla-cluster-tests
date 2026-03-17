@@ -46,6 +46,12 @@ Large phases that span multiple PRs are hard to review and test. Break work into
 
 When information is missing or ambiguous, explicitly flag it. Incorrect assumptions in a plan propagate through the entire implementation and cause rework.
 
+### Every Plan Must Have Status Metadata
+
+**All plans require YAML frontmatter with status, domain, and dates.**
+
+Plans without metadata are invisible to the tracking system. Every plan file must start with frontmatter specifying `status`, `domain`, `created`, `last_updated`, and `owner` fields. This enables `MASTER.md` and `progress.json` to reflect accurate state. See [frontmatter-fields.md](references/frontmatter-fields.md) for valid values.
+
 ## When to Use
 
 - When asked to "generate an implementation plan" or "draft a plan"
@@ -98,6 +104,9 @@ When writing plans for SCT, consider these domain-specific areas:
 | **Monitoring** | Changes to Prometheus metrics, Grafana dashboards, or Argus reporting |
 | **CI/CD** | Jenkins pipeline changes in `jenkins-pipelines/` |
 | **Provision labels** | Which provision test labels to add (`provision-aws`, `provision-gce`, etc.) |
+| **MASTER.md** | Register the plan in `docs/plans/MASTER.md` under the correct domain |
+| **progress.json** | Add an entry to `docs/plans/progress.json` with plan metadata |
+| **Related Plans** | Check MASTER.md for existing plans in the same domain that may overlap |
 
 ## Anti-Pattern Quick Reference
 
@@ -109,18 +118,20 @@ See [anti-patterns.md](references/anti-patterns.md) for the full catalog with be
 |------|---------|
 | [plan-templates.md](references/plan-templates.md) | Complete plan skeleton, section-by-section templates with SCT-specific examples |
 | [anti-patterns.md](references/anti-patterns.md) | Common plan writing mistakes with before/after fixes |
+| [frontmatter-fields.md](references/frontmatter-fields.md) | YAML frontmatter field definitions, valid values, and domain taxonomy |
 
 | Workflow | Purpose |
 |----------|---------|
 | [create-a-plan.md](workflows/create-a-plan.md) | 5-phase process for writing an implementation plan from scratch |
+| [update-plan-status.md](workflows/update-plan-status.md) | 3-phase workflow for updating plan status across frontmatter, MASTER.md, and progress.json |
 
 ## Supporting Documents
 
 | Document | Role |
 |----------|------|
 | `docs/plans/INSTRUCTIONS.md` | Authoritative source for plan structure and guidelines |
-| `docs/plans/health-check-optimization.md` | Reference example: performance optimization plan |
-| `docs/plans/nemesis-rework.md` | Reference example: large-scale refactoring plan |
+| `docs/plans/infrastructure/health-check-optimization.md` | Reference example: performance optimization plan |
+| `docs/plans/nemesis/nemesis-rework.md` | Reference example: large-scale refactoring plan |
 
 ## Success Criteria
 
@@ -138,3 +149,6 @@ A well-written SCT implementation plan:
 - [ ] Has risk mitigation with likelihood, impact, and mitigation for each risk
 - [ ] Marks unclear requirements as "Needs Investigation"
 - [ ] Is saved in `docs/plans/` with a kebab-case filename
+- [ ] Has valid YAML frontmatter (status, domain, created, last_updated, owner)
+- [ ] Is registered in `docs/plans/MASTER.md` under the correct domain
+- [ ] Has a corresponding entry in `docs/plans/progress.json`
