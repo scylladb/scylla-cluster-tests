@@ -89,9 +89,6 @@ compaction_strategy: 'SizeTieredCompactionStrategy'
 use_preinstalled_scylla: false
 
 alternator_enforce_authorization: false
-alternator_use_dns_routing: false
-alternator_loadbalancing: true
-alternator_trust_all_certificates: true
 alternator_access_key_id: ''
 alternator_secret_access_key: ''
 dynamodb_primarykey_type: 'HASH'
@@ -333,7 +330,6 @@ vector_store_threads: 0  # 0 = defaults to number of cores on a node
 vector_store_docker_image: 'scylladb/vector-store'
 vector_store_version: ''
 
-enable_argus_email_report : false
 argus_email_report_template: email_report_template_basic.yaml
 
 c_s_driver_version: '3'

@@ -908,23 +908,6 @@ class SCTConfiguration(dict):
             help="If true, spawn a docker with a dns server for the ycsb loader to point to",
         ),
         dict(
-            name="alternator_loadbalancing",
-            env="SCT_ALTERNATOR_LOADBALANCING",
-            type=boolean,
-            help="If true, enable native load balancing for alternator",
-        ),
-        dict(
-            name="alternator_test_table",
-            env="SCT_ALTERNATOR_TEST_TABLE",
-            type=dict,
-            help="""Dictionary of a test alternator table features:
-                    name: str - the name of the table
-                    lsi_name: str - the name of the local secondary index to create with a table
-                    gsi_name: str - the name of the global secondary index to create with a table
-                    tags: dict - the tags to apply to the created table
-                    items: int - expected number of items in the table after prepare""",
-        ),
-        dict(
             name="alternator_enforce_authorization",
             env="SCT_ALTERNATOR_ENFORCE_AUTHORIZATION",
             type=boolean,
@@ -941,12 +924,6 @@ class SCTConfiguration(dict):
             env="SCT_ALTERNATOR_SECRET_ACCESS_KEY",
             type=str,
             help="the aws_secret_access_key that would be used for alternator",
-        ),
-        dict(
-            name="alternator_trust_all_certificates",
-            env="SCT_ALTERNATOR_TRUST_ALL_CERTIFICATES",
-            type=boolean,
-            help="If true, trust all TLS certificates for alternator connections (for testing with self-signed certs)",
         ),
         dict(
             name="region_aware_loader",
@@ -2687,12 +2664,6 @@ class SCTConfiguration(dict):
             env="SCT_ARGUS_EMAIL_REPORT_TEMPLATE",
             type=str,
             help="Path to the email report template used for sending argus email reports",
-        ),
-        dict(
-            name="enable_argus_email_report",
-            env="SCT_ENABLE_ARGUS_REPORT",
-            type=bool,
-            help="Whether or not to send email using argus instead of SCT.",
         ),
         dict(
             name="c_s_driver_version",
