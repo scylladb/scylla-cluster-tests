@@ -1,4 +1,0 @@
-def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
-triggerMatrixPipeline(
-    matrix_file: 'configurations/triggers/perf-regression.yaml'
-)

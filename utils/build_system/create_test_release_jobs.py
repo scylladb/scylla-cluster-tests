@@ -205,6 +205,100 @@ class JenkinsPipelines:
 
         return description
 
+    def disable_job(self, job_name: str, reason: str = "") -> bool:
+        """Disable a Jenkins job by setting <disabled>true</disabled> in its config.
+
+        Args:
+            job_name: Full Jenkins job path (relative to base_job_dir).
+            reason: Optional reason prepended to the job description.
+
+        Returns:
+            True if the job was disabled, False if it doesn't exist or failed.
+        """
+        full_path = f"{self.base_job_dir}/{job_name}" if not job_name.startswith(self.base_job_dir) else job_name
+        try:
+            if not self.jenkins.job_exists(full_path):
+                LOGGER.warning("Job '%s' does not exist, skipping disable", full_path)
+                return False
+
+            xml_data = self.jenkins.get_job_config(full_path)
+            config = ET.fromstring(xml_data)
+
+            disabled_elem = config.find("disabled")
+            if disabled_elem is not None:
+                disabled_elem.text = "true"
+            else:
+                disabled_elem = ET.SubElement(config, "disabled")
+                disabled_elem.text = "true"
+
+            if reason:
+                desc_elem = config.find("description")
+                if desc_elem is None:
+                    desc_elem = ET.SubElement(config, "description")
+                prefix = f"[DEPRECATED] {reason}\n\n"
+                if desc_elem.text and not desc_elem.text.startswith("[DEPRECATED]"):
+                    desc_elem.text = prefix + desc_elem.text
+                elif not desc_elem.text:
+                    desc_elem.text = prefix.strip()
+
+            self.jenkins.reconfig_job(full_path, ET.tostring(config).decode("utf-8"))
+            LOGGER.info("Disabled job: %s (reason: %s)", full_path, reason or "none")
+            return True
+        except jenkins.JenkinsException as ex:
+            self._log_jenkins_exception(ex)
+            return False
+
+    def process_deprecated_jobs(self, local_path: str | Path):
+        """Process _deprecated_jobs.yaml files in the directory tree.
+
+        Each _deprecated_jobs.yaml contains a list of jobs to disable:
+
+            jobs:
+              - name: "sct_triggers/tier1-aws-custom-time-trigger"
+                reason: "Replaced by tier1-trigger using triggerMatrixPipeline"
+              - name: "sct_triggers/sanity-aws-trigger"
+                reason: "Replaced by sanity-trigger using triggerMatrixPipeline"
+
+        Args:
+            local_path: Root directory to walk for _deprecated_jobs.yaml files.
+        """
+        local_path = Path(local_path)
+        for root, _, files in os.walk(local_path):
+            if "_deprecated_jobs.yaml" not in files:
+                continue
+
+            deprecated_file = Path(root) / "_deprecated_jobs.yaml"
+            try:
+                with open(deprecated_file, encoding="utf-8") as fobj:
+                    data = yaml.safe_load(fobj)
+            except (yaml.YAMLError, OSError) as exc:
+                LOGGER.error("Failed to load %s: %s", deprecated_file, exc)
+                continue
+
+            if not data or "jobs" not in data:
+                continue
+
+            jenkins_path = Path(root).relative_to(local_path)
+            if str(jenkins_path) == ".":
+                jenkins_path = Path("")
+
+            for entry in data["jobs"]:
+                if isinstance(entry, str):
+                    job_name = entry
+                    reason = ""
+                elif isinstance(entry, dict):
+                    job_name = entry.get("name", "")
+                    reason = entry.get("reason", "")
+                else:
+                    LOGGER.warning("Invalid entry in %s: %s", deprecated_file, entry)
+                    continue
+
+                if not job_name:
+                    continue
+
+                full_job_name = str(jenkins_path / job_name) if str(jenkins_path) else job_name
+                self.disable_job(full_job_name, reason=reason)
+
     def create_job_tree(
         self,
         local_path: str | Path,
@@ -213,6 +307,9 @@ class JenkinsPipelines:
         template_context: dict | None = None,
         job_name_suffix: str = "-test",
     ):
+        # Process deprecated jobs first so they get disabled before any new jobs are created
+        self.process_deprecated_jobs(local_path)
+
         for root, _, job_files in os.walk(local_path):
             jenkins_path = Path(root).relative_to(local_path)
             defines = self.load_defines(Path(root))

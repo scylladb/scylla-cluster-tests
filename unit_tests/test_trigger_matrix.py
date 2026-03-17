@@ -223,8 +223,15 @@ class TestDetermineJobFolder:
 
 class TestFilterJobs:
     def test_no_filters_returns_all(self, sample_jobs):
-        result = filter_jobs(sample_jobs, scylla_version="master:latest")
+        # version exclusion always applies — job-d excludes "master", so 3 returned
+        result = filter_jobs(sample_jobs, scylla_version="2025.4")
         assert len(result) == 4
+
+    def test_version_exclusion_always_applies(self, sample_jobs):
+        # Even with no label/backend/skip filters, version exclusion still runs
+        result = filter_jobs(sample_jobs, scylla_version="master:latest")
+        assert len(result) == 3
+        assert all(j.job_name != "job-d" for j in result)
 
     def test_filter_by_labels_single(self, sample_jobs):
         result = filter_jobs(sample_jobs, scylla_version="2025.4", labels_selector="weekly")

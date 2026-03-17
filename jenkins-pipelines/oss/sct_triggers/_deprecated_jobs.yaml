@@ -1,0 +1,24 @@
+# Jobs to disable when create-test-release-jobs runs.
+# These are replaced by the centralized trigger matrix system.
+# See: configurations/triggers/*.yaml and vars/triggerMatrixPipeline.groovy
+#
+# After verifying the new triggers work in production, these old jobs
+# should be deleted manually from Jenkins and their source files removed.
+
+jobs:
+  - name: "tier1-aws-custom-time-trigger"
+    reason: "Replaced by tier1-trigger using triggerMatrixPipeline (configurations/triggers/tier1.yaml)"
+  - name: "tier1-azure-custom-time-trigger"
+    reason: "Replaced by tier1-trigger using triggerMatrixPipeline (configurations/triggers/tier1.yaml)"
+  - name: "tier1-gce-custom-time-trigger"
+    reason: "Replaced by tier1-trigger using triggerMatrixPipeline (configurations/triggers/tier1.yaml)"
+  - name: "tier1-aws-aarch64-custom-time-trigger"
+    reason: "Replaced by tier1-trigger using triggerMatrixPipeline (configurations/triggers/tier1.yaml)"
+  - name: "sanity-aws-trigger"
+    reason: "Replaced by sanity-trigger using triggerMatrixPipeline (configurations/triggers/sanity.yaml)"
+  - name: "sanity-azure-trigger"
+    reason: "Replaced by sanity-trigger using triggerMatrixPipeline (configurations/triggers/sanity.yaml)"
+  - name: "sanity-gcp-trigger"
+    reason: "Replaced by sanity-trigger using triggerMatrixPipeline (configurations/triggers/sanity.yaml)"
+  - name: "additional-aws-trigger"
+    reason: "Replaced by sanity-trigger using triggerMatrixPipeline (configurations/triggers/sanity.yaml)"
