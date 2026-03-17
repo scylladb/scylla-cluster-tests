@@ -25,6 +25,7 @@ from sdcm.provision.helpers.certificate import (
     JKS_TRUSTSTORE_FILE,
     TLSAssets,
     export_pem_cert_to_pkcs12_keystore,
+    install_client_certificate,
 )
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.docker_cmd_runner import DockerCmdRunner
@@ -449,6 +450,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
 
         if any([self.params.get("server_encrypt"), self.params.get("client_encrypt")]):
             self._generate_db_node_certs(node)
+            install_client_certificate(node.remoter, node.ip_address, force=True)
 
         node.config_setup(append_scylla_args=self.get_scylla_args())
         node.restart_scylla(verify_up_before=True)
