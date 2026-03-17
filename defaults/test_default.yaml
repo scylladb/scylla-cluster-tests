@@ -305,3 +305,25 @@ adaptive_timeout_store_metrics: true
 
 enable_argus_email_report : false
 argus_email_report_template: email_report_template_basic.yaml
+<<<<<<< HEAD
+||||||| parent of a05f8105f (feature(c-s): Enable c-s java 4x driver support)
+
+# SCT agent defaults
+agent:
+  enabled: false
+  port: 16000
+  binary_url: ""
+  max_concurrent_jobs: 10
+  log_level: "info"
+=======
+
+# SCT agent defaults
+agent:
+  enabled: false
+  port: 16000
+  binary_url: ""
+  max_concurrent_jobs: 10
+  log_level: "info"
+
+c_s_driver_version: '3'
+>>>>>>> a05f8105f (feature(c-s): Enable c-s java 4x driver support)
