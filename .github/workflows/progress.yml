@@ -1,0 +1,30 @@
+name: Regenerate Progress SVG
+
+on:
+  push:
+    paths: ['docs/plans/progress.json']
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate-svg:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate SVG
+        run: python3 scripts/generate_progress_svg.py
+
+      - name: Commit updated SVG
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/plans/assets/progress-roadmap.svg
+          git diff --cached --quiet || git commit -m "chore: regenerate progress roadmap SVG"
+          git push

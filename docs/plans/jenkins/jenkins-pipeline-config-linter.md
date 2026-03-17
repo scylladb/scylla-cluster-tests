@@ -1,3 +1,11 @@
+---
+status: draft
+domain: ci-cd
+created: 2026-03-09
+last_updated: 2026-03-15
+owner: fruch
+---
+
 # Jenkins Pipeline Configuration Linter
 
 ## Problem Statement

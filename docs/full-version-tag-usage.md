@@ -122,7 +122,7 @@ If Docker can't find the image:
 
 ## Additional Resources
 
-- **Design Document**: `docs/plans/full-version-tag-lookup.md`
+- **Design Document**: `docs/plans/config/full-version-tag-lookup.md`
 - **Configuration Options**: `docs/configuration_options.md`
 - **Test Examples**: `test-cases/PR-provision-test.yaml`
 - **Unit Tests**: `unit_tests/test_version_utils.py`
@@ -131,6 +131,6 @@ If Docker can't find the image:
 
 For issues or questions about full version tag support:
 1. Check this documentation first
-2. Review the design document in `docs/plans/full-version-tag-lookup.md`
+2. Review the design document in `docs/plans/config/full-version-tag-lookup.md`
 3. Look at unit tests in `unit_tests/test_version_utils.py` for examples
 4. Open an issue on GitHub with version tag details and error messages

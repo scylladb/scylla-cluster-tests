@@ -1,3 +1,11 @@
+---
+status: draft
+domain: framework
+created: 2026-01-12
+last_updated: 2026-03-15
+owner: fruch
+---
+
 # Design Plan: Full Version Tag Lookup for scylla_version Parameter
 
 ## Problem Statement

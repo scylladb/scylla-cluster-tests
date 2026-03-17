@@ -1,3 +1,11 @@
+---
+status: in_progress
+domain: nemesis
+created: 2026-01-30
+last_updated: 2026-03-15
+owner: pehala
+---
+
 # Nemesis Rework (Nemesis 2.0)
 
 ## Problem Statement

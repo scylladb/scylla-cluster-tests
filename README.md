@@ -222,6 +222,13 @@ so those tests won't honor what is set in `test-cases/your_config.yaml`.
 - **[Configuration Options Reference](./docs/configuration_options.md)** - Auto-generated list of all available configuration options
 
 
+## Development Plans
+
+![Progress Roadmap](docs/plans/assets/progress-roadmap.svg)
+
+Active implementation plans for SCT are tracked in [docs/plans/MASTER.md](docs/plans/MASTER.md).
+For guidelines on creating new plans, see [docs/plans/INSTRUCTIONS.md](docs/plans/INSTRUCTIONS.md).
+
 ## Types of Tests
 ### [Artifact tests](./docs/artifacts_test.md)
 ### [Longevity Tests](./docs/longevity.md) (TODO: write explanation for them)

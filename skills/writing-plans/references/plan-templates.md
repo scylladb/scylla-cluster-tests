@@ -9,6 +9,14 @@ Templates and examples for each section of an SCT implementation plan, based on 
 Use this as a starting point for any new plan:
 
 ```markdown
+---
+status: draft
+domain: <domain-key>
+created: <YYYY-MM-DD>
+last_updated: <YYYY-MM-DD>
+owner: null
+---
+
 # <Feature/Change Name> Plan
 
 ## Problem Statement
@@ -88,6 +96,18 @@ Completing all Definition of Done items across phases constitutes success. Add p
 **Likelihood**: High/Medium/Low
 **Impact**: <What goes wrong>
 **Mitigation**: <How to prevent or handle it>
+
+## Related Plans
+
+<Optional — only include if actual dependencies or overlaps exist with other plans.>
+
+- [<related-plan-name>.md](<related-plan-name>.md) — <relationship description>
+
+## PR History
+
+| Phase | PR | Status |
+|-------|-----|--------|
+| Phase 1 | — | Not started |
 ```
 
 ---
@@ -103,7 +123,7 @@ Completing all Definition of Done items across phases constitutes success. Add p
 - Pain points with the current situation
 - Justification for why this work is necessary
 
-**Good example** (from `docs/plans/health-check-optimization.md`):
+**Good example** (from `docs/plans/infrastructure/health-check-optimization.md`):
 ```markdown
 ## Problem Statement
 
@@ -140,7 +160,7 @@ The bad example lacks specifics: no measurable problem, no root cause, no justif
 - What needs to change
 - Technical debt or limitations
 
-**Good example** (from `docs/plans/nemesis-rework.md`):
+**Good example** (from `docs/plans/nemesis/nemesis-rework.md`):
 ```markdown
 ## Current State
 
@@ -325,8 +345,8 @@ Reference these for style and quality:
 
 | Plan | Type | Demonstrates |
 |------|------|-------------|
-| `docs/plans/health-check-optimization.md` | Performance optimization | Measurable metrics, phased approach, configuration design |
-| `docs/plans/nemesis-rework.md` | Feature refactoring | Large-scale restructuring, backward compatibility |
-| `docs/plans/docker-cleanup-all-backends.md` | Infrastructure cleanup | Multi-backend impact analysis |
-| `docs/plans/full-version-tag-lookup.md` | Feature implementation | Focused feature with clear deliverables |
+| `docs/plans/infrastructure/health-check-optimization.md` | Performance optimization | Measurable metrics, phased approach, configuration design |
+| `docs/plans/nemesis/nemesis-rework.md` | Feature refactoring | Large-scale restructuring, backward compatibility |
+| `docs/plans/infrastructure/docker-cleanup-all-backends.md` | Infrastructure cleanup | Multi-backend impact analysis |
+| `docs/plans/config/full-version-tag-lookup.md` | Feature implementation | Focused feature with clear deliverables |
 | `docs/plans/ai-skills-framework.md` | Framework design | Multi-phase skill creation with platform compatibility |

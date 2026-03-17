@@ -91,12 +91,33 @@ Known risks and how to address them.
 - Use bullet points for clarity
 - Link to relevant issues, PRs, or documentation
 
+### Frontmatter Requirements
+
+Every plan file must begin with YAML frontmatter:
+
+```yaml
+---
+status: draft          # draft | approved | in_progress | blocked | complete
+domain: framework      # from domain taxonomy (see MASTER.md)
+created: 2026-01-15    # date plan was first written
+last_updated: 2026-03-15
+owner: null            # GitHub username or null
+---
+```
+
+### Tracking and Registration
+
+- **MASTER.md** (`docs/plans/MASTER.md`) is the central index of all plans, grouped by domain. Register every new plan there.
+- **progress.json** (`docs/plans/progress.json`) provides machine-readable progress tracking. Add an entry for every new plan.
+- When a plan's status changes, update all three locations: the plan file frontmatter, MASTER.md, and progress.json.
+
 ### Best Practices
 - Review existing plans for reference (see `/docs/plans/`)
+- Check `MASTER.md` for related plans in the same domain before creating a new plan
 - Get feedback on the plan before starting implementation
 - Update the plan as you learn new information during implementation
 - Mark completed phases with checkboxes
-- Archive plans once fully implemented by moving them to `/docs/plans/archive/` directory
+- Archive plans once fully implemented by moving them to `/docs/plans/archive/` directory and updating MASTER.md status
 
 ## Rule for Agents
 
@@ -113,7 +134,7 @@ Known risks and how to address them.
 ## Examples
 
 For reference examples of well-structured implementation plans, see:
-- `/docs/plans/health-check-optimization.md` - Example of a performance optimization plan that demonstrates:
+- `/docs/plans/infrastructure/health-check-optimization.md` - Example of a performance optimization plan that demonstrates:
   - Clear problem statement with measurable performance issues
   - Detailed current state analysis with specific code references
   - Phased approach with atomic, PR-scoped implementation steps
