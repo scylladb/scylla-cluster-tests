@@ -28,7 +28,6 @@ from sdcm.nemesis import (
 from sdcm.rest.compaction_manager_client import CompactionManagerClient
 from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.sct_events.group_common_events import ignore_compaction_stopped_exceptions
-from sdcm.send_email import FunctionalEmailReporter
 from sdcm.tester import ClusterTester
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.compaction_ops import CompactionOps, COMPACTION_TYPES
@@ -60,9 +59,6 @@ class StopCompactionTest(ClusterTester):
         self.populate_data_parallel(size_in_gb=10, blocking=True)
         self.disable_autocompaction_on_all_nodes()
         self.test_statuses = {}
-        self.email_reporter = FunctionalEmailReporter(
-            email_recipients=self.params.get("email_recipients"), logdir=self.logdir
-        )
 
     def disable_autocompaction_on_all_nodes(self):
         compaction_ops = CompactionOps(cluster=self.db_cluster)
