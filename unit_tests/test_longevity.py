@@ -37,8 +37,12 @@ class DummyLongevityTest(LongevityTest):
         self.params["nemesis_interval"] = 1
         self.timeout_thread = None
         self.k8s_clusters = []
+        self.kafka_cluster = None
 
     def _init_params(self):
+        pass
+
+    def init_argus_run(self):
         pass
 
     def save_email_data(self):
