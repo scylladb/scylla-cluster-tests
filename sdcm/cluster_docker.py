@@ -14,11 +14,18 @@
 import os
 import re
 import logging
+import shutil
 from typing import Optional, Union, Dict
 from functools import cached_property
 
 
 from sdcm import cluster
+from sdcm.provision.helpers.certificate import (
+    CA_CERT_FILE,
+    JKS_TRUSTSTORE_FILE,
+    TLSAssets,
+    export_pem_cert_to_pkcs12_keystore,
+)
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.docker_cmd_runner import DockerCmdRunner
 from sdcm.reporting.tooling_reporter import VectorStoreVersionReporter
@@ -440,8 +447,25 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
         if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
 
+        if any([self.params.get("server_encrypt"), self.params.get("client_encrypt")]):
+            self._generate_db_node_certs(node)
+
         node.config_setup(append_scylla_args=self.get_scylla_args())
         node.restart_scylla(verify_up_before=True)
+
+    def _generate_db_node_certs(self, node):
+        """Generate per-node SSL certificates for a Docker DB node."""
+        node.create_node_certificate(
+            cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
+            cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
+            csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR,
+        )
+        node.create_node_certificate(
+            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT,
+            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY,
+        )
+        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+            shutil.copy(src, node.ssl_conf_dir)
 
     def node_startup(self, node, verbose=False, timeout=3600):
         if not ContainerManager.is_running(node, "node"):
@@ -594,7 +618,21 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
 
         self._install_docker_cli(node, verbose=verbose)
         if self.params.get("client_encrypt"):
+            self._generate_loader_certs(node)
             node.config_client_encrypt()
+
+    def _generate_loader_certs(self, node):
+        """Generate SSL client certificates for a Docker loader node."""
+        node.create_node_certificate(
+            node.ssl_conf_dir / TLSAssets.CLIENT_CERT, node.ssl_conf_dir / TLSAssets.CLIENT_KEY
+        )
+        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+            shutil.copy(src, node.ssl_conf_dir)
+        export_pem_cert_to_pkcs12_keystore(
+            node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
+            node.ssl_conf_dir / TLSAssets.CLIENT_KEY,
+            node.ssl_conf_dir / TLSAssets.PKCS12_KEYSTORE,
+        )
 
     def _install_docker_cli(self, node, verbose=False):
         result = node.remoter.run("docker --version", ignore_status=True, verbose=False)
