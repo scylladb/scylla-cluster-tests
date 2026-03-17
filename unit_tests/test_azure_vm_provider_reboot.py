@@ -21,8 +21,9 @@ def provider():
     return provider
 
 
+@patch("sdcm.provision.azure.virtual_machine_provider.time.sleep")
 @patch("sdcm.provision.azure.virtual_machine_provider.VirtualMachineProvider.run_command")
-def test_reboot_soft_success(mock_run_command, provider):
+def test_reboot_soft_success(mock_run_command, mock_sleep, provider):
     provider._azure_service.compute.virtual_machines.instance_view.return_value.statuses = [
         MagicMock(display_status="VM running")
     ]
