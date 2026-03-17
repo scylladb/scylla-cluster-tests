@@ -153,6 +153,8 @@ class PhysicalMachineCluster(cluster.BaseCluster):
 
     def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         assert instance_type is None, "baremetal can't provision different types"
+        # NOTE: multi-DC is not supported for baremetal setups. dc_idx is accepted for interface
+        # compatibility but all nodes are drawn from the single flat _node_public_ips/_node_private_ips lists.
         for node_index in range(count):
             node_name = "%s-%s" % (self.node_prefix, node_index)
             self.nodes.append(
@@ -167,6 +169,11 @@ class PhysicalMachineCluster(cluster.BaseCluster):
 
 
 class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
+    def _reuse_cluster_setup(self, node):
+        # Override needed: BaseScyllaCluster._reuse_cluster_setup is `pass` and takes MRO precedence
+        # over PhysicalMachineCluster._reuse_cluster_setup, so we must call it explicitly here.
+        node.run_startup_script()  # Reconfigure syslog-ng/vector on cluster reuse.
+
     def __init__(self, **kwargs):
         user_prefix = kwargs.pop("user_prefix")
         if username := kwargs.pop("ssh_username", None):
