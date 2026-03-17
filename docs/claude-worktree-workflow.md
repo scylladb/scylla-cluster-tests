@@ -13,6 +13,8 @@ When Claude Code spawns an agent with `isolation: "worktree"`, it:
 
 This means multiple agents can work on different tasks in parallel without interfering with each other or the main working tree.
 
+**Important:** The worktree is created from your **current branch**. If your branch has unrelated commits ahead of `upstream/master`, those commits will be included in the worktree and may end up in the PR. Always ensure a clean base before spawning worktree agents — see [Branching discipline](#branching-discipline) below.
+
 ## Environment setup in worktrees
 
 ### What happens automatically
@@ -110,6 +112,40 @@ Each agent gets its own worktree and works independently.
 | Changes that depend on each other | | Yes |
 | Running full test suites | Yes | |
 | Quick single-file edits | | Yes |
+
+### Branching discipline
+
+Worktree agents inherit commits from the branch they are spawned on. To avoid polluting a PR with unrelated commits:
+
+**For new work**, start from a clean `upstream/master`:
+```bash
+git checkout upstream/master
+# Then ask Claude to use a worktree agent
+```
+
+**For existing PR work**, checkout that PR's branch first:
+```bash
+gh pr checkout 12345
+# Then ask Claude to use a worktree agent
+```
+
+**When prompting Claude** to use a worktree, be explicit about the base:
+```
+Execute this in a worktree. Create a new branch from upstream/master
+before making any changes.
+```
+
+Or for an existing PR:
+```
+Execute this in a worktree based on PR #12345.
+```
+
+If you forget and the worktree picks up stale commits, fix it by cherry-picking your commits onto a clean branch:
+```bash
+git checkout -b clean-branch upstream/master
+git cherry-pick <your-commit-hashes>
+git push upstream clean-branch:original-branch --force-with-lease
+```
 
 ### Local permissions
 
