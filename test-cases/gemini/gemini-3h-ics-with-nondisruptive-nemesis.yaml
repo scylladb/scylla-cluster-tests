@@ -23,4 +23,3 @@ gemini_table_options:
 gemini_log_cql_statements: true
 
 db_type: mixed_scylla
-instance_type_db_oracle: 'i8ge.2xlarge'
