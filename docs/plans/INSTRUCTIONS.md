@@ -131,6 +131,35 @@ owner: null            # GitHub username or null
 5. **No Filler:** Start your response immediately with the `# Plan Title`. Do not include conversational prologues.
 6. Do NOT apply this format to regular coding questions or small changes.
 
+## Mini-Plans
+
+For small changes (under ~1K LOC, single PR), use a lightweight mini-plan instead of the full 7-section format.
+
+### Purpose
+
+Mini-plans reduce overhead for tasks that don't need multi-phase tracking, MASTER.md registration, or progress.json entries. They document the approach without the ceremony of a full plan.
+
+### Location
+
+Store mini-plans in `docs/plans/mini-plans/` with filenames following the pattern `YYYY-MM-DD-kebab-case-name.md`.
+
+### Format
+
+Mini-plans have 4 sections: Problem, Approach, Files to Modify, and Verification. They have no YAML frontmatter and are not registered in MASTER.md or progress.json.
+
+See `skills/writing-plans/references/mini-plan-template.md` for the template and an example.
+
+### Routing
+
+The `writing-plans` skill handles routing automatically. When asked to create a plan, it checks:
+1. Whether the user explicitly requested a big or small plan
+2. Whether the current PR has a `plans` label (label present -> full plan)
+3. Task size estimate as a fallback
+
+### Lifecycle
+
+Mini-plans are disposable. Delete them after the related PR is merged or after 30 days.
+
 ## Examples
 
 For reference examples of well-structured implementation plans, see:

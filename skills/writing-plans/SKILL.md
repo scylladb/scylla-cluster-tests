@@ -1,13 +1,12 @@
 ---
 name: writing-plans
 description: >-
-  Use when asked to generate an implementation plan, draft a plan,
-  or design a phased feature rollout for the SCT repository.
-  Applies to multi-phase changes, refactoring strategies, and
-  complex feature designs that need documented roadmaps. Produces
-  structured plans with PR-scoped phases, dependency ordering,
-  risk mitigation, and testing requirements following SCT's
-  7-section format in docs/plans/.
+  Use when asked to generate an implementation plan, draft a plan, save a plan,
+  or design a feature rollout for the SCT repository. Supports two formats:
+  full 7-section plans for multi-phase work (1K+ LOC, tracked in MASTER.md)
+  and lightweight mini-plans for single-PR changes (under 1K LOC, stored in
+  docs/plans/mini-plans/). Routes automatically based on PR plans label,
+  user input, or task size estimate.
 ---
 
 # Writing Implementation Plans for SCT
@@ -52,21 +51,68 @@ When information is missing or ambiguous, explicitly flag it. Incorrect assumpti
 
 Plans without metadata are invisible to the tracking system. Every plan file must start with frontmatter specifying `status`, `domain`, `created`, `last_updated`, and `owner` fields. This enables `MASTER.md` and `progress.json` to reflect accurate state. See [frontmatter-fields.md](references/frontmatter-fields.md) for valid values.
 
+## Plan Type Routing
+
+When the user asks to "save a plan", "draft a plan", or similar, determine the plan type **before writing anything**.
+
+### Decision Tree
+
+```
+1. User explicitly said big/small?       -> Use that
+2. Working on a PR with `plans` label?   -> FULL plan
+3. Working on a PR without `plans` label? -> MINI-plan
+4. No PR context?                        -> Ask user, or estimate: >=1K LOC -> FULL, <1K LOC -> MINI
+```
+
+### Step 1: Ask the User (Preferred)
+
+When explicitly asked to create/save a plan, ask:
+
+> "Is this a big plan (multi-phase, 1K+ LOC, needs tracking) or a small plan (single PR, under ~1K LOC)?"
+
+The user's answer is authoritative. If they say "small" -> mini-plan. If they say "big" -> full plan.
+
+**When user says "big":** If already working on a PR, add the `plans` label immediately:
+```bash
+gh pr edit <number> --add-label "plans"
+```
+If a PR hasn't been opened yet, include a reminder in the plan output: "Remember to add the `plans` label when the PR is created." The agent should also add the label automatically when it later creates the PR during that session.
+
+### Step 2: PR Label Check (When Working on an Existing PR)
+
+If the agent is already working on a PR (e.g., from `gh pr checkout`), check for the `plans` label:
+
+```bash
+gh pr view <number> --json labels --jq '.labels[].name' | grep -q '^plans$'
+```
+
+- PR has `plans` label -> FULL plan (7-section, `docs/plans/`)
+- PR does NOT have `plans` label -> MINI-plan (4-section, `docs/plans/mini-plans/`)
+
+### Step 3: Fallback Heuristic (Only if No User Answer and No PR Context)
+
+Estimate the scope from the task description:
+
+- **Likely big:** Multiple new files, new config parameters, multiple backends affected, needs CI changes
+- **Likely small:** Single file change, bug fix, test addition, refactoring one module
+- **When in doubt, ask the user** rather than guessing
+
 ## When to Use
 
-- When asked to "generate an implementation plan" or "draft a plan"
-- When designing a multi-phase feature rollout for SCT
-- When a complex change needs to be broken into PR-scoped steps
-- When documenting a refactoring strategy before implementation
-- When creating a roadmap for a new SCT capability
+- When asked to "generate an implementation plan", "draft a plan", or "save a plan"
+- When designing a multi-phase feature rollout for SCT (-> full plan)
+- When a complex change needs to be broken into PR-scoped steps (-> full plan)
+- When documenting a refactoring strategy before implementation (-> full plan)
+- When creating a roadmap for a new SCT capability (-> full plan)
 - When reviewing or improving an existing plan
+- When a small, single-PR change benefits from lightweight planning (-> mini-plan)
+- When working on a PR without a `plans` label and want to document approach (-> mini-plan)
 
 ## When NOT to Use
 
-- For small, single-PR changes that don't need a plan — just implement directly
+- For trivial changes that need no planning at all — just implement directly
 - For regular coding questions — answer them without plan structure
 - For documentation-only changes — edit the relevant file directly
-- For bug fixes that have an obvious solution — file a PR instead
 - For updating an existing plan's status — edit the plan file directly
 
 ## The 7-Section Structure
@@ -108,6 +154,20 @@ When writing plans for SCT, consider these domain-specific areas:
 | **progress.json** | Add an entry to `docs/plans/progress.json` with plan metadata |
 | **Related Plans** | Check MASTER.md for existing plans in the same domain that may overlap |
 
+## Mini-Plan Format
+
+Mini-plans are a lightweight 4-section format for small changes. See [mini-plan-template.md](references/mini-plan-template.md) for the full template and example.
+
+| Aspect | Full Plan | Mini-Plan |
+|--------|-----------|-----------|
+| Sections | 7 | 4 (Problem, Approach, Files, Verification) |
+| Frontmatter | Required | None |
+| MASTER.md | Required | None |
+| progress.json | Required | None |
+| Location | `docs/plans/<domain>/` | `docs/plans/mini-plans/` |
+| Filename | `kebab-case-name.md` | `YYYY-MM-DD-kebab-case-name.md` |
+| Lifecycle | Tracked until archived | Disposable after PR merge or 30 days |
+
 ## Anti-Pattern Quick Reference
 
 See [anti-patterns.md](references/anti-patterns.md) for the full catalog with before/after examples and the quick-reference table.
@@ -119,10 +179,12 @@ See [anti-patterns.md](references/anti-patterns.md) for the full catalog with be
 | [plan-templates.md](references/plan-templates.md) | Complete plan skeleton, section-by-section templates with SCT-specific examples |
 | [anti-patterns.md](references/anti-patterns.md) | Common plan writing mistakes with before/after fixes |
 | [frontmatter-fields.md](references/frontmatter-fields.md) | YAML frontmatter field definitions, valid values, and domain taxonomy |
+| [mini-plan-template.md](references/mini-plan-template.md) | Mini-plan 4-section template with example and rules |
 
 | Workflow | Purpose |
 |----------|---------|
-| [create-a-plan.md](workflows/create-a-plan.md) | 5-phase process for writing an implementation plan from scratch |
+| [create-a-plan.md](workflows/create-a-plan.md) | 5-phase process for writing a full implementation plan from scratch |
+| [create-a-mini-plan.md](workflows/create-a-mini-plan.md) | 3-phase lightweight workflow for writing a mini-plan |
 | [update-plan-status.md](workflows/update-plan-status.md) | 3-phase workflow for updating plan status across frontmatter, MASTER.md, and progress.json |
 
 ## Supporting Documents
@@ -135,7 +197,7 @@ See [anti-patterns.md](references/anti-patterns.md) for the full catalog with be
 
 ## Success Criteria
 
-A well-written SCT implementation plan:
+### Full Plan
 
 - [ ] Passes `uv run sct.py pre-commit` without formatting issues
 - [ ] Follows the 7-section structure from `docs/plans/INSTRUCTIONS.md`
@@ -152,3 +214,13 @@ A well-written SCT implementation plan:
 - [ ] Has valid YAML frontmatter (status, domain, created, last_updated, owner)
 - [ ] Is registered in `docs/plans/MASTER.md` under the correct domain
 - [ ] Has a corresponding entry in `docs/plans/progress.json`
+
+### Mini-Plan
+
+- [ ] Has exactly 4 sections: Problem, Approach, Files to Modify, Verification
+- [ ] Has no YAML frontmatter
+- [ ] All file paths in "Files to Modify" are code-verified (or marked as new)
+- [ ] Verification checklist has concrete, runnable checks
+- [ ] Includes `uv run sct.py pre-commit` in verification
+- [ ] Is saved as `docs/plans/mini-plans/YYYY-MM-DD-kebab-case-name.md`
+- [ ] Is NOT registered in MASTER.md or progress.json
