@@ -4,6 +4,20 @@ A 5-phase process for writing an SCT implementation plan following the 7-section
 
 ---
 
+## Before You Start: Check Plan Type Routing
+
+Before beginning Phase 1, determine whether this task needs a full plan or a mini-plan. Follow the routing decision tree in [SKILL.md](../SKILL.md#plan-type-routing):
+
+1. Did the user explicitly say "big" or "small"? Use their answer.
+2. Working on a PR? Check for the `plans` label: `gh pr view <number> --json labels --jq '.labels[].name' | grep -q '^plans$'`
+3. No PR context? Estimate scope — if under ~1K LOC and single PR, use the mini-plan workflow instead.
+
+**If this is a mini-plan**, stop here and follow [create-a-mini-plan.md](create-a-mini-plan.md) instead.
+
+**If this is a full plan**, continue to Phase 1 below.
+
+---
+
 ## Phase 1: Gather Context
 
 **Entry:** You have a feature or change request that needs an implementation plan.

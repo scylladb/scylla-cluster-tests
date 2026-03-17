@@ -433,3 +433,9 @@ When creating a new skill, follow the process in `skills/designing-skills/workfl
 I have strict standards for feature planning. You can find the full guidelines in `docs/plans/INSTRUCTIONS.md`.
 
 **Rule:** When I ask you to "generate an implementation plan" or "draft a plan", you MUST read `docs/plans/INSTRUCTIONS.md` and follow the structure defined there. Do not apply this format to regular coding questions.
+
+**Plan types:** The `writing-plans` skill supports two formats:
+- **Full plans** (7-section, `docs/plans/`): For multi-phase work, 1K+ LOC. Requires YAML frontmatter, MASTER.md registration, and progress.json tracking. PRs with a `plans` label use this format.
+- **Mini-plans** (4-section, `docs/plans/mini-plans/`): For single-PR changes under ~1K LOC. No frontmatter, no registration. Disposable after merge.
+
+The skill routes automatically based on the PR `plans` label, user input, or task size estimate.
