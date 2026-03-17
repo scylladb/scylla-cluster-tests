@@ -253,7 +253,7 @@ Format version of the user-data to use for scylla images,<br>default to what tag
 
 Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'<br>Automatically lookup AMIs for formal versions.<br>WARNING: can't be used together with 'ami_id_db_oracle'
 
-**default:** 2024.1
+**default:** 2025.4
 
 **type:** str
 
@@ -1144,7 +1144,7 @@ AWS image type of the db node
 
 AWS image type of the oracle node
 
-**default:** N/A
+**default:** i8g.2xlarge
 
 **type:** str (appendable)
 
