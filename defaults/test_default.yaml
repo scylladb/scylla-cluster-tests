@@ -327,5 +327,10 @@ vector_store_threads: 0  # 0 = defaults to number of cores on a node
 vector_store_docker_image: 'scylladb/vector-store'
 vector_store_version: ''
 
+<<<<<<< HEAD
 enable_argus_email_report : false
+||||||| parent of 159e9208c (refactor(email): remove sdcm/send_email.py and use only Argus email reporting)
+enable_argus_email_report: false
+=======
+>>>>>>> 159e9208c (refactor(email): remove sdcm/send_email.py and use only Argus email reporting)
 argus_email_report_template: email_report_template_basic.yaml

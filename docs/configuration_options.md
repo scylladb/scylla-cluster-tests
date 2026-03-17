@@ -3822,6 +3822,7 @@ Path to the email report template used for sending argus email reports
 **type:** str (appendable)
 
 
+<<<<<<< HEAD
 ## **enable_argus_email_report** / SCT_ENABLE_ARGUS_REPORT
 
 Whether or not to send email using argus instead of SCT.
@@ -3829,3 +3830,29 @@ Whether or not to send email using argus instead of SCT.
 **default:** N/A
 
 **type:** bool
+||||||| parent of 159e9208c (refactor(email): remove sdcm/send_email.py and use only Argus email reporting)
+## **enable_argus_email_report** / SCT_ENABLE_ARGUS_EMAIL_REPORT
+
+Whether or not to send email using argus instead of SCT.
+
+**default:** N/A
+
+**type:** bool
+
+
+## **c_s_driver_version** / SCT_C_S_DRIVER_VERSION
+
+cassandra-stress driver version to use: 3|4|random
+
+**default:** 3
+
+**type:** Literal['3', '4', 'random']
+=======
+## **c_s_driver_version** / SCT_C_S_DRIVER_VERSION
+
+cassandra-stress driver version to use: 3|4|random
+
+**default:** 3
+
+**type:** Literal['3', '4', 'random']
+>>>>>>> 159e9208c (refactor(email): remove sdcm/send_email.py and use only Argus email reporting)

@@ -14,7 +14,12 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_GCE_PROJECT = "${params.gce_project}"
+<<<<<<< HEAD
             SCT_ENABLE_ARGUS_REPORT = "1"
+||||||| parent of 159e9208c (refactor(email): remove sdcm/send_email.py and use only Argus email reporting)
+            SCT_ENABLE_ARGUS_EMAIL_REPORT = "1"
+=======
+>>>>>>> 159e9208c (refactor(email): remove sdcm/send_email.py and use only Argus email reporting)
         }
         parameters {
             // Cloud Provider Configuration
