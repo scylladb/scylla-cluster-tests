@@ -13,5 +13,3 @@ n_loaders: 1
 client_encrypt: true
 
 user_prefix: manager-backup
-
-enable_argus_email_report: true

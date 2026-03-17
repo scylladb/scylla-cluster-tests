@@ -27,5 +27,3 @@ n_loaders: 4
 
 user_prefix: manager-regression
 space_node_threshold: 6442
-
-enable_argus_email_report: true

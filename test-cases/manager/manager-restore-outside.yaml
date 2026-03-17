@@ -12,5 +12,3 @@ mgmt_reuse_backup_snapshot_name: '500gb_1t_ics'
 mgmt_skip_post_restore_stress_read: true
 
 user_prefix: 'manager-restore-out-of-manager'
-
-enable_argus_email_report: true
