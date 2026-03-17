@@ -51,9 +51,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     def setUp(self):
         super().setUp()
 
-        # need to remove the email_data.json file, as in the builders, it will accumulate and it will send multiple
-        # emails for each test. When we move to use SCT Runners, it won't be necessary.
-        self._clean_email_data()
         if self.params.get("run_db_node_benchmarks"):
             self.log.info("Validate node benchmarks results")
             compare_results = self.db_cluster.get_node_benchmarks_results() or {}
@@ -200,12 +197,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             stats_aggregate_cmds=False,
         )
         self.get_stress_results(queue=stress_queue, store_results=True)
-
-    @staticmethod
-    def _clean_email_data():
-        email_data_path = "email_data.json"
-        with open(email_data_path, "w", encoding="utf-8"):
-            pass
 
     def _stop_load_when_nemesis_threads_end(self):
         for nemesis_thread in self.db_cluster.nemesis_threads:

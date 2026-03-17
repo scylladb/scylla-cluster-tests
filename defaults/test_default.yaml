@@ -333,7 +333,6 @@ vector_store_threads: 0  # 0 = defaults to number of cores on a node
 vector_store_docker_image: 'scylladb/vector-store'
 vector_store_version: ''
 
-enable_argus_email_report : false
 argus_email_report_template: email_report_template_basic.yaml
 
 c_s_driver_version: '3'

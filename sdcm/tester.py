@@ -187,7 +187,6 @@ from sdcm.logcollector import (
     SirenManagerLogCollector,
     VectorStoreLogCollector,
 )
-from sdcm.send_email import build_reporter, save_email_data_to_file
 from sdcm.utils import alternator
 from sdcm.utils.profiler import ProfilerFactory
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER
@@ -1093,8 +1092,6 @@ class ClusterTester(unittest.TestCase):
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
         self.timeout_thread = None
-        self.email_reporter = build_reporter(self.__class__.__name__, self.params.get("email_recipients"), self.logdir)
-
         self.init_argus_run()
         self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
         PythonDriverReporter(argus_client=self.test_config.argus_client()).report()
@@ -4293,18 +4290,6 @@ class ClusterTester(unittest.TestCase):
             self.argus_collect_screenshots(grafana_screenshots)
         except Exception as exc:  # noqa: BLE001
             self.log.exception("Error while collecting screenshots:", exc_info=exc)
-
-        json_file_path = os.path.join(self.logdir, "email_data.json")
-
-        if email_data:
-            email_data["grafana_screenshots"] = grafana_screenshots
-            if self.email_reporter is not None:
-                email_data["reporter"] = self.email_reporter.__class__.__name__
-            self.log.debug("Save email data to file %s", json_file_path)
-            self.log.debug("Email data: %s", email_data)
-            save_email_data_to_file(email_data, json_file_path)
-        else:
-            self.log.info("failed to get email data, email will not be sent.")
 
     def argus_collect_screenshots(self, grafana_screenshots: list) -> None:
         if grafana_screenshots:
