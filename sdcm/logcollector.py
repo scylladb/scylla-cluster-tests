@@ -780,7 +780,7 @@ class LogCollector:
     def archive_to_tarfile(self, src_path: str, add_test_id_to_archive: bool = False) -> str:
         src_name = os.path.basename(src_path)
         if add_test_id_to_archive:
-            # Add test_id to the archive name when archive is created per log file, like: sct.log, email_data.json
+            # Add test_id to the archive name when archive is created per log file, like: sct.log
             extension = f".{src_name.split('.')[-1]}"
             if extension in [".log", ".json"]:
                 src_name = src_name.replace(extension, f"-{self.test_id.split('-')[0]}{extension}")
@@ -999,7 +999,6 @@ class BaseSCTLogCollector(LogCollector):
 
     log_entities = [
         FileLog(name="profile.stats", search_locally=True),
-        FileLog(name="email_data.json", search_locally=True),
         FileLog(name="left_processes.log", search_locally=True),
         FileLog(name="raw_events.log", search_locally=True),
         FileLog(name="events.log", search_locally=True),

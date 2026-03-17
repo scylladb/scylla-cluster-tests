@@ -2567,12 +2567,6 @@ class SCTConfiguration(dict):
             type=str,
             help="Path to the email report template used for sending argus email reports",
         ),
-        dict(
-            name="enable_argus_email_report",
-            env="SCT_ENABLE_ARGUS_REPORT",
-            type=bool,
-            help="Whether or not to send email using argus instead of SCT.",
-        ),
     ]
 
     required_params = [

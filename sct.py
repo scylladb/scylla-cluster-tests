@@ -48,7 +48,7 @@ from sdcm.provision import AzureProvisioner
 from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis import SisyphusMonkey
-from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
+from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.sct_provision.instances_provider import provision_sct_resources
@@ -91,7 +91,6 @@ from sdcm.utils.common import (
     list_instances_gce,
     list_logs_by_test_id,
     list_resources_docker,
-    list_parallel_timelines_report_urls,
     search_test_id_in_latest,
     get_latest_scylla_release,
 )
@@ -118,13 +117,11 @@ from sdcm.utils.gce_builder import GceBuilder
 from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.get_username import get_username
 from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
+from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
 from sdcm.send_email import (
-    get_running_instances_for_email_report,
     read_email_data_from_file,
-    build_reporter,
     send_perf_email,
 )
-from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
 from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
@@ -1563,19 +1560,6 @@ def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]], u
         LOGGER.error("Error saving logs to argus", exc_info=True)
 
 
-def get_test_results_for_failed_test(test_status, start_time):
-    return {
-        "job_url": os.environ.get("BUILD_URL"),
-        "subject": f"{test_status}: {os.environ.get('JOB_NAME')}: {start_time}",
-        "start_time": start_time,
-        "end_time": format_timestamp(time.time()),
-        "grafana_screenshots": "",
-        "nodes": "",
-        "test_id": "",
-        "username": "",
-    }
-
-
 @cli.command("send-email", help="Send email with results for testrun")
 @click.option("--test-id", help="Test-id of run")
 @click.option("--test-status", help="Override test status FAILED|ABORTED")
@@ -1584,17 +1568,15 @@ def get_test_results_for_failed_test(test_status, start_time):
 @click.option("--runner-ip", type=str, required=False, help="Sct runner ip for the running test")
 @click.option("--email-recipients", help="Send email to next recipients")
 @click.option("--logdir", help="Directory where to find testrun folder")
-def send_email(  # noqa: PLR0914, PLR0912
+def send_email(
     test_id=None,
     test_status=None,
     start_time=None,
     started_by=None,
-    runner_ip=None,  # noqa: PLR0912
+    runner_ip=None,
     email_recipients=None,
     logdir=None,
 ):
-    if started_by is None:
-        started_by = get_username()
     add_file_logger()
 
     if not email_recipients:
@@ -1603,105 +1585,30 @@ def send_email(  # noqa: PLR0914, PLR0912
     LOGGER.info("Email will be sent to next recipients: %s", email_recipients)
     email_recipients = email_recipients.split(",")
     sct_config = SCTConfiguration()
-    if sct_config.get("enable_argus_email_report"):
-        LOGGER.info("Sending email for test %s...", test_id)
-        client = init_argus_client(os.environ.get("SCT_TEST_ID"))
-        run = client.get_run()
-        title_template_data = {**dict(sct_config), **run}
 
-        template = sct_config.get("argus_email_report_template")
-        if not template:
-            LOGGER.error("Argus Email Report is enabled but the template file is not defined.")
-            sys.exit(1)
+    LOGGER.info("Sending email for test %s...", test_id)
+    client = init_argus_client(os.environ.get("SCT_TEST_ID"))
+    run = client.get_run()
+    title_template_data = {**dict(sct_config), **run}
 
-        p = Path(f"./argus_report_templates/{template}")
-        if not p.exists():
-            LOGGER.error("Argus Email Report is enabled but the template does not exist.")
-            sys.exit(1)
-
-        with p.open() as f:
-            template = yaml.safe_load(f)
-
-        title: str = (
-            template["title"] if ("{" not in template["title"]) else template["title"].format(title_template_data)
-        )
-        LOGGER.info("Sending email to %s with title %s and sections: %s", email_recipients, title, template)
-        client.send_email(recipients=email_recipients, title=title, sections=template["sections"])
-        return
-
-    if not logdir:
-        logdir = os.path.expanduser("~/sct-results")
-    test_results = None
-    if start_time is None:
-        start_time = format_timestamp(time.time())
-    else:
-        start_time = format_timestamp(int(start_time))
-    testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
-    if testrun_dir:
-        with open(os.path.join(testrun_dir, "test_id"), encoding="utf-8") as file:
-            test_id = file.read().strip()
-        email_results_file = os.path.join(testrun_dir, "email_data.json")
-        if not os.path.exists(email_results_file):
-            email_results_file = "email_data.json" if os.path.exists("email_data.json") else None
-        if not email_results_file:
-            LOGGER.error("Results file not found")
-        else:
-            test_results = read_email_data_from_file(email_results_file)
-    else:
-        LOGGER.warning("Failed to find test directory for %s", test_id)
-    if not test_results:
-        if not test_status:
-            test_status = "ABORTED"
-        test_results = get_test_results_for_failed_test(test_status, start_time)
-        if started_by:
-            test_results["username"] = started_by
-        if test_id:
-            test_results.update(
-                {
-                    "test_id": test_id,
-                    "nodes": get_running_instances_for_email_report(test_id, runner_ip),
-                    "log_links": list_logs_by_test_id(test_id),
-                }
-            )
-        reporter = build_reporter("TestAborted", email_recipients, testrun_dir)
-        if reporter:
-            reporter.send_report(test_results)
-            sys.exit(1)
-        else:
-            LOGGER.error("failed to get a reporter")
-            sys.exit(1)
-        return
-    job_name = os.environ.get("JOB_NAME", "")
-    if reporter := test_results.get("reporter", ""):
-        test_results["nodes"] = get_running_instances_for_email_report(test_id, runner_ip)
-        test_results["logs_links"] = list_logs_by_test_id(test_results.get("test_id", test_id))
-        if "longevity" in job_name:
-            pt_report_urls = list_parallel_timelines_report_urls(test_id=test_results.get("test_id", test_id))
-            test_results["parallel_timelines_report"] = pt_report_urls[0] if pt_report_urls else None
-
-        reporter = build_reporter(reporter, email_recipients, testrun_dir)
-        if not reporter:
-            LOGGER.warning("No reporter found")
-            sys.exit(1)
-        try:
-            reporter.send_report(test_results)
-        except Exception:  # noqa: BLE001
-            LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
-            build_reporter("TestAborted", email_recipients, testrun_dir).send_report(
-                {
-                    "job_url": os.environ.get("BUILD_URL"),
-                    "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
-                }
-            )
-    elif any(["email_body" in value for value in test_results.values()]):
-        # figure out it's a perf tests with multiple emails in single file
-        # based on the structure of file
-        logs = list_logs_by_test_id(test_results.get("test_id", test_id))
-        reporter = BaseResultsAnalyzer(es_index=test_id, email_recipients=email_recipients)
-        send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time)
-    else:
-        LOGGER.warning("failed to figure out what what to send out")
+    template = sct_config.get("argus_email_report_template")
+    if not template:
+        LOGGER.error("Argus Email Report template file is not defined.")
         sys.exit(1)
+
+    p = Path(f"./argus_report_templates/{template}")
+    if not p.exists():
+        LOGGER.error("Argus Email Report template does not exist: %s", p)
+        sys.exit(1)
+
+    with p.open() as f:
+        template = yaml.safe_load(f)
+
+    title: str = (
+        template["title"] if ("{" not in template["title"]) else template["title"].format(**title_template_data)
+    )
+    LOGGER.info("Sending email to %s with title %s and sections: %s", email_recipients, title, template)
+    client.send_email(recipients=email_recipients, title=title, sections=template["sections"])
 
 
 @cli.command("create-operator-test-release-jobs", help="Create pipeline jobs for a new scylla-operator branch/release")
