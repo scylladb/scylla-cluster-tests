@@ -52,5 +52,3 @@ user_prefix: manager-regression
 space_node_threshold: 6442
 
 aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'
-
-enable_argus_email_report: true
