@@ -12,7 +12,6 @@
 # Copyright (c) 2021 ScyllaDB
 
 import re
-from unittest.mock import MagicMock
 
 import pytest
 import requests
@@ -37,9 +36,8 @@ def fixture_alternator_api(params):
     params.update(
         dict(
             dynamodb_primarykey_type="HASH_AND_RANGE",
+            alternator_use_dns_routing=True,
             alternator_port=ALTERNATOR_PORT,
-            alternator_loadbalancing=True,
-            alternator_use_dns_routing=False,
             alternator_enforce_authorization=True,
             alternator_access_key_id="alternator",
             alternator_secret_access_key="password",
@@ -116,7 +114,7 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
 
     cmd = (
         "bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=1000000 "
-        "-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -p status.interval=2 -s"
+        "-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s"
     )
     ycsb_thread = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
@@ -135,7 +133,7 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
         assert "sct_ycsb_update_gauge" in output
 
         matches = regex.findall(output)
-        assert any(float(i) > 0 for i in matches), output
+        assert all(float(i) > 0 for i in matches), output
 
     check_metrics()
 
@@ -211,15 +209,7 @@ def test_03_cql(request, docker_scylla, prom_address, params):
 
     cmd = (
         "bin/ycsb load scylla -P workloads/workloada -threads 5 -p recordcount=1000000 "
-        "-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -p status.interval=2 -s"
-    )
-    ycsb_thread = YcsbStressThread(
-        loader_set,
-        cmd,
-        node_list=[docker_scylla],
-        timeout=30,
-        params=params,
-        cluster_tester=MagicMock(),
+        f"-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -p scylla.hosts={docker_scylla.ip_address} -s"
     )
     ycsb_thread = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
@@ -233,11 +223,12 @@ def test_03_cql(request, docker_scylla, prom_address, params):
     @timeout(timeout=60)
     def check_metrics():
         output = requests.get("http://{}/metrics".format(prom_address)).text
-        regex = re.compile(r"^sct_ycsb_insert_gauge.*?([0-9\.]*?)$", re.MULTILINE)
-        assert "sct_ycsb_insert_gauge" in output
+        regex = re.compile(r"^sct_ycsb_read_gauge.*?([0-9\.]*?)$", re.MULTILINE)
+        assert "sct_ycsb_read_gauge" in output
+        assert "sct_ycsb_update_gauge" in output
 
         matches = regex.findall(output)
-        assert any(float(i) > 0 for i in matches), output
+        assert all(float(i) > 0 for i in matches), output
 
     check_metrics()
     ycsb_thread.get_results()

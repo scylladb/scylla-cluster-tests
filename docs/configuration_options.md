@@ -933,24 +933,6 @@ If true, spawn a docker with a dns server for the ycsb loader to point to
 **type:** boolean
 
 
-## **alternator_loadbalancing** / SCT_ALTERNATOR_LOADBALANCING
-
-If true, enable native load balancing for alternator
-
-**default:** True
-
-**type:** boolean
-
-
-## **alternator_test_table** / SCT_ALTERNATOR_TEST_TABLE
-
-Dictionary of a test alternator table features:<br>name: str - the name of the table<br>lsi_name: str - the name of the local secondary index to create with a table<br>gsi_name: str - the name of the global secondary index to create with a table<br>tags: dict - the tags to apply to the created table<br>items: int - expected number of items in the table after prepare
-
-**default:** N/A
-
-**type:** dict
-
-
 ## **alternator_enforce_authorization** / SCT_ALTERNATOR_ENFORCE_AUTHORIZATION
 
 If true, enable the authorization check in dynamodb api (alternator)
@@ -976,15 +958,6 @@ the aws_secret_access_key that would be used for alternator
 **default:** N/A
 
 **type:** str (appendable)
-
-
-## **alternator_trust_all_certificates** / SCT_ALTERNATOR_TRUST_ALL_CERTIFICATES
-
-If true, trust all TLS certificates for alternator connections (for testing with self-signed certs)
-
-**default:** True
-
-**type:** boolean
 
 
 ## **region_aware_loader** / SCT_REGION_AWARE_LOADER
@@ -3820,15 +3793,6 @@ Path to the email report template used for sending argus email reports
 **default:** email_report_template_basic.yaml
 
 **type:** str (appendable)
-
-
-## **enable_argus_email_report** / SCT_ENABLE_ARGUS_REPORT
-
-Whether or not to send email using argus instead of SCT.
-
-**default:** N/A
-
-**type:** bool
 
 
 ## **c_s_driver_version** / SCT_C_S_DRIVER_VERSION
