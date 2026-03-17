@@ -851,8 +851,19 @@ class Nemesis:
 
     @target_all_nodes
     def disrupt_hard_reboot_node(self):
+<<<<<<< HEAD:sdcm/nemesis.py
         self.reboot_node(target_node=self.target_node, hard=True)
         self.target_node.wait_node_fully_start()
+||||||| parent of 4da81dd93 (fix(nemesis): wrap disrupt_hard_reboot_node with ignore_raft_topology_cmd_failing):sdcm/nemesis/__init__.py
+        self.reboot_node(target_node=self.target_node, hard=True)
+        with self.action_log_scope(f"Wait for {self.target_node.name} node to be fully started"):
+            self.target_node.wait_node_fully_start()
+=======
+        with ignore_raft_topology_cmd_failing():
+            self.reboot_node(target_node=self.target_node, hard=True)
+        with self.action_log_scope(f"Wait for {self.target_node.name} node to be fully started"):
+            self.target_node.wait_node_fully_start()
+>>>>>>> 4da81dd93 (fix(nemesis): wrap disrupt_hard_reboot_node with ignore_raft_topology_cmd_failing):sdcm/nemesis/__init__.py
 
     @target_all_nodes
     def disrupt_multiple_hard_reboot_node(self) -> None:
