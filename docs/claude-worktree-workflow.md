@@ -36,9 +36,18 @@ If you switch between branches with different Python versions and want per-versi
 |------|---------|--------------|
 | `setup-init.sh` | Session start | Installs Python, syncs deps, installs pre-commit, allows direnv |
 | `run-unit-tests.sh` | After editing `unit_tests/test_*` | Runs pytest on the edited file; blocks the edit if tests fail |
-| `save-session.sh` | Session end | Backs up the full session transcript to `.claude/session-backups/` |
+| `save-session.sh` | Session end | Backs up the full session transcript and extracts plans |
 
 The `run-unit-tests.sh` hook uses `--project "$CLAUDE_PROJECT_DIR"` to ensure `uv run` resolves the correct venv even when the shell working directory differs from the project root.
+
+### Session and plan backups
+
+When a session ends, `save-session.sh` automatically:
+
+1. **Saves the full transcript** to `.claude/session-backups/session-YYYYMMDD_HHMMSS.jsonl`
+2. **Extracts plans** (detected by section headers and keywords) to `.claude/plan-backups/plan-YYYYMMDD_HHMMSS-N-title.md`
+
+Both directories are gitignored. Plans are saved as standalone markdown files so you can easily find and reuse them without parsing JSONL transcripts.
 
 ## Complementary tools
 
