@@ -69,6 +69,7 @@ from sdcm.sct_runner import (
 )
 
 from sdcm.utils.ci_tools import get_job_name, get_job_url
+from sdcm.utils.trigger_matrix import trigger_matrix as run_trigger_matrix
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import argus_offline_collect_events, create_proxy_argus_s3_url, get_argus_client
 from sdcm.utils.aws_kms import AwsKms
@@ -232,6 +233,7 @@ def cli(ctx):
         "create-nemesis-yaml",
         "pre-commit",
         "unit-tests",
+        "trigger-matrix",
     ):
         try_auth_with_okta()
 
@@ -2493,6 +2495,76 @@ def hdr_investigate(
         f"\nFound P99 spikes higher than {error_threshold_ms} ms for tags {hdr_tags} with interval {hdr_summary_interval_sec} seconds\n"
     )
     click.echo(rich_table_to_string(hdr_table, title="HDR Latency Spikes"))
+
+
+@cli.command("trigger-matrix", help="Trigger Jenkins jobs from a YAML matrix file")
+@click.option("--matrix", required=True, type=click.Path(exists=True), help="Path to trigger matrix YAML file")
+@click.option(
+    "--scylla-version", required=True, type=str, help="Scylla version (e.g., master:latest, 2024.2.5-0.20250221.xxx-1)"
+)
+@click.option("--job-folder", default=None, type=str, help="Override auto-detected Jenkins job folder")
+@click.option("--labels-selector", default=None, type=str, help="Comma-separated labels to filter jobs (AND logic)")
+@click.option(
+    "--backend", default=None, type=click.Choice(["aws", "gce", "azure", "docker"]), help="Filter jobs by backend"
+)
+@click.option("--skip-jobs", default=None, type=str, help="Comma-separated job names to skip")
+@click.option("--stress-duration", default=None, type=str, help="Override stress_duration parameter")
+@click.option("--region", default=None, type=str, help="Override region for all jobs")
+@click.option(
+    "--provision-type",
+    default=None,
+    type=click.Choice(["spot", "on_demand", "spot_fleet"]),
+    help="Override provision type",
+)
+@click.option("--dry-run", is_flag=True, default=False, help="Preview mode — do not trigger jobs")
+@click.option("--requested-by-user", default=None, type=str, help="User requesting the run")
+def trigger_matrix_cmd(
+    matrix,
+    scylla_version,
+    job_folder,
+    labels_selector,
+    backend,
+    skip_jobs,
+    stress_duration,
+    region,
+    provision_type,
+    dry_run,
+    requested_by_user,
+):
+    add_file_logger()
+    overrides = {}
+    if stress_duration:
+        overrides["stress_duration"] = stress_duration
+    if region:
+        overrides["region"] = region
+    if provision_type:
+        overrides["provision_type"] = provision_type
+    if requested_by_user:
+        overrides["requested_by_user"] = requested_by_user
+
+    results = run_trigger_matrix(
+        matrix_file=matrix,
+        scylla_version=scylla_version,
+        job_folder=job_folder,
+        labels_selector=labels_selector,
+        backend=backend,
+        skip_jobs=skip_jobs,
+        dry_run=dry_run,
+        **overrides,
+    )
+
+    click.echo(f"\nTriggered: {len(results['triggered'])} jobs")
+    for job in results["triggered"]:
+        click.echo(f"  + {job}")
+    if results["skipped"]:
+        click.echo(f"Skipped: {len(results['skipped'])} jobs")
+        for job in results["skipped"]:
+            click.echo(f"  - {job}")
+    if results["failed"]:
+        click.echo(f"Failed: {len(results['failed'])} jobs")
+        for job in results["failed"]:
+            click.echo(f"  ! {job}")
+        sys.exit(1)
 
 
 cli.add_command(sct_ssh.ssh)
