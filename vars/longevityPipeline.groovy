@@ -19,7 +19,6 @@ def call(Map pipelineParams) {
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID = UUID.randomUUID().toString()
             SCT_GCE_PROJECT = "${params.gce_project}"
-            SCT_ENABLE_ARGUS_REPORT = "1"
             SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
