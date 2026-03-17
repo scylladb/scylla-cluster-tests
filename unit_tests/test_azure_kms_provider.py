@@ -117,8 +117,9 @@ def test_get_or_create_keyvault_returns_none_on_error(mock_logger, kms_provider,
     assert mock_logger.error.called
 
 
+@patch("sdcm.utils.decorators.time.sleep")
 def test_create_keyvault_retries_conflict_errors(
-    mock_logger, kms_provider, azure_service_mock, mock_http_error_factory, mock_vault_poller
+    mock_sleep, mock_logger, kms_provider, azure_service_mock, mock_http_error_factory, mock_vault_poller
 ):
     """Test that ConflictError is retried and eventually succeeds."""
     conflict_error = mock_http_error_factory("ConflictError")
