@@ -111,6 +111,21 @@ echo "  hydra bash           - Enter SCT containerized environment"
 echo "  pytest               - Run tests"
 ```
 
+### 3. Per-version venvs (optional)
+
+By default, `.envrc` creates a single `.venv` directory. If you switch between branches that use different Python versions and want separate venvs per version (e.g. `.venv-sct-3.14`, `.venv-sct-3.12`), create a marker file:
+
+```bash
+touch .venv-per-version
+```
+
+This file is gitignored and local to your checkout. With it present, direnv will use `.venv-sct-<python-version>` instead of `.venv`. To go back to the default, remove the file:
+
+```bash
+rm .venv-per-version
+direnv allow
+```
+
 ### 4. Initialize the environment
 
 Allow direnv to load the environment:

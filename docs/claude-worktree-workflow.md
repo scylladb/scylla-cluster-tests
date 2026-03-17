@@ -26,7 +26,9 @@ The `setup-init.sh` hook runs at session start in every worktree and handles:
 
 ### Venv location
 
-Both `setup-init.sh` and `.envrc` use `.venv` as the virtual environment directory. This is the uv community convention and avoids the confusion of multiple venv directories.
+Both `setup-init.sh` and `.envrc` default to `.venv` as the virtual environment directory. This is the uv community convention and avoids the confusion of multiple venv directories.
+
+If you switch between branches with different Python versions and want per-version venvs locally (e.g. `.venv-sct-3.14`), create `touch .venv-per-version` in your main checkout. This marker file is gitignored and won't exist in worktrees, so worktrees always get `.venv`. See [docs/setup-uv-direnv.md](setup-uv-direnv.md#3-per-version-venvs-optional) for details.
 
 ## Claude hooks in worktrees
 
