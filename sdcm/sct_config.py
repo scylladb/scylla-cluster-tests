@@ -2140,6 +2140,7 @@ class SCTConfiguration(dict):
             help="""
                 Jepsen test run policy (i.e., what we want to consider as passed for a single test)
 
+<<<<<<< HEAD
                 'most' - most test runs are passed
                 'any'  - one pass is enough
                 'all'  - all test runs should pass
@@ -2331,6 +2332,60 @@ class SCTConfiguration(dict):
             env="SCT_STOP_ON_HW_PERF_FAILURE",
             type=boolean,
             help="""Stop sct performance test if hardware performance test failed
+||||||| parent of 159e9208c (refactor(email): remove sdcm/send_email.py and use only Argus email reporting)
+        For more details, see `scaling` parameter description in Cloud REST API documentation:
+        https://cloud.docs.scylladb.com/stable/api.html#tag/Cluster/operation/createCluster""",
+    )
+    n_vector_store_nodes: int = SctField(
+        description="Number of vector store nodes (0 = VS is disabled)",
+    )
+    vector_store_port: int = SctField(
+        description="Vector Store API port",
+    )
+    vector_store_scylla_port: int = SctField(
+        description="ScyllaDB connection port for Vector Store",
+    )
+    vector_store_threads: int = SctField(
+        description="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)",
+    )
+    download_from_s3: list = SctField(
+        description="Destination-source map of dirs/buckets to download from S3 before starting the test",
+    )
+    argus_email_report_template: String = SctField(
+        description="Path to the email report template used for sending argus email reports",
+    )
+    enable_argus_email_report: Boolean = SctField(
+        description="Whether or not to send email using argus instead of SCT.",
+    )
+    c_s_driver_version: Literal["3", "4", "random"] = SctField(
+        description="cassandra-stress driver version to use: 3|4|random",
+    )
+=======
+        For more details, see `scaling` parameter description in Cloud REST API documentation:
+        https://cloud.docs.scylladb.com/stable/api.html#tag/Cluster/operation/createCluster""",
+    )
+    n_vector_store_nodes: int = SctField(
+        description="Number of vector store nodes (0 = VS is disabled)",
+    )
+    vector_store_port: int = SctField(
+        description="Vector Store API port",
+    )
+    vector_store_scylla_port: int = SctField(
+        description="ScyllaDB connection port for Vector Store",
+    )
+    vector_store_threads: int = SctField(
+        description="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)",
+    )
+    download_from_s3: list = SctField(
+        description="Destination-source map of dirs/buckets to download from S3 before starting the test",
+    )
+    argus_email_report_template: String = SctField(
+        description="Path to the email report template used for sending argus email reports",
+    )
+    c_s_driver_version: Literal["3", "4", "random"] = SctField(
+        description="cassandra-stress driver version to use: 3|4|random",
+    )
+>>>>>>> 159e9208c (refactor(email): remove sdcm/send_email.py and use only Argus email reporting)
 
                     Hardware performance tests runs on each node with sysbench and cassandra-fio tools.
                     Results stored in ES. HW perf tests run during cluster setups and not affect

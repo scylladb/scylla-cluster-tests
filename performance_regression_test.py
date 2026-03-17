@@ -44,6 +44,7 @@ class PerformanceRegressionTest(ClusterTester):
     throttle_step = 10_000
     max_ops = 200_000
 
+<<<<<<< HEAD
     def __init__(self, *args):
         # need to remove the email_data.json file, as in the builders, it will accumulate and it will send multiple
         # emails for each test. When we move to use SCT Runners, it won't be necessary.
@@ -57,6 +58,22 @@ class PerformanceRegressionTest(ClusterTester):
             self._test_index = es_index
 
         super().setUp()
+||||||| parent of 159e9208c (refactor(email): remove sdcm/send_email.py and use only Argus email reporting)
+    @teardown_on_exception
+    @log_run_info
+    def setUp(self):
+        super().setUp()
+
+        # need to remove the email_data.json file, as in the builders, it will accumulate and it will send multiple
+        # emails for each test. When we move to use SCT Runners, it won't be necessary.
+        self._clean_email_data()
+=======
+    @teardown_on_exception
+    @log_run_info
+    def setUp(self):
+        super().setUp()
+
+>>>>>>> 159e9208c (refactor(email): remove sdcm/send_email.py and use only Argus email reporting)
         if self.params.get("run_db_node_benchmarks"):
             self.log.info("Validate node benchmarks results")
             compare_results = self.db_cluster.get_node_benchmarks_results() or {}
@@ -218,12 +235,6 @@ class PerformanceRegressionTest(ClusterTester):
 
     def _get_total_ops(self):
         return self._stats["results"]["stats_total"]["op rate"]
-
-    @staticmethod
-    def _clean_email_data():
-        email_data_path = "email_data.json"
-        with open(email_data_path, "w", encoding="utf-8"):
-            pass
 
     def _stop_load_when_nemesis_threads_end(self):
         for nemesis_thread in self.db_cluster.nemesis_threads:

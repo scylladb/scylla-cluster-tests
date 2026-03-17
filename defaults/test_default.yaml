@@ -303,5 +303,40 @@ latency_decorator_error_thresholds:
 
 adaptive_timeout_store_metrics: true
 
+<<<<<<< HEAD
 enable_argus_email_report : false
+||||||| parent of 159e9208c (refactor(email): remove sdcm/send_email.py and use only Argus email reporting)
+# XCloud-specific defaults
+xcloud_scaling_config: null
+
+# Vector Search defaults
+n_vector_store_nodes: 0
+vector_store_port: 6080
+vector_store_scylla_port: 9042
+vector_store_threads: 0  # 0 = defaults to number of cores on a node
+vector_store_docker_image: 'scylladb/vector-store'
+vector_store_version: ''
+download_from_s3: []
+# The object-storage method options in Scylla-Manager are: native/rclone/auto.
+# An empty value here, means Scylla-Manager will use its default value.
+manager_backup_restore_method: ''
+
+enable_argus_email_report: false
+=======
+# XCloud-specific defaults
+xcloud_scaling_config: null
+
+# Vector Search defaults
+n_vector_store_nodes: 0
+vector_store_port: 6080
+vector_store_scylla_port: 9042
+vector_store_threads: 0  # 0 = defaults to number of cores on a node
+vector_store_docker_image: 'scylladb/vector-store'
+vector_store_version: ''
+download_from_s3: []
+# The object-storage method options in Scylla-Manager are: native/rclone/auto.
+# An empty value here, means Scylla-Manager will use its default value.
+manager_backup_restore_method: ''
+
+>>>>>>> 159e9208c (refactor(email): remove sdcm/send_email.py and use only Argus email reporting)
 argus_email_report_template: email_report_template_basic.yaml
