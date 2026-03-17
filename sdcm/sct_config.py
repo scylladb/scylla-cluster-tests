@@ -288,23 +288,31 @@ def MultitenantValue(inner_type):  # noqa: N802
 def dict_or_str(value: dict | str | None) -> dict | None:
     if value is None:
         return None
-    elif isinstance(value, str):
+    ast_err = None
+    yaml_err = None
+    if isinstance(value, str):
         try:
             return ast.literal_eval(value)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            ast_err = exc
 
         # ast.literal_eval() can fail on some strings (e.g. which contain lowercased booleans), try parsing such strings
         # using yaml.safe_load()
         try:
             return yaml.safe_load(value)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            yaml_err = exc
 
     if isinstance(value, dict):
         return value
 
-    raise ValueError('"{}" isn\'t a dict'.format(value))
+    errors = []
+    if ast_err is not None:
+        errors.append(f"ast.literal_eval failed: {ast_err}")
+    if yaml_err is not None:
+        errors.append(f"yaml.safe_load failed: {yaml_err}")
+    detail = f" Parse errors: {'; '.join(errors)}" if errors else ""
+    raise ValueError(f'"{value}" isn\'t a dict.{detail}')
 
 
 DictOrStr = Annotated[dict | str, BeforeValidator(dict_or_str)]
