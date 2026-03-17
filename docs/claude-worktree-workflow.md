@@ -36,6 +36,7 @@ If you switch between branches with different Python versions and want per-versi
 |------|---------|--------------|
 | `setup-init.sh` | Session start | Installs Python, syncs deps, installs pre-commit, allows direnv |
 | `run-unit-tests.sh` | After editing `unit_tests/test_*` | Runs pytest on the edited file; blocks the edit if tests fail |
+| `save-session.sh` | Session end | Backs up the full session transcript to `.claude/session-backups/` |
 
 The `run-unit-tests.sh` hook uses `--project "$CLAUDE_PROJECT_DIR"` to ensure `uv run` resolves the correct venv even when the shell working directory differs from the project root.
 
