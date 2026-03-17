@@ -112,6 +112,7 @@ class GeminiStressThread(DockerBasedStressThread):
         self.gemini_oracle_statements_file = f"gemini_oracle_statements_{self.unique_id}.log"
         self.gemini_test_statements_file = f"gemini_test_statements_{self.unique_id}.log"
         self.gemini_result_file = f"gemini_result_{self.unique_id}.log"
+        self.gemini_summary_file = f"gemini-summary-{self.unique_id}.txt"
 
     def _generate_gemini_command(self):
         seed = self.params.get("gemini_seed")
@@ -132,6 +133,7 @@ class GeminiStressThread(DockerBasedStressThread):
                 --profiling-port=6060 \
                 --bind=0.0.0.0:2112 \
                 --outfile=/{self.gemini_result_file} \
+                --summary-file=/{self.gemini_summary_file} \
                 --replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}}\" \
                 --oracle-replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}}\" "
 
@@ -171,6 +173,7 @@ class GeminiStressThread(DockerBasedStressThread):
             self.gemini_result_file,
             self.gemini_test_statements_file,
             self.gemini_oracle_statements_file,
+            self.gemini_summary_file,
         ]:
             loader.remoter.run(f"touch $HOME/{file_name}", ignore_status=True, verbose=False)
 
@@ -186,7 +189,8 @@ class GeminiStressThread(DockerBasedStressThread):
             f"--label shell_marker={self.shell_marker} "
             f"-v $HOME/{self.gemini_result_file}:/{self.gemini_result_file} "
             f"-v $HOME/{self.gemini_test_statements_file}:/{self.gemini_test_statements_file} "
-            f"-v $HOME/{self.gemini_oracle_statements_file}:/{self.gemini_oracle_statements_file} ",
+            f"-v $HOME/{self.gemini_oracle_statements_file}:/{self.gemini_oracle_statements_file} "
+            f"-v $HOME/{self.gemini_summary_file}:/{self.gemini_summary_file} ",
         )
 
         if not os.path.exists(loader.logdir):
@@ -248,8 +252,10 @@ class GeminiStressThread(DockerBasedStressThread):
             local_gemini_oracle_statements_file = os.path.join(
                 docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file)
             )
+            local_gemini_summary_file = os.path.join(docker.node.logdir, os.path.basename(self.gemini_summary_file))
             docker.receive_files(src=self.gemini_test_statements_file, dst=local_gemini_test_statements_file)
             docker.receive_files(src=self.gemini_oracle_statements_file, dst=local_gemini_oracle_statements_file)
+            docker.receive_files(src=self.gemini_summary_file, dst=local_gemini_summary_file)
 
         return docker, result, local_gemini_result_file
 
