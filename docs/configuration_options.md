@@ -3984,15 +3984,6 @@ Path to the email report template used for sending argus email reports
 **type:** str (appendable)
 
 
-## **enable_argus_email_report** / SCT_ENABLE_ARGUS_REPORT
-
-Whether or not to send email using argus instead of SCT.
-
-**default:** N/A
-
-**type:** bool
-
-
 ## **c_s_driver_version** / SCT_C_S_DRIVER_VERSION
 
 cassandra-stress driver version to use: 3|4|random

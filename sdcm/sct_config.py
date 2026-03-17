@@ -2824,12 +2824,6 @@ class SCTConfiguration(dict):
             help="Path to the email report template used for sending argus email reports",
         ),
         dict(
-            name="enable_argus_email_report",
-            env="SCT_ENABLE_ARGUS_REPORT",
-            type=bool,
-            help="Whether or not to send email using argus instead of SCT.",
-        ),
-        dict(
             name="c_s_driver_version",
             env="SCT_C_S_DRIVER_VERSION",
             type=str,
