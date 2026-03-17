@@ -24,6 +24,10 @@ uv sync
 > the compatibility issue (e.g. "fastavro 1.11.1 fails to build on Python 3.14; tests were run
 > locally with Python 3.12") so maintainers can decide whether to update the pinned version.
 
+### Claude Code Worktrees
+
+For details on how Claude Code worktree agents work with SCT (venv setup, hooks, complementary tools), see [docs/claude-worktree-workflow.md](docs/claude-worktree-workflow.md).
+
 ### Using Hydra (Docker/Podman container environment)
 ```bash
 # Install hydra

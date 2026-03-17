@@ -16,7 +16,8 @@ if [[ "$file" != */unit_tests/test_* ]]; then
 fi
 
 # Run tests, capture all output
-output=$(uv run python -m pytest "$file" -x -q --no-header --tb=short -n0 2>&1)
+# Use --project to ensure correct venv in worktree agents
+output=$(uv run --project "${CLAUDE_PROJECT_DIR:-.}" python -m pytest "$file" -x -q --no-header --tb=short -n0 2>&1)
 exit_code=$?
 
 if [ $exit_code -ne 0 ]; then
