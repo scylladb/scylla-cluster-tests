@@ -4,7 +4,6 @@ import json
 from collections import defaultdict
 from typing import Any
 
-# from sdcm.send_email import Email
 from performance_regression_test import PerformanceRegressionTest
 
 
