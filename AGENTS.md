@@ -425,6 +425,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | writing-plans | Use when asked to generate an implementation plan, draft a plan, or design a phased feature rollout for SCT. | `skills/writing-plans/SKILL.md` |
 | writing-unit-tests | Guides writing and debugging unit tests for SCT using pytest. Use when creating test files in unit_tests/, adding test cases, or mocking external services. | `skills/writing-unit-tests/SKILL.md` |
 | writing-integration-tests | Guides writing integration tests that interact with real external services. Use when creating tests requiring Docker, AWS, GCE, Azure, OCI, or Kubernetes backends. | `skills/writing-integration-tests/SKILL.md` |
+| commit-summary | Generate weekly commit summary reports for the SCT repository | `skills/commit-summary/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 
