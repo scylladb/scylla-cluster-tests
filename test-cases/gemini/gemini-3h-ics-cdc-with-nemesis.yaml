@@ -24,4 +24,3 @@ gemini_log_cql_statements: true
 stress_cdclog_reader_cmd: "cdc-stressor -duration 215m -stream-query-round-duration 30s"
 
 db_type: mixed_scylla
-instance_type_db_oracle: 'i8ge.2xlarge'
