@@ -989,6 +989,7 @@ class LoaderLogCollector(LogCollector):
         FileLog(name="*gemini-l*.log", search_locally=True),
         FileLog(name="*gemini_*_statements_*.log", search_locally=True),
         FileLog(name="gemini_result*.log", search_locally=True),
+        FileLog(name="gemini-summary-*.txt", search_locally=True),
         FileLog(name="cdclogreader*.log", search_locally=True),
         FileLog(name="scylla-bench-*.log", search_locally=True),
         FileLog(name="kcl-l*.log", search_locally=True),
