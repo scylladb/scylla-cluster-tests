@@ -71,6 +71,7 @@ def parse_size_to_bytes(size_str: str) -> int:
         bytes_ = int(value)
     return bytes_
 
+
 MANAGER_REPO_PATTERNS = {
     "rhel": "https://downloads.scylladb.com/rpm/centos/scylladb-manager-{version}.repo",
     "debian": "https://downloads.scylladb.com/deb/debian/scylladb-manager-{version}.list",
