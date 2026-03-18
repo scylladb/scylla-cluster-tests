@@ -19,6 +19,7 @@ from collections import namedtuple
 import pytest
 
 from sdcm import sct_config
+from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_latest_scylla_release
 from sdcm.utils.aws_utils import get_ssm_ami
 
@@ -1011,3 +1012,41 @@ def test_39_billing_project_staging_not_set(monkeypatch):
     conf = sct_config.SCTConfiguration()
     # billing_project should not be set to "staging"
     assert conf.get("billing_project") != "staging"
+
+
+class TestCommonTags:
+    """Tests for TestConfig.common_tags() method."""
+
+    def test_jenkins_job_tag_from_build_tag(self, monkeypatch):
+        """Test that JenkinsJobTag is set from BUILD_TAG."""
+        monkeypatch.setenv("BUILD_TAG", "jenkins-scylla-master-tier1-test-128")
+        monkeypatch.setenv("JOB_NAME", "scylla-master/test")
+        tags = TestConfig.common_tags()
+        assert tags["JenkinsJobTag"] == "jenkins-scylla-master-tier1-test-128"
+
+    @pytest.mark.parametrize(
+        "build_tag, expected_jenkins_job",
+        [
+            ("jenkins-scylla-master-tier1-longevity-12h-test-128", "jenkins-scylla-master-tier1-longevity-12h-test"),
+            ("jenkins-scylla-master-test-256", "jenkins-scylla-master-test"),
+            ("jenkins-job-name-1", "jenkins-job-name"),
+            # Edge case: trailing segment is not digits - remains unchanged
+            ("jenkins-no-trailing-dash", "jenkins-no-trailing-dash"),
+            ("jenkins", "jenkins"),
+            ("-42", ""),
+        ],
+    )
+    def test_jenkins_job_derived_from_build_tag(self, monkeypatch, build_tag, expected_jenkins_job):
+        """Test that JenkinsJob is derived from BUILD_TAG by stripping trailing dash+digits."""
+        monkeypatch.setenv("BUILD_TAG", build_tag)
+        monkeypatch.setenv("JOB_NAME", "scylla-master/test")
+        tags = TestConfig.common_tags()
+        assert tags["JenkinsJob"] == expected_jenkins_job
+
+    def test_jenkins_job_not_set_without_build_tag(self, monkeypatch):
+        """Test that JenkinsJob is not set when BUILD_TAG is not present."""
+        monkeypatch.delenv("BUILD_TAG", raising=False)
+        monkeypatch.setenv("JOB_NAME", "scylla-master/test")
+        tags = TestConfig.common_tags()
+        assert "JenkinsJobTag" not in tags
+        assert "JenkinsJob" not in tags
