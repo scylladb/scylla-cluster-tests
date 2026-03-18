@@ -12,6 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 import json
 import logging
+import os
 
 from packaging.version import Version
 
@@ -56,6 +57,7 @@ def wait_cloud_init_completes(remoter: RemoteCmdRunnerBase, instance: VmInstance
             LOGGER.error("Some errors during cloud-init %s", status)
             errors_found = True
     scripts_errors_found = log_user_data_scripts_errors(remoter=remoter)
+    collect_cloud_init_scripts(remoter=remoter, logdir=getattr(instance, "logdir", None))
     if errors_found or scripts_errors_found:
         raise CloudInitError("Errors during cloud-init provisioning phase. See logs for errors.")
 
@@ -77,3 +79,25 @@ def log_user_data_scripts_errors(remoter: RemoteCmdRunnerBase) -> bool:
         LOGGER.error("User data scripts were not executed at all.")
         errors_found = True
     return errors_found
+
+
+def collect_cloud_init_scripts(remoter: RemoteCmdRunnerBase, logdir: str | None) -> None:
+    """Copy cloud-init scripts from /var/lib/sct/cloud-init/ to the node's logdir for investigation.
+
+    Args:
+        remoter: Remote command runner for the node.
+        logdir: Local log directory for the node. If None, collection is skipped.
+    """
+    if not logdir:
+        LOGGER.debug("No logdir available, skipping cloud-init scripts collection.")
+        return
+    local_dst = os.path.join(logdir, "cloud-init-scripts")
+    os.makedirs(local_dst, exist_ok=True)
+    try:
+        remoter.receive_files(
+            src=f"{CLOUD_INIT_SCRIPTS_PATH}/*",
+            dst=local_dst,
+        )
+        LOGGER.info("Cloud-init scripts collected to %s", local_dst)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Failed to collect cloud-init scripts: %s", exc)

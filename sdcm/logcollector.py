@@ -41,6 +41,7 @@ from sdcm.paths import (
 from sdcm.provision import provisioner_factory
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import ProvisionerError
+from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.db_stats import PrometheusDBStats
@@ -909,6 +910,12 @@ class ScyllaLogCollector(LogCollector):
         CommandLog(name="scylla_doctor.vitals.json", command="cat *.vitals.json"),
         CommandLog(name="cloud-init-output.log", command="cat /var/log/cloud-init-output.log"),
         CommandLog(name="cloud-init.log", command="cat /var/log/cloud-init.log"),
+        CommandLog(
+            name="cloud-init-scripts.log",
+            command=f"ls -la {CLOUD_INIT_SCRIPTS_PATH}/ 2>/dev/null; "
+            f"for f in {CLOUD_INIT_SCRIPTS_PATH}/*; do "
+            "echo '=== '\"$f\"' ==='; cat \"$f\" 2>/dev/null; done",
+        ),
     ]
 
     cmd = "test -f /etc/scylla/ssl_conf/{0} && cat /etc/scylla/ssl_conf/{0}"
