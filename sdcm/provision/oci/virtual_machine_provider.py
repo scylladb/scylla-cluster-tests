@@ -19,6 +19,7 @@ from typing import Dict, List, Optional
 import oci
 from oci.core.models import (
     LaunchInstanceDetails,
+    LaunchInstanceShapeConfigDetails,
     CreateVnicDetails,
     Instance,
     PreemptionAction,
@@ -136,6 +137,7 @@ class VirtualMachineProvider:
                     display_name=vol_name,
                     size_in_gbs=disk_size,
                     vpus_per_gb=vpus_per_gb,
+                    defined_tags={TAG_NAMESPACE: self._get_tags(definition)},
                 )
                 try:
                     vol = self._bs_client.create_volume(vol_details).data
@@ -270,13 +272,14 @@ class VirtualMachineProvider:
             final_user_data = builder.build_mime_multipart_user_data()
             metadata["user_data"] = base64.b64encode(final_user_data.encode("utf-8")).decode("utf-8")
         shape_type, shape_config = self._get_shape_config(definition)
+        shape_config_obj = LaunchInstanceShapeConfigDetails(**shape_config) if shape_config else None
         launch_details = {
             "compartment_id": self._compartment_id,
             "availability_domain": self._get_availability_domain(definition),
             "display_name": definition.name,
             "image_id": definition.image_id,
             "shape": shape_type,
-            "shape_config": shape_config,
+            "shape_config": shape_config_obj,
             "create_vnic_details": CreateVnicDetails(
                 subnet_id=subnet.id,
                 assign_public_ip=definition.use_public_ip,

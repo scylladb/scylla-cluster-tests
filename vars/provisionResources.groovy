@@ -167,6 +167,16 @@ def call(Map params, String region){
         export PYTEST_ADDOPTS="${params.pytest_addopts}"
     fi
 
+    if [[ -n "${params.data_volume_disk_num ? params.data_volume_disk_num : ''}" ]] ; then
+        export SCT_DATA_VOLUME_DISK_NUM="${params.data_volume_disk_num}"
+    fi
+    if [[ -n "${params.data_volume_disk_type ? params.data_volume_disk_type : ''}" ]] ; then
+        export SCT_DATA_VOLUME_DISK_TYPE="${params.data_volume_disk_type}"
+    fi
+    if [[ -n "${params.data_volume_disk_size ? params.data_volume_disk_size : ''}" ]] ; then
+        export SCT_DATA_VOLUME_DISK_SIZE="${params.data_volume_disk_size}"
+    fi
+
     # Handle backend-specific provisioning logic
     if [[ "${params.backend}" == "xcloud" ]] ; then
         echo "Scylla Cloud backend selected: provisioning loader nodes only on ${params.xcloud_provider} cloud provider"

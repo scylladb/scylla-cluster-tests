@@ -356,7 +356,7 @@ def clean_aws_kms_aliases(ctx, regions, time_delta_h, dry_run):
     aws_kms.cleanup_old_aliases(**kwargs)
 
 
-@cli.command("clean-resources", help="clean tagged instances in both clouds (AWS/GCE)")
+@cli.command("clean-resources", help="clean tagged instances. Supported clouds: AWS|Azure|GCE|OCI")
 @click.option("--post-behavior", is_flag=True, default=False, help="clean all resources according to post behavior")
 @click.option("--user", type=str, help="user name to filter instances by")
 @click.option("--billing-project", type=str, help="billing project to filter instances by")
@@ -414,6 +414,7 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
         os.environ["SCT_REGION_NAME"] = os.environ.get("SCT_REGION_NAME", "")
         os.environ["SCT_GCE_DATACENTER"] = os.environ.get("SCT_GCE_DATACENTER", "")
         os.environ["SCT_AZURE_REGION_NAME"] = os.environ.get("SCT_AZURE_REGION_NAME", "")
+        os.environ["SCT_OCI_REGION_NAME"] = os.environ.get("SCT_OCI_REGION_NAME", "")
 
     if not post_behavior and user and not test_id and not logdir and not billing_project:
         click.echo(f"Clean all resources belong to user `{user}'")

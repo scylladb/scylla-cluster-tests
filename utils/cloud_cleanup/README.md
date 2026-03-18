@@ -13,6 +13,7 @@ utils/cloud_cleanup/
 ├── aws/          # AWS EC2 instances and resources
 ├── azure/        # Azure virtual machines and resources
 ├── gce/          # GCE instances and resources
+├── oci/          # OCI instances and block volumes
 ├── k8s_eks/      # AWS EKS clusters and associated resources
 ├── k8s_gke/      # GCP GKE clusters and associated resources
 └── xcloud/       # ScyllaDB Cloud clusters
@@ -80,6 +81,10 @@ Each cleanup script handles platform-specific resources:
 - Compute instances
 - Persistent disks
 - Static IPs
+
+**OCI (`oci/`):**
+- Compute instances
+- Orphan block volumes created for non-dense shapes
 
 **EKS (`k8s_eks/`):**
 - EKS clusters

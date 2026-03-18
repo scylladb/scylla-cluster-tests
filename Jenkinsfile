@@ -26,12 +26,13 @@ def createRunConfiguration(String backend) {
         configuration.azure_region_name = 'eastus'
     } else if (backend == 'oci') {
         configuration.oci_region_name = 'us-ashburn-1'
-        configuration.availability_zone = 'a' // For now quota allows DenseIO shapes only in 'a' AZ/AD
-        configuration.simulated_racks = 3
-        // TODO: use cheaper and not limited by quota non-dense shapes with 'spot' provisioning
-        //       when automatic PD disks deletion gets implemented?
-        configuration.oci_instance_type_db = "VM.DenseIO.E5.Flex:8" // 8 is minimum
-        configuration.provision_type = 'on_demand' // OCI DenseIO instances cannot be of the 'spot' type
+        configuration.availability_zone = 'a,b,c'
+        configuration.simulated_racks = 0
+        configuration.oci_instance_type_db = 'VM.Standard3.Flex:4:32'
+        configuration.data_volume_disk_num = 2
+        configuration.data_volume_disk_type = 'ultra'
+        configuration.data_volume_disk_size = 50
+        configuration.provision_type = 'spot'
         // TODO: set scylla version when we have Scylla releases in OCI
         configuration.scylla_version = ''
         // TODO: unset the image when 'scylla_version' gets specified
