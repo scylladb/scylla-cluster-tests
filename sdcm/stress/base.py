@@ -102,7 +102,7 @@ class DockerBasedStressThread:
 
     def get_results(self):
         results = []
-        timeout = self.hard_timeout + 120
+        timeout = self.hard_timeout + self.shutdown_timeout + 120
         LOGGER.debug(
             "Wait for %d stress tasks results on worker pool of size %d", len(self.results_futures), self.max_workers
         )
