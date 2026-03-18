@@ -87,44 +87,6 @@ def ignore_operation_errors():
 
 
 @contextmanager
-def ignore_topology_change_coordinator_errors():
-    with ExitStack() as stack:
-        if SkipPerIssues(
-            issues=[
-                "https://github.com/scylladb/scylladb/issues/20754",
-                "https://github.com/scylladb/scylladb/issues/20950",
-            ],
-            params=TestConfig().tester_obj().params,
-        ):
-            # @piodul:
-            #
-            #   The upgrade-to-view-build-status-on-raft procedure runs right after the VIEW_BUILD_STATUS_ON_GROUP0
-            #   feature is enabled.  Enabling a cluster feature on raft requires all nodes to be alive.  Most likely
-            #   the node being restarted wasn't yet seen as such, but the upgrade procedure started anyway.
-            #
-            #   The error is not critical.  The topology coordinator node will retry the operation in short intervals
-            #   until it succeeds.  The operation shouldn't have any harmful side effects if it fails, so it's mostly
-            #   bad UX because we can avoid the busywork and error messages by appropriately delaying the moment when
-            #   the operation is executed.
-            #
-            #   Therefore, it is OK to ignore this particular error until a proper fix is merged.
-            stack.enter_context(
-                DbEventsFilter(
-                    db_event=DatabaseLogEvent.DATABASE_ERROR,
-                    line=r".*raft_topology - topology change coordinator fiber got error exceptions::unavailable_exception "
-                    r"\(Cannot achieve consistency level for cl ALL\.",
-                )
-            )
-            stack.enter_context(
-                DbEventsFilter(
-                    db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                    line=r".*raft_topology - drain rpc failed, proceed to fence old writes:.*connection is closed",
-                )
-            )
-        yield
-
-
-@contextmanager
 def ignore_upgrade_schema_errors():
     with ExitStack() as stack:
         stack.enter_context(
@@ -159,7 +121,6 @@ def ignore_upgrade_schema_errors():
                 "(seastar::nested_exception)",
             )
         )
-        stack.enter_context(ignore_topology_change_coordinator_errors())
         yield
 
 
