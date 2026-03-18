@@ -5672,11 +5672,13 @@ class NemesisRunner:
                 # For process paused with SIGSTOP signal, network sockets are still open,
                 # so already running raft barriers could stuck. To avoid that
                 # we need to block scylla ports on target node.
-                if simulate_node_unavailability == node_operations.pause_scylla_with_sigstop:
-                    with node_operations.block_scylla_ports(self.target_node, ports=[7000, 7001]):
+                with ignore_raft_topology_cmd_failing():
+                    if simulate_node_unavailability == node_operations.pause_scylla_with_sigstop:
+                        with node_operations.block_scylla_ports(self.target_node, ports=[7000, 7001]):
+                            working_node.run_nodetool(f"removenode {target_host_id}", retry=0, long_running=True)
+                    else:
                         working_node.run_nodetool(f"removenode {target_host_id}", retry=0, long_running=True)
-                else:
-                    working_node.run_nodetool(f"removenode {target_host_id}", retry=0, long_running=True)
+
                 assert node_operations.is_node_removed_from_cluster(
                     removed_node=self.target_node, verification_node=working_node
                 ), f"Node {self.target_node.name} with host id {target_host_id} was not removed. See log errors"
