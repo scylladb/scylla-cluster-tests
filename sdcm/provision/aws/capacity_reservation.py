@@ -12,7 +12,7 @@
 # Copyright (c) 2024 ScyllaDB
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Tuple
 from collections import defaultdict
 
@@ -212,7 +212,7 @@ class SCTCapacityReservation:
                 AvailabilityZone=availability_zone,
                 InstanceCount=instance_count,
                 EndDateType="limited",
-                EndDate=datetime.utcnow() + timedelta(minutes=duration),
+                EndDate=datetime.now(timezone.utc) + timedelta(minutes=duration),
                 TagSpecifications=[
                     {"ResourceType": "capacity-reservation", "Tags": tags_as_ec2_tags(TestConfig().common_tags())},
                 ],
