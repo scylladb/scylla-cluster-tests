@@ -426,7 +426,7 @@ class SctEventsTests(BaseEventsTest):
                     node="A", line_number=22, line=line_prefix + " this is filtered"
                 ).publish()
 
-            line_prefix = f"{datetime.utcfromtimestamp(time.time() + 1):%Y-%m-%dT%H:%M:%S+00:00}"
+            line_prefix = f"{datetime.fromtimestamp(time.time() + 1, tz=timezone.utc):%Y-%m-%dT%H:%M:%S+00:00}"
             DatabaseLogEvent.NO_SPACE_ERROR().add_info(
                 node="A", line_number=22, line=line_prefix + " : this is not filtered"
             ).publish()
