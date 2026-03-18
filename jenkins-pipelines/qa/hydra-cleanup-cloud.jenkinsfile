@@ -80,6 +80,17 @@ pipeline {
                 }
             }
         }
+        stage('Clean OCI') {
+            steps {
+                catchError(stageResult: 'FAILURE') {
+                   timeout(time: 15, unit: 'MINUTES') {
+                        sctScript """
+                            ./docker/env/hydra.sh python -m utils.cloud_cleanup.oci.clean_oci ${params.dryRun ? '--dry-run' : ''}
+                        """
+                   }
+                }
+            }
+        }
         stage('Clean Scylla Cloud') {
             steps {
                 catchError(stageResult: 'FAILURE') {

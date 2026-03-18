@@ -328,6 +328,63 @@ def filter_oci_by_tags(tags_dict: dict, instances: list[Instance], tag_namespace
     return filtered_instances
 
 
+def oci_keep_action(resource_tags: dict) -> str:
+    """Return normalized keep action for OCI resource tags.
+
+    Empty keep_action is treated as "terminate" for backward compatibility.
+    """
+    keep_action = (resource_tags.get("keep_action") or "terminate").lower()
+    return keep_action if keep_action else "terminate"
+
+
+def is_oci_volume_attached_conflict(exc: Exception) -> bool:
+    """Return True when OCI rejects delete due to an attached volume."""
+    if not isinstance(exc, ServiceError):
+        return False
+    return exc.status == 409 and exc.code == "Conflict" and "attached" in (exc.message or "").lower()
+
+
+def delete_oci_volume_with_retry(
+    block_storage_client,
+    volume_id: str,
+    volume_name: str,
+    region: str,
+    logger: logging.Logger,
+    max_attempts: int = 60,
+    retry_wait_sec: int = 5,
+) -> None:
+    """Delete OCI block volume with retries for transient attach conflicts."""
+    for attempt in range(1, max_attempts + 1):
+        try:
+            block_storage_client.delete_volume(volume_id)
+            logger.info("Deleted OCI block volume %s (id: %s)", volume_name, volume_id)
+            return
+        except Exception as exc:  # noqa: BLE001
+            if is_oci_volume_attached_conflict(exc) and attempt < max_attempts:
+                logger.info(
+                    "OCI block volume %s (id: %s) in region %s is still attached, retrying in %ss (%d/%d)",
+                    volume_name,
+                    volume_id,
+                    region,
+                    retry_wait_sec,
+                    attempt,
+                    max_attempts,
+                )
+                time.sleep(retry_wait_sec)
+                continue
+            if is_oci_volume_attached_conflict(exc):
+                logger.warning(
+                    "Skipping OCI block volume %s (id: %s) in region %s: still attached after %d attempts",
+                    volume_name,
+                    volume_id,
+                    region,
+                    max_attempts,
+                )
+                return
+            logger.error("Failed to delete OCI block volume %s (id: %s): %s", volume_name, volume_id, exc)
+            return
+
+
 def oci_public_addresses(
     instance: Instance, compute_client: ComputeClient, network_client: VirtualNetworkClient
 ) -> list[str]:
