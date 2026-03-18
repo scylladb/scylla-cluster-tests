@@ -167,7 +167,10 @@ class TestName(unittest.TestCase):
         self.assertTrue(name)
 
 
-@patch("sdcm.utils.docker_utils.ContainerManager.default_docker_client", DummyDockerClient())
+_dummy_docker_client = DummyDockerClient()
+
+
+@patch("sdcm.utils.docker_utils._default_docker_client", new=lambda: _dummy_docker_client)
 class TestContainerManager(unittest.TestCase):
     def setUp(self) -> None:
         self.node = DummyNode()
@@ -175,9 +178,7 @@ class TestContainerManager(unittest.TestCase):
 
     def test_get_docker_client(self):
         with self.subTest("Default Docker client"):
-            self.assertEqual(
-                ContainerManager.get_docker_client(self.node, "c2"), ContainerManager.default_docker_client
-            )
+            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2"), _dummy_docker_client)
 
         with self.subTest("Docker client without name argument"):
             self.node.None_docker_client = Mock()
@@ -190,9 +191,7 @@ class TestContainerManager(unittest.TestCase):
 
         with self.subTest("Node-wide Docker client (None)"):
             self.node.docker_client = None
-            self.assertEqual(
-                ContainerManager.get_docker_client(self.node, "c2"), ContainerManager.default_docker_client
-            )
+            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2"), _dummy_docker_client)
 
         with self.subTest("Node-wide Docker client (not callable)"):
             self.node.docker_client = sentinel.node_property_docker_client
@@ -200,9 +199,7 @@ class TestContainerManager(unittest.TestCase):
 
         with self.subTest("Node-wide Docker client (callable, return None)"):
             self.node.docker_client = Mock(return_value=None)
-            self.assertEqual(
-                ContainerManager.get_docker_client(self.node, "c2"), ContainerManager.default_docker_client
-            )
+            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2"), _dummy_docker_client)
             self.node.docker_client.assert_called_once_with()
 
         with self.subTest("Node-wide Docker client (callable)"):
@@ -246,9 +243,7 @@ class TestContainerManager(unittest.TestCase):
         with self.subTest("Docker client per container family (callable, with member)"):
             self.node.docker_client = Mock(return_value=None)
             self.node.c2_docker_client = Mock(return_value=None)
-            self.assertEqual(
-                ContainerManager.get_docker_client(self.node, "c2:blah"), ContainerManager.default_docker_client
-            )
+            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2:blah"), _dummy_docker_client)
             self.node.c2_docker_client.assert_called_once_with("blah")
             self.node.docker_client.assert_called_once_with()
 
@@ -752,7 +747,7 @@ class TestContainerManager(unittest.TestCase):
 
         r_c1.remove, r_c2.remove, nr_c.remove = Mock(), Mock(), Mock()
         # temporarily patch dummy default_docker_client.containers.list to be able to filter containers by labels
-        with patch.object(ContainerManager.default_docker_client.containers, "list", new=stub_list):
+        with patch.object(_dummy_docker_client.containers, "list", new=stub_list):
             ContainerManager.destroy_unregistered_containers(node)
 
         with self.subTest("Not-registered labeled container destroyed"):
