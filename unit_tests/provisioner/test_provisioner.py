@@ -89,7 +89,7 @@ def provisioner(backend, provisioner_params):
 
 
 def test_can_provision_scylla_vm(region, definition, provisioner, backend, provisioner_params):
-    creation_time = datetime.utcnow().replace(microsecond=0).replace(tzinfo=timezone.utc)
+    creation_time = datetime.now(timezone.utc).replace(microsecond=0)
     v_m = provisioner.get_or_create_instances(definitions=[definition])[0]
     assert v_m.name == definition.name
     assert v_m.region == region

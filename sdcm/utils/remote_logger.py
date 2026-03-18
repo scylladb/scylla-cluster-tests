@@ -20,7 +20,7 @@ import logging
 import subprocess
 from abc import abstractmethod, ABCMeta
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import cached_property
 from threading import Lock, Thread, Event as ThreadEvent
 from typing import TYPE_CHECKING
@@ -94,7 +94,7 @@ class SSHLoggerBase(LoggerBase):
         while not self._termination_event.is_set():
             if self._is_ready_to_retrieve():
                 self._retrieve(since=read_from_timestamp)
-                read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                read_from_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             else:
                 time.sleep(self.READINESS_CHECK_DELAY)
 
@@ -254,7 +254,7 @@ class HDRHistogramFileLogger(SSHLoggerBase):
                     self._target_log_file,
                     file_size,
                 )
-                read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                read_from_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             else:
                 LOGGER.debug("Remoter is not ready. %s -> %s", self._remote_log_file, self._target_log_file)
             self._termination_event.wait(self.READINESS_CHECK_DELAY)
