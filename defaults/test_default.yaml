@@ -56,6 +56,7 @@ post_behavior_loader_nodes: "destroy"
 post_behavior_monitor_nodes: "destroy"
 post_behavior_k8s_cluster: "destroy"
 post_behavior_vector_store_nodes: "destroy"
+post_behavior_emr_cluster: "destroy"
 
 cloud_credentials_path: ''
 use_cloud_manager: false

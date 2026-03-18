@@ -1744,6 +1744,121 @@ Kafka connectors to use
 **type:** list[sdcm.kafka.kafka_config.SctKafkaConfiguration]
 
 
+## **emr_release_label** / SCT_EMR_RELEASE_LABEL
+
+EMR release version (e.g., 'emr-7.8.0'). When set, an EMR cluster is provisioned alongside the Scylla cluster.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **emr_instance_type_master** / SCT_EMR_INSTANCE_TYPE_MASTER
+
+Instance type for EMR master node (e.g., 'm5.xlarge')
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **emr_instance_type_core** / SCT_EMR_INSTANCE_TYPE_CORE
+
+Instance type for EMR core nodes
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **emr_instance_count_core** / SCT_EMR_INSTANCE_COUNT_CORE
+
+Number of EMR core nodes
+
+**default:** N/A
+
+**type:** int
+
+
+## **emr_instance_type_task** / SCT_EMR_INSTANCE_TYPE_TASK
+
+Instance type for EMR task nodes (optional, uses Spot instances)
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **emr_instance_count_task** / SCT_EMR_INSTANCE_COUNT_TASK
+
+Number of EMR task nodes
+
+**default:** N/A
+
+**type:** int
+
+
+## **emr_spot_bid_percentage** / SCT_EMR_SPOT_BID_PERCENTAGE
+
+Max Spot price as percentage of On-Demand for EMR task nodes (default: 100)
+
+**default:** N/A
+
+**type:** int
+
+
+## **emr_applications** / SCT_EMR_APPLICATIONS
+
+List of EMR applications to install (default: ['Spark'])
+
+**default:** N/A
+
+**type:** list
+
+
+## **emr_spark_migrator_jar_path** / SCT_EMR_SPARK_MIGRATOR_JAR_PATH
+
+S3 path or local path to the spark-migrator JAR file
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **emr_spark_migrator_release** / SCT_EMR_SPARK_MIGRATOR_RELEASE
+
+scylla-migrator release tag (e.g., 'v1.1.2'). When set, JAR is auto-downloaded from GitHub releases and uploaded to S3. Takes precedence over emr_spark_migrator_jar_path.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **emr_log_uri** / SCT_EMR_LOG_URI
+
+S3 URI for EMR cluster logs (e.g., 's3://sct-emr-spark-migrator-{region}/logs/')
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **emr_keep_alive** / SCT_EMR_KEEP_ALIVE
+
+Whether EMR cluster stays alive after job completion (default: true for reuse during testing)
+
+**default:** N/A
+
+**type:** bool
+
+
 ## **run_scylla_doctor** / SCT_RUN_SCYLLA_DOCTOR
 
 Flag to run Scylla Doctor tool
@@ -3627,6 +3742,15 @@ Failure/post test behavior, i.e. what to do with the k8s cluster at the end of t
 ## **post_behavior_vector_store_nodes** / SCT_POST_BEHAVIOR_VECTOR_STORE_NODES
 
 Failure/post test behavior, i.e. what to do with the vector store cloud instances at the end of the test.<br><br>'destroy' - Destroy instances and credentials (default)<br>'keep' - Keep instances running and leave credentials alone<br>'keep-on-failure' - Keep instances if testrun failed
+
+**default:** destroy
+
+**type:** Literal['destroy', 'keep', 'keep-on-failure']
+
+
+## **post_behavior_emr_cluster** / SCT_POST_BEHAVIOR_EMR_CLUSTER
+
+Failure/post test behavior, i.e. what to do with the EMR cluster at the end of the test.<br><br>'destroy' - Destroy EMR cluster (default)<br>'keep' - Keep EMR cluster running<br>'keep-on-failure' - Keep EMR cluster if testrun failed
 
 **default:** destroy
 

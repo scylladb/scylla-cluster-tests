@@ -1047,3 +1047,24 @@ def test_39_billing_project_staging_not_set(monkeypatch):
     conf = sct_config.SCTConfiguration()
     # billing_project should not be set to "staging"
     assert conf.get("billing_project") != "staging"
+
+
+def test_40_aws_emr_defaults_loaded(conf):
+    """Test that EMR defaults from aws_emr_config.yaml are loaded for AWS backend."""
+    expected_keys = [
+        "emr_release_label",
+        "emr_instance_type_master",
+        "emr_instance_type_core",
+        "emr_instance_count_core",
+        "emr_applications",
+    ]
+    dumped = conf.dump_config()
+    for key in expected_keys:
+        assert key in dumped
+
+    assert conf.get("emr_release_label") == ""
+    assert conf.get("emr_instance_type_master") == "m5.xlarge"
+    assert conf.get("emr_instance_type_core") == "m5.xlarge"
+    assert conf.get("emr_instance_count_core") == 2
+    assert conf.get("emr_applications") == ["Spark"]
+    assert conf.get("emr_keep_alive") is True

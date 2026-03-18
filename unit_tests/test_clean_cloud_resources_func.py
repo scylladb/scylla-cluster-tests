@@ -229,6 +229,7 @@ class CleanCloudResourcesTest(unittest.TestCase):
         "sdcm.utils.resources_cleanup.clean_aws_kms_alias",
         "sdcm.utils.resources_cleanup.SCTCapacityReservation",
         "sdcm.utils.resources_cleanup.SCTDedicatedHosts",
+        "sdcm.utils.resources_cleanup.clean_emr_clusters",
     )
 
     @pytest.fixture(autouse=True)

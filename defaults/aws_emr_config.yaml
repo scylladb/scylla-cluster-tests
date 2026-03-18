@@ -1,0 +1,13 @@
+emr_release_label: ''
+emr_instance_type_master: 'm5.xlarge'
+emr_instance_type_core: 'm5.xlarge'
+emr_instance_count_core: 2
+emr_instance_type_task: ''
+emr_instance_count_task: 0
+emr_spot_bid_percentage: 100
+emr_applications:
+  - 'Spark'
+emr_spark_migrator_jar_path: ''
+emr_spark_migrator_release: ''
+emr_log_uri: ''
+emr_keep_alive: true

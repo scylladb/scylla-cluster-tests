@@ -39,6 +39,8 @@ class AwsRegion:
     SCT_SSH_GROUP_NAME = "SCT-ssh-sg"
     SCT_SUBNET_PER_AZ = 2  # how many subnets to configure in each region.
     SCT_NODES_ROLE_ARN = "qa-scylla-manager-backup-role"
+    EMR_SERVICE_ROLE_NAME = "EMR_DefaultRole"
+    EMR_EC2_INSTANCE_PROFILE_NAME = "EMR_EC2_DefaultRole"
 
     def __init__(self, region_name):
         self.region_name = region_name
@@ -733,6 +735,85 @@ class AwsRegion:
             LOGGER.debug(response)
         except botocore.exceptions.ClientError as e:
             LOGGER.error(f"Error updating Default Host Management Configuration: {e}")
+
+    @property
+    def emr_service_role(self):
+        """Check if the EMR_DefaultRole IAM role exists."""
+        iam_client = boto3.client("iam", region_name=self.region_name)
+        try:
+            response = iam_client.get_role(RoleName=self.EMR_SERVICE_ROLE_NAME)
+            return response["Role"]
+        except botocore.exceptions.ClientError as ex:
+            if "NoSuchEntity" in str(ex):
+                return None
+            raise
+
+    @property
+    def emr_ec2_instance_profile(self):
+        """Check if the EMR_EC2_DefaultRole instance profile exists."""
+        iam_client = boto3.client("iam", region_name=self.region_name)
+        try:
+            response = iam_client.get_instance_profile(InstanceProfileName=self.EMR_EC2_INSTANCE_PROFILE_NAME)
+            return response["InstanceProfile"]
+        except botocore.exceptions.ClientError as ex:
+            if "NoSuchEntity" in str(ex):
+                return None
+            raise
+
+    def ensure_emr_roles(self):
+        """Create default EMR IAM roles if they don't exist.
+
+        Creates EMR_DefaultRole (service role) and EMR_EC2_DefaultRole (instance profile)
+        with the standard AWS-managed policies required for EMR cluster operation.
+        """
+        iam_client = boto3.client("iam", region_name=self.region_name)
+
+        if not self.emr_service_role:
+            LOGGER.info("Creating EMR service role '%s'...", self.EMR_SERVICE_ROLE_NAME)
+            emr_trust_policy = (
+                '{"Version":"2012-10-17","Statement":[{"Effect":"Allow",'
+                '"Principal":{"Service":"elasticmapreduce.amazonaws.com"},'
+                '"Action":"sts:AssumeRole"}]}'
+            )
+            iam_client.create_role(
+                RoleName=self.EMR_SERVICE_ROLE_NAME,
+                AssumeRolePolicyDocument=emr_trust_policy,
+                Description="Default role for EMR service",
+            )
+            iam_client.attach_role_policy(
+                RoleName=self.EMR_SERVICE_ROLE_NAME,
+                PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonEMRServicePolicy_v2",
+            )
+            LOGGER.info("EMR service role created.")
+        else:
+            LOGGER.debug("EMR service role '%s' already exists.", self.EMR_SERVICE_ROLE_NAME)
+
+        if not self.emr_ec2_instance_profile:
+            LOGGER.info("Creating EMR EC2 instance profile '%s'...", self.EMR_EC2_INSTANCE_PROFILE_NAME)
+            ec2_trust_policy = (
+                '{"Version":"2012-10-17","Statement":[{"Effect":"Allow",'
+                '"Principal":{"Service":"ec2.amazonaws.com"},'
+                '"Action":"sts:AssumeRole"}]}'
+            )
+            iam_client.create_role(
+                RoleName=self.EMR_EC2_INSTANCE_PROFILE_NAME,
+                AssumeRolePolicyDocument=ec2_trust_policy,
+                Description="Default role for EMR EC2 instances",
+            )
+            iam_client.attach_role_policy(
+                RoleName=self.EMR_EC2_INSTANCE_PROFILE_NAME,
+                PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceforEC2Role",
+            )
+            iam_client.create_instance_profile(
+                InstanceProfileName=self.EMR_EC2_INSTANCE_PROFILE_NAME,
+            )
+            iam_client.add_role_to_instance_profile(
+                InstanceProfileName=self.EMR_EC2_INSTANCE_PROFILE_NAME,
+                RoleName=self.EMR_EC2_INSTANCE_PROFILE_NAME,
+            )
+            LOGGER.info("EMR EC2 instance profile created.")
+        else:
+            LOGGER.debug("EMR EC2 instance profile '%s' already exists.", self.EMR_EC2_INSTANCE_PROFILE_NAME)
 
     def configure(self):
         LOGGER.info("Configuring '%s' region...", self.region_name)

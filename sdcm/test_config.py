@@ -46,6 +46,7 @@ class TestConfig(metaclass=Singleton):
     KEEP_ALIVE_MONITOR_NODES = False
     KEEP_ALIVE_VECTOR_STORE_NODES = False
     KEEP_ALIVE_DEDICATED_HOST = False
+    KEEP_ALIVE_EMR_CLUSTER = False
 
     REUSE_CLUSTER = False
     MIXED_CLUSTER = False
@@ -199,6 +200,8 @@ class TestConfig(metaclass=Singleton):
             cls.KEEP_ALIVE_VECTOR_STORE_NODES = bool(val == "keep")
         elif "dedicated_host" in node_type:
             cls.KEEP_ALIVE_DEDICATED_HOST = bool(val == "keep")
+        elif "emr_cluster" in node_type:
+            cls.KEEP_ALIVE_EMR_CLUSTER = bool(val == "keep")
 
     @classmethod
     def should_keep_alive(cls, node_type: Optional[str]) -> bool:  # noqa: PLR0911
@@ -214,6 +217,8 @@ class TestConfig(metaclass=Singleton):
             return cls.KEEP_ALIVE_VECTOR_STORE_NODES
         if "dedicated_host" in node_type:
             return cls.KEEP_ALIVE_DEDICATED_HOST
+        if "emr" in node_type:
+            return cls.KEEP_ALIVE_EMR_CLUSTER
         return False
 
     @classmethod
