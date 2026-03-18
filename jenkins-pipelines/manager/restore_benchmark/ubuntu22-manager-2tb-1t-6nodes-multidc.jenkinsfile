@@ -1,0 +1,23 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+managerPipeline(
+    backend: 'aws',
+    region: 'us-east-1',
+    provision_type: 'on_demand',
+    test_name: 'mgmt_cli_test.ManagerRestoreBenchmarkTests.test_restore_benchmark',
+    test_config: '''["test-cases/manager/manager-backup-restore-set-dataset.yaml", "configurations/object_storage.yaml", "configurations/object_storage_native_method.yaml", "configurations/network_config/all_addresses_ipv6_public.yaml"]''',
+    mgmt_reuse_backup_snapshot_name: '2tb_1t_twcs_2025_4_multidc',
+
+    extra_environment_variables: '''SCT_MGMT_SKIP_POST_RESTORE_STRESS_READ=true
+SCT_MGMT_RESTORE_EXTRA_PARAMS=--batch-size 1000
+SCT_INSTANCE_TYPE_DB=i4i.4xlarge
+SCT_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+SCT_N_DB_NODES=3 3
+SCT_N_LOADERS=2 2
+SCT_SIMULATED_RACKS=0
+SCT_AVAILABILITY_ZONE=a,b,c
+SCT_REGION_AWARE_LOADER=true'''
+)
