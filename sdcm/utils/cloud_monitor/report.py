@@ -15,12 +15,11 @@ import os
 import tempfile
 from abc import abstractmethod
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from copy import deepcopy
 
 import jinja2
-import pytz
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.cloud_monitor.resources import CLOUD_PROVIDERS
@@ -277,22 +276,22 @@ class InstancesTimeDistributionReport(BaseReport, metaclass=abc.ABCMeta):
     @staticmethod
     def _is_older_than_3days(create_time):
         return (
-            pytz.utc.localize(datetime.utcnow() - timedelta(days=3))
+            datetime.now(timezone.utc) - timedelta(days=3)
             > create_time
-            > pytz.utc.localize(datetime.utcnow() - timedelta(days=5))
+            > datetime.now(timezone.utc) - timedelta(days=5)
         )
 
     @staticmethod
     def _is_older_than_5days(create_time):
         return (
-            pytz.utc.localize(datetime.utcnow() - timedelta(days=5))
+            datetime.now(timezone.utc) - timedelta(days=5)
             > create_time
-            > pytz.utc.localize(datetime.utcnow() - timedelta(days=7))
+            > datetime.now(timezone.utc) - timedelta(days=7)
         )
 
     @staticmethod
     def _is_older_than_7days(create_time):
-        return create_time < pytz.utc.localize(datetime.utcnow() - timedelta(days=7))
+        return create_time < datetime.now(timezone.utc) - timedelta(days=7)
 
     @abstractmethod
     def _is_user_be_skipped(self, instance): ...

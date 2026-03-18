@@ -7096,7 +7096,7 @@ class BaseMonitorSet:
         grafana_extra_dashboards = []
         if "alternator_port" in self.params:
             grafana_extra_dashboards = [AlternatorDashboard()]
-        date_time = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        date_time = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
         screenshot_collector = GrafanaScreenShot(
             name="grafana-screenshot", test_start_time=test_start_time, extra_entities=grafana_extra_dashboards

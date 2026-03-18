@@ -12,7 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 import base64
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import os
 from dataclasses import dataclass, field
@@ -69,7 +69,7 @@ class VirtualMachineProvider:
             tags = definition.tags | {
                 "ssh_user": definition.user_name,
                 "ssh_key": definition.ssh_key.name,
-                "creation_time": datetime.utcnow().isoformat(sep=" ", timespec="seconds"),
+                "creation_time": datetime.now(timezone.utc).isoformat(sep=" ", timespec="seconds"),
             }
             tags = self._replace_null_value_from_tags_with_empty_string(tags)
             params = {
