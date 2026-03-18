@@ -10,6 +10,7 @@ import boto3
 from argus.client.sct.types import Package
 
 from sdcm.cluster import BaseNode
+from sdcm.keystore import KeyStore
 from sdcm.remote.remote_file import remote_file
 from sdcm.test_config import TestConfig
 
@@ -100,6 +101,15 @@ class ScyllaDoctor:
         """Get the configured scylla-doctor version from test config."""
         return self.test_config.tester_obj().params.get("scylla_doctor_version")
 
+    @cached_property
+    def configured_edition(self):
+        """Get the configured scylla-doctor edition from test config.
+
+        Returns:
+            str: 'basic' or 'full'
+        """
+        return self.test_config.tester_obj().params.get("scylla_doctor_edition") or "basic"
+
     def locate_scylla_doctor_package(self, version: str = None):
         """
         Locate scylla-doctor package in S3.
@@ -135,7 +145,86 @@ class ScyllaDoctor:
                 iter(sorted(packages["Contents"], key=lambda package: package["LastModified"], reverse=True)), None
             )
 
+    def locate_full_scylla_doctor_package(self, version: str = None):
+        """Locate scylla-doctor package in the full edition S3 bucket.
+
+        The bucket name and prefix are retrieved from the keystore.
+
+        Args:
+            version: Specific version to locate. If None, returns the latest version.
+
+        Returns:
+            Tuple of (package metadata dict, bucket_name) or (None, None) if not found.
+        """
+        ks = KeyStore()
+        config = ks.get_scylla_doctor_full_bucket_config()
+        bucket_name = config["bucket"]
+        prefix = config["prefix"]
+
+        s3 = boto3.client("s3")
+        packages = s3.list_objects(Bucket=bucket_name, Prefix=prefix, MaxKeys=5000)
+
+        if not packages.get("Contents"):
+            return None, None
+
+        if version:
+            version_prefix = f"{prefix}scylla-doctor-{version}"
+            matching = [p for p in packages["Contents"] if p["Key"].startswith(version_prefix)]
+            if not matching:
+                LOGGER.warning("No full scylla-doctor package found for version %s", version)
+                return None, None
+            package = next(iter(sorted(matching, key=lambda p: p["LastModified"], reverse=True)), None)
+        else:
+            package = next(iter(sorted(packages["Contents"], key=lambda p: p["LastModified"], reverse=True)), None)
+
+        return package, bucket_name
+
+    def download_full_scylla_doctor(self):
+        """Download the full scylla-doctor edition using an S3 pre-signed URL.
+
+        Generates a pre-signed URL on the SCT runner side (which has AWS credentials)
+        and passes it to curl on the remote node, avoiding the need for AWS credentials on the node.
+        """
+        if self.node.remoter.run("curl --version", ignore_status=True).ok:
+            LOGGER.info("curl already installed, proceeding...")
+        else:
+            self.node.install_package("curl")
+
+        version = self.configured_version
+        if version:
+            LOGGER.info("Locating full scylla-doctor version: %s", version)
+            package, bucket_name = self.locate_full_scylla_doctor_package(version=version)
+        else:
+            LOGGER.info("Locating latest full scylla-doctor")
+            package, bucket_name = self.locate_full_scylla_doctor_package()
+
+        if not package:
+            version_msg = f"version {version}" if version else "latest version"
+            raise ScyllaDoctorException(f"Unable to find full scylla-doctor package for {version_msg}")
+
+        package_key = package["Key"]
+        package_filename = package_key.split("/")[-1]
+        LOGGER.info("Downloading full scylla-doctor package %s from bucket %s...", package_filename, bucket_name)
+
+        # Generate a short-lived pre-signed URL (300s) so the remote node can download without AWS creds
+        s3 = boto3.client("s3")
+        presigned_url = s3.generate_presigned_url(
+            ClientMethod="get_object",
+            Params={"Bucket": bucket_name, "Key": package_key},
+            ExpiresIn=300,
+        )
+
+        self.node.remoter.run(f"curl -JL '{presigned_url}' | tar -xvz")
+        self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
+
     def download_scylla_doctor(self):
+        if self.configured_edition == "full":
+            try:
+                self.download_full_scylla_doctor()
+                return
+            except (ScyllaDoctorException, Exception) as exc:  # noqa: BLE001
+                LOGGER.warning("Failed to download full scylla-doctor edition, falling back to basic: %s", exc)
+
         if self.node.remoter.run("curl --version", ignore_status=True).ok:
             LOGGER.info("curl already installed, proceeding...")
         else:

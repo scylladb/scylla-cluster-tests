@@ -203,6 +203,14 @@ class KeyStore:
     def get_cloud_rest_credentials(self, environment: str = "lab"):
         return self.get_json(f"scylla_cloud_sct_api_creds_{environment}.json")
 
+    def get_scylla_doctor_full_bucket_config(self):
+        """Get the S3 bucket config for the full scylla-doctor edition.
+
+        Returns:
+            dict with keys: bucket (str), prefix (str)
+        """
+        return self.get_json("scylla_doctor_full.json")
+
     def get_jira_credentials(self):
         return self.get_json("scylladb_jira.json")
 

@@ -1140,6 +1140,11 @@ class SCTConfiguration(BaseModel):
                 to hardcode the version, or leave empty to use the latest available version. For stability,
                 artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.""",
     )
+    scylla_doctor_edition: String = SctField(
+        description="""Scylla Doctor edition to use. Allowed values: 'basic', 'full'.
+                'basic' fetches the free/open-source edition via HTTP.
+                'full' fetches the full/enterprise edition from a private S3 bucket.""",
+    )
     skip_test_stages: DictOrStr = SctField(
         description="Skip selected stages of a test scenario",
     )
