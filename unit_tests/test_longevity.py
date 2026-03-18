@@ -16,7 +16,7 @@ LongevityTest.__test__ = False
 
 @pytest.fixture(scope="function", autouse=True)
 def fixture_mock_calls():
-    with unittest.mock.patch("sdcm.tester.validate_raft_on_nodes"):
+    with unittest.mock.patch("sdcm.tester.validate_raft_on_nodes"), unittest.mock.patch("sdcm.tester.time.sleep"):
         yield
 
     # clear the events processes registry after each test, so next test would be ableto start it fresh
