@@ -27,7 +27,12 @@ instance_type_loader: 'c6i.4xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: "not disruptive"
+<<<<<<< HEAD
 nemesis_interval: 5
+||||||| parent of 312d8f2d1 (fix(test-cases): disable nemesis during prepare phase for tests with prepare_verify_cmd)
+=======
+nemesis_during_prepare: false
+>>>>>>> 312d8f2d1 (fix(test-cases): disable nemesis during prepare phase for tests with prepare_verify_cmd)
 
 user_prefix: 'longevity-1-rf-test-4h'
 space_node_threshold: 64424
