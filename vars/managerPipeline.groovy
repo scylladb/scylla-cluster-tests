@@ -114,6 +114,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_monitor_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
+            separator(name: 'CLUSTER_REUSE', sectionHeader: 'Cluster Reuse')
+            string(defaultValue: '',
+                   description: 'Test ID of an existing cluster to reuse. When set, provisioning is skipped and the existing cluster is used.',
+                   name: 'reuse_cluster')
             separator(name: 'SSH_CONFIG', sectionHeader: 'SSH Configuration')
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',

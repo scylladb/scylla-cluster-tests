@@ -85,6 +85,11 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_k8s_cluster', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_k8s_cluster')
+            // Cluster Reuse
+            separator(name: 'CLUSTER_REUSE', sectionHeader: 'Cluster Reuse')
+            string(defaultValue: '',
+                   description: 'Test ID of an existing cluster to reuse. When set, provisioning is skipped and the existing cluster is used.',
+                   name: 'reuse_cluster')
             // Performance Test Configuration
             separator(name: 'PERF_TEST', sectionHeader: 'Performance Test Configuration')
             string(defaultValue: "false",

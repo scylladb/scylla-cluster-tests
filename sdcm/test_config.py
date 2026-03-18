@@ -10,7 +10,7 @@ from typing import Optional, Dict, TYPE_CHECKING
 from unittest.mock import MagicMock
 
 from argus.client.sct.client import ArgusSCTClient
-
+from docker.errors import NotFound as DockerNotFound
 
 from sdcm.keystore import KeyStore
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
@@ -285,7 +285,21 @@ class TestConfig(metaclass=Singleton):
         current_logdir.symlink_to(target=docker_logdir)
 
     @classmethod
+    def _remove_stale_logging_container(cls, node, container_type):
+        """Remove an existing logging container left over from a previous test run."""
+        container_name = f"{node.name}-{container_type}"
+        try:
+            container = ContainerManager.default_docker_client.containers.get(container_name)
+            container.remove(v=True, force=True)
+            LOGGER.info(
+                "Removed previous %s container '%s' to recreate with current logdir", container_type, container_name
+            )
+        except DockerNotFound:
+            pass
+
+    @classmethod
     def configure_syslogng(cls, node):
+        cls._remove_stale_logging_container(node, "syslogng")
         ContainerManager.run_container(node, "syslogng", logdir=cls.logdir())
         cls._link_running_syslog_logdir(node.syslogng_log_dir)
         port = node.syslogng_port
@@ -295,6 +309,7 @@ class TestConfig(metaclass=Singleton):
 
     @classmethod
     def configure_vector(cls, node):
+        cls._remove_stale_logging_container(node, "vector")
         ContainerManager.run_container(node, "vector", logdir=cls.logdir())
         cls._link_running_syslog_logdir(node.vector_log_dir)
         port = node.vector_port
