@@ -28,6 +28,7 @@ SCT_TAG_KEYS = (
     "RestoredTestId",
     "CreatedBy",
     "JenkinsJobTag",
+    "JenkinsJob",
     "version",
     "ssh_user",
     "ssh_key",
