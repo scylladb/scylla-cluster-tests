@@ -7,12 +7,27 @@ import com.google.jenkins.plugins.credentials.oauth.GoogleOAuth2ScopeRequirement
 
 def call() {
     def cloudInfo = identifyCloud()
+    def buildTag = env.BUILD_TAG
+    def jenkinsJobTag = buildTag ?: ""
+    def jenkinsJob = deriveJenkinsJob(jenkinsJobTag)
     def tags = [RunByUser: "${getRunningUserId()}",
-                JenkinsJobTag: "${BUILD_TAG}",
+                JenkinsJobTag: jenkinsJobTag,
+                JenkinsJob: jenkinsJob,
                 NodeType: "builder",
                 keep_action: "terminate",
                 billing_project:"${GetBillingProjectTag()}"]
     applyTagsWithCreds(cloudInfo, tags)
+}
+
+private String deriveJenkinsJob(String buildTag) {
+    if (!buildTag) {
+        return ""
+    }
+    def matcher = (buildTag =~ /^(.*)-\d+$/)
+    if (matcher.matches()) {
+        return matcher[0][1]
+    }
+    return buildTag
 }
 
 private String GetBillingProjectTag() {
