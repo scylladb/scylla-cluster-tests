@@ -15,7 +15,7 @@
 
 import argparse
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable
 
 
@@ -36,7 +36,7 @@ def get_vm_creation_time(v_m, resource_group_name):
     except ValueError:
         LOGGER.info("Error parsing creation time tag of VM: %s", creation_time_str)
         # set creation time to now in instance.tags so next time will be processed properly
-        creation_time = datetime.utcnow()
+        creation_time = datetime.now(timezone.utc)
         tags = v_m.tags or {}
         tags.update({"creation_time": creation_time.isoformat(sep=" ", timespec="seconds")})
         try:
@@ -63,7 +63,7 @@ def get_rg_creation_time(resource_group):
         creation_time = datetime.fromisoformat(creation_time_str)
     except ValueError:
         LOGGER.info("Error parsing creation time tag of RG: %s", creation_time_str)
-        creation_time = datetime.utcnow()
+        creation_time = datetime.now(timezone.utc)
         tags = resource_group.tags or {}
         tags.update({"creation_time": creation_time.isoformat(sep=" ", timespec="seconds")})
         resource_group.tags = tags
