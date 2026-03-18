@@ -457,6 +457,7 @@ class Nemesis(NemesisFlags):
         if interval:
             self.interval = interval * 60
         self.log.info("Interval: %s s", self.interval)
+        consecutive_skips = {}
         try:
             while not self.termination_event.is_set():
                 if cycles_count == 0:
@@ -465,9 +466,28 @@ class Nemesis(NemesisFlags):
                 cycles_count -= 1
                 cur_interval = self.interval
                 try:
+<<<<<<< HEAD:sdcm/nemesis.py
                     self.disrupt()
+||||||| parent of be85eefeb (fix(nemesis): stop thread and fail test when nemesis are repeatedly skipped):sdcm/nemesis/__init__.py
+                    self.call_next_nemesis()
+=======
+                    self.call_next_nemesis()
+                    consecutive_skips.clear()
+>>>>>>> be85eefeb (fix(nemesis): stop thread and fail test when nemesis are repeatedly skipped):sdcm/nemesis/__init__.py
                 except (UnsupportedNemesis, MethodVersionNotFound) as exc:
-                    self.log.warning("Skipping unsupported nemesis: %s", exc)
+                    self.log.warning("Skipping unsupported nemesis %s: %s", self.current_disruption, exc)
+                    nemesis_name = self.base_disruption_name
+                    consecutive_skips[nemesis_name] = consecutive_skips.get(nemesis_name, 0) + 1
+                    if len(self.disruptions_list) == 1 and consecutive_skips[nemesis_name] >= 3:
+                        InfoEvent(
+                            message=(
+                                f"Nemesis '{nemesis_name}' has been skipped {consecutive_skips[nemesis_name]} "
+                                f"times in a row. Stopping nemesis thread. Reason: {exc}"
+                            ),
+                            severity=Severity.CRITICAL,
+                        ).publish()
+                        cur_interval = 0
+                        break
                     cur_interval = 0
                 finally:
                     self.node_allocator.unset_running_nemesis_from_all_nodes(self.current_disruption)
