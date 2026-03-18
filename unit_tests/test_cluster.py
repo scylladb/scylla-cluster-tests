@@ -18,7 +18,7 @@ import shutil
 import tempfile
 import time
 import unittest.mock
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 from invoke import Result
@@ -159,7 +159,7 @@ class TestBaseNode:
         InstanceStatusEvent.POWER_OFF().add_info(
             node="A",
             line_number=22,
-            line=f"{datetime.utcfromtimestamp(time.time() + 1):%Y-%m-%dT%H:%M:%S+00:00} "
+            line=f"{datetime.fromtimestamp(time.time() + 1, tz=timezone.utc):%Y-%m-%dT%H:%M:%S+00:00} "
             "longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Powering Off...",
         ).publish()
 
