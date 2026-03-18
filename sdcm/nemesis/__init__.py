@@ -2081,7 +2081,7 @@ class NemesisRunner:
             self.run_repair_manager(ignore_down_hosts=ignore_down_hosts, timeout=timeout)
 
     def repair_nodetool_rebuild(self):
-        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=60):
+        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC):
             self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
 
     def rebuild_or_repair(self, target_node, reason=""):
