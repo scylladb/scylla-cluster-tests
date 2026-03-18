@@ -2063,9 +2063,6 @@ def clean_sct_runners(
             )
 
         if not force and sct_runner_info.keep:
-            if "alive" in str(sct_runner_info.keep):
-                LOGGER.info("Skip %s because `keep' == `alive. No runners have been terminated'", sct_runner_info)
-                continue
             if sct_runner_info.keep_action != "terminate":
                 LOGGER.info("Skip %s because keep_action `keep_action' != `terminate'", sct_runner_info)
                 continue

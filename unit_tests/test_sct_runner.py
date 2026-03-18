@@ -11,12 +11,15 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+
+import pytest
 
 from sdcm.sct_runner import (
     list_sct_runners,
     clean_sct_runners,
+    update_sct_runner_tags,
     SctRunnerInfo,
     AwsSctRunner,
     GceSctRunner,
@@ -286,23 +289,19 @@ class TestCleanSctRunners:
     @patch("sdcm.sct_runner.ssh_run_cmd")
     @patch("sdcm.sct_runner.list_sct_runners")
     def test_clean_sct_runners_respect_keep_tags(self, mock_list_runners, mock_ssh_cmd):
-        """Test keep tags are respected when clean is not forced."""
-        # runner with keep 'alive' tag
-        mock_runner_keep_alive = MagicMock(
-            keep="alive",
+        """Test numeric keep tags are respected when clean is not forced."""
+        # runner with numeric keep value and recent launch (not expired)
+        mock_runner = MagicMock(
+            keep="120",
             keep_action="terminate",
             launch_time=datetime.now(timezone.utc),
-            public_ips=["1.2.3.4"],
-            cloud_provider="aws",
-            instance_name="test-runner-alive",
-            region_az="us-east-1a",
         )
 
-        mock_list_runners.return_value = [mock_runner_keep_alive]
+        mock_list_runners.return_value = [mock_runner]
         mock_ssh_cmd.return_value = MagicMock(stdout="")
 
         clean_sct_runners(test_status="", user="test_user", force=False, dry_run=False)
-        mock_runner_keep_alive.terminate.assert_not_called()
+        mock_runner.terminate.assert_not_called()
 
     @patch("sdcm.sct_runner.list_sct_runners")
     def test_clean_sct_runners_no_runners_found(self, mock_list_runners):
@@ -311,3 +310,97 @@ class TestCleanSctRunners:
 
         clean_sct_runners(test_status="", user="nonexistent_user", dry_run=True)
         mock_list_runners.assert_called_once()
+
+    @patch("sdcm.sct_runner.ssh_run_cmd")
+    @patch("sdcm.sct_runner.list_sct_runners")
+    def test_clean_sct_runners_terminates_expired_runner(self, mock_list_runners, mock_ssh_cmd):
+        """Test that runner past its numeric keep hours is terminated."""
+        mock_runner = MagicMock(
+            keep="24",
+            keep_action="terminate",
+            launch_time=datetime.now(timezone.utc) - timedelta(hours=25),
+        )
+        mock_list_runners.return_value = [mock_runner]
+        mock_ssh_cmd.return_value = MagicMock(stdout="")
+
+        clean_sct_runners(test_status="", force=False, dry_run=False)
+        mock_runner.terminate.assert_called_once()
+
+    @patch("sdcm.sct_runner.ssh_run_cmd")
+    @patch("sdcm.sct_runner.list_sct_runners")
+    def test_clean_sct_runners_skips_runner_without_terminate_action(self, mock_list_runners, mock_ssh_cmd):
+        """Test that runner with keep_action != 'terminate' is not terminated."""
+        mock_runner = MagicMock(
+            keep="120",
+            keep_action="none",
+            launch_time=datetime.now(timezone.utc),
+        )
+        mock_list_runners.return_value = [mock_runner]
+        mock_ssh_cmd.return_value = MagicMock(stdout="")
+
+        clean_sct_runners(test_status="", force=False, dry_run=False)
+        mock_runner.terminate.assert_not_called()
+
+
+class TestFindRunnerInstance:
+    """Test the find-runner-instance logic (list_sct_runners + update_sct_runner_tags orchestration)."""
+
+    @pytest.fixture
+    def runner_info(self):
+        return SctRunnerInfo(
+            sct_runner_class=AwsSctRunner,
+            cloud_service_instance=None,
+            region_az="us-east-1a",
+            instance=MagicMock(),
+            instance_name="reuse-runner-1",
+            public_ips=["10.0.0.1"],
+            test_id="original-test-id",
+            keep="120",
+            keep_action="terminate",
+        )
+
+    @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
+    def test_find_runner_by_test_id(self, mock_aws_list, runner_info):
+        """Test that list_sct_runners finds a runner by test_id for reuse."""
+        mock_aws_list.return_value = [runner_info]
+
+        runners = list_sct_runners(backend="aws", test_id="original-test-id", verbose=False)
+
+        assert len(runners) == 1
+        assert runners[0].public_ips == ["10.0.0.1"]
+        assert runners[0].instance_name == "reuse-runner-1"
+
+    @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
+    def test_find_runner_returns_empty_for_unknown_test_id(self, mock_aws_list, runner_info):
+        """Test that no runner is found for an unknown test_id."""
+        mock_aws_list.return_value = [runner_info]
+        runners = list_sct_runners(backend="aws", test_id="nonexistent-test-id", verbose=False)
+        assert len(runners) == 0
+
+    @patch("sdcm.sct_runner.list_sct_runners")
+    def test_update_tags_on_reuse(self, mock_list, runner_info):
+        """Test that runner keep/keep_action tags can be updated on reuse."""
+        mock_list.return_value = [runner_info]
+        runner_info.sct_runner_class = MagicMock()
+
+        update_sct_runner_tags(
+            backend="aws",
+            test_runner_ip="10.0.0.1",
+            tags={"keep": "12", "keep_action": "terminate"},
+        )
+
+        runner_info.sct_runner_class.set_tags.assert_called_once_with(
+            runner_info,
+            tags={"keep": "12", "keep_action": "terminate"},
+        )
+
+    @pytest.mark.parametrize(
+        "elapsed_hours,duration_minutes,expected",
+        [
+            (48, 360, "60"),
+            (2, 120, "10"),
+        ],
+    )
+    def test_keep_tag_calculation_from_duration(self, elapsed_hours, duration_minutes, expected):
+        """Test the keep tag value: elapsed_hours + duration_minutes / 60 + 6 hours buffer."""
+        assert str(elapsed_hours + int(duration_minutes / 60) + 6) == expected

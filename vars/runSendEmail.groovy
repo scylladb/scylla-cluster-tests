@@ -23,6 +23,10 @@ def call(Map params, RunWrapper currentBuild){
     RUNNER_IP=\$(cat sct_runner_ip||echo "")
     export SCT_CONFIG_FILES=${test_config}
 
+    if [[ -n "${params.reuse_cluster ?: ''}" ]] ; then
+        export SCT_REUSE_CLUSTER="${params.reuse_cluster}"
+    fi
+
     if [[ -z "${email_recipients}" ]]; then
         echo "Email was not sent because no recipient addresses were provided"
     else

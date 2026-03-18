@@ -72,6 +72,11 @@ def call(Map pipelineParams) {
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_k8s_cluster')
             string(defaultValue: '', description: 'scylla option: internode_compression', name: 'internode_compression')
+            // Cluster Reuse
+            separator(name: 'CLUSTER_REUSE', sectionHeader: 'Cluster Reuse')
+            string(defaultValue: '',
+                   description: 'Test ID of an existing cluster to reuse. When set, provisioning is skipped and the existing cluster is used.',
+                   name: 'reuse_cluster')
             separator(name: 'EMAIL_TEST', sectionHeader: 'Email and Test Configuration')
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
