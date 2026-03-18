@@ -182,7 +182,7 @@ def test_build_instance_groups_with_task():
     assert task["InstanceRole"] == "TASK"
     assert task["Market"] == "SPOT"
     assert task["InstanceCount"] == 3
-    assert task["BidPrice"] == "80"
+    assert task["BidPriceAsPercentageOfOnDemandPrice"] == 80.0
 
 
 def test_add_step(provisioner):

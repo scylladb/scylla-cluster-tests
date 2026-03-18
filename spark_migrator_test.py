@@ -16,6 +16,7 @@
 """Spark migrator test module for testing scylla-spark-migrator on EMR clusters."""
 
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from sdcm.spark_migrator import MigratorConfig, SparkMigratorRunner, upload_migrator_jar_to_s3
 from sdcm.tester import ClusterTester
@@ -111,7 +112,7 @@ class SparkMigratorTest(ClusterTester):
         self._validate_migration()
 
     def _prepare_source_data(self):
-        """Create source keyspace/table and load test data."""
+        """Create source keyspace/table and load test data using concurrent inserts."""
         self.log.info("Preparing source data for migration test")
         node = self.db_cluster.nodes[0]
         with self.db_cluster.cql_connection_patient(node) as session:
@@ -122,11 +123,18 @@ class SparkMigratorTest(ClusterTester):
             session.execute(
                 "CREATE TABLE IF NOT EXISTS migrator_test.source_table (id int PRIMARY KEY, data text, value int)"
             )
-            for i in range(1000):
-                session.execute(
-                    "INSERT INTO migrator_test.source_table (id, data, value) VALUES (%s, %s, %s)",
-                    (i, f"data_{i}", i * 10),
-                )
+            prepared = session.prepare(
+                "INSERT INTO migrator_test.source_table (id, data, value) VALUES (?, ?, ?)"
+            )
+
+            def insert_row(row_id):
+                session.execute(prepared, (row_id, f"data_{row_id}", row_id * 10))
+
+            with ThreadPoolExecutor(max_workers=20) as executor:
+                futures = [executor.submit(insert_row, i) for i in range(1000)]
+                for future in as_completed(futures):
+                    future.result()
+
         self.log.info("Source data prepared: 1000 rows inserted")
 
     def _build_migrator_config(self):

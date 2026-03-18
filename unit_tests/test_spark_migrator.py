@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import boto3
+import pytest
 from moto import mock_aws
 
 from sdcm.spark_migrator import (
@@ -88,6 +89,7 @@ def test_generate_migrator_config_basic():
         target_port=9042,
         target_keyspace="ks_target",
         target_table="tbl_target",
+        savepoints_path="s3://test-bucket/savepoints",
     )
     result = SparkMigratorRunner.generate_migrator_config(config)
 
@@ -104,7 +106,11 @@ def test_generate_migrator_config_basic():
 
 def test_generate_migrator_config_defaults():
     """Test generated config has sensible default values."""
-    config = MigratorConfig(source_host="10.0.0.1", target_host="10.0.0.2")
+    config = MigratorConfig(
+        source_host="10.0.0.1",
+        target_host="10.0.0.2",
+        savepoints_path="s3://test-bucket/savepoints",
+    )
     result = SparkMigratorRunner.generate_migrator_config(config)
 
     source, target, savepoints = result["source"], result["target"], result["savepoints"]
@@ -120,8 +126,15 @@ def test_generate_migrator_config_defaults():
     assert target["consistencyLevel"] == "LOCAL_QUORUM"
     assert target["connections"] == 16
 
-    assert savepoints["path"] == "/tmp/savepoints"
+    assert savepoints["path"] == "s3://test-bucket/savepoints"
     assert savepoints["intervalSeconds"] == 300
+
+
+def test_generate_migrator_config_no_savepoints_path_raises():
+    """Test that generate_migrator_config raises ValueError when savepoints_path is not set."""
+    config = MigratorConfig(source_host="10.0.0.1", target_host="10.0.0.2")
+    with pytest.raises(ValueError, match="savepoints_path must be set"):
+        SparkMigratorRunner.generate_migrator_config(config)
 
 
 @mock_aws

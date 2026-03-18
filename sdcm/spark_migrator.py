@@ -61,7 +61,7 @@ def get_migrator_download_url(release_tag):
     Returns:
         str: Download URL for the JAR asset.
     """
-    if release_tag.startswith("https://"):
+    if release_tag.startswith(("https://", "http://")):
         return release_tag
     return f"https://github.com/{MIGRATOR_GITHUB_REPO}/releases/download/{release_tag}/{MIGRATOR_JAR_NAME}"
 
@@ -124,6 +124,7 @@ class MigratorConfig:
         target_keyspace: Target keyspace name.
         target_table: Target table name.
         config_path: S3 path to migrator config YAML (alternative to individual fields).
+        savepoints_path: S3 or HDFS path for savepoints (e.g., 's3://bucket/savepoints').
         spark_executor_memory: Spark executor memory (e.g., '4g').
         spark_executor_cores: Number of Spark executor cores.
         spark_parallelism: Spark default parallelism.
@@ -139,6 +140,7 @@ class MigratorConfig:
     target_keyspace: str = ""
     target_table: str = ""
     config_path: str = ""
+    savepoints_path: str = ""
     spark_executor_memory: str = "4g"
     spark_executor_cores: int = 2
     spark_parallelism: int = 200
@@ -232,7 +234,15 @@ class SparkMigratorRunner:
 
         Returns:
             dict: Configuration dictionary matching scylla-migrator's expected YAML format.
+
+        Raises:
+            ValueError: If savepoints_path is not set to an S3 or HDFS path.
         """
+        if not migrator_config.savepoints_path:
+            raise ValueError(
+                "savepoints_path must be set to an S3 or HDFS path (e.g., 's3://bucket/savepoints'). "
+                "Local paths like '/tmp/savepoints' are not accessible across EMR nodes."
+            )
         return {
             "source": {
                 "type": "cassandra",
@@ -256,7 +266,7 @@ class SparkMigratorRunner:
                 "connections": 16,
             },
             "savepoints": {
-                "path": "/tmp/savepoints",
+                "path": migrator_config.savepoints_path,
                 "intervalSeconds": 300,
             },
         }

@@ -120,7 +120,7 @@ class EmrClusterProvisioner:
         task_count = self.params.get("emr_instance_count_task") or 0
         task_instance_type = self.params.get("emr_instance_type_task")
         if task_count > 0 and task_instance_type:
-            bid_percentage = str(self.params.get("emr_spot_bid_percentage") or 100)
+            bid_percentage = float(self.params.get("emr_spot_bid_percentage") or 100)
             instance_groups.append(
                 {
                     "Name": "Task",
@@ -128,7 +128,7 @@ class EmrClusterProvisioner:
                     "InstanceRole": "TASK",
                     "InstanceType": task_instance_type,
                     "InstanceCount": task_count,
-                    "BidPrice": bid_percentage,
+                    "BidPriceAsPercentageOfOnDemandPrice": bid_percentage,
                 }
             )
 
@@ -155,11 +155,13 @@ class EmrClusterProvisioner:
             LOGGER.info("EMR cluster %s is ready (state: %s)", cluster_id, state)
             return status
 
-        assert state not in EMR_TERMINAL_STATES, (
-            f"EMR cluster {cluster_id} entered terminal state: {state}. "
-            f"Reason: {status.get('StateChangeReason', {}).get('Message', 'unknown')}"
-        )
-        assert state in EMR_PROVISIONING_STATES, f"EMR cluster {cluster_id} in unexpected state: {state}"
+        if state in EMR_TERMINAL_STATES:
+            raise RuntimeError(
+                f"EMR cluster {cluster_id} entered terminal state: {state}. "
+                f"Reason: {status.get('StateChangeReason', {}).get('Message', 'unknown')}"
+            )
+        if state not in EMR_PROVISIONING_STATES:
+            raise RuntimeError(f"EMR cluster {cluster_id} in unexpected state: {state}")
         raise RuntimeError(f"EMR cluster {cluster_id} still provisioning (state: {state})")
 
     def get_emr_cluster_status(self, cluster_id=None):
@@ -229,13 +231,14 @@ class EmrClusterProvisioner:
             str: Step ID.
         """
         cluster_id = cluster_id or self.cluster_id
-        spark_args = ["spark-submit", "--deploy-mode", "cluster", "--class", "com.scylladb.migrator.Migrator", jar_path]
+        # spark-submit options (--class, --conf, etc.) must appear before the JAR path
+        spark_args = ["spark-submit", "--deploy-mode", "cluster"] + (args or []) + [jar_path]
         step = {
             "Name": step_name,
             "ActionOnFailure": "CONTINUE",
             "HadoopJarStep": {
                 "Jar": "command-runner.jar",
-                "Args": spark_args + (args or []),
+                "Args": spark_args,
             },
         }
 
@@ -286,10 +289,11 @@ class EmrClusterProvisioner:
             LOGGER.info("EMR step %s completed successfully", step_id)
             return status
 
-        assert state not in ("FAILED", "CANCELLED", "INTERRUPTED"), (
-            f"EMR step {step_id} failed with state: {state}. "
-            f"Reason: {status.get('FailureDetails', {}).get('Message', 'unknown')}"
-        )
+        if state in ("FAILED", "CANCELLED", "INTERRUPTED"):
+            raise RuntimeError(
+                f"EMR step {step_id} failed with state: {state}. "
+                f"Reason: {status.get('FailureDetails', {}).get('Message', 'unknown')}"
+            )
         raise RuntimeError(f"EMR step {step_id} still running (state: {state})")
 
 
