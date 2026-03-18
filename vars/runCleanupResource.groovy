@@ -17,6 +17,10 @@ def call(Map params, String region){
     export SCT_CONFIG_FILES=${test_config}
     export SCT_CLUSTER_BACKEND="${params.backend}"
 
+    if [[ -n "${params.reuse_cluster ?: ''}" ]] ; then
+        export SCT_REUSE_CLUSTER="${params.reuse_cluster}"
+    fi
+
     if [[ "${params.backend}" == "xcloud" ]] ; then
         export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
         export SCT_XCLOUD_ENV="${params.xcloud_env}"
@@ -54,7 +58,8 @@ def call(Map params, String region){
     echo "Starting to clean resources ..."
     RUNNER_IP=\$(cat sct_runner_ip||echo "")
     if [[ -n "\${RUNNER_IP}" ]] ; then
-        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} clean-resources --post-behavior --test-id \$SCT_TEST_ID
+        CLEANUP_TEST_ID=\${SCT_REUSE_CLUSTER:-\$SCT_TEST_ID}
+        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} clean-resources --post-behavior --test-id \$CLEANUP_TEST_ID
     else
         ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"
     fi

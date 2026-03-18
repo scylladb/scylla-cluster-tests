@@ -75,19 +75,24 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         fi
         """)
 
-    @staticmethod
-    def _skip_if_already_run_vector() -> str:
+    def _skip_if_already_run_vector(self) -> str:
         """
         If a node was configured before sct-runner, skip vector installation. Just ensure
         that logging destination is updated in the configuration and the service is
         restarted, to retrigger sending logs.
         """
-        return dedent(f"""
+        host, port = self.syslog_host_port
+        vector_config = configure_vector_target_script(host=host, port=port)
+        return (
+            dedent(f"""
         if [ -f {CLOUD_INIT_SCRIPTS_PATH}/done ] && command -v vector >/dev/null 2>&1; then
-            sudo systemctl restart vector
+        """)
+            + vector_config
+            + dedent("""
             exit 0
         fi
         """)
+        )
 
     @staticmethod
     def _mark_script_as_done() -> str:

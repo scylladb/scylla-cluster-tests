@@ -1190,6 +1190,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             node.set_web_listen_address()
 
     def _reuse_cluster_setup(self, node):
+        super()._reuse_cluster_setup(node)
         node.run_startup_script()  # Reconfigure syslog-ng.
 
     def destroy(self):

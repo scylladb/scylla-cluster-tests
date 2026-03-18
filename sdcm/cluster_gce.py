@@ -564,6 +564,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
         node.wait_for_machine_image_configured()
 
     def _reuse_cluster_setup(self, node: GCENode) -> None:
+        super()._reuse_cluster_setup(node)
         node.run_startup_script()
 
 
