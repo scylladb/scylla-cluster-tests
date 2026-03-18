@@ -24,6 +24,7 @@ from sdcm.utils.resources_cleanup import (
     clean_elastic_ips_aws,
     clean_instances_aws,
     clean_instances_gce,
+    clean_instances_oci,
     clean_resources_docker,
 )
 
@@ -183,6 +184,126 @@ class CleanInstancesGceTest(unittest.TestCase):
         instance.delete.assert_called_once_with(instance=instance.name, project="test", zone=unittest.mock.ANY)
 
 
+@pytest.fixture
+def oci_instance():
+    def _create(keep_action: str = "terminate", lifecycle_state: str = "RUNNING"):
+        instance = MagicMock()
+        instance.region = "us-ashburn-1"
+        instance.id = "ocid1.instance.oc1..example"
+        instance.display_name = "test-db-node"
+        instance.lifecycle_state = lifecycle_state
+        instance.defined_tags = {
+            "sct": {
+                "TestId": "1111",
+                "NodeType": "scylla-db",
+                "keep_action": keep_action,
+            }
+        }
+        return instance
+
+    return _create
+
+
+def test_clean_instances_oci_terminate_calls_argus(oci_instance):
+    instance = oci_instance(keep_action="terminate")
+    mock_compute_client = MagicMock()
+    mock_argus_client = MagicMock()
+
+    with patch.object(resources_cleanup, "list_instances_oci", return_value=[instance]) as list_instances_oci:
+        with patch.object(resources_cleanup, "OciService") as service_class:
+            with patch.object(
+                resources_cleanup,
+                "init_argus_client",
+                return_value=mock_argus_client,
+            ) as init_argus_client:
+                with patch.object(resources_cleanup, "terminate_resource_in_argus") as terminate_in_argus:
+                    service_class.return_value.get_compute_client.return_value = mock_compute_client
+                    clean_instances_oci({"TestId": "1111"})
+
+    list_instances_oci.assert_called_once_with(tags_dict={"TestId": "1111"}, verbose=False)
+    init_argus_client.assert_called_once_with("1111")
+    mock_compute_client.terminate_instance.assert_called_once_with("ocid1.instance.oc1..example")
+    mock_compute_client.instance_action.assert_not_called()
+    terminate_in_argus.assert_called_once_with(client=mock_argus_client, resource_name="test-db-node")
+
+
+def test_clean_instances_oci_stop_when_keep_action_is_not_terminate(oci_instance):
+    instance = oci_instance(keep_action="stop")
+    mock_compute_client = MagicMock()
+
+    with patch.object(resources_cleanup, "list_instances_oci", return_value=[instance]) as list_instances_oci:
+        with patch.object(resources_cleanup, "OciService") as service_class:
+            with patch.object(resources_cleanup, "terminate_resource_in_argus") as terminate_in_argus:
+                service_class.return_value.get_compute_client.return_value = mock_compute_client
+                clean_instances_oci({"TestId": "1111"})
+
+    list_instances_oci.assert_called_once_with(tags_dict={"TestId": "1111"}, verbose=False)
+    mock_compute_client.instance_action.assert_called_once_with("ocid1.instance.oc1..example", "STOP")
+    mock_compute_client.terminate_instance.assert_not_called()
+    terminate_in_argus.assert_not_called()
+
+
+@pytest.fixture
+def oci_block_volume():
+    def _create(keep_action: str = "terminate"):
+        volume = MagicMock()
+        volume.id = "ocid1.volume.oc1..example"
+        volume.display_name = "test-db-node-vol-0"
+        volume.defined_tags = {
+            "sct": {
+                "TestId": "1111",
+                "NodeType": "scylla-db",
+                "keep_action": keep_action,
+            }
+        }
+        return volume
+
+    return _create
+
+
+@pytest.mark.parametrize(
+    ("keep_action", "should_delete"),
+    [
+        pytest.param("terminate", True, id="delete-volume"),
+        pytest.param("stop", False, id="keep-volume"),
+    ],
+)
+def test_clean_orphan_block_volumes_oci_keep_action_behavior(oci_block_volume, keep_action, should_delete):
+    volume = oci_block_volume(keep_action=keep_action)
+    mock_block_storage_client = MagicMock()
+
+    with patch.object(resources_cleanup, "OciService") as service_class:
+        with patch.object(resources_cleanup, "get_oci_compartment_id", return_value="ocid1.compartment.test"):
+            with patch(
+                "sdcm.utils.resources_cleanup.oci.pagination.list_call_get_all_results_generator",
+                return_value=[volume],
+            ) as pager:
+                with patch.object(resources_cleanup, "delete_oci_volume_with_retry") as delete_volume:
+                    service_class.return_value.get_block_storage_client.return_value = mock_block_storage_client
+                    resources_cleanup.clean_orphan_block_volumes_oci(
+                        tags_dict={"TestId": "1111", "NodeType": ["scylla-db"]},
+                        regions=["us-ashburn-1"],
+                    )
+
+    pager.assert_called_once_with(
+        mock_block_storage_client.list_volumes,
+        yield_mode="record",
+        compartment_id="ocid1.compartment.test",
+        lifecycle_state="AVAILABLE",
+    )
+
+    if should_delete:
+        delete_volume.assert_called_once_with(
+            block_storage_client=mock_block_storage_client,
+            volume_id="ocid1.volume.oc1..example",
+            volume_name="test-db-node-vol-0",
+            region="us-ashburn-1",
+            logger=resources_cleanup.LOGGER,
+        )
+    else:
+        delete_volume.assert_not_called()
+
+
 class CleanResourcesDockerTest(unittest.TestCase):
     def test_empty_tags_dict(self):
         self.assertRaisesRegex(AssertionError, "not provided", clean_resources_docker, {})
@@ -220,6 +341,8 @@ class CleanCloudResourcesTest(unittest.TestCase):
         "sdcm.utils.resources_cleanup.clean_clusters_eks",
         "sdcm.utils.resources_cleanup.clean_instances_gce",
         "sdcm.utils.resources_cleanup.clean_instances_azure",
+        "sdcm.utils.resources_cleanup.clean_instances_oci",
+        "sdcm.utils.resources_cleanup.clean_orphan_block_volumes_oci",
         "sdcm.utils.resources_cleanup.clean_resources_docker",
         "sdcm.utils.resources_cleanup.clean_test_security_groups",
         "sdcm.utils.resources_cleanup.clean_load_balancers_aws",

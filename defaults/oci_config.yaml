@@ -9,11 +9,11 @@ instance_provision: "on_demand" # NOTE: DenseIO shapes cannot be 'spot'
 oci_region_name:
   - us-ashburn-1
 
-oci_instance_type_loader: "VM.Standard3.Flex:4"
+oci_instance_type_loader: "VM.Standard3.Flex:4:32"
 oci_image_loader: ""  # NOTE: Code will automatically take latest ubuntu:24.04
 ami_loader_user: 'ubuntu'
 
-oci_instance_type_monitor: "VM.Standard.E4.Flex:4"
+oci_instance_type_monitor: "VM.Standard.E4.Flex:4:32"
 oci_image_monitor: ""  # NOTE: Code will automatically take latest ubuntu:24.04
 ami_monitor_user: 'ubuntu'
 
@@ -29,5 +29,5 @@ oci_image_username: "scyllaadm"
 #       - "higher_performance" or "io1" or "io2" -> 20 VPUs/GB
 #       - "ultra" -> 30 VPUs/GB
 data_volume_disk_num: 0
-data_volume_disk_type: "higher_performance"
+data_volume_disk_type: "ultra"
 data_volume_disk_size: 500
