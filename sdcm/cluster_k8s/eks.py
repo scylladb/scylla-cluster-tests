@@ -912,7 +912,9 @@ class MonitorSetEKS(MonitorSetAWS):
         instances = sorted(instances, key=sort_by_index)
         return [ec2.get_instance(instance["InstanceId"]) for instance in instances]
 
-    def _create_instances(self, count, ec2_user_data="", dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False):
+    def _create_instances(
+        self, count, ec2_user_data="", dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False, ami_id=None
+    ):
         instances = super()._create_instances(
             count=count,
             ec2_user_data=ec2_user_data,
@@ -920,6 +922,7 @@ class MonitorSetEKS(MonitorSetAWS):
             az_idx=az_idx,
             instance_type=instance_type,
             is_zero_node=is_zero_node,
+            ami_id=ami_id,
         )
         for instance in instances:
             self._ec2_services[dc_idx].create_tags(
