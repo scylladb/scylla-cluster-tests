@@ -16,7 +16,7 @@ import logging
 import unittest
 import multiprocessing
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest import mock
 
 import pytest
@@ -419,7 +419,7 @@ class SctEventsTests(BaseEventsTest):
 
     def test_filter_expiration(self):
         with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=10):
-            line_prefix = f"{datetime.utcnow():%Y-%m-%dT%H:%M:%S+00:00}"
+            line_prefix = f"{datetime.now(timezone.utc):%Y-%m-%dT%H:%M:%S+00:00}"
 
             with DbEventsFilter(db_event=DatabaseLogEvent.NO_SPACE_ERROR, node="A"):
                 DatabaseLogEvent.NO_SPACE_ERROR().add_info(
