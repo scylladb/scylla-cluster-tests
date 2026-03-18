@@ -433,6 +433,40 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
         )
 
         self.vector_store_cluster = None
+        self.manager_node = None
+
+    def _init_manager_node(self) -> None:
+        """Initialize Scylla Manager node if use_mgmt is enabled"""
+        if not self.params.get("use_mgmt"):
+            self.log.debug("Manager not enabled (use_mgmt=False), skipping manager node initialization")
+            return
+
+        self.log.info("Initializing Scylla Manager node for Docker cluster")
+
+        try:
+            manager_set = ManagerSetDocker(
+                user_prefix=self.params.get("user_prefix"),
+                n_nodes=1,
+                params=self.params,
+            )
+            manager_set.add_nodes(count=1)
+            if manager_set.nodes:
+                self.manager_node = manager_set.nodes[0]
+                self.log.info("Manager node initialized: %s", self.manager_node.name)
+            else:
+                self.log.warning("Manager node creation failed - no nodes created")
+        except Exception as e:  # noqa: BLE001
+            self.log.error("Failed to initialize manager node: %s", e)
+            raise
+
+    @property
+    def scylla_manager_node(self) -> cluster.BaseNode:
+        """Return the manager node for this cluster"""
+        if self.manager_node:
+            return self.manager_node
+        # Fallback to monitor node behavior if manager not available
+        # This maintains backward compatibility
+        return self.test_config.tester_obj().monitors.nodes[0]
 
     def node_setup(self, node, verbose=False, timeout=3600):
         node.is_scylla_installed(raise_if_not_installed=True)
@@ -481,6 +515,13 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
         return re.sub(r"--blocked-reactor-notify-ms[ ]+[0-9]+", "", append_scylla_args)
 
     def destroy(self):
+        if self.manager_node:
+            self.log.info("Destroying manager node...")
+            try:
+                self.manager_node.destroy()
+            except Exception as e:  # noqa: BLE001
+                self.log.warning("Failed to destroy manager node: %s", e)
+
         if self.vector_store_cluster:
             self.log.info("Destroying vector store cluster...")
             try:
@@ -765,3 +806,116 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
             except Exception as exc:  # noqa: BLE001
                 self.log.error(f"Cleaning up scylla monitoring failed with {str(exc)}")
             node.destroy()
+
+
+class DockerManagerNode(DockerNode):
+    """Docker node running Scylla Manager server"""
+
+    log = LOGGER
+
+    def __init__(
+        self,
+        parent_cluster: "ManagerSetDocker",
+        container: Optional[Container] = None,
+        node_prefix: str = "manager-node",
+        base_logdir: Optional[str] = None,
+        ssh_login_info: Optional[dict] = None,
+        node_index: int = 1,
+    ) -> None:
+        super().__init__(
+            parent_cluster=parent_cluster,
+            container=container,
+            node_prefix=node_prefix,
+            base_logdir=base_logdir,
+            ssh_login_info=ssh_login_info,
+            node_index=node_index,
+        )
+
+    @cached_property
+    def node_container_image_tag(self):
+        """Override to use manager Docker image"""
+        mgmt_docker_image = self.parent_cluster.params.get("mgmt_docker_image")
+        if not mgmt_docker_image:
+            raise ValueError("mgmt_docker_image parameter is required for manager node")
+        return mgmt_docker_image
+
+    def node_container_run_args(self, seed_ip=None):
+        """Override to configure manager-specific container settings"""
+        volumes = {
+            "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
+        }
+
+        return dict(
+            name=self.name,
+            image=self.node_container_image_tag,
+            volumes=volumes,
+            network=self.parent_cluster.params.get("docker_network"),
+        )
+
+    @property
+    def node_type(self) -> str:
+        return "manager"
+
+
+class ManagerSetDocker(DockerCluster, cluster.BaseCluster):
+    """Set of Scylla Manager nodes (typically just one)"""
+
+    def __init__(
+        self, user_prefix: Optional[str] = None, n_nodes: Union[list, int] = 1, params: dict = None
+    ) -> None:
+        node_prefix = cluster.prepend_user_prefix(user_prefix, "manager-node")
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, "manager-set")
+
+        # Manager image configuration
+        mgmt_docker_image = params.get("mgmt_docker_image")
+        if not mgmt_docker_image:
+            raise ValueError("mgmt_docker_image parameter is required for ManagerSetDocker")
+
+        # Parse image name and tag from mgmt_docker_image (e.g., "scylladb/scylla-manager:3.8.0")
+        if ":" in mgmt_docker_image:
+            docker_image, docker_image_tag = mgmt_docker_image.rsplit(":", 1)
+        else:
+            docker_image = mgmt_docker_image
+            docker_image_tag = "latest"
+
+        super().__init__(
+            docker_image=docker_image,
+            docker_image_tag=docker_image_tag,
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            node_type="manager",
+            n_nodes=n_nodes,
+            params=params,
+        )
+
+    def _create_node(self, node_index, container=None):
+        node = DockerManagerNode(
+            parent_cluster=self,
+            container=container,
+            base_logdir=self.logdir,
+            node_prefix=self.node_prefix,
+            ssh_login_info=dict(hostname=None, user=self.node_container_user, key_file=self.node_container_key_file),
+            node_index=node_index,
+        )
+
+        if container is None:
+            ContainerManager.run_container(node, "node")
+            ContainerManager.wait_for_status(node, "node", status="running")
+
+        node.init()
+        return node
+
+    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+        assert instance_type is None, "docker can't provision different instance types"
+        return self._create_nodes(count, enable_auto_bootstrap)
+
+    def get_backtraces(self):
+        pass
+
+    def destroy(self):
+        for node in self.nodes:
+            try:
+                self.log.info("Destroying manager node %s", node.name)
+                node.destroy()
+            except Exception as exc:  # noqa: BLE001
+                self.log.error(f"Destroying manager node failed with {str(exc)}")
