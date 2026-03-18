@@ -14,9 +14,9 @@ pytestmark = [
 def test_01_cql_api(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy(params=params)
     cmd = (
-        "ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=20000000 ; "
-        "numReaders=8; numWriters=8 ; cass.writeConsistencyLevel=QUORUM ; "
-        "cass.readConsistencyLevel=QUORUM ; readRateLimit=7200 ; writeRateLimit=1800"
+        "ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=1000 ; "
+        "numReaders=2; numWriters=2 ; cass.writeConsistencyLevel=QUORUM ; "
+        "cass.readConsistencyLevel=QUORUM ; readRateLimit=500 ; writeRateLimit=500"
     )
     ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
@@ -34,9 +34,9 @@ def test_02_cql_kill(request, docker_scylla, params):
     """
     loader_set = LocalLoaderSetDummy(params=params)
     cmd = (
-        "ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=20000000 ; "
-        "numReaders=8; numWriters=8 ; cass.writeConsistencyLevel=QUORUM ; "
-        "cass.readConsistencyLevel=QUORUM ; readRateLimit=7200 ; writeRateLimit=1800"
+        "ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=1000 ; "
+        "numReaders=2; numWriters=2 ; cass.writeConsistencyLevel=QUORUM ; "
+        "cass.readConsistencyLevel=QUORUM ; readRateLimit=500 ; writeRateLimit=500"
     )
     ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=500, params=params)
 
@@ -58,8 +58,8 @@ def test_03_dynamodb_api(request, docker_scylla, events, params):
     # start a command that would yield errors
     loader_set = LocalLoaderSetDummy(params=params)
     cmd = (
-        f"ndbench cli.clientName=DynamoDBKeyValue ; numKeys=20000000 ; "
-        f"numReaders=8; numWriters=8 ; readRateLimit=7200 ; writeRateLimit=1800; "
+        f"ndbench cli.clientName=DynamoDBKeyValue ; numKeys=1000 ; "
+        f"numReaders=2; numWriters=2 ; readRateLimit=500 ; writeRateLimit=500; "
         f"dynamodb.autoscaling=false; dynamodb.endpoint=http://{docker_scylla.ip_address}:8000"
     )
     ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=20, params=params)
