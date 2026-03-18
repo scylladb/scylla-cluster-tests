@@ -47,9 +47,9 @@ def moto_server():
     # this is a bit tricky with other unittest (if we run in parallel, which we currently don't)
     # it might break some actually tests, we should consider moving as session based fixture just for
     # blocking unittests from touching actual AWS service
-    os.environ["AWS_ENDPOINT_URL"] = aws_endpoint_url
-    yield aws_endpoint_url
-    del os.environ["AWS_ENDPOINT_URL"]
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("AWS_ENDPOINT_URL", aws_endpoint_url)
+        yield aws_endpoint_url
     server.stop()
 
 
