@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import multiprocessing
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, TYPE_CHECKING
@@ -234,6 +235,8 @@ class TestConfig(metaclass=Singleton):
         build_tag = os.environ.get("BUILD_TAG")
         if build_tag:
             tags["JenkinsJobTag"] = build_tag
+            match = re.match(r"^(.*)-(\d+)$", build_tag)
+            tags["JenkinsJob"] = match.group(1) if match else build_tag
 
         # Add BillingProject tag if available
         if cls._tester_obj:
