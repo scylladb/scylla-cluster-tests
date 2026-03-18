@@ -233,7 +233,7 @@ class _HdrRangeHistogramBuilder:
         finally:
             LOGGER.debug(f"Finished building histogram summary for {path} with tags {self.hdr_tags}")
 
-    def build_from_log_line(self, log_line: str, hst_log_start_time: float) -> dict[str, dict[str, int]] | None:
+    def build_from_log_line(self, log_line: str, hst_log_start_time: float) -> dict[str, dict[str, int]]:
         """
         Build Range Histogram Summary from provided log_line
         """
@@ -251,7 +251,7 @@ class _HdrRangeHistogramBuilder:
 
         histogram = _HdrRangeHistogram(start_time=hst_start_ts, end_time=hst_end_ts, histogram=histogram, hdr_tag=tag)
 
-        return self._get_summary_for_operation_by_hdr_tag(histogram)
+        return self._get_summary_for_operation_by_hdr_tag(histogram) or {}
 
     def _build_histogram_from_file(self, hdr_file: str, hdr_tag: str) -> _HdrRangeHistogram | None:
         def analyze_hdr_file():

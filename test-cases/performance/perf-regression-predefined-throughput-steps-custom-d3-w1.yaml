@@ -26,6 +26,7 @@ round_robin: true
 latte_schema_parameters:
   # NOTE: below values are defaults in the rune script, used here only for clarity of what can be set
   keyspace: custom_d3_w1
+  table: table1
   tablets: "true"
   replication_factor: 2
   compaction_strategy: IncrementalCompactionStrategy
