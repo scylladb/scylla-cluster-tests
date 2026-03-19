@@ -470,6 +470,14 @@ def fixture_cleanup_continuous_events_registry():
     ContinuousEventsRegistry().cleanup_registry()
 
 
+@pytest.fixture
+def skip_cross_field_validation():
+    original = sct_config.SCTConfiguration._cross_field_validation_enabled
+    sct_config.SCTConfiguration._cross_field_validation_enabled = False
+    yield
+    sct_config.SCTConfiguration._cross_field_validation_enabled = original
+
+
 def pytest_collection_modifyitems(items):
     """Inject mock_cloud_services fixture into every non-integration test.
 
