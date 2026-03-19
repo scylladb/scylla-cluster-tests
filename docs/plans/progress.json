@@ -1,5 +1,5 @@
 {
-  "generated": "2026-03-15",
+  "generated": "2026-03-19",
   "plans": [
     {
       "id": "ai-skills-framework",
@@ -69,6 +69,16 @@
       "status": "draft",
       "created": "2026-02-11",
       "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "pipeline-labeling-and-documentation",
+      "title": "Pipeline Labeling and Documentation",
+      "file": "jenkins/pipeline-labeling-and-documentation.md",
+      "domain": "ci-cd",
+      "status": "draft",
+      "created": "2026-03-19",
+      "phases_total": 7,
       "phases_done": 0
     },
     {
