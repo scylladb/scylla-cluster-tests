@@ -2842,6 +2842,15 @@ Enable or disable starting cluster health checker for all nodes
 **type:** bool
 
 
+## **cluster_health_check_parallel_workers** / SCT_CLUSTER_HEALTH_CHECK_PARALLEL_WORKERS
+
+Number of parallel workers for health checks. Clamped to [1, 10] at runtime. Higher values reduce health check duration on large clusters.
+
+**default:** 5
+
+**type:** int
+
+
 ## **data_validation** / SCT_DATA_VALIDATION
 
 Specify the type of data validation to perform
