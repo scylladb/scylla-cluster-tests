@@ -40,8 +40,14 @@ gemini_cmd: |
 
 gemini_seed: 66
 
+<<<<<<< HEAD
 gemini_schema_url: "https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json" # currently is not used
 
+||||||| parent of f4f2bd6e1 (feat(gemini): add custom SCHEMA support flag)
+gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
+
+=======
+>>>>>>> f4f2bd6e1 (feat(gemini): add custom SCHEMA support flag)
 use_preinstalled_scylla: false
 
 gemini_log_cql_statements: false
