@@ -263,6 +263,21 @@ Nemesis are chaos operations that test database resilience. Common types:
 Separate each group with a blank line.
 Within each group, sort imports alphabetically.
 
+### Method Signature Changes (Override Safety)
+
+**CRITICAL**: SCT uses deep class hierarchies (e.g., `BaseCluster` -> `AWSCluster` -> `MonitorSetEKS`).
+When modifying a method signature in a parent class:
+
+1. Search for ALL overrides: `grep -rn "def <method_name>" sdcm/ unit_tests/`
+2. Update every override to accept and forward the new parameter
+3. Update test stubs in `unit_tests/` that override the same method (e.g., `dummy_remote.py`, `test_cluster.py`)
+4. If using `**kwargs` in overrides, verify the parameter actually reaches `super()`
+
+Failure to do this causes runtime `TypeError` that isn't caught by linting or unit tests.
+See PR #14113 for a real-world example of this failure pattern (caused by PR #13445 missing an override in `cluster_k8s/eks.py`).
+
+High-risk methods with 5+ overrides: `add_nodes`, `_create_instances`, `wait_for_init`, `destroy`.
+
 ### Unit Testing Guidelines
 
 **IMPORTANT: Use pytest style, NOT unittest.TestCase**
@@ -426,6 +441,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | writing-unit-tests | Guides writing and debugging unit tests for SCT using pytest. Use when creating test files in unit_tests/, adding test cases, or mocking external services. | `skills/writing-unit-tests/SKILL.md` |
 | writing-integration-tests | Guides writing integration tests that interact with real external services. Use when creating tests requiring Docker, AWS, GCE, Azure, OCI, or Kubernetes backends. | `skills/writing-integration-tests/SKILL.md` |
 | commit-summary | Generate weekly commit summary reports for the SCT repository | `skills/commit-summary/SKILL.md` |
+| code-review | Guides AI-assisted code review of SCT PRs. Use when reviewing diffs, checking override compatibility, verifying import conventions, or assessing backend impact. | `skills/code-review/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 

@@ -281,7 +281,7 @@ Key design patterns from coodie:
 
 ---
 
-### Phase 6: Create Code Review Skill (Priority: Medium)
+### Phase 6: Create Code Review Skill (Priority: Medium) — ✅ IMPLEMENTED
 
 **Description**: Investigate and implement a skill for AI-assisted code review on SCT pull requests. This skill should guide agents on how to review code changes, what to look for, and how to provide actionable feedback following SCT conventions.
 
@@ -305,13 +305,16 @@ Key design patterns from coodie:
 - Cover pre-commit compliance check: `uv run sct.py pre-commit`
 - Include guidance on identifying missing test coverage for code changes
 - Consider integration with existing PR template (`.github/pull_request_template.md`)
+- **Override/Inheritance Safety Check**: Explicit guidance for reviewing method signature changes across class hierarchies. SCT's cluster system has deep inheritance trees where a single method like `_create_instances` or `add_nodes` can have 5-18+ overrides across backends. The skill instructs reviewers to search for ALL overrides when ANY base class method signature changes. Real incident: PR #13445 -> #14113 (missed `MonitorSetEKS._create_instances` override). The `references/common-issues.md` includes a full incident catalog with root cause analysis and prevention patterns.
 
 **Definition of Done**:
-- [ ] `skills/code-review/` directory exists with all files
-- [ ] Covers SCT-specific review criteria (imports, error handling, test patterns)
-- [ ] Includes backend impact analysis guidance
-- [ ] Includes review checklist with common issues catalog
-- [ ] Workflow covers end-to-end PR review process
+- [x] `skills/code-review/` directory exists with all files
+- [x] Covers SCT-specific review criteria (imports, error handling, test patterns)
+- [x] Includes backend impact analysis guidance
+- [x] Includes review checklist with common issues catalog
+- [x] Workflow covers end-to-end PR review process
+- [x] Override safety is Check #1 with high-risk methods table and real incident reference
+- [x] Root guidance files updated: `AGENTS.md` (override safety rule + skills table), `.github/copilot-instructions.md` (override safety section), `CLAUDE.md` (skill import)
 
 ---
 
