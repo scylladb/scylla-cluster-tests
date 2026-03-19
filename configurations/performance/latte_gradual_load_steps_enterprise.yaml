@@ -1,0 +1,47 @@
+# Define load ops for steps with latte-specific dict format
+# Latte requires both threads and concurrency parameters for proper parallelism control
+# Each step is a dict with: {threads: int, concurrency: int, rate: str}
+# Rate is optional; omit for unthrottled
+
+# Recommended starting values for i8g.4xlarge (16 vCPUs, 128 GiB RAM)
+# These are based on cassandra-stress enterprise config equivalents:
+# - read: 620 threads → 1760 total parallelism (threads × concurrency)
+# - write: 400 threads → 640 total parallelism (threads × concurrency)
+# - mixed: 1900 threads → 8000 total parallelism  (threads × concurrency)
+# - read_disk_only: 620 threads → ? total parallelism (threads × concurrency)
+
+perf_gradual_throttle_steps:
+  read:
+    - {threads: 32, concurrency: 55, rate: '300000'}   # 1760 parallelism, ~300K ops/s
+    - {threads: 32, concurrency: 55, rate: '600000'}   # 1760 parallelism, ~600K ops/s
+    - {threads: 32, concurrency: 55, rate: '900000'}   # 1760 parallelism, ~450K ops/s
+    - {threads: 32, concurrency: 55, rate: '1100000'}   # 1760 parallelism, ~600K ops/s
+    - {threads: 32, concurrency: 55, rate: 'unthrottled'}  # 1760 parallelism, max throughput
+
+  mixed:
+    - {threads: 32, concurrency: 250, rate: '250000'}     # 8000 parallelism, ~250K ops/s
+    - {threads: 32, concurrency: 250, rate: '500000'}    # 8000 parallelism, ~500K ops/s
+    - {threads: 32, concurrency: 250, rate: '750000'}   # 8000 parallelism, ~750K ops/s
+    - {threads: 32, concurrency: 250, rate: '900000'}   # 8000 parallelism, ~900K ops/s
+    - {threads: 32, concurrency: 250, rate: 'unthrottled'}  # 8000 parallelism, max throughput
+
+  write:
+    - {threads: 32, concurrency: 20, rate: '150000'}   # 640 parallelism, ~150K ops/s
+    - {threads: 32, concurrency: 20, rate: '300000'}   # 640 parallelism, ~300K ops/s
+    - {threads: 32, concurrency: 20, rate: '500000'}   # 640 parallelism, ~500K ops/s
+    - {threads: 32, concurrency: 20, rate: '600000'}   # 640 parallelism, ~600K ops/s
+    - {threads: 32, concurrency: 20, rate: 'unthrottled'}  # 640 parallelism, max throughput
+
+  read_disk_only:
+    - {threads: 10, concurrency: 8, rate: '80000'}     # 80 parallelism, ~80K ops/s
+    - {threads: 15, concurrency: 11, rate: '165000'}   # 165 parallelism, ~165K ops/s
+    - {threads: 20, concurrency: 12, rate: '250000'}   # 240 parallelism, ~250K ops/s
+    - {threads: 25, concurrency: 12, rate: '300000'}   # 300 parallelism, ~300K ops/s
+    - {threads: 25, concurrency: 32, rate: 'unthrottled'}  # 800 parallelism, max throughput
+
+# Duration per step; None means until completion of the stress command
+perf_gradual_step_duration:
+  read: '30m'
+  write: None
+  mixed: '30m'
+  read_disk_only: '30m'
