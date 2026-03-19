@@ -22,6 +22,16 @@
       "phases_done": 3
     },
     {
+      "id": "multi-cloud-provisioning-resilience",
+      "title": "Multi-Cloud Provisioning Resilience",
+      "file": "infrastructure/multi-cloud-provisioning-resilience.md",
+      "domain": "cluster",
+      "status": "draft",
+      "created": "2026-01-24",
+      "phases_total": 8,
+      "phases_done": 0
+    },
+    {
       "id": "docker-cleanup-all-backends",
       "title": "Docker Cleanup for All Backends",
       "file": "infrastructure/docker-cleanup-all-backends.md",
