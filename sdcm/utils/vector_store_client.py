@@ -50,17 +50,17 @@ class VectorStoreClient:
         """Get list of all vector indexes"""
         return self.request("GET", "/api/v1/indexes").json()
 
-    def ann_search(self, keyspace: str, index: str, embedding: list[float], limit: int = 10) -> dict:
+    def ann_search(self, keyspace: str, index: str, vector: list[float], limit: int = 10) -> dict:
         """Perform Approximate Nearest Neighbor search
 
         :param keyspace: ScyllaDB keyspace name
         :param index: vector index name
-        :param embedding: query vector (list of floats)
+        :param vector: query vector (list of floats)
         :param limit: maximum number of results to return
 
         :returns dict: search results with 'primary_keys' and 'distances' fields
         """
-        payload = {"embedding": embedding, "limit": limit}
+        payload = {"vector": vector, "limit": limit}
         return self.request("POST", f"/api/v1/indexes/{keyspace}/{index}/ann", json=payload).json()
 
     def get_index_status(self, keyspace: str, index: str) -> dict:
