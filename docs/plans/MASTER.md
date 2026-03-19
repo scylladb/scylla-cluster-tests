@@ -28,6 +28,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | GCE Provisioning | `draft` | [gce-provisioning.md](infrastructure/gce-provisioning.md) |
 | Amazon EMR Spark Migrator | `pending_pr` | [#13909](https://github.com/scylladb/scylla-cluster-tests/pull/13909) |
 | Source-Destination Clusters | `pending_pr` | [#13908](https://github.com/scylladb/scylla-cluster-tests/pull/13908) |
+| Cassandra Cluster Support | `pending_pr` | [cassandra-cluster-support.md](infrastructure/cassandra-cluster-support.md) |
 
 ### Nemesis — Chaos engineering, disruptors
 
@@ -40,7 +41,6 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 
 | Plan | Status | File / PR |
 |------|--------|-----------|
-| Cassandra Oracle Cluster | `pending_pr` | [#13916](https://github.com/scylladb/scylla-cluster-tests/pull/13916) |
 
 ### CI/CD — Jenkins pipelines, Groovy libs
 
