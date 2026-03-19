@@ -1,21 +1,27 @@
 test_duration: 255
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
+
+pre_create_keyspace: "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'enabled': false};"
+
+prepare_write_cmd: "cassandra-stress write cl=QUORUM n=98304000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..98304000 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=120m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..98304000 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=120m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..98304000 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
              ]
 
 n_db_nodes: 6
 n_loaders: 2
+simulated_racks: 6
 
-instance_type_db: 'i4i.2xlarge'
-gce_instance_type_db: 'n2-highmem-16'
-gce_instance_type_loader: 'e2-standard-4'
-azure_instance_type_db: 'Standard_L8s_v3'
-run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 10}']
+instance_type_db: 'i4i.xlarge'
+
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '111'
-nemesis_interval: 2
+##nemesis_class_name: 'NoOpMonkey'
 
 user_prefix: 'longevity-10gb-3h'
 space_node_threshold: 64424
 
-gce_n_local_ssd_disk_db: 2
-run_db_node_benchmarks: false
+server_encrypt: true
+client_encrypt: true
+
+hinted_handoff: 'enabled'
+parallel_node_operations: true

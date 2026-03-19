@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -24,6 +25,30 @@ class TabletsConfiguration:
                 value = str(v).lower() if isinstance(v, bool) else v
                 items.append(f"'{k}': {value}")
         return "{" + ", ".join(items) + "}"
+
+
+def get_nodetool_migrate_to_tablets_status(node, keyspace: str) -> dict[str, str]:
+    """
+    Run 'nodetool migrate-to-tablets status <keyspace>' and parse the output.
+
+    Example output:
+        Nodes:
+        Host ID                              Status
+        dc1c5a03-8878-49da-a6f3-bd27d6a2d85d uses vnodes
+        b1428349-2154-41c9-a5c1-dd33c71bd571 migrating to tablets
+
+    Returns: {host_id: status}, e.g.:
+        {"dc1c5a03-8878-49da-a6f3-bd27d6a2d85d": "uses vnodes",
+         "b1428349-2154-41c9-a5c1-dd33c71bd571": "migrating to tablets"}
+    """
+    res = node.run_nodetool(f"migrate-to-tablets status {keyspace}")
+    pattern = re.compile(r"(?P<host_id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\s+(?P<status>.+)")
+    result = {}
+    for line in res.stdout.splitlines():
+        match = pattern.match(line.strip())
+        if match:
+            result[match.group("host_id")] = match.group("status").strip()
+    return result
 
 
 def wait_no_tablets_migration_running(node, timeout: int = 3600):
