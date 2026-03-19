@@ -1,0 +1,318 @@
+categories:
+  - id: T1_TEST_QUALITY
+    name: "Test Quality"
+    description: "Issues with test code style: using unittest classes instead of pytest functions, missing fixtures, missing parametrize, empty except blocks, improper test structure"
+    pilot_count: 38
+    trajectory: GROWING
+    enforced_by: [pehala, fruch]
+    patterns:
+      - "don't use class(es)?"
+      - "stop using class(es)? for test"
+      - "use.*fixture"
+      - "extract.*fixture"
+      - "parametri[zs](ation)?"
+      - "empty except"
+      - "inner function.*test"
+      - "docstring"
+      - "add docstring"
+      - "unittest"
+    keywords:
+      - fixture
+      - parametrize
+      - unittest
+      - docstring
+      - test
+      - pytest
+    bot_auto_tag: []
+
+  - id: T2_MISSING_DOCUMENTATION
+    name: "Missing Documentation"
+    description: "Missing or incomplete documentation: empty help values, missing nemesis documentation, missing comments explaining design choices, missing configuration examples"
+    pilot_count: 19
+    trajectory: PERSISTENT
+    enforced_by: [fruch, pehala, soyacz]
+    patterns:
+      - "empty help"
+      - "add.*documentation"
+      - "should have a comment"
+      - "add.*comment.*why"
+      - "clear comment about the why"
+      - "add.*example"
+      - "please.*add.*documentation"
+      - "documentation.*here"
+    keywords:
+      - documentation
+      - comment
+      - help
+      - example
+      - docstring
+    bot_auto_tag: []
+
+  - id: T3_AI_CODE_QUALITY
+    name: "AI-Generated Code Quality"
+    description: "Issues with AI-generated code: incorrect solutions, tests that don't match production code, removed features that should be restored, misaligned test assertions"
+    pilot_count: 28
+    trajectory: GROWING
+    enforced_by: [fruch, pehala, soyacz]
+    patterns:
+      - "copilot.*wrong"
+      - "claude.*generated"
+      - "as always with claude"
+      - "bring.*back"
+      - "bring it back"
+      - "shouldn't be removed"
+      - "restored"
+      - "test.*assert.*production.*doesn't"
+      - "need to bring this back"
+      - "pipeline.*configuration"
+    keywords:
+      - copilot
+      - claude
+      - AI
+      - generated
+      - bring back
+      - restore
+    bot_auto_tag: []
+
+  - id: T4_CODE_STRUCTURE
+    name: "Code Structure"
+    description: "Code organization and structure issues: unnecessary inner methods/functions, overly complex code, mutable default arguments, missing main guards, poor centralization"
+    pilot_count: 16
+    trajectory: PERSISTENT
+    enforced_by: [pehala, fruch]
+    patterns:
+      - "inner method"
+      - "inner function"
+      - "normal function"
+      - "mutable.*list"
+      - "if __name__.*main"
+      - "too complex"
+      - "way too complex"
+      - "centrali[sz]e"
+      - "3K lines"
+      - "top of the function"
+    keywords:
+      - inner method
+      - inner function
+      - mutable
+      - main
+      - complex
+      - centralize
+    bot_auto_tag: []
+
+  - id: T5_SCOPE_HYGIENE
+    name: "Scope Hygiene"
+    description: "Changes that belong in separate PRs: unrelated modifications, out-of-scope refactoring, changes that should be in different issues"
+    pilot_count: 12
+    trajectory: PERSISTENT
+    enforced_by: [pehala, fruch]
+    patterns:
+      - "out of scope"
+      - "remove.*change"
+      - "separate PR"
+      - "own PR"
+      - "its own"
+      - "unrelated"
+      - "far out of scope"
+      - "related to this PR"
+    keywords:
+      - scope
+      - separate PR
+      - own PR
+      - unrelated
+      - jira
+    bot_auto_tag: []
+
+  - id: T6_ERROR_HANDLING
+    name: "Error Handling"
+    description: "Missing or incomplete error handling: missing try/except blocks, missing finally blocks, unhandled exceptions, missing error events, should throw exceptions"
+    pilot_count: 9
+    trajectory: INTERMITTENT
+    enforced_by: [soyacz, pehala, fruch]
+    patterns:
+      - "throw exception"
+      - "should.*throw"
+      - "raise exception"
+      - "raise error event"
+      - "try/except"
+      - "try/finally"
+      - "invalid input"
+      - "exception propagate"
+      - "return.*zero"
+    keywords:
+      - exception
+      - error
+      - try
+      - catch
+      - finally
+      - throw
+    bot_auto_tag: []
+
+  - id: T7_MISSING_TESTS
+    name: "Missing Tests"
+    description: "Insufficient test coverage: missing unit tests, missing assertions, tests that don't prevent regressions, untested code paths"
+    pilot_count: 8
+    trajectory: PERSISTENT
+    enforced_by: [fruch, pehala]
+    patterns:
+      - "unit test"
+      - "missing.*test"
+      - "test.*regression"
+      - "could.*unit test"
+      - "focused test"
+      - "asserting.*parsing"
+      - "running it constantly"
+    keywords:
+      - unit test
+      - test
+      - assertion
+      - regression
+    bot_auto_tag: []
+
+  - id: T8_PLAN_QUALITY
+    name: "Plan Quality"
+    description: "Implementation plan issues: too much implementation detail, test code included, unclear dependencies, pseudo-code instead of descriptions"
+    pilot_count: 18
+    trajectory: DECLINING
+    enforced_by: [fruch, pehala, soyacz]
+    patterns:
+      - "remove.*implementation"
+      - "implementation details"
+      - "don't include.*code"
+      - "test code.*plan"
+      - "minimize.*testing"
+      - "python code.*plan"
+      - "visual help"
+      - "implicit dependency"
+      - "unittest.*plan"
+    keywords:
+      - implementation
+      - plan
+      - detail
+      - code
+      - test
+    bot_auto_tag: []
+
+  - id: T9_UNUSED_DEAD_CODE
+    name: "Unused / Dead Code"
+    description: "Unused imports, commented-out code, dead statements, unreachable code"
+    pilot_count: 20
+    trajectory: DECLINING
+    enforced_by: []
+    patterns:
+      - "unused.*import"
+      - "import.*not used"
+      - "commented[\\-\\s]out.*code"
+      - "statement.*no effect"
+      - "dead code"
+      - "suspicious unused"
+    keywords:
+      - unused
+      - import
+      - commented-out
+      - dead
+      - statement
+    bot_auto_tag: ["github-code-quality[bot]"]
+
+  - id: T10_CONSISTENCY
+    name: "Consistency"
+    description: "Inconsistent patterns and handling: done differently in different places, should use existing utilities, formatting inconsistencies"
+    pilot_count: 8
+    trajectory: PERSISTENT
+    enforced_by: [pehala, fruch, soyacz]
+    patterns:
+      - "unif[iy].*handling"
+      - "consistency"
+      - "not.*same"
+      - "done twice"
+      - "done.*differently"
+      - "utility function"
+      - "cannot.*use.*nodeallocator"
+      - "align.*format"
+    keywords:
+      - consistent
+      - consistency
+      - unify
+      - utility
+      - format
+    bot_auto_tag: []
+
+  - id: T11_CONFIG_SYSTEM
+    name: "Configuration System"
+    description: "Configuration-related issues: missing configuration options, validation not in config, configurable values hardcoded, empty help in sct_config.py"
+    pilot_count: 8
+    trajectory: PERSISTENT
+    enforced_by: [fruch, pehala, soyacz]
+    patterns:
+      - "configurable"
+      - "sct_config"
+      - "configuration"
+      - "validation.*config"
+      - "should be.*configurable"
+      - "empty help"
+      - "pydantic"
+      - "env var"
+    keywords:
+      - configuration
+      - config
+      - sct_config
+      - configurable
+      - validation
+    bot_auto_tag: []
+
+  - id: T12_NAMING
+    name: "Naming"
+    description: "Poor naming choices: backend-specific names used in generic code, protected attributes/functions, unclear names"
+    pilot_count: 5
+    trajectory: PERSISTENT
+    enforced_by: [fruch, pehala]
+    patterns:
+      - "shouldn't name"
+      - "better name"
+      - "protected.*function"
+      - "protected.*attribute"
+      - "overabundance.*protected"
+      - "name.*backend"
+      - "no need.*protected"
+    keywords:
+      - name
+      - naming
+      - protected
+      - ami_id
+    bot_auto_tag: []
+
+  - id: T13_LOGIC_CORRECTNESS
+    name: "Logic Correctness"
+    description: "Logical errors and incorrect implementations: wrong data structures, incorrect formatting, missing enforcement, algorithm errors, wrong return values"
+    pilot_count: 15
+    trajectory: PERSISTENT
+    enforced_by: [pehala, fruch, soyacz]
+    patterns:
+      - "code.*wrong"
+      - "this.*wrong"
+      - "wrong.*solution"
+      - "shouldn't.*format"
+      - "enforce.*somehow"
+      - "match.*expired"
+      - "return.*zero"
+      - "comma.*separated"
+      - "referenced.*places"
+      - "zero.token"
+    keywords:
+      - wrong
+      - incorrect
+      - logic
+      - error
+      - return
+      - enforce
+    bot_auto_tag: []
+
+  - id: T0_UNCATEGORIZED
+    name: "Uncategorized"
+    description: "Comments that did not match any known pattern"
+    pilot_count: 0
+    trajectory: PERSISTENT
+    enforced_by: []
+    patterns: []
+    keywords: []
+    bot_auto_tag: []
