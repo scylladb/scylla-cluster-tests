@@ -35,7 +35,15 @@ from distutils.util import strtobool
 import anyconfig
 from argus.client.sct.types import Package
 from packaging import version
-from pydantic import BaseModel, Field, ConfigDict, fields as pydantic_fields
+from pydantic import (
+    BaseModel,
+    Field,
+    ConfigDict,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+    fields as pydantic_fields,
+)
 from typing_extensions import Annotated
 from pydantic.functional_validators import BeforeValidator
 from pydantic.fields import FieldInfo
@@ -445,6 +453,15 @@ class SCTConfiguration(BaseModel):
 
     log: ClassVar = logging.getLogger(__name__)
 
+    # Guard flag: prevents cross-field @model_validator methods from firing during
+    # bulk loading in __init__ (when validate_assignment=True causes validators to see
+    # incomplete state). Set to True at end of __init__ after all config is merged.
+    _config_loaded: bool = PrivateAttr(default=False)
+
+    # ClassVar flag for selectively disabling cross-field validation in tests.
+    # Use the `skip_cross_field_validation` pytest fixture to toggle this.
+    _cross_field_validation_enabled: ClassVar[bool] = True
+
     perf_extra_jobs_to_compare: StringOrList = SctField(
         description="""Jobs to compare performance results with, for example if running in staging,
          we still can compare with official jobs""",
@@ -743,7 +760,7 @@ class SCTConfiguration(BaseModel):
         description="""Scylla will print kernel callstack to logs if True, otherwise, it will try and may print a message
          that it failed to.""",
     )
-    instance_provision: Literal["spot", "on_demand", "spot_fleet", "spot_low_price"] = SctField(
+    instance_provision: Literal["spot", "on_demand", "spot_fleet"] = SctField(
         description="instance_provision: spot|on_demand|spot_fleet",
     )
     instance_provision_fallback_on_demand: Boolean = SctField(
@@ -2336,6 +2353,209 @@ class SCTConfiguration(BaseModel):
         validate_assignment=True,
     )
 
+    # --- Pydantic Validators (extracted from __init__ Phase 1) ---
+
+    @field_validator("stress_duration", "prepare_stress_duration", mode="before")
+    @classmethod
+    def _coerce_stress_duration(cls, value):
+        if value is None:
+            return value
+        try:
+            return abs(int(value))
+        except (ValueError, TypeError):
+            raise ValueError(
+                f"Configured stress duration for generic test duratinon have to be "
+                f"positive integer number in minutes. Current value: {value}"
+            ) from None
+
+    @model_validator(mode="after")
+    def _validate_run_fullscan(self) -> "SCTConfiguration":
+        if not self._config_loaded or not self._cross_field_validation_enabled:
+            return self
+        run_fullscan_params = self.get("run_fullscan")
+        if not run_fullscan_params:
+            return self
+        if not isinstance(run_fullscan_params, list) or not len(run_fullscan_params) > 0:
+            raise ValueError(f"run_fullscan parameter must be non empty list, but got: {run_fullscan_params}")
+        for param in run_fullscan_params:
+            try:
+                ConfigParams(**json.loads(param))
+            except json.decoder.JSONDecodeError as exp:
+                raise ValueError(
+                    f"each item of run_fullscan list: {run_fullscan_params}, "
+                    f"item {param}, must be JSON but got error: {repr(exp)}"
+                ) from exp
+            except TypeError as exp:
+                raise ValueError(f" Got error: {repr(exp)}, on item '{param}'") from exp
+        return self
+
+    @model_validator(mode="after")
+    def _validate_scylla_network_config(self) -> "SCTConfiguration":
+        if not self._config_loaded or not self._cross_field_validation_enabled:
+            return self
+        scylla_network_config = self.get("scylla_network_config")
+        if not scylla_network_config:
+            return self
+        check_list = {
+            "listen_address": None,
+            "rpc_address": None,
+            "broadcast_rpc_address": None,
+            "broadcast_address": None,
+            "test_communication": None,
+        }
+        number2word = {1: "first", 2: "second", 3: "third"}
+        nics = set()
+        for i, address_config in enumerate(scylla_network_config):
+            for param in ["address", "ip_type", "public", "nic"]:
+                if address_config.get(param) is None:
+                    raise ValueError(
+                        f"'{param}' parameter value for {number2word[i + 1]} address is not defined. It is must parameter"
+                    )
+
+            if address_config["ip_type"] == "ipv4" and address_config["nic"] == 1 and address_config["public"] is True:
+                raise ValueError(
+                    "If ipv4 and public is True it has to be primary network interface, it means device index (nic) is 0"
+                )
+
+            nics.add(address_config["nic"])
+            if address_config["address"] not in check_list:
+                continue
+            check_list[address_config["address"]] = True
+
+        if not_defined_address := ",".join([key for key, val in check_list.items() if val is None]):
+            raise ValueError(f"Interface address(es) were not defined: {not_defined_address}")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_authenticator_params(self) -> "SCTConfiguration":
+        if not self._config_loaded or not self._cross_field_validation_enabled:
+            return self
+        if self.get("authenticator") and self.get("authenticator") == "PasswordAuthenticator":
+            authenticator_user = self.get("authenticator_user")
+            authenticator_password = self.get("authenticator_password")
+            if not (authenticator_password and authenticator_user):
+                raise ValueError(
+                    "For PasswordAuthenticator authenticator authenticator_user and authenticator_password"
+                    " have to be provided"
+                )
+        if self.get("alternator_enforce_authorization"):
+            if not self.get("authenticator") or not self.get("authorizer"):
+                raise ValueError(
+                    "When enabling `alternator_enforce_authorization` both `authenticator` and `authorizer` should be defined"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_endpoint_snitch(self) -> "SCTConfiguration":
+        if not self._config_loaded or not self._cross_field_validation_enabled:
+            return self
+        n_db_nodes = self.get("n_db_nodes") or 0
+        num_of_db_nodes = sum(n_db_nodes if isinstance(n_db_nodes, list) else [n_db_nodes])
+        simulated_regions = self.get("simulated_regions") or 0
+        simulated_racks = self.get("simulated_racks") or 0
+        cluster_backend = self.get("cluster_backend")
+        if (simulated_regions > 1 or simulated_racks > 1) and num_of_db_nodes > 1 and cluster_backend != "docker":
+            if snitch := self.get("endpoint_snitch"):
+                if not snitch.endswith("GossipingPropertyFileSnitch"):
+                    raise ValueError(
+                        f"Simulating racks requires endpoint_snitch to be GossipingPropertyFileSnitch "
+                        f"while it set to {self['endpoint_snitch']}"
+                    )
+            self.__dict__["endpoint_snitch"] = "org.apache.cassandra.locator.GossipingPropertyFileSnitch"
+        return self
+
+    @model_validator(mode="after")
+    def _validate_use_dns_names(self) -> "SCTConfiguration":
+        if not self._config_loaded or not self._cross_field_validation_enabled:
+            return self
+        if self.get("use_dns_names"):
+            cluster_backend = self.get("cluster_backend")
+            if cluster_backend not in ("aws",):
+                raise ValueError(f"use_dns_names is not supported for {cluster_backend} backend")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_scylla_network_config_multi_nic(self) -> "SCTConfiguration":
+        if not self._config_loaded or not self._cross_field_validation_enabled:
+            return self
+        if scylla_network_config := self.get("scylla_network_config"):
+            nics = {addr_cfg["nic"] for addr_cfg in scylla_network_config if "nic" in addr_cfg}
+            if len(nics) > 1 and len(self.region_names) >= 2:
+                raise ValueError("Multiple network interfaces aren't supported for multi region use cases")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_k8s_tls_sni(self) -> "SCTConfiguration":
+        if not self._config_loaded or not self._cross_field_validation_enabled:
+            return self
+        if self.get("k8s_enable_sni") and not self.get("k8s_enable_tls"):
+            raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_zero_token_nodes(self) -> "SCTConfiguration":
+        if not self._config_loaded or not self._cross_field_validation_enabled:
+            return self
+        if self.get("use_zero_nodes"):
+            cluster_backend = self.get("cluster_backend")
+            self._validate_zero_token_backend_support(backend=cluster_backend)
+            zero_nodes_num = self.get("n_db_zero_token_nodes")
+            data_nodes_num = self.get("n_db_nodes")
+            if zero_nodes_num:
+                zero_nodes_num = (
+                    [zero_nodes_num]
+                    if isinstance(zero_nodes_num, int)
+                    else [int(i) for i in str(zero_nodes_num).split()]
+                )
+                data_nodes_num = (
+                    [data_nodes_num]
+                    if isinstance(data_nodes_num, int)
+                    else [int(i) for i in str(data_nodes_num).split()]
+                )
+                if len(zero_nodes_num) != len(data_nodes_num):
+                    raise ValueError("Config of zero token nodes is not equal config of data nodes for multi dc")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_performance_throughput_params(self) -> "SCTConfiguration":
+        if not self._config_loaded or not self._cross_field_validation_enabled:
+            return self
+        if performance_throughput_params := self.get("perf_gradual_throttle_steps"):
+            for workload, params in performance_throughput_params.items():
+                if not isinstance(params, list):
+                    raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
+
+                if not (gradual_threads := self.get("perf_gradual_threads")):
+                    raise ValueError("perf_gradual_threads should be defined for performance throughput test")
+
+                if workload not in gradual_threads:
+                    raise ValueError(
+                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter"
+                    )
+
+                if not isinstance(gradual_threads[workload], list | int):
+                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
+
+                if isinstance(gradual_threads[workload], int):
+                    gradual_threads[workload] = [gradual_threads[workload]]
+
+                thread_list = gradual_threads[workload]
+                for thread_count in thread_list:
+                    if not isinstance(thread_count, int):
+                        raise ValueError(
+                            f"Invalid thread count type for '{workload}': {thread_count} "
+                            f"(type: {type(thread_count).__name__})"
+                        )
+
+                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
+                    raise ValueError(
+                        f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
+                        f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
+                    )
+        return self
+
+    # --- End Pydantic Validators ---
+
     # Dict-like access methods, since we need to have both attribute-style and dict-style access for dict merging
 
     def __getitem__(self, item):
@@ -2714,185 +2934,23 @@ class SCTConfiguration(BaseModel):
         # and some platfrom don't support special characters in the instance names (docker, AWS and such)
         self["user_prefix"] = re.sub(r"[^a-zA-Z0-9-]", "-", self.get("user_prefix"))
 
-        # 11) validate that supported instance_provision selected
-        if self.get("instance_provision") not in ["spot", "on_demand", "spot_fleet"]:
-            raise ValueError(f"Selected instance_provision type '{self.get('instance_provision')}' is not supported!")
-
-        # 12) validate authenticator parameters
-        if self.get("authenticator") and self.get("authenticator") == "PasswordAuthenticator":
-            authenticator_user = self.get("authenticator_user")
-            authenticator_password = self.get("authenticator_password")
-            if not (authenticator_password and authenticator_user):
-                raise ValueError(
-                    "For PasswordAuthenticator authenticator authenticator_user and authenticator_password"
-                    " have to be provided"
-                )
-
-        if self.get("alternator_enforce_authorization"):
-            if not self.get("authenticator") or not self.get("authorizer"):
-                raise ValueError(
-                    "When enabling `alternator_enforce_authorization` both `authenticator` and `authorizer` should be defined"
-                )
-
-        # 13) validate stress and prepare duration:
-        if stress_duration := self.get("stress_duration"):
-            try:
-                self["stress_duration"] = abs(int(stress_duration))
-            except ValueError:
-                raise ValueError(
-                    f"Configured stress duration for generic test duratinon have to be \
-                                 positive integer number in minutes. Current value: {stress_duration}"
-                ) from ValueError
-        if prepare_stress_duration := self.get("prepare_stress_duration"):
-            try:
-                self["prepare_stress_duration"] = abs(int(prepare_stress_duration))
-            except ValueError:
-                raise ValueError(
-                    f"Configured stress duration for generic test duratinon have to be \
-                                 positive integer number in minutes. Current value: {prepare_stress_duration}"
-                ) from ValueError
-
-        # 14 Validate run_fullscan parameters
-        if run_fullscan_params := self.get("run_fullscan"):
-            if not isinstance(run_fullscan_params, list) or not len(run_fullscan_params) > 0:
-                raise ValueError(f"run_fullscan parameter must be non empty list, but got: {run_fullscan_params}")
-            for param in run_fullscan_params:
-                try:
-                    ConfigParams(**json.loads(param))
-                except json.decoder.JSONDecodeError as exp:
-                    raise ValueError(
-                        f"each item of run_fullscan list: {run_fullscan_params}, "
-                        f"item {param}, must be JSON but got error: {repr(exp)}"
-                    ) from exp
-                except TypeError as exp:
-                    raise ValueError(f" Got error: {repr(exp)}, on item '{param}'") from exp
-
-        # 15 Force endpoint_snitch to GossipingPropertyFileSnitch if using simulated_regions or simulated_racks
-        n_db_nodes = self.get("n_db_nodes") or 0
-        num_of_db_nodes = sum(n_db_nodes if isinstance(n_db_nodes, list) else [n_db_nodes])
-        if (
-            (self.get("simulated_regions") or 0) > 1
-            or (self.get("simulated_racks") or 0) > 1
-            and num_of_db_nodes > 1
-            and cluster_backend != "docker"
-        ):
-            if snitch := self.get("endpoint_snitch"):
-                assert snitch.endswith("GossipingPropertyFileSnitch"), (
-                    f"Simulating racks requires endpoint_snitch to be GossipingPropertyFileSnitch while it set to {self['endpoint_snitch']}"
-                )
-            self["endpoint_snitch"] = "org.apache.cassandra.locator.GossipingPropertyFileSnitch"
-
-        # 16 Validate use_dns_names
-        if self.get("use_dns_names"):
-            if cluster_backend not in ("aws",):
-                raise ValueError(f"use_dns_names is not supported for {cluster_backend} backend")
-
-        # 17 Validate scylla network configuration mandatory values
-        if scylla_network_config := self.get("scylla_network_config"):
-            check_list = {
-                "listen_address": None,
-                "rpc_address": None,
-                "broadcast_rpc_address": None,
-                "broadcast_address": None,
-                "test_communication": None,
-            }
-            number2word = {1: "first", 2: "second", 3: "third"}
-            nics = set()
-            for i, address_config in enumerate(scylla_network_config):
-                for param in ["address", "ip_type", "public", "nic"]:
-                    if address_config.get(param) is None:
-                        raise ValueError(
-                            f"'{param}' parameter value for {number2word[i + 1]} address is not defined. It is must parameter"
-                        )
-
-                if (
-                    address_config["ip_type"] == "ipv4"
-                    and address_config["nic"] == 1
-                    and address_config["public"] is True
-                ):
-                    raise ValueError(
-                        "If ipv4 and public is True it has to be primary network interface, it means device index (nic) is 0"
-                    )
-
-                nics.add(address_config["nic"])
-                if address_config["address"] not in check_list:
-                    continue
-
-                check_list[address_config["address"]] = True
-
-            if not_defined_address := ",".join([key for key, value in check_list.items() if value is None]):
-                raise ValueError(f"Interface address(es) were not defined: {not_defined_address}")
-
-            if len(nics) > 1 and len(self.region_names) >= 2:
-                raise ValueError("Multiple network interfaces aren't supported for multi region use cases")
-
-        # 18 Validate K8S TLS+SNI values
-        if self.get("k8s_enable_sni") and not self.get("k8s_enable_tls"):
-            raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
-
         SCTCapacityReservation.get_cr_from_aws(self)
         SCTDedicatedHosts.reserve(self)
-
-        # Validate zero token nodes
-        if self.get("use_zero_nodes"):
-            self._validate_zero_token_backend_support(backend=cluster_backend)
-            zero_nodes_num = self.get("n_db_zero_token_nodes")
-            data_nodes_num = self.get("n_db_nodes")
-            # if number of zero nodes is set for cluster setup, check correctness of settings
-            if zero_nodes_num:
-                zero_nodes_num = (
-                    [zero_nodes_num]
-                    if isinstance(zero_nodes_num, int)
-                    else [int(i) for i in str(zero_nodes_num).split()]
-                )
-                data_nodes_num = (
-                    [data_nodes_num]
-                    if isinstance(data_nodes_num, int)
-                    else [int(i) for i in str(data_nodes_num).split()]
-                )
-                assert len(zero_nodes_num) == len(data_nodes_num), (
-                    "Config of zero token nodes is not equal config of data nodes for multi dc"
-                )
-
-        # 21 validate performance throughput parameters
-        if performance_throughput_params := self.get("perf_gradual_throttle_steps"):
-            for workload, params in performance_throughput_params.items():
-                if not isinstance(params, list):
-                    raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
-
-                if not (gradual_threads := self.get("perf_gradual_threads")):
-                    raise ValueError("perf_gradual_threads should be defined for performance throughput test")
-
-                if workload not in gradual_threads:
-                    raise ValueError(
-                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter"
-                    )
-
-                if not isinstance(gradual_threads[workload], list | int):
-                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
-
-                if isinstance(gradual_threads[workload], int):
-                    gradual_threads[workload] = [gradual_threads[workload]]
-
-                for thread_count in gradual_threads[workload]:
-                    if not isinstance(thread_count, int):
-                        raise ValueError(
-                            f"Invalid thread count type for '{workload}': {thread_count} "
-                            f"(type: {type(thread_count).__name__})"
-                        )
-
-                # The value of perf_gradual_threads[load] must be either:
-                #   - a single-element list (applied to all throttle steps) or integer
-                #   - a list with the same length as perf_gradual_throttle_steps[workload] (one thread count per step).
-                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
-                    raise ValueError(
-                        f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
-                        f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
-                    )
 
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
             self.log.debug("Using random cassandra-stress driver version: %s", self["c_s_driver_version"])
+
+        self._config_loaded = True
+        self._validate_authenticator_params()
+        self._validate_run_fullscan()
+        self._validate_endpoint_snitch()
+        self._validate_use_dns_names()
+        self._validate_scylla_network_config()
+        self._validate_scylla_network_config_multi_nic()
+        self._validate_k8s_tls_sni()
+        self._validate_zero_token_nodes()
+        self._validate_performance_throughput_params()
 
     def load_docker_images_defaults(self):
         docker_images_dir = pathlib.Path(sct_abs_path("defaults/docker_images"))

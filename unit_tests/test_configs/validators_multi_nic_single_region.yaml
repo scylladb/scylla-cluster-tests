@@ -1,0 +1,21 @@
+scylla_network_config:
+  - address: listen_address
+    ip_type: ipv4
+    public: false
+    nic: 0
+  - address: rpc_address
+    ip_type: ipv4
+    public: false
+    nic: 1
+  - address: broadcast_rpc_address
+    ip_type: ipv4
+    public: false
+    nic: 0
+  - address: broadcast_address
+    ip_type: ipv4
+    public: false
+    nic: 0
+  - address: test_communication
+    ip_type: ipv4
+    public: false
+    nic: 0
