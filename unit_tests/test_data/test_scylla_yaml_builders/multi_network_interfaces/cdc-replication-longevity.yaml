@@ -28,9 +28,6 @@ gemini_cmd: |
 gemini_table_options:
   - "cdc={'enabled':true,'ttl':0}"
 
-# Required by SCT, although not used:
-gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
-
 scylla_network_config:
 - address: listen_address  # Address Scylla listens for connections from other nodes. See storage_port and ssl_storage_ports.
   ip_type: ipv4
