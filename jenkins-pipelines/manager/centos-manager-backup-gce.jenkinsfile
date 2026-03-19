@@ -5,6 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 managerPipeline(
     backend: 'gce',
+<<<<<<< HEAD:jenkins-pipelines/manager/centos-manager-backup-gce.jenkinsfile
     test_name: 'mgmt_cli_test.MgmtCliTest.test_backup_feature',
     test_config: 'test-cases/manager/manager-regression-multiDC-gce.yaml',
     gce_datacenter: '''["us-east1", "us-west1"]''',
@@ -12,4 +13,13 @@ managerPipeline(
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
     post_behavior_monitor_nodes: 'destroy'
+||||||| parent of 46e0d2870 (test(manager): add singleDC config and sanity test for GCE):jenkins-pipelines/manager/ubuntu22-manager-backup-gce.jenkinsfile
+    test_name: 'mgmt_cli_test.ManagerBackupTests.test_backup_feature',
+    test_config: 'test-cases/manager/manager-regression-multiDC-gce.yaml',
+    gce_datacenter: '''["us-east1", "us-west1"]'''
+=======
+    test_name: 'mgmt_cli_test.ManagerBackupTests.test_backup_feature',
+    test_config: 'test-cases/manager/manager-regression-singleDC-gce.yaml',
+    gce_datacenter: 'us-east1'
+>>>>>>> 46e0d2870 (test(manager): add singleDC config and sanity test for GCE):jenkins-pipelines/manager/ubuntu22-manager-backup-gce.jenkinsfile
 )
