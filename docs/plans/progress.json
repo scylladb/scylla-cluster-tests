@@ -12,26 +12,6 @@
       "phases_done": 0
     },
     {
-      "id": "pr-review-taxonomy-analysis",
-      "title": "PR Review Taxonomy Analysis",
-      "file": "pr-review-taxonomy-analysis.md",
-      "domain": "ai-tooling",
-      "status": "in_progress",
-      "created": "2026-03-20",
-      "phases_total": 4,
-      "phases_done": 3
-    },
-    {
-      "id": "multi-cloud-provisioning-resilience",
-      "title": "Multi-Cloud Provisioning Resilience",
-      "file": "infrastructure/multi-cloud-provisioning-resilience.md",
-      "domain": "cluster",
-      "status": "draft",
-      "created": "2026-01-24",
-      "phases_total": 7,
-      "phases_done": 0
-    },
-    {
       "id": "docker-cleanup-all-backends",
       "title": "Docker Cleanup for All Backends",
       "file": "infrastructure/docker-cleanup-all-backends.md",
@@ -72,16 +52,6 @@
       "phases_done": 0
     },
     {
-      "id": "jenkins-reuse-cluster",
-      "title": "Jenkins Pipeline Cluster Reuse",
-      "file": "jenkins/jenkins-reuse-cluster.md",
-      "domain": "ci-cd",
-      "status": "draft",
-      "created": "2026-03-18",
-      "phases_total": 5,
-      "phases_done": 0
-    },
-    {
       "id": "jenkins-pipeline-config-linter",
       "title": "Jenkins Pipeline Config Linter",
       "file": "jenkins/jenkins-pipeline-config-linter.md",
@@ -102,6 +72,16 @@
       "phases_done": 0
     },
     {
+      "id": "pipeline-labeling-and-documentation",
+      "title": "Pipeline Labeling and Documentation",
+      "file": "jenkins/pipeline-labeling-and-documentation.md",
+      "domain": "ci-cd",
+      "status": "draft",
+      "created": "2026-03-19",
+      "phases_total": 7,
+      "phases_done": 0
+    },
+    {
       "id": "nemesis-rework",
       "title": "Nemesis Rework (Nemesis 2.0)",
       "file": "nemesis/nemesis-rework.md",
@@ -110,16 +90,6 @@
       "created": "2026-01-30",
       "phases_total": 3,
       "phases_done": 1
-    },
-    {
-      "id": "nemesis-extraction-phase3",
-      "title": "Nemesis Extraction Phase 3",
-      "file": "nemesis/nemesis-extraction.md",
-      "domain": "nemesis",
-      "status": "in_progress",
-      "created": "2026-03-30",
-      "phases_total": null,
-      "phases_done": 0
     },
     {
       "id": "k8s-multitenancy-dict-config",
@@ -150,16 +120,6 @@
       "phases_done": 0
     },
     {
-      "id": "unit-integration-test-separation",
-      "title": "Unit/Integration Test Separation",
-      "file": "testing/unit-integration-test-separation.md",
-      "domain": "testing",
-      "status": "draft",
-      "created": "2026-03-23",
-      "phases_total": 5,
-      "phases_done": 0
-    },
-    {
       "id": "resilient-test-config-dependencies",
       "title": "Resilient Test Config Dependencies",
       "domain": "config",
@@ -169,12 +129,11 @@
       "phases_done": 0
     },
     {
-      "id": "cassandra-cluster-support",
-      "title": "Cassandra Cluster Support",
-      "file": "infrastructure/cassandra-cluster-support.md",
-      "domain": "cluster",
-      "status": "draft",
-      "created": "2026-03-08",
+      "id": "cassandra-oracle-cluster",
+      "title": "Cassandra Oracle Cluster",
+      "domain": "stress-tools",
+      "status": "pending_pr",
+      "pr": 13916,
       "phases_total": null,
       "phases_done": 0
     },
@@ -199,10 +158,9 @@
     {
       "id": "centralized-trigger-matrix",
       "title": "Centralized Trigger Matrix",
-      "file": "jenkins/centralized-trigger-matrix.md",
       "domain": "ci-cd",
-      "status": "draft",
-      "created": "2026-03-05",
+      "status": "pending_pr",
+      "pr": 13887,
       "phases_total": null,
       "phases_done": 0
     },
@@ -218,21 +176,10 @@
     {
       "id": "sct-config-validation-and-lazy-images",
       "title": "SCT Config Validation and Lazy Images",
-      "file": "sct-config-validation-and-lazy-images.md",
       "domain": "config",
-      "status": "draft",
-      "created": "2026-03-04",
+      "status": "pending_pr",
+      "pr": 13877,
       "phases_total": null,
-      "phases_done": 0
-    },
-    {
-      "id": "config-type-normalization",
-      "title": "Config Type Normalization",
-      "file": "config/config-type-normalization.md",
-      "domain": "config",
-      "status": "draft",
-      "created": "2026-04-17",
-      "phases_total": 5,
       "phases_done": 0
     },
     {
@@ -245,23 +192,21 @@
       "phases_done": 0
     },
     {
-      "id": "i8g-performance-jobs-migration",
-      "title": "i8g Performance Jobs Migration",
-      "file": "i8g-performance-jobs-migration.md",
-      "domain": "ci-cd",
-      "status": "draft",
-      "created": "2026-03-22",
+      "id": "nemesis-extraction-phase3",
+      "title": "Nemesis Extraction Phase 3",
+      "domain": "nemesis",
+      "status": "pending_pr",
+      "pr": 13769,
       "phases_total": null,
       "phases_done": 0
     },
     {
-      "id": "perf-simple-query-offline-installer-trigger",
-      "title": "Perf-Simple-Query Offline Installer Trigger",
-      "file": "jenkins/perf-simple-query-offline-installer-trigger.md",
+      "id": "i8g-performance-jobs-migration",
+      "title": "i8g Performance Jobs Migration",
       "domain": "ci-cd",
-      "status": "draft",
-      "created": "2026-04-06",
-      "phases_total": 3,
+      "status": "pending_pr",
+      "pr": 13629,
+      "phases_total": null,
       "phases_done": 0
     },
     {
@@ -271,25 +216,6 @@
       "status": "pending_pr",
       "pr": 13509,
       "phases_total": null,
-      "phases_done": 0
-    },
-    {
-      "id": "ssh-key-decoupling",
-      "title": "SSH Key Decoupling",
-      "domain": "cluster",
-      "status": "draft",
-      "pr": null,
-      "phases_total": 3,
-      "phases_done": 0
-    },
-    {
-      "id": "aws-capacity-az-fallback",
-      "title": "AWS Capacity Validation and Automatic AZ/Region Fallback",
-      "file": "infrastructure/aws-capacity-az-fallback.md",
-      "domain": "cluster",
-      "status": "draft",
-      "created": "2026-04-12",
-      "phases_total": 5,
       "phases_done": 0
     }
   ]

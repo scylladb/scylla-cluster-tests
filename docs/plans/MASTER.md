@@ -51,6 +51,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 |------|--------|-----------|
 | Jenkins Pipeline Cluster Reuse | `draft` | [jenkins-reuse-cluster.md](jenkins/jenkins-reuse-cluster.md) |
 | Jenkins Pipeline Config Linter | `draft` | [jenkins-pipeline-config-linter.md](jenkins/jenkins-pipeline-config-linter.md) |
+| Pipeline Labeling and Documentation | `draft` | [pipeline-labeling-and-documentation.md](jenkins/pipeline-labeling-and-documentation.md) |
 | Jenkins Uno-Choice Billing Project | `draft` | [jenkins-uno-choice-billing-project.md](jenkins/jenkins-uno-choice-billing-project.md) |
 | Centralized Trigger Matrix | `draft` | [centralized-trigger-matrix.md](jenkins/centralized-trigger-matrix.md) |
 | i8g Performance Jobs Migration | `draft` | [i8g-performance-jobs-migration.md](i8g-performance-jobs-migration.md) |
@@ -100,6 +101,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Dependent Plan | Depends On | Relationship |
 |---------------|------------|--------------|
 | Nemesis Extraction Phase 3 | Nemesis Rework | Phase 3 continues the extraction started in Nemesis 2.0 |
+| Pipeline Labeling and Documentation | Jenkins Pipeline Config Linter | Labeling complements structural config linting; may reuse Jenkinsfile parser |
 | SCT Config Follow-up Refactoring | SCT Config Validation and Lazy Images | Follow-up work after initial config validation |
 | Typed Config Access Migration | SCT Config Follow-up Refactoring | Type safety layer on top of refactored config |
 
