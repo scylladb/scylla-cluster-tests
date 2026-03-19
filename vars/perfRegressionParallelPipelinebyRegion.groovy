@@ -60,20 +60,30 @@ def call(Map pipelineParams) {
                         }
                         def testRegionMatrix = [
                             [
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-vnodes',
+                                region: 'us-east-1',
+                                ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1'],
+                                pre_release: [],
+                                sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"', '"test_write_gradual_increase_load"', '"test_read_disk_only_gradual_increase_load"'],
+                                labels: ['master-monthly'],
+                                job_throttle_category: 'SCT-perf-i8g',
+                                arch: 'aarch64'
+                            ],
+                            [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes',
                                 region: 'us-east-1',
-                                ignore_versions: [],
+                                versions: ['2025.2', '2025.1', '2024.2', '2024.1'],
                                 pre_release: [],
                                 sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"', '"test_read_disk_only_gradual_increase_load"'],
-                                labels: ['master-monthly']
+                                labels: []
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-vnodes',
                                 region: 'us-east-1',
-                                ignore_versions: [],
+                                versions: ['2025.2', '2025.1', '2024.2', '2024.1'],
                                 pre_release: [],
                                 sub_tests: ['"test_write_gradual_increase_load"'],
-                                labels: ['master-monthly']
+                                labels: []
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade',
@@ -90,7 +100,7 @@ def call(Map pipelineParams) {
                                 ignore_versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"'],
-                                labels: ['master-monthly']
+                                labels: []
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis',
@@ -170,20 +180,30 @@ def call(Map pipelineParams) {
                             ],
                             // Tablets
                             [
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets',
+                                region: 'us-east-1',
+                                ignore_versions: ['2025.2', '2025.1', '2024.1', '2024.2'],
+                                pre_release: [],
+                                sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"', '"test_write_gradual_increase_load"', '"test_read_disk_only_gradual_increase_load"'],
+                                labels: ['master-weekly'],
+                                job_throttle_category: 'SCT-perf-i8g',
+                                arch: 'aarch64'
+                            ],
+                            [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets',
                                 region: 'us-east-1',
-                                ignore_versions: ['2024.1', '2024.2'],
+                                versions: ['2025.2', '2025.1'],
                                 pre_release: [],
                                 sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"', '"test_read_disk_only_gradual_increase_load"'],
-                                labels: ['master-weekly']
+                                labels: []
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-tablets',
                                 region: 'us-east-1',
-                                ignore_versions: ['2024.1', '2024.2'],
+                                versions: ['2025.2', '2025.1'],
                                 pre_release: [],
                                 sub_tests: ['"test_write_gradual_increase_load"'],
-                                labels: ['master-weekly']
+                                labels: []
                             ],
                             [
                                 job_name: 'scylla-master/perf-regression/latte-perf-regression-latency-steady-state-custom-d1-workload1-tablets',
@@ -208,7 +228,7 @@ def call(Map pipelineParams) {
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-tablets',
                                 region: 'eu-west-3',
                                 ignore_versions: ['2024.1', '2024.2', 'master'],
-                                pre_release: ['rc1',],
+                                pre_release: [],
                                 sub_tests: ['"test_latency_read_with_nemesis"', '"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-3weeks']
                             ],
@@ -240,7 +260,35 @@ def call(Map pipelineParams) {
                         println("testRegionMatrix: $testRegionMatrix")
                         def jobs_names = testRegionMatrix*.job_name.toSet()
                         println("Jobs names: $jobs_names")
-                        def image_name = null
+                        def image_names = [:]
+                        if (scylla_version == "master") {
+                            // Collect unique cloud_provider-arch combinations first
+                            def unique_keys = [:]  // image_cache_key -> [cloud_provider, arch, region]
+                            for (def entry in testRegionMatrix) {
+                                String cloud_provider = entry.cloud_provider ?: 'aws'
+                                String arch = entry.arch ?: 'x86_64'
+                                String image_cache_key = "${cloud_provider}-${arch}".toString()
+                                if (!unique_keys.containsKey(image_cache_key)) {
+                                    String lookup_region = entry.region ?: 'us-east-1'
+                                    unique_keys[image_cache_key] = [cloud_provider: cloud_provider, arch: arch, region: lookup_region]
+                                }
+                            }
+                            def unique_keys_list = unique_keys.keySet().collect()  // copy to serializable ArrayList
+                            println("Unique image keys to look up: ${unique_keys_list}")
+                            // Lookup images once per unique combination
+                            for (String image_cache_key in unique_keys_list) {
+                                def params_map = unique_keys[image_cache_key]
+                                def output = sh(script: "./docker/env/hydra.sh list-images -c ${params_map.cloud_provider} -r ${params_map.region} -a ${params_map.arch} -o json", returnStdout: true).trim()
+                                println("Output from hydra list-images (arch: ${params_map.arch}): $output")
+                                def image_name_json = output.split('\n')[-1].trim()
+                                println("Image name json: $image_name_json")
+                                if (!image_name_json) {
+                                    error "Image name is empty. Please check the hydra.sh command output."
+                                }
+                                image_names[image_cache_key] = new groovy.json.JsonSlurperClassic().parseText(image_name_json).keySet()[0]
+                                println("Image name for ${image_cache_key}: ${image_names[image_cache_key]}")
+                            }
+                        }
                         for (job_name in jobs_names) {
                             println("Job name: $job_name")
                             def version = null
@@ -249,21 +297,9 @@ def call(Map pipelineParams) {
                             def image_name_for_job = null
                             def rolling_upgrade_test = null
                             def microbenchmark = null
+                            def job_throttle_category = null
+                            def job_arch = null
                             for (def entry in testRegionMatrix) {
-                                 def cloud_provider = entry.cloud_provider ?: 'aws'
-                                 if (scylla_version == "master" && !image_name){
-                                    region = entry.region ?: 'us-east-1'
-                                    def output = sh(script: "./docker/env/hydra.sh list-images -c ${cloud_provider} -r ${region} -o json", returnStdout: true).trim()
-                                    println("Output from hydra list-images: $output")
-                                    def image_name_json = output.split('\n')[-1].trim()
-                                    println("Image name json: $image_name_json")
-                                    if (!image_name_json){
-                                        error "Image name is empty. Please check the hydra.sh command output."
-                                    }
-
-                                    image_name = new groovy.json.JsonSlurperClassic().parseText(image_name_json).keySet()[0]
-                                    println("Image name: $image_name")
-                                 }
 
                                 if (entry.job_name == job_name) {
                                     def entry_version_matched = false
@@ -281,7 +317,7 @@ def call(Map pipelineParams) {
                                         }
                                     }
                                     if (entry_version_matched) {
-                                        if (labels_selector && !(entry.labels.contains(labels_selector))) {
+                                        if (scylla_version == "master" && labels_selector && !(entry.labels.contains(labels_selector))) {
                                             println("Skipping job $job_name for labels_selector: $labels_selector")
                                             continue
                                         }
@@ -296,10 +332,14 @@ def call(Map pipelineParams) {
                                         println("Found for job $job_name: region : $region, version: $version, sub_tests: $sub_tests")
                                         rolling_upgrade_test = entry.rolling_upgrade_test
                                         microbenchmark = entry.microbenchmark
+                                        job_throttle_category = entry.job_throttle_category
+                                        job_arch = entry.arch ?: 'x86_64'
                                         if (rolling_upgrade_test || microbenchmark) {
                                             image_name_for_job = null
                                         } else {
-                                            image_name_for_job = image_name
+                                            def job_cloud_provider = entry.cloud_provider ?: 'aws'
+                                            String job_image_cache_key = "${job_cloud_provider}-${job_arch}".toString()
+                                            image_name_for_job = image_names[job_image_cache_key]
                                         }
                                     }
                                 }
@@ -308,18 +348,19 @@ def call(Map pipelineParams) {
                                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                                     println("Building job: $job_name with sub_test: ${sub_tests}, region: ${region}, image_name_for_job: ${image_name_for_job}, scylla_version: ${version}")
                                     println("Send to job: scylla_version: ${rolling_upgrade_test ? null : (image_name_for_job ? null : params.scylla_version)}; scylla_ami_id: ${image_name_for_job ? image_name_for_job : null}; new_scylla_repo: ${rolling_upgrade_test ? params.new_scylla_repo : null}")
-                                        build job: job_name, wait: false, parameters: [
-                                            string(name: 'scylla_version', value: rolling_upgrade_test ? null : (image_name_for_job ? null : params.scylla_version)),
-                                            string(name: 'scylla_ami_id', value: image_name_for_job ? image_name_for_job : null),
-                                            string(name: 'base_versions', value: rolling_upgrade_test ? params.base_versions : null),
-                                            string(name: 'provision_type', value: 'on_demand'),
-                                            string(name: 'new_scylla_repo', value: rolling_upgrade_test ? params.new_scylla_repo : null),
-                                            booleanParam(name: 'use_job_throttling', value: params.use_job_throttling),
-                                            string(name: 'sub_tests', value: groovy.json.JsonOutput.toJson(sub_tests)),
-                                            string(name: 'region', value: region),
-                                            string(name: 'requested_by_user', value: params.requested_by_user),
-                                            string(name: 'billing_project', value: params.billing_project)
-                                        ]
+//                                         build job: job_name, wait: false, parameters: [
+//                                             string(name: 'scylla_version', value: rolling_upgrade_test ? null : (image_name_for_job ? null : params.scylla_version)),
+//                                             string(name: 'scylla_ami_id', value: image_name_for_job ? image_name_for_job : null),
+//                                             string(name: 'base_versions', value: rolling_upgrade_test ? params.base_versions : null),
+//                                             string(name: 'provision_type', value: 'on_demand'),
+//                                             string(name: 'new_scylla_repo', value: rolling_upgrade_test ? params.new_scylla_repo : null),
+//                                             booleanParam(name: 'use_job_throttling', value: params.use_job_throttling),
+//                                             string(name: 'sub_tests', value: groovy.json.JsonOutput.toJson(sub_tests)),
+//                                             string(name: 'region', value: region),
+//                                             string(name: 'requested_by_user', value: params.requested_by_user),
+//                                             string(name: 'billing_project', value: params.billing_project),
+//                                             string(name: 'job_throttle_category', value: job_throttle_category)
+//                                         ]
                                     }
                                 }
                             }
