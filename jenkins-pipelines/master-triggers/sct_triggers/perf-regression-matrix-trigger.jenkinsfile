@@ -1,0 +1,8 @@
+#!groovy
+
+// New YAML-driven trigger matrix — replaces perfRegressionParallelPipelinebyRegion()
+// See: configurations/triggers/perf-regression.yaml for job definitions
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+triggerMatrixPipeline(
+    matrix_file: 'configurations/triggers/perf-regression.yaml'
+)
