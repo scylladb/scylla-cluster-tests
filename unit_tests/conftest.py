@@ -453,15 +453,17 @@ def fixture_params(request: pytest.FixtureRequest, monkeypatch):
         monkeypatch.setenv("SCT_CONFIG_FILES", config_files)
 
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    # Set authenticator env vars before creating SCTConfiguration so that all values
+    # are present when the cross-field validator runs at the end of __init__.
+    # Previously these were set via params.update() after creation, but that triggers
+    # _validate_authenticator_params for each setattr() individually (validate_assignment=True),
+    # causing a ValidationError when authenticator="PasswordAuthenticator" is set before
+    # authenticator_user/authenticator_password.
+    monkeypatch.setenv("SCT_AUTHENTICATOR", "PasswordAuthenticator")
+    monkeypatch.setenv("SCT_AUTHENTICATOR_USER", "cassandra")
+    monkeypatch.setenv("SCT_AUTHENTICATOR_PASSWORD", "cassandra")
+    monkeypatch.setenv("SCT_AUTHORIZER", "CassandraAuthorizer")
     params = sct_config.SCTConfiguration()
-    params.update(
-        dict(
-            authenticator="PasswordAuthenticator",
-            authenticator_user="cassandra",
-            authenticator_password="cassandra",
-            authorizer="CassandraAuthorizer",
-        )
-    )
     yield params
 
 
