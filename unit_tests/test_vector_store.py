@@ -129,7 +129,7 @@ def test_vector_search(docker_scylla, docker_vector_store, params):  # noqa: PLR
 
     # vector search via API
     search_results = vector_client.ann_search(
-        keyspace="vector_test", index="embeddings_vector_idx", embedding=query_vector, limit=10
+        keyspace="vector_test", index="embeddings_vector_idx", vector=query_vector, limit=10
     )
     primary_keys = search_results.get("primary_keys", {}).get("id", [])
     assert len(primary_keys) > 0, "No search results returned for API search"
@@ -154,7 +154,7 @@ def test_vector_search(docker_scylla, docker_vector_store, params):  # noqa: PLR
     # API search with different limits
     for limit in [1, 5, 20]:
         results = vector_client.ann_search(
-            keyspace="vector_test", index="embeddings_vector_idx", embedding=query_vector, limit=limit
+            keyspace="vector_test", index="embeddings_vector_idx", vector=query_vector, limit=limit
         )
         primary_keys = results.get("primary_keys", {}).get("id", [])
         actual_count = len(primary_keys)
@@ -177,9 +177,9 @@ def test_vector_search_error_handling(docker_scylla, docker_vector_store, params
 
     # too few dimensions
     with pytest.raises(Exception):
-        vector_client.ann_search(keyspace="vector_test", index="embeddings_vector_idx", embedding=[0.1, 0.2], limit=5)
+        vector_client.ann_search(keyspace="vector_test", index="embeddings_vector_idx", vector=[0.1, 0.2], limit=5)
 
     # search on non-existent index
     test_vector = [random.uniform(-1.0, 1.0) for _ in range(128)]
     with pytest.raises(Exception):
-        vector_client.ann_search(keyspace="nonexistent", index="nonexistent_idx", embedding=test_vector, limit=5)
+        vector_client.ann_search(keyspace="nonexistent", index="nonexistent_idx", vector=test_vector, limit=5)
