@@ -28,6 +28,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | GCE Provisioning | `draft` | [gce-provisioning.md](infrastructure/gce-provisioning.md) |
 | Amazon EMR Spark Migrator | `pending_pr` | [#13909](https://github.com/scylladb/scylla-cluster-tests/pull/13909) |
 | Source-Destination Clusters | `pending_pr` | [#13908](https://github.com/scylladb/scylla-cluster-tests/pull/13908) |
+| Multi-Cloud Provisioning Resilience | `draft` | [multi-cloud-provisioning-resilience.md](infrastructure/multi-cloud-provisioning-resilience.md) |
 
 ### Nemesis — Chaos engineering, disruptors
 
