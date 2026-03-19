@@ -4,6 +4,9 @@
 #
 # After verifying the new triggers work in production, these old jobs
 # should be deleted manually from Jenkins and their source files removed.
+#
+# TODO: Do not merge this without cross-checking that scylla-pkg has a ready
+#       PR pointing to the new triggers.
 
 jobs:
   - name: "tier1-aws-custom-time-trigger"
