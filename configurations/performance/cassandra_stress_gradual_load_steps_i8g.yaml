@@ -1,0 +1,13 @@
+# Define load ops for steps
+# # For debugging, you can set a specific thread count for each step (per load).
+## The value of perf_gradual_threads[load] must be either:
+##   - a single-element list or integer (applied to all throttle steps)
+##   - a list with the same length as perf_gradual_throttle_steps[load] (one thread count per step).
+perf_gradual_threads: {"read": 620, "write": 400, "mixed": 1900, "read_disk_only": 620}
+## The value of perf_gradual_throttle_steps[load] is a percentage of the max throughput (unthrottled) for that load type, which is determined by a preliminary run of the stress command with no throttle and the specified thread count.
+## max throughput for read load with 620 threads is 1,782,000 ops
+## max throughput for write load with 400 threads is 690,000 ops
+## max throughput for mixed load with 1900 threads is 850,000 ops
+## max throughput for read_disk_only load with 620 threads is 450,000 ops
+perf_gradual_throttle_steps: {"read": ['500000', '900000', '1200000', '1500000', 'unthrottled'], "mixed": ['250000', '480000', '600000', '750000', 'unthrottled'], "write": ['350000', '600000', 'unthrottled'], "read_disk_only": ['110000', '220000', '330000', '400000', 'unthrottled']}  # where every value is in ops
+perf_gradual_step_duration: {"read": '30m', "write": None, "mixed": '30m', "read_disk_only": '30m'}
