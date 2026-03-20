@@ -28,9 +28,12 @@ class PerformanceRegressionManagerBackupTest(PerformanceRegressionTest, ManagerT
     """
 
     def test_stress_steady_state(self, stress_cmd: str):
-        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
+        stress_queues = self._run_all_stress_cmds(
+            [], params={"stress_cmd": stress_cmd, "stress_num": 1, "stats_aggregate_cmds": False}
+        )
+        all_hdr_tags = [tag for queue in stress_queues for tag in queue.hdr_tags]
         time.sleep(60)  # postpone measure steady state latency to skip c-s start period when latency is high
-        self.steady_state_latency(hdr_tags=stress_queue.hdr_tags, sleep_time=30 * 60)  # 30 minutes
+        self.steady_state_latency(hdr_tags=all_hdr_tags, sleep_time=30 * 60)  # 30 minutes
         with EventsSeverityChangerFilter(
             new_severity=Severity.NORMAL, event_class=CassandraStressEvent, extra_time_to_expiration=60
         ):
@@ -42,7 +45,7 @@ class PerformanceRegressionManagerBackupTest(PerformanceRegressionTest, ManagerT
         stress_cmd = self.params.get("stress_cmd_m")
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
-        self.align_cluster_data_state(keyspace, table)
+        self.align_cluster_data_state(keyspace, table, compaction_timeout=7200)
         self.test_stress_steady_state(stress_cmd=stress_cmd)
-        self.align_cluster_data_state(keyspace, table)
+        self.align_cluster_data_state(keyspace, table, compaction_timeout=7200)
         self.run_workload(stress_cmd=stress_cmd, nemesis=True, sub_type="mixed")

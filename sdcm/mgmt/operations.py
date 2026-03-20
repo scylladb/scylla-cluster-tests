@@ -90,16 +90,18 @@ class ClusterOperations(ClusterTester):
         for node in self.db_cluster.nodes:
             compaction_ops.disable_autocompaction_on_ks_cf(node=node)
 
-    def _cluster_flush_and_major_compaction(self, keyspace: str, table: str):
+    def _cluster_flush_and_major_compaction(self, keyspace: str, table: str, compaction_timeout: int = 3600):
         InfoEvent(message="Flush cluster then run a major compaction and wait for finish").publish()
         flush_nodes(cluster=self.db_cluster, keyspace=keyspace)
-        major_compaction_nodes(cluster=self.db_cluster, keyspace=keyspace, table=table)
+        major_compaction_nodes(cluster=self.db_cluster, keyspace=keyspace, table=table, timeout=compaction_timeout)
         self.wait_no_compactions_running(n=400, sleep_time=60)
 
-    def align_cluster_data_state(self, keyspace: str, table: str, clear_snapshots: bool = True):
+    def align_cluster_data_state(
+        self, keyspace: str, table: str, clear_snapshots: bool = True, compaction_timeout=3600
+    ):
         if clear_snapshots:
             clear_snapshot_nodes(cluster=self.db_cluster)
-        self._cluster_flush_and_major_compaction(keyspace, table)
+        self._cluster_flush_and_major_compaction(keyspace, table, compaction_timeout=compaction_timeout)
         self.run_fstrim_on_all_db_nodes()
 
 
