@@ -71,3 +71,7 @@ data_dir/ssl_conf/
 
 # Internal private repo
 scylla-qa-internal/
+
+# Claude session and plan backups
+.claude/session-backups/
+.claude/plan-backups/

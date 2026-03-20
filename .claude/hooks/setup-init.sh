@@ -25,15 +25,21 @@ else
 fi
 
 # ── 3. Install pre-commit git hooks ──────────────────────────────────────
-if [ -d "$PROJECT_DIR/.git" ]; then
-    # Check if pre-commit hook is already installed
-    if [ ! -f "$PROJECT_DIR/.git/hooks/pre-commit" ] || ! grep -q "pre-commit" "$PROJECT_DIR/.git/hooks/pre-commit" 2>/dev/null; then
+if [ -e "$PROJECT_DIR/.git" ]; then
+    # Use -e (not -d) because in git worktrees .git is a file, not a directory
+    HOOKS_DIR=$(git -C "$PROJECT_DIR" rev-parse --git-path hooks)
+    if [ ! -f "$HOOKS_DIR/pre-commit" ] || ! grep -q "pre-commit" "$HOOKS_DIR/pre-commit" 2>/dev/null; then
         echo "Installing pre-commit hooks..." >&2
         uv run --project "$PROJECT_DIR" pre-commit install >&2
         uv run --project "$PROJECT_DIR" pre-commit install --hook-type commit-msg >&2
     else
         echo "Pre-commit hooks already installed." >&2
     fi
+fi
+
+# ── 4. Auto-allow direnv if available (needed for worktrees) ──────────
+if command -v direnv &>/dev/null && [ -f "$PROJECT_DIR/.envrc" ]; then
+    direnv allow "$PROJECT_DIR" 2>/dev/null || true
 fi
 
 echo "Project initialized: Python $PYTHON_VERSION, dependencies synced, pre-commit hooks installed."
