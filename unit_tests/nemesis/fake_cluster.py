@@ -1,6 +1,8 @@
 """Mock classes"""
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from unittest.mock import MagicMock
 
 from sdcm.cluster import BaseScyllaCluster
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
@@ -15,6 +17,10 @@ class Node:
     running_nemesis = None
     public_ip_address: str = "127.0.0.1"
     name: str = "Node1"
+    _is_zero_token_node: bool = False
+
+    def __hash__(self):
+        return hash(self.name)
 
     @property
     def scylla_shards(self):
@@ -59,6 +65,7 @@ class FakeTester:
     def __post_init__(self):
         self.db_cluster.params = self.params
         self.nemesis_allocator = NemesisNodeAllocator(self)
+        self.test_config = MagicMock()
 
     def create_stats(self):
         pass
@@ -74,3 +81,7 @@ class FakeTester:
 
     def id(self):
         return 0
+
+    @contextmanager
+    def run_nemesis_hooks(self):
+        yield
