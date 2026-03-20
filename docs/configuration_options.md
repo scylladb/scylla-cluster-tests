@@ -1531,7 +1531,7 @@ Supported regions: us-east1, us-east4, us-west1, us-central1. Specifying just th
 
 **default:** N/A
 
-**type:** str
+**type:** str | list[str]
 
 
 ## **gce_network** / SCT_GCE_NETWORK
