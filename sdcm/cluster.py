@@ -1498,6 +1498,8 @@ class BaseNode(AutoSshContainerMixin):
 
     def destroy(self):
         self.stop_task_threads()
+        if self.remoter:
+            self.remoter.stop()
         ContainerManager.destroy_all_containers(self)
         self._terminate_node_in_argus()
         LOGGER.info("%s destroyed", self)

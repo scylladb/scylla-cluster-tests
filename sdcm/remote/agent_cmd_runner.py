@@ -391,7 +391,12 @@ class AgentCmdRunner(CommandRunner, RetryMixin):
 
     def stop(self):
         """Close agent client connection"""
+        if self._agent_client:
+            self._agent_client.close()
         self._agent_client = None
+
+    def __del__(self):
+        self.stop()
 
     def __repr__(self) -> str:
         return f"AgentCmdRunner(hostname={self.hostname}, port={self.port})"
