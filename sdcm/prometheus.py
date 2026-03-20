@@ -245,7 +245,7 @@ class PrometheusAlertManagerListener(threading.Thread):
 
         assert duration or (start and end), "should define duration or (start and end)"
         if not start:
-            start = datetime.datetime.utcnow()
+            start = datetime.datetime.now(datetime.timezone.utc)
         if not end:
             end = start + datetime.timedelta(seconds=duration)
         silence_data = {

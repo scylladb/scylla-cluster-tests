@@ -51,7 +51,7 @@ class FakeProvisioner(Provisioner):
             tags=definition.tags,
             pricing_model=pricing_model,
             image=definition.image_id,
-            creation_time=datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc),
+            creation_time=datetime.datetime.now(datetime.timezone.utc),
             instance_type=definition.type,
             _provisioner=self,
         )
