@@ -253,6 +253,23 @@ CreateIndexNemesis:
   topology_changes: false
   xcloud: false
   zero_node_changes: false
+CreateMaterializedViewNemesis:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: true
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: false
+  topology_changes: false
+  xcloud: false
+  zero_node_changes: false
 DecommissionMonkey:
   config_changes: false
   delete_rows: false
