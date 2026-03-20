@@ -136,6 +136,10 @@ class AgentClient:
             }
         )
 
+    def close(self):
+        """Close the underlying HTTP session and its connection pools."""
+        self.session.close()
+
     def _make_request(self, method: str, url: str, operation_name: str, **kwargs) -> requests.Response:
         """
         Make an HTTP request with error handling
