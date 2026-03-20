@@ -1,2 +1,3 @@
-nemesis_class_name: 'ClusterRollingRestartRandomOrder'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'ClusterRollingRestartRandomOrder'
 user_prefix: 'longevity-5gb-1h-ClusterRollingRestartRandomOrder'

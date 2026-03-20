@@ -7,11 +7,11 @@ from collections.abc import Iterable
 from functools import wraps
 from typing import TYPE_CHECKING, Union
 
-from sdcm.utils.nemesis_utils import unique_disruption_name
+from sdcm.nemesis.utils import unique_disruption_name
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.metaclasses import Singleton
-from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS, DefaultValue
+from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS, DefaultValue
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode

@@ -1,2 +1,3 @@
-nemesis_class_name: 'RefreshMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'RefreshMonkey'
 user_prefix: 'longevity-5gb-1h-RefreshMonkey'

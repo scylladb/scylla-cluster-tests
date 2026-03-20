@@ -1,3 +1,4 @@
-nemesis_class_name: 'ToggleAuditNemesisSyslog'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'ToggleAuditNemesisSyslog'
 append_scylla_yaml:
   audit: 'none'

@@ -1,2 +1,3 @@
-nemesis_class_name: 'IsolateNodeWithIptableRuleNemesis'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'IsolateNodeWithIptableRuleNemesis'
 user_prefix: 'longevity-5gb-1h-IsolateNodeWithIptableRuleNemesis'

@@ -1,2 +1,3 @@
-nemesis_class_name: 'DecommissionSeedNode'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'DecommissionSeedNode'
 user_prefix: 'longevity-5gb-1h-DecommissionSeedNode'

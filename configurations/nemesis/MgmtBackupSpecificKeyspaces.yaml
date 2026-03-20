@@ -1,2 +1,3 @@
-nemesis_class_name: 'MgmtBackupSpecificKeyspaces'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'MgmtBackupSpecificKeyspaces'
 user_prefix: 'longevity-5gb-1h-MgmtBackupSpecificKeyspaces'

@@ -1,2 +1,3 @@
-nemesis_class_name: 'AddRemoveRackNemesis'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'AddRemoveRackNemesis'
 user_prefix: 'longevity-5gb-1h-AddRemoveRackNemesis'

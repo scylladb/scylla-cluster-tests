@@ -1,2 +1,3 @@
-nemesis_class_name: 'OperatorNodeReplace'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'OperatorNodeReplace'
 user_prefix: 'longevity-5gb-1h-OperatorNodeReplace'

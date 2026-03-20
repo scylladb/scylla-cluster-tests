@@ -1,3 +1,4 @@
 user_prefix: 'alternator-streams-nemesis'
-nemesis_class_name: 'DecommissionMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'DecommissionMonkey'
 nemesis_interval: 30

@@ -1,2 +1,3 @@
-nemesis_class_name: 'StartStopCleanupCompaction'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'StartStopCleanupCompaction'
 user_prefix: 'longevity-5gb-1h-StartStopCleanupCompaction'

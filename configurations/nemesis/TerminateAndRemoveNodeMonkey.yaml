@@ -1,2 +1,3 @@
-nemesis_class_name: 'TerminateAndRemoveNodeMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'TerminateAndRemoveNodeMonkey'
 user_prefix: 'longevity-5gb-1h-TerminateAndRemoveNodeMonkey'

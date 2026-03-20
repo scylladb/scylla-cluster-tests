@@ -1,2 +1,3 @@
-nemesis_class_name: 'DrainKubernetesNodeThenReplaceScyllaNode'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'DrainKubernetesNodeThenReplaceScyllaNode'
 user_prefix: 'longevity-5gb-1h-DrainKubernetesNodeThenReplaceScyllaNode'

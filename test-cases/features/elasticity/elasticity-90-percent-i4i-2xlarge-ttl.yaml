@@ -27,7 +27,8 @@ instance_type_loader: 'c6i.2xlarge'
 instance_type_monitor: 't3.large'
 
 # since the nemesis only compacts on one node, run 3 in parallel each will pick a different node
-nemesis_class_name: 'MajorCompactionMonkey:1 MajorCompactionMonkey:1 MajorCompactionMonkey:1'
+nemesis_class_name: "SisyphusMonkey:1 SisyphusMonkey:1 SisyphusMonkey:1"
+nemesis_selector: ['MajorCompactionMonkey', 'MajorCompactionMonkey', 'MajorCompactionMonkey']
 
 user_prefix: 'elasticity-test'
 round_robin: true
