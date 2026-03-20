@@ -100,6 +100,12 @@ class CommandRunner(metaclass=ABCMeta):
         Return instance parameters required to rebuild instance
         """
 
+    def stop(self):
+        """
+        Release resources held by this runner.
+        No-op by default; subclasses override to close connections/sessions.
+        """
+
     def __str__(self):
         return "{} [{}@{}]".format(self.__class__.__name__, self.user, self.hostname)
 
