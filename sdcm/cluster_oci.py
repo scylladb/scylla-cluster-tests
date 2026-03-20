@@ -19,13 +19,13 @@ from functools import cached_property
 from typing import Dict, List
 
 from sdcm import cluster
+from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.provision.oci.provisioner import OciProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
-from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import resolve_ip_to_dns
 
 LOGGER = logging.getLogger(__name__)
