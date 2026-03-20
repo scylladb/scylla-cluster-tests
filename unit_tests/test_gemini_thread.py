@@ -121,12 +121,14 @@ def build_gemini_thread(
     Returns:
         GeminiStressThread: Configured but not yet started thread.
     """
-    thread_params = params.copy()
-    thread_params.update({"gemini_table_options": ["gc_grace_seconds=60"]})
+    # params is a function-scoped fixture — each test gets its own fresh SCTConfiguration,
+    # so mutating it directly is safe and avoids the deprecated pydantic .copy() which can
+    # drop dynamically-merged state (e.g. stress_image set by load_docker_images_defaults).
+    params.update({"gemini_table_options": ["gc_grace_seconds=60"]})
     if use_schema:
-        thread_params["gemini_schema_url"] = str(GEMINI_SCHEMA_PATH.resolve())
+        params["gemini_schema_url"] = str(GEMINI_SCHEMA_PATH.resolve())
 
-    loader_set = LocalLoaderSetDummy(params=thread_params)
+    loader_set = LocalLoaderSetDummy(params=params)
     test_cluster = DummyDbCluster([test_node])
     oracle_cluster = DummyDbCluster([oracle_node]) if oracle_node else None
     options = [
@@ -151,7 +153,7 @@ def build_gemini_thread(
         test_cluster=test_cluster,
         oracle_cluster=oracle_cluster,
         timeout=240,
-        params=thread_params,
+        params=params,
     )
 
 
