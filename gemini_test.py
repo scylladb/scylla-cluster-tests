@@ -13,9 +13,18 @@
 #
 # Copyright (c) 2018 ScyllaDB
 
+import re
 import time
 
 from sdcm.tester import ClusterTester
+
+DEFAULT_NEMESIS_DELAY_MIN = 10
+
+
+def _parse_warmup_minutes(gemini_cmd: str) -> int:
+    """Return the --warmup value in minutes from the gemini cmd, or the default."""
+    match = re.search(r"--warmup[= ]\s*(\d+)m\b", gemini_cmd)
+    return int(match.group(1)) if match else DEFAULT_NEMESIS_DELAY_MIN
 
 
 class GeminiTest(ClusterTester):
@@ -47,10 +56,10 @@ class GeminiTest(ClusterTester):
         self.log.debug("Start gemini benchmark")
         gemini_thread = self.run_gemini(cmd=cmd)
         self.gemini_results["cmd"] = gemini_thread.gemini_commands
-        # sleep before run nemesis test_duration * .25
-        sleep_before_start = float(self.params.get("test_duration")) * 60 * 0.1
-        self.log.info("Sleep interval {}".format(sleep_before_start))
-        time.sleep(sleep_before_start)
+        # Wait for gemini warmup to complete before starting nemesis
+        warmup_min = _parse_warmup_minutes(cmd)
+        self.log.info("Sleeping %s min (gemini warmup) before starting nemesis", warmup_min)
+        time.sleep(warmup_min * 60)
 
         self.db_cluster.start_nemesis()
 
