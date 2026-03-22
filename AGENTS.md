@@ -263,6 +263,21 @@ Nemesis are chaos operations that test database resilience. Common types:
 Separate each group with a blank line.
 Within each group, sort imports alphabetically.
 
+### Method Signature Changes (Override Safety)
+
+**CRITICAL**: SCT uses deep class hierarchies (e.g., `BaseCluster` -> `AWSCluster` -> `MonitorSetEKS`).
+When modifying a method signature in a parent class:
+
+1. Search for ALL overrides: `grep -rn "def <method_name>" sdcm/ unit_tests/`
+2. Update every override to accept and forward the new parameter
+3. Update test stubs in `unit_tests/` that override the same method (e.g., `dummy_remote.py`, `test_cluster.py`)
+4. If using `**kwargs` in overrides, verify the parameter actually reaches `super()`
+
+Failure to do this causes runtime `TypeError` that isn't caught by linting or unit tests.
+See PR #14113 for a real-world example of this failure pattern (caused by PR #13445 missing an override in `cluster_k8s/eks.py`).
+
+High-risk methods with 5+ overrides: `add_nodes`, `_create_instances`, `wait_for_init`, `destroy`.
+
 ### Unit Testing Guidelines
 
 **IMPORTANT: Use pytest style, NOT unittest.TestCase**
@@ -419,7 +434,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 
 | Skill | Description | Path |
 |-------|-------------|------|
-| code-review | Data-driven code review guidance for SCT PRs. Use when reviewing PRs, checking code quality, or validating test coverage. Based on 7-year taxonomy analysis of ~28,500 review comments. | `skills/code-review/SKILL.md` |
+| code-review | Guides AI-assisted code review of SCT PRs. Use when reviewing diffs, checking override compatibility, verifying import conventions, or assessing backend impact. | `skills/code-review/SKILL.md` |
 | designing-skills | Guides the design and structuring of AI agent skills for SCT. Use when creating new skills, reviewing existing skills, or editing SKILL.md files. | `skills/designing-skills/SKILL.md` |
 | fix-backport-conflicts | Fix inline merge conflict markers in backport PRs. Use when a backport PR has unresolved conflict markers or a cherry-pick produced merge conflicts. | `skills/fix-backport-conflicts/SKILL.md` |
 | profiling-sct-code | Profile Python code in SCT to find CPU, memory, and concurrency bottlenecks. Use when a test or operation is unexpectedly slow or memory usage grows unbounded. | `skills/profiling-sct-code/SKILL.md` |
