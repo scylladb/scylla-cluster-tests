@@ -145,6 +145,7 @@ from sdcm.cluster_k8s import mini_k8s
 from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
+from utils.build_system.throttle_categories import ThrottleCategoryManager, ThrottleCategory
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
 from sdcm.utils.docker_utils import get_ip_address_of_container
 from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
@@ -2110,6 +2111,50 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
     if branch == "scylla-master":
         base_path = f"{server.base_sct_dir}/jenkins-pipelines/master-triggers"
         server.create_job_tree(base_path)
+
+
+@cli.command(
+    "configure-jenkins-throttle", help="Create/update Jenkins throttle-concurrents categories for perf regions"
+)
+@click.argument("username", envvar="JENKINS_USERNAME", type=str, required=False)
+@click.argument("password", envvar="JENKINS_PASSWORD", type=str, required=False)
+@click.option("--dry-run", is_flag=True, default=False, help="Print categories without applying changes")
+@click.option(
+    "--suffix",
+    multiple=True,
+    default=["i8g"],
+    help="Additional suffixes to create per region (e.g. --suffix i8g --suffix i4i). "
+    "Base categories (no suffix) are always created.",
+)
+def configure_jenkins_throttle(username, password, dry_run, suffix):
+    add_file_logger()
+
+    # AWS regions used by performance tests
+    aws_regions = [
+        "us-east-1",
+        "eu-west-1",
+        "eu-west-2",
+        "eu-west-3",
+        "eu-north-1",
+    ]
+
+    categories = [ThrottleCategory(name=f"SCT-perf-{region}", max_total=1, max_per_node=1) for region in aws_regions]
+    for sfx in suffix:
+        categories += [
+            ThrottleCategory(name=f"SCT-perf-{region}-{sfx}", max_total=1, max_per_node=1) for region in aws_regions
+        ]
+    if dry_run:
+        click.echo("Would ensure the following throttle categories:")
+        for cat in categories:
+            click.echo(f"  {cat.name}: max_total={cat.max_total}, max_per_node={cat.max_per_node}")
+        return
+
+    manager = ThrottleCategoryManager(username=username, password=password)
+    changed = manager.ensure_categories(categories)
+    if changed:
+        click.echo(f"Created/updated {len(changed)} categories: {changed}")
+    else:
+        click.echo("All categories already up to date")
 
 
 @cli.command("prepare-regions", help="Configure all required resources for SCT runs in selected cloud region")
