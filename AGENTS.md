@@ -419,6 +419,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 
 | Skill | Description | Path |
 |-------|-------------|------|
+| code-review | Data-driven code review guidance for SCT PRs. Use when reviewing PRs, checking code quality, or validating test coverage. Based on 7-year taxonomy analysis of ~28,500 review comments. | `skills/code-review/SKILL.md` |
 | designing-skills | Guides the design and structuring of AI agent skills for SCT. Use when creating new skills, reviewing existing skills, or editing SKILL.md files. | `skills/designing-skills/SKILL.md` |
 | fix-backport-conflicts | Fix inline merge conflict markers in backport PRs. Use when a backport PR has unresolved conflict markers or a cherry-pick produced merge conflicts. | `skills/fix-backport-conflicts/SKILL.md` |
 | profiling-sct-code | Profile Python code in SCT to find CPU, memory, and concurrency bottlenecks. Use when a test or operation is unexpectedly slow or memory usage grows unbounded. | `skills/profiling-sct-code/SKILL.md` |
