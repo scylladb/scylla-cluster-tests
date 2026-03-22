@@ -2605,7 +2605,9 @@ class PodCluster(cluster.BaseCluster):
     def pool_name(self):
         return self.node_pool_name
 
-    def _create_node(self, node_index: int, pod_name: str, dc_idx: int, rack: int) -> BasePodContainer:
+    def _create_node(
+        self, node_index: int, pod_name: str, dc_idx: int, rack: int, after_config=None
+    ) -> BasePodContainer:
         node = self.PodContainerClass(
             parent_cluster=self,
             name=pod_name,
@@ -2628,6 +2630,7 @@ class PodCluster(cluster.BaseCluster):
         rack: int = 0,
         enable_auto_bootstrap: bool = False,
         instance_type=None,
+        after_config=None,
     ) -> List[BasePodContainer]:
         # TODO: make it work when we have decommissioned (by nodetool) nodes.
         #       Now it will fail because pod which hosts decommissioned Scylla member is reported
@@ -3031,6 +3034,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         rack: int = 0,
         enable_auto_bootstrap: bool = False,
         instance_type=None,
+        after_config=None,
     ) -> List[BasePodContainer]:
         if dc_idx is None:
             dc_idx = list(range(len(self.k8s_clusters)))
@@ -3380,6 +3384,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
         rack: int = 0,
         enable_auto_bootstrap: bool = False,
         instance_type=None,
+        after_config=None,
     ) -> List[BasePodContainer]:
         if self.loader_cluster_created:
             raise NotImplementedError("Changing number of nodes in LoaderPodCluster is not supported.")

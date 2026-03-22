@@ -190,6 +190,7 @@ class CloudNode(cluster.BaseNode):
         base_logdir: str | None = None,
         dc_idx: int = 0,
         rack: int = 0,
+        after_config=None,
     ):
         self.node_index = node_index
         self._cloud_instance_data = cloud_instance_data
@@ -211,6 +212,7 @@ class CloudNode(cluster.BaseNode):
             node_prefix=node_prefix,
             dc_idx=dc_idx,
             rack=rack,
+            after_config=after_config,
         )
 
         instance_info = cloud_instance_data.get("instance", {})
@@ -724,6 +726,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         rack: int,
         node_class: type[CloudNode] = CloudNode,
         node_prefix: str | None = None,
+        after_config=None,
     ) -> CloudNode:
         try:
             node = node_class(
@@ -734,6 +737,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
                 base_logdir=self.logdir,
                 dc_idx=dc_idx,
                 rack=rack,
+                after_config=after_config,
             )
             node.init()
             return node
@@ -748,6 +752,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         rack: int = 0,
         enable_auto_bootstrap: bool = False,
         instance_type: str | None = None,
+        after_config=None,
     ) -> list[CloudNode]:
         """Create a new cluster with the specified number of nodes or reuse an existing one"""
         if not count:
