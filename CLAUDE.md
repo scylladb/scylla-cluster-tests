@@ -18,3 +18,4 @@ Scylla Cluster Tests (SCT) — test framework for ScyllaDB. See below for full r
 @skills/writing-integration-tests/SKILL.md
 @skills/commit-summary/SKILL.md
 @skills/writing-nemesis/SKILL.md
+@skills/code-review/SKILL.md
