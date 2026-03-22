@@ -119,9 +119,10 @@
       "phases_done": 0
     },
     {
-      "id": "cassandra-oracle-cluster",
-      "title": "Cassandra Oracle Cluster",
-      "domain": "stress-tools",
+      "id": "cassandra-cluster-support",
+      "title": "Cassandra Cluster Support",
+      "file": "infrastructure/cassandra-cluster-support.md",
+      "domain": "cluster",
       "status": "pending_pr",
       "pr": 13916,
       "phases_total": null,
