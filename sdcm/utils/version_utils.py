@@ -696,6 +696,30 @@ def get_specific_tag_of_docker_image(docker_repo: str, architecture: Literal["x8
     raise ValueError(f"Cannot find docker image tag info in {build_url} for architecture={architecture}")
 
 
+def latest_unified_package(arch: str = "x86_64", product: str = "scylla", branch: str = "master") -> str:
+    """Get the URL of the latest unified package from the S3 bucket.
+
+    Args:
+        arch: CPU architecture, e.g. 'x86_64' or 'aarch64'.
+        product: Scylla product name, e.g. 'scylla' or 'scylla-enterprise'.
+        branch: Branch name, e.g. 'master' or 'enterprise'.
+
+    Returns:
+        Full HTTPS URL of the latest scylla-unified package.
+
+    Raises:
+        FileNotFoundError: If no matching unified package is found.
+    """
+    prefix = f"unstable/{product}/{branch}/relocatable/latest/"
+    s3_client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION, config=Config(signature_version=UNSIGNED))
+    response = s3_client.list_objects_v2(Bucket=SCYLLA_REPO_BUCKET, Prefix=prefix)
+    for obj in response.get("Contents", []):
+        filename = obj["Key"].rsplit("/", 1)[-1]
+        if "scylla-unified" in filename and arch in filename:
+            return f"https://{SCYLLA_REPO_BUCKET}/{obj['Key']}"
+    raise FileNotFoundError(f"No scylla-unified package found for arch={arch} in {SCYLLA_REPO_BUCKET}/{prefix}")
+
+
 def transform_non_semver_scylla_version_to_semver(scylla_version: str):
     # NOTE: as of May 2022 all the non-GA versions of Scylla are not semver-like and it is problem
     #       for the scylla-operator.
