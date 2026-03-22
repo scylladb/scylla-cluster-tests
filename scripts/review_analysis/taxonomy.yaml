@@ -1,4 +1,335 @@
 categories:
+  # === Layer 1: Universal Review Categories (from Goldman et al. 2025, Mäntylä & Lassenius 2009, Conventional Comments) ===
+
+  - id: U1_READABILITY
+    name: "Readability / Style"
+    description: "Code readability and clarity improvements: naming suggestions, formatting, simplification, code duplication, import ordering, readability. Based on Goldman et al. (2025) — largest category at 35-46% of human review comments."
+    pilot_count: 0
+    trajectory: PERSISTENT
+    enforced_by: []
+    patterns:
+      - "more readable"
+      - "readab(le|ility)"
+      - "hard to (read|understand|follow)"
+      - "simplif(y|ied|ication)"
+      - "simpler"
+      - "cleaner"
+      - "clar(ify|ity)"
+      - "confus(ing|ed)"
+      - "verbose"
+      - "redundant"
+      - "unnecessar(y|ily)"
+      - "can be (shortened|simplified|reduced)"
+      - "move.*import"
+      - "imports.*top"
+      - "inline import"
+      - "formatting"
+      - "indentation"
+      - "whitespace"
+      - "line (too )?long"
+      - "f-string"
+      - "string format"
+      - "type hint"
+      - "type annotation"
+    keywords:
+      - readable
+      - readability
+      - simplify
+      - cleaner
+      - clarity
+      - confusing
+      - verbose
+      - redundant
+      - formatting
+    bot_auto_tag: []
+
+  - id: U2_SUGGESTION
+    name: "Suggestion / Alternative"
+    description: "Proposing alternative approaches or improvements. Based on Conventional Comments 'suggestion' label — the most common actionable review pattern (~20% of comments)."
+    pilot_count: 0
+    trajectory: PERSISTENT
+    enforced_by: []
+    patterns:
+      - "instead of"
+      - "rather than"
+      - "what about"
+      - "how about"
+      - "have you (tried|considered)"
+      - "prefer(red)?"
+      - "I would (suggest|recommend|use|prefer)"
+      - "we (should|could|can) use"
+      - "better (to|approach|way)"
+      - "alternative"
+      - "another (way|approach|option)"
+      - "worth (trying|considering)"
+      - "might (want|be better)"
+      - "I think we should"
+      - "my suggestion"
+    keywords:
+      - instead
+      - suggest
+      - recommend
+      - prefer
+      - alternative
+      - consider
+      - approach
+    bot_auto_tag: []
+
+  - id: U3_QUESTION
+    name: "Question / Clarification"
+    description: "Questions seeking understanding or clarification about the code. Based on Conventional Comments 'question' label (~10% of comments)."
+    pilot_count: 0
+    trajectory: PERSISTENT
+    enforced_by: []
+    patterns:
+      - "^why "
+      - "why (is|do|did|are|does|not|this|the|would)"
+      - "is this (needed|necessary|intentional|correct|right|required)"
+      - "what happens (if|when)"
+      - "do we (need|really|still)"
+      - "are you sure"
+      - "does this (work|handle|cover|mean)"
+      - "can you (explain|clarify)"
+      - "not sure (if|about|why|what)"
+      - "curious (about|why)"
+      - "what is the (reason|purpose|intent)"
+      - "how does this"
+      - "I don't understand"
+    keywords:
+      - why
+      - question
+      - clarify
+      - curious
+      - understand
+    bot_auto_tag: []
+
+  - id: U4_DISCUSSION
+    name: "Discussion / Context"
+    description: "Non-actionable discussion: agreements, acknowledgments, context-sharing, explanations, cross-PR references. Not a code issue — informational exchange."
+    pilot_count: 0
+    trajectory: PERSISTENT
+    enforced_by: []
+    patterns:
+      - "^(ok|okay|yes|yep|yeah|agreed|ack|right|true|correct|exactly|indeed|sure|fair)[\\.!,\\s]*$"
+      - "^(lgtm|LGTM|looks good|ship it)"
+      - "good (point|catch|idea|call)"
+      - "makes sense"
+      - "I (see|agree|understand)"
+      - "you're right"
+      - "fair (point|enough)"
+      - "^\\+1"
+      - "^done"
+      - "fixed in"
+      - "addressed in"
+      - "will (fix|address|do|update) "
+      - "fyi"
+      - "for reference"
+      - "see also"
+      - "related (to|PR|issue)"
+    keywords:
+      - agree
+      - lgtm
+      - done
+      - fixed
+      - fyi
+      - reference
+    bot_auto_tag: []
+
+  - id: U5_NITPICK
+    name: "Nitpick"
+    description: "Minor style preferences that don't affect functionality: trivial formatting, personal style choices, non-blocking suggestions. From Conventional Comments 'nitpick' label."
+    pilot_count: 0
+    trajectory: PERSISTENT
+    enforced_by: []
+    patterns:
+      - "nit(pick)?[:\\]]"
+      - "^nit[: ]"
+      - "\\[nit(pick)?\\]"
+      - "minor:"
+      - "style:"
+      - "trivial"
+      - "pedantic"
+      - "optional:"
+      - "tiny (thing|nit|issue)"
+      - "small (thing|nit|issue)"
+      - "bikeshed"
+      - "not a big deal"
+    keywords:
+      - nit
+      - nitpick
+      - minor
+      - trivial
+      - optional
+    bot_auto_tag: []
+
+  - id: U6_PRAISE
+    name: "Praise"
+    description: "Positive feedback and recognition. From Conventional Comments 'praise' label."
+    pilot_count: 0
+    trajectory: PERSISTENT
+    enforced_by: []
+    patterns:
+      - "nice( work| job|!|\\.|$)"
+      - "well done"
+      - "good (job|work)"
+      - "great (job|work|change|improvement)"
+      - "love (this|it|the)"
+      - "beautiful"
+      - "clean (code|implementation|solution)"
+      - "elegant"
+      - "awesome"
+      - "impressive"
+      - "thank(s| you)"
+      - "appreciate"
+    keywords:
+      - nice
+      - great
+      - praise
+      - thanks
+      - beautiful
+      - clean
+    bot_auto_tag: []
+
+  - id: U7_EXPLANATION
+    name: "Explanation / Context"
+    description: "Technical explanations providing context about why code works a certain way, how a feature behaves, or background information. Not actionable — informational."
+    pilot_count: 0
+    trajectory: PERSISTENT
+    enforced_by: []
+    patterns:
+      - "it's because"
+      - "the reason (is|was|being)"
+      - "this is (how|because|due)"
+      - "this (works|happens) (because|by|when|since)"
+      - "AFAI[KR]"
+      - "as (far as )?I (know|remember|understand|recall)"
+      - "for (context|background)"
+      - "just to (clarify|explain|be clear)"
+      - "to (clarify|explain)"
+      - "the (idea|intent|purpose|goal) (is|was|here)"
+      - "what (this|it|we) (does|do|means|is doing)"
+      - "basically"
+      - "in (short|brief|summary)"
+      - "long story short"
+    keywords:
+      - because
+      - reason
+      - context
+      - explain
+      - basically
+    bot_auto_tag: []
+
+  - id: U8_DIRECTIVE
+    name: "Directive / Instruction"
+    description: "Direct instructions to the author about what to do: commands, action items, specific requests. Often directed at AI assistants."
+    pilot_count: 0
+    trajectory: PERSISTENT
+    enforced_by: []
+    patterns:
+      - "@copilot"
+      - "@claude"
+      - "please (add|remove|fix|change|update|move|rename|check|make|use|drop|revert)"
+      - "need(s)? to (be |)(add|remov|fix|chang|updat|mov|renam)"
+      - "let'?s (add|remove|fix|change|update|move|rename|create|drop|use|run|split)"
+      - "^(add|remove|fix|change|update|move|rename|drop|revert|use|split|merge|extract)"
+      - "you (should|need to|must|can|could)"
+      - "make sure"
+      - "don't forget"
+      - "^please "
+    keywords:
+      - please
+      - copilot
+      - claude
+      - directive
+    bot_auto_tag: []
+
+  - id: U9_PROCESS
+    name: "Process / Workflow"
+    description: "Process and workflow coordination: backport decisions, pipeline/CI concerns, release management, merge/cherry-pick strategy, scheduling."
+    pilot_count: 0
+    trajectory: PERSISTENT
+    enforced_by: []
+    patterns:
+      - "backport"
+      - "cherry[- ]pick"
+      - "pipeline"
+      - "jenkins"
+      - "CI(/CD)?"
+      - "merge (conflict|request|this|it|after)"
+      - "rebase"
+      - "release (trigger|branch|version|cycle)"
+      - "schedul(e|er|ed|ing)"
+      - "trigger"
+      - "deploy"
+      - "rollback"
+      - "branch(es|ing)?"
+      - "upstream"
+      - "downstream"
+    keywords:
+      - backport
+      - pipeline
+      - jenkins
+      - CI
+      - merge
+      - rebase
+      - release
+    bot_auto_tag: []
+
+  - id: U10_OPINION
+    name: "Opinion / Assessment"
+    description: "Subjective judgments and assessments about code decisions. Expressions of belief or preference without specific suggestions."
+    pilot_count: 0
+    trajectory: PERSISTENT
+    enforced_by: []
+    patterns:
+      - "I think"
+      - "I believe"
+      - "I'?d say"
+      - "in my opinion"
+      - "from my perspective"
+      - "I don'?t think"
+      - "I'?m not sure (if|that|this|about|whether)"
+      - "probably"
+      - "I (would|wouldn'?t) "
+      - "I (like|dislike|prefer|vote)"
+      - "I feel (like|that)"
+      - "seems (like|to me|fine|ok|right|wrong)"
+    keywords:
+      - think
+      - believe
+      - opinion
+      - probably
+      - seems
+    bot_auto_tag: []
+
+  - id: U11_DEPENDENCY
+    name: "Dependency / Version"
+    description: "Version and dependency management: version mismatches, upgrades, compatibility issues, package alignment, deprecation."
+    pilot_count: 0
+    trajectory: PERSISTENT
+    enforced_by: []
+    patterns:
+      - "version (mismatch|does not match|conflict|bump|upgrad)"
+      - "upgrad(e|ing)"
+      - "deprecat(ed|ion)"
+      - "compat(ible|ibility)"
+      - "pin(ned|ning)"
+      - "requirements?"
+      - "depend(ency|encies)"
+      - "package version"
+      - "breaking change"
+      - "migration"
+    keywords:
+      - version
+      - upgrade
+      - deprecated
+      - compatibility
+      - dependency
+      - migration
+    bot_auto_tag: []
+
+  # === Layer 2: SCT-Specific Categories (domain expertise from 7-year pilot analysis) ===
+
   - id: T1_TEST_QUALITY
     name: "Test Quality"
     description: "Issues with test code style: using unittest classes instead of pytest functions, missing fixtures, missing parametrize, empty except blocks, improper test structure"
@@ -305,6 +636,57 @@ categories:
       - error
       - return
       - enforce
+    bot_auto_tag: []
+
+  - id: T14_SECURITY
+    name: "Security"
+    description: "Security issues: secrets/credentials exposure, injection vulnerabilities, sensitive data handling, improper escaping, token/key management"
+    pilot_count: 4
+    trajectory: PERSISTENT
+    enforced_by: [fruch, pehala]
+    patterns:
+      - "secret|credential|token|password|sensitive"
+      - "injection|escape|sanitize|shell.*special"
+      - "ssm|kms|aws.*key|access.key"
+      - "single quote|escape.*char|metacharacter"
+      - "command.injection"
+      - "having it as a secret"
+      - "shell injection"
+      - "special.char"
+    keywords:
+      - secret
+      - credential
+      - token
+      - password
+      - injection
+      - escape
+      - sanitize
+      - sensitive
+      - security
+    bot_auto_tag: []
+
+  - id: T15_SAFETY_RETRY
+    name: "Safety / Retry"
+    description: "Timeout, retry, and safety patterns: missing long_running=True, adaptive timeouts, retry/backoff logic, per-test timeouts"
+    pilot_count: 2
+    trajectory: PERSISTENT
+    enforced_by: [fruch, pehala, soyacz]
+    patterns:
+      - "long_running"
+      - "timeout|retry|backoff"
+      - "adaptive.timeout"
+      - "per.test.timeout"
+      - "takes.*long"
+      - "long running"
+      - "wait.*timeout"
+      - "deadline"
+    keywords:
+      - timeout
+      - retry
+      - backoff
+      - long_running
+      - deadline
+      - adaptive
     bot_auto_tag: []
 
   - id: T0_UNCATEGORIZED
