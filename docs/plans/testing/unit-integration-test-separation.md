@@ -1,5 +1,5 @@
 ---
-status: in_progress
+status: done
 domain: testing
 created: 2026-03-23
 last_updated: 2026-03-23
