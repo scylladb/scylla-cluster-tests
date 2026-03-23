@@ -9,31 +9,13 @@ from contextlib import nullcontext
 import pytest
 
 from sdcm.nemesis.monkey.runners import SisyphusMonkey
-from sdcm.nemesis import NemesisRunner
-from sdcm.nemesis.registry import NemesisRegistry
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
-from unit_tests.nemesis import TestBaseClass
+from unit_tests.nemesis import TestNemesisClass
 from unit_tests.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
-from unit_tests.test_tester import ClusterTesterForTests
+from unit_tests.lib.fake_tester import ClusterTesterForTests
 
 
-class TestNemesisClass(NemesisRunner):
-    COMMON_STRING = "called test function "
-    kubernetes = False
-    flag_a = False
-    flag_b = False
-    flag_c = False
-    flag_common = False
-    __test__ = False  # Prevent pytest from treating this as a test class
-
-    def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
-        super().__init__(
-            tester_obj, termination_event, *args, nemesis_selector=nemesis_selector, nemesis_seed=nemesis_seed, **kwargs
-        )
-        self.nemesis_registry = NemesisRegistry(base_class=TestBaseClass, flag_class=TestBaseClass)
-
-
-# Use multiple inheritance to ensure we overide registry after Nemesis but before Sisyphus
+# Use multiple inheritance to ensure we override registry after Nemesis but before Sisyphus
 class FakeSisyphusMonkey(SisyphusMonkey, TestNemesisClass):
     def __init__(self, tester_obj, *args, termination_event=None, nemesis_selector=None, nemesis_seed=None, **kwargs):
         super().__init__(

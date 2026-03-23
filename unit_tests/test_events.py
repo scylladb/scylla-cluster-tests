@@ -13,66 +13,34 @@
 
 import time
 import logging
-import unittest
-import multiprocessing
 from pathlib import Path
 from datetime import datetime
 from unittest import mock
 
 import pytest
-from parameterized import parameterized
 
 from sdcm.exceptions import UnsupportedNemesis, KillNemesis
-from sdcm.prometheus import start_metrics_server
 from sdcm.sct_events.nodetool import NodetoolEvent
-from sdcm.utils.decorators import timeout
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CoreDumpEvent, TestFrameworkEvent, SoftTimeoutEvent
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import YcsbStressEvent, CassandraStressLogEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.database import DatabaseLogEvent
-from sdcm.sct_events.file_logger import get_logger_event_summary
 from sdcm.sct_events.event_counter import EventCounterContextManager
 from sdcm.sct_events.setup import enable_default_filters
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.context_managers import environment
 
-from unit_tests.lib.events_utils import EventsUtilsMixin
+from unit_tests.lib.real_events import RealEventsTest
 
 LOGGER = logging.getLogger(__name__)
 
 
-class BaseEventsTest(unittest.TestCase, EventsUtilsMixin):
-    killed = multiprocessing.Event()
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        start_metrics_server()
-        cls.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls.teardown_events_processes()
-
-    @classmethod
-    def get_event_log_file(cls, name: str) -> str:
-        if (log_file := Path(cls.temp_dir, "events_log", name)).exists():
-            return log_file.read_text(encoding="utf-8")
-        return ""
-
-    @timeout(timeout=10, sleep_time=0.05)
-    def wait_for_event_summary(self):
-        return get_logger_event_summary(_registry=self.events_processes_registry)
-
-
-class SctEventsTests(BaseEventsTest):
-    # increase the max length to see the full strings in the AssertionError which precedes the diff
-    maxDiff = None
-
+class TestSctEvents(RealEventsTest):
     def test_disruption_skipped_event(self):
         with (
-            self.assertRaises(UnsupportedNemesis),
+            pytest.raises(UnsupportedNemesis),
             DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event,
         ):
             try:
@@ -83,23 +51,21 @@ class SctEventsTests(BaseEventsTest):
                 nemesis_event.duration = 15
                 raise
 
-        self.assertEqual(
-            str(nemesis_event),
+        assert str(nemesis_event) == (
             "(DisruptionEvent Severity.NORMAL) period_type=end event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318 "
             "duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node skipped skip_reason=This nemesis can "
-            "run on scylla_bench test only",
+            "run on scylla_bench test only"
         )
 
     def test_disruption_raised_critical_event(self):
         with (
-            self.assertRaises(ZeroDivisionError),
+            pytest.raises(ZeroDivisionError),
             DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event,
         ):
             nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
-            self.assertEqual(
-                str(nemesis_event),
+            assert str(nemesis_event) == (
                 "(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: "
-                "nemesis_name=DeleteByRowsRange target_node=target_node",
+                "nemesis_name=DeleteByRowsRange target_node=target_node"
             )
 
             try:
@@ -111,20 +77,19 @@ class SctEventsTests(BaseEventsTest):
                 nemesis_event.duration = 15
                 raise
 
-        self.assertIn("division by zero", nemesis_event.errors_formatted)
-        self.assertEqual(nemesis_event.severity, Severity.CRITICAL)
-        self.assertEqual(nemesis_event.duration_formatted, "15s")
+        assert "division by zero" in nemesis_event.errors_formatted
+        assert nemesis_event.severity == Severity.CRITICAL
+        assert nemesis_event.duration_formatted == "15s"
 
     def test_disruption_raised_error_event(self):
         with (
-            self.assertRaises(ZeroDivisionError),
+            pytest.raises(ZeroDivisionError),
             DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event,
         ):
             nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
-            self.assertEqual(
-                str(nemesis_event),
+            assert str(nemesis_event) == (
                 "(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: "
-                "nemesis_name=DeleteByRowsRange target_node=target_node",
+                "nemesis_name=DeleteByRowsRange target_node=target_node"
             )
 
             try:
@@ -135,19 +100,18 @@ class SctEventsTests(BaseEventsTest):
                 nemesis_event.duration = 15
                 raise
 
-        self.assertIn("division by zero", nemesis_event.errors_formatted)
-        self.assertEqual(nemesis_event.severity, Severity.ERROR)
-        self.assertEqual(nemesis_event.duration_formatted, "15s")
+        assert "division by zero" in nemesis_event.errors_formatted
+        assert nemesis_event.severity == Severity.ERROR
+        assert nemesis_event.duration_formatted == "15s"
 
     def test_disruption_error_event(self):
         with DisruptionEvent(
             nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False
         ) as nemesis_event:
             nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
-            self.assertEqual(
-                str(nemesis_event),
+            assert str(nemesis_event) == (
                 "(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: "
-                "nemesis_name=DeleteByRowsRange target_node=target_node",
+                "nemesis_name=DeleteByRowsRange target_node=target_node"
             )
 
             try:
@@ -158,28 +122,25 @@ class SctEventsTests(BaseEventsTest):
                 nemesis_event.duration = 15
                 nemesis_event.severity = Severity.ERROR
 
-        self.assertIn(
+        assert (
             "(DisruptionEvent Severity.ERROR) period_type=end event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318 "
-            "duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node errors=division by zero\n",
-            str(nemesis_event),
-        )
+            "duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node errors=division by zero\n"
+        ) in str(nemesis_event)
 
     def test_disruption_normal_event(self):
         with DisruptionEvent(
             nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False
         ) as nemesis_event:
             nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
-            self.assertEqual(
-                str(nemesis_event),
+            assert str(nemesis_event) == (
                 "(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: "
-                "nemesis_name=DeleteByRowsRange target_node=target_node",
+                "nemesis_name=DeleteByRowsRange target_node=target_node"
             )
             nemesis_event.duration = 15
 
-        self.assertEqual(
-            str(nemesis_event),
+        assert str(nemesis_event) == (
             "(DisruptionEvent Severity.NORMAL) period_type=end event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318 "
-            "duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node",
+            "duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node"
         )
 
     def test_filter(self):
@@ -209,7 +170,7 @@ class SctEventsTests(BaseEventsTest):
                 DatabaseLogEvent.DATABASE_ERROR().add_info(node="A", line_number=22, line=enospc_line_1).publish()
                 DatabaseLogEvent.NO_SPACE_ERROR().add_info(node="A", line_number=22, line=enospc_line_1).publish()
 
-        self.assertEqual(log_content_before, self.get_event_log_file("events.log"))
+        assert log_content_before == self.get_event_log_file("events.log")
 
     def test_general_filter(self):
         with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
@@ -225,8 +186,8 @@ class SctEventsTests(BaseEventsTest):
 
         log_content = self.get_event_log_file("events.log")
 
-        self.assertIn("TestFrameworkEvent", log_content)
-        self.assertNotIn("test_general_filter", log_content)
+        assert "TestFrameworkEvent" in log_content
+        assert "test_general_filter" not in log_content
 
     def test_general_filter_regex(self):
         with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
@@ -244,8 +205,8 @@ class SctEventsTests(BaseEventsTest):
 
         log_content = self.get_event_log_file("events.log")
 
-        self.assertIn("TestFrameworkEvent", log_content)
-        self.assertNotIn("1234567890", log_content)
+        assert "TestFrameworkEvent" in log_content
+        assert "1234567890" not in log_content
 
     def test_severity_changer(self):
         extra_time_to_expiration = 10
@@ -270,11 +231,11 @@ class SctEventsTests(BaseEventsTest):
         log_content = self.get_event_log_file("warning.log")
         crit_log_content = self.get_event_log_file("critical.log")
 
-        self.assertIn("TestFrameworkEvent", log_content)
-        self.assertIn("critical that should be lowered #1", log_content)
-        self.assertIn("critical that should be lowered #2", log_content)
-        self.assertNotIn("critical that should not be lowered #3", log_content)
-        self.assertIn("critical that should not be lowered #3", crit_log_content)
+        assert "TestFrameworkEvent" in log_content
+        assert "critical that should be lowered #1" in log_content
+        assert "critical that should be lowered #2" in log_content
+        assert "critical that should not be lowered #3" not in log_content
+        assert "critical that should not be lowered #3" in crit_log_content
 
     def test_severity_changer_db_log(self):
         """
@@ -303,11 +264,11 @@ class SctEventsTests(BaseEventsTest):
         log_content = self.get_event_log_file("warning.log")
         error_log_content = self.get_event_log_file("error.log")
 
-        self.assertIn("DatabaseLogEvent", log_content)
-        self.assertIn("error that should be lowered #1", log_content)
-        self.assertIn("error that should be lowered #2", log_content)
-        self.assertNotIn("error that should not be lowered #3", log_content)
-        self.assertIn("error that should not be lowered #3", error_log_content)
+        assert "DatabaseLogEvent" in log_content
+        assert "error that should be lowered #1" in log_content
+        assert "error that should be lowered #2" in log_content
+        assert "error that should not be lowered #3" not in log_content
+        assert "error that should not be lowered #3" in error_log_content
 
         # 2) One of the next DatabaseLogEvent event should expire the EventsSeverityChangerFilter
         #    (and not crash all subscribers)
@@ -320,7 +281,7 @@ class SctEventsTests(BaseEventsTest):
 
         log_content = self.get_event_log_file("error.log")
 
-        self.assertIn("error that shouldn't be lowered", log_content)
+        assert "error that shouldn't be lowered" in log_content
 
     def test_ycsb_filter(self):
         with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
@@ -343,8 +304,8 @@ class SctEventsTests(BaseEventsTest):
 
         log_content = self.get_event_log_file("events.log")
 
-        self.assertIn("TestFrameworkEvent", log_content)
-        self.assertNotIn("YcsbStressEvent", log_content)
+        assert "TestFrameworkEvent" in log_content
+        assert "YcsbStressEvent" not in log_content
 
         with self.wait_for_n_events(self.get_events_logger(), count=1):
             YcsbStressEvent.error(
@@ -361,8 +322,8 @@ class SctEventsTests(BaseEventsTest):
 
         log_content = self.get_event_log_file("events.log")
 
-        self.assertIn("TestFrameworkEvent", log_content)
-        self.assertIn("YcsbStressEvent", log_content)
+        assert "TestFrameworkEvent" in log_content
+        assert "YcsbStressEvent" in log_content
 
     def test_filter_repair(self):
         failed_repaired_line = (
@@ -385,8 +346,8 @@ class SctEventsTests(BaseEventsTest):
 
         log_content = self.get_event_log_file("events.log")
 
-        self.assertIn("not filtered", log_content)
-        self.assertNotIn("repair id 1", log_content)
+        assert "not filtered" in log_content
+        assert "repair id 1" not in log_content
 
     def test_filter_upgrade(self):
         known_failure_line = (
@@ -403,8 +364,8 @@ class SctEventsTests(BaseEventsTest):
 
         log_content = self.get_event_log_file("events.log")
 
-        self.assertIn("not filtered", log_content)
-        self.assertNotIn("Exception when communicating", log_content)
+        assert "not filtered" in log_content
+        assert "Exception when communicating" not in log_content
 
     def test_filter_by_node(self):
         with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
@@ -414,8 +375,8 @@ class SctEventsTests(BaseEventsTest):
 
         log_content = self.get_event_log_file("events.log")
 
-        self.assertIn("not filtered", log_content)
-        self.assertNotIn("this is filtered", log_content)
+        assert "not filtered" in log_content
+        assert "this is filtered" not in log_content
 
     def test_filter_expiration(self):
         with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=10):
@@ -433,8 +394,8 @@ class SctEventsTests(BaseEventsTest):
 
         log_content = self.get_event_log_file("events.log")
 
-        self.assertIn("this is not filtered", log_content)
-        self.assertNotIn("this is filtered", log_content)
+        assert "this is not filtered" in log_content
+        assert "this is filtered" not in log_content
 
     @pytest.mark.integration
     def test_default_filters(self):
@@ -477,8 +438,8 @@ class SctEventsTests(BaseEventsTest):
 
         log_content = self.get_event_log_file("events.log")
 
-        self.assertIn("other back trace", log_content)
-        self.assertNotIn("supressed", log_content)
+        assert "other back trace" in log_content
+        assert "supressed" not in log_content
 
         warnings_log_content = self.get_event_log_file("warning.log")
         assert "data_dictionary::no_such_column_family" in warnings_log_content
@@ -500,9 +461,10 @@ class SctEventsTests(BaseEventsTest):
                     node="A", line_number=22, line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 20"
                 ).publish()
 
-        self.assertEqual(event.severity, Severity.DEBUG)
+        assert event.severity == Severity.DEBUG
 
-    @parameterized.expand(
+    @pytest.mark.parametrize(
+        "duration_input, duration_formatted",
         [
             (None, ""),
             (2, "2s"),
@@ -510,7 +472,7 @@ class SctEventsTests(BaseEventsTest):
             (326, "5m26s"),
             (4598, "1h16m38s"),
             (87400, "1d0h16m40s"),
-        ]
+        ],
     )
     def test_duration_format(self, duration_input, duration_formatted):
         event = NodetoolEvent(
@@ -521,19 +483,19 @@ class SctEventsTests(BaseEventsTest):
         )
 
         event.duration = duration_input
-        self.assertEqual(duration_formatted, event.duration_formatted)
+        assert event.duration_formatted == duration_formatted
 
     @mock.patch("sdcm.sct_events.base.SctEvent.publish")
     def test_publish_called(self, publish):
         event = NodetoolEvent(nodetool_command="scrub", node="1.0.0.121", options="", publish_event=True)
         event.begin_event()
-        self.assertTrue(publish.called, "Publish function was not called unexpectedly")
+        assert publish.called, "Publish function was not called unexpectedly"
 
     @mock.patch("sdcm.sct_events.base.SctEvent.publish")
     def test_publish_not_called(self, publish):
         event = NodetoolEvent(nodetool_command="scrub", node="1.0.0.121", options="", publish_event=False)
         event.begin_event()
-        self.assertFalse(publish.called, "Publish function was called unexpectedly")
+        assert not publish.called, "Publish function was called unexpectedly"
 
     @staticmethod
     def test_soft_timeout():
@@ -854,14 +816,13 @@ class SctEventsTests(BaseEventsTest):
 
     def test_kill_nemesis_during_con_event(self):
         with (
-            self.assertRaises(KillNemesis),
+            pytest.raises(KillNemesis),
             DisruptionEvent(nemesis_name="SomeNemesis", node="target_node", publish_event=False) as nemesis_event,
         ):
             nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
-            self.assertEqual(
-                str(nemesis_event),
+            assert str(nemesis_event) == (
                 "(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: "
-                "nemesis_name=SomeNemesis target_node=target_node",
+                "nemesis_name=SomeNemesis target_node=target_node"
             )
 
             try:
@@ -876,5 +837,5 @@ class SctEventsTests(BaseEventsTest):
                 pytest.fail("we shouldn't reach this code path")
 
         assert nemesis_event.errors_formatted == ""
-        self.assertEqual(nemesis_event.severity, Severity.NORMAL)
-        self.assertEqual(nemesis_event.duration_formatted, "15s")
+        assert nemesis_event.severity == Severity.NORMAL
+        assert nemesis_event.duration_formatted == "15s"

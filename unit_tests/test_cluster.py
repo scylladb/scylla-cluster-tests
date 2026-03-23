@@ -20,14 +20,12 @@ import time
 import unittest
 from datetime import datetime
 from functools import cached_property
-from typing import List
 from weakref import proxy as weakproxy
 
 import pytest
 from invoke import Result
 
-from sdcm import sct_config
-from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet, BaseScyllaCluster
+from sdcm.cluster import BaseMonitorSet
 from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.filters import DbEventsFilter
@@ -44,31 +42,8 @@ from sdcm.utils.version_utils import ComparableScyllaVersion
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_config import SCTConfiguration
 from unit_tests.dummy_remote import DummyRemote, LocalNode
+from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, DummyScyllaCluster, NodetoolDummyNode
 from unit_tests.lib.fake_events import FakeEventsMixin
-from unit_tests.test_utils_common import DummyNode
-
-
-class DummyDbCluster(BaseCluster, BaseScyllaCluster):
-    def __init__(self, nodes, params=None):
-        self.nodes = nodes
-        self.params = params or sct_config.SCTConfiguration()
-        self.params["region_name"] = "test_region"
-        self.racks_count = 0
-        self.added_password_suffix = False
-        self.log = logging.getLogger(__name__)
-        self.node_type = "scylla-db"
-        self.name = "dummy_db_cluster"
-        self.vector_store_cluster = None
-
-    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
-        for _ in range(count):
-            self.nodes += [self.nodes[-1]]
-
-    def wait_for_init(*_, node_list=None, verbose=False, timeout=None, **__):
-        pass
-
-    def validate_seeds_on_all_nodes(self):
-        pass
 
 
 class TestBaseNode(unittest.TestCase, FakeEventsMixin):
@@ -490,47 +465,6 @@ class TestBaseMonitorSet(unittest.TestCase):
             ),
         )
         self.assertEqual(self.monitor_cluster.monitoring_version, "master")
-
-
-class NodetoolDummyNode(BaseNode):
-    def __init__(self, resp, myregion=None, myname=None, myrack=None, db_up=True):
-        self.resp = resp
-        self.myregion = myregion
-        self.myname = myname
-        self.parent_cluster = None
-        self.rack = myrack
-        self._db_up = db_up
-
-    @property
-    def region(self):
-        return self.myregion
-
-    @property
-    def name(self):
-        return self.myname
-
-    def run_nodetool(self, *args, **kwargs):
-        return Result(exited=0, stderr="", stdout=self.resp)
-
-    def db_up(self):
-        """return True if the database is up
-        Couldn't be a property, because BaseNode.db_up is a method
-        """
-        return self._db_up
-
-
-class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):
-    nodes: List["NodetoolDummyNode"]
-
-    def __init__(self, params):
-        self.nodes = params
-        self.name = "dummy_cluster"
-        self.added_password_suffix = False
-        self.log = logging.getLogger(self.name)
-
-    def get_ip_to_node_map(self):
-        """returns {ip: node} map for all nodes in cluster to get node by ip"""
-        return {node.myname: node for node in self.nodes}
 
 
 class TestNodetoolStatus(unittest.TestCase):
