@@ -3022,7 +3022,7 @@ class SCTConfiguration(BaseModel):
         4. Backwards compatibility with existing SCT_* environment variable naming
         """
         environment_vars = {}
-        for field_name, field in self.model_fields.items():
+        for field_name, field in type(self).model_fields.items():
             if field.exclude or is_ignored_field(field):
                 continue
 
@@ -3292,7 +3292,7 @@ class SCTConfiguration(BaseModel):
         # check if there are SCT_* environment variable which aren't documented
         config_keys = {
             f"SCT_{field_name.upper()}"
-            for field_name, field in self.model_fields.items()
+            for field_name, field in type(self).model_fields.items()
             if not is_ignored_field(field)
         }
         env_keys = {o.split(".")[0] for o in os.environ if o.startswith("SCT_")}
@@ -3302,7 +3302,7 @@ class SCTConfiguration(BaseModel):
             raise ValueError("Unsupported environment variables were used:\n\t - {}".format("\n\t - ".join(output)))
 
     def _validate_sct_variable_values(self):
-        for field_name, field in self.model_fields.items():
+        for field_name, field in type(self).model_fields.items():
             if is_ignored_field(field):
                 continue
             if field_name in self and field.json_schema_extra:
@@ -3391,7 +3391,7 @@ class SCTConfiguration(BaseModel):
     def _check_backend_defaults(self, backend, required_params):
         fields = [
             field_name
-            for field_name, field in self.model_fields.items()
+            for field_name, field in type(self).model_fields.items()
             if field_name in required_params and not is_ignored_field(field)
         ]
         for field in fields:
@@ -3723,7 +3723,7 @@ class SCTConfiguration(BaseModel):
 
         :return: str
         """
-        return anyconfig.dumps(self.dict(exclude_none=True), ac_parser="yaml")
+        return anyconfig.dumps(self.model_dump(exclude_none=True), ac_parser="yaml")
 
     @classmethod
     def get_annotations_as_strings(cls, field_type, field_metadata=None):  # noqa: PLR0911
