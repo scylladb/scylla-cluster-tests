@@ -19,7 +19,9 @@ from functools import (
     cache,
     cached_property,
 )
+import hashlib
 import logging
+import re
 import time
 
 import oci
@@ -893,3 +895,18 @@ def get_image_tags(region: str, image_id: str, tag_namespace: str) -> dict:
     compute_client = OciService().get_compute_client(region=region)
     image = compute_client.get_image(image_id=image_id)
     return image.data.defined_tags.get(tag_namespace, {})
+
+
+def build_hostname_label(name: str, default_hostname: str = "node") -> str:
+    """Build an RFC-compliant and deterministic hostname label for OCI VNICs."""
+    hostname = re.sub(r"[^a-z0-9-]", "-", name.lower())
+    hostname = re.sub(r"-+", "-", hostname).strip("-")
+    if not hostname:
+        hostname = default_hostname
+    if hostname[0].isdigit() or hostname.isdigit():
+        hostname = f"n-{hostname}"
+    checksum = hashlib.sha1(name.encode("utf-8")).hexdigest()[:8]
+    suffix = f"-{checksum}"
+    max_base_len = 63 - len(suffix)
+    hostname = hostname[:max_base_len].strip("-") or default_hostname
+    return f"{hostname}{suffix}"

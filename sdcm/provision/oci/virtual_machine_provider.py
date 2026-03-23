@@ -12,8 +12,8 @@
 # Copyright (c) 2026 ScyllaDB
 
 import base64
-from dataclasses import dataclass, field
 import logging
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 import oci
@@ -40,7 +40,7 @@ from sdcm.provision.provisioner import (
 )
 from sdcm.provision.user_data import UserDataBuilder
 from sdcm.utils.oci_region import OciRegion
-from sdcm.utils.oci_utils import OciService
+from sdcm.utils.oci_utils import OciService, build_hostname_label
 from sdcm.utils.parallel_object import ParallelObject
 
 LOGGER = logging.getLogger(__name__)
@@ -224,6 +224,21 @@ class VirtualMachineProvider:
         tags = {k: (str(v) if v is not None else "") for k, v in tags.items()}
         return tags
 
+    def _build_primary_vnic_details(
+        self,
+        definition: InstanceDefinition,
+        subnet_id: str,
+        nsg_id: str,
+    ) -> CreateVnicDetails:
+        return CreateVnicDetails(
+            subnet_id=subnet_id,
+            assign_public_ip=definition.use_public_ip,
+            assign_private_dns_record=True,
+            hostname_label=build_hostname_label(definition.name, "node"),
+            display_name=definition.name,
+            nsg_ids=[nsg_id],
+        )
+
     def _provision_instance(
         self, oci_region: OciRegion, definition: InstanceDefinition, pricing_model: PricingModel
     ) -> Instance:
@@ -280,11 +295,10 @@ class VirtualMachineProvider:
             "image_id": definition.image_id,
             "shape": shape_type,
             "shape_config": shape_config_obj,
-            "create_vnic_details": CreateVnicDetails(
+            "create_vnic_details": self._build_primary_vnic_details(
+                definition=definition,
                 subnet_id=subnet.id,
-                assign_public_ip=definition.use_public_ip,
-                display_name=definition.name,
-                nsg_ids=[oci_region.get_or_create_nsg(definition.tags.get("NodeType", definition.name)).id],
+                nsg_id=oci_region.get_or_create_nsg(definition.tags.get("NodeType", definition.name)).id,
             ),
             "metadata": metadata,
             "defined_tags": {TAG_NAMESPACE: self._get_tags(definition)},
@@ -410,6 +424,37 @@ class VirtualMachineProvider:
         else:
             return vnic.private_ip
 
+    def get_private_dns_name(self, name_or_id: str) -> str:
+        """Build OCI private FQDN from VNIC/subnet/VCN DNS labels.
+
+        OCI private DNS name format is: <hostname_label>.<subnet_dns>.<vcn_dns>.oraclevcn.com
+        """
+        instance = self._resolve_instance(name_or_id)
+        if not instance:
+            raise ProvisionError(f"Instance '{name_or_id}' not found")
+
+        vnic_attachments = oci.pagination.list_call_get_all_results(
+            self._compute_client.list_vnic_attachments,
+            compartment_id=self._compartment_id,
+            instance_id=instance.id,
+        ).data
+        if not vnic_attachments:
+            raise ProvisionError(f"No VNICs attached to {name_or_id}")
+
+        vnic = self._network_client.get_vnic(vnic_attachments[0].vnic_id).data
+        if not (hostname_label := vnic.hostname_label):
+            return ""
+
+        subnet = self._network_client.get_subnet(vnic.subnet_id).data
+        if not (subnet_dns_label := subnet.dns_label):
+            return ""
+
+        vcn = self._network_client.get_vcn(subnet.vcn_id).data
+        if not (vcn_dns_label := vcn.dns_label):
+            return ""
+
+        return f"{hostname_label}.{subnet_dns_label}.{vcn_dns_label}.oraclevcn.com"
+
     def convert_to_vm_instance(self, oci_instance: Instance, provisioner_ref) -> VmInstance:
         """Converts OCI SDK Instance model to SCT VmInstance."""
 
@@ -419,10 +464,12 @@ class VirtualMachineProvider:
         try:
             public_ip = self.get_ip_address(oci_instance.id, public=True)
             private_ip = self.get_ip_address(oci_instance.id, public=False)
+            private_dns_name = self.get_private_dns_name(oci_instance.id)
         except Exception as e:  # noqa: BLE001
             LOGGER.warning("Failed to detect the IP address(es): %s", e)
             public_ip = ""
             private_ip = ""
+            private_dns_name = ""
 
         pricing_model = PricingModel.ON_DEMAND
         if oci_instance.preemptible_instance_config:
@@ -447,6 +494,7 @@ class VirtualMachineProvider:
             creation_time=oci_instance.time_created,
             instance_type=oci_instance.shape,
             _provisioner=provisioner_ref,
+            private_dns_name=private_dns_name,
         )
 
     def add_tags(self, name_or_id: str, tags: Dict[str, str]):
