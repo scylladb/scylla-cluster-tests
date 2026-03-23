@@ -687,7 +687,7 @@ instance_provision: spot|on_demand|spot_fleet
 
 **default:** spot
 
-**type:** Literal['spot', 'on_demand', 'spot_fleet', 'spot_low_price']
+**type:** Literal['spot', 'on_demand', 'spot_fleet']
 
 
 ## **instance_provision_fallback_on_demand** / SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND

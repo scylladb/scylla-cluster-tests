@@ -1,0 +1,4 @@
+scylla_network_config:
+  - address: listen_address
+    ip_type: ipv4
+    public: false
