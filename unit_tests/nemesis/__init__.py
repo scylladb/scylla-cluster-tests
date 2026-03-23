@@ -3,6 +3,9 @@
 from abc import ABC, abstractmethod
 from unittest.mock import MagicMock
 
+from sdcm.nemesis import NemesisRunner
+from sdcm.nemesis.registry import NemesisRegistry
+
 
 class TestRunner:
     """Lightweight mock runner for nemesis unit tests.
@@ -97,3 +100,29 @@ class CustomNemesisAD(IntermediateNemesis):
 
     def disrupt(self):
         print(self.runner.COMMON_STRING + "d")
+
+
+class TestNemesisClass(NemesisRunner):
+    """Nemesis runner stub for unit tests.
+
+    Overrides nemesis_registry to use the test-only TestBaseClass hierarchy so
+    that registry/selector/filter logic can be exercised without touching the
+    real nemesis tree.  The flag attributes mirror TestBaseClass to allow the
+    same selector predicates to be tested on both sides.
+
+    __test__ = False prevents pytest from collecting this as a test class.
+    """
+
+    COMMON_STRING = "called test function "
+    kubernetes = False
+    flag_a = False
+    flag_b = False
+    flag_c = False
+    flag_common = False
+    __test__ = False
+
+    def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
+        super().__init__(
+            tester_obj, termination_event, *args, nemesis_selector=nemesis_selector, nemesis_seed=nemesis_seed, **kwargs
+        )
+        self.nemesis_registry = NemesisRegistry(base_class=TestBaseClass, flag_class=TestBaseClass)

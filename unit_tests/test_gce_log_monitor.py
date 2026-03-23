@@ -2,7 +2,7 @@ import copy
 
 from sdcm.cluster_gce import GCENode
 from sdcm.utils.gce_utils import GceLoggingClient
-from unit_tests.test_events import BaseEventsTest
+from unit_tests.lib.real_events import RealEventsTest
 
 
 class FakeGceLogClient(GceLoggingClient):
@@ -56,7 +56,7 @@ class FakeGceNode(GCENode):
         self._last_logs_fetch_time = 1656590843.0
 
 
-class TestGceErrorLog(BaseEventsTest):
+class TestGceErrorLog(RealEventsTest):
     @staticmethod
     def logging_client():
         use_real_gce = False
