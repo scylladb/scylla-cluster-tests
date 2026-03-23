@@ -22,12 +22,11 @@ from pathlib import Path
 
 import pytest
 
-from sdcm import sct_config
-from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
-from sdcm.utils.distro import Distro
 from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud, get_testrun_dir
 from sdcm.utils.sstable import load_inventory
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
+
+from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, FakeSstableRemoter
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -105,100 +104,6 @@ class TestDownloadDir(unittest.TestCase):
         sct_update_db_packages = None
         update_db_packages = download_dir_from_cloud(sct_update_db_packages)
         assert update_db_packages is None
-
-
-class Remoter:
-    def __init__(self, system_log):
-        self.system_log = system_log
-
-    def run(self, *args, **kwargs):
-        lines = [
-            "[shard 11] sstables_loader - load_and_stream: started ops_uuid=a2661989-6836-418f-aa67-2c5466499848, process [0-1] out",
-            "[shard  2] sstables_loader - Done loading new SSTables for keyspace=keyspace1, table=standard1, load_and_stream=true, "
-            "primary_replica_only=false, status=succeeded",
-        ]
-        for line in lines:
-            with open(self.system_log, "a", encoding="utf-8") as file:
-                file.write(f"{line}\n")
-
-
-class DummyDbCluster(BaseCluster, BaseScyllaCluster):
-    def __init__(self, nodes):
-        self.nodes = nodes
-        self.params = sct_config.SCTConfiguration()
-        self.params["region_name"] = "test_region"
-        self.racks_count = 0
-        self.added_password_suffix = False
-        self.log = logging.getLogger(__name__)
-        self.node_type = "scylla-db"
-        self.vector_store_cluster = None
-
-    def start_nemesis(self):
-        pass
-
-
-class DummyNode(BaseNode):
-    _system_log = None
-    is_enterprise = False
-    is_product_enterprise = False
-    distro = Distro.CENTOS7
-
-    def init(self):
-        super().init()
-        self.remoter.stop()
-        self.remoter = Remoter(self.system_log)
-
-    def do_default_installations(self):
-        pass  # we don't need to install anything for this unittests
-
-    def _set_keep_duration(self, duration_in_hours: int) -> None:
-        pass
-
-    def _get_private_ip_address(self) -> str:
-        return "127.0.0.1"
-
-    def _get_public_ip_address(self) -> str:
-        return "127.0.0.1"
-
-    @property
-    def cql_address(self):
-        return "127.0.0.1"
-
-    def start_task_threads(self) -> None:
-        # disable all background threads
-        pass
-
-    @property
-    def system_log(self) -> str:
-        return self._system_log
-
-    @system_log.setter
-    def system_log(self, log: str):
-        self._system_log = log
-
-    def wait_for_cloud_init(self):
-        pass
-
-    def set_hostname(self) -> None:
-        pass
-
-    def configure_remote_logging(self):
-        pass
-
-    def wait_ssh_up(self, verbose=True, timeout=500) -> None:
-        pass
-
-    @property
-    def is_nonroot_install(self) -> bool:
-        return False
-
-    @property
-    def scylla_shards(self):
-        return 0
-
-    @property
-    def cpu_cores(self) -> int:
-        return 0
 
 
 class TestSstableLoadUtils(unittest.TestCase):
@@ -303,7 +208,7 @@ class TestSstableLoadUtils(unittest.TestCase):
             )
 
     def test_load_and_stream_waits_for_log_lines(self):
-        self.node.remoter = Remoter(self.node.system_log)
+        self.node.remoter = FakeSstableRemoter(self.node.system_log)
         SstableLoadUtils.run_load_and_stream(self.node, start_timeout=1, end_timeout=2)
 
 
