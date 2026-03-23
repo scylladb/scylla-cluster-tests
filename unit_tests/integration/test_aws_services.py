@@ -9,7 +9,7 @@ import boto3
 # we need to set the environment variable before importing moto
 # otherwise it won't pick it up
 
-os.environ["MOTO_AMIS_PATH"] = str(Path(__file__).parent / "test_data" / "mocked_ami_data.json")
+os.environ["MOTO_AMIS_PATH"] = str(Path(__file__).parent.parent / "test_data" / "mocked_ami_data.json")
 from moto.server import ThreadedMotoServer
 
 from sdcm.keystore import KeyStore
