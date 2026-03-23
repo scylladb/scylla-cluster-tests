@@ -1178,6 +1178,7 @@ class ScyllaLogCollector(LogCollector):
         # so the run's own samples are readable here thanks to ClusterTester.stop_perf_collector(),
         # which stops the service at the start of teardown - well before logs are collected.
         RemoteDirArchiveLog(name="perf-data", remote_dir="/var/log/scylla-perf"),
+        FileLog(name="async_profiles_*.tar.gz", search_locally=True),
     ]
 
     cmd = "test -f /etc/scylla/ssl_conf/{0} && cat /etc/scylla/ssl_conf/{0}"
