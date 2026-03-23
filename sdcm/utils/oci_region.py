@@ -21,6 +21,7 @@ layer automation on top of these primitives.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from ipaddress import ip_network
@@ -594,6 +595,7 @@ class OciRegion:
             compartment_id=self.compartment_id,
             vcn_id=self.vcn.id,
             display_name=name,
+            dns_label=self._subnet_dns_label(public=public),
             prohibit_public_ip_on_vnic=not public,
             security_list_ids=[self.security_list.id],
             route_table_id=(self.public_route_table.id if public else self.private_route_table.id),
@@ -733,6 +735,39 @@ class OciRegion:
         self.setup_defined_tags()
         self.configure_network()
         LOGGER.info("Region configured successfully.")
+
+    def validate_dns_infrastructure(self, subnet, public: bool) -> None:
+        """Validate VCN/subnet DNS prerequisites for VM hostname allocation.
+
+        OCI requires DNS labels on both the VCN and subnet to allocate per-VNIC
+        hostnames and private DNS records.
+        """
+        if not self.vcn.dns_label:
+            raise ValueError(
+                f"VCN '{self.vcn.display_name}' ({self.vcn.id}) in region '{self.region_name}' has no DNS label. "
+                "OCI cannot assign per-VM private DNS names without it. "
+                "Recreate the SCT VCN with DNS labels and run 'hydra prepare-regions --cloud-provider oci'."
+            )
+        if not subnet.dns_label:
+            subnet_type = "public" if public else "private"
+            raise ValueError(
+                f"{subnet_type.capitalize()} subnet '{subnet.display_name}' ({subnet.id}) in region "
+                f"'{self.region_name}' has no DNS label. OCI cannot assign stable hostnames in this subnet. "
+                "Delete/recreate this SCT subnet with DNS labels and rerun "
+                "'hydra prepare-regions --cloud-provider oci'."
+            )
+
+    def _subnet_dns_label(self, public: bool) -> str:
+        """Create a deterministic RFC-compliant subnet DNS label.
+
+        Labels must be <=15 characters, alphanumeric, start with a letter and be
+        unique in the VCN.
+        """
+        visibility = "public" if public else "private"
+        label_source = f"{self.region_name}-{visibility}"
+        checksum = hashlib.sha1(label_source.encode("utf-8")).hexdigest()[:7]
+        base = self._dns_label_from_name(visibility)
+        return f"{base[:7]}-{checksum}"
 
     @staticmethod
     def _dns_label_from_name(name: str) -> str:
