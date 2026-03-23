@@ -10,7 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2026 ScyllaDB
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,25 +19,23 @@ from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
 
 
-GCE_CONFIG = str(Path(__file__).parent.parent.parent / "defaults" / "gce_config.yaml")
-
-_BASE_ENV = {
-    "SCT_CLUSTER_BACKEND": "gce",
-    "SCT_CONFIG_FILES": f'["{GCE_CONFIG}"]',
-    "SCT_GCE_DATACENTER": "us-east1",
-    "SCT_N_DB_NODES": "3",
-    "SCT_N_LOADERS": "2",
-    "SCT_N_MONITOR_NODES": "1",
-    "SCT_USER_PREFIX": "unit",
-}
-
-
 @pytest.fixture
-def make_config(monkeypatch):
+def make_config(monkeypatch, defaults_dir):
+    gce_config = str(defaults_dir / "gce_config.yaml")
+    base_env = {
+        "SCT_CLUSTER_BACKEND": "gce",
+        "SCT_CONFIG_FILES": f'["{gce_config}"]',
+        "SCT_GCE_DATACENTER": "us-east1",
+        "SCT_N_DB_NODES": "3",
+        "SCT_N_LOADERS": "2",
+        "SCT_N_MONITOR_NODES": "1",
+        "SCT_USER_PREFIX": "unit",
+    }
+
     def _factory(extra_env: dict | None = None):
         test_config = TestConfig()
         test_config.set_test_id_only("3923f974-bf0e-4c3c-9f52-3f6473b8a0b7")
-        env = {**_BASE_ENV, "SCT_TEST_ID": test_config.test_id(), **(extra_env or {})}
+        env = {**base_env, "SCT_TEST_ID": test_config.test_id(), **(extra_env or {})}
         for key, value in env.items():
             monkeypatch.setenv(key, value)
         return SCTConfiguration(), test_config

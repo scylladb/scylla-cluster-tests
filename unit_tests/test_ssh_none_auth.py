@@ -15,7 +15,6 @@ import os
 import subprocess
 import time
 import socket
-from pathlib import Path
 
 import pytest
 
@@ -24,10 +23,10 @@ from sdcm.utils.decorators import retrying
 
 
 @pytest.fixture(scope="module")
-def ssh_server_container():
+def ssh_server_container(test_data_dir):
     """Start a Docker container with SSH server configured for 'none' authentication."""
     exposed_port = 22
-    docker_dir = Path(__file__).parent / "test_data" / "auth_none_ssh_docker"
+    docker_dir = test_data_dir / "auth_none_ssh_docker"
     image_tag = "ssh_server_none_auth_test:latest"
 
     subprocess.run(["docker", "build", "-t", image_tag, docker_dir], check=True)

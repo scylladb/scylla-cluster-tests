@@ -23,6 +23,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock, PropertyMock
 
+# Single source-of-truth for directory roots used across unit-test fixtures.
+# Only this module is allowed to reference __file__ for path construction;
+# all other unit-test files must consume the `test_data_dir` / `data_dir`
+# fixtures defined below.
+UNIT_TESTS_DIR: Path = Path(__file__).parent
+
 from sdcm.utils.mp_start import ensure_start_method
 
 ensure_start_method()
@@ -121,9 +127,21 @@ def prom_address():
     yield start_metrics_server()
 
 
+@pytest.fixture(scope="session")
+def test_data_dir() -> Path:
+    """Return the path to unit_tests/test_data/."""
+    return UNIT_TESTS_DIR / "test_data"
+
+
+@pytest.fixture(scope="session")
+def data_dir() -> Path:
+    """Return the path to the top-level data_dir/ directory."""
+    return UNIT_TESTS_DIR.parent / "data_dir"
+
+
 @contextmanager
 def create_ssl_dir(test_id: str):
-    ssl_dir = (Path(__file__).parent.parent / "data_dir" / f"ssl_conf_{test_id}").absolute()
+    ssl_dir = (UNIT_TESTS_DIR.parent / "data_dir" / f"ssl_conf_{test_id}").absolute()
     ssl_dir.mkdir(parents=True, exist_ok=True)
 
     localhost = LocalHost(user_prefix="unit_test_fake_user", test_id="unit_test_fake_test_id")
@@ -142,7 +160,7 @@ def configure_scylla_node(docker_scylla_args: dict, params, ssl_dir: Path | None
     # make sure the path to the file is base on the host path, and not as the docker internal path i.e. /sct/
     # since we are going to mount it in a DinD (docker-inside-docker) setup
     base_dir = os.environ.get("_SCT_BASE_DIR", None)
-    entryfile_path = Path(base_dir) if base_dir else Path(__file__).parent.parent
+    entryfile_path = Path(base_dir) if base_dir else UNIT_TESTS_DIR.parent
     entryfile_path = entryfile_path / "docker" / "scylla-sct" / ("entry_ssl.sh" if ssl else "entry.sh")
 
     alternator_flags = f"--alternator-port {ALTERNATOR_PORT} --alternator-write-isolation=always"

@@ -217,8 +217,8 @@ class TestSstableLoadUtils(unittest.TestCase):
         cls.node.init()
 
     @pytest.fixture(autouse=True)
-    def fixture_setup(self, tmp_path):
-        source = os.path.join(os.path.dirname(__file__), "test_data", "load_and_stream.log")
+    def fixture_setup(self, tmp_path, test_data_dir):
+        source = test_data_dir / "load_and_stream.log"
         target = tmp_path / "load_and_stream.log"
         shutil.copy(source, target)
         self.node.system_log = str(target)

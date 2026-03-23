@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2022 ScyllaDB
 from collections import namedtuple
-from pathlib import Path
 
 
 from sdcm.keystore import KeyStore
@@ -21,7 +20,7 @@ from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
 
 
-def test_can_create_basic_scylla_instance_definition_from_sct_config(monkeypatch):
+def test_can_create_basic_scylla_instance_definition_from_sct_config(monkeypatch, provisioner_dir):
     """Test for azure_region_definition_builder"""
     EnvConfig = namedtuple(
         "EnvConfig",
@@ -44,7 +43,7 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config(monkeypatch
     env_config = EnvConfig(
         SCT_CLUSTER_BACKEND="azure",
         SCT_TEST_ID=test_config.test_id(),
-        SCT_CONFIG_FILES=f'["{Path(__file__).parent.absolute()}/azure_default_config.yaml"]',
+        SCT_CONFIG_FILES=f'["{provisioner_dir.absolute()}/azure_default_config.yaml"]',
         SCT_AZURE_REGION_NAME="['eastus', 'easteu']",
         SCT_N_DB_NODES="3 1",
         SCT_USER_PREFIX="unit",

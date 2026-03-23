@@ -25,6 +25,24 @@ from unit_tests.provisioner.fake_azure_service import FakeAzureService
 
 
 @pytest.fixture(scope="session")
+def test_data_dir() -> Path:
+    """Override root test_data_dir: return provisioner's own test_data/ directory."""
+    return Path(__file__).parent / "test_data"
+
+
+@pytest.fixture(scope="session")
+def provisioner_dir(test_data_dir: Path) -> Path:
+    """Return the path to unit_tests/provisioner/ (for config files co-located with tests)."""
+    return test_data_dir.parent
+
+
+@pytest.fixture(scope="session")
+def defaults_dir(provisioner_dir: Path) -> Path:
+    """Return the path to the top-level defaults/ directory."""
+    return provisioner_dir.parent.parent / "defaults"
+
+
+@pytest.fixture(scope="session")
 def azure_service(tmp_path_factory) -> AzureService:
     run_on_real_azure = False  # make it True to test with real Azure
     if run_on_real_azure:
@@ -43,7 +61,7 @@ def fallback_on_demand(monkeypatch):
 
 
 @pytest.fixture
-def params(monkeypatch):
+def params(monkeypatch, provisioner_dir: Path):
     EnvConfig = namedtuple(
         "EnvConfig",
         [
@@ -62,7 +80,7 @@ def params(monkeypatch):
     env_config = EnvConfig(
         SCT_CLUSTER_BACKEND="azure",
         SCT_TEST_ID=f"{str(uuid.uuid4())}",
-        SCT_CONFIG_FILES=f'["{Path(__file__).parent.absolute()}/azure_default_config.yaml"]',
+        SCT_CONFIG_FILES=f'["{provisioner_dir.absolute()}/azure_default_config.yaml"]',
         SCT_AZURE_REGION_NAME="['eastus', 'easteu']",
         SCT_N_DB_NODES="3 1",
         SCT_AZURE_IMAGE_DB="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/"
