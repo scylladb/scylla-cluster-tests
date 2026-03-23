@@ -2,7 +2,7 @@
 status: draft
 domain: ci-cd
 created: 2026-03-18
-last_updated: 2026-03-18
+last_updated: 2026-03-23
 owner: dimakr
 ---
 
@@ -164,9 +164,9 @@ The `runCleanupResource.groovy` (line 3) calls `hydra clean-resources --post-beh
 2. **Export `SCT_REUSE_CLUSTER` in `vars/runSctTest.groovy`**: When `reuse_cluster` param is set, export it as an environment variable before running the test.
 
    ```groovy
-   if [[ -n "${params.reuse_cluster ? params.reuse_cluster : ''}" ]] ; then
-       export SCT_REUSE_CLUSTER="${params.reuse_cluster}"
-   fi
+   if (params.reuse_cluster) {
+       env.SCT_REUSE_CLUSTER = params.reuse_cluster
+   }
    ```
 
 3. **Export `SCT_REUSE_CLUSTER` in `vars/provisionResources.groovy`**: Pass the reuse_cluster parameter through so the provisioning command can detect it and behave appropriately.
@@ -246,6 +246,7 @@ The `runCleanupResource.groovy` (line 3) calls `hydra clean-resources --post-beh
 - [ ] `find-runner-instance` CLI command implemented in `sct.py`
 - [ ] `createSctRunner.groovy` finds existing runner when `reuse_cluster` is set
 - [ ] `Provision Resources` stage skipped when `reuse_cluster` is set
+- [ ] Log collection for the original run is confirmed complete before `TestId` tag is updated (enforced via pipeline stage ordering: `Collect Logs` must succeed before `findOrCreateSctRunner` updates tags)
 - [ ] Runner's `TestId` and `keep` tags updated for the new run
 - [ ] Unit tests for `find-runner-instance` command
 - [ ] Integration test: Reuse flow works end-to-end in provision test pipeline
@@ -291,17 +292,35 @@ The `runCleanupResource.groovy` (line 3) calls `hydra clean-resources --post-beh
    - How to find the `test_id` of a previous run
    - Limitations and caveats
 
-2. **Runner expiry safety**: Add a maximum `keep=alive` duration (e.g., 7 days). The periodic cleanup should terminate `alive` runners that exceed this threshold. Implement this in `clean_sct_runners()`.
+2. **Runner expiry safety**: Add a maximum `keep=alive` duration (e.g., 7 days). When tagging a runner with `keep=alive` (Phase 1), also set a `keep_alive_since` tag with the current UTC timestamp. The periodic cleanup in `clean_sct_runners()` reads `keep_alive_since` to determine how long the runner has been in `alive` state and terminates it after 7 days.
+
+   Using `launch_time` (when the VM was created) would be incorrect here — a runner could be alive for days before being tagged `keep=alive`, causing it to be immediately terminated. The `keep_alive_since` tag captures the moment reuse mode was activated.
 
    ```python
    MAX_ALIVE_HOURS = 168  # 7 days
+
    if "alive" in str(sct_runner_info.keep):
-       if sct_runner_info.launch_time:
-           elapsed = (utc_now - sct_runner_info.launch_time).total_seconds() / 3600
+       keep_alive_since_str = sct_runner_info.tags.get("keep_alive_since")
+       if keep_alive_since_str:
+           keep_alive_since = datetime.fromisoformat(keep_alive_since_str)
+           elapsed = (utc_now - keep_alive_since).total_seconds() / 3600
            if elapsed > MAX_ALIVE_HOURS:
-               LOGGER.warning("Runner %s exceeded max alive time (%dh). Terminating.", ...)
+               LOGGER.warning("Runner %s exceeded max alive time (%dh since %s). Terminating.",
+                              sct_runner_info.name, MAX_ALIVE_HOURS, keep_alive_since_str)
                sct_runner_info.terminate()
+               continue
        continue
+   ```
+
+   The `keep_alive_since` tag must be set atomically with `keep=alive` in Phase 1's `update-runner-tags` call:
+
+   ```groovy
+   sh """
+       ./docker/env/hydra.sh update-runner-tags \
+           --runner-ip \${RUNNER_IP} \
+           --backend "$cloud_provider" \
+           --tags '{"keep": "alive", "keep_action": "none", "keep_alive_since": "'"\$(date -u +%Y-%m-%dT%H:%M:%S)"'"}'
+   """
    ```
 
 3. **Pipeline validation**: When `reuse_cluster` is set but no matching runner/cluster is found, fail early with a clear error message instead of proceeding with a broken state.
