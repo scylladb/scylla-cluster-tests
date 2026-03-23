@@ -2845,20 +2845,12 @@ class SCTConfiguration(BaseModel):
         # Validate zero token nodes
         if self.get("use_zero_nodes"):
             self._validate_zero_token_backend_support(backend=cluster_backend)
-            zero_nodes_num = self.get("n_db_zero_token_nodes")
-            data_nodes_num = self.get("n_db_nodes")
+            zero_nodes_num: list[int] | int = self.get("n_db_zero_token_nodes")
+            data_nodes_num: list[int] | int = self.get("n_db_nodes")
             # if number of zero nodes is set for cluster setup, check correctness of settings
             if zero_nodes_num:
-                zero_nodes_num = (
-                    [zero_nodes_num]
-                    if isinstance(zero_nodes_num, int)
-                    else [int(i) for i in str(zero_nodes_num).split()]
-                )
-                data_nodes_num = (
-                    [data_nodes_num]
-                    if isinstance(data_nodes_num, int)
-                    else [int(i) for i in str(data_nodes_num).split()]
-                )
+                zero_nodes_num = zero_nodes_num if isinstance(zero_nodes_num, list) else [zero_nodes_num]
+                data_nodes_num = data_nodes_num if isinstance(data_nodes_num, list) else [data_nodes_num]
                 assert len(zero_nodes_num) == len(data_nodes_num), (
                     "Config of zero token nodes is not equal config of data nodes for multi dc"
                 )
@@ -2921,8 +2913,8 @@ class SCTConfiguration(BaseModel):
     def total_db_nodes(self) -> List[int]:
         """Used to get total number of db nodes data nodes and zero nodes"""
         use_zero_nodes = self.get("use_zero_nodes")
-        zero_nodes_num = self.get("n_db_zero_token_nodes")
-        data_nodes_num = self.get("n_db_nodes")
+        zero_nodes_num: list[int] | int = self.get("n_db_zero_token_nodes")
+        data_nodes_num: list[int] | int = self.get("n_db_nodes")
         zero_nodes_num = (
             zero_nodes_num
             if isinstance(zero_nodes_num, list)
@@ -2930,13 +2922,7 @@ class SCTConfiguration(BaseModel):
             if isinstance(zero_nodes_num, int)
             else [int(i) for i in str(zero_nodes_num).split()]
         )
-        data_nodes_num = (
-            data_nodes_num
-            if isinstance(data_nodes_num, list)
-            else [data_nodes_num]
-            if isinstance(data_nodes_num, int)
-            else [int(i) for i in str(data_nodes_num).split()]
-        )
+        data_nodes_num = data_nodes_num if isinstance(data_nodes_num, list) else [data_nodes_num]
         total_nodes = data_nodes_num[:]
         if use_zero_nodes and zero_nodes_num:
             total_nodes = [n1 + n2 for n1, n2 in zip(data_nodes_num, zero_nodes_num)]
@@ -4024,9 +4010,10 @@ class SCTConfiguration(BaseModel):
                 )
 
         rf = self.get("xcloud_replication_factor")
-        n_nodes = int(self.get("n_db_nodes"))
+        _n_db_nodes: list[int] | int = self.get("n_db_nodes")
+        n_nodes = _n_db_nodes if isinstance(_n_db_nodes, list) else [_n_db_nodes]
         if rf is None:
-            self["xcloud_replication_factor"] = min(n_nodes, 3)
+            self["xcloud_replication_factor"] = min(*n_nodes, 3)
         elif rf > n_nodes:
             raise ValueError(f"xcloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
 

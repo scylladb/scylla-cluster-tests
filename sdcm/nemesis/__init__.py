@@ -4378,7 +4378,7 @@ class NemesisRunner:
         if isinstance(initial_db_size, int):
             decommission_nodes_number = min(cur_num_nodes_in_dc - initial_db_size, add_nodes_number)
         else:
-            initial_db_size_in_dc = int(initial_db_size.split(" ")[self.target_node.dc_idx])
+            initial_db_size_in_dc = initial_db_size[self.target_node.dc_idx]
             decommission_nodes_number = min(cur_num_nodes_in_dc - initial_db_size_in_dc, add_nodes_number)
 
         if decommission_nodes_number < 1:

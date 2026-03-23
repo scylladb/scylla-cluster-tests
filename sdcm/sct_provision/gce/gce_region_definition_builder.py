@@ -78,13 +78,15 @@ class GceDefinitionBuilder(DefinitionBuilder):
         """Return GCE-specific provisioner configuration."""
         return {"network_name": self.params.get("gce_network")}
 
-    def _get_node_count_for_each_region(self, n_str: str) -> List[int]:
-        """Generate node count for each region from configuration parameter string.
+    def _get_node_count_for_each_region(self, n_list_or_int: list[int] | int) -> List[int]:
+        """Generate node count for each region from configuration parameter.
 
         Overrides base class method to use self.regions property instead of REGION_MAP,
         since GCE uses gce_datacenters parameter.
 
-        E.g. regions: 'us-east1 us-west1' and n_db_nodes: '2 1' - will generate [2, 1] list
+        E.g. regions: 'us-east1 us-west1' and n_db_nodes: [2, 1] - will generate [2, 1] list
         """
         region_count = len(self.regions)
-        return ([int(v) for v in str(n_str).split()] + [0] * region_count)[:region_count]
+        return ((n_list_or_int if isinstance(n_list_or_int, list) else [n_list_or_int]) + [0] * region_count)[
+            :region_count
+        ]

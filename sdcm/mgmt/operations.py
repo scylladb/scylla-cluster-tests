@@ -544,7 +544,8 @@ class DatabaseOperations(ClusterTester):
         shuts down one node, insert one part of the rows and starts the node again.
         As a result, each node that was shut down will have missing rows and will require repair.
         """
-        num_of_nodes = self.params.get("n_db_nodes")
+        n_db_nodes = self.params.get("n_db_nodes")
+        num_of_nodes = sum(n_db_nodes) if isinstance(n_db_nodes, list) else n_db_nodes
         num_of_rows_per_insertion = int(total_num_of_rows / (num_of_nodes - 1))
         stress_command_template = (
             "cassandra-stress write cl=QUORUM n={} -schema 'keyspace={}"
@@ -598,13 +599,11 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
         return sum(int(n) for n in n_loaders.split())
 
     def _get_total_db_nodes(self) -> int:
-        """Get total number of db nodes, handling both single-DC (int) and multi-DC (list or space-separated string) formats."""
+        """Get total number of db nodes, handling both single-DC (int) and multi-DC (list[int]) formats."""
         n_db_nodes = self.params.get("n_db_nodes")
-        if isinstance(n_db_nodes, int):
-            return n_db_nodes
         if isinstance(n_db_nodes, list):
             return sum(n_db_nodes)
-        return sum(int(n) for n in n_db_nodes.split())
+        return n_db_nodes
 
     def _generate_load(self, keyspace_name: str = None):
         self.log.info("Starting c-s write workload")
