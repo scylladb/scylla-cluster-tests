@@ -144,6 +144,43 @@ def call(Map pipelineParams) {
                                 labels: ['master-weekly'],
                                 microbenchmark: true
                             ],
+                            // Offline installer microbenchmark jobs (PGO builds)
+                            [
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-offline',
+                                region: 'us-east-1',
+                                ignore_versions: [],
+                                pre_release: [],
+                                sub_tests: ['microbenchmark'],
+                                labels: ['master-weekly'],
+                                microbenchmark: true
+                            ],
+                            [
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-write-offline',
+                                region: 'us-east-1',
+                                ignore_versions: [],
+                                pre_release: [],
+                                sub_tests: ['microbenchmark'],
+                                labels: ['master-weekly'],
+                                microbenchmark: true
+                            ],
+                            [
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64-offline',
+                                region: 'us-east-1',
+                                ignore_versions: [],
+                                pre_release: [],
+                                sub_tests: ['microbenchmark'],
+                                labels: ['master-weekly'],
+                                microbenchmark: true
+                            ],
+                            [
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64-write-offline',
+                                region: 'us-east-1',
+                                ignore_versions: [],
+                                pre_release: [],
+                                sub_tests: ['microbenchmark'],
+                                labels: ['master-weekly'],
+                                microbenchmark: true
+                            ],
                             [
                                 job_name: 'scylla-master/perf-regression/perf-regression-predefined-throughput-steps-sanity-vnodes',
                                 region: '',

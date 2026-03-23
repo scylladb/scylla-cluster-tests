@@ -1,0 +1,25 @@
+test_duration: 60
+backtrace_decoding: false
+cluster_backend: 'aws'
+
+n_loaders: 0
+n_monitor_nodes: 0
+n_db_nodes: 1
+use_mgmt: false
+
+instance_type_db: 'c7i.large'
+data_volume_disk_num: 1
+user_prefix: 'perf-microbenchmarking-amazon-offline-x86'
+argus_email_report_template: email_report_performance.yaml
+instance_provision: "spot"
+instance_provision_fallback_on_demand: true
+
+# Offline installer settings: use base Ubuntu 22.04 x86_64 AMI instead of Scylla AMI
+ami_id_db_scylla: 'resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id'
+ami_db_scylla_user: 'ubuntu'
+use_preinstalled_scylla: false
+scylla_linux_distro: 'ubuntu-jammy'
+# enhanced network isn't supported on base OS AMI
+append_scylla_setup_args: ' --no-ec2-check '
+
+email_recipients: ['scylla-perf-results@scylladb.com']
