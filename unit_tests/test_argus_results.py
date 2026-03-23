@@ -12,7 +12,6 @@
 # Copyright (c) 2024 ScyllaDB
 
 import json
-from pathlib import Path
 from unittest.mock import MagicMock, call
 
 from argus.client.generic_result import Cell, Status
@@ -20,10 +19,10 @@ from argus.client.generic_result import Cell, Status
 from sdcm.argus_results import ReactorStallStatsResult, send_result_to_argus, LatencyCalculatorMixedResult
 
 
-def test_send_latency_decorator_result_to_argus():
+def test_send_latency_decorator_result_to_argus(test_data_dir):
     argus_mock = MagicMock()
     argus_mock.submit_results = MagicMock()
-    result = json.loads(Path(__file__).parent.joinpath("test_data/latency_decorator_result.json").read_text())
+    result = json.loads((test_data_dir / "latency_decorator_result.json").read_text())
     cycle_num = 1
     send_result_to_argus(
         argus_client=argus_mock,

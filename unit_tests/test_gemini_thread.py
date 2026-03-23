@@ -33,10 +33,12 @@ pytestmark = [
 
 GEMINI_KEYSPACE = "ks1"
 GEMINI_TABLE = "table1"
-GEMINI_SCHEMA_PATH = Path(__file__).parent / "test_data" / "gemini_schemas" / "simple_two_partition_keys_schema.json"
-GEMINI_STATEMENT_RATIOS_PATH = (
-    Path(__file__).parent / "test_data" / "gemini_schemas" / "no_delete_statement_ratios.json"
-)
+
+
+@pytest.fixture(scope="session")
+def gemini_schemas_dir(test_data_dir: Path) -> Path:
+    """Return the path to unit_tests/test_data/gemini_schemas/."""
+    return test_data_dir / "gemini_schemas"
 
 
 @pytest.fixture(name="docker_scylla_oracle", scope="function")
@@ -72,26 +74,27 @@ def fixture_cql_session(docker_scylla):
         cluster.shutdown()
 
 
-def load_statement_ratios():
-    return json.dumps(json.loads(GEMINI_STATEMENT_RATIOS_PATH.read_text(encoding="utf-8")), separators=(",", ":"))
+def load_statement_ratios(gemini_schemas_dir: Path) -> str:
+    ratios_path = gemini_schemas_dir / "no_delete_statement_ratios.json"
+    return json.dumps(json.loads(ratios_path.read_text(encoding="utf-8")), separators=(",", ":"))
 
 
 @pytest.fixture(name="gemini_thread")
-def fixture_gemini_thread(request, params, docker_scylla, docker_scylla_oracle):
+def fixture_gemini_thread(request, params, docker_scylla, docker_scylla_oracle, gemini_schemas_dir):
     """Build and teardown a GeminiStressThread for the standard oracle case.
 
     Test functions that need to vary mode, duration, or other options should
     call :func:`build_gemini_thread` directly instead.
     """
-    thread = build_gemini_thread(params, docker_scylla, docker_scylla_oracle)
+    thread = build_gemini_thread(params, docker_scylla, docker_scylla_oracle, gemini_schemas_dir=gemini_schemas_dir)
     request.addfinalizer(thread.kill)
     return thread
 
 
 @pytest.fixture(name="gemini_thread_no_oracle")
-def fixture_gemini_thread_no_oracle(request, params, docker_scylla):
+def fixture_gemini_thread_no_oracle(request, params, docker_scylla, gemini_schemas_dir):
     """Build and teardown a GeminiStressThread with no oracle cluster."""
-    thread = build_gemini_thread(params, docker_scylla, oracle_node=None)
+    thread = build_gemini_thread(params, docker_scylla, oracle_node=None, gemini_schemas_dir=gemini_schemas_dir)
     request.addfinalizer(thread.kill)
     return thread
 
@@ -101,6 +104,7 @@ def build_gemini_thread(
     test_node,
     oracle_node=None,
     *,
+    gemini_schemas_dir: Path,
     mode="mixed",
     duration="1m",
     extra_options=None,
@@ -112,6 +116,7 @@ def build_gemini_thread(
         params: SCT params dict (from the ``params`` fixture).
         test_node: The primary Scylla Docker node to test against.
         oracle_node: Optional oracle Scylla Docker node; ``None`` disables oracle.
+        gemini_schemas_dir: Path to the gemini_schemas test data directory.
         mode: Gemini run mode (``"mixed"``, ``"write"``, etc.).
         duration: Gemini run duration string (e.g. ``"30s"``).
         extra_options: Additional CLI flags to append to the stress command.
@@ -126,7 +131,7 @@ def build_gemini_thread(
     # drop dynamically-merged state (e.g. stress_image set by load_docker_images_defaults).
     params.update({"gemini_table_options": ["gc_grace_seconds=60"]})
     if use_schema:
-        params["gemini_schema_url"] = str(GEMINI_SCHEMA_PATH.resolve())
+        params["gemini_schema_url"] = str((gemini_schemas_dir / "simple_two_partition_keys_schema.json").resolve())
 
     loader_set = LocalLoaderSetDummy(params=params)
     test_cluster = DummyDbCluster([test_node])
@@ -143,7 +148,7 @@ def build_gemini_thread(
         "--oracle-replication-strategy=\"{'class': 'SimpleStrategy', 'replication_factor': '1'}\"",
         "--partition-count=100",
         "--max-errors-to-store=1",
-        f"--statement-ratios='{load_statement_ratios()}'",
+        f"--statement-ratios='{load_statement_ratios(gemini_schemas_dir)}'",
     ]
     if extra_options:
         options.extend(extra_options)
@@ -238,14 +243,16 @@ def assert_mixed_result(result):
     assert result["read_ops"] > 0, "Mixed run produced zero read_ops — did gemini actually run?"
 
 
-def test_gemini_mixed_mode_with_oracle(request, docker_scylla, docker_scylla_oracle, params):
+def test_gemini_mixed_mode_with_oracle(request, docker_scylla, docker_scylla_oracle, params, gemini_schemas_dir):
     """A full mixed-mode run against an oracle cluster must complete without errors.
 
     This is the most representative integration scenario: gemini writes data and
     validates it against the oracle cluster simultaneously. Both write_ops and
     read_ops must be positive, and the result must carry no errors.
     """
-    thread = build_gemini_thread(params, docker_scylla, docker_scylla_oracle, mode="mixed", duration="30s")
+    thread = build_gemini_thread(
+        params, docker_scylla, docker_scylla_oracle, gemini_schemas_dir=gemini_schemas_dir, mode="mixed", duration="30s"
+    )
     request.addfinalizer(thread.kill)
     thread.run()
     results = thread.get_gemini_results()
@@ -256,14 +263,16 @@ def test_gemini_mixed_mode_with_oracle(request, docker_scylla, docker_scylla_ora
     assert_mixed_result(results[0])
 
 
-def test_gemini_write_only_with_oracle(request, docker_scylla, docker_scylla_oracle, params):
+def test_gemini_write_only_with_oracle(request, docker_scylla, docker_scylla_oracle, params, gemini_schemas_dir):
     """A write-only run against an oracle cluster must succeed and produce non-zero write_ops.
 
     Write-only mode is used for CDC tests and write-only workloads where reads are not
     performed during the run. An oracle cluster is still present so that a subsequent
     read-mode run could validate consistency if needed.
     """
-    thread = build_gemini_thread(params, docker_scylla, docker_scylla_oracle, mode="write", duration="30s")
+    thread = build_gemini_thread(
+        params, docker_scylla, docker_scylla_oracle, gemini_schemas_dir=gemini_schemas_dir, mode="write", duration="30s"
+    )
     request.addfinalizer(thread.kill)
     thread.run()
     results = thread.get_gemini_results()
@@ -274,7 +283,7 @@ def test_gemini_write_only_with_oracle(request, docker_scylla, docker_scylla_ora
     assert_write_result(results[0])
 
 
-def test_gemini_with_schema(request, docker_scylla, docker_scylla_oracle, cql_session, params):
+def test_gemini_with_schema(request, docker_scylla, docker_scylla_oracle, cql_session, params, gemini_schemas_dir):
     """A mixed-mode run using an explicit schema file must succeed and produce non-zero ops.
 
     Using a schema file gives deterministic table structure (known partition key names,
@@ -283,7 +292,13 @@ def test_gemini_with_schema(request, docker_scylla, docker_scylla_oracle, cql_se
     regular columns, so we can verify that the keyspace and table were created as expected.
     """
     thread = build_gemini_thread(
-        params, docker_scylla, docker_scylla_oracle, mode="mixed", duration="30s", use_schema=True
+        params,
+        docker_scylla,
+        docker_scylla_oracle,
+        gemini_schemas_dir=gemini_schemas_dir,
+        mode="mixed",
+        duration="30s",
+        use_schema=True,
     )
     request.addfinalizer(thread.kill)
 
@@ -293,7 +308,7 @@ def test_gemini_with_schema(request, docker_scylla, docker_scylla_oracle, cql_se
     assert "--partition-count=100" in gemini_cmd, "partition-count must be forwarded from stress_cmd"
     assert "--duration=30s" in gemini_cmd, "duration must appear in the generated command"
     assert "--warmup=0" in gemini_cmd, "warmup must appear in the generated command"
-    assert f"--statement-ratios='{load_statement_ratios()}'" in gemini_cmd, (
+    assert f"--statement-ratios='{load_statement_ratios(gemini_schemas_dir)}'" in gemini_cmd, (
         "statement-ratios must appear in the generated command"
     )
 
@@ -325,14 +340,16 @@ def test_gemini_with_schema(request, docker_scylla, docker_scylla_oracle, cql_se
     )
 
 
-def test_gemini_without_oracle(request, docker_scylla, params):
+def test_gemini_without_oracle(request, docker_scylla, params, gemini_schemas_dir):
     """A write-only run with no oracle cluster must succeed.
 
     The oracle-less code path (``oracle_cluster is None``) is used when no
     consistency verification is needed, e.g. pure write-load or smoke tests.
     No ``--oracle-cluster`` flag must appear in the generated command.
     """
-    thread = build_gemini_thread(params, docker_scylla, oracle_node=None, mode="write", duration="30s")
+    thread = build_gemini_thread(
+        params, docker_scylla, oracle_node=None, gemini_schemas_dir=gemini_schemas_dir, mode="write", duration="30s"
+    )
     request.addfinalizer(thread.kill)
 
     # Confirm --oracle-cluster is absent from the generated command

@@ -12,7 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import re
-from pathlib import Path
+
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
@@ -72,12 +72,8 @@ def test_reactor_stalled_severity():
     assert event2.line_number == 2
 
 
-def test_find_issue_by_reactor_stall():
-    with (
-        Path(__file__)
-        .parent.joinpath("test_data/reactor_stalls_with_known_issue.log")
-        .open(encoding="utf-8") as sct_log
-    ):
+def test_find_issue_by_reactor_stall(test_data_dir):
+    with (test_data_dir / "reactor_stalls_with_known_issue.log").open(encoding="utf-8") as sct_log:
         backtrace = sct_log.readlines()
 
     find_issue_obj = FindIssuePerBacktrace()
