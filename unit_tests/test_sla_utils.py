@@ -3,8 +3,6 @@ import time
 import unittest
 from typing import NamedTuple
 
-from sdcm.cluster import BaseNode
-from sdcm.utils.distro import Distro
 from sdcm.utils.loader_utils import (
     STRESS_ROLE_NAME_TEMPLATE,
     STRESS_ROLE_PASSWORD_TEMPLATE,
@@ -12,35 +10,9 @@ from sdcm.utils.loader_utils import (
 )
 from sdcm.sla.libs.sla_utils import SlaUtils, SchedulerRuntimeUnexpectedValue
 from test_lib.sla import Role, UserRoleBase, ServiceLevel
-from unit_tests.lib.fake_cluster import DummyDbCluster
+from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode
 
 logging.basicConfig(level=logging.DEBUG)
-
-
-class DummyNode(BaseNode):
-    _system_log = None
-    is_enterprise = False
-    distro = Distro.CENTOS7
-
-    def init(self):
-        super().init()
-        self.remoter.stop()
-
-    def do_default_installations(self):
-        pass  # we don't need to install anything for this unittests
-
-    def wait_for_cloud_init(self):
-        pass
-
-    def jmx_up(self):
-        return True
-
-    def db_up(self):
-        return True
-
-    @property
-    def private_ip_address(self):
-        return "127.0.0.1"
 
 
 class Row(NamedTuple):

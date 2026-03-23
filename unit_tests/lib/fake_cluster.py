@@ -114,6 +114,12 @@ class DummyNode(BaseNode):
     def cpu_cores(self) -> int:
         return 0
 
+    def jmx_up(self):
+        return True
+
+    def db_up(self):
+        return True
+
 
 class DummyDbCluster(BaseCluster, BaseScyllaCluster):
     """Lightweight BaseCluster + BaseScyllaCluster stub for unit tests.
