@@ -79,6 +79,10 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
+            string(defaultValue: '',
+                   description: 'Test ID of an existing cluster to reuse. When set, provisioning is skipped and the existing cluster/runner are used. '
+                                + 'The original run must have used post_behavior_*=keep.',
+                   name: 'reuse_cluster')
             string(defaultValue: "${pipelineParams.get('billing_project', '')}",
                    description: 'Billing project for the test run',
                    name: 'billing_project')
@@ -281,17 +285,22 @@ def call(Map pipelineParams) {
                                                 }
                                                 stage("Provision Resources for ${base_version}") {
                                                     script {
-                                                        wrap([$class: 'BuildUser']) {
-                                                            dir('scylla-cluster-tests') {
-                                                                timeout(time: 30, unit: 'MINUTES') {
-                                                                    if (params.backend == 'aws' || params.backend == 'azure' || params.backend == 'gce' || params.backend == 'oci') {
-                                                                        provisionResources(params_mapping[base_version], builder.region)
-                                                                    } else {
-                                                                        sh """
-                                                                            echo 'Skipping because non-AWS/Azure/GCE backends are not supported'
-                                                                        """
+                                                        if (params.reuse_cluster?.trim()) {
+                                                            echo "Skipping provisioning: reuse_cluster is set to ${params.reuse_cluster}"
+                                                            completed_stages[base_version]['provision_resources'] = true
+                                                        } else {
+                                                            wrap([$class: 'BuildUser']) {
+                                                                dir('scylla-cluster-tests') {
+                                                                    timeout(time: 30, unit: 'MINUTES') {
+                                                                        if (params.backend == 'aws' || params.backend == 'azure' || params.backend == 'gce' || params.backend == 'oci') {
+                                                                            provisionResources(params_mapping[base_version], builder.region)
+                                                                        } else {
+                                                                            sh """
+                                                                                echo 'Skipping because non-AWS/Azure/GCE backends are not supported'
+                                                                            """
+                                                                        }
+                                                                        completed_stages[base_version]['provision_resources'] = true
                                                                     }
-                                                                    completed_stages[base_version]['provision_resources'] = true
                                                                 }
                                                             }
                                                         }

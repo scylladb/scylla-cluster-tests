@@ -182,6 +182,11 @@ def call(Map pipelineParams) {
 
             // Miscellaneous Configuration
             separator(name: 'MISC_CONFIG', sectionHeader: 'Miscellaneous Configuration')
+            string(defaultValue: '',
+                   description: 'Test ID of an existing cluster to reuse. When set, a new SCT runner is NOT created — the existing runner is found by test ID. '
+                                + 'Provisioning is skipped and the existing cluster is used. '
+                                + 'The original run must have used post_behavior_*=keep.',
+                   name: 'reuse_cluster')
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                description: 'Gce project to use',
                name: 'gce_project')
@@ -332,6 +337,9 @@ def call(Map pipelineParams) {
                 }
             }
             stage('Provision Resources') {
+                when {
+                    expression { return !(params.reuse_cluster?.trim()) }
+                }
                 steps {
                     script {
                         wrap([$class: 'BuildUser']) {

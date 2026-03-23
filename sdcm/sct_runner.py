@@ -1963,6 +1963,9 @@ def _manage_runner_keep_tag_value(
         return sct_runner_info
 
 
+MAX_ALIVE_HOURS = 168  # 7 days — safety limit for runners tagged keep=alive
+
+
 def clean_sct_runners(
     test_status: str,
     test_runner_ip: str = None,
@@ -2015,20 +2018,36 @@ def clean_sct_runners(
 
         if not force and sct_runner_info.keep:
             if "alive" in str(sct_runner_info.keep):
-                LOGGER.info("Skip %s because `keep' == `alive. No runners have been terminated'", sct_runner_info)
-                continue
-            if sct_runner_info.keep_action != "terminate":
-                LOGGER.info("Skip %s because keep_action `keep_action' != `terminate'", sct_runner_info)
-                continue
-            if sct_runner_info.launch_time is None:
-                LOGGER.info("Skip %s because `launch_time' is not set", sct_runner_info)
-                continue
-            try:
-                if (utc_now - sct_runner_info.launch_time).total_seconds() < int(sct_runner_info.keep) * 3600:
-                    LOGGER.info("Skip %s, too early to terminate", sct_runner_info)
+                # Safety: terminate runners with keep=alive that exceeded the max allowed duration
+                if sct_runner_info.launch_time:
+                    elapsed_hours = (utc_now - sct_runner_info.launch_time).total_seconds() / 3600
+                    if elapsed_hours > MAX_ALIVE_HOURS:
+                        LOGGER.warning(
+                            "Runner %s exceeded max alive time (%.1fh > %dh). Terminating.",
+                            sct_runner_info, elapsed_hours, MAX_ALIVE_HOURS,
+                        )
+                        # fall through to termination below
+                    else:
+                        LOGGER.info("Skip %s because keep=alive (%.1fh elapsed, %dh max allowed)",
+                                    sct_runner_info, elapsed_hours, MAX_ALIVE_HOURS)
+                        continue
+                else:
+                    LOGGER.info("Skip %s because `keep' == `alive' (no launch_time to check expiry)",
+                                sct_runner_info)
                     continue
-            except ValueError as exc:
-                LOGGER.warning("Value of `keep' tag is invalid: %s", exc)
+            else:
+                if sct_runner_info.keep_action != "terminate":
+                    LOGGER.info("Skip %s because keep_action `keep_action' != `terminate'", sct_runner_info)
+                    continue
+                if sct_runner_info.launch_time is None:
+                    LOGGER.info("Skip %s because `launch_time' is not set", sct_runner_info)
+                    continue
+                try:
+                    if (utc_now - sct_runner_info.launch_time).total_seconds() < int(sct_runner_info.keep) * 3600:
+                        LOGGER.info("Skip %s, too early to terminate", sct_runner_info)
+                        continue
+                except ValueError as exc:
+                    LOGGER.warning("Value of `keep' tag is invalid: %s", exc)
 
         if dry_run:
             LOGGER.info("Skip %s because of dry-run", sct_runner_info)

@@ -32,6 +32,10 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     export SCT_CONFIG_FILES=${test_config}
     export SCT_COLLECT_LOGS=false
 
+    if [[ -n "${params.reuse_cluster ? params.reuse_cluster : ''}" ]] ; then
+        export SCT_REUSE_CLUSTER="${params.reuse_cluster}"
+    fi
+
     if [[ "${params.backend}" == "xcloud" ]] ; then
         export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
         export SCT_XCLOUD_ENV="${params.xcloud_env}"

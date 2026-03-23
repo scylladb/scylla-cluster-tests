@@ -2237,6 +2237,29 @@ def clean_runner_instances(runner_ip, test_status, backend, user, billing_projec
     )
 
 
+@cli.command("find-runner-instance", help="Find an existing SCT runner by test ID and write its IP to sct_runner_ip")
+@click.option("-t", "--test-id", required=True, type=str, help="Test ID of the original run whose runner to find")
+@click.option("-b", "--backend", type=click.Choice(available_backends), help="Cloud backend to search in")
+def find_runner_instance(test_id, backend):
+    add_file_logger()
+
+    LOGGER.info("Looking for SCT runner with test_id: %s (backend: %s)", test_id, backend)
+    runners = list_sct_runners(backend=backend, test_id=test_id)
+    if not runners:
+        LOGGER.error("No SCT runner found for test_id: %s", test_id)
+        sys.exit(1)
+
+    runner = runners[0]
+    if not runner.public_ips:
+        LOGGER.error("SCT runner found but has no public IP: %s", runner)
+        sys.exit(1)
+
+    runner_ip = runner.public_ips[0]
+    sct_runner_ip_path = Path("sct_runner_ip")
+    sct_runner_ip_path.write_text(runner_ip, encoding="utf-8")
+    LOGGER.info("Found SCT Runner at %s for test %s", runner_ip, test_id)
+
+
 @cli.command("configure-jenkins-builders", help="Configure all required jenkins builders for SCT")
 @cloud_provider_option
 @click.option("-r", "--regions", type=CloudRegion(), default=[], help="Cloud regions", multiple=True)
