@@ -289,7 +289,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         self.log.info("Dataset has been populated")
 
     def prepare_schema(self, workload: Workload):
-        if workload.prepare_schema and (prepare_stress_cmds := self.params.get("prepare_stress_cmd")):
+        if workload.prepare_schema and self.params.get("pre_create_keyspace"):
+            self._pre_create_keyspace()
+        elif workload.prepare_schema and (prepare_stress_cmds := self.params.get("prepare_stress_cmd")):
             stress_queue = []
             for stress_cmd in prepare_stress_cmds:
                 self.log.info("Preparing schema using command: %s", stress_cmd)
