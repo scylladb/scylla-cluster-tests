@@ -15,12 +15,12 @@
 from __future__ import annotations
 
 import base64
-import logging
-import string
-import random
-import tempfile
 import datetime
 import glob
+import logging
+import random
+import string
+import tempfile
 from contextlib import suppress
 from enum import Enum
 from functools import cached_property
@@ -96,6 +96,7 @@ from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_lo
 from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.oci_utils import (
     OciService,
+    build_hostname_label,
     list_instances_oci,
     oci_public_addresses,
     wait_for_instance_state,
@@ -1525,11 +1526,15 @@ class OciSctRunner(SctRunner):
                     f"to create cloud env!"
                 )
 
+        oci_region.validate_dns_infrastructure(subnet=subnet, public=True)
+
         LOGGER.info("Creating instance...")
 
         vnic_details = CreateVnicDetails(
             subnet_id=subnet.id,
             assign_public_ip=True,
+            assign_private_dns_record=True,
+            hostname_label=build_hostname_label(instance_name, "runner"),
             defined_tags={TAG_NAMESPACE: tags},
         )
 

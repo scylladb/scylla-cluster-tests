@@ -50,6 +50,16 @@ def _assert_private_and_public_subnet_create_calls(network_client):
     assert prohibit_public_ip_by_subnet_name["SCT-2-subnet-regional-private"] is True
     assert prohibit_public_ip_by_subnet_name["SCT-2-subnet-regional-public"] is False
 
+    dns_labels_by_subnet_name = {details.display_name: details.dns_label for details in create_details}
+    private_dns_label = dns_labels_by_subnet_name["SCT-2-subnet-regional-private"]
+    public_dns_label = dns_labels_by_subnet_name["SCT-2-subnet-regional-public"]
+
+    assert private_dns_label != public_dns_label
+    for dns_label in (private_dns_label, public_dns_label):
+        assert dns_label
+        assert dns_label[0].isalpha()
+        assert len(dns_label) <= 15
+
 
 @patch("sdcm.utils.oci_region.get_username", return_value="tester")
 @patch("sdcm.utils.oci_region.oci.wait_until")
@@ -287,3 +297,36 @@ def test_region_validation(mock_compute, mock_identity, mock_network, mock_compa
 
     with pytest.raises(ValueError):
         OciRegion("us-phoenix-1")
+
+
+@patch(
+    "sdcm.utils.oci_region.OciRegion.vcn",
+    new_callable=PropertyMock,
+    return_value=MagicMock(display_name="SCT-2-vcn", id="ocid1.vcn.oc1..no-dns", dns_label=None),
+)
+def test_validate_dns_infrastructure_fails_when_vcn_has_no_dns_label(mock_vcn):
+    subnet = MagicMock(
+        display_name="SCT-2-subnet-regional-private",
+        id="ocid1.subnet.oc1..has-dns",
+        dns_label="subnet1",
+    )
+
+    with pytest.raises(ValueError, match="VCN 'SCT-2-vcn'.*has no DNS label"):
+        OciRegion("us-ashburn-1").validate_dns_infrastructure(subnet=subnet, public=False)
+
+    mock_vcn.assert_called()
+
+
+@patch(
+    "sdcm.utils.oci_region.OciRegion.vcn",
+    new_callable=PropertyMock,
+    return_value=MagicMock(display_name="SCT-2-vcn", id="ocid1.vcn.oc1..has-dns", dns_label="vcn1"),
+)
+def test_validate_dns_infrastructure_fails_when_subnet_has_no_dns_label(mock_vcn):
+    subnet = MagicMock(display_name="SCT-2-subnet-regional-private", id="ocid1.subnet.oc1..no-dns", dns_label=None)
+
+    err_msg_template = "Private subnet 'SCT-2-subnet-regional-private'.*has no DNS label"
+    with pytest.raises(ValueError, match=err_msg_template):
+        OciRegion("us-ashburn-1").validate_dns_infrastructure(subnet=subnet, public=False)
+
+    mock_vcn.assert_called()
