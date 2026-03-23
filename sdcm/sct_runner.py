@@ -2026,6 +2026,7 @@ def clean_sct_runners(
                             "Runner %s exceeded max alive time (%.1fh > %dh). Terminating.",
                             sct_runner_info, elapsed_hours, MAX_ALIVE_HOURS,
                         )
+                        # fall through to termination below
                     else:
                         LOGGER.info("Skip %s because `keep' == `alive' (%.1fh / %dh max)",
                                     sct_runner_info, elapsed_hours, MAX_ALIVE_HOURS)
@@ -2034,18 +2035,19 @@ def clean_sct_runners(
                     LOGGER.info("Skip %s because `keep' == `alive' (no launch_time to check expiry)",
                                 sct_runner_info)
                     continue
-            if sct_runner_info.keep_action != "terminate":
-                LOGGER.info("Skip %s because keep_action `keep_action' != `terminate'", sct_runner_info)
-                continue
-            if sct_runner_info.launch_time is None:
-                LOGGER.info("Skip %s because `launch_time' is not set", sct_runner_info)
-                continue
-            try:
-                if (utc_now - sct_runner_info.launch_time).total_seconds() < int(sct_runner_info.keep) * 3600:
-                    LOGGER.info("Skip %s, too early to terminate", sct_runner_info)
+            else:
+                if sct_runner_info.keep_action != "terminate":
+                    LOGGER.info("Skip %s because keep_action `keep_action' != `terminate'", sct_runner_info)
                     continue
-            except ValueError as exc:
-                LOGGER.warning("Value of `keep' tag is invalid: %s", exc)
+                if sct_runner_info.launch_time is None:
+                    LOGGER.info("Skip %s because `launch_time' is not set", sct_runner_info)
+                    continue
+                try:
+                    if (utc_now - sct_runner_info.launch_time).total_seconds() < int(sct_runner_info.keep) * 3600:
+                        LOGGER.info("Skip %s, too early to terminate", sct_runner_info)
+                        continue
+                except ValueError as exc:
+                    LOGGER.warning("Value of `keep' tag is invalid: %s", exc)
 
         if dry_run:
             LOGGER.info("Skip %s because of dry-run", sct_runner_info)

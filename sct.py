@@ -2242,7 +2242,6 @@ def clean_runner_instances(runner_ip, test_status, backend, user, billing_projec
 @click.option("-b", "--backend", type=click.Choice(available_backends), help="Cloud backend to search in")
 def find_runner_instance(test_id, backend):
     add_file_logger()
-    from sdcm.sct_runner import list_sct_runners
 
     LOGGER.info("Looking for SCT runner with test_id: %s (backend: %s)", test_id, backend)
     runners = list_sct_runners(backend=backend, test_id=test_id)

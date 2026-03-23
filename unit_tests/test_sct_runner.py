@@ -11,9 +11,13 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
+import os
+import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+
+from click.testing import CliRunner as ClickRunner
 
 from sdcm.sct_runner import (
     list_sct_runners,
@@ -25,6 +29,8 @@ from sdcm.sct_runner import (
     OciSctRunner,
     MAX_ALIVE_HOURS,
 )
+
+from sct import find_runner_instance
 
 
 class TestListSctRunners(unittest.TestCase):
@@ -322,8 +328,6 @@ class TestCleanSctRunnersAliveExpiry(unittest.TestCase):
     @patch("sdcm.sct_runner.list_sct_runners")
     def test_alive_runner_within_max_hours_is_skipped(self, mock_list_runners, mock_ssh_cmd):
         """Runners with keep=alive that are within 7-day limit are preserved."""
-        from sdcm.sct_runner import MAX_ALIVE_HOURS
-
         mock_runner = MagicMock(
             keep="alive",
             keep_action="none",
@@ -346,10 +350,6 @@ class TestCleanSctRunnersAliveExpiry(unittest.TestCase):
     @patch("sdcm.sct_runner.list_sct_runners")
     def test_alive_runner_past_max_hours_is_terminated(self, mock_list_runners, mock_ssh_cmd):
         """Runners with keep=alive that exceeded 7-day limit are terminated."""
-        from datetime import timedelta
-
-        from sdcm.sct_runner import MAX_ALIVE_HOURS
-
         expired_time = datetime.now(timezone.utc) - timedelta(hours=MAX_ALIVE_HOURS + 1)
         mock_runner = MagicMock(
             keep="alive",
@@ -393,10 +393,6 @@ class TestCleanSctRunnersAliveExpiry(unittest.TestCase):
     @patch("sdcm.sct_runner.list_sct_runners")
     def test_alive_runner_past_max_hours_dry_run_not_terminated(self, mock_list_runners, mock_ssh_cmd):
         """Expired alive runners are not terminated when dry_run=True."""
-        from datetime import timedelta
-
-        from sdcm.sct_runner import MAX_ALIVE_HOURS
-
         expired_time = datetime.now(timezone.utc) - timedelta(hours=MAX_ALIVE_HOURS + 10)
         mock_runner = MagicMock(
             keep="alive",
@@ -419,73 +415,64 @@ class TestCleanSctRunnersAliveExpiry(unittest.TestCase):
 class TestFindRunnerInstance(unittest.TestCase):
     """Test the find-runner-instance CLI command."""
 
-    @patch("sdcm.sct_runner.list_sct_runners")
-    def test_find_runner_instance_success(self, mock_list_runners):
+    @patch("sct.add_file_logger")
+    @patch("sct.list_sct_runners")
+    def test_find_runner_instance_success(self, mock_list_runners, mock_add_logger):
         """Test successful runner lookup writes IP to file."""
-        import tempfile
-        import os
-
-        from click.testing import CliRunner
-
-        from sct import find_runner_instance
-
         mock_runner = MagicMock(
             public_ips=["10.20.30.40"],
             test_id="test-find-1",
         )
         mock_list_runners.return_value = [mock_runner]
 
-        runner = CliRunner()
-        with runner.isolated_filesystem():
-            result = runner.invoke(find_runner_instance, [
-                "--test-id", "test-find-1",
-                "--backend", "aws",
-            ])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_dir = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                cli_runner = ClickRunner(mix_stderr=False)
+                result = cli_runner.invoke(find_runner_instance, [
+                    "--test-id", "test-find-1",
+                    "--backend", "aws",
+                ], catch_exceptions=False)
 
-            assert result.exit_code == 0
-            assert os.path.exists("sct_runner_ip")
-            with open("sct_runner_ip", encoding="utf-8") as f:
-                assert f.read() == "10.20.30.40"
+                assert result.exit_code == 0, f"CLI failed: {result.output}"
+                assert os.path.exists("sct_runner_ip")
+                with open("sct_runner_ip", encoding="utf-8") as f:
+                    assert f.read() == "10.20.30.40"
+            finally:
+                os.chdir(original_dir)
 
-    @patch("sdcm.sct_runner.list_sct_runners")
-    def test_find_runner_instance_not_found(self, mock_list_runners):
+    @patch("sct.add_file_logger")
+    @patch("sct.list_sct_runners")
+    def test_find_runner_instance_not_found(self, mock_list_runners, mock_add_logger):
         """Test runner lookup fails when no runner found."""
-        from click.testing import CliRunner
-
-        from sct import find_runner_instance
-
         mock_list_runners.return_value = []
 
-        runner = CliRunner()
-        with runner.isolated_filesystem():
-            result = runner.invoke(find_runner_instance, [
-                "--test-id", "nonexistent-test-id",
-                "--backend", "aws",
-            ])
+        cli_runner = ClickRunner(mix_stderr=False)
+        result = cli_runner.invoke(find_runner_instance, [
+            "--test-id", "nonexistent-test-id",
+            "--backend", "aws",
+        ])
 
-            assert result.exit_code != 0
+        assert result.exit_code != 0
 
-    @patch("sdcm.sct_runner.list_sct_runners")
-    def test_find_runner_instance_no_public_ip(self, mock_list_runners):
+    @patch("sct.add_file_logger")
+    @patch("sct.list_sct_runners")
+    def test_find_runner_instance_no_public_ip(self, mock_list_runners, mock_add_logger):
         """Test runner lookup fails when runner has no public IP."""
-        from click.testing import CliRunner
-
-        from sct import find_runner_instance
-
         mock_runner = MagicMock(
             public_ips=[],
             test_id="test-no-ip",
         )
         mock_list_runners.return_value = [mock_runner]
 
-        runner = CliRunner()
-        with runner.isolated_filesystem():
-            result = runner.invoke(find_runner_instance, [
-                "--test-id", "test-no-ip",
-                "--backend", "aws",
-            ])
+        cli_runner = ClickRunner(mix_stderr=False)
+        result = cli_runner.invoke(find_runner_instance, [
+            "--test-id", "test-no-ip",
+            "--backend", "aws",
+        ])
 
-            assert result.exit_code != 0
+        assert result.exit_code != 0
 
 
 class TestMaxAliveHours(unittest.TestCase):
