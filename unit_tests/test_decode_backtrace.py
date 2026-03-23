@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 from multiprocessing import Queue
 
 import pytest
@@ -22,9 +21,6 @@ from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.lib.fake_cluster import DummyNode
-
-
-TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "test_data")
 
 
 class DecodeDummyNode(DummyNode):
@@ -71,12 +67,14 @@ def monitor_node_fixture(tmp_path):
     monitor_node.wait_till_tasks_threads_are_stopped()
 
 
-def test_reactor_stall_not_decoded_when_no_decoding_queue(dummy_node, monitor_node, events_function_scope):
+def test_reactor_stall_not_decoded_when_no_decoding_queue(
+    dummy_node, monitor_node, events_function_scope, test_data_dir
+):
     """Backtraces are not decoded when decoding_queue is None."""
     config = TestConfig()
     config.set_decoding_queue()
 
-    dummy_node.system_log = os.path.join(TEST_DATA_DIR, "system.log")
+    dummy_node.system_log = str(test_data_dir / "system.log")
 
     db_log_reader = DbLogReader(
         system_log=dummy_node.system_log,
@@ -108,9 +106,11 @@ def test_reactor_stall_not_decoded_when_no_decoding_queue(dummy_node, monitor_no
         pytest.param("system_core.log", id="core_backtrace_log"),
     ],
 )
-def test_backtraces_decoded_when_enabled(test_config, dummy_node, monitor_node, events_function_scope, log_file):
+def test_backtraces_decoded_when_enabled(
+    test_config, dummy_node, monitor_node, events_function_scope, log_file, test_data_dir
+):
     """Backtraces are decoded to addr2line commands when decoding is enabled."""
-    dummy_node.system_log = os.path.join(TEST_DATA_DIR, log_file)
+    dummy_node.system_log = str(test_data_dir / log_file)
 
     db_log_reader = DbLogReader(
         system_log=dummy_node.system_log,
@@ -170,6 +170,7 @@ def test_backtrace_decoding_configuration(
     dummy_node,
     monitor_node,
     events_function_scope,
+    test_data_dir,
     stall_decoding,
     disable_regex,
     event_filter,
@@ -183,8 +184,10 @@ def test_backtrace_decoding_configuration(
         event_filter: Lambda function to filter events for validation
         should_decode: Whether the filtered events should have decoded backtraces
     """
-    dummy_node.system_log = os.path.join(TEST_DATA_DIR, "system.log")
+    # Setup
+    dummy_node.system_log = str(test_data_dir / "system.log")
 
+    # Create db_log_reader with specific configuration
     db_log_reader = DbLogReader(
         system_log=dummy_node.system_log,
         node_name=str(dummy_node),

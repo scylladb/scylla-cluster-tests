@@ -16,32 +16,35 @@ from sdcm.utils.junit_summary import (
     parse_precommit_log,
 )
 
-TEST_DATA_DIR = Path(__file__).parent / "test_data" / "junit_summary"
+
+@pytest.fixture(scope="session")
+def junit_summary_dir(test_data_dir: Path) -> Path:
+    return test_data_dir / "junit_summary"
 
 
 @pytest.fixture()
-def passing_xml():
-    return TEST_DATA_DIR / "passing.xml"
+def passing_xml(junit_summary_dir: Path) -> Path:
+    return junit_summary_dir / "passing.xml"
 
 
 @pytest.fixture()
-def failing_xml():
-    return TEST_DATA_DIR / "failing.xml"
+def failing_xml(junit_summary_dir: Path) -> Path:
+    return junit_summary_dir / "failing.xml"
 
 
 @pytest.fixture()
-def single_suite_xml():
-    return TEST_DATA_DIR / "single_suite.xml"
+def single_suite_xml(junit_summary_dir: Path) -> Path:
+    return junit_summary_dir / "single_suite.xml"
 
 
 @pytest.fixture()
-def precommit_all_passing():
-    return (TEST_DATA_DIR / "precommit_all_passing.txt").read_text()
+def precommit_all_passing(junit_summary_dir: Path) -> str:
+    return (junit_summary_dir / "precommit_all_passing.txt").read_text()
 
 
 @pytest.fixture()
-def precommit_with_failures():
-    return (TEST_DATA_DIR / "precommit_with_failures.txt").read_text()
+def precommit_with_failures(junit_summary_dir: Path) -> str:
+    return (junit_summary_dir / "precommit_with_failures.txt").read_text()
 
 
 # -- parse_junit_xml --

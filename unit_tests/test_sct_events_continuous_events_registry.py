@@ -1,5 +1,4 @@
 import uuid
-from pathlib import Path
 from typing import Generator
 
 import pytest
@@ -142,8 +141,8 @@ class TestContinuousEventsRegistry:
         with pytest.raises(ContinuousEventRegistryException):
             registry.add_event(info_event)
 
-    def _read_events_from_file(self, file_name: str):
-        with Path(__file__).parent.joinpath(file_name).open(encoding="utf-8") as sct_log:
+    def _read_events_from_file(self, test_data_dir, file_name: str):
+        with (test_data_dir / file_name).open(encoding="utf-8") as sct_log:
             for line in sct_log.readlines():
                 db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(node="node1")
                 for item in db_event_pattern_func_map:
@@ -158,8 +157,10 @@ class TestContinuousEventsRegistry:
                             raise
 
     @pytest.mark.skip(reason="https://trello.com/c/Mu3lGc7C/4828-disable-compaction-and-repair-continuous-events")
-    def test_get_compact_events_by_continues_hash_from_log(self, populated_registry: ContinuousEventsRegistry):
-        self._read_events_from_file("test_data/compaction_event_start.log")
+    def test_get_compact_events_by_continues_hash_from_log(
+        self, populated_registry: ContinuousEventsRegistry, test_data_dir
+    ):
+        self._read_events_from_file(test_data_dir, "compaction_event_start.log")
 
         continues_hash = CompactionEvent.get_continuous_hash_from_dict(
             {
@@ -171,7 +172,7 @@ class TestContinuousEventsRegistry:
         )
         found_events = populated_registry.find_continuous_events_by_hash(continues_hash)
 
-        self._read_events_from_file("test_data/compaction_event_end.log")
+        self._read_events_from_file(test_data_dir, "compaction_event_end.log")
 
         assert not populated_registry.find_continuous_events_by_hash(continues_hash), (
             "Event was not removed from registry"
