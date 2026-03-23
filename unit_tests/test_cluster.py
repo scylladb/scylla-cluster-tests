@@ -44,7 +44,7 @@ from sdcm.remote import LocalCmdRunner
 from sdcm.sct_config import SCTConfiguration
 from unit_tests.dummy_remote import DummyRemote, LocalNode
 from unit_tests.lib.fake_events import FakeEventsMixin
-from unit_tests.test_utils_common import DummyNode
+from unit_tests.unit.test_utils_common import DummyNode
 
 
 class DummyDbCluster(BaseCluster, BaseScyllaCluster):

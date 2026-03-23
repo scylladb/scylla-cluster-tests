@@ -12,9 +12,9 @@ from sdcm.nemesis.monkey.runners import SisyphusMonkey
 from sdcm.nemesis import NemesisRunner
 from sdcm.nemesis.registry import NemesisRegistry
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
-from unit_tests.nemesis import TestBaseClass
-from unit_tests.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
-from unit_tests.test_tester import ClusterTesterForTests
+from unit_tests.unit.nemesis import TestBaseClass
+from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
+from unit_tests.unit.test_tester import ClusterTesterForTests
 
 
 class TestNemesisClass(NemesisRunner):

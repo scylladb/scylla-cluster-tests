@@ -21,7 +21,7 @@ from sdcm.utils.sct_cmd_helpers import get_test_config
 from sdcm.sct_config import SCTConfiguration
 from sdcm.test_config import TestConfig
 from sdcm.utils.azure_utils import AzureService
-from unit_tests.provisioner.fake_azure_service import FakeAzureService
+from unit_tests.unit.provisioner.fake_azure_service import FakeAzureService
 
 
 @pytest.fixture(scope="session")
@@ -39,7 +39,7 @@ def provisioner_dir(test_data_dir: Path) -> Path:
 @pytest.fixture(scope="session")
 def defaults_dir(provisioner_dir: Path) -> Path:
     """Return the path to the top-level defaults/ directory."""
-    return provisioner_dir.parent.parent / "defaults"
+    return provisioner_dir.parent.parent.parent / "defaults"
 
 
 @pytest.fixture(scope="session")

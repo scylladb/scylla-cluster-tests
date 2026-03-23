@@ -142,7 +142,7 @@ from utils.build_system.throttle_categories import ThrottleCategoryManager, Thro
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
 from sdcm.utils.docker_utils import get_ip_address_of_container
 from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
-from unit_tests.nemesis.fake_cluster import FakeTester
+from unit_tests.unit.nemesis.fake_cluster import FakeTester
 from sdcm.logcollector import Collector
 
 SUPPORTED_CLOUDS = (

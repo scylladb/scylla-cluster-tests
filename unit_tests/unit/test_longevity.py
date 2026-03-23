@@ -7,7 +7,7 @@ import pytest
 from longevity_test import LongevityTest
 from sdcm.cluster import NoMonitorSet
 from sdcm.sct_events.base import SctEvent
-from unit_tests.test_utils_common import DummyDbCluster, DummyNode
+from unit_tests.unit.test_utils_common import DummyNode
 from unit_tests.test_cluster import DummyDbCluster
 from unit_tests.lib.fake_events import make_fake_events
 

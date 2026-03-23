@@ -43,7 +43,7 @@ repos:
         language: system  # Override the language
         exclude: >
              (?x)^(
-                  unit_tests/test_oci_utils.py|
+                  unit_tests/unit/test_oci_utils.py|
                   data_dir/ssl_conf/.*
              )$
 

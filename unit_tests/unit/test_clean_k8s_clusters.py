@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Add the cloud_cleanup directory to the path
-cloud_cleanup_path = Path(__file__).parent.parent / "utils" / "cloud_cleanup"
+cloud_cleanup_path = Path(__file__).parent.parent.parent / "utils" / "cloud_cleanup"
 sys.path.insert(0, str(cloud_cleanup_path / "k8s_eks"))
 sys.path.insert(0, str(cloud_cleanup_path / "k8s_gke"))
 
