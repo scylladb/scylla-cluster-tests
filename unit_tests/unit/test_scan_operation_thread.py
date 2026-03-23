@@ -14,7 +14,7 @@ import pytest
 from cassandra import OperationTimedOut, ReadTimeout
 
 # from sdcm.utils.operations_thread import ThreadParams
-from unit_tests.test_cluster import DummyDbCluster, DummyNode
+from unit_tests.unit.test_cluster import DummyDbCluster, DummyNode
 from sdcm.utils.decorators import retrying, Retry
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.test_config import TestConfig

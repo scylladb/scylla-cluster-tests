@@ -1,5 +1,5 @@
 ---
-status: draft
+status: in_progress
 domain: testing
 created: 2026-03-23
 last_updated: 2026-03-23
@@ -433,8 +433,8 @@ text to reflect this.
 
 | Phase | Commit | Status |
 |-------|--------|--------|
-| Phase 1: Cleanup and directory structure | — | Not started |
-| Phase 2: Move purely unit test files | — | Not started |
-| Phase 3: Move purely integration test files | — | Not started |
-| Phase 4: Split conftest.py and remove hook | — | Not started |
-| Phase 5: Split mixed files + docs | — | Not started |
+| Phase 1: Cleanup and directory structure | `be83737fb` | Done |
+| Phase 2: Move purely unit test files | `b6d44820e` | Done |
+| Phase 3: Move purely integration test files | `9f2c3237d` | Done |
+| Phase 4: Split conftest.py and remove hook | `d1b8d6764` | Done |
+| Phase 5: Split mixed files + docs | — | In progress |

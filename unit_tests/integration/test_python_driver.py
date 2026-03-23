@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from unit_tests.test_cluster import DummyDbCluster
+from unit_tests.unit.test_cluster import DummyDbCluster
 
 
 log = logging.getLogger(__name__)

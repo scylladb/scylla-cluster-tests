@@ -1,7 +1,7 @@
 import pytest
 
 from sdcm.utils.database_query_utils import fetch_all_rows
-from unit_tests.test_cluster import DummyScyllaCluster
+from unit_tests.unit.test_cluster import DummyScyllaCluster
 
 
 @pytest.mark.integration

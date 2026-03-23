@@ -6,17 +6,13 @@ import unittest
 import pytest
 
 import sdcm
-from unit_tests.lib.s3_utils import get_latest_branches_from_s3
 from sdcm.utils.version_utils import (
     assume_version,
     get_all_versions,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
-    get_branched_repo,
     get_git_tag_from_helm_chart_version,
-    get_relocatable_pkg_url,
     get_scylla_urls_from_repository,
-    get_specific_tag_of_docker_image,
     is_enterprise,
     scylla_versions,
     ComparableScyllaOperatorVersion,
@@ -456,13 +452,6 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_attr():
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
 
 
-@pytest.mark.need_network
-@pytest.mark.integration
-@pytest.mark.parametrize("docker_repo", ["scylladb/scylla-nightly", "scylladb/scylla-enterprise-nightly"])
-def test_get_specific_tag_of_docker_image(docker_repo):
-    assert get_specific_tag_of_docker_image(docker_repo=docker_repo) != "latest"
-
-
 @pytest.mark.parametrize(
     "full_version,version,date,commit_id",
     (
@@ -719,59 +708,6 @@ def test_comparable_scylla_operator_versions_to_str(version_string_input, versio
     assert str(ComparableScyllaOperatorVersion(version_string_input)) == version_string_output
 
 
-def _generate_test_params_for_get_branched_repo():
-    """
-    Generate test parameters dynamically based on available OSS branches in S3.
-
-    This function discovers the latest OSS branches from S3 and creates
-    test parameters for various distribution types (centos, ubuntu, debian).
-
-    Returns:
-        list: Test parameters as tuples of (scylla_version, distro, expected_repo)
-    """
-    branches = get_latest_branches_from_s3()
-    test_params = []
-
-    # Add tests for OSS branches with centos
-    for branch in branches:
-        test_params.append((f"{branch}:latest", "centos", f"unstable/scylla/{branch}/rpm/centos/latest/scylla.repo"))
-
-    # Add tests for one OSS branch with ubuntu and debian
-    for branch in branches:
-        if branch.startswith("branch-"):
-            branch_id = branch.replace("branch-", "")
-            test_params.append(
-                (
-                    f"{branch}:latest",
-                    "ubuntu",
-                    f"unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch_id}/scylla.list",
-                )
-            )
-            test_params.append(
-                (
-                    f"{branch}:latest",
-                    "debian",
-                    f"unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch_id}/scylla.list",
-                )
-            )
-            # Test multiple distros only for the first branch
-            break
-
-    return test_params
-
-
-@pytest.mark.need_network
-@pytest.mark.integration
-@pytest.mark.parametrize(
-    "scylla_version,distro,expected_repo",
-    _generate_test_params_for_get_branched_repo(),
-)
-def test_get_branched_repo(scylla_version, distro, expected_repo):
-    expected_template = "https://s3.amazonaws.com/downloads.scylladb.com/{}"
-    actual_repo = get_branched_repo(scylla_version, distro)
-    assert actual_repo == expected_template.format(expected_repo)
-
-
 @pytest.mark.parametrize(
     "version, expected_repo",
     (
@@ -797,27 +733,6 @@ def test_get_branched_repo(scylla_version, distro, expected_repo):
 )
 def test_verify_docker_repo_implicit_resolution_for_scylla_versions(version, expected_repo):
     assert get_scylla_docker_repo_from_version(version) == expected_repo
-
-
-@pytest.mark.need_network
-@pytest.mark.integration
-@pytest.mark.parametrize(
-    "scylla_version, expected_result",
-    [
-        pytest.param(
-            "2025.1.10 with build-id 6facdbdabc830d767b848ff2f47b418350f96a72",
-            "https://downloads.scylladb.com/unstable/scylla/branch-2025.1/relocatable/2025-11-21T14:15:54Z/scylla-unified-2025.1.10-0.20251121.cb1f72dc8134.aarch64.tar.gz",
-            id="valid build-id for 2025.1.10",
-        ),
-        pytest.param("6.2.0", None, id="version without build-id"),
-        pytest.param("", None, id="empty version string"),
-        pytest.param("6.2.0 with build-id 000", None, id="invalid_build-id"),
-    ],
-)
-def test_get_relocatable_pkg_url(scylla_version, expected_result):
-    """Test get_relocatable_pkg_url with a valid build-id from staging backtrace service."""
-    result = get_relocatable_pkg_url(scylla_version)
-    assert result == expected_result
 
 
 @pytest.mark.parametrize(

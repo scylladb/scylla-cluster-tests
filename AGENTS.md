@@ -85,6 +85,11 @@ export SCT_REUSE_CLUSTER=$(cat ~/sct-results/latest/test_id)
 - `*_test.py` - Main test modules (longevity, performance, upgrade, artifacts, etc.)
 - `functional_tests/` - Kubernetes operator and other functional tests
 - `unit_tests/` - Unit and integration tests for SCT components
+  - `unit_tests/unit/` - Pure unit tests (no Docker, no real cloud APIs); fake fixtures applied automatically
+  - `unit_tests/integration/` - Integration tests requiring Docker or real cloud credentials
+  - `unit_tests/lib/` - Shared fake utilities (FakeRemoter, FakeProvisioner, etc.)
+  - `unit_tests/test_data/` - Test fixture data files
+  - `unit_tests/test_configs/` - Test YAML configuration files
 
 **Key Test Categories:**
 1. **Longevity Tests** - Long-running stability tests with various nemesis operations
@@ -278,7 +283,7 @@ All unit tests in `unit_tests/` should follow pytest conventions:
 1. **Use fixtures for setup/teardown** - `@pytest.fixture` to avoid code repetition, access via function parameters
 2. **Use parametrize for multiple test cases** - `@pytest.mark.parametrize("input,expected", [...])` for efficient variation testing
 3. **Scope fixtures appropriately** - Use `scope="module"` for expensive setup, `scope="function"` (default) for clean state
-4. **Use conftest.py for shared fixtures** - Place common fixtures in `unit_tests/conftest.py`, auto-discovered by pytest
+4. **Use conftest.py for shared fixtures** - Place common fixtures in `unit_tests/conftest.py` (shared), `unit_tests/unit/conftest.py` (unit-only, autouse fakes), or `unit_tests/integration/conftest.py` (Docker fixtures); all are auto-discovered by pytest
 5. **Prefer simple assertions** - Use `assert x == y` not `self.assertEqual(x, y)`
 
 ## Documentation Standards

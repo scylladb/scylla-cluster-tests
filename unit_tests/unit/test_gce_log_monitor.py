@@ -2,7 +2,7 @@ import copy
 
 from sdcm.cluster_gce import GCENode
 from sdcm.utils.gce_utils import GceLoggingClient
-from unit_tests.test_events import BaseEventsTest
+from unit_tests.unit.test_events import BaseEventsTest
 
 
 class FakeGceLogClient(GceLoggingClient):

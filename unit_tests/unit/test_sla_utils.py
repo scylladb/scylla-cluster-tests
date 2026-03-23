@@ -12,7 +12,7 @@ from sdcm.utils.loader_utils import (
 )
 from sdcm.sla.libs.sla_utils import SlaUtils, SchedulerRuntimeUnexpectedValue
 from test_lib.sla import Role, UserRoleBase, ServiceLevel
-from unit_tests.test_cluster import DummyDbCluster
+from unit_tests.unit.test_cluster import DummyDbCluster
 
 logging.basicConfig(level=logging.DEBUG)
 

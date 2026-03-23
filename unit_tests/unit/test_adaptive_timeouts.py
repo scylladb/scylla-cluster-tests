@@ -23,7 +23,7 @@ from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.adaptive_timeouts.load_info_store import AdaptiveTimeoutStore
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout, TABLETS_HARD_TIMEOUT
-from unit_tests.test_cluster import DummyDbCluster
+from unit_tests.unit.test_cluster import DummyDbCluster
 
 LOGGER = logging.getLogger(__name__)
 

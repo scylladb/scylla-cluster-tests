@@ -66,7 +66,7 @@ Use `yield` fixtures with teardown blocks, context managers, or `try/finally`. L
 
 ## Quick Reference: Integration Test Fixtures
 
-### Docker Scylla Fixtures (from `conftest.py`)
+### Docker Scylla Fixtures (from `unit_tests/integration/conftest.py`)
 
 | Fixture | Scope | Purpose |
 |---------|-------|---------|
