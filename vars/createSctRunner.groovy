@@ -33,6 +33,8 @@ def call(Map params, Integer test_duration, String region) {
         region_zone_arg = "--region " + region
     }
 
+    def reuse_cluster = params.reuse_cluster ? params.reuse_cluster : ''
+
     println(params)
     sh """#!/bin/bash
     set -xe
@@ -53,13 +55,20 @@ def call(Map params, Integer test_duration, String region) {
             export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
         fi
 
-        ./docker/env/hydra.sh create-runner-instance \
-            --cloud-provider ${cloud_provider} \
-            $region_zone_arg \
-            $availability_zone_arg \
-            --test-id \${SCT_TEST_ID} \
-            --duration ${test_duration} \
-            --test-name ${test_name}
+        if [[ -n "${reuse_cluster}" ]] ; then
+            echo "Reuse cluster mode: looking for existing SCT runner with test_id=${reuse_cluster}"
+            ./docker/env/hydra.sh find-runner-instance \
+                --test-id ${reuse_cluster} \
+                --backend ${cloud_provider}
+        else
+            ./docker/env/hydra.sh create-runner-instance \
+                --cloud-provider ${cloud_provider} \
+                $region_zone_arg \
+                $availability_zone_arg \
+                --test-id \${SCT_TEST_ID} \
+                --duration ${test_duration} \
+                --test-name ${test_name}
+        fi
 
     else
         echo "Currently, <$cloud_provider> not supported to. Will run on regular builder."

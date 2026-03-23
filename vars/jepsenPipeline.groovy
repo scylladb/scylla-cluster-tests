@@ -75,6 +75,10 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
+            string(defaultValue: '',
+                   description: 'Test ID of an existing cluster to reuse. When set, provisioning is skipped and the existing cluster/runner are used. '
+                                + 'The original run must have used post_behavior_*=keep.',
+                   name: 'reuse_cluster')
             choice(choices: getBillingProjectChoices(),
                    description: 'Billing project for the test run (dynamically fetched from finops repository)',
                    name: 'billing_project')

@@ -23,6 +23,7 @@ from sdcm.sct_runner import (
     GceSctRunner,
     AzureSctRunner,
     OciSctRunner,
+    MAX_ALIVE_HOURS,
 )
 
 
@@ -312,3 +313,184 @@ class TestCleanSctRunners(unittest.TestCase):
 
         clean_sct_runners(test_status="", user="nonexistent_user", dry_run=True)
         mock_list_runners.assert_called_once()
+
+
+class TestCleanSctRunnersAliveExpiry(unittest.TestCase):
+    """Test the keep=alive expiry safety in clean_sct_runners."""
+
+    @patch("sdcm.sct_runner.ssh_run_cmd")
+    @patch("sdcm.sct_runner.list_sct_runners")
+    def test_alive_runner_within_max_hours_is_skipped(self, mock_list_runners, mock_ssh_cmd):
+        """Runners with keep=alive that are within 7-day limit are preserved."""
+        from sdcm.sct_runner import MAX_ALIVE_HOURS
+
+        mock_runner = MagicMock(
+            keep="alive",
+            keep_action="none",
+            launch_time=datetime.now(timezone.utc),  # just launched
+            public_ips=["1.2.3.4"],
+            cloud_provider="aws",
+            instance_name="test-runner-alive",
+            region_az="us-east-1a",
+            test_id="test-alive-1",
+        )
+        mock_list_runners.return_value = [mock_runner]
+        mock_ssh_cmd.return_value = MagicMock(stdout="")
+
+        clean_sct_runners(test_status="PASSED", force=False, dry_run=False)
+
+        mock_runner.terminate.assert_not_called()
+        assert MAX_ALIVE_HOURS == 168  # 7 days
+
+    @patch("sdcm.sct_runner.ssh_run_cmd")
+    @patch("sdcm.sct_runner.list_sct_runners")
+    def test_alive_runner_past_max_hours_is_terminated(self, mock_list_runners, mock_ssh_cmd):
+        """Runners with keep=alive that exceeded 7-day limit are terminated."""
+        from datetime import timedelta
+
+        from sdcm.sct_runner import MAX_ALIVE_HOURS
+
+        expired_time = datetime.now(timezone.utc) - timedelta(hours=MAX_ALIVE_HOURS + 1)
+        mock_runner = MagicMock(
+            keep="alive",
+            keep_action="none",
+            launch_time=expired_time,
+            public_ips=["1.2.3.4"],
+            cloud_provider="aws",
+            instance_name="test-runner-alive-expired",
+            region_az="us-east-1a",
+            test_id="test-expired-1",
+        )
+        mock_list_runners.return_value = [mock_runner]
+        mock_ssh_cmd.return_value = MagicMock(stdout="")
+
+        clean_sct_runners(test_status="PASSED", force=False, dry_run=False)
+
+        mock_runner.terminate.assert_called_once()
+
+    @patch("sdcm.sct_runner.ssh_run_cmd")
+    @patch("sdcm.sct_runner.list_sct_runners")
+    def test_alive_runner_no_launch_time_is_skipped(self, mock_list_runners, mock_ssh_cmd):
+        """Runners with keep=alive but no launch_time are preserved (can't determine expiry)."""
+        mock_runner = MagicMock(
+            keep="alive",
+            keep_action="none",
+            launch_time=None,
+            public_ips=["1.2.3.4"],
+            cloud_provider="aws",
+            instance_name="test-runner-alive-no-time",
+            region_az="us-east-1a",
+            test_id="test-no-time-1",
+        )
+        mock_list_runners.return_value = [mock_runner]
+        mock_ssh_cmd.return_value = MagicMock(stdout="")
+
+        clean_sct_runners(test_status="PASSED", force=False, dry_run=False)
+
+        mock_runner.terminate.assert_not_called()
+
+    @patch("sdcm.sct_runner.ssh_run_cmd")
+    @patch("sdcm.sct_runner.list_sct_runners")
+    def test_alive_runner_past_max_hours_dry_run_not_terminated(self, mock_list_runners, mock_ssh_cmd):
+        """Expired alive runners are not terminated when dry_run=True."""
+        from datetime import timedelta
+
+        from sdcm.sct_runner import MAX_ALIVE_HOURS
+
+        expired_time = datetime.now(timezone.utc) - timedelta(hours=MAX_ALIVE_HOURS + 10)
+        mock_runner = MagicMock(
+            keep="alive",
+            keep_action="none",
+            launch_time=expired_time,
+            public_ips=["1.2.3.4"],
+            cloud_provider="aws",
+            instance_name="test-runner-dry",
+            region_az="us-east-1a",
+            test_id="test-dry-1",
+        )
+        mock_list_runners.return_value = [mock_runner]
+        mock_ssh_cmd.return_value = MagicMock(stdout="")
+
+        clean_sct_runners(test_status="PASSED", force=False, dry_run=True)
+
+        mock_runner.terminate.assert_not_called()
+
+
+class TestFindRunnerInstance(unittest.TestCase):
+    """Test the find-runner-instance CLI command."""
+
+    @patch("sdcm.sct_runner.list_sct_runners")
+    def test_find_runner_instance_success(self, mock_list_runners):
+        """Test successful runner lookup writes IP to file."""
+        import tempfile
+        import os
+
+        from click.testing import CliRunner
+
+        from sct import find_runner_instance
+
+        mock_runner = MagicMock(
+            public_ips=["10.20.30.40"],
+            test_id="test-find-1",
+        )
+        mock_list_runners.return_value = [mock_runner]
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(find_runner_instance, [
+                "--test-id", "test-find-1",
+                "--backend", "aws",
+            ])
+
+            assert result.exit_code == 0
+            assert os.path.exists("sct_runner_ip")
+            with open("sct_runner_ip", encoding="utf-8") as f:
+                assert f.read() == "10.20.30.40"
+
+    @patch("sdcm.sct_runner.list_sct_runners")
+    def test_find_runner_instance_not_found(self, mock_list_runners):
+        """Test runner lookup fails when no runner found."""
+        from click.testing import CliRunner
+
+        from sct import find_runner_instance
+
+        mock_list_runners.return_value = []
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(find_runner_instance, [
+                "--test-id", "nonexistent-test-id",
+                "--backend", "aws",
+            ])
+
+            assert result.exit_code != 0
+
+    @patch("sdcm.sct_runner.list_sct_runners")
+    def test_find_runner_instance_no_public_ip(self, mock_list_runners):
+        """Test runner lookup fails when runner has no public IP."""
+        from click.testing import CliRunner
+
+        from sct import find_runner_instance
+
+        mock_runner = MagicMock(
+            public_ips=[],
+            test_id="test-no-ip",
+        )
+        mock_list_runners.return_value = [mock_runner]
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(find_runner_instance, [
+                "--test-id", "test-no-ip",
+                "--backend", "aws",
+            ])
+
+            assert result.exit_code != 0
+
+
+class TestMaxAliveHours(unittest.TestCase):
+    """Test the MAX_ALIVE_HOURS constant."""
+
+    def test_max_alive_hours_is_7_days(self):
+        """Verify MAX_ALIVE_HOURS is 168 (7 * 24)."""
+        assert MAX_ALIVE_HOURS == 168

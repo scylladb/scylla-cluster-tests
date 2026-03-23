@@ -116,3 +116,66 @@ When resuing a cluster SCT validates that the existing cluster configuration mat
 - VS node count must match `n_vector_store_nodes` parameter
 - Cluster status must be ACTIVE (not PROVISIONING, etc.)
 ```
+
+### Jenkins Pipeline Reuse
+
+Cluster reuse is also supported in Jenkins pipelines, enabling cross-build reuse of
+both the SCT runner and the test cluster. This is useful for:
+- Re-running tests on an existing cluster after SCT code changes
+- Multi-phase test campaigns (e.g., run longevity, then run upgrade on the same cluster)
+- Debugging failed tests without re-provisioning infrastructure
+
+#### How It Works
+
+When all `post_behavior_*` settings are set to `keep`, the Jenkins pipeline:
+1. Preserves cluster resources (DB nodes, loaders, monitors) as before
+2. Also preserves the SCT runner by tagging it with `keep=alive` instead of terminating it
+
+On a subsequent build, when `reuse_cluster` is specified:
+1. The pipeline finds the existing SCT runner by the original test ID
+2. The `Provision Resources` stage is skipped
+3. The test runs on the existing cluster via `SCT_REUSE_CLUSTER`
+
+#### Step-by-Step
+
+1. **Initial run** — trigger a Jenkins build with:
+   - `post_behavior_db_nodes` = `keep`
+   - `post_behavior_loader_nodes` = `keep`
+   - `post_behavior_monitor_nodes` = `keep`
+
+2. **Find the test ID** — after the build completes, note the `SCT_TEST_ID` from
+   the build logs or find it in Argus.
+
+3. **Reuse run** — trigger a new Jenkins build with:
+   - `reuse_cluster` = `<test_id from step 2>`
+
+   The pipeline will:
+   - Find the existing SCT runner tagged with the given test ID
+   - Skip the `Provision Resources` stage
+   - Run the test against the existing cluster
+
+4. **Final cleanup** — when done, trigger a build with `post_behavior_*=destroy`
+   (or wait for the 7-day automatic cleanup of `keep=alive` runners).
+
+#### Supported Pipelines
+
+The `reuse_cluster` parameter is available in:
+- `longevityPipeline`
+- `managerPipeline`
+- `rollingUpgradePipeline`
+- `perfRegressionParallelPipeline`
+- `jepsenPipeline`
+
+#### Safety Guardrails
+
+- **Automatic runner expiry**: Runners tagged with `keep=alive` are automatically
+  terminated after 7 days to prevent resource leaks.
+- **Early validation**: If `reuse_cluster` is set but no matching runner is found,
+  the build fails early with a clear error message.
+
+#### Limitations
+
+- Cross-build reuse is currently scoped to the same cloud backend (AWS, GCE, Azure, OCI).
+- The reused runner may have stale state; if SSH connectivity fails, the build will fail
+  and a new runner must be created manually.
+- Partial reuse (e.g., only DB nodes) is not supported — all node types must be kept.
