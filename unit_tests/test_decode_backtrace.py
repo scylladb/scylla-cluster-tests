@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import shutil
 import tempfile
 import unittest
@@ -44,6 +43,10 @@ class TestDecodeBactraces(unittest.TestCase, FakeEventsMixin):
     def teardown_class(cls):
         shutil.rmtree(cls.temp_dir, ignore_errors=True)
         super().teardown_class()
+
+    @pytest.fixture(autouse=True)
+    def inject_test_data_dir(self, test_data_dir):
+        self.test_data_dir = test_data_dir
 
     @cached_property
     def test_config(self):
@@ -106,7 +109,7 @@ class TestDecodeBactraces(unittest.TestCase, FakeEventsMixin):
         self._db_log_reader_no_decoding._read_and_publish_events()
 
     def setUp(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
+        self.node.system_log = str(self.test_data_dir / "system.log")
 
     def test_01_reactor_stall_is_not_decoded_if_disabled(self):
         # Accesses the test_config to ensure it is initialized
@@ -150,7 +153,7 @@ class TestDecodeBactraces(unittest.TestCase, FakeEventsMixin):
         self.test_config.BACKTRACE_DECODING = True
 
         self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_interlace_stall.log")
+        self.node.system_log = str(self.test_data_dir / "system_interlace_stall.log")
 
         self._read_and_publish_events()
 
@@ -173,7 +176,7 @@ class TestDecodeBactraces(unittest.TestCase, FakeEventsMixin):
         self.test_config.BACKTRACE_DECODING = True
 
         self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_core.log")
+        self.node.system_log = str(self.test_data_dir / "system_core.log")
 
         self._read_and_publish_events()
 
@@ -265,6 +268,7 @@ def test_backtrace_decoding_configuration(
     dummy_node,
     monitor_node,
     events_function_scope,
+    test_data_dir,
     stall_decoding,
     disable_regex,
     event_filter,
@@ -280,7 +284,7 @@ def test_backtrace_decoding_configuration(
     """
 
     # Setup
-    dummy_node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
+    dummy_node.system_log = str(test_data_dir / "system.log")
 
     # Create db_log_reader with specific configuration
     db_log_reader = DbLogReader(

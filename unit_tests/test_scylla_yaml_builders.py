@@ -375,6 +375,10 @@ class ScyllaYamlNodeAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
         )
 
 
+# NOTE: BASE_FOLDER must remain a module-level constant because it is consumed by
+# @parameterized.expand() decorators below, which run at class-definition / import
+# time — before any pytest fixture can be injected.  This is a documented exception
+# to the "no __file__ outside conftest.py" rule.
 BASE_FOLDER = os.path.join(os.path.dirname(__file__), "test_data/test_scylla_yaml_builders")
 
 

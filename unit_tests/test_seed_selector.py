@@ -2,8 +2,8 @@ import unittest
 import tempfile
 import logging
 import shutil
-import os.path
 
+import pytest
 import sdcm.cluster
 from sdcm import sct_config
 from sdcm.test_config import TestConfig
@@ -63,6 +63,10 @@ class TestSeedSelector(unittest.TestCase):
         # stop_events_device()
         shutil.rmtree(cls.temp_dir)
 
+    @pytest.fixture(autouse=True)
+    def inject_test_data_dir(self, test_data_dir):
+        self.test_data_dir = test_data_dir
+
     def setup_cluster(self, nodes_number):
         self.cluster = DummyCluster()
         # Add 3 nodes
@@ -91,7 +95,7 @@ class TestSeedSelector(unittest.TestCase):
     def test_reuse_cluster_seed(self):
         self.setup_cluster(nodes_number=3)
         self.cluster.set_test_params(seeds_selector="first", seeds_num=2, db_type="scylla")
-        sdcm.cluster.SCYLLA_YAML_PATH = os.path.join(os.path.dirname(__file__), "test_data", "scylla.yaml")
+        sdcm.cluster.SCYLLA_YAML_PATH = str(self.test_data_dir / "scylla.yaml")
         TestConfig().reuse_cluster(True)
         self.cluster.set_seeds()
         self.assertTrue(self.cluster.seed_nodes == [self.cluster.nodes[1]])

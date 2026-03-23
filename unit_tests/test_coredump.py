@@ -1,8 +1,8 @@
 import unittest
-import os
 import time
 import tempfile
 from abc import abstractmethod
+from pathlib import Path
 
 import pytest
 
@@ -15,7 +15,7 @@ from unit_tests.lib.mock_remoter import MockRemoter
 class FakeNode(BaseNode):
     def __init__(self, remoter, logdir):
         self.remoter = remoter
-        os.makedirs(logdir, exist_ok=True)
+        Path(logdir).mkdir(parents=True, exist_ok=True)
         self.logdir = logdir
 
     def wait_ssh_up(self, verbose=False, timeout=60):
@@ -90,6 +90,10 @@ class CoredumpExportTestBase(unittest.TestCase):
     maxDiff = None
     test_data_folder: str = None
 
+    @pytest.fixture(autouse=True)
+    def inject_test_data_dir(self, test_data_dir):
+        self.test_data_dir = test_data_dir
+
     @abstractmethod
     def _init_target_coredump_class(self, test_name: str) -> CoredumpThreadBase:
         pass
@@ -103,13 +107,7 @@ class CoredumpExportTestBase(unittest.TestCase):
         self.assertFalse(coredump_thread.is_alive(), "CoredumpExportThread thread did not stop in 20 seconds")
         results = coredump_thread.get_results()
         expected_results = coredump_thread.load_expected_results(
-            os.path.join(
-                os.path.dirname(__file__),
-                "test_data",
-                "test_coredump",
-                self.test_data_folder,
-                test_name + "_results.json",
-            )
+            str(self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_results.json"))
         )
         for coredump_status, expected_coredump_list in expected_results.items():
             result_coredump_list = results[coredump_status]
@@ -129,12 +127,8 @@ class CoredumpExportExceptionTest(CoredumpExportTestBase):
         coredump_thread = CoredumpExportSystemdTestThread(
             FakeNode(
                 MockRemoter(
-                    responses=os.path.join(
-                        os.path.dirname(__file__),
-                        "test_data",
-                        "test_coredump",
-                        self.test_data_folder,
-                        test_name + "_remoter.json",
+                    responses=str(
+                        self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_remoter.json")
                     )
                 ),
                 tempfile.mkdtemp(),
@@ -159,12 +153,8 @@ class CoredumpExportSystemdTest(CoredumpExportTestBase):
         return CoredumpExportSystemdTestThread(
             FakeNode(
                 MockRemoter(
-                    responses=os.path.join(
-                        os.path.dirname(__file__),
-                        "test_data",
-                        "test_coredump",
-                        self.test_data_folder,
-                        test_name + "_remoter.json",
+                    responses=str(
+                        self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_remoter.json")
                     )
                 ),
                 tempfile.mkdtemp(),
@@ -193,12 +183,8 @@ class CoredumpExportFileTest(CoredumpExportTestBase):
         return CoredumpExportFileTestThread(
             FakeNode(
                 MockRemoter(
-                    responses=os.path.join(
-                        os.path.dirname(__file__),
-                        "test_data",
-                        "test_coredump",
-                        self.test_data_folder,
-                        test_name + "_remoter.json",
+                    responses=str(
+                        self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_remoter.json")
                     )
                 ),
                 tempfile.mkdtemp(),
