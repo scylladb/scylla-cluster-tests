@@ -12,7 +12,6 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
-import os.path
 import re
 import shutil
 import tempfile
@@ -50,7 +49,6 @@ class TestBaseNode:
         self._events = events_function_scope
         self._tmp_path = tmp_path
         self._init_node()
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
 
     def _init_node(self):
         if not hasattr(self, "_node"):
@@ -63,6 +61,11 @@ class TestBaseNode:
             self._node.parent_cluster = DummyDbCluster(nodes=[self._node])
             self._node.init()
             self._node.remoter = DummyRemote()
+
+    @pytest.fixture(autouse=True)
+    def inject_test_data_dir(self, setup_events, test_data_dir):  # noqa: ARG002
+        self.test_data_dir = test_data_dir
+        self.node.system_log = str(test_data_dir / "system.log")
 
     @property
     def node(self):
@@ -105,7 +108,7 @@ class TestBaseNode:
         assert len(errors) == 2
 
     def test_search_system_interlace_reactor_stall(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_interlace_stall.log")
+        self.node.system_log = str(self.test_data_dir / "system_interlace_stall.log")
 
         self._read_and_publish_events()
 
@@ -122,7 +125,7 @@ class TestBaseNode:
 
     def test_search_kernel_callstack(self):
         self.node.parent_cluster = {"params": {"print_kernel_callstack": True}}
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "kernel_callstack.log")
+        self.node.system_log = str(self.test_data_dir / "kernel_callstack.log")
         self._read_and_publish_events()
 
         events = self._events.published_events
@@ -137,7 +140,7 @@ class TestBaseNode:
         assert event_b["line_number"] == 5
 
     def test_search_cdc_invalid_request(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_cdc_invalid_request.log")
+        self.node.system_log = str(self.test_data_dir / "system_cdc_invalid_request.log")
         with unittest.mock.patch("sdcm.sct_events.group_common_events.TestConfig"):
             with unittest.mock.patch("sdcm.sct_events.group_common_events.SkipPerIssues") as skip_per_issues:
                 skip_per_issues.return_value = False
@@ -152,7 +155,7 @@ class TestBaseNode:
         assert cdc_err_events != []
 
     def test_search_power_off(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "power_off.log")
+        self.node.system_log = str(self.test_data_dir / "power_off.log")
         with DbEventsFilter(db_event=InstanceStatusEvent.POWER_OFF, node=self.node):
             self._read_and_publish_events()
 
@@ -167,7 +170,7 @@ class TestBaseNode:
         assert events
 
     def test_search_system_suppressed_messages(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_suppressed_messages.log")
+        self.node.system_log = str(self.test_data_dir / "system_suppressed_messages.log")
 
         self._read_and_publish_events()
 
@@ -180,7 +183,7 @@ class TestBaseNode:
         assert event_a["line_number"] == 6, "Not expected event line number {}".format(event_a["line_number"])
 
     def test_search_one_line_backtraces(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_one_line_backtrace.log")
+        self.node.system_log = str(self.test_data_dir / "system_one_line_backtrace.log")
 
         self._read_and_publish_events()
 
@@ -200,7 +203,7 @@ class TestBaseNode:
         print(events[-1])
 
     def test_gate_closed_ignored_exception_is_catched(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "gate_closed_ignored_exception.log")
+        self.node.system_log = str(self.test_data_dir / "gate_closed_ignored_exception.log")
 
         self._read_and_publish_events()
 
@@ -216,7 +219,7 @@ class TestBaseNode:
         assert event_backtrace2["line_number"] == 3
 
     def test_compaction_stopped_exception_is_catched(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "compaction_stopped_exception.log")
+        self.node.system_log = str(self.test_data_dir / "compaction_stopped_exception.log")
 
         self._read_and_publish_events()
 

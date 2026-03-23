@@ -10,8 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from pathlib import Path
-
 import yaml
 
 from sdcm.provision.scylla_yaml import ServerEncryptionOptions, ClientEncryptionOptions, SeedProvider, ScyllaYaml
@@ -464,9 +462,9 @@ def test_update_with_scylla_yaml_object():
     )
 
 
-def test_update_with_dict_object():
+def test_update_with_dict_object(test_data_dir):
     yaml1 = ScyllaYaml(cluster_name="cluster1", redis_keyspace_replication_strategy="NetworkTopologyStrategy")
-    test_config_file = Path(__file__).parent / "test_data" / "scylla_yaml_update.yaml"
+    test_config_file = test_data_dir / "scylla_yaml_update.yaml"
     with open(test_config_file, encoding="utf-8") as test_file:
         test_config_file_yaml = yaml.safe_load(test_file)
         append_scylla_args_dict = test_config_file_yaml.get("append_scylla_yaml", {})
