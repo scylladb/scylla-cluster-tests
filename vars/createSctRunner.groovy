@@ -57,9 +57,12 @@ def call(Map params, Integer test_duration, String region) {
 
         if [[ -n "${reuse_cluster}" ]] ; then
             echo "Reuse cluster mode: looking for existing SCT runner with test_id=${reuse_cluster}"
-            ./docker/env/hydra.sh find-runner-instance \
+            if ! ./docker/env/hydra.sh find-runner-instance \
                 --test-id ${reuse_cluster} \
-                --backend ${cloud_provider}
+                --backend ${cloud_provider} ; then
+                echo "ERROR: Failed to find SCT runner for test_id=${reuse_cluster}. Ensure the original run used post_behavior_*=keep."
+                exit 1
+            fi
         else
             ./docker/env/hydra.sh create-runner-instance \
                 --cloud-provider ${cloud_provider} \

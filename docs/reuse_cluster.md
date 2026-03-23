@@ -169,7 +169,7 @@ The `reuse_cluster` parameter is available in:
 #### Safety Guardrails
 
 - **Automatic runner expiry**: Runners tagged with `keep=alive` are automatically
-  terminated after 7 days to prevent resource leaks.
+  terminated 7 days (168 hours) after their initial launch time to prevent resource leaks.
 - **Early validation**: If `reuse_cluster` is set but no matching runner is found,
   the build fails early with a clear error message.
 

@@ -2028,7 +2028,7 @@ def clean_sct_runners(
                         )
                         # fall through to termination below
                     else:
-                        LOGGER.info("Skip %s because `keep' == `alive' (%.1fh / %dh max)",
+                        LOGGER.info("Skip %s because keep=alive (%.1fh elapsed, %dh max allowed)",
                                     sct_runner_info, elapsed_hours, MAX_ALIVE_HOURS)
                         continue
                 else:

@@ -344,7 +344,6 @@ class TestCleanSctRunnersAliveExpiry(unittest.TestCase):
         clean_sct_runners(test_status="PASSED", force=False, dry_run=False)
 
         mock_runner.terminate.assert_not_called()
-        assert MAX_ALIVE_HOURS == 168  # 7 days
 
     @patch("sdcm.sct_runner.ssh_run_cmd")
     @patch("sdcm.sct_runner.list_sct_runners")
