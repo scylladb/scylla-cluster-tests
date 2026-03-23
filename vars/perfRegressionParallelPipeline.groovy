@@ -5,6 +5,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 def base_versions_list = []
 
 def call(Map pipelineParams) {
+    def completed_stages = [:]
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
 
     pipeline {
@@ -310,6 +311,8 @@ def call(Map pipelineParams) {
                                 params_mapping[sub_test].put('scylla_version', supportedVersions)
                             }
 
+                            completed_stages[sub_test] = [:]
+
                             tasks["sub_test=${sub_test}"] = {
                                 node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
@@ -317,112 +320,212 @@ def call(Map pipelineParams) {
                                              "SCT_TEST_ID=${UUID.randomUUID().toString()}",
                                              "SCT_GCE_PROJECT=${env.SCT_GCE_PROJECT ?: ''}",
                                              "SCT_BILLING_PROJECT=${env.SCT_BILLING_PROJECT ?: ''}",]) {
-                                        stage("Checkout for ${sub_test}") {
-                                            catchError(stageResult: 'FAILURE') {
-                                                timeout(time: 5, unit: 'MINUTES') {
-                                                    script {
-                                                        wrap([$class: 'BuildUser']) {
-                                                            loadEnvFromString(params_mapping[sub_test].extra_environment_variables)
-                                                            dir('scylla-cluster-tests') {
-                                                                checkout scm
-                                                                checkoutQaInternal(params_mapping[sub_test])
+                                        stage("Split for ${sub_test}") {
+                                            try {
+                                                stage("Checkout for ${sub_test}") {
+                                                    catchError(stageResult: 'FAILURE') {
+                                                        timeout(time: 5, unit: 'MINUTES') {
+                                                            script {
+                                                                wrap([$class: 'BuildUser']) {
+                                                                    loadEnvFromString(params_mapping[sub_test].extra_environment_variables)
+                                                                    dir('scylla-cluster-tests') {
+                                                                        checkout scm
+                                                                        checkoutQaInternal(params_mapping[sub_test])
+                                                                    }
+                                                                dockerLogin(params_mapping[sub_test])
+                                                                }
                                                             }
-                                                        dockerLogin(params_mapping[sub_test])
                                                         }
                                                     }
                                                 }
-                                            }
-                                        }
-                                        stage('Create Argus Test Run') {
-                                            catchError(stageResult: 'FAILURE') {
-                                                script {
+                                                stage('Create Argus Test Run') {
+                                                    catchError(stageResult: 'FAILURE') {
+                                                        script {
+                                                            wrap([$class: 'BuildUser']) {
+                                                                dir('scylla-cluster-tests') {
+                                                                    timeout(time: 5, unit: 'MINUTES') {
+                                                                        createArgusTestRun(params_mapping[sub_test])
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                stage("Create SCT Runner for ${sub_test}") {
                                                     wrap([$class: 'BuildUser']) {
                                                         dir('scylla-cluster-tests') {
-                                                            timeout(time: 5, unit: 'MINUTES') {
-                                                                createArgusTestRun(params_mapping[sub_test])
+                                                            timeout(time: 10, unit: 'MINUTES') {
+                                                                createSctRunner(params_mapping[sub_test], runnerTimeout, builder.region)
                                                             }
                                                         }
                                                     }
                                                 }
-                                            }
-                                        }
-                                        stage("Create SCT Runner for ${sub_test}") {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    timeout(time: 10, unit: 'MINUTES') {
-                                                        createSctRunner(params_mapping[sub_test], runnerTimeout, builder.region)
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        stage("Provision Resources for ${sub_test}") {
-                                            script {
-                                                wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
-                                                        timeout(time: 30, unit: 'MINUTES') {
-                                                            if (params_mapping[sub_test].backend == 'aws' || params_mapping[sub_test].backend == 'azure' || params_mapping[sub_test].backend == 'gce' || params_mapping[sub_test].backend == 'oci') {
-                                                                provisionResources(params_mapping[sub_test], builder.region)
-                                                            } else {
-                                                                sh """
-                                                                    echo 'Skipping because non-AWS/Azure/GCE/OCI backends are not supported'
-                                                                """
+                                                stage("Provision Resources for ${sub_test}") {
+                                                    script {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                timeout(time: 30, unit: 'MINUTES') {
+                                                                    if (params_mapping[sub_test].backend == 'aws' || params_mapping[sub_test].backend == 'azure' || params_mapping[sub_test].backend == 'gce' || params_mapping[sub_test].backend == 'oci') {
+                                                                        provisionResources(params_mapping[sub_test], builder.region)
+                                                                    } else {
+                                                                        sh """
+                                                                            echo 'Skipping because non-AWS/Azure/GCE/OCI backends are not supported'
+                                                                        """
+                                                                    }
+                                                                    completed_stages[sub_test]['provision_resources'] = true
+                                                                }
                                                             }
                                                         }
                                                     }
                                                 }
-                                            }
-                                        }
-
-                                        stage("Run ${sub_test}"){
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
-                                                    timeout(time: testRunTimeout, unit: 'MINUTES') {
-                                                        dir('scylla-cluster-tests') {
-                                                            runSctTest(params_mapping[sub_test], builder.region, false, pipelineParams)
+                                                stage("Run ${sub_test}"){
+                                                    catchError(stageResult: 'FAILURE') {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            timeout(time: testRunTimeout, unit: 'MINUTES') {
+                                                                dir('scylla-cluster-tests') {
+                                                                    runSctTest(params_mapping[sub_test], builder.region, false, pipelineParams)
+                                                                    completed_stages[sub_test]['run_tests'] = true
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
-                                        }
-                                        stage("Collect logs for ${sub_test}") {
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
-                                                    timeout(time: collectLogsTimeout, unit: 'MINUTES') {
-                                                        dir('scylla-cluster-tests') {
-                                                            runCollectLogs(params_mapping[sub_test], builder.region)
+                                                stage("Collect logs for ${sub_test}") {
+                                                    catchError(stageResult: 'FAILURE') {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            timeout(time: collectLogsTimeout, unit: 'MINUTES') {
+                                                                dir('scylla-cluster-tests') {
+                                                                    completed_stages[sub_test]['collect_logs'] = true
+                                                                    runCollectLogs(params_mapping[sub_test], builder.region)
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
-                                        }
-                                        stage("Clean resources for ${sub_test}") {
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
-                                                        timeout(time: resourceCleanupTimeout, unit: 'MINUTES') {
-                                                            runCleanupResource(params_mapping[sub_test], builder.region)
+                                                stage("Clean resources for ${sub_test}") {
+                                                    catchError(stageResult: 'FAILURE') {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                timeout(time: resourceCleanupTimeout, unit: 'MINUTES') {
+                                                                    runCleanupResource(params_mapping[sub_test], builder.region)
+                                                                    completed_stages[sub_test]['clean_resources'] = true
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
-                                        }
-                                        stage("Send email for ${sub_test}") {
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
-                                                        timeout(time: 10, unit: 'MINUTES') {
-                                                            runSendEmail(params_mapping[sub_test], currentBuild)
+                                                stage("Finish Argus Test Run for ${sub_test}") {
+                                                    catchError(stageResult: 'FAILURE') {
+                                                        script {
+                                                            wrap([$class: 'BuildUser']) {
+                                                                dir('scylla-cluster-tests') {
+                                                                    timeout(time: 5, unit: 'MINUTES') {
+                                                                        finishArgusTestRun(params_mapping[sub_test], currentBuild)
+                                                                        completed_stages[sub_test]['report_to_argus'] = true
+                                                                    }
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
-                                        }
-                                        stage('Clean SCT Runners') {
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
-                                                        cleanSctRunners(params_mapping[sub_test], currentBuild)
+                                                stage("Send email for ${sub_test}") {
+                                                    catchError(stageResult: 'FAILURE') {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                timeout(time: 10, unit: 'MINUTES') {
+                                                                    runSendEmail(params_mapping[sub_test], currentBuild)
+                                                                    completed_stages[sub_test]['send_email'] = true
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                stage('Clean SCT Runners') {
+                                                    catchError(stageResult: 'FAILURE') {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                cleanSctRunners(params_mapping[sub_test], currentBuild)
+                                                                completed_stages[sub_test]['clean_sct_runner'] = true
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } finally {
+                                                def provision_resources = completed_stages[sub_test]['provision_resources']
+                                                def run_tests = completed_stages[sub_test]['run_tests']
+                                                def collect_logs = completed_stages[sub_test]['collect_logs']
+                                                def clean_resources = completed_stages[sub_test]['clean_resources']
+                                                def send_email = completed_stages[sub_test]['send_email']
+                                                def clean_sct_runner = completed_stages[sub_test]['clean_sct_runner']
+                                                sh """
+                                                    echo "'provision_resources' stage is completed: $provision_resources"
+                                                    echo "'run_tests' stage is completed: $run_tests"
+                                                    echo "'collect_logs' stage is completed: $collect_logs"
+                                                    echo "'clean_resources' stage is completed: $clean_resources"
+                                                    echo "'send_email' stage is completed: $send_email"
+                                                    echo "'clean_sct_runner' stage is completed: $clean_sct_runner"
+                                                """
+                                                if (!completed_stages[sub_test]['collect_logs']) {
+                                                    catchError {
+                                                        script {
+                                                            wrap([$class: 'BuildUser']) {
+                                                                dir('scylla-cluster-tests') {
+                                                                    timeout(time: collectLogsTimeout, unit: 'MINUTES') {
+                                                                        runCollectLogs(params_mapping[sub_test], builder.region)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                if (!completed_stages[sub_test]['clean_resources']) {
+                                                    catchError {
+                                                        script {
+                                                            wrap([$class: 'BuildUser']) {
+                                                                dir('scylla-cluster-tests') {
+                                                                    timeout(time: resourceCleanupTimeout, unit: 'MINUTES') {
+                                                                        runCleanupResource(params_mapping[sub_test], builder.region)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                if (!completed_stages[sub_test]['report_to_argus']) {
+                                                    catchError {
+                                                        script {
+                                                            wrap([$class: 'BuildUser']) {
+                                                                dir('scylla-cluster-tests') {
+                                                                    timeout(time: 5, unit: 'MINUTES') {
+                                                                        finishArgusTestRun(params_mapping[sub_test], currentBuild)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                if (!completed_stages[sub_test]['send_email']) {
+                                                    catchError {
+                                                        script {
+                                                            wrap([$class: 'BuildUser']) {
+                                                                dir('scylla-cluster-tests') {
+                                                                    timeout(time: 10, unit: 'MINUTES') {
+                                                                        runSendEmail(params_mapping[sub_test], currentBuild)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                if (!completed_stages[sub_test]['clean_sct_runner']) {
+                                                    catchError {
+                                                        script {
+                                                            wrap([$class: 'BuildUser']) {
+                                                                dir('scylla-cluster-tests') {
+                                                                    cleanSctRunners(params_mapping[sub_test], currentBuild)
+                                                                }
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
