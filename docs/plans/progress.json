@@ -110,6 +110,16 @@
       "phases_done": 0
     },
     {
+      "id": "unit-integration-test-separation",
+      "title": "Unit/Integration Test Separation",
+      "file": "testing/unit-integration-test-separation.md",
+      "domain": "testing",
+      "status": "draft",
+      "created": "2026-03-23",
+      "phases_total": 5,
+      "phases_done": 0
+    },
+    {
       "id": "resilient-test-config-dependencies",
       "title": "Resilient Test Config Dependencies",
       "domain": "config",

@@ -60,16 +60,17 @@ Mocking internal functions makes tests brittle and hides bugs. Mock at the outer
 
 ### Autouse Fixtures (Always Active)
 
-These fixtures from `unit_tests/conftest.py` run automatically for every test:
+These fixtures run automatically for every unit test under `unit_tests/unit/`:
 
-| Fixture | Scope | Purpose |
-|---------|-------|---------|
-| `fake_remoter` | function | Blocks real SSH; sets `FakeRemoter` as default remoter (returns the **class**, not an instance) |
-| `fake_provisioner` | session | Registers `FakeProvisioner` for cloud provisioning |
-| `fake_region_definition_builder` | session | Registers `FakeDefinitionBuilder` for regions |
-| `fixture_cleanup_continuous_events_registry` | function | Cleans up event registry between tests |
+| Fixture | Scope | Source | Purpose |
+|---------|-------|--------|---------|
+| `fake_remoter` | function | `unit_tests/unit/conftest.py` | Blocks real SSH; sets `FakeRemoter` as default remoter (returns the **class**, not an instance) |
+| `mock_cloud_services` | session | `unit_tests/unit/conftest.py` | Mocks AWS/GCE/Azure API calls and `KeyStore` so no real credentials are needed |
+| `fake_provisioner` | session | `unit_tests/conftest.py` | Registers `FakeProvisioner` for cloud provisioning |
+| `fake_region_definition_builder` | session | `unit_tests/conftest.py` | Registers `FakeDefinitionBuilder` for regions |
+| `fixture_cleanup_continuous_events_registry` | function | `unit_tests/conftest.py` | Cleans up event registry between tests |
 
-**Important:** AWS, GCE, and Azure HTTP calls are **NOT** auto-blocked. You must mock them per-test using `unittest.mock.patch`, `patch.object`, `monkeypatch`, or `moto`. Common functions to patch include `convert_name_to_ami_if_needed`, `find_scylla_repo`, `get_arch_from_instance_type`, and `KeyStore` methods. Use `patch.object(KeyStore, "method_name", ...)` for `KeyStore` since it's imported via `from sdcm.keystore import KeyStore` in 20+ modules.
+**Important:** `fake_remoter` and `mock_cloud_services` are scoped to `unit_tests/unit/conftest.py` as `autouse=True` — they activate for all tests under `unit_tests/unit/` automatically. Integration tests under `unit_tests/integration/` do **not** receive these fixtures, so they use real credentials and connections.
 
 ### On-Demand Fixtures
 
