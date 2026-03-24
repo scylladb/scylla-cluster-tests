@@ -7,7 +7,7 @@ n_db_nodes: 3
 instance_type_db: 'i4i.large'
 
 n_test_oracle_db_nodes: 1
-instance_type_db_oracle: 'i3.large'
+instance_type_db_oracle: 'i8g.large'
 
 n_loaders: 1
 instance_type_loader: 'c6i.large'
@@ -28,6 +28,3 @@ gemini_cmd: |
 
 gemini_table_options:
   - "cdc = {'enabled': true, 'ttl': 0}"
-
-# Required by SCT, although not used:
-gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'

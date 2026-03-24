@@ -29,6 +29,10 @@ RPM_URL = (
 )
 
 
+def _get_latest_scylla_release(product="scylla"):
+    return get_latest_scylla_release(product=product, verify=False)
+
+
 class ConfigurationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -57,7 +61,7 @@ class ConfigurationTests(unittest.TestCase):
     def setup_default_env(cls):
         os.environ["SCT_CLUSTER_BACKEND"] = "docker"
         os.environ["SCT_USE_MGMT"] = "false"
-        os.environ["SCT_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_SCYLLA_VERSION"] = _get_latest_scylla_release()
         os.environ["SCT_CONFIG_FILES"] = "internal_test_data/minimal_test_case.yaml"
 
     @classmethod
@@ -186,7 +190,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_12_scylla_version_ami(self):
         os.environ.pop("SCT_AMI_ID_DB_SCYLLA", None)
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
-        os.environ["SCT_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_SCYLLA_VERSION"] = _get_latest_scylla_release()
 
         os.environ["SCT_CONFIG_FILES"] = "internal_test_data/multi_region_dc_test_case.yaml"
         conf = sct_config.SCTConfiguration()
@@ -197,7 +201,7 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_12_scylla_version_ami_case1(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
-        os.environ["SCT_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_SCYLLA_VERSION"] = _get_latest_scylla_release()
 
         os.environ["SCT_CONFIG_FILES"] = "internal_test_data/multi_region_dc_test_case.yaml"
         conf = sct_config.SCTConfiguration()
@@ -216,7 +220,7 @@ class ConfigurationTests(unittest.TestCase):
     @pytest.mark.integration
     def test_12_scylla_version_repo(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
-        os.environ["SCT_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_SCYLLA_VERSION"] = _get_latest_scylla_release()
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -224,7 +228,7 @@ class ConfigurationTests(unittest.TestCase):
     @pytest.mark.integration
     def test_12_scylla_version_repo_case1(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
-        os.environ["SCT_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_SCYLLA_VERSION"] = _get_latest_scylla_release()
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -578,7 +582,7 @@ class ConfigurationTests(unittest.TestCase):
     @pytest.mark.integration
     def test_16_oracle_scylla_version_us_east_1(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
-        os.environ["SCT_ORACLE_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_ORACLE_SCYLLA_VERSION"] = _get_latest_scylla_release()
         os.environ["SCT_REGION_NAME"] = "us-east-1"
         os.environ["SCT_AMI_ID_DB_SCYLLA"] = "ami-dummy"
         os.environ["SCT_CONFIG_FILES"] = "internal_test_data/minimal_test_case.yaml"
@@ -593,7 +597,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_16_oracle_scylla_version_eu_west_1(self):
         os.environ["SCT_AMI_ID_DB_SCYLLA"] = "ami-dummy"
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
-        os.environ["SCT_ORACLE_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_ORACLE_SCYLLA_VERSION"] = _get_latest_scylla_release()
         os.environ["SCT_REGION_NAME"] = "eu-west-1"
         os.environ["SCT_CONFIG_FILES"] = "internal_test_data/minimal_test_case.yaml"
         os.environ["SCT_DB_TYPE"] = "mixed_scylla"
@@ -607,7 +611,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_16_oracle_scylla_version_and_oracle_ami_together(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
         os.environ["SCT_REGION_NAME"] = "eu-west-1"
-        os.environ["SCT_ORACLE_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_ORACLE_SCYLLA_VERSION"] = _get_latest_scylla_release()
         os.environ["SCT_AMI_ID_DB_ORACLE"] = "ami-dummy"
         os.environ["SCT_DB_TYPE"] = "mixed_scylla"
         os.environ["SCT_CONFIG_FILES"] = "internal_test_data/minimal_test_case.yaml"
@@ -719,7 +723,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_20_user_data_format_version_aws(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
         os.environ["SCT_SCYLLA_VERSION"] = "master:latest"
-        os.environ["SCT_ORACLE_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_ORACLE_SCYLLA_VERSION"] = _get_latest_scylla_release()
         os.environ["SCT_DB_TYPE"] = "mixed_scylla"
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -754,7 +758,7 @@ class ConfigurationTests(unittest.TestCase):
     @pytest.mark.integration
     def test_20_user_data_format_version_gce_2(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "gce"
-        os.environ["SCT_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_SCYLLA_VERSION"] = _get_latest_scylla_release()
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()
@@ -993,7 +997,7 @@ class ConfigurationTests(unittest.TestCase):
     @pytest.mark.integration
     def test_31_check_network_config_gce(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "gce"
-        os.environ["SCT_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_SCYLLA_VERSION"] = _get_latest_scylla_release()
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -1005,7 +1009,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_31_check_network_config_azure(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "azure"
         os.environ["SCT_AZURE_REGION_NAME"] = "eastus"
-        os.environ["SCT_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_SCYLLA_VERSION"] = _get_latest_scylla_release()
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -1017,7 +1021,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_31_check_network_config_docker(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "docker"
         os.environ["SCT_USE_MGMT"] = "false"
-        os.environ["SCT_SCYLLA_VERSION"] = get_latest_scylla_release(product="scylla")
+        os.environ["SCT_SCYLLA_VERSION"] = _get_latest_scylla_release()
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()

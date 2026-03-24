@@ -7,6 +7,7 @@ from argus.common.sct_types import GeminiResultsRequest, PerformanceResultsReque
 from argus.common.enums import ResourceState, TestStatus
 from argus.client.base import ArgusClient
 from argus.client.sct.types import EventsInfo, LogLink, Package
+from argus.common.utils import clamp_ts_to_milliseconds
 
 
 class ArgusSCTClient(ArgusClient):
@@ -128,7 +129,7 @@ class ArgusSCTClient(ArgusClient):
         )
         self.check_response(response)
 
-    def add_stress_command(self, command: str, log_name: str, loader_name: str) -> None:
+    def add_stress_command(self, command: str, ts: float, log_name: str, loader_name: str) -> None:
         """
             Submits stress command information to be viewed inside Argus.
         """
@@ -139,6 +140,7 @@ class ArgusSCTClient(ArgusClient):
                 **self.generic_body,
                 "cmd": command,
                 "log_name": log_name,
+                "ts": clamp_ts_to_milliseconds(ts),
                 "loader_name": loader_name,
             }
         )

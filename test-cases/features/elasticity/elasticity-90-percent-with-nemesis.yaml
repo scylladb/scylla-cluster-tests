@@ -1,18 +1,18 @@
 test_duration: 3000
 
 prepare_write_cmd:
-  - "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..78125000"
-  - "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=78125001..156250000"
-  - "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=156250001..234375000"
-  - "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=234375001..312500000"
+  - "cassandra-stress write no-warmup cl=ALL n=180000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=100 fixed=6000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..180000000"
+  - "cassandra-stress write no-warmup cl=ALL n=180000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=100 fixed=6000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=180000001..360000000"
+  - "cassandra-stress write no-warmup cl=ALL n=180000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=100 fixed=6000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=360000001..540000000"
+  - "cassandra-stress write no-warmup cl=ALL n=180000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=100 fixed=6000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=540000001..720000000"
 
 stress_cmd:
-  - "cassandra-stress read no-warmup cl=QUORUM duration=2400m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200 fixed=3000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..162500000,81250000,1625000)'"
-  - "cassandra-stress write no-warmup cl=ONE duration=2400m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=1 fixed=10/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..162500000,81250000,102500)'"
+  - "cassandra-stress read no-warmup cl=QUORUM duration=2400m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200 fixed=3000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..360000000,180000000,3600000)'"
+  - "cassandra-stress write no-warmup cl=ONE duration=2400m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=1 fixed=10/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..360000000,180000000,3600000)'"
 
 pre_create_keyspace: "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'initial': 64};"
 
-n_db_nodes: 3
+n_db_nodes: 6
 n_loaders: 4
 nemesis_grow_shrink_instance_type: 'i4i.large'
 

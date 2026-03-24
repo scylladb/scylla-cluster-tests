@@ -5304,7 +5304,7 @@ class BaseScyllaCluster:
             f"sed -ie 's/^rpc_address: .*/rpc_address: {node.ip_address}/g' {node.offline_install_dir}/etc/scylla/scylla.yaml"
         )
 
-    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # noqa: PLR0912, PLR0914
+    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # noqa: PLR0912, PLR0914, PLR0915
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
 
         if node.distro.is_rhel_like:
@@ -5333,6 +5333,14 @@ class BaseScyllaCluster:
 
         if self.test_config.REUSE_CLUSTER:
             self._reuse_cluster_setup(node)
+            if (self.params.get("server_encrypt") or self.params.get("client_encrypt")) and not (
+                node.ssl_conf_dir / TLSAssets.DB_CERT
+            ).exists():
+                self._generate_db_node_certs(node)
+                install_client_certificate(node.remoter, node.ip_address, force=True)
+            # warm up raft cached_property per node to avoid rapid TLS session cycling
+            # during validate_raft_on_nodes (https://github.com/scylladb/python-driver/issues/614 workaround)
+            _ = node.raft
             return
 
         node.disable_daily_triggered_services()
@@ -5380,18 +5388,7 @@ class BaseScyllaCluster:
             SnitchConfig(node=node, datacenters=datacenters).apply()
 
         if any([self.params.get("server_encrypt"), self.params.get("client_encrypt")]):
-            # Create node certificate for internode communication
-            node.create_node_certificate(
-                cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
-                cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
-                csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR,
-            )
-            # Create client facing node certificate, for client-to-node communication
-            node.create_node_certificate(
-                node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY
-            )
-            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
-                shutil.copy(src, node.ssl_conf_dir)
+            self._generate_db_node_certs(node)
         node.config_setup(append_scylla_args=self.get_scylla_args())
 
         self._scylla_post_install(node, install_scylla, nic_devname)
@@ -5564,6 +5561,20 @@ class BaseScyllaCluster:
 
     def _reuse_cluster_setup(self, node):
         pass
+
+    def _generate_db_node_certs(self, node):
+        """Generate per-node SSL certificates for a DB node"""
+        node.create_node_certificate(
+            cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
+            cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
+            csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR,
+        )
+        node.create_node_certificate(
+            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT,
+            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY,
+        )
+        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+            shutil.copy(src, node.ssl_conf_dir)
 
     @staticmethod
     def clean_replacement_node_options(node):
@@ -5925,6 +5936,9 @@ class BaseLoaderSet:
 
         if TestConfig().REUSE_CLUSTER:
             self.kill_stress_thread()
+            if self.params.get("client_encrypt") and not (node.ssl_conf_dir / TLSAssets.CLIENT_CERT).exists():
+                self._generate_loader_certs(node)
+                install_client_certificate(node.remoter, node.ip_address, force=True)
             return
 
         node_exporter_setup = NodeExporterSetup()
@@ -5935,16 +5949,7 @@ class BaseLoaderSet:
             return
 
         if self.params.get("client_encrypt"):
-            node.create_node_certificate(
-                node.ssl_conf_dir / TLSAssets.CLIENT_CERT, node.ssl_conf_dir / TLSAssets.CLIENT_KEY
-            )
-            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
-                shutil.copy(src, node.ssl_conf_dir)
-            export_pem_cert_to_pkcs12_keystore(
-                node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
-                node.ssl_conf_dir / TLSAssets.CLIENT_KEY,
-                node.ssl_conf_dir / TLSAssets.PKCS12_KEYSTORE,
-            )
+            self._generate_loader_certs(node)
 
             if self.params.get("use_prepared_loaders"):
                 node.config_client_encrypt()
@@ -5961,6 +5966,19 @@ class BaseLoaderSet:
 
         # Login to Docker Hub.
         docker_hub_login(remoter=node.remoter)
+
+    def _generate_loader_certs(self, node):
+        """Generate SSL client certificates for a loader node"""
+        node.create_node_certificate(
+            node.ssl_conf_dir / TLSAssets.CLIENT_CERT, node.ssl_conf_dir / TLSAssets.CLIENT_KEY
+        )
+        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+            shutil.copy(src, node.ssl_conf_dir)
+        export_pem_cert_to_pkcs12_keystore(
+            node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
+            node.ssl_conf_dir / TLSAssets.CLIENT_KEY,
+            node.ssl_conf_dir / TLSAssets.PKCS12_KEYSTORE,
+        )
 
     def node_startup(self, node, verbose=False, **kwargs):
         pass
