@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="pytest" tests="2" errors="0" failures="1" skipped="0">
+  <testcase classname="unit_tests.test_foo" name="test_bar" file="unit_tests/test_foo.py" time="1.0">
+    <failure message="assert False">unit_tests/test_foo.py:10: AssertionError</failure>
+  </testcase>
+  <testcase classname="unit_tests.test_foo" name="test_baz" file="unit_tests/test_foo.py" time="0.5"/>
+</testsuite>
