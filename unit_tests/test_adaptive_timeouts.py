@@ -221,6 +221,59 @@ def test_tablets_new_node_uses_predefined_timeouts(
     assert metrics[0].get("tablets_enabled") is True
 
 
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_tablets_tablet_migration_timeout_is_calculated_from_disk_size(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
+):
+    mock_tablets_feature.return_value = True
+    with adaptive_timeout(
+        operation=Operations.TABLET_MIGRATION, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+    ) as timeout:
+        # node_disk_size_mb=102400, expected_throughput=69/2*3=103.5
+        # estimated = 102400 * 0.9 / 103.5 ≈ 889.9s
+        # hard = int(estimated * 4) = 3559
+        expected_hard = int(102400 * 0.9 / (_I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3) * 4)
+        assert timeout == expected_hard
+
+    soft_timeout_mock.assert_not_called()
+    hard_timeout_mock.assert_not_called()
+    metrics = adaptive_timeout_store.get(operation=Operations.TABLET_MIGRATION.name)
+    assert metrics[0].get("tablets_enabled") is True
+
+
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_tablet_migration_timeout_fallback_uses_caller_timeout(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
+):
+    mock_tablets_feature.return_value = True
+    # Force metrics gathering to fail by making node_disk_size_mb raise
+    with mock.patch.object(
+        NodeLoadInfoService, "node_disk_size_mb", new_callable=mock.PropertyMock, side_effect=ValueError("no disk")
+    ):
+        with adaptive_timeout(
+            operation=Operations.TABLET_MIGRATION, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+        ) as timeout:
+            assert timeout == 3600  # fallback returns caller timeout (or 6 hours if not provided)
+
+
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_tablet_migration_uses_formula_when_tablets_disabled(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store
+):
+    # With tablets disabled, non-tablets formula: max(int(102400 MB * 0.9 * 0.03), 7200) = max(2764, 7200) = 7200 s
+    # hard_timeout is None, so yields soft_timeout directly.
+    with adaptive_timeout(
+        operation=Operations.TABLET_MIGRATION, node=fake_node, stats_storage=adaptive_timeout_store, timeout=7200
+    ) as timeout:
+        assert timeout == 7200
+
+    soft_timeout_mock.assert_not_called()
+    hard_timeout_mock.assert_not_called()
+
+
 def test_node_disk_size_mb(fake_node):
     """node_disk_size_mb should return total /var/lib/scylla filesystem size in MB.
 
