@@ -103,8 +103,12 @@ The `sdcm/` directory is the heart of the SCT framework. Here's a detailed break
 #### Core Files
 - `cluster.py` - Base classes for cluster management, node operations, and connectivity
 - `tester.py` - Base test class used by all tests, handles test setup/teardown and reporting
-- `nemesis.py` - Core chaos engineering framework with disruptors for testing resilience
-- `nemesis_registry.py` - Registry of all chaos operations available for testing
+- `nemesis/` - Chaos engineering module (package) — see [Nemesis Developer Guide](docs/nemesis.md) for details
+  - `__init__.py` - `NemesisBaseClass`, `NemesisRunner`, all `disrupt_*` methods, and auto-discovery mechanism
+  - `registry.py` - `NemesisRegistry` for discovering and filtering nemesis by boolean flag expressions
+  - `generator.py` - `NemesisJobGenerator` for generating Jenkins pipelines and test configs
+  - `monkey/` - Individual nemesis classes (`NemesisBaseClass` subclasses) and composite runners (`NemesisRunner` subclasses)
+  - `utils/` - Shared utilities: `NemesisNodeAllocator`, index helpers, node operations (iptables, SIGSTOP)
 - `sct_config.py` - Configuration management and parameter handling
 - `log.py` - Logging setup and utilities
 - `db_stats.py` - Database metrics collection using Prometheus
@@ -211,7 +215,15 @@ The `sdcm/` directory is the heart of the SCT framework. Here's a detailed break
 
 ### Nemesis Operations
 
-Nemesis are chaos operations that test database resilience. Common types:
+Nemesis are chaos operations that test database resilience. For a comprehensive guide, see [docs/nemesis.md](docs/nemesis.md).
+
+**Architecture:**
+- `NemesisBaseClass` — Abstract base for individual disruptions (a.k.a. "Monkeys"). Each subclass sets boolean flags and implements `disrupt()`.
+- `NemesisRunner` — Orchestrator that contains all `disrupt_*` methods (the actual disruption logic), handles node selection, metrics, and error reporting.
+- `NemesisRegistry` — Discovery mechanism that filters nemesis using boolean flag expressions (e.g. `"not disruptive"`, `"topology_changes and not limited"`).
+- `NemesisNodeAllocator` — Thread-safe singleton preventing conflicting nemesis on the same node.
+
+**Common nemesis categories:**
 - Node operations (stop/start, reboot, terminate, decommission)
 - Network disruptions (block, delay, partition)
 - Disk operations (fill disk, corrupt data)
