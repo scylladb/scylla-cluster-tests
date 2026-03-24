@@ -21,7 +21,6 @@ from pathlib import Path
 
 
 from sdcm.cluster import BaseCluster, BaseScyllaCluster
-from sdcm.cluster_aws import CassandraAWSCluster, ScyllaAWSCluster
 from sdcm.sct_events import Severity
 from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread
@@ -69,7 +68,7 @@ class GeminiStressThread(DockerBasedStressThread):
     def __init__(
         self,
         test_cluster: BaseCluster | BaseScyllaCluster,
-        oracle_cluster: ScyllaAWSCluster | CassandraAWSCluster | None,
+        oracle_cluster: BaseCluster | None,
         loaders,
         stress_cmd: str,
         timeout=None,

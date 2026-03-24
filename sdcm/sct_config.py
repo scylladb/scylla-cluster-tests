@@ -1431,6 +1431,22 @@ class SCTConfiguration(BaseModel):
     vector_store_version: String = SctField(
         description="Vector Store version / docker image tag",
     )
+    docker_image_cassandra: String = SctField(
+        description="Cassandra docker image repo, i.e. 'cassandra'. Used when db_type is 'cassandra'.",
+    )
+    cassandra_version: String = SctField(
+        description="Cassandra version / docker image tag, i.e. '4.1' or '5.0'",
+    )
+    cassandra_num_tokens: int = SctField(
+        description="num_tokens value to configure in cassandra.yaml.",
+    )
+    cassandra_oracle_version: String = SctField(
+        description="Cassandra version for the oracle cluster, i.e. '4.1' or '5.0'",
+    )
+    ami_id_db_cassandra_oracle: String = SctField(
+        description="AMI ID for Cassandra oracle cluster nodes on AWS. "
+        "Defaults to empty string, which causes fallback to the loader AMI (a standard Ubuntu image).",
+    )
     # baremetal config options
     s3_baremetal_config: String = SctField(
         description="Configuration for S3 in baremetal setups. This includes details such as endpoint URL, access key, secret key, and bucket name.",
@@ -1970,19 +1986,7 @@ class SCTConfiguration(BaseModel):
     )
     latte_schema_parameters: DictOrStr = SctField(
         description="""Optional. Allows to pass through custom rune script parameters to the 'latte schema' command.
-        Also used as a fallback source for keyspace/table in gradual performance tests when
-        perf_stress_keyspace/perf_stress_table are not set.
         For example, {'keyspace': 'test_keyspace', 'table': 'test_table'}""",
-    )
-    perf_stress_keyspace: String = SctField(
-        description="""Keyspace name used in performance gradual throughput tests.
-        Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).
-        For latte, if not set, falls back to the 'keyspace' key in latte_schema_parameters.""",
-    )
-    perf_stress_table: String = SctField(
-        description="""Table name used in performance gradual throughput tests.
-        Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).
-        For latte, if not set, falls back to the 'table' key in latte_schema_parameters.""",
     )
     num_loaders_step: int = SctField(
         description="Number of loaders which should be added per step",
@@ -2415,7 +2419,7 @@ class SCTConfiguration(BaseModel):
                 assert "xcloud_provider" in env, "xcloud_provider must be set for xcloud backend"
                 backend_config_files += self.defaults_config_files[env.get("xcloud_provider")]
             backend_config_files += self.defaults_config_files[str(backend)]
-        self.multi_region_params = self.per_provider_multi_region_params.get(str(backend), [])
+        self.multi_region_params = list(self.per_provider_multi_region_params.get(str(backend), []))
 
         # load docker images defaults
         self.load_docker_images_defaults()
@@ -2857,12 +2861,20 @@ class SCTConfiguration(BaseModel):
         # Validate zero token nodes
         if self.get("use_zero_nodes"):
             self._validate_zero_token_backend_support(backend=cluster_backend)
-            zero_nodes_num: list[int] | int = self.get("n_db_zero_token_nodes")
-            data_nodes_num: list[int] | int = self.get("n_db_nodes")
+            zero_nodes_num = self.get("n_db_zero_token_nodes")
+            data_nodes_num = self.get("n_db_nodes")
             # if number of zero nodes is set for cluster setup, check correctness of settings
             if zero_nodes_num:
-                zero_nodes_num = zero_nodes_num if isinstance(zero_nodes_num, list) else [zero_nodes_num]
-                data_nodes_num = data_nodes_num if isinstance(data_nodes_num, list) else [data_nodes_num]
+                zero_nodes_num = (
+                    [zero_nodes_num]
+                    if isinstance(zero_nodes_num, int)
+                    else [int(i) for i in str(zero_nodes_num).split()]
+                )
+                data_nodes_num = (
+                    [data_nodes_num]
+                    if isinstance(data_nodes_num, int)
+                    else [int(i) for i in str(data_nodes_num).split()]
+                )
                 assert len(zero_nodes_num) == len(data_nodes_num), (
                     "Config of zero token nodes is not equal config of data nodes for multi dc"
                 )
@@ -2925,8 +2937,8 @@ class SCTConfiguration(BaseModel):
     def total_db_nodes(self) -> List[int]:
         """Used to get total number of db nodes data nodes and zero nodes"""
         use_zero_nodes = self.get("use_zero_nodes")
-        zero_nodes_num: list[int] | int = self.get("n_db_zero_token_nodes")
-        data_nodes_num: list[int] | int = self.get("n_db_nodes")
+        zero_nodes_num = self.get("n_db_zero_token_nodes")
+        data_nodes_num = self.get("n_db_nodes")
         zero_nodes_num = (
             zero_nodes_num
             if isinstance(zero_nodes_num, list)
@@ -2934,7 +2946,13 @@ class SCTConfiguration(BaseModel):
             if isinstance(zero_nodes_num, int)
             else [int(i) for i in str(zero_nodes_num).split()]
         )
-        data_nodes_num = data_nodes_num if isinstance(data_nodes_num, list) else [data_nodes_num]
+        data_nodes_num = (
+            data_nodes_num
+            if isinstance(data_nodes_num, list)
+            else [data_nodes_num]
+            if isinstance(data_nodes_num, int)
+            else [int(i) for i in str(data_nodes_num).split()]
+        )
         total_nodes = data_nodes_num[:]
         if use_zero_nodes and zero_nodes_num:
             total_nodes = [n1 + n2 for n1, n2 in zip(data_nodes_num, zero_nodes_num)]
@@ -3309,8 +3327,12 @@ class SCTConfiguration(BaseModel):
     def _check_multi_region_params(self, backend):
         region_param_names = {"aws": "region_name", "gce": "gce_datacenter"}
         current_region_param_name = region_param_names[backend]
+        multi_region_params = list(self.multi_region_params)
+        # For Cassandra db_type, check ami_id_db_cassandra instead of ami_id_db_scylla
+        if self.get("db_type") in ("cassandra",) and "ami_id_db_scylla" in multi_region_params:
+            multi_region_params[multi_region_params.index("ami_id_db_scylla")] = "ami_id_db_cassandra"
         region_count = {}
-        for opt in self.multi_region_params:
+        for opt in multi_region_params:
             val = self.get(opt)
             if isinstance(val, str):
                 region_count[opt] = len(self.get(opt).split())
@@ -3432,13 +3454,21 @@ class SCTConfiguration(BaseModel):
     def _check_version_supplied(self, backend: str):
         options_must_exist = []
 
-        if not self.get("use_preinstalled_scylla") and not backend == "baremetal" and not self.get("unified_package"):
+        if (
+            self.get("db_type") not in ("cassandra",)
+            and not self.get("use_preinstalled_scylla")
+            and not backend == "baremetal"
+            and not self.get("unified_package")
+        ):
             options_must_exist += ["scylla_repo"]
 
         if self.get("db_type") == "cloud_scylla":
             options_must_exist += ["cloud_cluster_id"]
         elif backend == "aws":
-            options_must_exist += ["ami_id_db_scylla"]
+            if self.get("db_type") in ("cassandra",):
+                options_must_exist += ["ami_id_db_cassandra"]
+            else:
+                options_must_exist += ["ami_id_db_scylla"]
         elif backend == "gce":
             options_must_exist += ["gce_image_db"]
         elif backend == "azure":
@@ -3446,7 +3476,10 @@ class SCTConfiguration(BaseModel):
         elif backend == "oci":
             options_must_exist += ["oci_image_db"]
         elif backend == "docker":
-            options_must_exist += ["docker_image"]
+            if self.get("db_type") == "cassandra":
+                options_must_exist += ["docker_image_cassandra"]
+            else:
+                options_must_exist += ["docker_image"]
         elif backend == "baremetal":
             options_must_exist += ["db_nodes_public_ip"]
         elif "k8s" in backend or backend == "xcloud":
@@ -3579,6 +3612,9 @@ class SCTConfiguration(BaseModel):
         backend = self.get("cluster_backend")
         scylla_version = None
         _is_enterprise = False
+
+        if self.get("db_type") in ("cassandra",):
+            return scylla_version, _is_enterprise
 
         if unified_package := self.get("unified_package"):
             with tempfile.TemporaryDirectory() as tmpdirname:
@@ -3944,7 +3980,8 @@ class SCTConfiguration(BaseModel):
 
     def _validate_docker_backend_parameters(self):
         if self.get("use_mgmt"):
-            raise ValueError("Scylla Manager is not supported for docker backend")
+            self.log.warning("Scylla Manager is not supported for docker backend, disabling")
+            self["use_mgmt"] = False
 
     def _verify_rackaware_configuration(self):
         if not self.get("rack_aware_loader"):
@@ -4022,10 +4059,9 @@ class SCTConfiguration(BaseModel):
                 )
 
         rf = self.get("xcloud_replication_factor")
-        _n_db_nodes: list[int] | int = self.get("n_db_nodes")
-        n_nodes = _n_db_nodes if isinstance(_n_db_nodes, list) else [_n_db_nodes]
+        n_nodes = int(self.get("n_db_nodes"))
         if rf is None:
-            self["xcloud_replication_factor"] = min(*n_nodes, 3)
+            self["xcloud_replication_factor"] = min(n_nodes, 3)
         elif rf > n_nodes:
             raise ValueError(f"xcloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
 

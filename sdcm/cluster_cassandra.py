@@ -1,0 +1,484 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
+import logging
+import threading
+from functools import cached_property
+from typing import List
+
+from sdcm import wait
+from sdcm.exceptions import KillNemesis
+from sdcm.sct_config import TestConfig
+from sdcm.utils.common import raise_exception_in_thread
+from sdcm.utils.decorators import log_run_info, optional_stage
+from sdcm.utils.raft import NoRaft
+
+LOGGER = logging.getLogger(__name__)
+
+CASSANDRA_YAML_PATH = "/etc/cassandra/cassandra.yaml"
+CASSANDRA_SERVICE_NAME = "cassandra"
+CASSANDRA_ENV_SH_PATH = "/etc/cassandra/cassandra-env.sh"
+CASSANDRA_RACKDC_PATH = "/etc/cassandra/cassandra-rackdc.properties"
+
+
+def compute_jvm_heap_mb(total_ram_mb: int) -> tuple[int, int]:
+    """Compute Cassandra JVM heap sizes following upstream recommendations.
+
+    Cassandra's own startup scripts use:
+    - max_heap = min(total_ram / 2, 1024 MB) for systems < 2 GB
+    - max_heap = min(total_ram / 4, 8192 MB) for systems >= 2 GB
+    - heap_new = min(max_heap / 4, 800 MB)
+
+    The 31 GB hard cap prevents the JVM from exceeding the compressed-oops
+    threshold, which would cause a large performance regression.
+
+    Args:
+        total_ram_mb: Total system RAM in megabytes.
+
+    Returns:
+        Tuple of (max_heap_mb, heap_new_mb).
+    """
+    if total_ram_mb < 2048:
+        max_heap = min(total_ram_mb // 2, 1024)
+    else:
+        max_heap = min(total_ram_mb // 4, 8192)
+
+    # Hard cap at 31 GB (compressed oops threshold)
+    max_heap = min(max_heap, 31 * 1024)
+
+    # Ensure at least 256 MB
+    max_heap = max(max_heap, 256)
+
+    heap_new = min(max_heap // 4, 800)
+    return max_heap, heap_new
+
+
+import contextlib
+import os
+import tempfile
+from typing import ContextManager
+
+import yaml
+
+from sdcm.exceptions import NodeNotReady
+from sdcm.remote.remote_file import remote_file, dict_to_yaml_file, yaml_file_to_dict
+
+
+class CassandraNodeMixin:
+    """Mixin for nodes running Cassandra instead of Scylla.
+
+    Overrides Scylla-specific properties on BaseNode that would log
+    errors or fail on a Cassandra node (no /etc/scylla, no scylla binary).
+    """
+
+    @property
+    def smp(self):
+        return ""
+
+    @property
+    def cpuset(self):
+        return ""
+
+    def _gen_nodetool_cmd(self, sub_cmd, args, options):
+        """Use nodetool from PATH (Cassandra installs to /usr/bin or /opt/cassandra/bin)."""
+        credentials = self.parent_cluster.get_db_auth()
+        if credentials:
+            options += "-u {} -pw '{}' ".format(*credentials)
+        return f"nodetool {options} {sub_cmd} {args}"
+
+    @contextlib.contextmanager
+    def remote_scylla_yaml(self) -> ContextManager[dict]:
+        """Read/write cassandra.yaml instead of scylla.yaml."""
+        with remote_file(
+            remoter=self.remoter,
+            remote_path=CASSANDRA_YAML_PATH,
+            serializer=dict_to_yaml_file,
+            deserializer=yaml_file_to_dict,
+            sudo=True,
+        ) as cassandra_yaml:
+            yield CassandraYamlAttrProxy(cassandra_yaml)
+
+    def extract_seeds_from_scylla_yaml(self):
+        """Extract seed IPs from cassandra.yaml."""
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix="sct"), "cassandra.yaml")
+        wait.wait_for(
+            func=self.remoter.receive_files,
+            step=10,
+            text="Waiting for copying cassandra.yaml",
+            timeout=300,
+            throw_exc=True,
+            src=CASSANDRA_YAML_PATH,
+            dst=yaml_dst_path,
+        )
+        with open(yaml_dst_path, encoding="utf-8") as yaml_stream:
+            conf_dict = yaml.safe_load(yaml_stream)
+
+        try:
+            node_seeds = conf_dict["seed_provider"][0]["parameters"][0].get("seeds")
+        except (KeyError, IndexError, TypeError) as details:
+            self.log.debug("Loaded YAML data structure: %s", conf_dict)
+            raise ValueError("Exception determining seed node ips from cassandra.yaml") from details
+
+        if node_seeds:
+            return [s.strip() for s in node_seeds.split(",")]
+        return []
+
+    @property
+    def is_server_encrypt(self):
+        result = self.remoter.run(f"grep '^server_encryption_options:' {CASSANDRA_YAML_PATH}", ignore_status=True)
+        return "server_encryption_options" in result.stdout.lower()
+
+    @cached_property
+    def raft(self):
+        return NoRaft(self)
+
+    @cached_property
+    def cql_address(self):
+        return self.ip_address
+
+    def wait_native_transport(self):
+        """Cassandra has no Scylla REST API; check CQL port instead."""
+        if not self.db_up():
+            raise NodeNotReady(f"Node {self.name} CQL port not ready")
+
+    def db_up(self):
+        return self.is_port_used(port=self.CQL_PORT, service_name=CASSANDRA_SERVICE_NAME)
+
+    def config_setup(self, append_scylla_args="", debug_install=False, **_):
+        pass
+
+    def get_scylla_binary_version(self):
+        """Return Cassandra version without invoking /usr/bin/scylla (not present on Cassandra nodes)."""
+        result = self.remoter.run(
+            "dpkg-query --show --showformat '${Version}' cassandra",
+            ignore_status=True,
+        )
+        if result.ok and result.stdout.strip():
+            return result.stdout.strip()
+        result = self.remoter.run("nodetool version", ignore_status=True)
+        if result.ok:
+            for line in result.stdout.splitlines():
+                if "ReleaseVersion:" in line:
+                    return line.split(":", 1)[1].strip()
+        return None
+
+
+class CassandraYamlAttrProxy:
+    """Wraps a plain dict so attribute access works like on ScyllaYaml.
+
+    ``report_scylla_yaml_to_argus`` calls ``scylla_yml.model_dump()``
+    and accesses attributes like ``broadcast_rpc_address``.  This proxy
+    makes a raw cassandra.yaml dict behave similarly.
+    """
+
+    def __init__(self, data: dict):
+        self._data = data
+
+    def __getattr__(self, name):
+        try:
+            return self._data[name]
+        except KeyError:
+            return None
+
+    def model_dump(self, **_kwargs):
+        return dict(self._data)
+
+
+class BaseCassandraCluster:
+    """Backend-agnostic mixin for Cassandra clusters.
+
+    Provides Cassandra-specific initialization, seed management no-ops,
+    and node setup logic for cloud VM backends. Intended to be mixed in
+    with a backend-specific cluster class (AWSCluster, GCECluster, DockerCluster).
+
+    For Docker backend, node_setup() is overridden to no-op since the Docker
+    image entrypoint handles installation. For cloud backends, node_setup()
+    installs Cassandra via the official apt repository.
+    """
+
+    name: str
+    nodes: List
+    log: logging.Logger
+
+    def __init__(self, *args, **kwargs):
+        self.nemesis_termination_event = threading.Event()
+        self.nemesis = []
+        self.nemesis_threads = []
+        self.nemesis_count = 0
+        self.test_config = TestConfig()
+        self._node_cycle = None
+        self.vector_store_cluster = None
+        self.params = kwargs.get("params", {})
+        self.parallel_node_operations = False
+        super().__init__(*args, **kwargs)
+
+    @cached_property
+    def parallel_startup(self):
+        return False
+
+    def get_scylla_args(self):
+        return ""
+
+    def update_seed_provider(self):
+        pass
+
+    def validate_seeds_on_all_nodes(self):
+        pass
+
+    def set_seeds(self, wait_for_timeout=300, first_only=False):
+        """Mark nodes as seeds. For Cassandra, first node is always the seed."""
+        if first_only:
+            seed_nodes_addresses = [self.nodes[0].ip_address]
+        else:
+            seeds_num = self.params.get("seeds_num") or 1
+            seed_nodes_addresses = [node.ip_address for node in self.nodes[:seeds_num]]
+
+        for node in self.nodes:
+            if node.ip_address in seed_nodes_addresses:
+                node.set_seed_flag(True)
+
+    @property
+    def seed_nodes_addresses(self):
+        seed_nodes_addresses = [node.ip_address for node in self.nodes if node.is_seed]
+        assert seed_nodes_addresses, "We should have at least one selected seed by now"
+        return seed_nodes_addresses
+
+    @property
+    def seed_nodes(self):
+        seed_nodes = [node for node in self.nodes if node.is_seed]
+        assert seed_nodes, "We should have at least one selected seed by now"
+        return seed_nodes
+
+    @optional_stage("nemesis")
+    def add_nemesis(self, nemesis, tester_obj, hdr_tags: list[str] = None):
+        for nem in nemesis:
+            nemesis_obj = nem["nemesis"](
+                tester_obj=tester_obj,
+                termination_event=self.nemesis_termination_event,
+                nemesis_selector=nem["nemesis_selector"],
+                nemesis_seed=nem["nemesis_seed"],
+            )
+            if hdr_tags:
+                nemesis_obj.hdr_tags = hdr_tags
+            self.nemesis.append(nemesis_obj)
+        self.nemesis_count = len(nemesis)
+
+    def clean_nemesis(self):
+        self.nemesis = []
+
+    @optional_stage("nemesis")
+    @log_run_info("Start nemesis threads on cluster")
+    def start_nemesis(self, interval=None, cycles_count: int = -1):
+        self.log.info("Clear _nemesis_termination_event")
+        self.nemesis_termination_event.clear()
+        for nemesis in self.nemesis:
+            nemesis_thread = threading.Thread(
+                target=nemesis.run, name="NemesisThread", args=(interval, cycles_count), daemon=True
+            )
+            nemesis_thread.start()
+            self.nemesis_threads.append(nemesis_thread)
+
+    @optional_stage("nemesis")
+    @log_run_info("Stop nemesis threads on cluster")
+    def stop_nemesis(self, timeout=10):
+        if self.nemesis_termination_event.is_set():
+            return
+        self.log.info("Set _nemesis_termination_event")
+        self.nemesis_termination_event.set()
+        for nemesis_thread in self.nemesis_threads:
+            raise_exception_in_thread(nemesis_thread, KillNemesis)
+            nemesis_thread.join(timeout)
+
+    def start_kms_key_rotation_thread(self) -> None:
+        pass
+
+    def start_azure_kms_key_rotation_thread(self) -> None:
+        pass
+
+    def start_gcp_key_rotation_thread(self) -> None:
+        pass
+
+    def wait_total_space_used_per_node(self, size=None, keyspace="keyspace1"):
+        pass
+
+    @property
+    def cassandra_version(self) -> str:
+        return self.params.get("cassandra_version") or self.params.get("cassandra_oracle_version") or "4.1"
+
+    def jdk_version(self) -> int:
+        """Return required JDK major version for the configured Cassandra version.
+
+        Cassandra 4.x needs JDK 11; Cassandra 5.x needs JDK 17.
+        """
+        major = int(self.cassandra_version.split(".")[0])
+        return 17 if major >= 5 else 11
+
+    def node_setup(self, node, verbose=False, timeout=3600):
+        """Full Cassandra node setup for cloud VM backends.
+
+        Installs JDK, adds the Apache Cassandra apt repository,
+        installs Cassandra, configures cassandra.yaml and heap sizes,
+        then starts the service.
+
+        Docker backend overrides this to no-op since the image handles it.
+        """
+        node.wait_ssh_up(verbose=verbose)
+        self._install_jdk(node)
+        self._add_cassandra_apt_repo(node)
+        self._install_cassandra(node)
+        self._configure_cassandra_yaml(node)
+        self._configure_cassandra_env(node)
+        self._configure_rackdc(node)
+        self._start_cassandra_service(node)
+
+    def check_node_db_up(self, node):
+        """Check if Cassandra is up via nodetool status (runs on the node via SSH).
+
+        BaseNode.db_up() connects from the SCT runner to the node's public IP,
+        which may be blocked by AWS security groups. This method checks from
+        the node itself via a remote command.
+        """
+        result = node.remoter.run(
+            "nodetool status",
+            ignore_status=True,
+            verbose=False,
+        )
+        if not result.ok:
+            self.log.debug("nodetool status failed (exit %s): %s", result.exited, result.stderr[:200])
+            return False
+        is_up = "UN " in result.stdout
+        if not is_up:
+            self.log.debug("nodetool status output (no UN found): %s", result.stdout[:200])
+        return is_up
+
+    def node_startup(self, node, verbose=False, timeout=3600):
+        """No-op: Cassandra is already started at the end of node_setup.
+
+        The wait_for_init_wrap decorator calls node_startup after node_setup.
+        Restarting Cassandra here would kill the running JVM and force a full
+        restart cycle (~7 min), so we skip it.
+        """
+
+    def _install_jdk(self, node):
+        """Install the required JDK version."""
+        jdk = self.jdk_version()
+        node.remoter.sudo("apt-get update", ignore_status=True, retry=3)
+        node.remoter.sudo(
+            f"apt-get install -y openjdk-{jdk}-jdk-headless",
+            retry=3,
+            timeout=300,
+        )
+
+    def _add_cassandra_apt_repo(self, node):
+        """Add the official Apache Cassandra apt repository."""
+        version = self.cassandra_version
+        major = int(version.split(".")[0])
+        minor = int(version.split(".")[1])
+        dist_name = f"{major}{minor}x"  # e.g., "41x" for 4.1, "50x" for 5.0
+        node.remoter.sudo(
+            "curl -fsSL https://downloads.apache.org/cassandra/KEYS "
+            "| sudo tee /etc/apt/trusted.gpg.d/cassandra.asc > /dev/null",
+            retry=3,
+        )
+        node.remoter.sudo(
+            f'echo "deb https://debian.cassandra.apache.org {dist_name} main" '
+            f"| sudo tee /etc/apt/sources.list.d/cassandra.sources.list",
+        )
+        node.remoter.sudo("apt-get update", retry=3)
+
+    def _install_cassandra(self, node):
+        """Install Cassandra package and stop the auto-started service."""
+        node.remoter.sudo("apt-get install -y cassandra", retry=5, timeout=600)
+        # Cassandra auto-starts after install with default config. Stop it and
+        # wipe data so we can reconfigure without cluster_name mismatch errors.
+        node.remoter.sudo("systemctl stop cassandra", ignore_status=True)
+        node.remoter.sudo("rm -rf /var/lib/cassandra/*", ignore_status=True)
+        # Recreate required directories with correct ownership after wipe
+        node.remoter.sudo(
+            "mkdir -p /var/lib/cassandra/data /var/lib/cassandra/commitlog "
+            "/var/lib/cassandra/saved_caches /var/lib/cassandra/hints "
+            "/var/run/cassandra"
+        )
+        node.remoter.sudo("chown -R cassandra:cassandra /var/lib/cassandra /var/run/cassandra")
+
+    def _configure_cassandra_yaml(self, node):
+        """Render and upload cassandra.yaml for the given node."""
+        seeds = ",".join(n.ip_address for n in self.nodes if n.is_seed) or node.ip_address
+        num_tokens = self.params.get("cassandra_num_tokens") or 16
+
+        yaml_updates = {
+            "cluster_name": self.name,
+            "num_tokens": num_tokens,
+            "seed_provider": [
+                {
+                    "class_name": "org.apache.cassandra.locator.SimpleSeedProvider",
+                    "parameters": [{"seeds": seeds}],
+                }
+            ],
+            "listen_address": node.ip_address,
+            "rpc_address": "0.0.0.0",
+            "broadcast_rpc_address": node.ip_address,
+            "endpoint_snitch": "GossipingPropertyFileSnitch",
+        }
+
+        # Use sed to update individual keys in the existing cassandra.yaml.
+        # Pattern ^#? handles entries that are commented out by default
+        # (e.g., broadcast_rpc_address is "# broadcast_rpc_address: 1.2.3.4").
+        for key, value in yaml_updates.items():
+            if key == "seed_provider":
+                node.remoter.sudo(f"sed -i 's/- seeds: .*/- seeds: \"{seeds}\"/' {CASSANDRA_YAML_PATH}")
+            elif key == "cluster_name":
+                # cluster_name may be quoted — handle both forms
+                node.remoter.sudo(f"sed -i \"s/^cluster_name:.*/cluster_name: '{value}'/\" {CASSANDRA_YAML_PATH}")
+            else:
+                node.remoter.sudo(f"sed -Ei 's/^#? *{key}:.*/{key}: {value}/' {CASSANDRA_YAML_PATH}")
+
+    def _configure_cassandra_env(self, node):
+        """Set JVM heap sizes in cassandra-env.sh."""
+        result = node.remoter.run("grep MemTotal /proc/meminfo")
+        total_kb = int(result.stdout.split()[1])
+        total_mb = total_kb // 1024
+        max_heap, heap_new = compute_jvm_heap_mb(total_mb)
+
+        node.remoter.sudo(f"sed -Ei 's/^#?MAX_HEAP_SIZE=.*/MAX_HEAP_SIZE=\"{max_heap}M\"/' {CASSANDRA_ENV_SH_PATH}")
+        node.remoter.sudo(f"sed -Ei 's/^#?HEAP_NEWSIZE=.*/HEAP_NEWSIZE=\"{heap_new}M\"/' {CASSANDRA_ENV_SH_PATH}")
+
+    def _configure_rackdc(self, node):
+        """Write cassandra-rackdc.properties for GossipingPropertyFileSnitch."""
+        dc = getattr(node, "dc_idx", 0)
+        dc_name = f"datacenter{dc + 1}" if isinstance(dc, int) else str(dc)
+        rack = getattr(node, "rack", 0)
+        rack_name = f"rack{rack + 1}" if isinstance(rack, int) else str(rack)
+        content = f"dc={dc_name}\\nrack={rack_name}"
+        node.remoter.sudo(f"bash -c \"printf '{content}\\n' > {CASSANDRA_RACKDC_PATH}\"")
+
+    def _start_cassandra_service(self, node):
+        """Enable and start the Cassandra systemd service."""
+        node.remoter.sudo("systemctl enable cassandra", ignore_status=True)
+        node.remoter.sudo("systemctl start cassandra")
+
+    def get_node_ips_param(self, public_ip=True):
+        if self.test_config.MIXED_CLUSTER:
+            return "oracle_db_nodes_public_ip" if public_ip else "oracle_db_nodes_private_ip"
+        return "db_nodes_public_ip" if public_ip else "db_nodes_private_ip"
+
+    @property
+    def data_nodes(self):
+        return list(self.nodes)
+
+    @property
+    def zero_nodes(self):
+        return []
+
+    def get_rack_nodes(self, rack: int) -> list:
+        return sorted([node for node in self.nodes if node.rack == rack], key=lambda n: n.name)
