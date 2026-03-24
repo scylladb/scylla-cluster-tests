@@ -2,6 +2,7 @@ test_duration: 60
 n_db_nodes: 1
 n_loaders: 1
 instance_type_db: 'r6i.xlarge'
+root_disk_size_db: 100
 instance_type_loader: 'm6i.large'
 
 db_type: cassandra
