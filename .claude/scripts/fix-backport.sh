@@ -13,6 +13,7 @@ Usage: fix-backport.sh <command> [args...]
 
 Commands:
   checkout <PR_NUMBER>              Checkout the PR branch and print base branch info
+  rebase <BASE_REF>                 Fetch base branch and rebase PR onto it
   resolve-commit                    Stage all changes and create a temporary commit
   prepare-recommit <BASE_REF>       Hard-reset to base, keeping resolved tree accessible via TEMP tag
   recommit <ORIGINAL_HASH>          Apply one commit's file changes from the resolved tree and commit
@@ -30,6 +31,42 @@ cmd_checkout() {
     # so the push step knows which remote to target (e.g. scylladbbot, not origin)
     gh pr view "$pr_number" --json baseRefName,headRefName,headRepositoryOwner \
         --jq '{base: .baseRefName, head: .headRefName, headRepoOwner: .headRepositoryOwner.login}'
+}
+
+cmd_rebase() {
+    local base_ref="${1:?Base ref required (e.g. upstream/branch-2026.1)}"
+
+    # Extract remote and branch from ref like "upstream/branch-2026.1"
+    local remote branch
+    remote="${base_ref%%/*}"
+    branch="${base_ref#*/}"
+
+    # Fetch latest state of the base branch
+    echo "Fetching ${remote} ${branch}..."
+    git fetch "$remote" "$branch"
+
+    # Count commits ahead of base — these are the backported commits
+    local commit_count
+    commit_count="$(git rev-list --count "$base_ref"..HEAD)"
+    echo "Rebasing ${commit_count} commit(s) onto ${base_ref}..."
+
+    # Rebase onto the base branch. Use --no-verify because pre-commit hooks
+    # may not work in worktrees. The rebase may stop with conflicts — that's
+    # expected and the caller (the agent) will resolve them.
+    if git rebase --no-verify "$base_ref" 2>&1; then
+        echo "REBASE_OK"
+    else
+        # Rebase stopped due to conflicts. The agent needs to resolve them
+        # and then run: git add <files> && git rebase --continue
+        echo "REBASE_CONFLICTS"
+        echo "Resolve the conflicts, then run:"
+        echo "  git add <resolved-files>"
+        echo "  .claude/scripts/fix-backport.sh rebase-continue"
+    fi
+}
+
+cmd_rebase_continue() {
+    GIT_EDITOR=true git rebase --continue --no-verify
 }
 
 cmd_resolve_commit() {
@@ -120,6 +157,8 @@ shift
 
 case "$command" in
     checkout)          cmd_checkout "$@" ;;
+    rebase)            cmd_rebase "$@" ;;
+    rebase-continue)   cmd_rebase_continue "$@" ;;
     resolve-commit)    cmd_resolve_commit "$@" ;;
     prepare-recommit)  cmd_prepare_recommit "$@" ;;
     recommit)          cmd_recommit "$@" ;;
