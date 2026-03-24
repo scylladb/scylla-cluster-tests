@@ -1,0 +1,17 @@
+trailing whitespace..................................................Passed
+ruff-format..........................................................Failed
+- hook id: ruff-format
+- files were modified by this hook
+
+diff --git a/sdcm/utils/foo.py b/sdcm/utils/foo.py
+--- a/sdcm/utils/foo.py
++++ b/sdcm/utils/foo.py
+@@ -1,2 +1,2 @@
+-x=1
++x = 1
+ruff.................................................................Failed
+- hook id: ruff
+- exit code: 1
+
+sdcm/utils/foo.py:10:1: F401 `os` imported but unused
+check yaml...........................................(no files to check)Skipped
