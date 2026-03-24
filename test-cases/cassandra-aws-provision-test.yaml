@@ -1,4 +1,4 @@
-test_duration: 5
+test_duration: 60
 n_db_nodes: 1
 n_loaders: 1
 instance_type_db: 'r6i.xlarge'
