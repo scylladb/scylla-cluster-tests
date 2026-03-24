@@ -26,8 +26,10 @@ EOF
 cmd_checkout() {
     local pr_number="${1:?PR number required}"
     gh pr checkout "$pr_number"
-    # Print metadata for the caller to parse
-    gh pr view "$pr_number" --json baseRefName,headRefName --jq '{base: .baseRefName, head: .headRefName}'
+    # Print metadata for the caller to parse, including headRepositoryOwner
+    # so the push step knows which remote to target (e.g. scylladbbot, not origin)
+    gh pr view "$pr_number" --json baseRefName,headRefName,headRepositoryOwner \
+        --jq '{base: .baseRefName, head: .headRefName, headRepoOwner: .headRepositoryOwner.login}'
 }
 
 cmd_resolve_commit() {
