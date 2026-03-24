@@ -182,6 +182,7 @@ from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from sdcm.stress.latte_thread import LatteStressThread
 from sdcm.cdclog_reader_thread import CDCLogReaderThread
 from sdcm.logcollector import (
+    CassandraLogCollector,
     KubernetesAPIServerLogCollector,
     KubernetesLogCollector,
     KubernetesMustGatherLogCollector,
@@ -4378,8 +4379,18 @@ class ClusterTester(unittest.TestCase):
             {
                 "name": "db_cluster",
                 "nodes": self.db_cluster and self.db_cluster.nodes,
-                "collector": ScyllaLogCollector,
+                "collector": CassandraLogCollector
+                if isinstance(self.db_cluster, BaseCassandraCluster)
+                else ScyllaLogCollector,
                 "logname": "db_cluster_log",
+            },
+            {
+                "name": "cs_db_cluster",
+                "nodes": self.cs_db_cluster and self.cs_db_cluster.nodes,
+                "collector": CassandraLogCollector
+                if isinstance(self.cs_db_cluster, BaseCassandraCluster)
+                else ScyllaLogCollector,
+                "logname": "cs_db_cluster_log",
             },
             {
                 "name": "loaders",
