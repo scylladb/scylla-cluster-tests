@@ -47,17 +47,21 @@ def call(Map args) {
     cmdParts.add("--stage-name '\"${stageName}\"'")
     cmdParts.add("--build-url '\"${env.BUILD_URL}\"'")
 
-    def summary = sh(
+    def rawOutput = sh(
         script: "#!/bin/bash\nset -o pipefail\n" + cmdParts.join(" \\\n    "),
         returnStdout: true,
     ).trim()
+
+    // Strip hydra.sh noise (Docker pull messages, "Going to run" etc.)
+    // by extracting only the content starting from the HTML comment marker.
+    def marker = "<!-- sct-test-summary -->"
+    def markerIdx = rawOutput.indexOf(marker)
+    def summary = markerIdx >= 0 ? rawOutput.substring(markerIdx) : rawOutput
 
     if (!summary) {
         echo "postTestSummaryComment: empty summary output, skipping"
         return
     }
-
-    def marker = "<!-- sct-test-summary -->"
 
     // Update existing comment if one exists, otherwise create a new one
     def existingComment = pullRequest.comments.find { it.body.contains(marker) }
