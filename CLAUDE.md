@@ -1,0 +1,20 @@
+# CLAUDE.md
+
+Project instructions for Claude Code. This file is loaded at session start.
+
+## Repository
+
+Scylla Cluster Tests (SCT) — test framework for ScyllaDB. See below for full repository overview, architecture, and conventions.
+
+@AGENTS.md
+
+## Skills
+
+@skills/designing-skills/SKILL.md
+@skills/fix-backport-conflicts/SKILL.md
+@skills/profiling-sct-code/SKILL.md
+@skills/writing-plans/SKILL.md
+@skills/writing-unit-tests/SKILL.md
+@skills/writing-integration-tests/SKILL.md
+@skills/commit-summary/SKILL.md
+@skills/writing-nemesis/SKILL.md
