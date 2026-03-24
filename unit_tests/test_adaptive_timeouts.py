@@ -21,7 +21,12 @@ from invoke import Result
 
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.adaptive_timeouts.load_info_store import AdaptiveTimeoutStore, NodeLoadInfoService
+from sdcm.utils.adaptive_timeouts.load_info_store import (
+    AdaptiveTimeoutStore,
+    NodeLoadInfoService,
+    _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC,
+    _I4I_LARGE_SHARD_COUNT,
+)
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout, TABLETS_HARD_TIMEOUT
 from unit_tests.lib.fake_cluster import DummyDbCluster
 
@@ -112,6 +117,7 @@ Token                  : (invoke with -T/--tokens to see all 256 tokens)
         r"curl -s localhost:9100/metrics": Result(stdout=node_exporter_metrics, exited=0),
         r"nodetool info": Result(stdout=nodetool_info, exited=0),
         r"uptime": Result(stdout=" 10:00:00 up 1 day,  1:00,  1 user,  load average: 1.20, 2.30, 1.60", exited=0),
+        r"cat /etc/scylla/scylla.yaml": Result(stdout="", exited=0),
     }
     remoter = RemoteCmdRunnerBase.create_remoter("test-node-host")
     yield remoter
@@ -225,3 +231,36 @@ def test_node_disk_size_mb(fake_node):
     )
     # 107374182400 bytes / 1024 / 1024 == 102400 MB
     assert service.node_disk_size_mb == 102400
+
+
+def _make_service(fake_node, scylla_yaml_content: str) -> NodeLoadInfoService:
+    """Helper that builds a NodeLoadInfoService with a custom scylla.yaml mock."""
+    fake_node.remoter.result_map[r"cat /etc/scylla/scylla.yaml"] = Result(stdout=scylla_yaml_content, exited=0)
+    return NodeLoadInfoService(
+        remoter=fake_node.remoter,
+        name=fake_node.name,
+        scylla_version=fake_node.scylla_version_detailed,
+        node_idx="0",
+    )
+
+
+def test_expected_throughput_uses_scylla_yaml_value(fake_node):
+    """When stream_io_throughput_mb_per_sec is set and non-zero, return it directly."""
+    service = _make_service(fake_node, "stream_io_throughput_mb_per_sec: 200\n")
+    assert service.expected_throughput == 200.0
+
+
+def test_expected_throughput_falls_back_to_estimate_when_missing(fake_node):
+    """When stream_io_throughput_mb_per_sec is absent, estimate from shard count.
+
+    The fixture has 3 shards, so the estimate is _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3 == 103.5.
+    """
+    service = _make_service(fake_node, "cluster_name: test\n")
+    # shards_count == 3 (3 scylla_lsa_free_space entries in the metrics fixture)
+    assert service.expected_throughput == _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
+
+
+def test_expected_throughput_falls_back_to_estimate_when_zero(fake_node):
+    """When stream_io_throughput_mb_per_sec is explicitly 0, fall back to the estimate."""
+    service = _make_service(fake_node, "stream_io_throughput_mb_per_sec: 0\n")
+    assert service.expected_throughput == _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
