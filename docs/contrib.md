@@ -127,7 +127,7 @@ To add a new reusable prompt:
 
    * `sdcm.cluster`: Base classes for Clusters
    * `sdcm.remote`: SSH library
-   * `sdcm.nemesis`: Nemesis classes (a nemesis is a class that does disruption in the node)
+   * `sdcm.nemesis`: Nemesis package — chaos engineering framework with auto-discovery, a registry for filtering by flags, and individual disruption classes (see [docs/nemesis.md](nemesis.md))
    * `sdcm.tester`: Contains the base test class, see below.
 
 2. A data directory, aptly named `data_dir`. It contains:

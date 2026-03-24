@@ -146,7 +146,7 @@ When writing plans for SCT, consider these domain-specific areas:
 |------|----------------|
 | **Backends** | Which backends are affected? (AWS, GCE, Azure, Docker, K8S, Baremetal) |
 | **Configuration** | New parameters in `sdcm/sct_config.py` with defaults in `defaults/test_default.yaml` |
-| **Nemesis** | Impact on chaos operations in `sdcm/nemesis.py` and `sdcm/nemesis_registry.py` |
+| **Nemesis** | Impact on chaos operations in `sdcm/nemesis/` (package: `__init__.py`, `registry.py`, `monkey/`, `utils/`) |
 | **Monitoring** | Changes to Prometheus metrics, Grafana dashboards, or Argus reporting |
 | **CI/CD** | Jenkins pipeline changes in `jenkins-pipelines/` |
 | **Provision labels** | Which provision test labels to add (`provision-aws`, `provision-gce`, etc.) |

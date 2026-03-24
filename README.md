@@ -142,17 +142,19 @@ hydra run-test longevity_test.LongevityTest.test_custom_time --backend docker \
 -c configurations/nemesis/AbortRepairMonkey.yaml \
 -c configurations/nemesis/additional_configs/docker_backend.yaml
 ```
-For debugging a specific nemesis setup you can edit a nemesis class name to run.
-Change the relevant parameters and nemesis class name to the one you want to debug in test-cases/PR-provision-test-docker.yaml like below:
-```
+For debugging a specific nemesis setup you can edit the nemesis configuration to run.
+Change the relevant parameters in test-cases/PR-provision-test-docker.yaml like below:
+```yaml
 test_duration: 60
 stress_cmd: "cassandra-stress write cl=QUORUM duration=5m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) ' -mode cql3 native -rate threads=10 -pop seq=1..100000 -log interval=5"
 n_db_nodes: 4
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'DecommissionMonkey'
+nemesis_selector: 'DecommissionMonkey'  # Filter to run only DecommissionMonkey
 nemesis_interval: 5
 ```
-For more details on docker backend supported nemesis, please check [docker backend specifics](./docs/docker-backend-overview.md)
+The `nemesis_class_name` specifies the runner (e.g. `SisyphusMonkey`), while `nemesis_selector` filters which nemesis classes to include using boolean flag expressions or class names.
+For more details on nemesis architecture, flags, and configuration, see the [Nemesis Developer Guide](./docs/nemesis.md).
+For docker backend supported nemesis, check [docker backend specifics](./docs/docker-backend-overview.md).
 ```bash
 #### You can also enter the containerized SCT environment using:
 ```bash

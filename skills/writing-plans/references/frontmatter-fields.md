@@ -36,7 +36,7 @@ The functional area of the codebase this plan affects. Must be one of:
 | Domain Key | Covers | Codebase Areas |
 |-----------|--------|----------------|
 | `cluster` | Cluster management, node lifecycle, backends | `sdcm/cluster*.py`, `sdcm/provision/` |
-| `nemesis` | Chaos engineering, disruptors | `sdcm/nemesis.py`, `sdcm/nemesis_registry.py` |
+| `nemesis` | Chaos engineering, disruptors | `sdcm/nemesis/` (package: `__init__.py`, `registry.py`, `generator.py`, `monkey/`, `utils/`) |
 | `stress-tools` | Load generators | `sdcm/stress/`, `*_thread.py` |
 | `monitoring` | Metrics, dashboards, reporting | `sdcm/monitorstack/`, `sdcm/reporting/` |
 | `events` | Event system | `sdcm/sct_events/` |
