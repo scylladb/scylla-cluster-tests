@@ -3351,7 +3351,7 @@ Stress command to be run before upgrade starts (preload/validation stage). This 
 
 **default:** N/A
 
-**type:** str (appendable)
+**type:** str_or_list (appendable)
 
 
 ## **large_partition_stress_during_upgrade** / SCT_LARGE_PARTITION_STRESS_DURING_UPGRADE
@@ -3360,7 +3360,7 @@ Stress command to be run during rolling upgrade while nodes are being upgraded. 
 
 **default:** N/A
 
-**type:** str (appendable)
+**type:** str_or_list (appendable)
 
 
 ## **stress_during_entire_upgrade** / SCT_STRESS_DURING_ENTIRE_UPGRADE
