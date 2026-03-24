@@ -95,8 +95,12 @@ The `sdcm/` directory is the heart of the SCT framework. Here's a detailed break
 #### Core Files
 - `cluster.py` - Base classes for cluster management, node operations, and connectivity
 - `tester.py` - Base test class used by all tests, handles test setup/teardown and reporting
-- `nemesis.py` - Core chaos engineering framework with disruptors for testing resilience
-- `nemesis_registry.py` - Registry of all chaos operations available for testing
+- `nemesis/` - Chaos engineering module (package) — see [Nemesis Developer Guide](docs/nemesis.md) for details
+  - `__init__.py` - `NemesisBaseClass`, `NemesisRunner`, all `disrupt_*` methods, and auto-discovery mechanism
+  - `registry.py` - `NemesisRegistry` for discovering and filtering nemesis by boolean flag expressions
+  - `generator.py` - `NemesisJobGenerator` for generating Jenkins pipelines and test configs
+  - `monkey/` - Individual nemesis classes (`NemesisBaseClass` subclasses) and composite runners (`NemesisRunner` subclasses)
+  - `utils/` - Shared utilities: `NemesisNodeAllocator`, index helpers, node operations (iptables, SIGSTOP)
 - `sct_config.py` - Configuration management and parameter handling
 - `log.py` - Logging setup and utilities
 - `db_stats.py` - Database metrics collection using Prometheus
@@ -203,7 +207,15 @@ The `sdcm/` directory is the heart of the SCT framework. Here's a detailed break
 
 ### Nemesis Operations
 
-Nemesis are chaos operations that test database resilience. Common types:
+Nemesis are chaos operations that test database resilience. For a comprehensive guide, see [docs/nemesis.md](docs/nemesis.md).
+
+**Architecture:**
+- `NemesisBaseClass` — Abstract base for individual disruptions (a.k.a. "Monkeys"). Each subclass sets boolean flags and implements `disrupt()`.
+- `NemesisRunner` — Orchestrator that contains all `disrupt_*` methods (the actual disruption logic), handles node selection, metrics, and error reporting.
+- `NemesisRegistry` — Discovery mechanism that filters nemesis using boolean flag expressions (e.g. `"not disruptive"`, `"topology_changes and not limited"`).
+- `NemesisNodeAllocator` — Thread-safe singleton preventing conflicting nemesis on the same node.
+
+**Common nemesis categories:**
 - Node operations (stop/start, reboot, terminate, decommission)
 - Network disruptions (block, delay, partition)
 - Disk operations (fill disk, corrupt data)
@@ -309,3 +321,31 @@ Jenkins pipelines are in `jenkins-pipelines/` organized by:
 - `manager/` - Scylla Manager tests
 
 Pipeline utilities are in `vars/` directory.
+
+## Skills
+
+Modular, task-specific guidance for AI agents lives in the `skills/` directory. Each skill is a self-contained directory with a `SKILL.md` entry point and optional `references/` and `workflows/` subdirectories.
+
+| Skill | Description | Path |
+|-------|-------------|------|
+| designing-skills | Guides the design and structuring of AI agent skills for SCT. Use when creating new skills, reviewing existing skills, or editing SKILL.md files. | `skills/designing-skills/SKILL.md` |
+| fix-backport-conflicts | Fix inline merge conflict markers in backport PRs. Use when a backport PR has unresolved conflict markers or a cherry-pick produced merge conflicts. | `skills/fix-backport-conflicts/SKILL.md` |
+| profiling-sct-code | Profile Python code in SCT to find CPU, memory, and concurrency bottlenecks. Use when a test or operation is unexpectedly slow or memory usage grows unbounded. | `skills/profiling-sct-code/SKILL.md` |
+| writing-plans | Use when asked to generate an implementation plan, draft a plan, or design a phased feature rollout for SCT. | `skills/writing-plans/SKILL.md` |
+| writing-unit-tests | Guides writing and debugging unit tests for SCT using pytest. Use when creating test files in unit_tests/, adding test cases, or mocking external services. | `skills/writing-unit-tests/SKILL.md` |
+| writing-integration-tests | Guides writing integration tests that interact with real external services. Use when creating tests requiring Docker, AWS, GCE, Azure, OCI, or Kubernetes backends. | `skills/writing-integration-tests/SKILL.md` |
+| commit-summary | Generate weekly commit summary reports for the SCT repository | `skills/commit-summary/SKILL.md` |
+
+When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
+
+## Implementation Plans
+
+I have strict standards for feature planning. You can find the full guidelines in `docs/plans/INSTRUCTIONS.md`.
+
+**Rule:** When I ask you to "generate an implementation plan" or "draft a plan", you MUST read `docs/plans/INSTRUCTIONS.md` and follow the structure defined there. Do not apply this format to regular coding questions.
+
+**Plan types:** The `writing-plans` skill supports two formats:
+- **Full plans** (7-section, `docs/plans/`): For multi-phase work, 1K+ LOC. Requires YAML frontmatter, MASTER.md registration, and progress.json tracking. PRs with a `plans` label use this format.
+- **Mini-plans** (4-section, `docs/plans/mini-plans/`): For single-PR changes under ~1K LOC. No frontmatter, no registration. Disposable after merge.
+
+The skill routes automatically based on the PR `plans` label, user input, or task size estimate.
