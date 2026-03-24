@@ -20,24 +20,25 @@ commits with original authorship and messages preserved.
 
 - `$ARGUMENTS` — one or more PR numbers to fix (e.g. `13920` or `13920 13921 13925`)
 
-## Modes
+## Dispatch — ALWAYS use a subagent
 
-### Single PR mode
+**Every PR MUST be dispatched to a subagent with `isolation: "worktree"`.**
+Never run the workflow in the current working directory — it checks out branches, resets HEAD,
+and rewrites commits, which would destroy any in-progress work. The worktree gives each PR
+a completely isolated git state.
 
-When `$ARGUMENTS` contains a single PR number, follow the Workflow below directly.
+For each PR number in `$ARGUMENTS`, launch a parallel Agent with:
+- `isolation: "worktree"`
+- `subagent_type: "general-purpose"`
+- A prompt containing: the PR number, and the full Workflow below (copy it into the prompt)
 
-### Bulk mode
+After all subagents complete, summarize which PRs succeeded and which failed or had ambiguous
+conflicts requiring user input. Remind the user to force-push each PR branch after reviewing.
 
-When `$ARGUMENTS` contains multiple PR numbers (space-separated):
+## Workflow (executed by the subagent inside its worktree)
 
-1. **Dispatch each PR to a parallel subagent** using the Agent tool with `isolation: "worktree"`.
-   Each subagent receives one PR number and follows the full Workflow below independently.
-   Because each subagent runs in its own worktree, there are no branch or stash collisions.
-2. **Collect results** — after all subagents complete, summarize which PRs succeeded and which
-   failed or had ambiguous conflicts requiring user input.
-3. **Force-push reminder** — remind the user to force-push each PR branch after reviewing.
-
-## Workflow
+**All git commands below run from the worktree's working directory. Never use `git -C` to
+reference the main repository.**
 
 ### 1. Checkout the PR
 
@@ -56,6 +57,7 @@ git fetch upstream <baseRefName>
 ### 3. Check for inline conflict markers
 
 Search all tracked files for conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`).
+Exclude false positives in non-code files (e.g. `docker/jepsen/*`, `*.md`).
 If none are found, report "No conflicts found" and stop.
 
 ### 4. Understand each conflict
@@ -122,9 +124,10 @@ After the conflicts are resolved and recommitted:
 
 ## Important rules
 
+- **Always dispatch to a worktree subagent** — never run the workflow in the current working directory
 - **Never use `git stash`** — stashes are global across worktrees and cause collisions in parallel runs. Use a temporary commit instead.
+- **Never use `git -C`** — all commands run from the worktree's working directory directly
 - Never modify commit messages beyond what's needed (preserve co-author lines, cherry-pick references, etc.)
 - Preserve original author attribution using `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL` environment variables
 - Do NOT force push — leave that decision to the user
 - If a conflict resolution is ambiguous, ask the user before proceeding
-- In bulk mode, each PR runs in its own worktree via `isolation: "worktree"` to avoid branch and state collisions
