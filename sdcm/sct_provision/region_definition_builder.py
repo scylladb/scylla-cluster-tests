@@ -183,7 +183,7 @@ class DefinitionBuilder(abc.ABC):
         n_monitor_nodes = self._get_node_count_for_each_region(self.params.get("n_monitor_nodes"))
 
         # skip DB node provisioning for Scylla Cloud
-        if self.params.get("cluster_backend") == "xcloud" or self.params.get("xcloud_provisioning_mode"):
+        if self.params.get("cluster_backend") == "xcloud" or self.params.get("xcloud_provider"):
             n_db_nodes = [0] * len(self.regions)
 
         for dc_idx, (region, db_nodes, loader_nodes, monitor_nodes) in enumerate(
@@ -250,9 +250,16 @@ class RegionDefinitionBuilder:
         Must be used before calling RegionDefinitionBuilder for given backend."""
         self._builder_classes[backend] = builder_class
 
-    def get_builder(self, params: SCTConfiguration, test_config: TestConfig) -> DefinitionBuilder:
+    def get_builder(self, params: SCTConfiguration, test_config: TestConfig, backend: str = None) -> DefinitionBuilder:
         """Creates RegionDefinition for each region based on SCTConfiguration.
 
-        Prior use, must register builder for given backend."""
-        backend = params.get("cluster_backend")
+        Args:
+            params: SCT configuration object.
+            test_config: Test configuration object.
+            backend: explicit backend key to select the builder.
+                Uses when the cluster class is known (e.g. GCECluster needs "gce"), but cluster_backend
+                configuration parameter may be set to something else (e.g. "xcloud").
+                When None, falls back to params.get("cluster_backend").
+        """
+        backend = backend or params.get("cluster_backend")
         return self._builder_classes[backend](params, test_config)

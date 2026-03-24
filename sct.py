@@ -301,11 +301,11 @@ def provision_resources(backend, test_name: str, config: str):
             # 'cluster_backend' SCT config parameter to match the provider selected for cloud cluster.
             # This is only needed when provisioning resources is executed as a separate step of a test run
             if cloud_provider == "aws":
-                params.update({"cluster_backend": "aws", "xcloud_provisioning_mode": True})
+                params.update({"cluster_backend": "aws"})
                 try:
                     SCTProvisionLayout(params=params).provision()
                 finally:
-                    params.update({"cluster_backend": original_backend, "xcloud_provisioning_mode": False})
+                    params.update({"cluster_backend": original_backend})
         else:
             raise ValueError(f"backend {backend} is not supported")
     except Exception as exc:
