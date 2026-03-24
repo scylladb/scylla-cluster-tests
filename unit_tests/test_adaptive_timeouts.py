@@ -186,14 +186,17 @@ def test_decommission_timeout_is_calculated_and_stored(publish_or_dump, fake_nod
 
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
 @mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
-def test_tablets_decommission_uses_predefined_timeouts(
+def test_tablets_decommission_timeout_is_calculated_from_data_size(
     hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
 ):
     mock_tablets_feature.return_value = True
     with adaptive_timeout(
         operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
     ) as timeout:
-        assert timeout == TABLETS_HARD_TIMEOUT
+        # node_data_size_mb=102400, expected_throughput=69/2*3=103.5 → estimated≈989.4s
+        # hard = int(estimated * 4) = 3957
+        expected_hard = int(102400 / (_I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3) * 4)
+        assert timeout == expected_hard
 
     soft_timeout_mock.assert_not_called()
     hard_timeout_mock.assert_not_called()
