@@ -45,7 +45,8 @@ permissions, keeping the blast radius small. Available subcommands:
 |------------|---------|
 | `checkout <PR>` | Checkout PR branch, print base/head ref as JSON |
 | `resolve-commit` | Stage all + temp commit (--no-verify) |
-| `recommit <BASE_REF> <HASH>` | Recommit one original commit with preserved authorship |
+| `prepare-recommit <BASE_REF>` | Tag resolved tree, hard-reset to base for clean recommit |
+| `recommit <HASH>` | Copy files from resolved tree for one commit, commit with original author |
 | `push <REMOTE> <BRANCH>` | Force-push with --force-with-lease |
 | `update-pr <PR>` | Remove conflicts label + mark ready |
 | `verify` | Check no conflict markers remain |
@@ -98,7 +99,20 @@ Must print "CLEAN" before proceeding.
 
 ### 5. Recommit cleanly
 
-1. **Save resolved state**:
+This is the most critical step. The resolved files must be attributed to the correct
+commits, and ONLY those files — no unrelated diffs must leak in.
+
+**Why this is tricky:** After resolving conflicts, the working tree contains the resolved
+state on top of the PR branch. A naive `git reset` + `git add <files>` would stage the
+full diff of each file against the base — including unrelated changes that were already
+in the branch before the backport. The script avoids this by:
+1. Saving the resolved tree as a git tag
+2. Hard-resetting to the base (clean slate)
+3. Extracting ONLY the specific files from the resolved tree via `git show <tag>:<file>`
+
+**Steps:**
+
+1. **Save resolved state as temp commit**:
    ```
    .claude/scripts/fix-backport.sh resolve-commit
    ```
@@ -109,22 +123,28 @@ Must print "CLEAN" before proceeding.
    ```
    Note the original commit hashes (all except TEMP).
 
-3. **Mixed reset** to the base:
+3. **Prepare for recommit** — tags resolved tree and hard-resets to base:
    ```
-   git reset upstream/<baseRefName>
+   .claude/scripts/fix-backport.sh prepare-recommit upstream/<baseRefName>
    ```
-   (Mixed reset — NOT `--soft` — so changes become unstaged.)
+   After this, the working tree is clean and matches the base branch exactly.
 
 4. **Recommit each original commit** (oldest first):
    ```
-   .claude/scripts/fix-backport.sh recommit upstream/<baseRefName> <original-hash>
+   .claude/scripts/fix-backport.sh recommit <original-hash>
    ```
-   The script extracts author, message, and file list from the original hash automatically.
+   The script automatically:
+   - Reads the original commit's file list from `git show --name-only`
+   - Copies ONLY those files from the saved resolved tree (`_fix_backport_resolved` tag)
+   - Commits with the original author name, email, and full message
 
-5. **Verify** commit count and messages:
+5. **Verify** commit count, messages, and file lists:
    ```
    git log --oneline upstream/<baseRefName>..HEAD
+   git show --stat HEAD
    ```
+   The commit count MUST match the original PR. Each commit MUST touch only the
+   files from the original commit — no extra files.
 
 ### 6. Final verification
 
@@ -134,7 +154,8 @@ Must print "CLEAN" before proceeding.
 
 Also confirm:
 - Commit count matches the original PR
-- Each commit's `--stat` matches expected files
+- Each commit's `--stat` matches expected files (compare with parent PR if needed)
+- No files outside the original commit's scope are included
 
 ### 7. Push and update PR
 
@@ -151,5 +172,6 @@ The `headRefName` comes from step 1's JSON output.
 - **Use `.claude/scripts/fix-backport.sh`** for all dangerous operations — raw git reset/commit --no-verify/push are not in the permission allowlist
 - **Never use `git stash`** — stashes are global across worktrees
 - **Never use `git -C`** — all commands run from the worktree working directory
+- **Verify file scope after recommit** — each commit must touch ONLY the files from the original commit, nothing else. If `git show --stat` shows extra files, the recommit is wrong.
 - Never modify commit messages beyond what's needed (preserve co-author lines, cherry-pick references, etc.)
 - If a conflict resolution is ambiguous, ask the user before proceeding
