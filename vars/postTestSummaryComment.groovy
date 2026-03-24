@@ -44,8 +44,8 @@ def call(Map args) {
         cmdParts.add("--precommit-log \"${precommitLog}\"")
     }
 
-    cmdParts.add("--stage-name \"${stageName}\"")
-    cmdParts.add("--build-url \"${env.BUILD_URL}\"")
+    cmdParts.add("--stage-name '\"${stageName}\"'")
+    cmdParts.add("--build-url '\"${env.BUILD_URL}\"'")
 
     def summary = sh(
         script: "#!/bin/bash\nset -o pipefail\n" + cmdParts.join(" \\\n    "),
