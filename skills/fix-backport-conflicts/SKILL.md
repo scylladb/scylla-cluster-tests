@@ -61,7 +61,9 @@ permissions, keeping the blast radius small. Available subcommands:
 .claude/scripts/fix-backport.sh checkout $PR_NUMBER
 ```
 
-This prints JSON with `base` and `head` fields. Save both.
+This prints JSON with `base`, `head`, and `headRepoOwner` fields. Save all three.
+The `headRepoOwner` is the git remote name to push to (e.g. `scylladbbot`, not `origin`).
+Backport PRs are typically created by bots on their own forks.
 
 Then fetch the base branch:
 ```
@@ -160,11 +162,13 @@ Also confirm:
 ### 7. Push and update PR
 
 ```
-.claude/scripts/fix-backport.sh push origin <headRefName>
+.claude/scripts/fix-backport.sh push <headRepoOwner> <headRefName>
 .claude/scripts/fix-backport.sh update-pr $PR_NUMBER
 ```
 
-The `headRefName` comes from step 1's JSON output.
+**CRITICAL:** Use `headRepoOwner` from step 1 as the remote — NOT `origin`.
+Backport PRs are created by bots (e.g. `scylladbbot`) on their forks. Pushing
+to `origin` goes to the wrong fork and leaves the PR unchanged.
 
 ## Important rules
 
