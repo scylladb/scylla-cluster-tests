@@ -37,13 +37,15 @@ conflicts requiring user input. Remind the user to review the changes.
 
 ## Helper Script
 
-All dangerous git operations (reset, commit --no-verify, force-push) are wrapped in
+All dangerous git operations (rebase, reset, commit --no-verify, force-push) are wrapped in
 `.claude/scripts/fix-backport.sh`. This script is the ONLY command allowed in project
 permissions, keeping the blast radius small. Available subcommands:
 
 | Subcommand | Purpose |
 |------------|---------|
-| `checkout <PR>` | Checkout PR branch, print base/head ref as JSON |
+| `checkout <PR>` | Checkout PR branch, print base/head/headRepoOwner as JSON |
+| `rebase <BASE_REF>` | Fetch latest base branch and rebase PR onto it |
+| `rebase-continue` | Continue rebase after resolving conflicts |
 | `resolve-commit` | Stage all + temp commit (--no-verify) |
 | `prepare-recommit <BASE_REF>` | Tag resolved tree, hard-reset to base for clean recommit |
 | `recommit <HASH>` | Copy files from resolved tree for one commit, commit with original author |
@@ -65,20 +67,35 @@ This prints JSON with `base`, `head`, and `headRepoOwner` fields. Save all three
 The `headRepoOwner` is the git remote name to push to (e.g. `scylladbbot`, not `origin`).
 Backport PRs are typically created by bots on their own forks.
 
-Then fetch the base branch:
+### 2. Rebase onto the latest base branch
+
 ```
-git fetch upstream <baseRefName>
+.claude/scripts/fix-backport.sh rebase upstream/<baseRefName>
 ```
 
-### 2. Check for inline conflict markers
+This fetches the latest state of the base branch and rebases the PR commits onto it.
+Rebasing BEFORE resolving conflicts ensures we work against the current target code.
+If we resolved first and rebased after, the rebase could introduce new conflicts,
+requiring double work.
+
+**If the rebase prints `REBASE_OK`:** The PR is now up to date with the base. Proceed
+to step 3.
+
+**If the rebase prints `REBASE_CONFLICTS`:** The rebase stopped because git couldn't
+auto-resolve the cherry-pick against the latest base. This is the expected case for
+backport PRs with the `conflicts` label. The conflicted files are in the working tree.
+Skip to step 3 (the conflict markers are already there from the rebase).
+
+### 3. Check for inline conflict markers
 
 ```
 .claude/scripts/fix-backport.sh verify
 ```
 
-If it prints "CLEAN", report "No conflicts found" and stop.
+If it prints "CLEAN", the rebase resolved everything automatically. Run
+`rebase-continue` if needed, then skip to step 7 (push).
 
-### 3. Understand each conflict
+### 4. Understand each conflict
 
 Read each conflicted file. For each conflict block, identify:
 - **HEAD side** — changes already in the base branch
@@ -90,7 +107,7 @@ Determine the correct resolution by combining both sides:
 - Use the incoming commit's architectural approach when that's the purpose of the backport
 - Preserve additions from HEAD that don't conflict with the incoming approach
 
-### 4. Resolve the conflicts
+### 5. Resolve the conflicts
 
 Edit the files to remove all conflict markers and produce the correct merged code.
 Then verify:
@@ -99,62 +116,27 @@ Then verify:
 ```
 Must print "CLEAN" before proceeding.
 
-### 5. Recommit cleanly
+Then complete the rebase:
+```
+git add <resolved-files>
+.claude/scripts/fix-backport.sh rebase-continue
+```
 
-This is the most critical step. The resolved files must be attributed to the correct
-commits, and ONLY those files — no unrelated diffs must leak in.
+If there are multiple commits being rebased and the next one also has conflicts,
+repeat steps 3-5 for each.
 
-**Why this is tricky:** After resolving conflicts, the working tree contains the resolved
-state on top of the PR branch. A naive `git reset` + `git add <files>` would stage the
-full diff of each file against the base — including unrelated changes that were already
-in the branch before the backport. The script avoids this by:
-1. Saving the resolved tree as a git tag
-2. Hard-resetting to the base (clean slate)
-3. Extracting ONLY the specific files from the resolved tree via `git show <tag>:<file>`
+### 6. Verify the result
 
-**Steps:**
-
-1. **Save resolved state as temp commit**:
-   ```
-   .claude/scripts/fix-backport.sh resolve-commit
-   ```
-
-2. **Identify commits** ahead of base (excluding the TEMP commit):
-   ```
-   git log --oneline upstream/<baseRefName>..HEAD
-   ```
-   Note the original commit hashes (all except TEMP).
-
-3. **Prepare for recommit** — tags resolved tree and hard-resets to base:
-   ```
-   .claude/scripts/fix-backport.sh prepare-recommit upstream/<baseRefName>
-   ```
-   After this, the working tree is clean and matches the base branch exactly.
-
-4. **Recommit each original commit** (oldest first):
-   ```
-   .claude/scripts/fix-backport.sh recommit <original-hash>
-   ```
-   The script automatically:
-   - Reads the original commit's file list from `git show --name-only`
-   - Copies ONLY those files from the saved resolved tree (`_fix_backport_resolved` tag)
-   - Commits with the original author name, email, and full message
-
-5. **Verify** commit count, messages, and file lists:
-   ```
-   git log --oneline upstream/<baseRefName>..HEAD
-   git show --stat HEAD
-   ```
-   The commit count MUST match the original PR. Each commit MUST touch only the
-   files from the original commit — no extra files.
-
-### 6. Final verification
+After the rebase completes:
 
 ```
 .claude/scripts/fix-backport.sh verify
+git log --oneline upstream/<baseRefName>..HEAD
+git show --stat HEAD
 ```
 
-Also confirm:
+Confirm:
+- No conflict markers remain
 - Commit count matches the original PR
 - Each commit's `--stat` matches expected files (compare with parent PR if needed)
 - No files outside the original commit's scope are included
@@ -173,9 +155,10 @@ to `origin` goes to the wrong fork and leaves the PR unchanged.
 ## Important rules
 
 - **Always dispatch to a worktree subagent** — never run the workflow in the current working directory
+- **Always rebase onto the latest base branch first** — resolving stale conflicts wastes work if the rebase introduces new ones
 - **Use `.claude/scripts/fix-backport.sh`** for all dangerous operations — raw git reset/commit --no-verify/push are not in the permission allowlist
 - **Never use `git stash`** — stashes are global across worktrees
 - **Never use `git -C`** — all commands run from the worktree working directory
-- **Verify file scope after recommit** — each commit must touch ONLY the files from the original commit, nothing else. If `git show --stat` shows extra files, the recommit is wrong.
+- **Verify file scope after rebase** — each commit must touch ONLY the files from the original commit, nothing else
 - Never modify commit messages beyond what's needed (preserve co-author lines, cherry-pick references, etc.)
 - If a conflict resolution is ambiguous, ask the user before proceeding
