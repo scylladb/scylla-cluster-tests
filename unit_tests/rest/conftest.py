@@ -9,16 +9,23 @@
 #
 # See LICENSE for more details.
 #
-# Copyright (c) 2022 ScyllaDB
+# Copyright (c) 2026 ScyllaDB
+import pytest
+
+from sdcm.remote.libssh2_client import Result
 
 
-from functools import partial
+class FakeRemoter:
+    def run(self, cmd: str, timeout: int, retry: int) -> Result:
+        return Result(stdout=cmd, stderr="", exited=0)
 
-from sdcm.rest.compaction_manager_client import CompactionManagerClient
+
+class FakeNode:
+    @property
+    def remoter(self):
+        return FakeRemoter()
 
 
-def test_compaction_manager_stop_compaction(fake_node):
-    client = CompactionManagerClient(fake_node)
-    result = partial(client.stop_compaction, compaction_type="reshape")()
-
-    assert result.stdout == 'curl -v -X POST "http://localhost:10000/compaction_manager/stop_compaction?type=RESHAPE"'
+@pytest.fixture
+def fake_node():
+    return FakeNode()
