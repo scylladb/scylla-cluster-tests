@@ -82,15 +82,23 @@ This is the critical step — the resolved changes must be attributed to the cor
 **Important: Do NOT use `git stash`** — stashes are shared across all worktrees and will collide
 when running multiple PRs in parallel. Instead, use a temporary commit to hold resolved state.
 
-1. **Save resolved state as a temporary commit**: `git add -A && git commit -m "TEMP: resolved conflicts"`
+1. **Save resolved state as a temporary commit**: `git add -A && git commit --no-verify -m "TEMP: resolved conflicts"`
+   (Use `--no-verify` only for this temporary commit — it will be discarded. Pre-commit hooks may
+   fail in worktrees that lack installed dependencies.)
 2. **Identify commits** ahead of the base (excluding the temp commit): `git log --oneline upstream/<baseRefName>..HEAD`
    Note the original commit hashes (all except the TEMP commit).
 3. **Determine which files belong to which commit** by inspecting each commit's diff with `git show <hash> --stat`
-4. **Soft reset** to the base: `git reset --soft upstream/<baseRefName>`
+4. **Mixed reset** to the base: `git reset upstream/<baseRefName>`
+   (Use mixed reset — NOT `--soft` — so all changes become unstaged. This prevents accidentally
+   committing files that belong to other commits.)
 5. For each original commit (in order, oldest first):
-   a. Stage only the files belonging to that commit (use `git checkout <original-hash> -- <file>` for files without conflicts, and `git add <file>` for conflict-resolved files)
-   b. Unstage files belonging to later commits with `git reset HEAD -- <file>`
-   c. Commit with the **original author** (`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`) and **original commit message** (copy it exactly from `git show --format="%s%n%n%b" --no-patch <hash>`)
+   a. Stage only the files belonging to that commit: `git add <file1> <file2> ...`
+   b. Commit with the **original author** and **original commit message**:
+      ```
+      GIT_AUTHOR_NAME="<name>" GIT_AUTHOR_EMAIL="<email>" git commit --no-verify -m "<message>"
+      ```
+      Copy the full message from `git show --format="%B" --no-patch <original-hash>`.
+      Use `--no-verify` because pre-commit hooks may not work in worktrees.
 6. **Verify** the final log matches the original commit count and messages: `git log --oneline upstream/<baseRefName>..HEAD`
 
 ### 7. Final verification
