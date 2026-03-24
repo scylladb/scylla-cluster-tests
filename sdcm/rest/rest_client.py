@@ -29,23 +29,26 @@ class RestClient:
         self._host = host
         self._endpoint = endpoint
 
+    def _build_url(self, path: str) -> str:
+        return f"{self._base_url}/{path}" if path else self._base_url
+
     @cached_property
     def _base_url(self) -> str:
         return urljoin(f"{self._url_prefix}{self._host}", self._endpoint)
 
     def get(self, path: str, params: Dict[str, str] = None) -> Response:
-        url = f"{self._base_url}/{path}"
+        url = self._build_url(path)
         LOGGER.info("Sending a GET request for: %s", url)
 
         return requests.get(url=url, params=params)
 
     def post(self, path: str, params: Dict[str, str] = None) -> Response:
-        url = f"{self._base_url}/{path}"
+        url = self._build_url(path)
         LOGGER.info("Sending a POST request for: %s", url)
         return requests.post(url=url, params=params)
 
     def _prepare_request(self, method: Literal["GET", "POST"], path: str, params: dict[str, str] | None):
-        full_url = f"{self._base_url}/{path}"
+        full_url = self._build_url(path)
         prepared_request = requests.Request(method=method, url=full_url, params=params).prepare()
 
         return prepared_request
