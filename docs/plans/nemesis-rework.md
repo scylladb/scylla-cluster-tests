@@ -84,7 +84,7 @@ This method of discovery prevents further improvements
 - Better structure of all nemesis related code
 - No changes to actual tests and coverage
 
-### Phase 2a: Update existing nemesis documentation
+### Phase 2a: Update existing nemesis documentation (Done)
 
 **Objective**: Bring existing documentation up to date
 
@@ -94,6 +94,8 @@ This method of discovery prevents further improvements
 - Add/update sections about how to develop nemesis
 - Add/update section about the machinery behind nemesis
   - NemesisRegistry, NodeAllocator, NemesisJobGenerator etc.
+- Created comprehensive Nemesis Developer Guide at `docs/nemesis.md`
+- Fixed outdated references in AGENTS.md, contrib.md, writing-plans skill
 
 **Expected Impact**:
 - Simpler entrypoint for new developers to understand the concept and implementation
