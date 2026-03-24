@@ -12,6 +12,16 @@
       "phases_done": 0
     },
     {
+      "id": "pr-review-taxonomy-analysis",
+      "title": "PR Review Taxonomy Analysis",
+      "file": "pr-review-taxonomy-analysis.md",
+      "domain": "ai-tooling",
+      "status": "in_progress",
+      "created": "2026-03-20",
+      "phases_total": 4,
+      "phases_done": 3
+    },
+    {
       "id": "docker-cleanup-all-backends",
       "title": "Docker Cleanup for All Backends",
       "file": "infrastructure/docker-cleanup-all-backends.md",

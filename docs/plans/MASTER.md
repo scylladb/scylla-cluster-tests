@@ -80,6 +80,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Plan | Status | File / PR |
 |------|--------|-----------|
 | AI Skills Framework | `draft` | [ai-skills-framework.md](ai-skills-framework.md) |
+| PR Review Taxonomy Analysis | `in_progress` | [pr-review-taxonomy-analysis.md](pr-review-taxonomy-analysis.md) |
 
 ### Testing — Unit/integration test infrastructure
 
