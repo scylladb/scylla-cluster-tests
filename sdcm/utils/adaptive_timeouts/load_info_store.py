@@ -45,6 +45,8 @@ def convert_to_mb(value) -> int:
         number = float(match.group(1))
         suffix = match.group(3)
         match suffix:
+            case "B":
+                number /= 1024 * 1024
             case "KB":
                 number /= 1024
             case "GB":
@@ -129,6 +131,26 @@ class NodeLoadInfoService:
         raise ValueError("Couldn't find Load in nodetool info response")
 
     @property
+    def node_disk_size_mb(self) -> int:
+        """Total filesystem size of /var/lib/scylla in MB, sourced from node_exporter metrics.
+
+        Tries the current metric name (node_filesystem_size_bytes) first, then falls back to
+        the legacy name (node_filesystem_size) for older node_exporter versions.
+
+        Returns:
+            int: Total disk size in MB.
+
+        Raises:
+            ValueError: If neither metric is found for the /var/lib/scylla mountpoint.
+        """
+        metrics = self._get_node_exporter_metrics()
+        for prefix in ("node_filesystem_size_bytes", "node_filesystem_size"):
+            for key, value in metrics.items():
+                if key.startswith(prefix) and 'mountpoint="/var/lib/scylla"' in key:
+                    return convert_to_mb(f"{int(float(value))} B")
+        raise ValueError("Couldn't find node_filesystem_size_bytes for /var/lib/scylla in node_exporter metrics")
+
+    @property
     def cpu_load_5(self) -> float:
         return self._get_node_load()[1]
 
@@ -188,6 +210,7 @@ class NodeLoadInfoService:
             "read_iops": self.read_iops,
             "write_iops": self.write_iops,
             "node_data_size_mb": self.node_data_size_mb,
+            "node_disk_size_mb": self.node_disk_size_mb,
             "scylla_version": self._scylla_version,
         }
 
@@ -235,6 +258,7 @@ class AdaptiveTimeoutResultsTable(StaticGenericResultTable):
             ColumnMetadata(name="read_iops", unit="op/s", type=ResultType.INTEGER, visible=False),
             ColumnMetadata(name="write_iops", unit="op/s", type=ResultType.INTEGER, visible=False),
             ColumnMetadata(name="node_data_size_mb", unit="MB", type=ResultType.INTEGER, visible=False),
+            ColumnMetadata(name="node_disk_size_mb", unit="MB", type=ResultType.INTEGER, visible=False),
             ColumnMetadata(name="node_idx", unit="", type=ResultType.TEXT),
         ]
 
@@ -295,6 +319,12 @@ class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
             column="node_data_size_mb",
             row=f"#{cycle}",
             value=result.metrics.get("node_data_size_mb"),
+            status=Status.UNSET,
+        )
+        table.add_result(
+            column="node_disk_size_mb",
+            row=f"#{cycle}",
+            value=result.metrics.get("node_disk_size_mb"),
             status=Status.UNSET,
         )
         table.add_result(column="node_idx", row=f"#{cycle}", value=result.metrics.get("node_idx"), status=Status.UNSET)

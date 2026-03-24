@@ -21,7 +21,7 @@ from invoke import Result
 
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.adaptive_timeouts.load_info_store import AdaptiveTimeoutStore
+from sdcm.utils.adaptive_timeouts.load_info_store import AdaptiveTimeoutStore, NodeLoadInfoService
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout, TABLETS_HARD_TIMEOUT
 from unit_tests.lib.fake_cluster import DummyDbCluster
 
@@ -77,6 +77,15 @@ scylla_lsa_free_space{shard="0"} 3749052416.000000
 scylla_lsa_free_space{shard="1"} 3750100992.000000
 scylla_lsa_free_space{shard="2"} 3750887424.000000
     """
+    # 107374182400 bytes == 102400 MB == 100 GB
+    node_exporter_metrics = """
+node_load1 1.20
+node_load5 2.30
+node_load15 1.60
+node_boot_time_seconds 1678343052.0
+node_filesystem_size_bytes{device="/dev/sda1",fstype="ext4",mountpoint="/var/lib/scylla"} 107374182400.0
+node_filesystem_avail_bytes{device="/dev/sda1",fstype="ext4",mountpoint="/var/lib/scylla"} 53687091200.0
+    """
     nodetool_info = """
 Using /etc/scylla/scylla.yaml as the config file
 ID                     : aa7409d6-4129-4e6a-96f8-e571abdabe7c
@@ -100,6 +109,7 @@ Token                  : (invoke with -T/--tokens to see all 256 tokens)
     fake_remoter.result_map = {
         r"cat /etc/scylla.d/io_properties.yaml": Result(stdout=io_properties, stderr="", exited=0),
         r"curl -s localhost:9180/metrics": Result(stdout=scylla_metrics, exited=0),
+        r"curl -s localhost:9100/metrics": Result(stdout=node_exporter_metrics, exited=0),
         r"nodetool info": Result(stdout=nodetool_info, exited=0),
         r"uptime": Result(stdout=" 10:00:00 up 1 day,  1:00,  1 user,  load average: 1.20, 2.30, 1.60", exited=0),
     }
@@ -200,3 +210,18 @@ def test_tablets_new_node_uses_predefined_timeouts(
     hard_timeout_mock.assert_not_called()
     metrics = adaptive_timeout_store.get(operation=Operations.NEW_NODE.name)
     assert metrics[0].get("tablets_enabled") is True
+
+
+def test_node_disk_size_mb(fake_node):
+    """node_disk_size_mb should return total /var/lib/scylla filesystem size in MB.
+
+    The fixture provides node_filesystem_size_bytes = 107374182400 bytes (100 GB = 102400 MB).
+    """
+    service = NodeLoadInfoService(
+        remoter=fake_node.remoter,
+        name=fake_node.name,
+        scylla_version=fake_node.scylla_version_detailed,
+        node_idx="0",
+    )
+    # 107374182400 bytes / 1024 / 1024 == 102400 MB
+    assert service.node_disk_size_mb == 102400
