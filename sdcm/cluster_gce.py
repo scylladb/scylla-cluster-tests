@@ -327,7 +327,9 @@ class GCECluster(cluster.BaseCluster):
         self._add_disks = add_disks
         # the full node prefix will contain unique uuid, so use this for search of existing nodes
         self._node_prefix = node_prefix.lower()
-        self._definition_builder = region_definition_builder.get_builder(params, test_config=self.test_config)
+        self._definition_builder = region_definition_builder.get_builder(
+            params, test_config=self.test_config, backend="gce"
+        )
         super().__init__(
             cluster_uuid=cluster_uuid,
             cluster_prefix=cluster_prefix,

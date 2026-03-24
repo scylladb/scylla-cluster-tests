@@ -2460,7 +2460,7 @@ class ClusterTester(unittest.TestCase):
             self.monitors = NoMonitorSet()
             self.monitors_multitenant = [self.monitors]
 
-    def get_cluster_cloud(self, loader_info, db_info, monitor_info):  # noqa: PLR0912
+    def get_cluster_cloud(self, loader_info, db_info, monitor_info):  # noqa: PLR0912, PLR0914
         cloud_api_client = ScyllaCloudAPIClient(
             api_url=self.params.cloud_env_credentials["base_url"],
             auth_token=self.params.cloud_env_credentials["api_token"],
@@ -2570,13 +2570,26 @@ class ClusterTester(unittest.TestCase):
             if monitor_info["n_local_ssd"] is None:
                 monitor_info["n_local_ssd"] = self.params.get("gce_n_local_ssd_disk_monitor")
 
+            datacenters = gce_datacenter.split() if isinstance(gce_datacenter, str) else [gce_datacenter]
+            provisioners: List[GceProvisioner] = []
+            for datacenter in datacenters:
+                provisioners.append(
+                    provisioner_factory.create_provisioner(
+                        backend="gce",
+                        test_id=str(self.test_config.test_id()),
+                        region=datacenter,
+                        availability_zone=self.params.get("availability_zone"),
+                        network_name=self.params.get("gce_network"),
+                    )
+                )
+
             common_params = dict(
                 gce_image_username=self.params.get("gce_image_username"),
                 gce_network=self.params.get("gce_network"),
                 credentials=self.credentials,
                 user_prefix=user_prefix,
                 params=self.params,
-                gce_datacenter=gce_datacenter.split() if isinstance(gce_datacenter, str) else [gce_datacenter],
+                gce_datacenter=datacenters,
                 gce_service=get_gce_compute_instances_client(),
             )
 
@@ -2588,6 +2601,7 @@ class ClusterTester(unittest.TestCase):
                 gce_instance_type=loader_info["type"],
                 n_nodes=loader_info["n_nodes"],
                 add_disks=loader_additional_disks,
+                provisioners=provisioners,
                 **common_params,
             )
 
@@ -2602,6 +2616,7 @@ class ClusterTester(unittest.TestCase):
                     n_nodes=monitor_info["n_nodes"],
                     add_disks=monitor_additional_disks,
                     targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                    provisioners=provisioners,
                     **common_params,
                 )
             else:

@@ -1110,7 +1110,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         return cluster_status, "\n" + "\n".join(diagnostic_lines)
 
-    def _wait_for_cluster_ready(self, timeout: int = 600) -> None:
+    def _wait_for_cluster_ready(self, timeout: int = 1200) -> None:
         self.log.info("Waiting for Scylla Cloud cluster to be ready")
 
         def check_cluster_status():
