@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(.claude/scripts/fix-backport.sh:*)"
+      "Bash(.claude/scripts/fix-backport.sh:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git add:*)",
+      "Bash(git fetch:*)",
+      "Bash(git grep:*)",
+      "Bash(gh pr view:*)"
     ]
   },
   "hooks": {
