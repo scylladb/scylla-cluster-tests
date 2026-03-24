@@ -31,26 +31,14 @@ def get_sisyphus():
     return _create_sisyphus
 
 
-@pytest.mark.parametrize(
-    "params, expected",
-    [
-        pytest.param(
-            {"nemesis_exclude_disabled": True},
-            {"CustomNemesisAD", "CustomNemesisA", "CustomNemesisC"},
-            id="exclude_disabled",
-        ),
-        pytest.param(
-            {"nemesis_exclude_disabled": False},
-            {"CustomNemesisA", "CustomNemesisB", "CustomNemesisC", "CustomNemesisAD"},
-            id="disabled",
-        ),
-    ],
-)
-def test_disruptions_list(get_sisyphus, params, expected):
-    if params:
-        params.update(PARAMS)
-    nemesis = get_sisyphus(params=params)
-    assert set(method.__class__.__name__ for method in nemesis.disruptions_list) == expected
+def test_disruptions_list(get_sisyphus):
+    nemesis = get_sisyphus()
+    assert set(method.__class__.__name__ for method in nemesis.disruptions_list) == {
+        "CustomNemesisA",
+        "CustomNemesisB",
+        "CustomNemesisC",
+        "CustomNemesisAD",
+    }
 
 
 def test_add_sisyphus_with_filter_in_parallel_nemesis_run(tmp_path):
@@ -67,7 +55,6 @@ def test_add_sisyphus_with_filter_in_parallel_nemesis_run(tmp_path):
         "CustomNemesisC",
         "CustomNemesisA or CustomNemesisC",
     ]
-    tester.params["nemesis_exclude_disabled"] = True
     tester.params["nemesis_multiply_factor"] = 1
 
     tester.nemesis_allocator = NemesisNodeAllocator(tester)
@@ -95,8 +82,8 @@ def test_add_sisyphus_with_filter_in_parallel_nemesis_run(tmp_path):
         active_nemesis.append(sisyphus)
 
     expected_methods = [
-        {"CustomNemesisA", "CustomNemesisAD", "CustomNemesisC"},
-        {"CustomNemesisA", "CustomNemesisAD"},
+        {"CustomNemesisA", "CustomNemesisB", "CustomNemesisAD", "CustomNemesisC"},
+        {"CustomNemesisA", "CustomNemesisB", "CustomNemesisAD"},
         {"CustomNemesisC"},
         {"CustomNemesisC"},
         {"CustomNemesisA", "CustomNemesisC"},
@@ -131,7 +118,6 @@ def test_get_nemesis_class_validates_runner_subclass(tmp_path, nemesis_class_nam
     tester.db_cluster = Cluster(nodes=[Node(), Node()])
     tester.db_cluster.params = tester.params
     tester.params["nemesis_class_name"] = nemesis_class_name
-    tester.params["nemesis_exclude_disabled"] = True
     tester.params["nemesis_multiply_factor"] = 1
     tester.nemesis_allocator = NemesisNodeAllocator(tester)
 
@@ -144,14 +130,13 @@ def test_get_nemesis_class_validates_runner_subclass(tmp_path, nemesis_class_nam
     [
         pytest.param(["CustomNemesisA", "CustomNemesisAD"], None, id="valid_disruptions"),
         pytest.param(["CustomNemesisX", "CustomNemesisAD"], AssertionError, id="invalid_disruptions"),
-        pytest.param(["CustomNemesisB", "CustomNemesisC"], AssertionError, id="disabled_disruption"),
     ],
 )
 def test_build_disruptions_by_name(disruptions, expected_error):
     """
     Tests the build_disruptions_by_name method of CategoricalMonkey.
     It checks if the method correctly builds disruptions from given names
-    and raises an error for invalid or disabled disruptions.
+    and raises an error for invalid disruptions.
     """
 
     class CustomNemesis(TestNemesisClass):
@@ -162,7 +147,6 @@ def test_build_disruptions_by_name(disruptions, expected_error):
             self.disruptions_list = self.build_disruptions_by_name(disruptions)
 
     tester = FakeTester()
-    tester.params["nemesis_exclude_disabled"] = True
     ctx = pytest.raises(expected_error) if expected_error else nullcontext()
     with ctx:
         CustomNemesis(tester, None)

@@ -2056,24 +2056,12 @@ class NemesisRunner:
         if self._nemesis_selector:
             return self._nemesis_selector
 
-        nemesis_selector = self.cluster.params.get("nemesis_selector") or ""
-        if self.cluster.params.get("nemesis_exclude_disabled"):
-            if not nemesis_selector:
-                nemesis_selector = "not disabled"
-            else:
-                nemesis_selector += " and not disabled"
-        self._nemesis_selector = nemesis_selector
+        self._nemesis_selector = self.cluster.params.get("nemesis_selector") or ""
         return self._nemesis_selector
 
     @nemesis_selector.setter
     def nemesis_selector(self, value: str):
         self._nemesis_selector = value
-        if (
-            value
-            and self.cluster.params.get("nemesis_exclude_disabled")
-            and not self._nemesis_selector.endswith("and not disabled")
-        ):
-            self._nemesis_selector += " and not disabled"
 
     @property
     def _disruption_list_names(self):

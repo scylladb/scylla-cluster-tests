@@ -81,7 +81,6 @@ def test_gather_properties(registry):
             "flag_d": False,
             "flag_true": False,
             "flag_common": True,
-            "disabled": False,
         },
         "CustomNemesisB": {
             "flag_a": False,
@@ -90,7 +89,6 @@ def test_gather_properties(registry):
             "flag_d": False,
             "flag_true": True,
             "flag_common": True,
-            "disabled": True,
         },
         "CustomNemesisC": {
             "flag_a": True,
@@ -99,7 +97,6 @@ def test_gather_properties(registry):
             "flag_d": False,
             "flag_true": False,
             "flag_common": True,
-            "disabled": False,
         },
         "CustomNemesisAD": {
             "flag_a": True,
@@ -108,7 +105,6 @@ def test_gather_properties(registry):
             "flag_d": True,
             "flag_true": True,
             "flag_common": True,
-            "disabled": False,
         },
     }
 
