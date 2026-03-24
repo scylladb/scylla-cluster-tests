@@ -60,6 +60,37 @@ def _get_new_node_timeout(
         return (timeout, None), {}
 
 
+def _get_tablet_migration_timeout(
+    node_info_service: NodeLoadInfoService,
+    timeout: int | float = None,
+    tablets_enabled: bool = False,
+) -> tuple[tuple[int, int | None], dict[str, Any]]:
+    """Calculate timeout for tablet migration operation based on node disk size.
+
+    At worst, the node will be filled up to 90% of its disk size
+    Uses node_disk_size_mb * 0.9 / expected_throughput as the base estimate,
+    with soft = estimated * 2 and hard = estimated * 4.
+    For vnodes, use the same estimation as decommission.
+    Falls back to the caller-supplied timeout on error.
+    """
+    try:
+        node_info = node_info_service.as_dict()
+        if tablets_enabled:
+            node_info["tablets_enabled"] = True
+            estimated = node_info_service.node_disk_size_mb * 0.9 / node_info_service.expected_throughput
+            soft_timeout = int(estimated * 2)
+            hard_timeout = int(estimated * 4)
+            return (soft_timeout, hard_timeout), node_info
+        else:
+            soft_timeout = max(int(node_info_service.node_disk_size_mb * 0.9 * 0.03), 7200)  # 2 hours minimum
+            return (soft_timeout, None), node_info
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning(
+            "Failed to calculate tablet migration timeout: \n%s \nDefaulting to caller timeout or 6 hours", exc
+        )
+        return (timeout or 6 * 60 * 60, None), {}
+
+
 def _get_soft_timeout(
     node_info_service: NodeLoadInfoService, timeout: int | float = None
 ) -> tuple[int | float, dict[str, Any]]:
@@ -123,7 +154,7 @@ class Operations(Enum):
         _get_service_level_propagation_timeout,
         ("timeout", "service_level_for_test_step"),
     )
-    TABLET_MIGRATION = ("tablet_migration", _get_soft_timeout, ("timeout",))
+    TABLET_MIGRATION = ("tablet_migration", _get_tablet_migration_timeout, ("timeout",))
     HEALTHCHECK = ("healthcheck", _get_soft_timeout, ("timeout",))
     SSH_CONNECTIVITY = ("ssh_connectivity", _get_soft_timeout_no_node_info, ("timeout",))
 
@@ -201,7 +232,7 @@ def adaptive_timeout(  # noqa: PLR0914
     Also store node load info and timeout value in AdaptiveTimeoutStore (ES by default) for future reference.
     Use Operation.SOFT_TIMEOUT to set timeout explicitly without calculations.
     """
-    tablet_sensitive_op = operation in {Operations.DECOMMISSION, Operations.NEW_NODE}
+    tablet_sensitive_op = operation in {Operations.DECOMMISSION, Operations.NEW_NODE, Operations.TABLET_MIGRATION}
     kwargs.setdefault("node_available", True)
 
     # in some situations we may want to skip tablet check, since it depends on ssh connectivity

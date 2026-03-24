@@ -44,8 +44,10 @@ def wait_no_tablets_migration_running(node, timeout: int = 3600):
     client = RemoteCurlClient(host="127.0.0.1:10000", endpoint="", node=node)
     LOGGER.info("Waiting for having no ongoing tablets topology operations")
     try:
-        with adaptive_timeout(Operations.TABLET_MIGRATION, node, timeout=timeout):
-            client.run_remoter_curl(method="POST", path="storage_service/quiesce_topology", params={}, timeout=4 * 3600)
+        with adaptive_timeout(Operations.TABLET_MIGRATION, node, timeout=timeout) as adaptive_timeout_value:
+            client.run_remoter_curl(
+                method="POST", path="storage_service/quiesce_topology", params={}, timeout=adaptive_timeout_value
+            )
         LOGGER.info("All ongoing tablets topology operations are done")
     except Exception as exc:  # noqa: BLE001
         InfoEvent(
