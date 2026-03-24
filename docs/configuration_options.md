@@ -2635,6 +2635,15 @@ AMI ID for Cassandra oracle cluster nodes on AWS. Defaults to empty string, whic
 * appendable
 
 
+## **install_cassandra_exporter** / SCT_INSTALL_CASSANDRA_EXPORTER
+
+Install Criteo cassandra_exporter on Cassandra nodes for Prometheus metrics collection. The exporter connects to JMX (port 7199) and exposes metrics on port 8080.
+
+**default:** True
+
+**type:** bool
+
+
 ## **s3_baremetal_config** / SCT_S3_BAREMETAL_CONFIG
 
 Configuration for S3 in baremetal setups. This includes details such as endpoint URL, access key, secret key, and bucket name.

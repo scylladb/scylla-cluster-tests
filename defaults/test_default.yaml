@@ -271,6 +271,7 @@ nemesis_double_load_during_grow_shrink_duration: 0
 
 enterprise_disable_kms: false
 enable_kms_key_rotation: true
+install_cassandra_exporter: true
 
 assert_linux_distro_features: []
 

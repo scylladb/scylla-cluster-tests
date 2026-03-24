@@ -29,6 +29,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Amazon EMR Spark Migrator | `pending_pr` | [#13909](https://github.com/scylladb/scylla-cluster-tests/pull/13909) |
 | Source-Destination Clusters | `pending_pr` | [#13908](https://github.com/scylladb/scylla-cluster-tests/pull/13908) |
 | Cassandra Cluster Support | `pending_pr` | [cassandra-cluster-support.md](infrastructure/cassandra-cluster-support.md) |
+| Cassandra Monitoring | `draft` | [cassandra-monitoring.md](infrastructure/cassandra-monitoring.md) |
 
 ### Nemesis — Chaos engineering, disruptors
 

@@ -1447,6 +1447,10 @@ class SCTConfiguration(BaseModel):
         description="AMI ID for Cassandra oracle cluster nodes on AWS. "
         "Defaults to empty string, which causes fallback to the loader AMI (a standard Ubuntu image).",
     )
+    install_cassandra_exporter: Boolean = SctField(
+        description="Install Criteo cassandra_exporter on Cassandra nodes for Prometheus metrics collection. "
+        "The exporter connects to JMX (port 7199) and exposes metrics on port 8080.",
+    )
     # baremetal config options
     s3_baremetal_config: String = SctField(
         description="Configuration for S3 in baremetal setups. This includes details such as endpoint URL, access key, secret key, and bucket name.",

@@ -17,6 +17,7 @@ from functools import cached_property
 from typing import List
 
 from sdcm import wait
+from sdcm.cassandra_exporter_setup import CassandraExporterSetup
 from sdcm.exceptions import KillNemesis
 from sdcm.sct_config import TestConfig
 from sdcm.utils.common import raise_exception_in_thread
@@ -340,6 +341,8 @@ class BaseCassandraCluster:
         self._configure_cassandra_env(node)
         self._configure_rackdc(node)
         self._start_cassandra_service(node)
+        if self.params.get("install_cassandra_exporter"):
+            CassandraExporterSetup.install(node=node)
 
     def check_node_db_up(self, node):
         """Check if Cassandra is up via nodetool status (runs on the node via SSH).
