@@ -447,6 +447,7 @@ class NemesisRunner:
                     cur_interval = 0
                 finally:
                     self.node_allocator.unset_running_nemesis_from_all_nodes(self.current_disruption)
+                    self.current_disruption = None
                     self.target_node = None
                     self.termination_event.wait(timeout=cur_interval)
         except KillNemesis:
@@ -2008,7 +2009,6 @@ class NemesisRunner:
                 self.log_on_all_nodes(
                     f"Finished disruption {class_name} ({disruption_name} nemesis) with status '{nemesis_event.nemesis_status}'"
                 )
-                self.current_disruption = None
         self.set_target_node_pool_type(DISRUPT_DEFAULT_POOL)
         if raise_error:
             raise raise_error
