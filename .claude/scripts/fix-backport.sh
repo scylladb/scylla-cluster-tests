@@ -26,11 +26,32 @@ EOF
 
 cmd_checkout() {
     local pr_number="${1:?PR number required}"
-    gh pr checkout "$pr_number"
-    # Print metadata for the caller to parse, including headRepositoryOwner
-    # so the push step knows which remote to target (e.g. scylladbbot, not origin)
-    gh pr view "$pr_number" --json baseRefName,headRefName,headRepositoryOwner \
-        --jq '{base: .baseRefName, head: .headRefName, headRepoOwner: .headRepositoryOwner.login}'
+
+    # Get metadata first (before checkout, which may fail)
+    local metadata
+    metadata="$(gh pr view "$pr_number" --json baseRefName,headRefName,headRepositoryOwner \
+        --jq '{base: .baseRefName, head: .headRefName, headRepoOwner: .headRepositoryOwner.login}')"
+
+    local head_ref head_repo_owner
+    head_ref="$(echo "$metadata" | grep -o '"head":"[^"]*"' | cut -d'"' -f4)"
+    head_repo_owner="$(echo "$metadata" | grep -o '"headRepoOwner":"[^"]*"' | cut -d'"' -f4)"
+
+    # Try normal checkout first. If it fails (diverged branch from a previous
+    # worktree), fetch the remote branch and hard-reset to it.
+    if ! gh pr checkout "$pr_number" 2>/dev/null; then
+        echo "Normal checkout failed (branch likely diverged). Fetching and resetting..."
+        git fetch "$head_repo_owner" "$head_ref"
+        # If branch exists locally, reset it; otherwise create it
+        if git show-ref --verify --quiet "refs/heads/$head_ref"; then
+            git checkout "$head_ref"
+            git reset --hard "$head_repo_owner/$head_ref"
+        else
+            git checkout -b "$head_ref" "$head_repo_owner/$head_ref"
+        fi
+    fi
+
+    # Print metadata for the caller to parse
+    echo "$metadata"
 }
 
 cmd_rebase() {
