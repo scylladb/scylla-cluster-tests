@@ -33,101 +33,123 @@ For each PR number in `$ARGUMENTS`, launch a parallel Agent with:
 - A prompt containing: the PR number, and the full Workflow below (copy it into the prompt)
 
 After all subagents complete, summarize which PRs succeeded and which failed or had ambiguous
-conflicts requiring user input. Remind the user to force-push each PR branch after reviewing.
+conflicts requiring user input. Remind the user to review the changes.
+
+## Helper Script
+
+All dangerous git operations (reset, commit --no-verify, force-push) are wrapped in
+`.claude/scripts/fix-backport.sh`. This script is the ONLY command allowed in project
+permissions, keeping the blast radius small. Available subcommands:
+
+| Subcommand | Purpose |
+|------------|---------|
+| `checkout <PR>` | Checkout PR branch, print base/head ref as JSON |
+| `resolve-commit` | Stage all + temp commit (--no-verify) |
+| `recommit <BASE_REF> <HASH>` | Recommit one original commit with preserved authorship |
+| `push <REMOTE> <BRANCH>` | Force-push with --force-with-lease |
+| `update-pr <PR>` | Remove conflicts label + mark ready |
+| `verify` | Check no conflict markers remain |
 
 ## Workflow (executed by the subagent inside its worktree)
 
-**All git commands below run from the worktree's working directory. Never use `git -C` to
-reference the main repository.**
+**All commands run from the worktree's working directory. Never use `git -C`.**
 
 ### 1. Checkout the PR
 
 ```
-gh pr checkout $PR_NUMBER
+.claude/scripts/fix-backport.sh checkout $PR_NUMBER
 ```
 
-Get the PR's base branch from `gh pr view $PR_NUMBER --json baseRefName`.
+This prints JSON with `base` and `head` fields. Save both.
 
-### 2. Fetch the base branch
-
+Then fetch the base branch:
 ```
 git fetch upstream <baseRefName>
 ```
 
-### 3. Check for inline conflict markers
+### 2. Check for inline conflict markers
 
-Search all tracked files for conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`).
-Exclude false positives in non-code files (e.g. `docker/jepsen/*`, `*.md`).
-If none are found, report "No conflicts found" and stop.
+```
+.claude/scripts/fix-backport.sh verify
+```
 
-### 4. Understand each conflict
+If it prints "CLEAN", report "No conflicts found" and stop.
 
-For each conflict block, identify:
+### 3. Understand each conflict
+
+Read each conflicted file. For each conflict block, identify:
 - **HEAD side** — changes already in the base branch
 - **Incoming side** — changes from the cherry-picked/backported commit
 - **Parent (if diff3)** — the common ancestor version
 
 Determine the correct resolution by combining both sides:
 - Keep new features/fixes from both HEAD and the incoming change
-- Use the incoming commit's architectural approach (e.g. list-based vs single) when that's the purpose of the backport
-- Preserve additions from HEAD that don't conflict with the incoming approach (e.g. new parameters, new method calls)
+- Use the incoming commit's architectural approach when that's the purpose of the backport
+- Preserve additions from HEAD that don't conflict with the incoming approach
 
-### 5. Resolve the conflicts
+### 4. Resolve the conflicts
 
 Edit the files to remove all conflict markers and produce the correct merged code.
-Verify no conflict markers remain with a grep.
+Then verify:
+```
+.claude/scripts/fix-backport.sh verify
+```
+Must print "CLEAN" before proceeding.
 
-### 6. Recommit cleanly
+### 5. Recommit cleanly
 
-This is the critical step — the resolved changes must be attributed to the correct commits.
-
-**Important: Do NOT use `git stash`** — stashes are shared across all worktrees and will collide
-when running multiple PRs in parallel. Instead, use a temporary commit to hold resolved state.
-
-1. **Save resolved state as a temporary commit**: `git add -A && git commit --no-verify -m "TEMP: resolved conflicts"`
-   (Use `--no-verify` only for this temporary commit — it will be discarded. Pre-commit hooks may
-   fail in worktrees that lack installed dependencies.)
-2. **Identify commits** ahead of the base (excluding the temp commit): `git log --oneline upstream/<baseRefName>..HEAD`
-   Note the original commit hashes (all except the TEMP commit).
-3. **Determine which files belong to which commit** by inspecting each commit's diff with `git show <hash> --stat`
-4. **Mixed reset** to the base: `git reset upstream/<baseRefName>`
-   (Use mixed reset — NOT `--soft` — so all changes become unstaged. This prevents accidentally
-   committing files that belong to other commits.)
-5. For each original commit (in order, oldest first):
-   a. Stage only the files belonging to that commit: `git add <file1> <file2> ...`
-   b. Commit with the **original author** and **original commit message**:
-      ```
-      GIT_AUTHOR_NAME="<name>" GIT_AUTHOR_EMAIL="<email>" git commit --no-verify -m "<message>"
-      ```
-      Copy the full message from `git show --format="%B" --no-patch <original-hash>`.
-      Use `--no-verify` because pre-commit hooks may not work in worktrees.
-6. **Verify** the final log matches the original commit count and messages: `git log --oneline upstream/<baseRefName>..HEAD`
-
-### 7. Final verification
-
-- Confirm no conflict markers remain in any file
-- Confirm commit count and messages match the original PR
-- Confirm each commit's `--stat` matches the expected file set
-
-### 8. Update PR status
-
-After the conflicts are resolved and recommitted:
-
-1. **Remove the `conflicts` label** from the PR:
+1. **Save resolved state**:
    ```
-   gh pr edit $PR_NUMBER --remove-label "conflicts"
+   .claude/scripts/fix-backport.sh resolve-commit
    ```
-2. **Mark the PR as ready for review** (take it out of draft):
+
+2. **Identify commits** ahead of base (excluding the TEMP commit):
    ```
-   gh pr ready $PR_NUMBER
+   git log --oneline upstream/<baseRefName>..HEAD
    ```
+   Note the original commit hashes (all except TEMP).
+
+3. **Mixed reset** to the base:
+   ```
+   git reset upstream/<baseRefName>
+   ```
+   (Mixed reset — NOT `--soft` — so changes become unstaged.)
+
+4. **Recommit each original commit** (oldest first):
+   ```
+   .claude/scripts/fix-backport.sh recommit upstream/<baseRefName> <original-hash>
+   ```
+   The script extracts author, message, and file list from the original hash automatically.
+
+5. **Verify** commit count and messages:
+   ```
+   git log --oneline upstream/<baseRefName>..HEAD
+   ```
+
+### 6. Final verification
+
+```
+.claude/scripts/fix-backport.sh verify
+```
+
+Also confirm:
+- Commit count matches the original PR
+- Each commit's `--stat` matches expected files
+
+### 7. Push and update PR
+
+```
+.claude/scripts/fix-backport.sh push origin <headRefName>
+.claude/scripts/fix-backport.sh update-pr $PR_NUMBER
+```
+
+The `headRefName` comes from step 1's JSON output.
 
 ## Important rules
 
 - **Always dispatch to a worktree subagent** — never run the workflow in the current working directory
-- **Never use `git stash`** — stashes are global across worktrees and cause collisions in parallel runs. Use a temporary commit instead.
-- **Never use `git -C`** — all commands run from the worktree's working directory directly
+- **Use `.claude/scripts/fix-backport.sh`** for all dangerous operations — raw git reset/commit --no-verify/push are not in the permission allowlist
+- **Never use `git stash`** — stashes are global across worktrees
+- **Never use `git -C`** — all commands run from the worktree working directory
 - Never modify commit messages beyond what's needed (preserve co-author lines, cherry-pick references, etc.)
-- Preserve original author attribution using `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL` environment variables
-- Do NOT force push — leave that decision to the user
 - If a conflict resolution is ambiguous, ask the user before proceeding

@@ -1,19 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh pr checkout:*)",
-      "Bash(gh pr view:*)",
-      "Bash(gh pr edit:*)",
-      "Bash(gh pr ready:*)",
-      "Bash(git fetch:*)",
-      "Bash(git log:*)",
-      "Bash(git show:*)",
-      "Bash(git add:*)",
-      "Bash(git reset:*)",
-      "Bash(git checkout:*)",
-      "Bash(git commit --no-verify:*)",
-      "Bash(git grep:*)",
-      "Bash(GIT_AUTHOR_NAME=*)"
+      "Bash(.claude/scripts/fix-backport.sh:*)"
     ]
   },
   "hooks": {
