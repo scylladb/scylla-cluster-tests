@@ -209,7 +209,6 @@ All flags are on `NemesisFlags` in `sdcm/nemesis/__init__.py`. Each defaults to 
 | `enospc` | Nemesis causes disk-full (ENOSPC) |
 | `modify_table` | Nemesis modifies table properties |
 | `supports_high_disk_utilization` | Nemesis is safe at 90% disk usage (default: `True`) |
-| `disabled` | Nemesis is disabled and excluded by default |
 
 ## Decision Guide
 

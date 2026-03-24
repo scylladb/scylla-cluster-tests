@@ -54,7 +54,6 @@ class TestBaseClass(ABC):
     flag_d = False
     flag_common = False
     flag_true = True
-    disabled = False
 
     def __init__(self, runner):
         self.runner = runner
@@ -76,7 +75,6 @@ class CustomNemesisA(TestBaseClass):
 class CustomNemesisB(TestBaseClass):
     flag_b = True
     flag_common = True
-    disabled = True
 
     def disrupt(self):
         print(self.runner.COMMON_STRING + "b")

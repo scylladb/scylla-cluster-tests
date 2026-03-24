@@ -59,9 +59,6 @@ space_node_threshold:
 nemesis_filter_seeds:
   tenant1: False
   tenant2: True
-nemesis_exclude_disabled:
-  tenant1: True
-  tenant2: False
 nemesis_multiply_factor:
   tenant1: 5
   tenant2: 6

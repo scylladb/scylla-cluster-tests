@@ -100,7 +100,6 @@ Nemesis behavior is controlled through test YAML configs or environment variable
 | `nemesis_seed` | `int` | random | Seed for reproducible nemesis sequences |
 | `nemesis_filter_seeds` | `bool` | `false` | If true, target only non-seed nodes |
 | `nemesis_multiply_factor` | `int` | `2` | Multiply the disruption list before shuffling |
-| `nemesis_exclude_disabled` | `bool` | `true` | Filter out nemesis with `disabled = True` |
 | `nemesis_during_prepare` | `bool` | `true` | Run nemesis during test prepare stage |
 | `nemesis_add_node_cnt` | `int` | `3` | Nodes to add/remove in GrowShrinkCluster |
 | `nemesis_sequence_sleep_between_ops` | `int` | `None` | Sleep between operations in sequence tests |
@@ -140,8 +139,6 @@ nemesis_selector: 'DecommissionMonkey or GrowShrinkClusterNemesis'
 # Exclude specific nemesis
 nemesis_selector: 'not DecommissionMonkey'
 ```
-
-When `nemesis_exclude_disabled` is `true` (default), `" and not disabled"` is automatically appended to the selector.
 
 On Kubernetes backends, `" and kubernetes"` is automatically appended to ensure only K8s-compatible nemesis run.
 

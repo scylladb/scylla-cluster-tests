@@ -37,6 +37,5 @@ nemesis_seed: 13
 nemesis_add_node_cnt: 1
 space_node_threshold: 13531
 nemesis_filter_seeds: False
-nemesis_exclude_disabled: True
 nemesis_multiply_factor: 5
 round_robin: True

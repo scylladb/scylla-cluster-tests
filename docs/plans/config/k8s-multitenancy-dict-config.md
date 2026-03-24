@@ -164,7 +164,6 @@ Update all 19 fields with `k8s_multitenancy_supported=True` to wrap existing typ
 | `stress_cmd_cache_warmup` | `StringOrList` | `MultitenantValue[StringOrList]` |
 | `prepare_write_cmd` | `StringOrList` | `MultitenantValue[StringOrList]` |
 | `nemesis_selector` | `StringOrList` | `MultitenantValue[StringOrList]` |
-| `nemesis_exclude_disabled` | `BooleanOrList` | `MultitenantValue[BooleanOrList]` |
 | `nemesis_multiply_factor` | `IntOrList` | `MultitenantValue[IntOrList]` |
 
 **Example field definition:**

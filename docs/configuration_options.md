@@ -3952,16 +3952,6 @@ nemesis_selector gets a list of "nemesis properties" and filters IN all the neme
 * supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
-## **nemesis_exclude_disabled** / SCT_NEMESIS_EXCLUDE_DISABLED
-
-nemesis_exclude_disabled determines whether 'disabled' nemeses are filtered out from list<br>or are allowed to be used. This allows to easily disable too 'risky' or 'extreme' nemeses by default,<br>for all longevities. For example: it is unwanted to run the ToggleGcModeMonkey in standard longevities<br>that runs a stress with data validation.
-
-**default:** True
-
-**type:** bool | list[bool]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
-
-
 ## **nemesis_multiply_factor** / SCT_NEMESIS_MULTIPLY_FACTOR
 
 Multiply the list of nemesis to execute by the specified factor

@@ -112,7 +112,6 @@ class TestUtilsOperatorMultitenantCommon:
             assert tenant.params.get("nemesis_add_node_cnt") == 1
             assert tenant.params.get("space_node_threshold") == 13531
             assert tenant.params.get("nemesis_filter_seeds") is False
-            assert tenant.params.get("nemesis_exclude_disabled") is True
             assert tenant.params.get("nemesis_multiply_factor") == 5
             assert tenant.params.get("round_robin") is True
 
@@ -162,7 +161,6 @@ class TestUtilsOperatorMultitenantCommon:
         assert tenants[0].params.get("nemesis_add_node_cnt") == 1
         assert tenants[0].params.get("space_node_threshold") == 1357
         assert tenants[0].params.get("nemesis_filter_seeds") is False
-        assert tenants[0].params.get("nemesis_exclude_disabled") is True
         assert tenants[0].params.get("nemesis_multiply_factor") == 5
         assert tenants[0].params.get("round_robin") is True
 
@@ -180,7 +178,6 @@ class TestUtilsOperatorMultitenantCommon:
         assert tenants[1].params.get("nemesis_add_node_cnt") == 2
         assert tenants[1].params.get("space_node_threshold") == 2468
         assert tenants[1].params.get("nemesis_filter_seeds") is True
-        assert tenants[1].params.get("nemesis_exclude_disabled") is False
         assert tenants[1].params.get("nemesis_multiply_factor") == 6
         assert tenants[1].params.get("round_robin") is False
 
