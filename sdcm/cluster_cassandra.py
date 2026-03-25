@@ -324,6 +324,36 @@ class BaseCassandraCluster:
         major = int(self.cassandra_version.split(".")[0])
         return 17 if major >= 5 else 11
 
+    def _setup_data_device(self, node):
+        """Mount NVMe instance storage for Cassandra data if available.
+
+        i4i/i3 instances have fast NVMe local disks that are ideal for Cassandra
+        data and commitlog. Without this, Cassandra writes to the small root EBS
+        volume which fills up quickly (default 8GB on Ubuntu AMI).
+
+        Mounts the first NVMe instance store device to /var/lib/cassandra.
+        If no NVMe is found, does nothing (Cassandra uses root EBS).
+        """
+        # Find NVMe instance store devices (exclude root EBS nvme0n1)
+        result = node.remoter.run(
+            "lsblk -dpno NAME,TYPE | awk '$2==\"disk\" && $1 ~ /nvme[1-9]/ {print $1; exit}'",
+            ignore_status=True,
+            verbose=False,
+        )
+        nvme_device = result.stdout.strip()
+        if not nvme_device:
+            self.log.info("No NVMe instance store found — Cassandra will use root EBS")
+            return
+
+        self.log.info("Setting up NVMe device %s for Cassandra data", nvme_device)
+        node.remoter.sudo(
+            f"mkfs.xfs -f {nvme_device}"
+            " && mkdir -p /var/lib/cassandra"
+            f" && mount {nvme_device} /var/lib/cassandra"
+            f' && echo "{nvme_device} /var/lib/cassandra xfs defaults,nofail 0 2" >> /etc/fstab',
+            ignore_status=True,
+        )
+
     def node_setup(self, node, verbose=False, timeout=3600):
         """Full Cassandra node setup for cloud VM backends.
 
@@ -334,6 +364,7 @@ class BaseCassandraCluster:
         Docker backend overrides this to no-op since the image handles it.
         """
         node.wait_ssh_up(verbose=verbose)
+        self._setup_data_device(node)
         self._install_jdk(node)
         self._add_cassandra_apt_repo(node)
         self._install_cassandra(node)
