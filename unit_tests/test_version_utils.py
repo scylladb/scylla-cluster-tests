@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 import os
-import unittest
+import unittest.mock
 
 import pytest
 
@@ -47,8 +47,9 @@ RPM_URL = (
 BROKEN_URL = "https://www.google.com"
 
 
-class TestVersionUtils(unittest.TestCase):
-    def check_multiple_urls(self, urls):
+class TestVersionUtils:
+    @staticmethod
+    def check_multiple_urls(urls):
         expected_versions, repo_urls = [], []
         for url, expected_version in urls:
             repo_urls.append(url)
@@ -56,10 +57,10 @@ class TestVersionUtils(unittest.TestCase):
         for branch_version, expected_version in zip(
             get_branch_version_for_multiple_repositories(urls=repo_urls), expected_versions
         ):
-            self.assertEqual(branch_version, expected_version)
+            assert branch_version == expected_version
 
     def test_01_get_branch_version_from_list(self):
-        self.assertEqual(get_branch_version(DEB_URL), "2019.1.1")
+        assert get_branch_version(DEB_URL) == "2019.1.1"
 
     def test_02_get_branch_version_from_repo(self):
         self.check_multiple_urls(urls=[(RPM_URL, "2019.1.1")])
@@ -69,17 +70,20 @@ class TestVersionUtils(unittest.TestCase):
 
     def test_04_get_branch_version_failed(self):
         msg_error = VERSION_NOT_FOUND_ERROR
-        self.assertRaisesRegex(ValueError, msg_error, get_branch_version, BROKEN_URL)
-        self.assertRaisesRegex(ValueError, msg_error, get_branch_version, BROKEN_URL)
-        self.assertRaisesRegex(ValueError, msg_error, get_branch_version, BROKEN_URL)
+        with pytest.raises(ValueError, match=msg_error):
+            get_branch_version(BROKEN_URL)
+        with pytest.raises(ValueError, match=msg_error):
+            get_branch_version(BROKEN_URL)
+        with pytest.raises(ValueError, match=msg_error):
+            get_branch_version(BROKEN_URL)
 
     def test_05_is_enterprise(self):
-        self.assertEqual(is_enterprise(None), False)
-        self.assertEqual(is_enterprise("2019.1.1"), True)
-        self.assertEqual(is_enterprise("2018"), True)
-        self.assertEqual(is_enterprise("3.1"), False)
-        self.assertEqual(is_enterprise("2.2"), False)
-        self.assertEqual(is_enterprise("666.development"), False)
+        assert is_enterprise(None) is False
+        assert is_enterprise("2019.1.1") is True
+        assert is_enterprise("2018") is True
+        assert is_enterprise("3.1") is False
+        assert is_enterprise("2.2") is False
+        assert is_enterprise("666.development") is False
 
     def test_06_get_scylla_urls_from_repository_rpm_one_arch(self):
         with unittest.mock.patch.object(sdcm.utils.version_utils, "get_url_content", return_value="", clear=True):
@@ -98,15 +102,12 @@ class TestVersionUtils(unittest.TestCase):
                     ],
                 )
             )
-        self.assertEqual(
-            {
-                "http://downloads.scylladb.com/unstable/scylla/master/rpm/centos/2021-06-29T00:59:00Z/scylla/noarch"
-                "/repodata/repomd.xml",
-                "http://downloads.scylladb.com/unstable/scylla/master/rpm/centos/2021-06-29T00:59:00Z/scylla/x86_64"
-                "/repodata/repomd.xml",
-            },
-            urls,
-        )
+        assert urls == {
+            "http://downloads.scylladb.com/unstable/scylla/master/rpm/centos/2021-06-29T00:59:00Z/scylla/noarch"
+            "/repodata/repomd.xml",
+            "http://downloads.scylladb.com/unstable/scylla/master/rpm/centos/2021-06-29T00:59:00Z/scylla/x86_64"
+            "/repodata/repomd.xml",
+        }
 
     def test_06_get_scylla_urls_from_repository_deb_one_arch(self):
         with unittest.mock.patch.object(sdcm.utils.version_utils, "get_url_content", return_value="", clear=True):
@@ -119,13 +120,10 @@ class TestVersionUtils(unittest.TestCase):
                     ],
                 )
             )
-        self.assertEqual(
-            {
-                "http://downloads.scylladb.com/unstable/scylla/master/deb/unified/2021-06-23T10:53:35Z/scylladb-master/"
-                "dists/stable/main/binary-amd64/Packages",
-            },
-            urls,
-        )
+        assert urls == {
+            "http://downloads.scylladb.com/unstable/scylla/master/deb/unified/2021-06-23T10:53:35Z/scylladb-master/"
+            "dists/stable/main/binary-amd64/Packages",
+        }
 
     def test_06_get_scylla_urls_from_repository_deb_two_archs(self):
         with unittest.mock.patch.object(sdcm.utils.version_utils, "get_url_content", return_value="", clear=True):
@@ -138,15 +136,12 @@ class TestVersionUtils(unittest.TestCase):
                     ],
                 )
             )
-        self.assertEqual(
-            {
-                "http://downloads.scylladb.com/unstable/scylla/master/deb/unified/2021-06-23T10:53:35Z/scylladb-master/"
-                "dists/stable/main/binary-amd64/Packages",
-                "http://downloads.scylladb.com/unstable/scylla/master/deb/unified/2021-06-23T10:53:35Z/scylladb-master/"
-                "dists/stable/main/binary-arm64/Packages",
-            },
-            urls,
-        )
+        assert urls == {
+            "http://downloads.scylladb.com/unstable/scylla/master/deb/unified/2021-06-23T10:53:35Z/scylladb-master/"
+            "dists/stable/main/binary-amd64/Packages",
+            "http://downloads.scylladb.com/unstable/scylla/master/deb/unified/2021-06-23T10:53:35Z/scylladb-master/"
+            "dists/stable/main/binary-arm64/Packages",
+        }
 
     def test_06_get_scylla_urls_from_repository_no_urls(self):
         with unittest.mock.patch.object(sdcm.utils.version_utils, "get_url_content", return_value="", clear=True):
@@ -156,22 +151,20 @@ class TestVersionUtils(unittest.TestCase):
                     urls=[""],
                 )
             )
-        self.assertEqual(set(), urls)
+        assert urls == set()
 
     def test_07_get_all_versions(self):
-        self.assertIn(
-            "4.5.3", get_all_versions("https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.5.repo")
-        )
+        assert "4.5.3" in get_all_versions("https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.5.repo")
 
     def test_09_assume_versions(self):
         with unittest.mock.patch.object(os.environ, "get", return_value="branch-2022.1", clear=True):
             params = {}
             version = assume_version(params)
-            self.assertEqual(version, "nightly-2022.1", "Version should be 2022.1")
+            assert version == "nightly-2022.1", "Version should be 2022.1"
 
             scylla_version = "2022.1"
             version = assume_version(params, scylla_version)
-            self.assertEqual(version, "nightly-2022.1", "Version should be 2022.1")
+            assert version == "nightly-2022.1", "Version should be 2022.1"
 
             repo_url = (
                 "http://downloads.scylladb.com/unstable/scylla-enterprise/enterprise-2022.1/deb/unified/"
@@ -179,7 +172,7 @@ class TestVersionUtils(unittest.TestCase):
             )
             params.update({"scylla_repo": repo_url})
             version = assume_version(params)
-            self.assertEqual(version, "nightly-2022.1", "Version should be 2022.1")
+            assert version == "nightly-2022.1", "Version should be 2022.1"
 
 
 @pytest.mark.parametrize(

@@ -17,10 +17,8 @@ import re
 import shutil
 import tempfile
 import time
-import unittest
+import unittest.mock
 from datetime import datetime
-from functools import cached_property
-from weakref import proxy as weakproxy
 
 import pytest
 from invoke import Result
@@ -43,34 +41,34 @@ from sdcm.remote import LocalCmdRunner
 from sdcm.sct_config import SCTConfiguration
 from unit_tests.dummy_remote import DummyRemote, LocalNode
 from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, DummyScyllaCluster, NodetoolDummyNode
-from unit_tests.lib.fake_events import FakeEventsMixin
 
 
-class TestBaseNode(unittest.TestCase, FakeEventsMixin):
-    @classmethod
-    def setup_class(cls):
-        super().setup_class()
-        cls.temp_dir = tempfile.mkdtemp()
+class TestBaseNode:
+    @pytest.fixture(autouse=True)
+    def setup_events(self, events_function_scope, tmp_path):
+        """Use per-test events fixture for proper isolation between tests."""
+        self._events = events_function_scope
+        self._tmp_path = tmp_path
+        self._init_node()
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
 
-    @classmethod
-    def teardown_class(cls):
-        shutil.rmtree(cls.temp_dir, ignore_errors=True)
-        super().teardown_class()
+    def _init_node(self):
+        if not hasattr(self, "_node"):
+            self._node = DummyNode(
+                name="test_node",
+                parent_cluster=None,
+                base_logdir=str(self._tmp_path),
+                ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
+            )
+            self._node.parent_cluster = DummyDbCluster(nodes=[self._node])
+            self._node.init()
+            self._node.remoter = DummyRemote()
 
-    @cached_property
+    @property
     def node(self):
-        dummy_node = DummyNode(
-            name="test_node",
-            parent_cluster=None,
-            base_logdir=self.temp_dir,
-            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
-        )
-        dummy_node.parent_cluster = DummyDbCluster(nodes=[dummy_node])
-        dummy_node.init()
-        dummy_node.remoter = DummyRemote()
-        return dummy_node
+        return self._node
 
-    @cached_property
+    @property
     def _db_log_reader(self):
         return DbLogReader(
             system_log=self.node.system_log,
@@ -87,33 +85,31 @@ class TestBaseNode(unittest.TestCase, FakeEventsMixin):
         if log_text:
             with tempfile.NamedTemporaryFile(mode="wt") as temp_log:
                 self.node.system_log = temp_log.name
+                db_log_reader = self._db_log_reader
 
                 for line in log_text.splitlines(keepends=True):
                     temp_log.write(line)
                     temp_log.flush()
-                    self._db_log_reader._read_and_publish_events()
+                    db_log_reader._read_and_publish_events()
         else:
             self._db_log_reader._read_and_publish_events()
 
-    def setUp(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
-
     def test_search_system_log(self):
         critical_errors = list(self.node.follow_system_log(start_from_beginning=True))
-        self.assertEqual(33, len(critical_errors))
+        assert 33 == len(critical_errors)
 
     def test_search_system_log_specific_log(self):
         errors = list(
             self.node.follow_system_log(patterns=["Failed to load schema version"], start_from_beginning=True)
         )
-        self.assertEqual(len(errors), 2)
+        assert len(errors) == 2
 
     def test_search_system_interlace_reactor_stall(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_interlace_stall.log")
 
         self._read_and_publish_events()
 
-        events = self.events.published_events
+        events = self._events.published_events
 
         event_a, event_b = events[-2], events[-1]
         print(event_a)
@@ -129,7 +125,7 @@ class TestBaseNode(unittest.TestCase, FakeEventsMixin):
         self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "kernel_callstack.log")
         self._read_and_publish_events()
 
-        events = self.events.published_events
+        events = self._events.published_events
 
         event_a, event_b = events[-2], events[-1]
         print(event_a)
@@ -150,7 +146,7 @@ class TestBaseNode(unittest.TestCase, FakeEventsMixin):
 
         cdc_err_events = [
             line
-            for line in self.events.get_events_by_category()["ERROR"]
+            for line in self._events.get_events_by_category()["ERROR"]
             if "cdc - Could not retrieve CDC streams" in line
         ]
         assert cdc_err_events != []
@@ -167,7 +163,7 @@ class TestBaseNode(unittest.TestCase, FakeEventsMixin):
             "longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Powering Off...",
         ).publish()
 
-        events = [line for line in self.events.get_events_by_category()["WARNING"] if "Powering Off" in line]
+        events = [line for line in self._events.get_events_by_category()["WARNING"] if "Powering Off" in line]
         assert events
 
     def test_search_system_suppressed_messages(self):
@@ -175,7 +171,7 @@ class TestBaseNode(unittest.TestCase, FakeEventsMixin):
 
         self._read_and_publish_events()
 
-        events = self.events.published_events
+        events = self._events.published_events
 
         event_a = events[-1]
         print(event_a)
@@ -188,7 +184,7 @@ class TestBaseNode(unittest.TestCase, FakeEventsMixin):
 
         self._read_and_publish_events()
 
-        events = self.events.published_events
+        events = self._events.published_events
 
         backtraces = [event for event in events if event["type"] == "BACKTRACE"]
         assert len(backtraces) == 2
@@ -208,7 +204,7 @@ class TestBaseNode(unittest.TestCase, FakeEventsMixin):
 
         self._read_and_publish_events()
 
-        events = self.events.published_events
+        events = self._events.published_events
 
         event_backtrace1, event_backtrace2 = events[-2], events[-1]
         print(event_backtrace1)
@@ -224,7 +220,7 @@ class TestBaseNode(unittest.TestCase, FakeEventsMixin):
 
         self._read_and_publish_events()
 
-        events = self.events.published_events
+        events = self._events.published_events
 
         event_backtrace1, event_backtrace2 = events[-3], events[-2]
         print(event_backtrace1)
@@ -245,7 +241,7 @@ INFO  2022-07-14 09:28:35,102 [shard 1] database - Flushed non-system tables
 
         self._read_and_publish_events(logs)
 
-        events = self.events.published_events
+        events = self._events.published_events
         reactor_stalls = [event for event in events if event["type"] == "REACTOR_STALLED"]
         assert len(reactor_stalls) == 1
         event = reactor_stalls[0]
@@ -256,25 +252,24 @@ INFO  2022-07-14 09:28:35,102 [shard 1] database - Flushed non-system tables
 
 class VersionDummyRemote:
     def __init__(self, test, results):
-        self.test = weakproxy(test)
         self.results = iter(results)
 
     def run(self, cmd, *_, **__):
         expected_cmd, result = next(self.results)
-        self.test.assertEqual(cmd, expected_cmd)
+        assert cmd == expected_cmd
         return Result(exited=result[0], stdout=result[1], stderr=result[2])
 
 
-class TestBaseNodeGetScyllaVersion(unittest.TestCase):
+class TestBaseNodeGetScyllaVersion:
     @classmethod
-    def setUpClass(cls):
+    def setup_class(cls):
         cls.temp_dir = tempfile.mkdtemp()
 
     @classmethod
-    def tearDownClass(cls):
+    def teardown_class(cls):
         shutil.rmtree(cls.temp_dir)
 
-    def setUp(self):
+    def setup_method(self):
         self.node = DummyNode(
             name="test_node",
             parent_cluster=None,
@@ -291,8 +286,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
                 ("rpm --query --queryformat '%{VERSION}' scylla", (0, "3.3.rc1", "")),
             ),
         )
-        self.assertEqual("3.3.rc1", self.node.scylla_version)
-        self.assertEqual("3.3.rc1", self.node.scylla_version_detailed)
+        assert "3.3.rc1" == self.node.scylla_version
+        assert "3.3.rc1" == self.node.scylla_version_detailed
 
     def test_no_scylla_binary_other(self):
         self.node.distro = Distro.DEBIAN11
@@ -303,8 +298,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
                 ("dpkg-query --show --showformat '${Version}' scylla", (0, "3.3~rc1-0.20200209.0d0c1d43188-1", "")),
             ),
         )
-        self.assertEqual("3.3.rc1", self.node.scylla_version)
-        self.assertEqual("3.3.rc1-0.20200209.0d0c1d43188-1", self.node.scylla_version_detailed)
+        assert "3.3.rc1" == self.node.scylla_version
+        assert "3.3.rc1-0.20200209.0d0c1d43188-1" == self.node.scylla_version_detailed
 
     def test_scylla(self):
         self.node.remoter = VersionDummyRemote(
@@ -314,8 +309,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        self.assertEqual("3.3.rc1", self.node.scylla_version)
-        self.assertEqual("3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx", self.node.scylla_version_detailed)
+        assert "3.3.rc1" == self.node.scylla_version
+        assert "3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx" == self.node.scylla_version_detailed
 
     def test_scylla_master(self):
         self.node.remoter = VersionDummyRemote(
@@ -325,8 +320,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        self.assertEqual("666.development", self.node.scylla_version)
-        self.assertEqual("666.development-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
+        assert "666.development" == self.node.scylla_version
+        assert "666.development-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
 
     def test_scylla_master_new_format(self):
         self.node.remoter = VersionDummyRemote(
@@ -336,8 +331,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        self.assertEqual("4.4.dev", self.node.scylla_version)
-        self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
+        assert "4.4.dev" == self.node.scylla_version
+        assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
 
     def test_scylla_enterprise(self):
         self.node.is_enterprise = True
@@ -348,8 +343,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        self.assertEqual("2019.1.4", self.node.scylla_version)
-        self.assertEqual("2019.1.4-0.20191217.b59e92dbd with build-id xxx", self.node.scylla_version_detailed)
+        assert "2019.1.4" == self.node.scylla_version
+        assert "2019.1.4-0.20191217.b59e92dbd with build-id xxx" == self.node.scylla_version_detailed
 
     def test_scylla_enterprise_no_scylla_binary(self):
         self.node.is_enterprise = True
@@ -361,8 +356,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
                 ("rpm --query --queryformat '%{VERSION}' scylla-enterprise", (0, "2019.1.4", "")),
             ),
         )
-        self.assertEqual("2019.1.4", self.node.scylla_version)
-        self.assertEqual("2019.1.4", self.node.scylla_version_detailed)
+        assert "2019.1.4" == self.node.scylla_version
+        assert "2019.1.4" == self.node.scylla_version_detailed
 
     def test_scylla_binary_version_unparseable(self):
         self.node.remoter = VersionDummyRemote(
@@ -372,8 +367,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        self.assertIsNone(self.node.scylla_version)
-        self.assertEqual("x.y.z with build-id xxx", self.node.scylla_version_detailed)
+        assert self.node.scylla_version is None
+        assert "x.y.z with build-id xxx" == self.node.scylla_version_detailed
 
     def test_get_scylla_version_from_second_attempt(self):
         self.node.distro = Distro.DEBIAN11
@@ -392,8 +387,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
                 ),
             ),
         )
-        self.assertIsNone(self.node.scylla_version)
-        self.assertIsNone(self.node.scylla_version_detailed)
+        assert self.node.scylla_version is None
+        assert self.node.scylla_version_detailed is None
 
         self.node.remoter = VersionDummyRemote(
             self,
@@ -402,8 +397,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        self.assertEqual("4.4.dev", self.node.scylla_version)
-        self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
+        assert "4.4.dev" == self.node.scylla_version
+        assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
 
     def test_forget_scylla_version(self):
         self.node.remoter = VersionDummyRemote(
@@ -413,8 +408,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        self.assertEqual("4.4.dev", self.node.scylla_version)
-        self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
+        assert "4.4.dev" == self.node.scylla_version
+        assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
 
         self.node.remoter = VersionDummyRemote(
             self,
@@ -424,25 +419,25 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
             ),
         )
 
-        self.assertEqual("4.4.dev", self.node.scylla_version)
-        self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
+        assert "4.4.dev" == self.node.scylla_version
+        assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
 
         self.node.forget_scylla_version()
 
-        self.assertEqual("3.3.rc1", self.node.scylla_version)
-        self.assertEqual("3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx", self.node.scylla_version_detailed)
+        assert "3.3.rc1" == self.node.scylla_version
+        assert "3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx" == self.node.scylla_version_detailed
 
 
-class TestBaseMonitorSet(unittest.TestCase):
+class TestBaseMonitorSet:
     @classmethod
-    def setUpClass(cls):
+    def setup_class(cls):
         cls.temp_dir = tempfile.mkdtemp()
 
     @classmethod
-    def tearDownClass(cls):
+    def teardown_class(cls):
         shutil.rmtree(cls.temp_dir)
 
-    def setUp(self):
+    def setup_method(self):
         self.node = DummyNode(
             name="test_node",
             parent_cluster=None,
@@ -464,10 +459,10 @@ class TestBaseMonitorSet(unittest.TestCase):
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        self.assertEqual(self.monitor_cluster.monitoring_version, "master")
+        assert self.monitor_cluster.monitoring_version == "master"
 
 
-class TestNodetoolStatus(unittest.TestCase):
+class TestNodetoolStatus:
     def test_can_get_nodetool_status_typical(self):
         resp = "\n".join(
             [
@@ -1184,7 +1179,7 @@ def test_exclusive_connection(docker_scylla, docker_scylla_2, params, events):
                 )
 
 
-class TestNodetool(unittest.TestCase):
+class TestNodetool:
     def test_describering_parsing(self):
         """Test "nodetool describering" output parsing"""
         resp = "\n".join(

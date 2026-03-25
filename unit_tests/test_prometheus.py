@@ -13,7 +13,6 @@
 
 import os
 import json
-import unittest
 
 from sdcm.prometheus import PrometheusAlertManagerListener
 
@@ -49,7 +48,7 @@ class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListene
         pass
 
 
-class PrometheusAlertManagerTest(unittest.TestCase):
+class TestPrometheusAlertManager:
     def test_alert_manager_listener_artificial_run(self):
         with open(
             os.path.join(
@@ -62,4 +61,4 @@ class PrometheusAlertManagerTest(unittest.TestCase):
         listener.start()
         listener.join()
         result = listener.get_result()
-        self.assertEqual(result, test_data["expected"])
+        assert result == test_data["expected"]

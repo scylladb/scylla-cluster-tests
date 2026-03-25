@@ -11,23 +11,22 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import unittest
-from unittest.mock import patch
 import os
+from unittest.mock import patch
 
 from click.testing import CliRunner
 
 import sct
 
 
-class TestCleanResourcesCommand(unittest.TestCase):
+class TestCleanResourcesCommand:
     ENV_VARS = {
         "SCT_REGION_NAME": "us-east-1",
         "SCT_GCE_DATACENTER": "us-central1-a",
         "SCT_AZURE_REGION_NAME": "eastus",
     }
 
-    def setUp(self):
+    def setup_method(self):
         self.runner = CliRunner()
 
     @patch("sct.clean_cloud_resources")
@@ -43,7 +42,7 @@ class TestCleanResourcesCommand(unittest.TestCase):
         with patch.dict(os.environ, self.ENV_VARS):
             result = self.runner.invoke(sct.clean_resources, ["--user", "test.user", "--clean-runners", "--dry-run"])
 
-        self.assertEqual(result.exit_code, 0)
+        assert result.exit_code == 0
         mock_clean_runners.assert_called_once_with(
             test_status="", test_runner_ip=None, backend=None, user="test.user", test_id=None, dry_run=True, force=True
         )
@@ -64,7 +63,7 @@ class TestCleanResourcesCommand(unittest.TestCase):
                 sct.clean_resources, ["--test-id", "test-123", "--clean-runners", "--backend", "aws"]
             )
 
-        self.assertEqual(result.exit_code, 0)
+        assert result.exit_code == 0
         mock_clean_runners.assert_called_once_with(
             test_status="", test_runner_ip=None, backend="aws", user=None, test_id="test-123", dry_run=False, force=True
         )
@@ -73,8 +72,8 @@ class TestCleanResourcesCommand(unittest.TestCase):
     def test_clean_resources_clean_runners_requires_user_or_test_id(self, mock_logger):
         """Test that --clean-runners requires --user or --test-id."""
         result = self.runner.invoke(sct.clean_resources, ["--clean-runners"])
-        self.assertEqual(result.exit_code, 1)
-        self.assertIn("--clean-runners requires --user and/or --test-id", result.output)
+        assert result.exit_code == 1
+        assert "--clean-runners requires --user and/or --test-id" in result.output
 
     @patch("sct.clean_cloud_resources")
     @patch("sct.clean_sct_runners")
@@ -90,7 +89,7 @@ class TestCleanResourcesCommand(unittest.TestCase):
                 ["--user", "test.user", "--test-id", "test-123", "--clean-runners", "--backend", "gce"],
             )
 
-        self.assertEqual(result.exit_code, 0)
+        assert result.exit_code == 0
         mock_clean_runners.assert_called_once_with(
             test_status="",
             test_runner_ip=None,
@@ -110,14 +109,14 @@ class TestCleanResourcesCommand(unittest.TestCase):
         with patch.dict(os.environ, self.ENV_VARS):
             result = self.runner.invoke(sct.clean_resources, ["--user", "test.user"])
 
-        self.assertEqual(result.exit_code, 0)
+        assert result.exit_code == 0
         mock_clean_resources.assert_called_once()
         with patch("sct.clean_sct_runners") as mock_clean_runners:
             mock_clean_runners.assert_not_called()
 
 
-class TestCleanRunnerInstancesCommand(unittest.TestCase):
-    def setUp(self):
+class TestCleanRunnerInstancesCommand:
+    def setup_method(self):
         self.runner = CliRunner()
 
     @patch("sct.clean_sct_runners")
@@ -128,7 +127,7 @@ class TestCleanRunnerInstancesCommand(unittest.TestCase):
 
         result = self.runner.invoke(sct.clean_runner_instances, ["--user", "test.user"])
 
-        self.assertEqual(result.exit_code, 0)
+        assert result.exit_code == 0
         mock_clean_runners.assert_called_once_with(
             test_runner_ip="", test_status=None, backend=None, user="test.user", test_id=(), dry_run=False, force=False
         )
@@ -141,7 +140,7 @@ class TestCleanRunnerInstancesCommand(unittest.TestCase):
 
         result = self.runner.invoke(sct.clean_runner_instances, ["--test-id", "test-123"])
 
-        self.assertEqual(result.exit_code, 0)
+        assert result.exit_code == 0
         mock_clean_runners.assert_called_once_with(
             test_runner_ip="",
             test_status=None,
@@ -160,7 +159,7 @@ class TestCleanRunnerInstancesCommand(unittest.TestCase):
 
         result = self.runner.invoke(sct.clean_runner_instances, ["--runner-ip", "1.2.3.4"])
 
-        self.assertEqual(result.exit_code, 0)
+        assert result.exit_code == 0
         mock_clean_runners.assert_called_once_with(
             test_runner_ip="1.2.3.4", test_status=None, backend=None, user=None, test_id=(), dry_run=False, force=False
         )
@@ -173,7 +172,7 @@ class TestCleanRunnerInstancesCommand(unittest.TestCase):
 
         result = self.runner.invoke(sct.clean_runner_instances, ["--runner-ip", "1.2.3.4", "--force"])
 
-        self.assertEqual(result.exit_code, 0)
+        assert result.exit_code == 0
         mock_clean_runners.assert_called_once_with(
             test_runner_ip="1.2.3.4", test_status=None, backend=None, user=None, test_id=(), dry_run=False, force=True
         )
@@ -202,7 +201,7 @@ class TestCleanRunnerInstancesCommand(unittest.TestCase):
             ],
         )
 
-        self.assertEqual(result.exit_code, 0)
+        assert result.exit_code == 0
         mock_clean_runners.assert_called_once_with(
             test_runner_ip="1.2.3.4",
             test_status="timeout",
