@@ -4192,6 +4192,15 @@ Scaling policy configuration. The payload should follow the following structure:
 **type:** dict
 
 
+## **xcloud_provisioning_mode** / SCT_XCLOUD_PROVISIONING_MODE
+
+Internal flag used during xcloud provisioning to temporarily switch backend<br>to the underlying cloud provider. Set automatically by sct.py provision-resources when<br>--backend xcloud is used; should not be set manually in test configs.
+
+**default:** N/A
+
+**type:** bool
+
+
 ## **n_vector_store_nodes** / SCT_N_VECTOR_STORE_NODES
 
 Number of vector store nodes (0 = VS is disabled)

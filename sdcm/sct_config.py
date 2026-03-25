@@ -2058,6 +2058,11 @@ class SCTConfiguration(BaseModel):
         For more details, see `scaling` parameter description in Cloud REST API documentation:
         https://cloud.docs.scylladb.com/stable/api.html#tag/Cluster/operation/createCluster""",
     )
+    xcloud_provisioning_mode: bool = SctField(
+        description="""Internal flag used during xcloud provisioning to temporarily switch backend
+        to the underlying cloud provider. Set automatically by sct.py provision-resources when
+        --backend xcloud is used; should not be set manually in test configs.""",
+    )
     n_vector_store_nodes: int = SctField(
         description="Number of vector store nodes (0 = VS is disabled)",
     )

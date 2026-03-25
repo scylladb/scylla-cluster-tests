@@ -332,6 +332,7 @@ adaptive_timeout_store_metrics: true
 
 # XCloud-specific defaults
 xcloud_scaling_config: null
+xcloud_provisioning_mode: false
 
 # Vector Search defaults
 n_vector_store_nodes: 0
