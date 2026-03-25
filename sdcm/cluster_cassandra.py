@@ -421,19 +421,24 @@ class BaseCassandraCluster:
                 proc_check.stdout.strip(),
                 proc_check.exited,
             )
+            # Always dump system.log tail — even when active, shows if JMX/gossip is stuck
+            log_tail = node.remoter.run(
+                "sudo tail -30 /var/log/cassandra/system.log 2>/dev/null || echo 'no log file'",
+                ignore_status=True,
+                verbose=False,
+            )
+            self.log.warning("Cassandra system.log tail:\n%s", log_tail.stdout[-2000:])
             if "inactive" in proc_check.stdout or "failed" in proc_check.stdout:
-                # Cassandra is not running — dump the last lines of system.log for diagnosis
-                log_tail = node.remoter.run(
-                    "sudo tail -50 /var/log/cassandra/system.log 2>/dev/null || echo 'no log file'",
-                    ignore_status=True,
-                    verbose=False,
-                )
-                self.log.error("Cassandra is NOT running. Last 50 lines of system.log:\n%s", log_tail.stdout[-2000:])
-                # Also check disk space
                 df_result = node.remoter.run(
                     "df -h / /var/lib/cassandra 2>/dev/null", ignore_status=True, verbose=False
                 )
-                self.log.error("Disk space:\n%s", df_result.stdout)
+                self.log.error("Cassandra is NOT running. Disk space:\n%s", df_result.stdout)
+                journal = node.remoter.run(
+                    "sudo journalctl -u cassandra.service --no-pager -n 20",
+                    ignore_status=True,
+                    verbose=False,
+                )
+                self.log.error("Cassandra journal:\n%s", journal.stdout[-2000:])
             return False
         is_up = "UN " in result.stdout
         if not is_up:
