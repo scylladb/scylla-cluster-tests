@@ -139,7 +139,10 @@ pipeline {
                         dockerLogin(params)
                         // also check the commit-message for the rules we want
                         sh 'touch ./.git/COMMIT_EDITMSG'
-                        sh './docker/env/hydra.sh pre-commit 2>&1 | tee precommit-output.log'
+                        sh '''#!/bin/bash
+                        set -o pipefail
+                        ./docker/env/hydra.sh pre-commit 2>&1 | tee precommit-output.log
+                        '''
                     }
                 }
             }
