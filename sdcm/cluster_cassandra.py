@@ -325,13 +325,14 @@ class BaseCassandraCluster:
         return 17 if major >= 5 else 11
 
     def _setup_data_device(self, node):
-        """Mount NVMe instance storage for Cassandra data if available.
+        """Mount NVMe instance storage for Cassandra data and logs if available.
 
         i4i/i3 instances have fast NVMe local disks that are ideal for Cassandra
         data and commitlog. Without this, Cassandra writes to the small root EBS
-        volume which fills up quickly (default 8GB on Ubuntu AMI).
+        volume which fills up quickly.
 
-        Mounts the first NVMe instance store device to /var/lib/cassandra.
+        Creates /data on NVMe, then symlinks /var/lib/cassandra and
+        /var/log/cassandra to subdirectories on the NVMe mount.
         If no NVMe is found, does nothing (Cassandra uses root EBS).
         """
         # Find NVMe instance store devices (exclude root EBS nvme0n1)
@@ -345,14 +346,22 @@ class BaseCassandraCluster:
             self.log.info("No NVMe instance store found — Cassandra will use root EBS")
             return
 
-        self.log.info("Setting up NVMe device %s for Cassandra data", nvme_device)
-        node.remoter.sudo(
-            f"mkfs.xfs -f {nvme_device}"
-            " && mkdir -p /var/lib/cassandra"
-            f" && mount {nvme_device} /var/lib/cassandra"
-            f' && echo "{nvme_device} /var/lib/cassandra xfs defaults,nofail 0 2" >> /etc/fstab',
-            ignore_status=True,
-        )
+        self.log.info("Setting up NVMe device %s for Cassandra data and logs", nvme_device)
+        node.remoter.sudo("apt-get install -y xfsprogs", ignore_status=True, retry=3)
+        node.remoter.sudo(f"mkfs.xfs -f {nvme_device}")
+        node.remoter.sudo("mkdir -p /data")
+        node.remoter.sudo(f"mount {nvme_device} /data")
+        node.remoter.sudo(f'echo "{nvme_device} /data xfs defaults,nofail 0 2" >> /etc/fstab')
+        # Create subdirectories for Cassandra data and logs
+        node.remoter.sudo("mkdir -p /data/cassandra /data/cassandra-logs")
+        # Symlink Cassandra directories to NVMe
+        node.remoter.sudo("rm -rf /var/lib/cassandra")
+        node.remoter.sudo("ln -sf /data/cassandra /var/lib/cassandra")
+        node.remoter.sudo("rm -rf /var/log/cassandra")
+        node.remoter.sudo("ln -sf /data/cassandra-logs /var/log/cassandra")
+        # Verify
+        df_result = node.remoter.run("df -h /data", ignore_status=True, verbose=False)
+        self.log.info("NVMe mounted: %s", df_result.stdout.strip())
 
     def node_setup(self, node, verbose=False, timeout=3600):
         """Full Cassandra node setup for cloud VM backends.
