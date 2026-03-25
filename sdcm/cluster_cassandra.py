@@ -325,17 +325,12 @@ class BaseCassandraCluster:
         return 17 if major >= 5 else 11
 
     def _setup_data_device(self, node):
-        """Mount NVMe instance storage for Cassandra data and logs if available.
+        """Format and mount NVMe instance storage if available.
 
-        i4i/i3 instances have fast NVMe local disks that are ideal for Cassandra
-        data and commitlog. Without this, Cassandra writes to the small root EBS
-        volume which fills up quickly.
-
-        Creates /data on NVMe, then symlinks /var/lib/cassandra and
-        /var/log/cassandra to subdirectories on the NVMe mount.
-        If no NVMe is found, does nothing (Cassandra uses root EBS).
+        Only formats and mounts — does NOT create symlinks yet.
+        Symlinks are created after Cassandra is installed (so the
+        cassandra user exists and apt's auto-start works normally).
         """
-        # Find NVMe instance store devices (exclude root EBS nvme0n1)
         result = node.remoter.run(
             "lsblk -dpno NAME,TYPE | awk '$2==\"disk\" && $1 ~ /nvme[1-9]/ {print $1; exit}'",
             ignore_status=True,
@@ -346,22 +341,38 @@ class BaseCassandraCluster:
             self.log.info("No NVMe instance store found — Cassandra will use root EBS")
             return
 
-        self.log.info("Setting up NVMe device %s for Cassandra data and logs", nvme_device)
+        self.log.info("Setting up NVMe device %s", nvme_device)
         node.remoter.sudo("apt-get install -y xfsprogs", ignore_status=True, retry=3)
         node.remoter.sudo(f"mkfs.xfs -f {nvme_device}")
         node.remoter.sudo("mkdir -p /data")
         node.remoter.sudo(f"mount {nvme_device} /data")
         node.remoter.sudo(f"bash -c 'echo \"{nvme_device} /data xfs defaults,nofail 0 2\" >> /etc/fstab'")
-        # Create subdirectories for Cassandra data and logs
+        df_result = node.remoter.run("df -h /data", ignore_status=True, verbose=False)
+        self.log.info("NVMe mounted: %s", df_result.stdout.strip())
+
+    def _move_cassandra_to_nvme(self, node):
+        """Move Cassandra data and logs to NVMe after install.
+
+        Called after _install_cassandra (which stops Cassandra and wipes data).
+        Moves directories to /data on NVMe and creates symlinks.
+        Only runs if /data is mounted (i.e., NVMe was set up).
+        """
+        check = node.remoter.run("mountpoint -q /data", ignore_status=True, verbose=False)
+        if not check.ok:
+            return
+
+        self.log.info("Moving Cassandra data and logs to NVMe (/data)")
         node.remoter.sudo("mkdir -p /data/cassandra /data/cassandra-logs")
-        # Symlink Cassandra directories to NVMe
+        # Move existing data if any (after install+wipe, dirs are mostly empty)
+        node.remoter.sudo("rsync -a /var/lib/cassandra/ /data/cassandra/ 2>/dev/null", ignore_status=True)
+        node.remoter.sudo("rsync -a /var/log/cassandra/ /data/cassandra-logs/ 2>/dev/null", ignore_status=True)
+        # Replace with symlinks
         node.remoter.sudo("rm -rf /var/lib/cassandra")
         node.remoter.sudo("ln -sf /data/cassandra /var/lib/cassandra")
         node.remoter.sudo("rm -rf /var/log/cassandra")
         node.remoter.sudo("ln -sf /data/cassandra-logs /var/log/cassandra")
-        # Verify
-        df_result = node.remoter.run("df -h /data", ignore_status=True, verbose=False)
-        self.log.info("NVMe mounted: %s", df_result.stdout.strip())
+        # Fix ownership (cassandra user exists after apt install)
+        node.remoter.sudo("chown -R cassandra:cassandra /data/cassandra /data/cassandra-logs")
 
     def node_setup(self, node, verbose=False, timeout=3600):
         """Full Cassandra node setup for cloud VM backends.
@@ -377,6 +388,7 @@ class BaseCassandraCluster:
         self._install_jdk(node)
         self._add_cassandra_apt_repo(node)
         self._install_cassandra(node)
+        self._move_cassandra_to_nvme(node)
         self._configure_cassandra_yaml(node)
         self._configure_cassandra_env(node)
         self._configure_rackdc(node)
