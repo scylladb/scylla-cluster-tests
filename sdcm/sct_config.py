@@ -1431,6 +1431,15 @@ class SCTConfiguration(BaseModel):
     vector_store_version: String = SctField(
         description="Vector Store version / docker image tag",
     )
+    docker_image_cassandra: String = SctField(
+        description="Cassandra docker image repo, i.e. 'cassandra'. Used when db_type is 'cassandra'.",
+    )
+    cassandra_version: String = SctField(
+        description="Cassandra version / docker image tag, i.e. '4.1' or '5.0'",
+    )
+    cassandra_num_tokens: int = SctField(
+        description="num_tokens value to configure in cassandra.yaml.",
+    )
     # baremetal config options
     s3_baremetal_config: String = SctField(
         description="Configuration for S3 in baremetal setups. This includes details such as endpoint URL, access key, secret key, and bucket name.",
@@ -3448,7 +3457,10 @@ class SCTConfiguration(BaseModel):
         elif backend == "oci":
             options_must_exist += ["oci_image_db"]
         elif backend == "docker":
-            options_must_exist += ["docker_image"]
+            if self.get("db_type") == "cassandra":
+                options_must_exist += ["docker_image_cassandra"]
+            else:
+                options_must_exist += ["docker_image"]
         elif backend == "baremetal":
             options_must_exist += ["db_nodes_public_ip"]
         elif "k8s" in backend or backend == "xcloud":
@@ -3946,7 +3958,9 @@ class SCTConfiguration(BaseModel):
 
     def _validate_docker_backend_parameters(self):
         if self.get("use_mgmt"):
-            raise ValueError("Scylla Manager is not supported for docker backend")
+            raise ValueError(
+                "Scylla Manager is not supported for docker backend. Set 'use_mgmt: false' in your test config."
+            )
 
     def _verify_rackaware_configuration(self):
         if not self.get("rack_aware_loader"):
