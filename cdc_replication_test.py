@@ -334,7 +334,7 @@ class CDCReplicationTest(ClusterTester):
         loader_node = self.loaders.nodes[0]
         self.log.info("Comparing table contents using scylla-migrate...")
         res = loader_node.remoter.run(
-            cmd="./scylla-migrate check --master-address {} --replica-address {}"
+            cmd="set -o pipefail; ./scylla-migrate check --master-address {} --replica-address {}"
             " --ignore-schema-difference {} {}.{} 2>&1 | tee scylla-migrate.log".format(
                 self.db_cluster.nodes[0].external_address,
                 self.cs_db_cluster.nodes[0].external_address,
@@ -391,6 +391,7 @@ class CDCReplicationTest(ClusterTester):
             """
             (cat >runreplicator.sh && chmod +x runreplicator.sh && tmux new-session -d -s 'replicator' ./runreplicator.sh) <<'EOF'
             #!/bin/bash
+            set -o pipefail
 
             java -cp replicator.jar com.scylladb.cdc.replicator.Main -k {} -t {} -s {} -d {} -cl one -m {} 2>&1 | tee cdc-replicator.log
             EOF
