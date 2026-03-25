@@ -147,7 +147,7 @@ class ScyllaYaml(BaseModel):
     cross_node_timeout: bool = None  # False
     internode_send_buff_size_in_bytes: int = None  # 0
     internode_recv_buff_size_in_bytes: int = None  # 0
-    internode_compression: Literal["none", "all", "dc"] = None  # "none"
+    internode_compression: Literal["none", "all", "dc", "rack"] = None  # "none"
     internode_compression_enable_advanced: bool = None
     rpc_dict_training_when: Literal["always", "never", "when_leader"] = None
     rpc_dict_training_min_time_seconds: int = None
