@@ -351,7 +351,7 @@ class BaseCassandraCluster:
         node.remoter.sudo(f"mkfs.xfs -f {nvme_device}")
         node.remoter.sudo("mkdir -p /data")
         node.remoter.sudo(f"mount {nvme_device} /data")
-        node.remoter.sudo(f'echo "{nvme_device} /data xfs defaults,nofail 0 2" >> /etc/fstab')
+        node.remoter.sudo(f"bash -c 'echo \"{nvme_device} /data xfs defaults,nofail 0 2\" >> /etc/fstab'")
         # Create subdirectories for Cassandra data and logs
         node.remoter.sudo("mkdir -p /data/cassandra /data/cassandra-logs")
         # Symlink Cassandra directories to NVMe
