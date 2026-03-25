@@ -12,11 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
-import shutil
-import tempfile
-import unittest
 from multiprocessing import Queue
-from functools import cached_property
 
 import pytest
 
@@ -26,173 +22,14 @@ from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.lib.fake_cluster import DummyNode
-from unit_tests.lib.fake_events import FakeEventsMixin
+
+
+TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "test_data")
 
 
 class DecodeDummyNode(DummyNode):
     def copy_scylla_debug_info(self, node_name, debug_file):
         return "scylla_debug_info_file"
-
-
-class TestDecodeBactraces(unittest.TestCase, FakeEventsMixin):
-    @classmethod
-    def setup_class(cls):
-        super().setup_class()
-        cls.temp_dir = tempfile.mkdtemp()
-
-    @classmethod
-    def teardown_class(cls):
-        shutil.rmtree(cls.temp_dir, ignore_errors=True)
-        super().teardown_class()
-
-    @cached_property
-    def test_config(self):
-        result = TestConfig()
-        result.set_decoding_queue()
-        return result
-
-    @cached_property
-    def node(self):
-        dummy_node = DecodeDummyNode(
-            name="test_node",
-            parent_cluster=None,
-            base_logdir=self.temp_dir,
-            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
-        )
-        dummy_node.remoter = DummyRemote()
-        return dummy_node
-
-    @cached_property
-    def monitor_node(self):
-        dummy_monitor = DecodeDummyNode(
-            name="test_monitor_node",
-            parent_cluster=None,
-            base_logdir=self.temp_dir,
-            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
-        )
-        dummy_monitor.remoter = DummyRemote()
-        return dummy_monitor
-
-    @cached_property
-    def _db_log_reader(self):
-        return DbLogReader(
-            system_log=self.node.system_log,
-            node_name=str(self),
-            remoter=self.node.remoter,
-            decoding_queue=self.test_config.DECODING_QUEUE,
-            system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
-            log_lines=True,
-            backtrace_stall_decoding=True,
-            backtrace_decoding_disable_regex=None,
-        )
-
-    @cached_property
-    def _db_log_reader_no_decoding(self):
-        return DbLogReader(
-            system_log=self.node.system_log,
-            node_name=str(self),
-            remoter=self.node.remoter,
-            decoding_queue=None,
-            system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
-            log_lines=False,
-            backtrace_stall_decoding=True,
-            backtrace_decoding_disable_regex=None,
-        )
-
-    def _read_and_publish_events(self):
-        self._db_log_reader._read_and_publish_events()
-
-    def _read_and_publish_events_no_decoding(self):
-        self._db_log_reader_no_decoding._read_and_publish_events()
-
-    def setUp(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
-
-    def test_01_reactor_stall_is_not_decoded_if_disabled(self):
-        # Accesses the test_config to ensure it is initialized
-        self.test_config
-        self.monitor_node.start_decode_on_monitor_node_thread()
-        self._read_and_publish_events_no_decoding()
-        self.monitor_node.termination_event.set()
-        self.monitor_node.stop_task_threads()
-        self.monitor_node.wait_till_tasks_threads_are_stopped()
-
-        events = self.events.published_events
-
-        assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
-        for event in events:
-            if event.get("raw_backtrace"):
-                self.assertIsNone(event["backtrace"])
-
-    def test_02_reactor_stalls_is_decoded_if_enabled(self):
-        self.test_config.BACKTRACE_DECODING = True
-
-        self.test_config.DECODING_QUEUE = Queue()
-
-        self.monitor_node.start_decode_on_monitor_node_thread()
-        self._read_and_publish_events()
-        self.monitor_node.termination_event.set()
-        self.monitor_node.stop_task_threads()
-        self.monitor_node.wait_till_tasks_threads_are_stopped()
-
-        events = self.events.published_events
-
-        assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
-        for event in events:
-            if event.get("backtrace") and event.get("raw_backtrace"):
-                self.assertEqual(
-                    event["backtrace"].strip(),
-                    "addr2line -Cpife scylla_debug_info_file {}".format(" ".join(event["raw_backtrace"].split("\n"))),
-                )
-
-    def test_03_decode_interlace_reactor_stall(self):
-        self.test_config.DECODING_QUEUE = Queue()
-        self.test_config.BACKTRACE_DECODING = True
-
-        self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_interlace_stall.log")
-
-        self._read_and_publish_events()
-
-        self.monitor_node.termination_event.set()
-        self.monitor_node.stop_task_threads()
-        self.monitor_node.wait_till_tasks_threads_are_stopped()
-
-        events = self.events.published_events
-
-        assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
-        for event in events:
-            if event.get("backtrace") and event.get("raw_backtrace"):
-                self.assertEqual(
-                    event["backtrace"].strip(),
-                    "addr2line -Cpife scylla_debug_info_file {}".format(" ".join(event["raw_backtrace"].split("\n"))),
-                )
-
-    def test_04_decode_backtraces_core(self):
-        self.test_config.DECODING_QUEUE = Queue()
-        self.test_config.BACKTRACE_DECODING = True
-
-        self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_core.log")
-
-        self._read_and_publish_events()
-
-        self.monitor_node.termination_event.set()
-        self.monitor_node.stop_task_threads()
-        self.monitor_node.wait_till_tasks_threads_are_stopped()
-
-        events = self.events.published_events
-
-        assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
-        for event in events:
-            if event.get("backtrace") and event.get("raw_backtrace"):
-                self.assertEqual(
-                    event["backtrace"].strip(),
-                    "addr2line -Cpife scylla_debug_info_file {}".format(" ".join(event["raw_backtrace"].split("\n"))),
-                )
-
-
-# Pytest-style fixtures and tests
 
 
 @pytest.fixture(name="test_config")
@@ -232,6 +69,74 @@ def monitor_node_fixture(tmp_path):
     monitor_node.termination_event.set()
     monitor_node.stop_task_threads()
     monitor_node.wait_till_tasks_threads_are_stopped()
+
+
+def test_reactor_stall_not_decoded_when_no_decoding_queue(dummy_node, monitor_node, events_function_scope):
+    """Backtraces are not decoded when decoding_queue is None."""
+    config = TestConfig()
+    config.set_decoding_queue()
+
+    dummy_node.system_log = os.path.join(TEST_DATA_DIR, "system.log")
+
+    db_log_reader = DbLogReader(
+        system_log=dummy_node.system_log,
+        node_name=str(dummy_node),
+        remoter=dummy_node.remoter,
+        decoding_queue=None,
+        system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+        log_lines=False,
+        backtrace_stall_decoding=True,
+        backtrace_decoding_disable_regex=None,
+    )
+
+    monitor_node.start_decode_on_monitor_node_thread()
+    db_log_reader._read_and_publish_events()
+
+    events = events_function_scope.published_events
+
+    assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
+    for event in events:
+        if event.get("raw_backtrace"):
+            assert event["backtrace"] is None
+
+
+@pytest.mark.parametrize(
+    "log_file",
+    [
+        pytest.param("system.log", id="standard_log"),
+        pytest.param("system_interlace_stall.log", id="interlace_stall_log"),
+        pytest.param("system_core.log", id="core_backtrace_log"),
+    ],
+)
+def test_backtraces_decoded_when_enabled(test_config, dummy_node, monitor_node, events_function_scope, log_file):
+    """Backtraces are decoded to addr2line commands when decoding is enabled."""
+    dummy_node.system_log = os.path.join(TEST_DATA_DIR, log_file)
+
+    db_log_reader = DbLogReader(
+        system_log=dummy_node.system_log,
+        node_name=str(dummy_node),
+        remoter=dummy_node.remoter,
+        decoding_queue=test_config.DECODING_QUEUE,
+        system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+        log_lines=True,
+        backtrace_stall_decoding=True,
+        backtrace_decoding_disable_regex=None,
+    )
+
+    monitor_node.start_decode_on_monitor_node_thread()
+    db_log_reader._read_and_publish_events()
+    monitor_node.termination_event.set()
+    monitor_node.stop_task_threads()
+    monitor_node.wait_till_tasks_threads_are_stopped()
+
+    events = events_function_scope.published_events
+
+    assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
+    for event in events:
+        if event.get("backtrace") and event.get("raw_backtrace"):
+            assert event["backtrace"].strip() == "addr2line -Cpife scylla_debug_info_file {}".format(
+                " ".join(event["raw_backtrace"].split("\n"))
+            )
 
 
 @pytest.mark.parametrize(
@@ -278,11 +183,8 @@ def test_backtrace_decoding_configuration(
         event_filter: Lambda function to filter events for validation
         should_decode: Whether the filtered events should have decoded backtraces
     """
+    dummy_node.system_log = os.path.join(TEST_DATA_DIR, "system.log")
 
-    # Setup
-    dummy_node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
-
-    # Create db_log_reader with specific configuration
     db_log_reader = DbLogReader(
         system_log=dummy_node.system_log,
         node_name=str(dummy_node),
@@ -294,14 +196,12 @@ def test_backtrace_decoding_configuration(
         backtrace_decoding_disable_regex=disable_regex,
     )
 
-    # Execute
     monitor_node.start_decode_on_monitor_node_thread()
     db_log_reader._read_and_publish_events()
     monitor_node.termination_event.set()
     monitor_node.stop_task_threads()
     monitor_node.wait_till_tasks_threads_are_stopped()
 
-    # Validate
     events = events_function_scope.published_events
 
     filtered_events = [e for e in events if event_filter(e)]

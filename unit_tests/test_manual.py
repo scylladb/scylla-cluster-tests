@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import time
-import unittest
+import pytest
 import tempfile
 import logging
 from typing import TYPE_CHECKING
@@ -66,8 +66,8 @@ class LoaderSetDummy:
     name = "LoaderSetDummy"
 
 
-@unittest.skip("manual tests")
-class EC2ClientTests(unittest.TestCase):
+@pytest.mark.skip(reason="manual tests")
+class EC2ClientTests:
     @staticmethod
     def test_01():
         network_if = [
@@ -93,10 +93,10 @@ class EC2ClientTests(unittest.TestCase):
         print(inst)
 
 
-@unittest.skip("manual tests")
-class TestCassandraStressExporter(unittest.TestCase):
+@pytest.mark.skip(reason="manual tests")
+class TestCassandraStressExporter:
     @classmethod
-    def setUpClass(cls):
+    def setup_class(cls):
         cls.prom_address = start_metrics_server()
         cls.metrics = nemesis_metrics_obj()
 
@@ -137,10 +137,10 @@ class TestCassandraStressExporter(unittest.TestCase):
         res.result()
 
 
-@unittest.skip("manual tests")
-class TestCassandraStressHDRExporter(unittest.TestCase):
+@pytest.mark.skip(reason="manual tests")
+class TestCassandraStressHDRExporter:
     @classmethod
-    def setUpClass(cls):
+    def setup_class(cls):
         cls.prom_address = start_metrics_server()
         cls.metrics = nemesis_metrics_obj()
 
@@ -262,19 +262,19 @@ class TestCassandraStressHDRExporter(unittest.TestCase):
         res.result(10)
 
 
-class BaseSCTEventsTest(unittest.TestCase):
+class BaseSCTEventsTest:
     @classmethod
-    def setUpClass(cls):
+    def setup_class(cls):
         cls.temp_dir = tempfile.mkdtemp()
         start_events_device(cls.temp_dir)
         time.sleep(10)
 
     @classmethod
-    def tearDownClass(cls):
+    def teardown_class(cls):
         stop_events_device()
 
 
-@unittest.skip("manual tests")
+@pytest.mark.skip(reason="manual tests")
 class TestStressThread(BaseSCTEventsTest):
     def test_01(self):
         start_metrics_server()
@@ -326,7 +326,7 @@ class TestStressThread(BaseSCTEventsTest):
         res.result()
 
 
-@unittest.skip("manual tests")
+@pytest.mark.skip(reason="manual tests")
 class TestYcsbStressThread(BaseSCTEventsTest):
     def test_01(self):
         params = dict(alternator_port=8080)  # , dynamodb_primarykey_type='HASH_AND_RANGE')

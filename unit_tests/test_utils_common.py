@@ -16,7 +16,6 @@ import time
 import hashlib
 import shutil
 import logging
-import unittest
 import unittest.mock
 from pathlib import Path
 
@@ -28,10 +27,12 @@ from sdcm.utils.sstable.load_utils import SstableLoadUtils
 
 from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, FakeSstableRemoter
 
+from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, FakeSstableRemoter
+
 logging.basicConfig(level=logging.DEBUG)
 
 
-class TestUtils(unittest.TestCase):
+class TestUtils:
     def test_scylla_bench_metrics_conversion(self):
         metrics = {
             "4ms": 4.0,
@@ -49,7 +50,7 @@ class TestUtils(unittest.TestCase):
             assert actual == converted, f"Expected {converted}, got {actual}"
 
 
-class TestDownloadDir(unittest.TestCase):
+class TestDownloadDir:
     @staticmethod
     def clear_cloud_downloaded_path(url):
         md5 = hashlib.md5()
@@ -106,12 +107,12 @@ class TestDownloadDir(unittest.TestCase):
         assert update_db_packages is None
 
 
-class TestSstableLoadUtils(unittest.TestCase):
+class TestSstableLoadUtils:
     node = None
     temp_dir = None
 
     @classmethod
-    def setUpClass(cls):
+    def setup_class(cls):
         cls.node = DummyNode(
             name="test_node",
             parent_cluster=None,

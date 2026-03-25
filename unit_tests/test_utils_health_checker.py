@@ -12,7 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 
-import unittest
+import unittest.mock
 from unittest.mock import MagicMock
 from uuid import UUID
 
@@ -120,15 +120,15 @@ GOSSIP_INFO = {
 }
 
 
-class TestHealthChecker(unittest.TestCase):
+class TestHealthChecker:
     def test_check_nodes_status_no_removed(self):
         event = next(check_nodes_status(NODES_STATUS, node1), None)
-        self.assertIsNotNone(event)
-        self.assertEqual(event.type, "NodeStatus")
-        self.assertEqual(event.severity, Severity.CRITICAL)
-        self.assertEqual(event.node, "node-0")
-        self.assertEqual(event.message, "")
-        self.assertNotEqual(event.error, "")
+        assert event is not None
+        assert event.type == "NodeStatus"
+        assert event.severity == Severity.CRITICAL
+        assert event.node == "node-0"
+        assert event.message == ""
+        assert event.error != ""
 
     def test_check_nodes_status_removed(self):
         event = next(
@@ -141,16 +141,16 @@ class TestHealthChecker(unittest.TestCase):
             ),
             None,
         )
-        self.assertIsNotNone(event)
-        self.assertEqual(event.type, "NodeStatus")
-        self.assertEqual(event.severity, Severity.CRITICAL)
-        self.assertEqual(event.node, "node-0")
-        self.assertEqual(event.message, "")
-        self.assertNotEqual(event.error, "")
+        assert event is not None
+        assert event.type == "NodeStatus"
+        assert event.severity == Severity.CRITICAL
+        assert event.node == "node-0"
+        assert event.message == ""
+        assert event.error != ""
 
     def test_check_nulls_in_peers_no_nulls(self):
         event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
-        self.assertIsNone(event)
+        assert event is None
 
     def test_check_nulls_in_peers(self):
         # Due to commit
@@ -159,11 +159,11 @@ class TestHealthChecker(unittest.TestCase):
         data_center = PEERS_INFO[node2]["data_center"]
         PEERS_INFO[node2]["data_center"] = "null"
         event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
-        self.assertEqual(event.type, "NodePeersNulls")
-        self.assertEqual(event.severity, Severity.ERROR)
-        self.assertEqual(event.node, "node-0")
-        self.assertEqual(event.message, "")
-        self.assertNotEqual(event.error, "")
+        assert event.type == "NodePeersNulls"
+        assert event.severity == Severity.ERROR
+        assert event.node == "node-0"
+        assert event.message == ""
+        assert event.error != ""
 
         PEERS_INFO[node2]["data_center"] = data_center
 
@@ -178,7 +178,7 @@ class TestHealthChecker(unittest.TestCase):
         GOSSIP_INFO[node2]["status"] = "FILTERED"
 
         event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
-        self.assertIsNone(event)
+        assert event is None
 
         PEERS_INFO[node2]["data_center"] = data_center
         GOSSIP_INFO[node2]["status"] = gossip_status
@@ -188,16 +188,16 @@ class TestHealthChecker(unittest.TestCase):
             "data_center": "null",
         }
         event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
-        self.assertIsNone(event)
+        assert event is None
         PEERS_INFO.pop(node4)
 
     def test_check_node_status_in_gossip_and_nodetool_status_all_ok(self):
         event = next(check_node_status_in_gossip_and_nodetool_status(GOSSIP_INFO, NODES_STATUS, node1), None)
-        self.assertIsNone(event)
+        assert event is None
 
     def test_check_schema_version_all_ok(self):
         event = next(check_schema_version(GOSSIP_INFO, PEERS_INFO, NODES_STATUS, node1), None)
-        self.assertIsNone(event)
+        assert event is None
 
     def test_check_schema_agreement_in_gossip_and_peers(self):
         attempts = 3
@@ -205,9 +205,9 @@ class TestHealthChecker(unittest.TestCase):
         with unittest.mock.patch("time.sleep") as mocked_sleep:
             err = check_schema_agreement_in_gossip_and_peers(node1, attempts)
 
-        self.assertEqual(mocked_sleep.call_count, 0, "Looks like redundant retries were executed")
-        self.assertIsInstance(err, str)
-        self.assertFalse(err)
+        assert mocked_sleep.call_count == 0, "Looks like redundant retries were executed"
+        assert isinstance(err, str)
+        assert not err
 
     def test_check_schema_agreement_in_gossip_and_peers_error_on_first_attempt(self):
         problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=1)
@@ -216,9 +216,9 @@ class TestHealthChecker(unittest.TestCase):
         with unittest.mock.patch("time.sleep") as mocked_sleep:
             err = check_schema_agreement_in_gossip_and_peers(problem_node, attempts)
 
-        self.assertEqual(mocked_sleep.call_count, 1, "Unexpected number of retries applied")
-        self.assertIsInstance(err, str)
-        self.assertFalse(err)
+        assert mocked_sleep.call_count == 1, "Unexpected number of retries applied"
+        assert isinstance(err, str)
+        assert not err
 
     def test_check_schema_agreement_in_gossip_and_peers_constant_error(self):
         attempts = 3
@@ -227,9 +227,9 @@ class TestHealthChecker(unittest.TestCase):
         with unittest.mock.patch("time.sleep") as mocked_sleep:
             err = check_schema_agreement_in_gossip_and_peers(problem_node, attempts)
 
-        self.assertEqual(mocked_sleep.call_count, attempts - 1, "Unexpected number of retries applied")
-        self.assertIsInstance(err, str)
-        self.assertTrue(err)
+        assert mocked_sleep.call_count == attempts - 1, "Unexpected number of retries applied"
+        assert isinstance(err, str)
+        assert err
 
     def test_check_group0_tokenring_consistency_with_none_values(self):
         """Test that check_group0_tokenring_consistency handles None values gracefully"""
