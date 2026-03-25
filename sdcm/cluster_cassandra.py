@@ -545,6 +545,21 @@ class BaseCassandraCluster:
         """Enable and start the Cassandra systemd service."""
         node.remoter.sudo("systemctl enable cassandra", ignore_status=True)
         node.remoter.sudo("systemctl start cassandra")
+        # Verify service started and log status for debugging
+        status = node.remoter.run("systemctl is-active cassandra", ignore_status=True, verbose=False)
+        self.log.info("Cassandra service status after start: %s", status.stdout.strip())
+        if "active" not in status.stdout:
+            journal = node.remoter.run(
+                "sudo journalctl -u cassandra.service --no-pager -n 20", ignore_status=True, verbose=False
+            )
+            self.log.error("Cassandra failed to start. Journal:\n%s", journal.stdout[-2000:])
+            # Also check the system.log
+            syslog = node.remoter.run(
+                "sudo tail -30 /var/log/cassandra/system.log 2>/dev/null || echo 'no log'",
+                ignore_status=True,
+                verbose=False,
+            )
+            self.log.error("Cassandra system.log:\n%s", syslog.stdout[-2000:])
 
     def get_node_ips_param(self, public_ip=True):
         if self.test_config.MIXED_CLUSTER:
