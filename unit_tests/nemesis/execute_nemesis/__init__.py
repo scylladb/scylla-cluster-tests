@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 from sdcm.nemesis import NemesisRunner, UnsupportedNemesis, KillNemesis
 from sdcm.nemesis.registry import NemesisRegistry
+from sdcm.utils.version_utils import MethodVersionNotFound
 
 
 class TestExecuteBaseClass(ABC):
@@ -47,6 +48,13 @@ class KillTestNemesis(TestExecuteBaseClass):
 
     def disrupt(self):
         raise KillNemesis("Intentional kill")
+
+
+class VersionNotFoundTestNemesis(TestExecuteBaseClass):
+    """A nemesis that raises MethodVersionNotFound."""
+
+    def disrupt(self):
+        raise MethodVersionNotFound("Intentional version skip")
 
 
 class TestNemesisRunner(NemesisRunner):
