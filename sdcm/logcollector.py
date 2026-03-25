@@ -1576,8 +1576,11 @@ class Collector:
                 KubernetesMustGatherLogCollector: self.kubernetes_set,
                 KubernetesAPIServerLogCollector: self.kubernetes_set,
             }
+        db_collector = (
+            CassandraLogCollector if params.get("db_type") in ("cassandra", "mixed_cassandra") else ScyllaLogCollector
+        )
         self.cluster_log_collectors |= {
-            ScyllaLogCollector: self.db_cluster,
+            db_collector: self.db_cluster,
             SchemaLogCollector: self.sct_set,
             FailureStatisticsCollector: self.sct_set,
             BaseSCTLogCollector: self.sct_set,
