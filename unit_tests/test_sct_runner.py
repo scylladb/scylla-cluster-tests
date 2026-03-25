@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import unittest
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 
@@ -26,10 +25,10 @@ from sdcm.sct_runner import (
 )
 
 
-class TestListSctRunners(unittest.TestCase):
+class TestListSctRunners:
     """Test the enhanced list_sct_runners function."""
 
-    def setUp(self):
+    def setup_method(self):
         self.aws_runner = SctRunnerInfo(
             sct_runner_class=AwsSctRunner,
             cloud_service_instance=None,
@@ -83,11 +82,11 @@ class TestListSctRunners(unittest.TestCase):
 
         runners = list_sct_runners(verbose=False)
 
-        self.assertEqual(len(runners), 4)
-        self.assertIn(self.aws_runner, runners)
-        self.assertIn(self.gce_runner, runners)
-        self.assertIn(self.azure_runner, runners)
-        self.assertIn(self.oci_runner, runners)
+        assert len(runners) == 4
+        assert self.aws_runner in runners
+        assert self.gce_runner in runners
+        assert self.azure_runner in runners
+        assert self.oci_runner in runners
 
     @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.GceSctRunner.list_sct_runners")
@@ -116,11 +115,11 @@ class TestListSctRunners(unittest.TestCase):
 
         runners = list_sct_runners(user="user1", verbose=False)
 
-        self.assertEqual(len(runners), 2)
-        self.assertIn(self.aws_runner, runners)
-        self.assertIn(self.gce_runner, runners)
-        self.assertNotIn(self.azure_runner, runners)
-        self.assertNotIn(self.oci_runner, runners)
+        assert len(runners) == 2
+        assert self.aws_runner in runners
+        assert self.gce_runner in runners
+        assert self.azure_runner not in runners
+        assert self.oci_runner not in runners
 
     @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.GceSctRunner.list_sct_runners")
@@ -135,11 +134,11 @@ class TestListSctRunners(unittest.TestCase):
 
         runners = list_sct_runners(test_id="test-id-1", verbose=False)
 
-        self.assertEqual(len(runners), 3)
-        self.assertIn(self.aws_runner, runners)
-        self.assertNotIn(self.gce_runner, runners)
-        self.assertIn(self.azure_runner, runners)
-        self.assertIn(self.oci_runner, runners)
+        assert len(runners) == 3
+        assert self.aws_runner in runners
+        assert self.gce_runner not in runners
+        assert self.azure_runner in runners
+        assert self.oci_runner in runners
 
     @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.GceSctRunner.list_sct_runners")
@@ -154,11 +153,11 @@ class TestListSctRunners(unittest.TestCase):
 
         runners = list_sct_runners(test_runner_ip="5.6.7.8", verbose=False)
 
-        self.assertEqual(len(runners), 1)
-        self.assertNotIn(self.aws_runner, runners)
-        self.assertIn(self.gce_runner, runners)
-        self.assertNotIn(self.azure_runner, runners)
-        self.assertNotIn(self.oci_runner, runners)
+        assert len(runners) == 1
+        assert self.aws_runner not in runners
+        assert self.gce_runner in runners
+        assert self.azure_runner not in runners
+        assert self.oci_runner not in runners
 
     @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.GceSctRunner.list_sct_runners")
@@ -185,11 +184,11 @@ class TestListSctRunners(unittest.TestCase):
 
         runners = list_sct_runners(user="user1", test_id="test-id-1", verbose=False)
 
-        self.assertEqual(len(runners), 3)
-        self.assertIn(self.aws_runner, runners)
-        self.assertNotIn(self.gce_runner, runners)
-        self.assertIn(self.azure_runner, runners)
-        self.assertIn(self.oci_runner, runners)
+        assert len(runners) == 3
+        assert self.aws_runner in runners
+        assert self.gce_runner not in runners
+        assert self.azure_runner in runners
+        assert self.oci_runner in runners
 
     @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.GceSctRunner.list_sct_runners")
@@ -204,7 +203,7 @@ class TestListSctRunners(unittest.TestCase):
 
         runners = list_sct_runners(test_id="non-existent-test-id", verbose=False)
 
-        self.assertEqual(len(runners), 0)
+        assert len(runners) == 0
 
     @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
     def test_list_sct_runners_backend_filtering_aws(self, mock_aws):
@@ -218,14 +217,14 @@ class TestListSctRunners(unittest.TestCase):
                 mock_aws.assert_called_once()
                 mock_gce.assert_not_called()
                 mock_azure.assert_not_called()
-                self.assertEqual(len(runners), 1)
-                self.assertIn(self.aws_runner, runners)
+                assert len(runners) == 1
+                assert self.aws_runner in runners
 
 
-class TestCleanSctRunners(unittest.TestCase):
+class TestCleanSctRunners:
     """Test the clean_sct_runners function."""
 
-    def setUp(self):
+    def setup_method(self):
         self.mock_runner_with_keep = MagicMock(
             keep="24",
             keep_action="terminate",

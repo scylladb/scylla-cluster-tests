@@ -13,10 +13,11 @@
 
 import os
 import getpass
-import unittest
 import threading
 from typing import Union, Optional
 from logging import getLogger
+
+import pytest
 
 # from parameterized import parameterized
 
@@ -90,7 +91,7 @@ def generate_all_commands_with_all_options():
 ALL_COMMANDS_WITH_ALL_OPTIONS = generate_all_commands_with_all_options()
 
 
-class TestRemoteCmdRunners(unittest.TestCase):
+class TestRemoteCmdRunners:
     """A class that use LocalCmdRunner to get example of result and runs tests against
       RemoteLibSSH2CmdRunner and RemoteCmdRunner, to make sure that they produce result that matches
       result of LocalCmdRunner
@@ -221,7 +222,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
             future.join()
 
     # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
-    @unittest.skip("To be ran manually")
+    @pytest.mark.skip(reason="To be ran manually")
     def test_run_in_mainthread(
         self,
         remoter_type,
@@ -270,7 +271,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         self._compare_results(expected, result2, stmt=stmt, kwargs=kwargs)
 
     # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
-    @unittest.skip("To be ran manually")
+    @pytest.mark.skip(reason="To be ran manually")
     def test_create_and_run_in_same_thread(
         self,
         remoter_type,
@@ -307,7 +308,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
             self._compare_results(expected, paramiko_result, stmt=stmt, kwargs=kwargs)
 
     # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
-    @unittest.skip("To be ran manually")
+    @pytest.mark.skip(reason="To be ran manually")
     def test_create_and_run_in_separate_thread(
         self,
         remoter_type,
@@ -378,7 +379,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
     #             "AA\\n%.0s' {1..100};\""
     #     )
     # ])
-    @unittest.skip("To be ran manually")
+    @pytest.mark.skip(reason="To be ran manually")
     def test_load_1000_threads(self, remoter_type, stmt: str):
         kwargs = {"verbose": True, "ignore_status": False, "new_session": True, "retry": 2}
         self.log.info(repr({stmt: stmt, **kwargs}))
@@ -416,21 +417,21 @@ class TestRemoteCmdRunners(unittest.TestCase):
     #     (RemoteCmdRunner, "export | grep SSH_CONNECTION ; true", False),
     #     (KubernetesCmdRunner, "export | grep SSH_CONNECTION ; true", False)
     # ])
-    @unittest.skip("To be ran manually")
+    @pytest.mark.skip(reason="To be ran manually")
     def test_context_changing(self, remoter_type, stmt: str, change_context: bool):
         kwargs = {"verbose": True, "ignore_status": True, "timeout": 10, "change_context": change_context}
         self.log.info(repr({stmt: stmt, **kwargs}))
         paramiko_thread_results = []
         self._create_and_run_twice_in_same_thread(remoter_type, self.key_file, stmt, kwargs, paramiko_thread_results)
         if change_context and paramiko_thread_results[0].ok:
-            self.assertNotEqual(paramiko_thread_results[0].stdout, paramiko_thread_results[1].stdout)
+            assert paramiko_thread_results[0].stdout != paramiko_thread_results[1].stdout
         else:
-            self.assertEqual(paramiko_thread_results[0].stdout, paramiko_thread_results[1].stdout)
+            assert paramiko_thread_results[0].stdout == paramiko_thread_results[1].stdout
 
 
-class TestSudoAndRunShellScript(unittest.TestCase):
+class TestSudoAndRunShellScript:
     @classmethod
-    def setUpClass(cls) -> None:
+    def setup_class(cls) -> None:
         class _Runner(CommandRunner):
             def run(self, cmd, *_, **__):
                 self.command_to_run = cmd
@@ -446,20 +447,20 @@ class TestSudoAndRunShellScript(unittest.TestCase):
     def test_sudo_root(self):
         remoter = self.remoter_cls("localhost", user="root")
         remoter.run("true")
-        self.assertEqual(remoter.command_to_run, "true")
+        assert remoter.command_to_run == "true"
 
     def test_sudo_non_root(self):
         remoter = self.remoter_cls("localhost", user="joe")
         remoter.sudo("true")
-        self.assertEqual(remoter.command_to_run, "sudo true")
+        assert remoter.command_to_run == "sudo true"
 
     def test_shell_script_cmd(self):
-        self.assertEqual(shell_script_cmd("true"), 'bash -cxe "true"')
+        assert shell_script_cmd("true") == 'bash -cxe "true"'
 
 
-class TestRemoteFile(unittest.TestCase):
+class TestRemoteFile:
     @classmethod
-    def setUpClass(cls) -> None:
+    def setup_class(cls) -> None:
         class _Runner:
             sf_data = sf_src = sf_dst = rf_src = rf_dst = None
             hostname = "localhost"
@@ -502,14 +503,14 @@ class TestRemoteFile(unittest.TestCase):
             remoter=remoter, remote_path=some_file, preserve_ownership=False, preserve_permissions=False
         ) as fobj:
             fobj.write("test data")
-        self.assertEqual(remoter.rf_src, some_file)
-        self.assertEqual(remoter.sf_dst, "temporary")
-        self.assertTrue(remoter.rf_dst.startswith("/tmp/sct"))
-        self.assertTrue(remoter.rf_dst.endswith(os.path.basename(some_file)))
-        self.assertEqual(remoter.rf_dst, remoter.sf_src)
-        self.assertEqual(remoter.sf_data, "test data")
-        self.assertFalse(os.path.exists(remoter.sf_src))
-        self.assertEqual(remoter.command_to_run, f"bash -cxe \"cat 'temporary' > '{some_file}'\nrm 'temporary'\n\"")
+        assert remoter.rf_src == some_file
+        assert remoter.sf_dst == "temporary"
+        assert remoter.rf_dst.startswith("/tmp/sct")
+        assert remoter.rf_dst.endswith(os.path.basename(some_file))
+        assert remoter.rf_dst == remoter.sf_src
+        assert remoter.sf_data == "test data"
+        assert not os.path.exists(remoter.sf_src)
+        assert remoter.command_to_run == f"bash -cxe \"cat 'temporary' > '{some_file}'\nrm 'temporary'\n\""
 
     def test_remote_file_preserve_ownership(self):
         remoter = self.remoter_cls()
@@ -540,7 +541,7 @@ class TestRemoteFile(unittest.TestCase):
             fobj.write(remoter.rf_data)
             assert remoter.command_to_run == f'stat -c "%a" {some_file}'
 
-        self.assertEqual(remoter.rf_src, some_file)
-        self.assertTrue(remoter.rf_dst.startswith("/tmp/sct"))
-        self.assertTrue(remoter.rf_dst.endswith(os.path.basename(some_file)))
-        self.assertEqual(remoter.sf_data, None)
+        assert remoter.rf_src == some_file
+        assert remoter.rf_dst.startswith("/tmp/sct")
+        assert remoter.rf_dst.endswith(os.path.basename(some_file))
+        assert remoter.sf_data is None
