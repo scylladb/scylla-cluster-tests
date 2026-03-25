@@ -1,0 +1,107 @@
+# Provision test labels — used by Jenkinsfile to gate provision test stages.
+# Apply these labels to a PR to trigger the corresponding provision test.
+#
+# This file serves as documentation and can be used with label-sync tools
+# such as github-label-sync or EndBug/label-sync GitHub Action.
+
+# Run provision tests on ALL backends
+- name: test-provision
+  description: Run provision tests on all backends
+  color: "0e8a16"
+
+# Docker
+- name: test-provision-docker
+  description: Run provision test on Docker (Scylla)
+  color: "0e8a16"
+
+- name: test-provision-cassandra-docker
+  description: Run provision test on Docker (Cassandra)
+  color: "0e8a16"
+
+# AWS
+- name: test-provision-aws
+  description: Run provision test on AWS
+  color: "0e8a16"
+
+- name: test-provision-aws-reuse
+  description: Run provision test on AWS with cluster reuse
+  color: "0e8a16"
+
+# GCE
+- name: test-provision-gce
+  description: Run provision test on GCE
+  color: "0e8a16"
+
+- name: test-provision-gce-reuse
+  description: Run provision test on GCE with cluster reuse
+  color: "0e8a16"
+
+# Azure
+- name: test-provision-azure
+  description: Run provision test on Azure
+  color: "0e8a16"
+
+- name: test-provision-azure-reuse
+  description: Run provision test on Azure with cluster reuse
+  color: "0e8a16"
+
+# OCI
+- name: test-provision-oci
+  description: Run provision test on OCI
+  color: "0e8a16"
+
+- name: test-provision-oci-reuse
+  description: Run provision test on OCI with cluster reuse
+  color: "0e8a16"
+
+# Kubernetes
+- name: test-provision-k8s-local-kind-aws
+  description: Run provision test on K8s (KinD on AWS)
+  color: "0e8a16"
+
+- name: test-provision-k8s-local-kind-aws-reuse
+  description: Run provision test on K8s (KinD on AWS) with cluster reuse
+  color: "0e8a16"
+
+- name: test-provision-k8s-eks
+  description: Run provision test on K8s (EKS)
+  color: "0e8a16"
+
+- name: test-provision-k8s-eks-reuse
+  description: Run provision test on K8s (EKS) with cluster reuse
+  color: "0e8a16"
+
+# ScyllaDB Cloud (xcloud)
+- name: test-provision-xcloud-aws
+  description: Run provision test on ScyllaDB Cloud (AWS)
+  color: "0e8a16"
+
+- name: test-provision-xcloud-aws-reuse
+  description: Run provision test on ScyllaDB Cloud (AWS) with cluster reuse
+  color: "0e8a16"
+
+- name: test-provision-xcloud-gce
+  description: Run provision test on ScyllaDB Cloud (GCE)
+  color: "0e8a16"
+
+- name: test-provision-xcloud-gce-reuse
+  description: Run provision test on ScyllaDB Cloud (GCE) with cluster reuse
+  color: "0e8a16"
+
+# Vector Store
+- name: test-provision-vs-docker
+  description: Run provision test for Vector Store on Docker
+  color: "0e8a16"
+
+- name: test-provision-vs-aws
+  description: Run provision test for Vector Store on AWS
+  color: "0e8a16"
+
+- name: test-provision-vs-aws-reuse
+  description: Run provision test for Vector Store on AWS with cluster reuse
+  color: "0e8a16"
+
+# Other CI labels referenced in Jenkinsfile
+- name: test-integration
+  description: Run the integration tests suite
+  color: "0e8a16"
