@@ -937,12 +937,16 @@ class CassandraLogCollector(LogCollector):
     """
 
     log_entities = [
-        # Cassandra application logs (file-based, not journald)
-        CommandLog(name="cassandra-system.log", command="cat /var/log/cassandra/system.log"),
-        CommandLog(name="cassandra-debug.log", command="cat /var/log/cassandra/debug.log"),
-        DirLog(
-            name="cassandra-gc-logs",
-            command="ls /var/log/cassandra/gc.log* 2>/dev/null && cat /var/log/cassandra/gc.log*",
+        # Cassandra application logs (file-based, not journald — need sudo)
+        CommandLog(
+            name="cassandra-system.log",
+            command="sudo cat /var/log/cassandra/system.log 2>/dev/null || echo 'not found'",
+        ),
+        CommandLog(
+            name="cassandra-debug.log", command="sudo cat /var/log/cassandra/debug.log 2>/dev/null || echo 'not found'"
+        ),
+        CommandLog(
+            name="cassandra-gc.log", command="sudo cat /var/log/cassandra/gc.log 2>/dev/null || echo 'not found'"
         ),
         # Cassandra service journal (captures start-stop-daemon messages)
         FileLog(
@@ -953,18 +957,25 @@ class CassandraLogCollector(LogCollector):
         FileLog(name="system_*", search_locally=True),
         FileLog(name="schema.log", search_locally=True, collect_from_parent=True),
         # Cassandra configuration files
-        CommandLog(name="cassandra.yaml", command="cat /etc/cassandra/cassandra.yaml"),
-        CommandLog(name="cassandra-env.sh", command="cat /etc/cassandra/cassandra-env.sh"),
-        CommandLog(name="cassandra-rackdc.properties", command="cat /etc/cassandra/cassandra-rackdc.properties"),
+        CommandLog(
+            name="cassandra.yaml", command="sudo cat /etc/cassandra/cassandra.yaml 2>/dev/null || echo 'not found'"
+        ),
+        CommandLog(
+            name="cassandra-env.sh", command="sudo cat /etc/cassandra/cassandra-env.sh 2>/dev/null || echo 'not found'"
+        ),
+        CommandLog(
+            name="cassandra-rackdc.properties",
+            command="sudo cat /etc/cassandra/cassandra-rackdc.properties 2>/dev/null || echo 'not found'",
+        ),
         CommandLog(
             name="jvm.options",
-            command="test -f /etc/cassandra/jvm.options && cat /etc/cassandra/jvm.options || echo 'not found'",
+            command="sudo cat /etc/cassandra/jvm.options 2>/dev/null || echo 'not found'",
         ),
         CommandLog(
             name="jvm11-server.options",
-            command="test -f /etc/cassandra/jvm11-server.options && cat /etc/cassandra/jvm11-server.options || echo 'not found'",
+            command="sudo cat /etc/cassandra/jvm11-server.options 2>/dev/null || echo 'not found'",
         ),
-        # System info (same as Scylla)
+        # System info
         CommandLog(name="cpu_info", command="cat /proc/cpuinfo"),
         CommandLog(name="mem_info", command="cat /proc/meminfo"),
         CommandLog(name="interrupts", command="cat /proc/interrupts"),
@@ -972,11 +983,12 @@ class CassandraLogCollector(LogCollector):
         CommandLog(name="dmesg.log", command="sudo dmesg -P"),
         CommandLog(name="systemctl.status", command="sudo systemctl status --all --full --no-pager"),
         CommandLog(name="df.log", command="df -h"),
-        CommandLog(name="cloud-init-output.log", command="cat /var/log/cloud-init-output.log"),
-        CommandLog(name="cloud-init.log", command="cat /var/log/cloud-init.log"),
+        CommandLog(name="cloud-init-output.log", command="sudo cat /var/log/cloud-init-output.log 2>/dev/null"),
+        CommandLog(name="cloud-init.log", command="sudo cat /var/log/cloud-init.log 2>/dev/null"),
         # Cassandra data directory info (sizes, not contents)
         CommandLog(
-            name="cassandra-data-sizes.log", command="du -sh /var/lib/cassandra/* 2>/dev/null || echo 'no data'"
+            name="cassandra-data-sizes.log",
+            command="sudo du -sh /var/lib/cassandra/* 2>/dev/null || echo 'no data'",
         ),
         # Cassandra nodetool diagnostics
         CommandLog(name="nodetool-status.log", command="nodetool status 2>&1 || echo 'nodetool failed'"),

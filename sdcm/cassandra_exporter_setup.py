@@ -22,7 +22,7 @@ class CassandraExporterSetup:
             shell_script_cmd(f"""
             # Download Criteo cassandra_exporter
             curl -L --retry 5 --retry-max-time 300 -o /opt/cassandra_exporter.jar \
-                https://github.com/criteo/cassandra_exporter/releases/download/{CASSANDRA_EXPORTER_VERSION}/cassandra_exporter-{CASSANDRA_EXPORTER_VERSION}-all.jar
+                https://github.com/criteo/cassandra_exporter/releases/download/{CASSANDRA_EXPORTER_VERSION}/cassandra_exporter-{CASSANDRA_EXPORTER_VERSION}.jar
 
             # Create config file
             cat > /etc/cassandra_exporter.yml <<'EXPORTER_CONFIG'
