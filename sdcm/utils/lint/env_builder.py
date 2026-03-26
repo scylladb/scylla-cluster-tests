@@ -256,7 +256,11 @@ def _add_image_placeholders(env: dict[str, str], backend: str, num_regions: int)
         env["SCT_AMI_ID_LOADER"] = " ".join(["aws-lint-placeholder"] * num_regions)
 
     # Add scylla_repo placeholder if not set and backend needs it
-    if base_backend in ("aws", "gce", "azure") and "SCT_SCYLLA_REPO" not in env and "SCT_SCYLLA_VERSION" not in env:
+    if (
+        base_backend in ("aws", "gce", "azure", "oci")
+        and "SCT_SCYLLA_REPO" not in env
+        and "SCT_SCYLLA_VERSION" not in env
+    ):
         env["SCT_SCYLLA_REPO"] = _SCYLLA_REPO_PLACEHOLDER
 
     # xcloud backend requires scylla_version at runtime — provide obviously invalid placeholder

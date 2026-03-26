@@ -444,6 +444,7 @@ BACKEND_IMAGE_FIELD: dict[str, str] = {
     "gce": "gce_image_db",
     "azure": "azure_image_db",
     "docker": "docker_image",
+    "oci": "oci_image_db",
 }
 
 

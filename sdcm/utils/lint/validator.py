@@ -42,6 +42,16 @@ _CLOUD_API_PATCHES = {
     "sdcm.sct_config.azure_check_instance_type_available": lambda *a, **kw: True,
     # KeyStore reads credentials from S3 — not needed for config structure validation
     "sdcm.sct_config.KeyStore": lambda: _FakeKeyStore(),
+    # OCI image tag lookup (verify_configuration_urls_validity)
+    "sdcm.utils.oci_utils.get_image_tags": lambda *a, **kw: {
+        "user_data_format_version": "3",
+        "scylla_version": "2024.2.0",
+    },
+    # Azure image tag lookup (verify_configuration_urls_validity)
+    "sdcm.provision.azure.utils.get_image_tags": lambda *a, **kw: {
+        "user_data_format_version": "2",
+        "scylla_version": "2024.2.0",
+    },
 }
 
 
