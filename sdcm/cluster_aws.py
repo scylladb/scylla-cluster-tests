@@ -1268,7 +1268,7 @@ class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
                 func=self.check_node_db_up,
                 step=10,
                 text=f"{node.name}: Waiting for Cassandra to be up (nodetool status UN)",
-                timeout=timeout or 600,
+                timeout=timeout or 1200,
                 throw_exc=True,
                 node=node,
             )
