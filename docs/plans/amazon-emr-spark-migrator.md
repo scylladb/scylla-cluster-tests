@@ -55,12 +55,6 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 - `sdcm/utils/resources_cleanup.py:clean_instances_aws()` (line ~179) — Terminates EC2 instances by tag filtering (`TestId`, `RunByUser`)
 - `sdcm/utils/resources_cleanup.py:clean_clusters_eks()` (line ~511) — EKS-specific cleanup: discovers EKS clusters by tags and destroys them in parallel using `ParallelObject`
 
-### Email Reporting
-
-- `sdcm/send_email.py:BaseEmailReporter` (line ~126) — Base class with common fields, Jinja2 template rendering, and SMTP delivery
-- `sdcm/send_email.py:build_reporter()` (line ~589) — Maps test class names to reporter subclasses (e.g., `"Longevity"` → `LongevityEmailReporter`)
-- `sdcm/report_templates/` — Jinja2 HTML templates for each reporter type
-
 ### Tagging and Resource Discovery
 
 - All AWS resources are tagged with `TestId` and `RunByUser` for cleanup discovery
@@ -73,7 +67,7 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 - No EMR configuration parameters in `sdcm/sct_config.py`
 - No EMR cleanup function in `resources_cleanup.py`
 - No spark-migrator test class or test cases
-- No EMR-specific email reporter or template
+- No EMR-specific email reporter or template (N/A — old email system removed; reporting now handled by Argus)
 - No default configuration for EMR in `defaults/`
 
 ## Goals
@@ -82,7 +76,7 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 2. **Support Spot Instance integration** for EMR Core/Task nodes to minimize cost (On-Demand for Master, Spot for Core/Task), with automatic fallback timeout of 10 minutes before failing the test
 3. **Submit and monitor spark-migrator jobs** on provisioned EMR clusters — step status polling at 30-second intervals, job completion detected within 60 seconds of actual finish
 4. **Clean up EMR resources automatically** — tag-based discovery (`TestId`, `RunByUser`) finds and terminates all orphaned EMR clusters within 5 minutes; cleanup runs as part of `clean_cloud_resources()` on every test teardown
-5. **Integrate with SCT email reporting** so spark-migrator test results (rows migrated, duration, throughput) appear in standard SCT reports
+5. **Integrate with Argus reporting** so spark-migrator test results (rows migrated, duration, throughput) are tracked alongside other SCT test results
 6. **Provide a reusable test base class** — base scenario: 3-node Scylla cluster + 3-node EMR cluster (1 master + 2 core), migrating ≥1 million rows with post-migration row-count and data-checksum validation. Base scenario completes within 60 minutes end-to-end (provision + migrate + validate + teardown)
 7. **Support configurable EMR release versions** (e.g., `emr-7.x`) and Spark versions to test across multiple environments
 
@@ -227,34 +221,7 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 
 ---
 
-### Phase 6: Email Reporting for Spark Migrator Tests
-
-**Importance**: Important
-**Description**: Add email reporting support so spark-migrator test results are included in standard SCT email reports.
-
-**Dependencies**: Phase 5
-
-**Deliverables**:
-- New reporter class in `sdcm/send_email.py`:
-  - `SparkMigratorEmailReporter(BaseEmailReporter)` — Adds fields for migration-specific metrics (rows migrated, duration, throughput, EMR cluster details)
-- New email template: `sdcm/report_templates/results_spark_migrator.html`
-- Registration in `build_reporter()` function: `"SparkMigrator"` → `SparkMigratorEmailReporter`
-- Reporter fields:
-  - `emr_cluster_id` — EMR cluster identifier
-  - `emr_release_label` — EMR version used
-  - `migration_duration` — Time to complete migration
-  - `rows_migrated` — Number of rows transferred
-  - `migration_throughput` — Rows/second or MB/second
-
-**Definition of Done**:
-- [ ] Email reporter renders migration test results correctly
-- [ ] `build_reporter()` maps spark-migrator test class to the new reporter
-- [ ] Template includes EMR cluster info and migration metrics
-- [ ] Unit test verifies reporter data building and template rendering
-
----
-
-### Phase 7: Post-Behavior Configuration and Documentation
+### Phase 6: Post-Behavior Configuration and Documentation
 
 **Importance**: Important
 **Description**: Add post-behavior configuration for EMR clusters (keep/destroy after test) and document the full EMR integration.
@@ -278,7 +245,7 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 
 ---
 
-### Phase 8: Jenkins Pipeline Integration
+### Phase 7: Jenkins Pipeline Integration
 
 **Importance**: Nice-to-have
 **Description**: Create Jenkins pipeline definitions for running spark-migrator tests in CI/CD.
@@ -293,7 +260,6 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 **Definition of Done**:
 - [ ] Jenkins pipeline runs spark-migrator test end-to-end
 - [ ] Pipeline cleans up all resources including EMR clusters
-- [ ] Pipeline sends email reports on completion
 
 ## Testing Requirements
 
@@ -307,8 +273,6 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
   - Location: `unit_tests/test_clean_cloud_resources_func.py` (extend existing cleanup tests)
 - **Spark job submission**: Use `moto` to mock EMR Steps API (`add_job_flow_steps`, `describe_step`, `list_steps`) for job submission and monitoring
   - Location: `unit_tests/test_spark_migrator.py`
-- **Email reporter**: Verify data building and template rendering for migration-specific fields
-  - Location: `unit_tests/test_send_email.py` (extend existing email tests)
 - Run with: `uv run sct.py unit-tests -t <test_file>`
 
 ### Integration Tests
@@ -326,7 +290,6 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 - **Spot Instance behavior**: Verify Spot interruption handling on EMR Task nodes
 - **Multi-region**: Test EMR cluster in different AWS regions
 - **Cleanup verification**: Confirm no orphaned EMR clusters after test abort/failure
-- **Email report**: Verify email report renders correctly with migration metrics
 
 ## Success Criteria
 
