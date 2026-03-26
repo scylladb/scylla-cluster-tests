@@ -258,6 +258,7 @@ class SCTConfiguration(dict):
         "xcloud",
     ]
 
+<<<<<<< HEAD
     config_options = [
         dict(
             name="config_files",
@@ -362,6 +363,31 @@ class SCTConfiguration(dict):
             type=str,
             help="""
                 The snitch class scylla would use
+||||||| parent of e765e9095 (refactor(config): remove perf_extra_jobs_to_compare parameter from all module)
+    perf_extra_jobs_to_compare: StringOrList = SctField(
+        description="""Jobs to compare performance results with, for example if running in staging,
+         we still can compare with official jobs""",
+    )
+    perf_simple_query_extra_command: String = SctField(
+        description="Extra command line options to pass to perf_simple_query",
+    )
+    force_run_iotune: Boolean = SctField(
+        description="Force running iotune on the DB nodes, regardless if image has predefined values",
+    )
+    data_volume_disk_throughput: int = SctField(
+        description="Throughput in MiB/sec for ebs type gp3. Min is 125. Max is 1000.",
+    )
+=======
+    perf_simple_query_extra_command: String = SctField(
+        description="Extra command line options to pass to perf_simple_query",
+    )
+    force_run_iotune: Boolean = SctField(
+        description="Force running iotune on the DB nodes, regardless if image has predefined values",
+    )
+    data_volume_disk_throughput: int = SctField(
+        description="Throughput in MiB/sec for ebs type gp3. Min is 125. Max is 1000.",
+    )
+>>>>>>> e765e9095 (refactor(config): remove perf_extra_jobs_to_compare parameter from all module)
 
                 'GossipingPropertyFileSnitch' - default
                 'Ec2MultiRegionSnitch' - default on aws backend
