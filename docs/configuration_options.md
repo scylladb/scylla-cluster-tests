@@ -6,16 +6,6 @@
 * **list:** can be appended by adding `++` as the first item of the list
 `export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
 
-## **perf_extra_jobs_to_compare** / SCT_PERF_EXTRA_JOBS_TO_COMPARE
-
-Jobs to compare performance results with, for example if running in staging,<br>we still can compare with official jobs
-
-**default:** N/A
-
-**type:** str | list[str]
-* appendable
-
-
 ## **perf_simple_query_extra_command** / SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND
 
 Extra command line options to pass to perf_simple_query

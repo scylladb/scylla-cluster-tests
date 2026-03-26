@@ -9,7 +9,6 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     }
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
-    def perf_extra_jobs_to_compare = params.perf_extra_jobs_to_compare ? groovy.json.JsonOutput.toJson(params.perf_extra_jobs_to_compare) : ""
     def email_recipients = params.email_recipients ? groovy.json.JsonOutput.toJson(params.email_recipients) : ""
 
     def test_cmd
@@ -208,10 +207,6 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
 
     if [[ -n "${params.pytest_addopts ? params.pytest_addopts : ''}" ]] ; then
         export PYTEST_ADDOPTS="${params.pytest_addopts}"
-    fi
-
-    if [[ -n "${perf_extra_jobs_to_compare}" ]] ; then
-        export SCT_PERF_EXTRA_JOBS_TO_COMPARE="${perf_extra_jobs_to_compare}"
     fi
 
     if [[ -n "${email_recipients}" ]] ; then

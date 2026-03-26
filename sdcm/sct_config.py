@@ -445,10 +445,6 @@ class SCTConfiguration(BaseModel):
 
     log: ClassVar = logging.getLogger(__name__)
 
-    perf_extra_jobs_to_compare: StringOrList = SctField(
-        description="""Jobs to compare performance results with, for example if running in staging,
-         we still can compare with official jobs""",
-    )
     perf_simple_query_extra_command: String = SctField(
         description="Extra command line options to pass to perf_simple_query",
     )
