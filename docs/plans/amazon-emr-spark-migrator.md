@@ -67,7 +67,6 @@ SCT has no EMR-related code. The following analysis identifies existing patterns
 - No EMR configuration parameters in `sdcm/sct_config.py`
 - No EMR cleanup function in `resources_cleanup.py`
 - No spark-migrator test class or test cases
-- No EMR-specific email reporter or template (N/A — old email system removed; reporting now handled by Argus)
 - No default configuration for EMR in `defaults/`
 
 ## Goals
