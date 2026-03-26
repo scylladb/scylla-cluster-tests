@@ -13,7 +13,8 @@
 
 import unittest
 import re
-from pathlib import Path
+
+import pytest
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
@@ -28,6 +29,10 @@ from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 
 
 class TestDatabaseLogEvent(unittest.TestCase):
+    @pytest.fixture(autouse=True)
+    def inject_test_data_dir(self, test_data_dir):
+        self.test_data_dir = test_data_dir
+
     def test_known_system_errors(self):
         self.assertTrue(issubclass(DatabaseLogEvent.NO_SPACE_ERROR, DatabaseLogEvent))
         self.assertTrue(issubclass(DatabaseLogEvent.UNKNOWN_VERB, DatabaseLogEvent))
@@ -73,11 +78,7 @@ class TestDatabaseLogEvent(unittest.TestCase):
         self.assertEqual(event2.line_number, 2)
 
     def test_find_issue_by_reactor_stall(self):
-        with (
-            Path(__file__)
-            .parent.joinpath("test_data/reactor_stalls_with_known_issue.log")
-            .open(encoding="utf-8") as sct_log
-        ):
+        with (self.test_data_dir / "reactor_stalls_with_known_issue.log").open(encoding="utf-8") as sct_log:
             backtrace = sct_log.readlines()
 
         find_issue_obj = FindIssuePerBacktrace()

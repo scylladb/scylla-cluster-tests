@@ -1,20 +1,27 @@
 from datetime import datetime
 from pathlib import Path
 
+
 from sdcm.audit import get_audit_log_rows
 from sdcm.cluster import BaseNode
 
 
 class DummyAuditNode(BaseNode):
-    system_log = Path(__file__).parent.resolve() / "test_data" / "test_audit.log"
+    def __init__(self, system_log: Path, **kwargs):
+        super().__init__(**kwargs)
+        self._system_log_path = system_log
+
+    @property
+    def system_log(self):
+        return str(self._system_log_path)
 
 
-class DummyAuditNodeCommaSeparated(BaseNode):
-    system_log = Path(__file__).parent.resolve() / "test_data" / "test_audit_comma_sep.log"
-
-
-def test_get_audit_log_rows_can_be_filtered_by_time():
-    node = DummyAuditNode(name="dummy-node", parent_cluster=None)
+def test_get_audit_log_rows_can_be_filtered_by_time(test_data_dir):
+    node = DummyAuditNode(
+        system_log=test_data_dir / "test_audit.log",
+        name="dummy-node",
+        parent_cluster=None,
+    )
     # no date filter provided
     rows = get_audit_log_rows(node, from_datetime=None)
     assert len(list(rows)) == 69
@@ -27,8 +34,12 @@ def test_get_audit_log_rows_can_be_filtered_by_time():
     assert not [row for row in rows if row.event_time < start_time.replace(microsecond=0)]
 
 
-def test_get_audit_log_rows_can_be_filtered_by_time_comma_separated():
-    node = DummyAuditNodeCommaSeparated(name="dummy-node", parent_cluster=None)
+def test_get_audit_log_rows_can_be_filtered_by_time_comma_separated(test_data_dir):
+    node = DummyAuditNode(
+        system_log=test_data_dir / "test_audit_comma_sep.log",
+        name="dummy-node",
+        parent_cluster=None,
+    )
     # no date filter provided
     rows = get_audit_log_rows(node, from_datetime=None)
     assert len(list(rows)) == 211
@@ -41,8 +52,12 @@ def test_get_audit_log_rows_can_be_filtered_by_time_comma_separated():
     assert not [row for row in rows if row.event_time < start_time.replace(microsecond=0)]
 
 
-def test_get_audit_log_rows_can_be_filtered_by_category():
-    node = DummyAuditNode(name="dummy-node", parent_cluster=None)
+def test_get_audit_log_rows_can_be_filtered_by_category(test_data_dir):
+    node = DummyAuditNode(
+        system_log=test_data_dir / "test_audit.log",
+        name="dummy-node",
+        parent_cluster=None,
+    )
     # no date filter provided
     rows = get_audit_log_rows(node, from_datetime=None, category="DML")
     rows = list(rows)
@@ -57,8 +72,12 @@ def test_get_audit_log_rows_can_be_filtered_by_category():
     assert not [row for row in rows if row.category != "DML" and row.event_time < start_time.replace(microsecond=0)]
 
 
-def test_get_audit_log_rows_can_be_filtered_by_operation():
-    node = DummyAuditNode(name="dummy-node", parent_cluster=None)
+def test_get_audit_log_rows_can_be_filtered_by_operation(test_data_dir):
+    node = DummyAuditNode(
+        system_log=test_data_dir / "test_audit.log",
+        name="dummy-node",
+        parent_cluster=None,
+    )
     # no date filter provided
     rows = get_audit_log_rows(node, from_datetime=None, operation='USE "audit_keyspace"')
     rows = list(rows)

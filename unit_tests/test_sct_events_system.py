@@ -10,11 +10,11 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-import os
-
 import pickle
 import unittest
 from textwrap import dedent
+
+import pytest
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import (
@@ -177,6 +177,10 @@ class TestSystemEvents(unittest.TestCase):
 
 
 class TestInstanceStatusEvent(unittest.TestCase):
+    @pytest.fixture(autouse=True)
+    def inject_test_data_dir(self, test_data_dir):
+        self.test_data_dir = test_data_dir
+
     def test_known_system_status_events(self):
         self.assertTrue(issubclass(InstanceStatusEvent.STARTUP, InstanceStatusEvent))
         self.assertTrue(issubclass(InstanceStatusEvent.REBOOT, InstanceStatusEvent))
@@ -215,9 +219,7 @@ class TestInstanceStatusEvent(unittest.TestCase):
 
     def test_instance_status_events_patterns(self):
         cloned_events = []
-        with open(
-            os.path.join(os.path.dirname(__file__), "test_data/system_status_events.log"), encoding="utf-8"
-        ) as sct_log:
+        with (self.test_data_dir / "system_status_events.log").open(encoding="utf-8") as sct_log:
             for index, line in enumerate(sct_log.readlines()):
                 for pattern, event in INSTANCE_STATUS_EVENTS_PATTERNS:
                     match = pattern.search(line)

@@ -11,8 +11,8 @@
 #
 # Copyright (c) 2021 ScyllaDB
 import unittest
-from pathlib import Path
 
+import pytest
 import yaml
 
 from sdcm.provision.scylla_yaml import ServerEncryptionOptions, ClientEncryptionOptions, SeedProvider, ScyllaYaml
@@ -20,6 +20,10 @@ from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions
 
 
 class ScyllaYamlTest(unittest.TestCase):
+    @pytest.fixture(autouse=True)
+    def inject_test_data_dir(self, test_data_dir):
+        self.test_data_dir = test_data_dir
+
     @staticmethod
     def _run_test(object_type, init_params: dict, expected_without_defaults: dict, expected_with_defaults: dict):
         instance = object_type(**init_params)
@@ -461,10 +465,9 @@ class ScyllaYamlTest(unittest.TestCase):
             client_encryption_options=ClientEncryptionOptions(),
         )
 
-    @staticmethod
-    def test_update_with_dict_object():
+    def test_update_with_dict_object(self):
         yaml1 = ScyllaYaml(cluster_name="cluster1", redis_keyspace_replication_strategy="NetworkTopologyStrategy")
-        test_config_file = Path(__file__).parent / "test_data" / "scylla_yaml_update.yaml"
+        test_config_file = self.test_data_dir / "scylla_yaml_update.yaml"
         with open(test_config_file, encoding="utf-8") as test_file:
             test_config_file_yaml = yaml.safe_load(test_file)
             append_scylla_args_dict = test_config_file_yaml.get("append_scylla_yaml", {})
