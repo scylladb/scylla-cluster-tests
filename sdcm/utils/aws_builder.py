@@ -177,7 +177,7 @@ class AwsBuilder:
                 res = self.region.client.create_launch_template_version(
                     LaunchTemplateName=self.launch_template_name,
                     SourceVersion=str(default_version.get("VersionNumber")),
-                    **launch_template_data,
+                    LaunchTemplateData=launch_template_data["LaunchTemplateData"],
                 )
                 version_number = res.get("LaunchTemplateVersion", {}).get("VersionNumber")
                 self.region.client.modify_launch_template(
