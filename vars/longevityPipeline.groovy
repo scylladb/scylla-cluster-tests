@@ -191,10 +191,6 @@ def call(Map pipelineParams) {
             choice(choices: getBillingProjectChoices(),
                    description: 'Billing project for the test run (dynamically fetched from finops repository)',
                    name: 'billing_project')
-            string(defaultValue: "${pipelineParams.get('perf_extra_jobs_to_compare', '')}",
-                   description: 'jobs to compare performance results with, for example if running in staging, '
-                                + 'we still can compare with official jobs',
-                   name: 'perf_extra_jobs_to_compare')
             text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
                     description: (
                         'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +

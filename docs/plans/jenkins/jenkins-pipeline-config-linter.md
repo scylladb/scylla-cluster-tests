@@ -314,7 +314,6 @@ The `build_env()` function iterates over **all** parameters in `PipelineConfig.p
 | `test_email_title` | `SCT_EMAIL_SUBJECT_POSTFIX` | Adapted name |
 | `extra_environment_variables` | Parsed and exported directly | `'KEY=val'` strings |
 | `requested_by_user` | `BUILD_USER_REQUESTED_BY` | Conditional: only if non-empty (line 41) |
-| `perf_extra_jobs_to_compare` | `SCT_PERF_EXTRA_JOBS_TO_COMPARE` | Conditional: JSON-encoded, only if non-empty (line 207) |
 | `email_recipients` | `SCT_EMAIL_RECIPIENTS` | Conditional: JSON-encoded, only if non-empty (line 211) |
 | `stop_on_hw_perf_failure` | `SCT_STOP_ON_HW_PERF_FAILURE` | Conditional: only when value is `"true"` (line 215) |
 | `base_versions` | N/A | Not exported by `runSctTest.groovy` — used internally by `rollingUpgradePipeline.groovy` for multi-version iteration |
