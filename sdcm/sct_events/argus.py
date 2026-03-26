@@ -58,6 +58,7 @@ class ArgusEventCollector(EventsProcessPipe[Tuple[str, Any], SCTArgusEvent]):
                         "severity": event.severity.name,
                         "ts": event.timestamp,
                         "duration": getattr(event, "duration", None),
+                        "event_id": getattr(event, "event_id", None),
                         "event_type": event_class,
                         "message": str(event),
                         "known_issue": getattr(event, "known_issue", None),
@@ -94,7 +95,7 @@ class ArgusEventAggregator(EventsProcessPipe[SCTArgusEvent, SCTArgusEvent]):
 
     @staticmethod
     def unique_key(event: SCTArgusEvent) -> SCTArgusEventKey:
-        return SCTArgusEventKey(tuple([event["run_id"], event["severity"], event["event_type"]]))
+        return SCTArgusEventKey(tuple([event["run_id"], event["severity"], event["event_type"], event.pop("event_id")]))
 
 
 class ArgusEventPostman(BaseEventsProcess[SCTArgusEvent, None], threading.Thread):
