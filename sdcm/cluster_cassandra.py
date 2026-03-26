@@ -443,7 +443,18 @@ class BaseCassandraCluster:
         is_up = "UN " in result.stdout
         if not is_up:
             self.log.debug("nodetool status output (no UN found): %s", result.stdout[:200])
-        return is_up
+            return False
+        # Verify CQL is accepting queries (nodetool UN doesn't guarantee CQL readiness)
+        cql_check = node.remoter.run(
+            f'cqlsh {node.ip_address} -e "SELECT cluster_name FROM system.local" 2>&1',
+            ignore_status=True,
+            verbose=False,
+        )
+        if not cql_check.ok:
+            self.log.debug("CQL not ready on %s: %s", node.name, cql_check.stdout[:200])
+            return False
+        self.log.info("Node %s is UN and CQL is ready", node.name)
+        return True
 
     def node_startup(self, node, verbose=False, timeout=3600):
         """No-op: Cassandra is already started at the end of node_setup.
