@@ -2598,15 +2598,6 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 **type:** str (appendable)
 
 
-## **perf_extra_jobs_to_compare** / SCT_PERF_EXTRA_JOBS_TO_COMPARE
-
-jobs to compare performance results with, for example if running in staging, we still can compare with official jobs
-
-**default:** N/A
-
-**type:** str_or_list_or_eval (appendable)
-
-
 ## **perf_simple_query_extra_command** / SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND
 
 extra command line options to pass to perf_simple_query
