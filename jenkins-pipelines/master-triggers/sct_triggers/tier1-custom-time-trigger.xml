@@ -37,8 +37,8 @@ requested_by_user=pehala</properties>
               ../tier1/longevity-large-partition-200k-pks-4days-gce-test,
               ../tier1/longevity-mv-si-4days-streaming-test,
               ../tier1/longevity-schema-topology-changes-12h-test,
-              ../longevity/longevity-harry-2h-test
-              ../tier1/scale-5000-tables-test
+              ../longevity/longevity-harry-2h-test,
+              ../tier1/scale-schema-5000-tables-latte-test
           </projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
