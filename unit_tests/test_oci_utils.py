@@ -18,6 +18,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sdcm.utils.oci_utils import (
+    build_hostname_label,
     filter_oci_by_tags,
     get_ubuntu_image_ocid,
     list_instances_oci,
@@ -292,3 +293,23 @@ def test_oci_service_compartment_id(mock_keystore_class):
     service = OciService()
     assert service.compartment_id == "ocid1.compartment.oc1..test"
     assert service.tenancy_id == "ocid1.tenancy.oc1..test"
+
+
+def test_build_hostname_label_generates_rfc_compliant_value() -> None:
+    """Test that generated hostname label is RFC-compliant and within 63 characters."""
+    hostname_label = build_hostname_label(
+        "LONG_Name.With.Mixed#Chars-and-a-very-very-very-very-very-very-very-long-suffix-123"
+    )
+    assert hostname_label
+    assert len(hostname_label) <= 63
+    assert hostname_label[0].isalpha()
+    assert hostname_label[-1].isalnum()
+    assert hostname_label.replace("-", "").isalnum()
+
+
+def test_build_hostname_label_is_stable_and_unique() -> None:
+    """Test that hostname labels are deterministic for the same input and unique across inputs."""
+    name_a = "test-oci-node-a"
+    name_b = "test-oci-node-b"
+    assert build_hostname_label(name_a) == build_hostname_label(name_a)
+    assert build_hostname_label(name_a) != build_hostname_label(name_b)

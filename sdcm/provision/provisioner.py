@@ -92,6 +92,7 @@ class VmInstance:
     creation_time: datetime | None
     instance_type: str
     _provisioner: "Provisioner"
+    private_dns_name: str | None = None
 
     def terminate(self, wait: bool = True) -> None:
         """terminates VM instance.

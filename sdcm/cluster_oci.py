@@ -22,6 +22,7 @@ from sdcm import cluster
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.provision.oci.provisioner import OciProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
+from sdcm.provision.helpers.certificate import CA_CERT_FILE, CA_KEY_FILE, create_certificate
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
@@ -184,7 +185,90 @@ class OciNode(cluster.BaseNode):
 
     @cached_property
     def private_dns_name(self) -> str:
-        return resolve_ip_to_dns(self.private_ip_address)
+        instance_private_dns = getattr(getattr(self, "_instance", None), "private_dns_name", None)
+        if instance_private_dns:
+            return instance_private_dns
+
+        metadata_hostname = None
+        try:
+            metadata_hostname = self.query_oci_metadata("hostname")
+            if "." in metadata_hostname:
+                return metadata_hostname
+            self.log.warning(
+                "OCI metadata hostname for node %s is short label '%s'. Trying reverse DNS for FQDN.",
+                self.name,
+                metadata_hostname,
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning(
+                "Failed to query OCI metadata hostname for node %s (%s). Falling back.",
+                self.name,
+                exc,
+            )
+
+        private_ip_address = self.private_ip_address
+        if not private_ip_address:
+            self.log.warning(
+                "Node %s has no private IP while resolving private DNS name. Falling back to node name.",
+                self.name,
+            )
+            return self.name
+
+        try:
+            return resolve_ip_to_dns(private_ip_address)
+        except ValueError as exc:
+            if metadata_hostname:
+                self.log.warning(
+                    "Unable to resolve private IP %s for node %s (%s). Falling back to metadata hostname '%s'.",
+                    private_ip_address,
+                    self.name,
+                    exc,
+                    metadata_hostname,
+                )
+                return metadata_hostname
+            self.log.warning(
+                "Unable to resolve private IP %s for node %s (%s). Falling back to private IP.",
+                private_ip_address,
+                self.name,
+                exc,
+            )
+            return private_ip_address
+
+    def create_node_certificate(self, cert_file, cert_key, csr_file=None):
+        """Create OCI node certificate with both short and FQDN hostname SANs when available."""
+        dns_names = {
+            self.public_dns_name,
+            self.private_dns_name,
+            getattr(getattr(self, "_instance", None), "private_dns_name", None),
+        }
+
+        try:
+            metadata_hostname = self.query_oci_metadata("hostname")
+        except Exception:  # noqa: BLE001
+            metadata_hostname = None
+
+        if metadata_hostname:
+            dns_names.add(metadata_hostname)
+
+        private_ip_address = self.private_ip_address
+        if private_ip_address:
+            try:
+                reverse_dns = resolve_ip_to_dns(private_ip_address)
+                if reverse_dns:
+                    dns_names.add(reverse_dns)
+            except ValueError:
+                pass
+
+        create_certificate(
+            cert_file,
+            cert_key,
+            self.name,
+            ca_cert_file=CA_CERT_FILE,
+            ca_key_file=CA_KEY_FILE,
+            server_csr_file=csr_file,
+            ip_addresses=[self.ip_address, self.public_ip_address],
+            dns_names=sorted(dns for dns in dns_names if dns),
+        )
 
 
 class OciCluster(cluster.BaseCluster):
