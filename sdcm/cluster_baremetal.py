@@ -127,7 +127,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):
     def ssh_username(self) -> str:
         return self._ssh_username
 
-    def _create_node(self, name, public_ip, private_ip):
+    def _create_node(self, name, public_ip, private_ip, after_config=None):
         node = PhysicalMachineNode(
             name,
             parent_cluster=self,
@@ -140,7 +140,16 @@ class PhysicalMachineCluster(cluster.BaseCluster):
         node.init()
         return node
 
-    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+    def add_nodes(
+        self,
+        count,
+        ec2_user_data="",
+        dc_idx=0,
+        rack=0,
+        enable_auto_bootstrap=False,
+        instance_type=None,
+        after_config=None,
+    ):
         assert instance_type is None, "baremetal can provision diffrent types"
         for node_index in range(count):
             node_name = "%s-%s" % (self.node_prefix, node_index)

@@ -81,6 +81,7 @@ class GCENode(cluster.BaseNode):
         dc_idx: int = 0,
         rack: int = 0,
         gce_project: str = None,
+        after_config=None,
     ):
         self._instance = gce_instance
         name = self._instance.name
@@ -104,6 +105,7 @@ class GCENode(cluster.BaseNode):
             node_prefix=node_prefix,
             dc_idx=dc_idx,
             rack=rack,
+            after_config=after_config,
         )
 
     def refresh_network_interfaces_info(self):
@@ -456,7 +458,7 @@ class GCECluster(cluster.BaseCluster):
         instances = sorted(instances, key=sort_by_index)
         return instances
 
-    def _create_node(self, instance, node_index, dc_idx, rack):
+    def _create_node(self, instance, node_index, dc_idx, rack, after_config=None):
         try:
             node = GCENode(
                 gce_instance=instance,
@@ -470,6 +472,7 @@ class GCECluster(cluster.BaseCluster):
                 base_logdir=self.logdir,
                 dc_idx=dc_idx,
                 rack=rack,
+                after_config=after_config,
             )
             node.init()
             return node
@@ -477,7 +480,16 @@ class GCECluster(cluster.BaseCluster):
             raise CreateGCENodeError("Failed to create node: %s" % ex) from ex
 
     @mark_new_nodes_as_running_nemesis
-    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+    def add_nodes(
+        self,
+        count,
+        ec2_user_data="",
+        dc_idx=0,
+        rack=0,
+        enable_auto_bootstrap=False,
+        instance_type=None,
+        after_config=None,
+    ):
         if count <= 0:
             return []
         self.log.info("Adding nodes to cluster")
@@ -505,7 +517,7 @@ class GCECluster(cluster.BaseCluster):
         for node_index, instance in enumerate(instances, start=self._node_index + 1):
             # in case rack is not specified, spread nodes to different racks
             node_rack = node_index % self.racks_count if rack is None else rack
-            node = self._create_node(instance, node_index, dc_idx, rack=node_rack)
+            node = self._create_node(instance, node_index, dc_idx, rack=node_rack, after_config=after_config)
             nodes.append(node)
             self.nodes.append(node)
             self.log.info("Added node: %s", node.name)
