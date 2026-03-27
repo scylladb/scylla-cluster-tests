@@ -338,6 +338,7 @@ class TestCleanResourcesDocker:
 class TestCleanCloudResources:
     integration = False  # set it to True if you want to run test with actual cloud operations.
     functions_to_patch = (
+        "sdcm.utils.resources_cleanup.clean_emr_clusters",
         "sdcm.utils.resources_cleanup.clean_instances_aws",
         "sdcm.utils.resources_cleanup.clean_elastic_ips_aws",
         "sdcm.utils.resources_cleanup.clean_clusters_gke",
