@@ -1,1 +1,1 @@
-user_credentials_path: '~/.ssh/scylla-test'
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
