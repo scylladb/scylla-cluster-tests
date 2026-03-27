@@ -29,6 +29,7 @@ from argus.client.generic_result import StaticGenericResultTable, ColumnMetadata
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
 
+from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.remote import RemoteCmdRunner
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying
@@ -36,6 +37,10 @@ from sdcm.utils.metaclasses import Singleton
 from sdcm.argus_results import submit_results_to_argus
 
 LOGGER = logging.getLogger(__name__)
+
+# Used for estimating when data is not available
+_I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC = 69
+_I4I_LARGE_SHARD_COUNT = 2
 
 
 def convert_to_mb(value) -> int:
@@ -45,6 +50,8 @@ def convert_to_mb(value) -> int:
         number = float(match.group(1))
         suffix = match.group(3)
         match suffix:
+            case "B":
+                number /= 1024 * 1024
             case "KB":
                 number /= 1024
             case "GB":
@@ -72,6 +79,10 @@ class NodeLoadInfoService:
     @cached_property
     def _io_properties(self):
         return yaml.safe_load(self.remoter.run("cat /etc/scylla.d/io_properties.yaml", verbose=False).stdout)
+
+    @cached_property
+    def _scylla_yaml(self) -> dict:
+        return yaml.safe_load(self.remoter.run(f"cat {SCYLLA_YAML_PATH}", verbose=False).stdout) or {}
 
     @cached(cache=TTLCache(maxsize=1024, ttl=300))
     def _cf_stats(self, keyspace):
@@ -129,6 +140,26 @@ class NodeLoadInfoService:
         raise ValueError("Couldn't find Load in nodetool info response")
 
     @property
+    def node_disk_size_mb(self) -> int:
+        """Total filesystem size of /var/lib/scylla in MB, sourced from node_exporter metrics.
+
+        Tries the current metric name (node_filesystem_size_bytes) first, then falls back to
+        the legacy name (node_filesystem_size) for older node_exporter versions.
+
+        Returns:
+            int: Total disk size in MB.
+
+        Raises:
+            ValueError: If neither metric is found for the /var/lib/scylla mountpoint.
+        """
+        metrics = self._get_node_exporter_metrics()
+        for prefix in ("node_filesystem_size_bytes", "node_filesystem_size"):
+            for key, value in metrics.items():
+                if key.startswith(prefix) and 'mountpoint="/var/lib/scylla"' in key:
+                    return convert_to_mb(f"{int(float(value))} B")
+        raise ValueError("Couldn't find node_filesystem_size_bytes for /var/lib/scylla in node_exporter metrics")
+
+    @property
     def cpu_load_5(self) -> float:
         return self._get_node_load()[1]
 
@@ -177,6 +208,20 @@ class NodeLoadInfoService:
     def write_iops(self) -> float:
         return self._io_properties["disks"][0]["write_iops"]
 
+    @property
+    def expected_throughput(self) -> float:
+        """Expected streaming throughput in MB/s.
+
+        Returns stream_io_throughput_mb_per_sec from scylla.yaml if the value is set and
+        non-zero, otherwise estimates by scaling the baseline throughput of an i4i.large
+        instance (69 MB/s) by the ratio of shards on this node to the 2 shards on that
+        baseline instance: 69 / 2 * shards_count.
+        """
+        throughput = self._scylla_yaml.get("stream_io_throughput_mb_per_sec") or 0
+        if throughput:
+            return float(throughput)
+        return _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * self.shards_count
+
     def as_dict(self):
         return {
             "node_name": self._name,
@@ -188,6 +233,8 @@ class NodeLoadInfoService:
             "read_iops": self.read_iops,
             "write_iops": self.write_iops,
             "node_data_size_mb": self.node_data_size_mb,
+            "node_disk_size_mb": self.node_disk_size_mb,
+            "expected_throughput": self.expected_throughput,
             "scylla_version": self._scylla_version,
         }
 
@@ -235,6 +282,8 @@ class AdaptiveTimeoutResultsTable(StaticGenericResultTable):
             ColumnMetadata(name="read_iops", unit="op/s", type=ResultType.INTEGER, visible=False),
             ColumnMetadata(name="write_iops", unit="op/s", type=ResultType.INTEGER, visible=False),
             ColumnMetadata(name="node_data_size_mb", unit="MB", type=ResultType.INTEGER, visible=False),
+            ColumnMetadata(name="node_disk_size_mb", unit="MB", type=ResultType.INTEGER, visible=False),
+            ColumnMetadata(name="expected_throughput", unit="MB/s", type=ResultType.FLOAT, visible=False),
             ColumnMetadata(name="node_idx", unit="", type=ResultType.TEXT),
         ]
 
@@ -295,6 +344,18 @@ class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
             column="node_data_size_mb",
             row=f"#{cycle}",
             value=result.metrics.get("node_data_size_mb"),
+            status=Status.UNSET,
+        )
+        table.add_result(
+            column="node_disk_size_mb",
+            row=f"#{cycle}",
+            value=result.metrics.get("node_disk_size_mb"),
+            status=Status.UNSET,
+        )
+        table.add_result(
+            column="expected_throughput",
+            row=f"#{cycle}",
+            value=result.metrics.get("expected_throughput"),
             status=Status.UNSET,
         )
         table.add_result(column="node_idx", row=f"#{cycle}", value=result.metrics.get("node_idx"), status=Status.UNSET)
