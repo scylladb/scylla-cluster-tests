@@ -2037,13 +2037,23 @@ class ClusterTester(unittest.TestCase):
         )
         common_params = dict(user_prefix=self.params.get("user_prefix"), params=self.params)
 
-        self.db_cluster = cluster_docker.ScyllaDockerCluster(
-            n_nodes=[
-                self.params.get("n_db_nodes"),
-            ],
-            **container_node_params,
-            **common_params,
-        )
+        db_type = self.params.get("db_type")
+        if db_type == "cassandra":
+            self.db_cluster = cluster_docker.CassandraDockerCluster(
+                docker_image=self.params.get("docker_image_cassandra"),
+                docker_image_tag=self.params.get("cassandra_version"),
+                node_key_file=self.credentials[0].key_file,
+                n_nodes=[self.params.get("n_db_nodes")],
+                **common_params,
+            )
+        else:
+            self.db_cluster = cluster_docker.ScyllaDockerCluster(
+                n_nodes=[
+                    self.params.get("n_db_nodes"),
+                ],
+                **container_node_params,
+                **common_params,
+            )
 
         if self.params.get("n_vector_store_nodes") > 0:
             self.db_cluster.vector_store_cluster = cluster_docker.VectorStoreSetDocker(
@@ -2055,6 +2065,10 @@ class ClusterTester(unittest.TestCase):
                 node_key_file=self.credentials[0].key_file,
             )
 
+        # TODO: for Docker backend, loaders are Scylla containers used only as a Docker host
+        # to launch stress tool containers (RemoteDocker) via docker-in-docker.
+        # This is wasteful — stress containers could run directly on the host via LOCALRUNNER.
+        # See docs/plans/infrastructure/cassandra-cluster-support.md for refactor notes.
         self.loaders = cluster_docker.LoaderSetDocker(
             n_nodes=self.params.get("n_loaders"), **container_node_params, **common_params
         )
