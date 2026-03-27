@@ -5,6 +5,7 @@ from sdcm.cluster import BaseNode
 from sdcm.logcollector import CollectingNode
 from sdcm.utils.common import S3Storage
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
+from sdcm.utils.sstable.sstable_utils import decrypt_sstables_on_node
 
 LOGGER = logging.getLogger(__name__)
 
@@ -26,9 +27,18 @@ def upload_sstables_to_s3(
     try:
         node.remoter.run(nodetool_snapshot_cmd)
         snapshot_paths = node.remoter.run(f"find {data_directory} -type d -name {snapshot_tag}").stdout.split()
+        upload_paths = []
+        for snapshot_path in snapshot_paths:
+            # snapshot_path is .../data/{keyspace}/{table}-{uuid}/snapshots/{tag}
+            table_dir = snapshot_path.split("/snapshots/")[0]
+            table_name = table_dir.rsplit("/", 1)[1].rsplit("-", 1)[0]
+            upload_paths.append(snapshot_path)
+            decrypted_path = decrypt_sstables_on_node(node, snapshot_path, keyspace=keyspace, table=table_name)
+            if decrypted_path:
+                upload_paths.append(decrypted_path)
         s3_link = upload_remote_files_directly_to_s3(
             node.ssh_login_info,
-            snapshot_paths,
+            upload_paths,
             s3_bucket=S3Storage.bucket_name,
             s3_key=f"{test_id}/{snapshot_date}/sstables-{snapshot_date}-{node.name}-{keyspace}.tar.gz",
             max_size_gb=400,

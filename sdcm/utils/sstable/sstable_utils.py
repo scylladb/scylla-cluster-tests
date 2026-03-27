@@ -2,11 +2,14 @@ import datetime
 import json
 import logging
 import random
+import re
 from pathlib import Path
 
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.utils.version_utils import ComparableScyllaVersion
 from sdcm.exceptions import SstablesNotFound
+
+LOGGER = logging.getLogger(__name__)
 
 
 class NonDeletedTombstonesFound(Exception):
@@ -439,3 +442,193 @@ def get_sstable_data_dump_command(node, keyspace: str, table: str) -> str:
     if not is_new_sstable_dump_supported(node):
         return "sstabledump"
     return _generate_sstable_dump_command(node, "dump-data", keyspace, table)
+
+
+# Matches a full CQL property assignment for scylla_encryption_options, e.g.:
+#   AND scylla_encryption_options = {'cipher_algorithm': '...', ...}
+# The pattern is tolerant of multi-line values (the value part is always on one line in practice,
+# but the leading AND keyword may be preceded by spaces/newlines).
+ENCRYPTION_OPTIONS_RE = re.compile(r"\s+AND\s+scylla_encryption_options\s*=\s*\{[^}]*\}", re.IGNORECASE)
+
+
+def strip_encryption_options_from_schema(schema_text: str) -> str:
+    """Remove ``scylla_encryption_options`` property assignments from a schema.cql string.
+
+    When sstables are encrypted at the table level, the snapshot's ``schema.cql`` contains an
+    ``AND scylla_encryption_options = {...}`` clause.  Passing such a schema to
+    ``scylla sstable upgrade`` would produce encrypted output.  This helper strips the clause so
+    that the upgrade tool writes plain (unencrypted) sstables.
+
+    Args:
+        schema_text: Raw text of a ``schema.cql`` file.
+
+    Returns:
+        Schema text with all ``scylla_encryption_options`` clauses removed.
+    """
+    return ENCRYPTION_OPTIONS_RE.sub("", schema_text)
+
+
+def decrypt_sstables_on_node(node, snapshot_path: str, keyspace: str, table: str) -> str | None:
+    """Decrypt all sstables in *snapshot_path* into a sibling ``decrypted/`` subdirectory.
+
+    Reads ``schema.cql`` from *snapshot_path*, strips any ``scylla_encryption_options`` clause,
+    and runs ``scylla sstable upgrade`` once for all ``Data.db`` files found, writing output to
+    ``{snapshot_path}/decrypted/``.  The original encrypted files are left untouched so both
+    versions are available for upload.
+
+    On any error the function logs a warning and returns ``None`` without raising, so sstable
+    collection is never blocked by a decryption failure.
+
+    Args:
+        node: A DB / collecting node that has ``remoter`` and ``add_install_prefix`` attributes.
+        snapshot_path: Remote absolute path to the snapshot directory (contains ``schema.cql``
+            and ``*.db`` files).
+        keyspace: Keyspace name of the table whose sstables are being decrypted.
+        table: Table name of the sstables being decrypted.
+
+    Returns:
+        Path to the ``decrypted/`` directory on success, ``None`` otherwise.
+    """
+    try:
+        schema_result = node.remoter.run(f"cat {snapshot_path}/schema.cql", ignore_status=True, verbose=False)
+        if not schema_result.ok or not schema_result.stdout.strip():
+            LOGGER.warning(
+                "decrypt_sstables_on_node: schema.cql not found or empty at %s/schema.cql — skipping decryption",
+                snapshot_path,
+            )
+            return None
+
+        ls_result = node.remoter.run(
+            f"ls {snapshot_path}/*-Data.db 2>/dev/null || true", ignore_status=True, verbose=False
+        )
+        data_files = ls_result.stdout.split() if ls_result.stdout.strip() else []
+
+        if not data_files:
+            LOGGER.debug("decrypt_sstables_on_node: no Data.db files found in %s — nothing to decrypt", snapshot_path)
+            return None
+
+        return run_scylla_sstable_upgrade(
+            node=node,
+            data_files=data_files,
+            schema_text=strip_encryption_options_from_schema(schema_result.stdout),
+            keyspace=keyspace,
+            table=table,
+            output_dir=f"{snapshot_path}/decrypted",
+        )
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning(
+            "decrypt_sstables_on_node: unexpected error for %s — skipping decryption. Error: %s",
+            snapshot_path,
+            exc,
+        )
+        return None
+
+
+def decrypt_sstable_files_on_node(
+    node, data_files: list[str], schema_text: str, keyspace: str, table: str
+) -> str | None:
+    """Decrypt *data_files* into a sibling ``decrypted/`` subdirectory next to the first file.
+
+    Accepts explicit file paths and a schema string rather than reading them from a snapshot
+    directory.  Use this when the sstables to decrypt are not in a snapshot (e.g. quarantined or
+    invalidated files found by scrub).
+
+    On any error the function logs a warning and returns ``None`` without raising.
+
+    Args:
+        node: A DB / collecting node that has ``remoter`` and ``add_install_prefix`` attributes.
+        data_files: List of remote absolute paths to ``Data.db`` files to decrypt.
+        schema_text: Raw CQL schema text (will have ``scylla_encryption_options`` stripped
+            automatically).
+        keyspace: Keyspace name of the table whose sstables are being decrypted.
+        table: Table name of the sstables being decrypted.
+
+    Returns:
+        Path to the ``decrypted/`` directory on success, ``None`` otherwise.
+    """
+    if not data_files:
+        return None
+    try:
+        parent_dir = data_files[0].rsplit("/", 1)[0]
+        return run_scylla_sstable_upgrade(
+            node=node,
+            data_files=data_files,
+            schema_text=strip_encryption_options_from_schema(schema_text),
+            keyspace=keyspace,
+            table=table,
+            output_dir=f"{parent_dir}/decrypted",
+        )
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning(
+            "decrypt_sstable_files_on_node: unexpected error for %s — skipping decryption. Error: %s",
+            data_files,
+            exc,
+        )
+        return None
+
+
+def run_scylla_sstable_upgrade(
+    node, data_files: list[str], schema_text: str, keyspace: str, table: str, output_dir: str
+) -> str | None:
+    """Run ``scylla sstable upgrade`` for *data_files* and write output to *output_dir*.
+
+    The output directory is created fresh (any prior contents are removed).  Original files are
+    left untouched.  Both encrypted originals and decrypted output are kept so callers can upload
+    both directories.
+
+    Args:
+        node: Node with ``remoter`` and ``add_install_prefix``.
+        data_files: Remote paths to ``Data.db`` files.
+        schema_text: Schema CQL text (already stripped of encryption options).
+        keyspace: Keyspace name, passed to ``--keyspace``.
+        table: Table name, passed to ``--table``.
+        output_dir: Destination directory for upgraded files (created fresh).
+
+    Returns:
+        *output_dir* on success, ``None`` if the upgrade failed or produced no files.
+    """
+    tmp_id = abs(hash(data_files[0])) % 10**8
+    tmp_schema = f"/tmp/sct_decrypt_schema_{tmp_id}.cql"
+    node.remoter.run(
+        f"cat > {tmp_schema} << 'SCT_EOF'\n{schema_text}\nSCT_EOF",
+        ignore_status=False,
+        verbose=False,
+    )
+
+    node.remoter.sudo(f"rm -rf {output_dir}", ignore_status=False, verbose=False)
+    node.remoter.sudo(f"mkdir -p {output_dir}", ignore_status=False, verbose=False)
+
+    scylla_conf_dir = str(Path(node.add_install_prefix(SCYLLA_YAML_PATH)).parent)
+    scylla_bin = node.add_install_prefix("/usr/bin/scylla")
+    sstables_args = " ".join(f"--sstables {f}" for f in data_files)
+
+    result = node.remoter.sudo(
+        f"SCYLLA_CONF={scylla_conf_dir} {scylla_bin} sstable upgrade"
+        f" --all --keyspace {keyspace} --table {table}"
+        f" --schema-file={tmp_schema} {sstables_args} --output-dir={output_dir}",
+        ignore_status=True,
+        verbose=True,
+    )
+    node.remoter.run(f"rm -f {tmp_schema}", ignore_status=True, verbose=False)
+
+    if not result.ok:
+        LOGGER.warning(
+            "run_scylla_sstable_upgrade: upgrade failed (exit %s):\n  stdout: %s\n  stderr: %s",
+            result.exit_status,
+            result.stdout.strip() or "<empty>",
+            result.stderr.strip() or "<empty>",
+        )
+        return None
+
+    ls_out = node.remoter.sudo(f"ls {output_dir}/", ignore_status=True, verbose=False)
+    if not ls_out.stdout.strip():
+        LOGGER.warning(
+            "run_scylla_sstable_upgrade: upgrade reported success but produced no output files"
+            " — stdout: %s  stderr: %s",
+            result.stdout.strip() or "<empty>",
+            result.stderr.strip() or "<empty>",
+        )
+        return None
+
+    LOGGER.info("run_scylla_sstable_upgrade: decrypted %d file(s) into %s", len(data_files), output_dir)
+    return output_dir
