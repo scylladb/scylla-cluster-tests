@@ -89,12 +89,12 @@ class GceBuilder:
     It creates a launch template based on sct-runner image, and adds configuration needed in Jenkins to use it
     """
 
-    VERSION = "v6"
+    VERSION = "v7"
 
     def __init__(self, region: GceRegion):
         self.region = region
         self.jenkins_info = KeyStore().get_json("jenkins.json")
-        self.runner = GceSctRunner(region_name=self.region.region_name, availability_zone="a")
+        self.runner = GceSctRunner(region_name=self.region.region_name, availability_zone="a", params=None)
 
         info = KeyStore().get_gcp_credentials()
         self.credentials = service_account.Credentials.from_service_account_info(info)

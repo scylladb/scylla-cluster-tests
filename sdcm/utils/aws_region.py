@@ -11,6 +11,8 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import base64
+import hashlib
 import logging
 from ipaddress import ip_network
 from functools import cached_property, cache
@@ -639,38 +641,77 @@ class AwsRegion:
                 ]
             )
 
-    @property
-    def sct_keypair(self):
+    def _get_ec2_key_fingerprint(self):
+        """Return the SHA256 fingerprint of the EC2 key pair, or None if it doesn't exist."""
         try:
             key_pairs = self.client.describe_key_pairs(KeyNames=[self.SCT_KEY_PAIR_NAME])
         except botocore.exceptions.ClientError as ex:
             if "InvalidKeyPair.NotFound" in str(ex):
                 return None
             raise
-        LOGGER.debug("Found key pairs: %s", key_pairs)
-        existing_key_pairs = key_pairs.get("KeyPairs", [])
-        assert len(existing_key_pairs) == 1, (
-            f"More than 1 Key Pair with {self.SCT_KEY_PAIR_NAME} found in {self.region_name}: {existing_key_pairs}!"
-        )
-        return self.resource.KeyPair(existing_key_pairs[0]["KeyName"])
+        existing = key_pairs.get("KeyPairs", [])
+        if not existing:
+            return None
+        return existing[0].get("KeyFingerprint")
 
-    def create_sct_key_pair(self):
-        LOGGER.info("Creating SCT Key Pair...")
-        if self.sct_keypair:
-            LOGGER.warning("SCT Key Pair already exists in '%s'!", self.region_name)
-        else:
-            ks = KeyStore()
-            sct_key_pair = ks.get_ec2_ssh_key_pair()
-            self.resource.import_key_pair(KeyName=self.SCT_KEY_PAIR_NAME, PublicKeyMaterial=sct_key_pair.public_key)
-            LOGGER.info("SCT Key Pair created.")
+    @staticmethod
+    def _compute_public_key_fingerprint(public_key_material: bytes) -> str:
+        """Compute the SHA256 fingerprint matching AWS format for imported keys.
+
+        AWS returns fingerprints as base64-encoded SHA256 digests of the raw
+        public key bytes for imported key pairs.
+        """
+        # Parse SSH public key format: "ssh-ed25519 <base64-data> <comment>"
+        parts = public_key_material.split()
+        if len(parts) < 2:
+            raise ValueError(f"Invalid SSH public key format: {public_key_material!r}")
+        key_data = base64.b64decode(parts[1])
+        digest = hashlib.sha256(key_data).digest()
+        return base64.b64encode(digest).decode()
+
+    def update_sct_key_pair(self):
+        """Update the EC2 key pair if the fingerprint differs from the S3 key.
+
+        Compares the SHA256 fingerprint of the current EC2 key pair against
+        the public key from S3. Only replaces when they differ or the key
+        pair doesn't exist yet.
+        """
+        ks = KeyStore()
+        sct_key_pair = ks.get_ec2_ssh_key_pair()
+        s3_fingerprint = self._compute_public_key_fingerprint(sct_key_pair.public_key)
+        ec2_fingerprint = self._get_ec2_key_fingerprint()
+
+        if ec2_fingerprint == s3_fingerprint:
+            LOGGER.info("SCT Key Pair in '%s' is up to date (fingerprint: %s).", self.region_name, ec2_fingerprint)
+            return
+
+        LOGGER.info(
+            "SCT Key Pair fingerprint mismatch in '%s': EC2=%s, S3=%s",
+            self.region_name,
+            ec2_fingerprint,
+            s3_fingerprint,
+        )
+        if ec2_fingerprint is not None:
+            self.client.delete_key_pair(KeyName=self.SCT_KEY_PAIR_NAME)
+            LOGGER.info("Deleted old key pair in '%s'.", self.region_name)
+        self.resource.import_key_pair(KeyName=self.SCT_KEY_PAIR_NAME, PublicKeyMaterial=sct_key_pair.public_key)
+        LOGGER.info("SCT Key Pair updated in '%s'.", self.region_name)
 
     def configure(self):
         LOGGER.info("Configuring '%s' region...", self.region_name)
+        self.update_sct_key_pair()
         self.create_sct_vpc()
         self.create_sct_internet_gateway()
         self.configure_sct_route_table()
         self.create_sct_subnets()
         self.create_sct_security_group()
         self.create_sct_ssh_security_group()
+<<<<<<< HEAD
         self.create_sct_key_pair()
+||||||| parent of 5909288d8 (feature(aws_region): add fingerprint-based EC2 key pair update with rotation docs)
+        self.create_sct_key_pair()
+        self.configure_ssm()
+=======
+        self.configure_ssm()
+>>>>>>> 5909288d8 (feature(aws_region): add fingerprint-based EC2 key pair update with rotation docs)
         LOGGER.info("Region configured successfully.")
