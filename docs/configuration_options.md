@@ -6,6 +6,76 @@
 * **list:** can be appended by adding `++` as the first item of the list
 `export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
 
+<<<<<<< HEAD
+||||||| parent of e765e9095 (refactor(config): remove perf_extra_jobs_to_compare parameter from all module)
+## **perf_extra_jobs_to_compare** / SCT_PERF_EXTRA_JOBS_TO_COMPARE
+
+Jobs to compare performance results with, for example if running in staging,<br>we still can compare with official jobs
+
+**default:** N/A
+
+**type:** str | list[str]
+* appendable
+
+
+## **perf_simple_query_extra_command** / SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND
+
+Extra command line options to pass to perf_simple_query
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **force_run_iotune** / SCT_FORCE_RUN_IOTUNE
+
+Force running iotune on the DB nodes, regardless if image has predefined values
+
+**default:** N/A
+
+**type:** bool
+
+
+## **data_volume_disk_throughput** / SCT_DATA_VOLUME_DISK_THROUGHPUT
+
+Throughput in MiB/sec for ebs type gp3. Min is 125. Max is 1000.
+
+**default:** N/A
+
+**type:** int
+
+
+=======
+## **perf_simple_query_extra_command** / SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND
+
+Extra command line options to pass to perf_simple_query
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **force_run_iotune** / SCT_FORCE_RUN_IOTUNE
+
+Force running iotune on the DB nodes, regardless if image has predefined values
+
+**default:** N/A
+
+**type:** bool
+
+
+## **data_volume_disk_throughput** / SCT_DATA_VOLUME_DISK_THROUGHPUT
+
+Throughput in MiB/sec for ebs type gp3. Min is 125. Max is 1000.
+
+**default:** N/A
+
+**type:** int
+
+
+>>>>>>> e765e9095 (refactor(config): remove perf_extra_jobs_to_compare parameter from all module)
 ## **config_files** / SCT_CONFIG_FILES
 
 a list of config files that would be used
