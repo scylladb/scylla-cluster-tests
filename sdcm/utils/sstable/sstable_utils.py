@@ -2,11 +2,14 @@ import datetime
 import json
 import logging
 import random
+import re
 from pathlib import Path
 
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.utils.version_utils import ComparableScyllaVersion
 from sdcm.exceptions import SstablesNotFound
+
+LOGGER = logging.getLogger(__name__)
 
 
 class NonDeletedTombstonesFound(Exception):
@@ -439,3 +442,197 @@ def get_sstable_data_dump_command(node, keyspace: str, table: str) -> str:
     if not is_new_sstable_dump_supported(node):
         return "sstabledump"
     return _generate_sstable_dump_command(node, "dump-data", keyspace, table)
+
+
+# Matches a full CQL property assignment for scylla_encryption_options, e.g.:
+#   AND scylla_encryption_options = {'cipher_algorithm': '...', ...}
+# The pattern is tolerant of multi-line values (the value part is always on one line in practice,
+# but the leading AND keyword may be preceded by spaces/newlines).
+ENCRYPTION_OPTIONS_RE = re.compile(r"\s+AND\s+scylla_encryption_options\s*=\s*\{[^}]*\}", re.IGNORECASE)
+
+
+def strip_encryption_options_from_schema(schema_text: str) -> str:
+    """Remove ``scylla_encryption_options`` property assignments from a schema.cql string.
+
+    When sstables are encrypted at the table level, the snapshot's ``schema.cql`` contains an
+    ``AND scylla_encryption_options = {...}`` clause.  Passing such a schema to
+    ``scylla sstable upgrade`` would produce encrypted output.  This helper strips the clause so
+    that the upgrade tool writes plain (unencrypted) sstables.
+
+    Args:
+        schema_text: Raw text of a ``schema.cql`` file.
+
+    Returns:
+        Schema text with all ``scylla_encryption_options`` clauses removed.
+    """
+    return ENCRYPTION_OPTIONS_RE.sub("", schema_text)
+
+
+def decrypt_sstables_on_node(node, snapshot_path: str) -> bool:
+    """Decrypt sstables in *snapshot_path* in-place using ``scylla sstable upgrade``.
+
+    The function reads ``schema.cql`` from *snapshot_path*, strips any
+    ``scylla_encryption_options`` clause, writes the modified schema to a temporary file on the
+    node, and then calls ``scylla sstable upgrade --all`` for every ``Data.db`` file found in the
+    snapshot directory.  The decrypted output files replace the originals so that subsequent S3
+    uploads contain readable sstables.
+
+    On any error the function logs a warning and returns without raising, so sstable collection
+    is never blocked by a decryption failure.
+
+    Args:
+        node: A DB / collecting node that has ``remoter`` and ``add_install_prefix`` attributes.
+        snapshot_path: Remote absolute path to the snapshot directory (contains ``schema.cql``
+            and ``*.db`` files).
+
+    Returns:
+        True if at least one sstable was successfully decrypted, False otherwise.
+    """
+    try:
+        schema_result = node.remoter.run(f"cat {snapshot_path}/schema.cql", ignore_status=True, verbose=False)
+        if not schema_result.ok or not schema_result.stdout.strip():
+            LOGGER.warning(
+                "decrypt_sstables_on_node: schema.cql not found or empty at %s/schema.cql — skipping decryption",
+                snapshot_path,
+            )
+            return False
+
+        modified_schema = strip_encryption_options_from_schema(schema_result.stdout)
+
+        ls_result = node.remoter.run(
+            f"ls {snapshot_path}/*-Data.db 2>/dev/null || true", ignore_status=True, verbose=False
+        )
+        data_files = ls_result.stdout.split() if ls_result.stdout.strip() else []
+
+        if not data_files:
+            LOGGER.debug("decrypt_sstables_on_node: no Data.db files found in %s — nothing to decrypt", snapshot_path)
+            return False
+
+        return decrypt_data_files_on_node(
+            node=node,
+            data_files=data_files,
+            schema_text=modified_schema,
+            output_dir=snapshot_path,
+        )
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning(
+            "decrypt_sstables_on_node: unexpected error while decrypting sstables in %s — "
+            "continuing with original files. Error: %s",
+            snapshot_path,
+            exc,
+        )
+        return False
+
+
+def decrypt_sstable_files_on_node(node, data_files: list[str], schema_text: str) -> bool:
+    """Decrypt a list of individual sstable ``Data.db`` files in-place.
+
+    Unlike :func:`decrypt_sstables_on_node`, this function accepts explicit file paths and a
+    schema string rather than reading them from a snapshot directory.  Use this when the sstables
+    to decrypt are not in a snapshot (e.g. quarantined or invalidated files found by scrub).
+
+    On any error the function logs a warning and returns without raising.
+
+    Args:
+        node: A DB / collecting node that has ``remoter`` and ``add_install_prefix`` attributes.
+        data_files: List of remote absolute paths to ``Data.db`` files to decrypt.
+        schema_text: Raw CQL schema text (will have ``scylla_encryption_options`` stripped
+            automatically).
+
+    Returns:
+        True if at least one sstable was successfully decrypted, False otherwise.
+    """
+    if not data_files:
+        return False
+    modified_schema = strip_encryption_options_from_schema(schema_text)
+    try:
+        return decrypt_data_files_on_node(
+            node=node,
+            data_files=data_files,
+            schema_text=modified_schema,
+            output_dir=None,  # means: decrypt in-place (replace original files)
+        )
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning(
+            "decrypt_sstable_files_on_node: unexpected error for %s — continuing with original files. Error: %s",
+            data_files,
+            exc,
+        )
+        return False
+
+
+def decrypt_data_files_on_node(node, data_files: list[str], schema_text: str, output_dir: str | None) -> bool:
+    """Run ``scylla sstable upgrade`` on *data_files* and write output to *output_dir*.
+
+    If *output_dir* is ``None``, each file is decrypted into a per-file temp directory and the
+    result is moved back to the original file's parent directory.
+
+    Args:
+        node: Node with ``remoter`` and ``add_install_prefix``.
+        data_files: Remote paths to ``Data.db`` files.
+        schema_text: Schema CQL text (already stripped of encryption options).
+        output_dir: Destination directory for upgraded files, or ``None`` for in-place.
+
+    Returns:
+        True if at least one sstable was successfully decrypted, False otherwise.
+    """
+    # Use a short hash of the first file path to make temp names unique per batch.
+    tmp_id = abs(hash(data_files[0])) % 10**8
+    tmp_schema = f"/tmp/sct_decrypt_schema_{tmp_id}.cql"
+    node.remoter.run(
+        f"cat > {tmp_schema} << 'SCT_EOF'\n{schema_text}\nSCT_EOF",
+        ignore_status=False,
+        verbose=False,
+    )
+
+    scylla_conf_dir = str(Path(node.add_install_prefix(SCYLLA_YAML_PATH)).parent)
+    scylla_bin = node.add_install_prefix("/usr/bin/scylla")
+
+    upgraded_count = 0
+    for data_file in data_files:
+        # Always use a per-file temp directory: the tool refuses to write into a non-empty
+        # output directory, and snapshot dirs already contain the original sstable files.
+        out = f"/tmp/sct_decrypt_out_{tmp_id}"
+        node.remoter.run(f"rm -rf {out} && mkdir -p {out} && chmod 777 {out}", ignore_status=False, verbose=False)
+
+        result = node.remoter.run(
+            f"SCYLLA_CONF={scylla_conf_dir} {scylla_bin} sstable upgrade"
+            f" --all --schema-file={tmp_schema} {data_file} --output-dir={out}",
+            ignore_status=True,
+            verbose=True,
+        )
+        if not result.ok:
+            LOGGER.warning("decrypt_data_files_on_node: upgrade failed for %s: %s", data_file, result.stderr)
+            node.remoter.run(f"rm -rf {out}", ignore_status=True, verbose=False)
+            continue
+
+        # Move decrypted files to the target directory.
+        # The upgrade tool emits new sstable files with a *new* generation ID in their name, so
+        # the original encrypted files must be removed explicitly (they are not overwritten).
+        dest = output_dir if output_dir else data_file.rsplit("/", 1)[0]
+        # Derive the base prefix of the original sstable (everything before "-big-<Component>")
+        orig_prefix = data_file.rsplit("-big-", 1)[0]
+        node.remoter.run(
+            f"mv {out}/* {dest}/ && rm -rf {out} && rm -f {orig_prefix}-big-*",
+            ignore_status=True,
+            verbose=False,
+        )
+        upgraded_count += 1
+
+    node.remoter.run(f"rm -f {tmp_schema}", ignore_status=True, verbose=False)
+
+    if upgraded_count == 0:
+        LOGGER.warning(
+            "decrypt_data_files_on_node: no sstables were successfully upgraded for %s — "
+            "keeping original (possibly encrypted) files",
+            data_files,
+        )
+    else:
+        LOGGER.info(
+            "decrypt_data_files_on_node: successfully decrypted %d/%d sstable(s) in %s",
+            upgraded_count,
+            len(data_files),
+            output_dir or data_files[0].rsplit("/", 1)[0],
+        )
+
+    return upgraded_count > 0

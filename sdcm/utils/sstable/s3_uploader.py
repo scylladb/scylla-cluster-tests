@@ -5,6 +5,7 @@ from sdcm.cluster import BaseNode
 from sdcm.logcollector import CollectingNode
 from sdcm.utils.common import S3Storage
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
+from sdcm.utils.sstable.sstable_utils import decrypt_sstables_on_node
 
 LOGGER = logging.getLogger(__name__)
 
@@ -26,6 +27,8 @@ def upload_sstables_to_s3(
     try:
         node.remoter.run(nodetool_snapshot_cmd)
         snapshot_paths = node.remoter.run(f"find {data_directory} -type d -name {snapshot_tag}").stdout.split()
+        for snapshot_path in snapshot_paths:
+            decrypt_sstables_on_node(node, snapshot_path)
         s3_link = upload_remote_files_directly_to_s3(
             node.ssh_login_info,
             snapshot_paths,
