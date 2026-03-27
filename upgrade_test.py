@@ -54,7 +54,6 @@ from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.group_common_events import (
     decorate_with_context,
     ignore_abort_requested_errors,
-    ignore_topology_change_coordinator_errors,
     ignore_upgrade_schema_errors,
     ignore_ycsb_connection_refused,
     ignore_raft_topology_cmd_failing,
@@ -250,7 +249,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         [
             ignore_abort_requested_errors,
             ignore_ycsb_connection_refused,
-            ignore_topology_change_coordinator_errors,
             ignore_raft_topology_cmd_failing,
         ]
     )
@@ -399,7 +397,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         [
             ignore_abort_requested_errors,
             ignore_ycsb_connection_refused,
-            ignore_topology_change_coordinator_errors,
             ignore_raft_topology_cmd_failing,
         ]
     )
