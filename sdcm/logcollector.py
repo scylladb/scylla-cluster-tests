@@ -66,6 +66,7 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
+from sdcm.utils.sstable.sstable_utils import decrypt_sstables_on_node
 from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
 from sdcm.localhost import LocalHost
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
@@ -1413,6 +1414,7 @@ class SSTablesCollector(BaseSCTLogCollector):
                 LOGGER.error("Cannot extract snapshot directory from stdout: %s", result.stdout)
                 return []
             snapshot_path = f"{sstable_dir}/snapshots/{snapshot_dir}"
+            decrypt_sstables_on_node(node, snapshot_path)
             s3_link = upload_remote_files_directly_to_s3(
                 node.ssh_login_info,
                 [snapshot_path],

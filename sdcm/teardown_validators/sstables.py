@@ -14,6 +14,7 @@ from sdcm.teardown_validators.base import TeardownValidator
 from sdcm.utils.common import S3Storage
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
+from sdcm.utils.sstable.sstable_utils import decrypt_sstable_files_on_node, strip_encryption_options_from_schema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,11 +40,57 @@ def severity_change_context():
         yield
 
 
+def table_dir_from_sstable_path(sstable: str) -> str | None:
+    """Extract the table directory (``/var/lib/scylla/data/<ks>/<table-dir>``) from an sstable path."""
+    clean = re.sub(r"/quarantine(/.*)?$", "", sstable)
+    parts = clean.rstrip("/").split("/")
+    # Expected structure: ['', 'var', 'lib', 'scylla', 'data', <ks>, <table-dir>, ...]
+    return "/".join(parts[:7]) if len(parts) >= 7 else None
+
+
+def decrypt_corrupted_sstables(node: BaseNode, corrupted_sstables: list[str]) -> None:
+    """Take per-table snapshots to get schema.cql, then decrypt the corrupted Data.db files."""
+    snapshot_tag = "sct-scrub-decrypt"
+    # Map table_dir -> (keyspace, table_name) for each unique table touched
+    table_dir_info: dict[str, tuple[str, str]] = {}
+    for sstable in corrupted_sstables:
+        table_dir = table_dir_from_sstable_path(sstable)
+        if table_dir:
+            parts = table_dir.rstrip("/").split("/")
+            table_dir_info[table_dir] = (parts[5], parts[6].split("-")[0])
+
+    # Collect schema text per table dir, taking snapshots as needed
+    schema_by_table_dir: dict[str, str] = {}
+    for table_dir, (keyspace, table_name) in table_dir_info.items():
+        snap_result = node.remoter.run(
+            f"nodetool snapshot -t {snapshot_tag} {keyspace} -cf {table_name}",
+            ignore_status=True,
+        )
+        if snap_result.ok:
+            schema_path = f"{table_dir}/snapshots/{snapshot_tag}/schema.cql"
+            schema_result = node.remoter.run(f"cat {schema_path}", ignore_status=True, verbose=False)
+            if schema_result.ok and schema_result.stdout.strip():
+                schema_by_table_dir[table_dir] = strip_encryption_options_from_schema(schema_result.stdout)
+            node.remoter.run(f"nodetool clearsnapshot -t {snapshot_tag} {keyspace}", ignore_status=True)
+
+    # Group Data.db files by table_dir and decrypt each group
+    for table_dir, schema_text in schema_by_table_dir.items():
+        keyspace, table_name = table_dir_info[table_dir]
+        data_files = [
+            s for s in corrupted_sstables if s.endswith(".db") and table_dir_from_sstable_path(s) == table_dir
+        ]
+        if data_files:
+            decrypt_sstable_files_on_node(
+                node=node,
+                data_files=data_files,
+                schema_text=schema_text,
+            )
+
+
 class SstablesValidator(TeardownValidator):
     validator_name = "scrub"
 
-    @staticmethod
-    def _upload_corrupted_files(node: BaseNode, invalid_sstables_lines):
+    def _upload_corrupted_files(self, node: BaseNode, invalid_sstables_lines):
         # get corrupted sstables from lines:
         # INFO  2024-04-02 12:40:24,787 [shard 0:stre] sstable - Moving sstable /var/lib/scylla/data/system_schema/columns-24101c25a2ae3af787c1b40ee1aca33f/me-3gey_0z3c_2h5vl2ogebmg26ku9t-big-Data.db to "/var/lib/scylla/data/system_schema/columns-24101c25a2ae3af787c1b40ee1aca33f/quarantine"
         # scylla[5976]:  [shard 6:strm] compaction - Finished scrubbing in validate mode /var/lib/scylla/data/keyspace1/standard1-01b9f260d55311ef8caf5992914eabbe/me-3gn1_0bxv_16fs02rr7ufpbjejzy-big-Data.db - sstable is invalid"
@@ -54,6 +101,9 @@ class SstablesValidator(TeardownValidator):
                 corrupted_sstables.append(list(matches)[-1].group(0))
         # remove duplicates from corrupted_sstables
         corrupted_sstables = list(set(corrupted_sstables))
+
+        decrypt_corrupted_sstables(node, corrupted_sstables)
+
         s3_link = upload_remote_files_directly_to_s3(
             node.ssh_login_info,
             list(corrupted_sstables),
