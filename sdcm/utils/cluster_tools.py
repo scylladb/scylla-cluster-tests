@@ -89,7 +89,7 @@ def flush_nodes(cluster, keyspace: str):
     ParallelObject(objects=triggers, timeout=1200).call_objects()
 
 
-def major_compaction_nodes(cluster, keyspace: str, table: str):
+def major_compaction_nodes(cluster, keyspace: str, table: str, timeout: int = 3600):
     LOGGER.debug("Run a major compaction on cluster data nodes")
     triggers = [
         partial(
@@ -99,7 +99,7 @@ def major_compaction_nodes(cluster, keyspace: str, table: str):
         )
         for node in cluster.data_nodes
     ]
-    ParallelObject(objects=triggers, timeout=3000).call_objects()
+    ParallelObject(objects=triggers, timeout=timeout).call_objects()
 
 
 def clear_snapshot_nodes(cluster):
