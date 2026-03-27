@@ -328,29 +328,44 @@ class Monitors:
 
 Prefer pytest fixtures (including factory fixtures) over bare helper functions. Fixtures integrate with pytest's lifecycle, cleanup, and dependency injection.
 
-❌ **Bad — helper function, no lifecycle management:**
-```python
-def _make_config(backend="docker", n_db_nodes=3):
-    return SCTConfiguration(cluster_backend=backend, n_db_nodes=n_db_nodes)
+**This is especially important when the factory needs a pytest fixture as a dependency** (e.g. `events_function_scope`, `monkeypatch`, `tmp_path`). A plain helper function cannot receive fixtures via dependency injection — you end up passing them manually, or worse, working around scope issues with hacks like `events.clear()`. Converting the helper to a factory fixture lets pytest wire up dependencies automatically.
 
-def test_config():
-    config = _make_config("aws", 6)
-    assert config.get("n_db_nodes") == 6
+❌ **Bad — helper function that needs a fixture but can't receive one:**
+```python
+def _make_runner(disruptions):
+    # Cannot depend on events_function_scope — it's not a fixture!
+    termination_event = threading.Event()
+    tester = FakeTester(params=PARAMS)
+    tester.db_cluster.check_cluster_health = MagicMock()
+    runner = TestNemesisRunner(tester, termination_event)
+    runner.disruptions_list = disruptions
+    return runner
+
+def test_run_stops_after_skips(events_function_scope):
+    runner = _make_runner(disruptions=[])  # events not wired to runner
+    runner.disruptions_list = [SkippingTestNemesis(runner=runner)]
+    runner.run(cycles_count=5)
 ```
 
-✅ **Good — factory fixture with cleanup:**
+✅ **Good — factory fixture with proper dependency injection:**
 ```python
+# conftest.py
 @pytest.fixture
-def create_config(monkeypatch, tmp_path):
-    def _create(backend="docker", n_db_nodes=3):
-        monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
-        monkeypatch.setenv("SCT_N_DB_NODES", str(n_db_nodes))
-        return SCTConfiguration()
-    return _create
+def make_nemesis_runner(events_function_scope):
+    def _make(disruptions=None):
+        termination_event = threading.Event()
+        tester = FakeTester(params=PARAMS)
+        tester.db_cluster.check_cluster_health = MagicMock()
+        runner = TestNemesisRunner(tester, termination_event)
+        if disruptions is not None:
+            runner.disruptions_list = disruptions
+        return runner
+    return _make
 
-def test_config(create_config):
-    config = create_config("aws", 6)
-    assert config.get("n_db_nodes") == 6
+# test file
+def test_run_stops_after_skips(make_nemesis_runner, events_function_scope):
+    runner = make_nemesis_runner([SkippingTestNemesis(runner=runner)])
+    runner.run(cycles_count=5)
 ```
 
 

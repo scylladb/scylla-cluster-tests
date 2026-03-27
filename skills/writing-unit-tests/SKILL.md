@@ -24,9 +24,11 @@ If a test is slow or flaky, the first suspect is an unmocked network call.
 
 ### Use pytest, Not unittest.TestCase
 
-**All tests use pytest functions, fixtures, and `assert` — never `unittest.TestCase`.**
+**All tests use pytest functions, fixtures, and `assert` — never `unittest.TestCase` or `class Test*`.**
 
-`unittest.TestCase` breaks pytest's fixture injection, `autouse` fixtures, parametrize, and parallel execution. SCT requires pytest-native style throughout `unit_tests/`.
+`unittest.TestCase` breaks pytest's fixture injection, `autouse` fixtures, parametrize, and parallel execution. SCT requires pytest-native style throughout `unit_tests/`. This means **no test classes at all** — use flat module-level `def test_*` functions and group related tests with comment blocks (see AP-4).
+
+**Never duplicate test infrastructure** — fake objects, base classes, runner stubs, and fixture setup code. Before adding anything new, check `fake_cluster.py`, `unit_tests/nemesis/__init__.py`, `execute_nemesis/__init__.py`, and `conftest.py`. Add concrete subclasses or attributes to existing structures; only create a new class hierarchy when the registry under test must be isolated from existing subclasses, and document the reason (see AP-5).
 
 ### Tests Must Be Isolated and Parallel-Safe
 
@@ -236,7 +238,7 @@ uv run python -m pytest unit_tests/test_config.py --cov=sdcm.sct_config --cov-re
 | File | Content |
 |------|---------|
 | [common-pitfalls.md](references/common-pitfalls.md) | Pitfalls P-1 through P-15 with before/after fixes |
-| [anti-patterns.md](references/anti-patterns.md) | Anti-patterns AP-1 through AP-3 with before/after fixes |
+| [anti-patterns.md](references/anti-patterns.md) | Anti-patterns AP-1 through AP-5 with before/after fixes |
 
 | Workflow | Purpose |
 |----------|---------|
