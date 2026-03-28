@@ -18,7 +18,12 @@ import unittest
 from collections import namedtuple
 import pytest
 from sdcm import sct_config
+<<<<<<< HEAD
 from sdcm.utils import loader_utils
+||||||| parent of c088ec55d (feat(tags): add JenkinsJob tag for billing aggregation)
+=======
+from sdcm.test_config import TestConfig
+>>>>>>> c088ec55d (feat(tags): add JenkinsJob tag for billing aggregation)
 from sdcm.utils.common import get_latest_scylla_release
 from sdcm.utils.aws_utils import get_ssm_ami
 
@@ -1244,5 +1249,111 @@ class ConfigurationTests(unittest.TestCase):
             conf.verify_configuration()
 
 
+<<<<<<< HEAD
 if __name__ == "__main__":
     unittest.main()
+||||||| parent of c088ec55d (feat(tags): add JenkinsJob tag for billing aggregation)
+def test_39_billing_project_from_job_name(monkeypatch):
+    """Test that billing_project is set correctly from JOB_NAME."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+
+    # Test with scylla-5.2 prefix
+    monkeypatch.setenv("JOB_NAME", "scylla-5.2/longevity/test")
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("billing_project") == "5.2"
+
+    # Test with scylladb-5.4 prefix
+    monkeypatch.setenv("JOB_NAME", "scylladb-5.4/longevity/test")
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("billing_project") == "5.4"
+
+
+def test_39_billing_project_staging_not_set(monkeypatch):
+    """Test that billing_project is NOT set to 'staging'."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+
+    # Test with staging folder - should not set billing_project
+    monkeypatch.setenv("JOB_NAME", "scylla-staging/longevity/test")
+    conf = sct_config.SCTConfiguration()
+    # billing_project should not be set to "staging"
+    assert conf.get("billing_project") != "staging"
+
+    # Test with scylladb-staging folder - should not set billing_project
+    monkeypatch.setenv("JOB_NAME", "scylladb-staging/longevity/test")
+    conf = sct_config.SCTConfiguration()
+    # billing_project should not be set to "staging"
+    assert conf.get("billing_project") != "staging"
+=======
+def test_39_billing_project_from_job_name(monkeypatch):
+    """Test that billing_project is set correctly from JOB_NAME."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+
+    # Test with scylla-5.2 prefix
+    monkeypatch.setenv("JOB_NAME", "scylla-5.2/longevity/test")
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("billing_project") == "5.2"
+
+    # Test with scylladb-5.4 prefix
+    monkeypatch.setenv("JOB_NAME", "scylladb-5.4/longevity/test")
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("billing_project") == "5.4"
+
+
+def test_39_billing_project_staging_not_set(monkeypatch):
+    """Test that billing_project is NOT set to 'staging'."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+
+    # Test with staging folder - should not set billing_project
+    monkeypatch.setenv("JOB_NAME", "scylla-staging/longevity/test")
+    conf = sct_config.SCTConfiguration()
+    # billing_project should not be set to "staging"
+    assert conf.get("billing_project") != "staging"
+
+    # Test with scylladb-staging folder - should not set billing_project
+    monkeypatch.setenv("JOB_NAME", "scylladb-staging/longevity/test")
+    conf = sct_config.SCTConfiguration()
+    # billing_project should not be set to "staging"
+    assert conf.get("billing_project") != "staging"
+
+
+class TestCommonTags:
+    """Tests for TestConfig.common_tags() method."""
+
+    def test_jenkins_job_tag_from_build_tag(self, monkeypatch):
+        """Test that JenkinsJobTag is set from BUILD_TAG."""
+        monkeypatch.setenv("BUILD_TAG", "jenkins-scylla-master-tier1-test-128")
+        monkeypatch.setenv("JOB_NAME", "scylla-master/test")
+        tags = TestConfig.common_tags()
+        assert tags["JenkinsJobTag"] == "jenkins-scylla-master-tier1-test-128"
+
+    @pytest.mark.parametrize(
+        "build_tag, expected_jenkins_job",
+        [
+            ("jenkins-scylla-master-tier1-longevity-12h-test-128", "jenkins-scylla-master-tier1-longevity-12h-test"),
+            ("jenkins-scylla-master-test-256", "jenkins-scylla-master-test"),
+            ("jenkins-job-name-1", "jenkins-job-name"),
+            # Edge case: trailing segment is not digits - remains unchanged
+            ("jenkins-no-trailing-dash", "jenkins-no-trailing-dash"),
+            ("jenkins", "jenkins"),
+            ("-42", ""),
+        ],
+    )
+    def test_jenkins_job_derived_from_build_tag(self, monkeypatch, build_tag, expected_jenkins_job):
+        """Test that JenkinsJob is derived from BUILD_TAG by stripping trailing dash+digits."""
+        monkeypatch.setenv("BUILD_TAG", build_tag)
+        monkeypatch.setenv("JOB_NAME", "scylla-master/test")
+        tags = TestConfig.common_tags()
+        assert tags["JenkinsJob"] == expected_jenkins_job
+
+    def test_jenkins_job_not_set_without_build_tag(self, monkeypatch):
+        """Test that JenkinsJob is not set when BUILD_TAG is not present."""
+        monkeypatch.delenv("BUILD_TAG", raising=False)
+        monkeypatch.setenv("JOB_NAME", "scylla-master/test")
+        tags = TestConfig.common_tags()
+        assert "JenkinsJobTag" not in tags
+        assert "JenkinsJob" not in tags
+>>>>>>> c088ec55d (feat(tags): add JenkinsJob tag for billing aggregation)
