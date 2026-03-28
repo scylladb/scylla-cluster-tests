@@ -1,0 +1,99 @@
+# Tier1 trigger matrix — single source of truth for all tier1 job definitions.
+#
+# Replaces:
+#   - jenkins-pipelines/oss/sct_triggers/tier1-aws-custom-time-trigger.xml
+#   - jenkins-pipelines/oss/sct_triggers/tier1-azure-custom-time-trigger.xml
+#   - jenkins-pipelines/oss/sct_triggers/tier1-gce-custom-time-trigger.xml
+#   - jenkins-pipelines/oss/sct_triggers/tier1-aws-aarch64-custom-time-trigger.xml
+#   - jenkins-pipelines/master-triggers/sct_triggers/tier1-custom-time-trigger.xml
+
+cron_triggers:
+  - schedule: "00 06 * * 6"  # Saturday 6am UTC
+    params:
+      scylla_version: "{branch}:latest"
+      labels_selector: "weekly"
+      requested_by_user: "scheduled"
+
+defaults:
+  provision_type: "on_demand"
+  post_behavior_db_nodes: "destroy"
+  post_behavior_loader_nodes: "destroy"
+  post_behavior_monitor_nodes: "destroy"
+
+jobs:
+  # --- AWS tier1 jobs (from tier1-aws-custom-time-trigger.xml) ---
+  - job_name: "tier1/longevity-mv-si-4days-streaming-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "weekly"
+    exclude_versions: []
+
+  - job_name: "tier1/longevity-schema-topology-changes-12h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "weekly"
+    exclude_versions: []
+
+  - job_name: "tier1/elasticity-90-percent-with-nemesis-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "weekly"
+    exclude_versions: []
+
+  - job_name: "tier1/longevity-150gb-asymmetric-cluster-12h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "weekly"
+    exclude_versions: []
+
+  - job_name: "tier1/longevity-multidc-schema-topology-changes-12h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "weekly"
+    exclude_versions: []
+
+  # --- Azure tier1 jobs (from tier1-azure-custom-time-trigger.xml) ---
+  - job_name: "tier1/longevity-1tb-5days-azure-test"
+    backend: "azure"
+    region: "eastus"
+    labels:
+      - "weekly"
+    exclude_versions: []
+
+  # --- GCE tier1 jobs (from tier1-gce-custom-time-trigger.xml) ---
+  - job_name: "tier1/longevity-large-partition-200k-pks-4days-gce-test"
+    backend: "gce"
+    region: "us-east1"
+    labels:
+      - "weekly"
+    exclude_versions: []
+
+  # --- AWS aarch64 tier1 jobs (from tier1-aws-aarch64-custom-time-trigger.xml) ---
+  - job_name: "tier1/longevity-twcs-48h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "weekly"
+    exclude_versions: []
+
+  # --- Master-only tier1 jobs (from master-triggers/tier1-custom-time-trigger.xml) ---
+  - job_name: "tier1/gemini-1tb-10h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "weekly"
+      - "master-only"
+    exclude_versions: []
+
+  - job_name: "longevity/longevity-harry-2h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "weekly"
+      - "master-only"
+    exclude_versions: []

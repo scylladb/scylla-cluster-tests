@@ -69,6 +69,11 @@ from sdcm.sct_runner import (
 )
 
 from sdcm.utils.ci_tools import get_job_name, get_job_url
+from sdcm.utils.trigger_matrix import (
+    resolve_scylla_version_from_image,
+    resolve_to_full_version,
+    trigger_matrix as run_trigger_matrix,
+)
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import argus_offline_collect_events, create_proxy_argus_s3_url, get_argus_client
 from sdcm.utils.aws_kms import AwsKms
@@ -138,7 +143,6 @@ from sdcm.cluster_k8s import mini_k8s
 from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
-from utils.build_system.throttle_categories import ThrottleCategoryManager, ThrottleCategory
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
 from sdcm.utils.docker_utils import get_ip_address_of_container
 from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
@@ -233,6 +237,7 @@ def cli(ctx):
         "create-nemesis-yaml",
         "pre-commit",
         "unit-tests",
+        "trigger-matrix",
     ):
         try_auth_with_okta()
 
@@ -357,7 +362,7 @@ def clean_aws_kms_aliases(ctx, regions, time_delta_h, dry_run):
     aws_kms.cleanup_old_aliases(**kwargs)
 
 
-@cli.command("clean-resources", help="clean tagged instances. Supported clouds: AWS|Azure|GCE|OCI")
+@cli.command("clean-resources", help="clean tagged instances in both clouds (AWS/GCE)")
 @click.option("--post-behavior", is_flag=True, default=False, help="clean all resources according to post behavior")
 @click.option("--user", type=str, help="user name to filter instances by")
 @click.option("--billing-project", type=str, help="billing project to filter instances by")
@@ -415,7 +420,6 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
         os.environ["SCT_REGION_NAME"] = os.environ.get("SCT_REGION_NAME", "")
         os.environ["SCT_GCE_DATACENTER"] = os.environ.get("SCT_GCE_DATACENTER", "")
         os.environ["SCT_AZURE_REGION_NAME"] = os.environ.get("SCT_AZURE_REGION_NAME", "")
-        os.environ["SCT_OCI_REGION_NAME"] = os.environ.get("SCT_OCI_REGION_NAME", "")
 
     if not post_behavior and user and not test_id and not logdir and not billing_project:
         click.echo(f"Clean all resources belong to user `{user}'")
@@ -2028,50 +2032,6 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
         server.create_job_tree(base_path)
 
 
-@cli.command(
-    "configure-jenkins-throttle", help="Create/update Jenkins throttle-concurrents categories for perf regions"
-)
-@click.argument("username", envvar="JENKINS_USERNAME", type=str, required=False)
-@click.argument("password", envvar="JENKINS_PASSWORD", type=str, required=False)
-@click.option("--dry-run", is_flag=True, default=False, help="Print categories without applying changes")
-@click.option(
-    "--suffix",
-    multiple=True,
-    default=["i8g"],
-    help="Additional suffixes to create per region (e.g. --suffix i8g --suffix i4i). "
-    "Base categories (no suffix) are always created.",
-)
-def configure_jenkins_throttle(username, password, dry_run, suffix):
-    add_file_logger()
-
-    # AWS regions used by performance tests
-    aws_regions = [
-        "us-east-1",
-        "eu-west-1",
-        "eu-west-2",
-        "eu-west-3",
-        "eu-north-1",
-    ]
-
-    categories = [ThrottleCategory(name=f"SCT-perf-{region}", max_total=1, max_per_node=1) for region in aws_regions]
-    for sfx in suffix:
-        categories += [
-            ThrottleCategory(name=f"SCT-perf-{region}-{sfx}", max_total=1, max_per_node=1) for region in aws_regions
-        ]
-    if dry_run:
-        click.echo("Would ensure the following throttle categories:")
-        for cat in categories:
-            click.echo(f"  {cat.name}: max_total={cat.max_total}, max_per_node={cat.max_per_node}")
-        return
-
-    manager = ThrottleCategoryManager(username=username, password=password)
-    changed = manager.ensure_categories(categories)
-    if changed:
-        click.echo(f"Created/updated {len(changed)} categories: {changed}")
-    else:
-        click.echo("All categories already up to date")
-
-
 @cli.command("prepare-regions", help="Configure all required resources for SCT runs in selected cloud region")
 @cloud_provider_option
 @click.option("-r", "--regions", type=CloudRegion(), help="Cloud region", multiple=True)
@@ -2539,6 +2499,128 @@ def hdr_investigate(
         f"\nFound P99 spikes higher than {error_threshold_ms} ms for tags {hdr_tags} with interval {hdr_summary_interval_sec} seconds\n"
     )
     click.echo(rich_table_to_string(hdr_table, title="HDR Latency Spikes"))
+
+
+@cli.command("trigger-matrix", help="Trigger Jenkins jobs from a YAML matrix file")
+@click.option("--matrix", required=True, type=click.Path(exists=True), help="Path to trigger matrix YAML file")
+@click.option(
+    "--scylla-version", required=False, default=None, type=str,
+    help="Scylla version (e.g., master:latest, 2024.2.5-0.20250221.xxx-1). "
+         "If not provided, resolved automatically from image params"
+)
+@click.option("--job-folder", default=None, type=str, help="Override auto-detected Jenkins job folder")
+@click.option("--labels-selector", default=None, type=str, help="Comma-separated labels to filter jobs (AND logic)")
+@click.option(
+    "--backend", default=None, type=click.Choice(["aws", "gce", "azure", "docker", "oci"]), help="Filter jobs by backend"
+)
+@click.option("--skip-jobs", default=None, type=str, help="Comma-separated job names to skip")
+@click.option("--stress-duration", default=None, type=str, help="Override stress_duration parameter")
+@click.option("--region", default=None, type=str, help="Override region for all jobs")
+@click.option("--availability-zone", default=None, type=str, help="Override availability zone for all jobs")
+@click.option(
+    "--provision-type",
+    default=None,
+    type=click.Choice(["spot", "on_demand", "spot_fleet"]),
+    help="Override provision type",
+)
+@click.option("--scylla-ami-id", default=None, type=str, help="Scylla AMI ID (AWS) — also used to resolve scylla_version if not provided")
+@click.option("--gce-image-db", default=None, type=str, help="Scylla GCE image — also used to resolve scylla_version if not provided")
+@click.option("--azure-image-db", default=None, type=str, help="Scylla Azure image — also used to resolve scylla_version if not provided")
+@click.option("--oci-image-db", default=None, type=str, help="Scylla OCI image OCID — also used to resolve scylla_version if not provided")
+@click.option("--dry-run", is_flag=True, default=False, help="Preview mode — do not trigger jobs")
+@click.option("--requested-by-user", default=None, type=str, help="User requesting the run")
+def trigger_matrix_cmd(  # noqa: PLR0913
+    matrix,
+    scylla_version,
+    job_folder,
+    labels_selector,
+    backend,
+    skip_jobs,
+    stress_duration,
+    region,
+    availability_zone,
+    provision_type,
+    scylla_ami_id,
+    gce_image_db,
+    azure_image_db,
+    oci_image_db,
+    dry_run,
+    requested_by_user,
+):
+    add_file_logger()
+
+    # Resolve scylla_version: from image tags, or from partial version via AMI lookup
+    version_from_image = False
+    if not scylla_version:
+        has_image = any([scylla_ami_id, gce_image_db, azure_image_db, oci_image_db])
+        if not has_image:
+            click.echo("Error: Either --scylla-version or an image param "
+                        "(--scylla-ami-id, --gce-image-db, --azure-image-db, --oci-image-db) is required", err=True)
+            sys.exit(1)
+        try:
+            scylla_version = resolve_scylla_version_from_image(
+                scylla_ami_id=scylla_ami_id, gce_image_db=gce_image_db,
+                azure_image_db=azure_image_db, oci_image_db=oci_image_db,
+                region=region,
+            )
+            version_from_image = True
+            click.echo(f"Resolved scylla_version from image: {scylla_version}")
+        except Exception as exc:  # noqa: BLE001
+            click.echo(f"Error: {exc}", err=True)
+            sys.exit(1)
+
+    # For user-provided partial versions (master:latest, 2025.4), resolve to full version.
+    # Skip if version was already resolved from image tags — that's already the real version.
+    if not version_from_image:
+        try:
+            scylla_version = resolve_to_full_version(scylla_version, region=region)
+            click.echo(f"Using full version: {scylla_version}")
+        except Exception as exc:  # noqa: BLE001
+            click.echo(f"Error resolving full version: {exc}", err=True)
+            sys.exit(1)
+
+    # Image params (scylla_ami_id, gce_image_db, etc.) are only used for version
+    # resolution above — not passed to triggered jobs. Downstream jobs resolve
+    # their own images from scylla_version.
+    overrides = {}
+    if stress_duration:
+        overrides["stress_duration"] = stress_duration
+    if region:
+        overrides["region"] = region
+    if availability_zone:
+        overrides["availability_zone"] = availability_zone
+    if provision_type:
+        overrides["provision_type"] = provision_type
+    if requested_by_user:
+        overrides["requested_by_user"] = requested_by_user
+
+    try:
+        results = run_trigger_matrix(
+            matrix_file=matrix,
+            scylla_version=scylla_version,
+            job_folder=job_folder,
+            labels_selector=labels_selector,
+            backend=backend,
+            skip_jobs=skip_jobs,
+            dry_run=dry_run,
+            **overrides,
+        )
+    except Exception as exc:  # noqa: BLE001
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+
+    click.echo(f"\nTriggered: {len(results['triggered'])} jobs")
+    for job in results["triggered"]:
+        click.echo(f"  + {job}")
+    if results["skipped"]:
+        click.echo(f"Skipped: {len(results['skipped'])} jobs")
+        for job in results["skipped"]:
+            click.echo(f"  - {job}")
+    if results["failed"]:
+        click.echo(f"Failed: {len(results['failed'])} jobs")
+        for job in results["failed"]:
+            click.echo(f"  ! {job}")
+        sys.exit(1)
 
 
 cli.add_command(sct_ssh.ssh)
