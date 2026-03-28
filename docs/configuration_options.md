@@ -288,7 +288,7 @@ Scylla install mode, repo/offline/web
 
 ## **scylla_version** / SCT_SCYLLA_VERSION
 
-Version of scylla to install, ex. '2.3.1'<br>Automatically lookup AMIs and repo links for formal versions.<br>WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'
+Version of scylla to install, ex. '2.3.1'<br>Automatically lookup AMIs and repo links for formal versions.<br>WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'.<br>Supports 'relocatable:<branch>:<arch>' format to auto-resolve<br>the latest unified package URL from S3.<br><branch> defaults to 'master', <arch> defaults to 'x86_64'<br>(auto-detected from AWS instance type when on AWS backend).<br>Examples: 'relocatable:master:x86_64', 'relocatable:branch-2025.1',<br>'relocatable:enterprise:aarch64'
 
 **default:** N/A
 

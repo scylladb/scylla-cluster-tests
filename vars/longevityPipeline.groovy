@@ -75,6 +75,12 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
                    name: 'scylla_repo')
+            string(defaultValue: "${pipelineParams.get('unified_package', '')}",
+                   description: 'Url to the unified package of scylla version to install scylla',
+                   name: 'unified_package')
+            booleanParam(defaultValue: "${pipelineParams.get('nonroot_offline_install', false)}",
+                   description: 'Install Scylla without required root privilege',
+                   name: 'nonroot_offline_install')
 
             // Provisioning Configuration
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')

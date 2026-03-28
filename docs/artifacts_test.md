@@ -118,6 +118,46 @@ If you want to run against some official ScyllaDB Docker image, you should go to
 SCT_SCYLLA_VERSION="<tag you've chose>" hydra run-test artifacts_test --backend docker --config test-cases/artifacts/docker.yaml
 ```
 
+## Unified Package (Relocatable)
+
+You can install ScyllaDB from a unified (relocatable) tarball instead of using repositories or cloud images. This is useful for testing nightly builds or custom builds.
+
+### Direct URL
+
+Provide the full URL to the unified package tarball:
+
+```sh
+export SCT_UNIFIED_PACKAGE="https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/master/relocatable/2026-03-20T08:05:34Z/scylla-unified-x86_64.tar.gz"
+export SCT_NONROOT_OFFLINE_INSTALL=true
+hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos9.yaml
+```
+
+### Auto-resolve via `scylla_version`
+
+Use the `relocatable:` prefix on `scylla_version` to automatically resolve the latest unified package URL from S3:
+
+```sh
+# Resolve latest master build for x86_64
+export SCT_SCYLLA_VERSION=relocatable:master:x86_64
+hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos9.yaml
+
+# Resolve latest from a release branch for ARM
+export SCT_SCYLLA_VERSION=relocatable:branch-2025.1:aarch64
+hydra run-test artifacts_test --backend aws --config test-cases/artifacts/ami.yaml
+```
+
+### Non-root installation
+
+To install without root privileges, set `nonroot_offline_install`:
+
+```sh
+export SCT_UNIFIED_PACKAGE="https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/master/relocatable/2026-03-20T08:05:34Z/scylla-unified-x86_64.tar.gz"
+export SCT_NONROOT_OFFLINE_INSTALL=true
+hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos9.yaml
+```
+
+> **Note:** When `unified_package` is set in Jenkins pipelines, Scylla Manager is automatically disabled (`SCT_USE_MGMT=false`) because the manager is not included in the unified package.
+
 # Scylla Doctor Version Management
 
 ## Overview

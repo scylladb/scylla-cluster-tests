@@ -47,7 +47,7 @@ from sdcm.utils.cloud_api_utils import get_cloud_rest_credentials_from_file
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.utils import alternator
-from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
+from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported, DEFAULT_AWS_REGION
 from sdcm.utils.common import (
     ami_built_by_scylla,
     get_ami_tags,
@@ -71,6 +71,7 @@ from sdcm.utils.version_utils import (
     find_scylla_repo,
     is_enterprise,
     ComparableScyllaVersion,
+    latest_unified_package,
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import (
@@ -584,7 +585,13 @@ class SCTConfiguration(BaseModel):
     scylla_version: String = SctField(
         description="""Version of scylla to install, ex. '2.3.1'
                        Automatically lookup AMIs and repo links for formal versions.
-                       WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'""",
+                       WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'.
+                       Supports 'relocatable:<branch>:<arch>' format to auto-resolve
+                       the latest unified package URL from S3.
+                       <branch> defaults to 'master', <arch> defaults to 'x86_64'
+                       (auto-detected from AWS instance type when on AWS backend).
+                       Examples: 'relocatable:master:x86_64', 'relocatable:branch-2025.1',
+                       'relocatable:enterprise:aarch64'""",
         appendable=False,
     )
     user_data_format_version: String = SctField(
@@ -2496,6 +2503,67 @@ class SCTConfiguration(BaseModel):
         dist_type = scylla_linux_distro.split("-")[0]
         dist_version = scylla_linux_distro.split("-")[-1]
 
+        # 6a) handle relocatable:<branch>:<arch> prefix – resolve to unified package URL
+        scylla_version = self.get("scylla_version")
+        if scylla_version and scylla_version.startswith("relocatable:"):
+            parts = scylla_version.split(":")
+            # Format: relocatable[:<branch>[:<arch>]]
+            branch = parts[1] if len(parts) > 1 and parts[1] else "master"
+            arch = parts[2] if len(parts) > 2 and parts[2] else None
+            if arch is None:
+                backend = self.get("cluster_backend")
+                if backend == "aws":
+                    instance_type = self.get("instance_type_db")
+                    region = self.region_names[0] if self.region_names else DEFAULT_AWS_REGION
+                    aws_arch = get_arch_from_instance_type(instance_type, region_name=region)
+                    # AWS uses 'arm64' but S3 unified packages use 'aarch64'
+                    arch = "aarch64" if aws_arch == "arm64" else aws_arch
+                    self.log.info(
+                        "Auto-detected architecture '%s' from AWS instance type '%s'",
+                        arch,
+                        instance_type,
+                    )
+                else:
+                    arch = "x86_64"
+                    self.log.warning(
+                        "Architecture auto-detection is only supported on AWS backend. "
+                        "Defaulting to '%s'. Use 'relocatable:%s:<arch>' to specify explicitly.",
+                        arch,
+                        branch,
+                    )
+            self.log.info(
+                "Resolving relocatable scylla_version='%s' → branch='%s', arch='%s'",
+                scylla_version,
+                branch,
+                arch,
+            )
+            unified_url = latest_unified_package(branch=branch, arch=arch)
+            self.log.info("Resolved unified package URL: %s", unified_url)
+            self["unified_package"] = unified_url
+            self["use_preinstalled_scylla"] = False
+            self["scylla_version"] = ""
+
+            # Ensure a base OS AMI is available for AWS offline install.
+            # The YAML config provides one via resolve:ssm:... but it can be
+            # overridden to empty by Jenkins environment variables.
+            backend = self.get("cluster_backend")
+            if backend == "aws" and not self.get("ami_id_db_scylla"):
+                ssm_arch = "arm64" if arch == "aarch64" else "amd64"
+                ssm_path = f"resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/{ssm_arch}/hvm/ebs-gp2/ami-id"
+                self.log.info("ami_id_db_scylla is empty, resolving base Ubuntu 22.04 AMI from SSM: %s", ssm_path)
+                self["ami_id_db_scylla"] = convert_name_to_ami_if_needed(ssm_path, tuple(self.region_names))
+                self.log.info("Resolved base Ubuntu AMI: %s", self["ami_id_db_scylla"])
+                # Always set the SSH user to 'ubuntu' for base OS AMI — the default
+                # 'scyllaadm' from aws_config.yaml only applies to prebuilt Scylla AMIs.
+                self["ami_db_scylla_user"] = "ubuntu"
+                if not self.get("scylla_linux_distro") or self.get("scylla_linux_distro") == "ubuntu-focal":
+                    self["scylla_linux_distro"] = "ubuntu-jammy"
+                # Base OS AMI doesn't have user_data_format_version tag
+                self["user_data_format_version"] = "3"
+                # Enhanced network check isn't supported on base OS AMI
+                if " --no-ec2-check " not in (self.get("append_scylla_setup_args") or ""):
+                    self["append_scylla_setup_args"] = (self.get("append_scylla_setup_args") or "") + " --no-ec2-check "
+
         if scylla_version := self.get("scylla_version"):
             if self.get("cluster_backend") in ["docker", "k8s-eks", "k8s-gke"] and not self.get("docker_image"):
                 self["docker_image"] = get_scylla_docker_repo_from_version(scylla_version)
@@ -3033,10 +3101,19 @@ class SCTConfiguration(BaseModel):
 
             if field_env and any(key.startswith(field_env) for key in os.environ.keys()):
                 if field_env in os.environ.keys():
-                    try:
-                        environment_vars[field_name] = from_env_func(os.environ[field_env])
-                    except Exception as ex:  # noqa: BLE001
-                        raise ValueError("failed to parse {} from environment variable".format(field_env)) from ex
+                    env_value = os.environ[field_env]
+                    # Skip empty string env vars for AMI ID fields — an empty string is never
+                    # a valid AMI/image ID and would only override meaningful YAML values
+                    # (e.g. resolve:ssm:... paths) with an empty string.
+                    if not env_value and field_name in self.ami_id_params:
+                        self.log.debug(
+                            "Ignoring empty environment variable %s for AMI field '%s'", field_env, field_name
+                        )
+                    else:
+                        try:
+                            environment_vars[field_name] = from_env_func(env_value)
+                        except Exception as ex:  # noqa: BLE001
+                            raise ValueError("failed to parse {} from environment variable".format(field_env)) from ex
                 nested_keys = [key for key in os.environ if key.startswith(field_env + ".")]
                 if nested_keys:
                     list_value = []
@@ -3306,6 +3383,10 @@ class SCTConfiguration(BaseModel):
         current_region_param_name = region_param_names[backend]
         region_count = {}
         for opt in self.multi_region_params:
+            # When using unified_package (offline install), ami_id_db_scylla may be empty
+            # because Scylla is installed from a tarball, not from a pre-built AMI.
+            if self.get("unified_package") and opt in self.ami_id_params:
+                continue
             val = self.get(opt)
             if isinstance(val, str):
                 region_count[opt] = len(self.get(opt).split())
@@ -3430,22 +3511,30 @@ class SCTConfiguration(BaseModel):
         if not self.get("use_preinstalled_scylla") and not backend == "baremetal" and not self.get("unified_package"):
             options_must_exist += ["scylla_repo"]
 
-        if self.get("db_type") == "cloud_scylla":
+        # When unified_package is set (offline install), the base OS image (AMI/GCE/Azure)
+        # is expected to come from the YAML config and Scylla will be installed from the
+        # unified package tarball.  Skip the image requirement in this case — provisioning
+        # will fail with a clear error if the image is truly missing.
+        if not self.get("unified_package"):
+            if self.get("db_type") == "cloud_scylla":
+                options_must_exist += ["cloud_cluster_id"]
+            elif backend == "aws":
+                options_must_exist += ["ami_id_db_scylla"]
+            elif backend == "gce":
+                options_must_exist += ["gce_image_db"]
+            elif backend == "azure":
+                options_must_exist += ["azure_image_db"]
+            elif backend == "oci":
+                options_must_exist += ["oci_image_db"]
+            elif backend == "docker":
+                options_must_exist += ["docker_image"]
+            elif backend == "baremetal":
+                options_must_exist += ["db_nodes_public_ip"]
+            elif "k8s" in backend or backend == "xcloud":
+                options_must_exist += ["scylla_version"]
+        # For cloud_scylla the cluster ID is always needed even with unified_package
+        elif self.get("db_type") == "cloud_scylla":
             options_must_exist += ["cloud_cluster_id"]
-        elif backend == "aws":
-            options_must_exist += ["ami_id_db_scylla"]
-        elif backend == "gce":
-            options_must_exist += ["gce_image_db"]
-        elif backend == "azure":
-            options_must_exist += ["azure_image_db"]
-        elif backend == "oci":
-            options_must_exist += ["oci_image_db"]
-        elif backend == "docker":
-            options_must_exist += ["docker_image"]
-        elif backend == "baremetal":
-            options_must_exist += ["db_nodes_public_ip"]
-        elif "k8s" in backend or backend == "xcloud":
-            options_must_exist += ["scylla_version"]
 
         if not options_must_exist:
             return

@@ -52,6 +52,60 @@ A full version tag consists of:
 | **Commit ID** | Git commit hash (short form) | `cb9e2a54ae6d`, `4cde34f6f20b` |
 | **Suffix** | Optional suffix for package version | `-1`, `-2` (optional) |
 
+### 4. Relocatable / Unified Package Versions (NEW)
+
+Install from the latest unified (relocatable) tarball published to S3:
+
+**Format**: `relocatable:<branch>:<arch>`
+
+| Part | Required | Default | Description |
+|------|----------|---------|-------------|
+| `relocatable` | yes | — | Literal prefix that triggers unified-package resolution |
+| `<branch>` | no | `master` | ScyllaDB branch, e.g. `master`, `branch-2025.1`, `enterprise` |
+| `<arch>` | no | `x86_64` | CPU architecture — `x86_64` or `aarch64`. Auto-detected from AWS instance type on the AWS backend |
+
+**Examples**:
+```bash
+# Latest master build for x86_64 (default arch)
+export SCT_SCYLLA_VERSION=relocatable:master
+
+# Latest master build, explicitly x86_64
+export SCT_SCYLLA_VERSION=relocatable:master:x86_64
+
+# Latest from a release branch for ARM
+export SCT_SCYLLA_VERSION=relocatable:branch-2025.1:aarch64
+
+# Enterprise branch
+export SCT_SCYLLA_VERSION=relocatable:enterprise:x86_64
+```
+
+**How it works**:
+1. SCT fetches `00-Build.txt` from `s3://downloads.scylladb.com/unstable/<product>/<branch>/relocatable/latest/`
+2. The `url-id` field in that file gives the timestamp of the latest build
+3. SCT lists the S3 prefix for that timestamp and finds the matching `scylla-unified-*.tar.gz`
+4. The resolved URL is set as `unified_package`, `use_preinstalled_scylla` is set to `False`, and `scylla_version` is cleared
+
+**Architecture auto-detection** (AWS only):
+When `<arch>` is omitted and the backend is `aws`, SCT inspects the configured `instance_type_db` to determine the architecture automatically. On non-AWS backends, `x86_64` is used as the default and a warning is logged suggesting explicit specification.
+
+**Usage with all backends**:
+```bash
+# AWS — arch auto-detected from instance type
+export SCT_SCYLLA_VERSION=relocatable:master
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws \
+  --config test-cases/PR-provision-test.yaml
+
+# GCE — specify arch explicitly
+export SCT_SCYLLA_VERSION=relocatable:master:x86_64
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend gce \
+  --config test-cases/PR-provision-test.yaml
+
+# Docker
+export SCT_SCYLLA_VERSION=relocatable:master:x86_64
+hydra run-test artifacts_test --backend docker \
+  --config test-cases/artifacts/docker.yaml
+```
+
 
 ## Usage Examples
 
@@ -86,6 +140,7 @@ Full version tag support is **fully backward compatible**:
 
 - ✅ Simple versions continue to work: `5.2.1`, `2024.2.0`
 - ✅ Branch versions continue to work: `master:latest`, `enterprise:latest`
+- ✅ Relocatable prefix resolves to unified package: `relocatable:master:x86_64`
 - ✅ Existing test configs require no changes
 - ✅ Automatic detection determines version format
 
