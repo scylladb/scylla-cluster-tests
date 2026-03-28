@@ -1,6 +1,11 @@
 #!groovy
 
 def call(Map params, String region){
+    if (params.reuse_cluster) {
+        echo "Cluster reuse mode: skipping resource provisioning"
+        return
+    }
+
     def current_region = initAwsRegionParam(params.region, region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)

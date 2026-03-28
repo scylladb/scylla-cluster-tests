@@ -55,6 +55,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_monitor_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
+            string(defaultValue: '',
+                   description: 'Test ID of an existing cluster to reuse. When set, provisioning is skipped and the existing cluster is used.',
+                   name: 'reuse_cluster')
             string(defaultValue: "${pipelineParams.get('provision_type', 'on_demand')}",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')

@@ -70,6 +70,72 @@ hydra update-scylla-packages --test-id $SCT_REUSE_CLUSTER -p ~/new_scylla_packag
 hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/longevity/longevity-10gb-3h.yaml --config configurations/network_config/test_communication_public.yaml
 ```
 
+### Jenkins pipeline reuse
+
+Cluster reuse is also supported in Jenkins pipelines. This allows re-running a test against an existing cluster directly from the Jenkins UI, without provisioning new infrastructure.
+
+#### How it works
+
+When a Jenkins build runs with `post_behavior_*` parameters set to `keep`, the test cluster and the SCT runner VM are both preserved after the build completes. A subsequent build can then reuse the preserved cluster and runner by specifying the original run's `test_id` in the `reuse_cluster` parameter.
+
+The reuse flow:
+1. **SCT runner**: instead of creating a new runner VM, the pipeline looks up the runner from the original test by its `test_id` and reuses it
+2. **Provisioning**: the `Provision Resources` stage is skipped entirely
+3. **Test execution**: the test runs against the existing cluster using `SCT_REUSE_CLUSTER`
+4. **Cleanup**: post-test cleanup respects the current run's `post_behavior` settings — set them to `keep` again to preserve the cluster for another reuse, or `destroy` to tear everything down
+
+#### Step-by-step
+
+1. **Run the initial build with `post_behavior_*=keep`**
+
+   In the Jenkins build parameters, set:
+   - `post_behavior_db_nodes` = `keep`
+   - `post_behavior_loader_nodes` = `keep`
+   - `post_behavior_monitor_nodes` = `keep`
+
+   This preserves both the test cluster and the SCT runner after the build finishes.
+
+2. **Find the test ID**
+
+   The `test_id` of the completed build can be found in:
+   - The Argus link in the Jenkins build description (the UUID in the URL)
+   - Jenkins build logs — search for `test_id`
+   - The `SCT_TEST_ID` value shown in the build's environment variables
+
+3. **Start a reuse build**
+
+   Trigger a new build of the same pipeline (or a compatible one). In the build parameters:
+   - Set `reuse_cluster` to the `test_id` from step 2
+   - Set `post_behavior_*` to `keep` if you plan to reuse again, or `destroy` to clean up
+
+4. **Verify the reuse**
+
+   In the build log, look for:
+   - `"Reuse mode: looking up existing SCT runner"` — confirms runner reuse
+   - `"Cluster reuse mode: skipping resource provisioning"` — confirms provisioning was skipped
+
+#### Supported pipelines
+
+The `reuse_cluster` parameter is available in the following pipeline types:
+- Longevity (`longevityPipeline`)
+- Manager (`managerPipeline`)
+- Rolling Upgrade (`rollingUpgradePipeline`)
+- Jepsen (`jepsenPipeline`)
+- Performance Regression (`perfRegressionParallelPipeline`)
+
+#### Safety: runner expiry
+
+Preserved runners are tagged with a numeric `keep` value (hours from VM launch time) that acts as a safety ceiling. The existing cleanup logic automatically terminates runners once the elapsed time since launch exceeds this value (default: 120 hours / 5 days).
+
+If a runner expires between builds, the reuse build will fail with an error indicating no runner was found. In that case, run a fresh build without `reuse_cluster`.
+
+#### Limitations
+
+- **Same backend required**: the reuse build must use the same cloud backend as the original build
+- **Same pipeline type recommended**: while cross-pipeline reuse is technically possible, it is only reliable when both pipelines use compatible test configurations
+- **No partial reuse**: you cannot reuse only the DB nodes and create new loaders — the entire test environment is reused
+- **Runner state**: a reused runner may have artifacts from the previous run; if the reuse build fails due to runner issues, run a fresh build
+
 ### Scylla Cloud (xcloud) backend
 
 When reusing clusters deployed in Scylla Cloud backend, the test environment consists of:

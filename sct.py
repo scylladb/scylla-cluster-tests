@@ -2202,6 +2202,7 @@ def create_runner_instance(
 
 @cli.command("set-runner-tags")
 @click.argument("runner-ip", type=str)
+@click.option("-b", "--backend", type=click.Choice(available_backends), help="Cloud backend to use")
 @click.option(
     "-t",
     "--tags",
@@ -2209,9 +2210,52 @@ def create_runner_instance(
     help="Space separated key value pair to add as a new tag to the runner",
     multiple=True,
 )
-def set_runner_tags(runner_ip, tags):
+def set_runner_tags(runner_ip, backend, tags):
     add_file_logger()
-    update_sct_runner_tags(test_runner_ip=runner_ip, tags=dict(tags))
+    update_sct_runner_tags(test_runner_ip=runner_ip, backend=backend, tags=dict(tags))
+
+
+@cli.command("find-runner-instance", help="Find an existing SCT runner by test ID and write its IP to sct_runner_ip")
+@click.option("-t", "--test-id", required=True, type=str, help="Test ID to find the runner for")
+@click.option("-b", "--backend", type=click.Choice(available_backends), help="Cloud backend to use")
+@click.option(
+    "-d", "--duration", required=False, type=int, default=0, help="New test duration in minutes (extends keep tag)"
+)
+def find_runner_instance(test_id, backend, duration):
+    add_file_logger()
+    sct_runner_ip_path = Path("sct_runner_ip")
+    sct_runner_ip_path.unlink(missing_ok=True)
+
+    runners = list_sct_runners(backend=backend, test_id=test_id)
+    if not runners:
+        LOGGER.error("No SCT runner found for test_id: %s", test_id)
+        sys.exit(1)
+
+    runner = runners[0]
+    if not runner.public_ips:
+        LOGGER.error("SCT runner %s has no public IPs", runner.instance_name)
+        sys.exit(1)
+
+    runner_ip = runner.public_ips[0]
+    LOGGER.info(
+        "Found SCT runner %s (%s) at %s for test %s",
+        runner.instance_name,
+        runner.instance.get("InstanceId", ""),
+        runner_ip,
+        test_id,
+    )
+
+    if duration:
+        # keep is relative to launch_time, so add elapsed hours to give the test enough time
+        elapsed_hours = (
+            int((datetime.now(UTC) - runner.launch_time).total_seconds() / 3600) if runner.launch_time else 0
+        )
+        tags_to_update = {"keep": str(elapsed_hours + int(duration / 60) + 6), "keep_action": "terminate"}
+        update_sct_runner_tags(backend=backend, test_runner_ip=runner_ip, tags=tags_to_update)
+        LOGGER.info("Updated runner tags: %s", tags_to_update)
+
+    sct_runner_ip_path.write_text(runner_ip)
+    LOGGER.info("SCT Runner IP written to %s: %s", sct_runner_ip_path, runner_ip)
 
 
 @cli.command("clean-runner-instances", help="Clean all unused SCT runner instances")
