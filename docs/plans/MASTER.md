@@ -47,6 +47,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Plan | Status | File / PR |
 |------|--------|-----------|
 | Jenkins Pipeline Config Linter | `draft` | [jenkins-pipeline-config-linter.md](jenkins/jenkins-pipeline-config-linter.md) |
+| Pipeline Labeling and Documentation | `draft` | [pipeline-labeling-and-documentation.md](jenkins/pipeline-labeling-and-documentation.md) |
 | Jenkins Uno-Choice Billing Project | `draft` | [jenkins-uno-choice-billing-project.md](jenkins/jenkins-uno-choice-billing-project.md) |
 | Centralized Trigger Matrix | `pending_pr` | [#13887](https://github.com/scylladb/scylla-cluster-tests/pull/13887) |
 | i8g Performance Jobs Migration | `pending_pr` | [#13629](https://github.com/scylladb/scylla-cluster-tests/pull/13629) |
@@ -92,6 +93,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Dependent Plan | Depends On | Relationship |
 |---------------|------------|--------------|
 | Nemesis Extraction Phase 3 | Nemesis Rework | Phase 3 continues the extraction started in Nemesis 2.0 |
+| Pipeline Labeling and Documentation | Jenkins Pipeline Config Linter | Labeling complements structural config linting; may reuse Jenkinsfile parser |
 | SCT Config Follow-up Refactoring | SCT Config Validation and Lazy Images | Follow-up work after initial config validation |
 | Typed Config Access Migration | SCT Config Follow-up Refactoring | Type safety layer on top of refactored config |
 
