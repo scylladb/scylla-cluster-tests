@@ -1,0 +1,25 @@
+test_duration: 30
+n_db_nodes: 3
+n_test_oracle_db_nodes: 1
+n_loaders: 1
+instance_type_db: 'i4i.xlarge'
+instance_type_db_oracle: 'r6i.xlarge'
+instance_type_loader: 'm6i.xlarge'
+
+db_type: mixed_cassandra
+cassandra_oracle_version: '4.1'
+ami_id_db_cassandra_oracle: ''  # falls back to loader AMI (Ubuntu)
+
+user_prefix: 'gemini-cs-oracle-aws'
+
+run_commit_log_check_thread: false
+
+gemini_cmd: |
+  --duration 20m
+  --warmup 2m
+  --concurrency 10
+  --mode mixed
+  --max-tables 3
+  --max-columns 8
+  --max-partition-keys 3
+  --max-clustering-keys 3

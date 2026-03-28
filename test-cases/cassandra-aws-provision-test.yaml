@@ -1,0 +1,18 @@
+test_duration: 60
+n_db_nodes: 1
+n_loaders: 1
+instance_type_db: 'r6i.xlarge'
+root_disk_size_db: 100
+instance_type_loader: 'm6i.large'
+
+db_type: cassandra
+cassandra_version: '4.1'
+ami_id_db_cassandra: 'resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id'
+
+user_prefix: 'cassandra-aws-test'
+
+# Cassandra does not use Scylla's KMS encryption-at-rest or CommitLogCheckThread
+enable_kms_key_rotation: false
+run_commit_log_check_thread: false
+
+stress_cmd: ["cassandra-stress write cl=ONE duration=1m -schema 'replication(strategy=SimpleStrategy,replication_factor=1)' -mode cql3 native -rate threads=10 -pop seq=1..10000 -log interval=5"]
