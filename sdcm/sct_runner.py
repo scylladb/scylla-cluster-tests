@@ -178,7 +178,7 @@ class SctRunnerInfo:
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
 
-    VERSION = "1.16"  # Version of the Image
+    VERSION = "1.1699"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -236,7 +236,81 @@ class SctRunner(ABC):
 
         LOGGER.info("Installing required packages...")
         login_user = self.LOGIN_USER
-        public_key = self.key_pair.public_key.decode()
+
+        # Build the two helper files as base64 blobs so they can be written safely
+        # inside the single-quoted bash -c '...' that shell_script_cmd() produces.
+        # Heredocs (cat << 'EOF') do not work inside bash -c '...single-quoted...'
+        # because the shell sees the entire string as a literal; base64 | tee avoids that.
+        _sync_script = dedent("""\
+            #!/bin/bash
+            set -euo pipefail
+
+            TARGET="/home/jenkins/.ssh/authorized_keys"
+            KEY=""
+
+            # Try AWS IMDS (IMDSv1 - always available on SCT runners)
+            AWS_KEY=$(curl -sf --max-time 5 http://169.254.169.254/latest/meta-data/public-keys/0/openssh-key 2>/dev/null || true)
+            if [ -n "$AWS_KEY" ]; then
+                KEY="$AWS_KEY"
+                echo "Fetched SSH key from AWS IMDS"
+            fi
+
+            # Try GCE metadata (project-level and instance-level ssh-keys)
+            if [ -z "$KEY" ]; then
+                GCE_KEY=$(curl -sf --max-time 5 -H "Metadata-Flavor: Google" \
+                    "http://metadata.google.internal/computeMetadata/v1/instance/attributes/ssh-keys" 2>/dev/null \
+                    | awk -F: '{print $2}' | head -1 || true)
+                if [ -n "$GCE_KEY" ]; then
+                    KEY="$GCE_KEY"
+                    echo "Fetched SSH key from GCE metadata"
+                fi
+            fi
+
+            # Fallback: copy from ubuntu authorized_keys if cloud metadata unavailable
+            if [ -z "$KEY" ]; then
+                SOURCE="/home/ubuntu/.ssh/authorized_keys"
+                MAX_WAIT=60
+                WAITED=0
+                while [ ! -s "$SOURCE" ] && [ "$WAITED" -lt "$MAX_WAIT" ]; do
+                    sleep 2
+                    WAITED=$(( WAITED + 2 ))
+                done
+                if [ -s "$SOURCE" ]; then
+                    KEY=$(cat "$SOURCE")
+                    echo "Fetched SSH key from $SOURCE"
+                fi
+            fi
+
+            if [ -z "$KEY" ]; then
+                echo "ERROR: could not obtain SSH public key from any source" >&2
+                exit 1
+            fi
+
+            mkdir -p /home/jenkins/.ssh
+            echo "$KEY" > "$TARGET"
+            chmod 600 "$TARGET"
+            chown jenkins:jenkins "$TARGET"
+            chown jenkins:jenkins /home/jenkins/.ssh
+
+            echo "Synced SSH key to $TARGET"
+        """)
+        _unit_file = dedent("""\
+            [Unit]
+            Description=Sync SSH authorized keys from cloud metadata to jenkins user
+            After=network-online.target
+            Wants=network-online.target
+
+            [Service]
+            Type=oneshot
+            RemainAfterExit=yes
+            ExecStart=/usr/local/bin/sct-sync-jenkins-ssh-keys.sh
+
+            [Install]
+            WantedBy=multi-user.target
+        """)
+        sync_script_b64 = base64.b64encode(_sync_script.encode()).decode()
+        unit_file_b64 = base64.b64encode(_unit_file.encode()).decode()
+
         result = remoter.sudo(
             shell_script_cmd(
                 quote="'",
@@ -251,8 +325,6 @@ class SctRunner(ABC):
 
             # Configure default user account.
             sudo -u {login_user} mkdir -p /home/{login_user}/.ssh || true
-            echo "{public_key}" >> /home/{login_user}/.ssh/authorized_keys
-            chmod 600 /home/{login_user}/.ssh/authorized_keys
             mkdir -p -m 777 /home/{login_user}/sct-results
             echo "cd ~/sct-results" >> /home/{login_user}/.bashrc
             chown -R {login_user}:{login_user} /home/{login_user}/
@@ -314,10 +386,15 @@ class SctRunner(ABC):
             adduser --disabled-password --gecos "" jenkins || true
             usermod -aG docker jenkins
             mkdir -p /home/jenkins/.ssh
-            echo "{public_key}" >> /home/jenkins/.ssh/authorized_keys
-            chmod 600 /home/jenkins/.ssh/authorized_keys
             chown -R jenkins:jenkins /home/jenkins
-            echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
+            echo "jenkins ALL=(ALL) NOPASSWD: ALL" | tee /etc/sudoers.d/jenkins
+
+            printf %s {sync_script_b64} | base64 -d | tee /usr/local/bin/sct-sync-jenkins-ssh-keys.sh
+            chmod +x /usr/local/bin/sct-sync-jenkins-ssh-keys.sh
+
+            printf %s {unit_file_b64} | base64 -d | tee /etc/systemd/system/sct-jenkins-ssh-sync.service
+            systemctl daemon-reload
+            systemctl enable sct-jenkins-ssh-sync.service
 
             # Jenkins pipelines run /bin/sh for some reason.
             ln -sf /bin/bash /bin/sh
@@ -794,7 +871,14 @@ class AwsSctRunner(SctRunner):
         result = self.aws_region_source.client.create_image(
             Description=self.IMAGE_DESCRIPTION, InstanceId=instance.instance_id, Name=self.image_name, NoReboot=False
         )
-        self.tag_image(image_id=result["ImageId"], image_type=ImageType.SOURCE)
+        image_id = result["ImageId"]
+        LOGGER.info("Image created: %s. Waiting for it to become available...", image_id)
+        self.aws_region_source.client.get_waiter("image_available").wait(
+            ImageIds=[image_id],
+            WaiterConfig={"Delay": 30, "MaxAttempts": 60},
+        )
+        LOGGER.info("Image '%s' is now available.", image_id)
+        self.tag_image(image_id=image_id, image_type=ImageType.SOURCE)
 
     def _get_image_id(self, image: Any) -> Any:
         return image.image_id
@@ -1318,7 +1402,6 @@ class OciSctRunner(SctRunner):
     IMAGE_BUILDER_INSTANCE_TYPE = "VM.Standard.E4.Flex-2-2"
     REGULAR_TEST_INSTANCE_TYPE = "VM.Standard.E4.Flex-2-8"  # 2 vcpus, 8G
     LONGTERM_TEST_INSTANCE_TYPE = "VM.Standard.E4.Flex-4-16"  # 4 vcpus, 16G
-    OCI_CLI_VERSION = "3.76.2"  # Pinned version for reproducibility
 
     @cached_property
     def BASE_IMAGE(self) -> str:
@@ -1422,45 +1505,6 @@ class OciSctRunner(SctRunner):
     @cached_property
     def key_pair(self) -> SSHKey:
         return KeyStore().get_oci_ssh_key_pair()
-
-    def install_prereqs(self, public_ip: str, connect_timeout: Optional[int] = None) -> None:
-        super().install_prereqs(public_ip=public_ip, connect_timeout=connect_timeout)
-
-        LOGGER.info("Installing OCI CLI v%s using the official Oracle installer...", self.OCI_CLI_VERSION)
-        remoter = self.get_remoter(host=public_ip, connect_timeout=connect_timeout)
-
-        remoter.sudo(
-            shell_script_cmd(
-                quote="'",
-                cmd=(
-                    "curl -fsSL https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh"
-                    " -o /tmp/oci_install.sh && chmod +x /tmp/oci_install.sh"
-                ),
-            )
-        )
-        remoter.sudo(
-            shell_script_cmd(
-                quote="'",
-                cmd=(
-                    f"OCI_CLI_SUPPRESS_PROMPT=True bash /tmp/oci_install.sh"
-                    f" --oci-cli-version {self.OCI_CLI_VERSION}"
-                    f" --install-dir /opt/oracle/oci-cli"
-                    f" --exec-dir /usr/local/bin"
-                    f" --accept-all-defaults"
-                ),
-            )
-        )
-
-        result = remoter.sudo(shell_script_cmd(quote="'", cmd="/usr/local/bin/oci --version"))
-        LOGGER.info("OCI CLI installed: %s", result.stdout.strip())
-
-        remoter.sudo(shell_script_cmd(quote="'", cmd="rm -f /tmp/oci_install.sh"))
-        # Flush all dirty pages to disk before we stop the instance.
-        # OCI's SOFTSTOP sends ACPI shutdown but we belt-and-suspenders
-        # with an explicit sync so pip-generated entry-point scripts
-        # (which are NOT fsynced by pip) survive the snapshot.
-        remoter.sudo(shell_script_cmd(quote="'", cmd="sync"))
-        remoter.stop()
 
     def _image(self, image_type: ImageType = ImageType.SOURCE) -> Any:
         if image_type == ImageType.SOURCE:
@@ -1599,11 +1643,7 @@ class OciSctRunner(SctRunner):
 
     def _stop_image_builder_instance(self, instance: Any) -> None:
         compute_client, _ = self.get_compute_and_network_clients_for_instance(instance)
-        # SOFTSTOP sends an ACPI shutdown signal so the OS flushes dirty
-        # pages before powering off. The default STOP is a hard power-off
-        # that can leave freshly-written files (e.g. pip entry-points)
-        # as 0-byte in the resulting image snapshot.
-        compute_client.instance_action(instance_id=instance.id, action="SOFTSTOP")
+        compute_client.instance_action(instance_id=instance.id, action="STOP")
         wait_for_instance_state(
             compute_client=compute_client,
             instance_id=instance.id,
