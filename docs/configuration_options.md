@@ -2576,6 +2576,64 @@ Vector Store version / docker image tag
 * appendable
 
 
+## **docker_image_cassandra** / SCT_DOCKER_IMAGE_CASSANDRA
+
+Cassandra docker image repo, i.e. 'cassandra'. Used when db_type is 'cassandra'.
+
+**default:** cassandra
+
+**type:** str
+* appendable
+
+
+## **cassandra_version** / SCT_CASSANDRA_VERSION
+
+Cassandra version / docker image tag, i.e. '4.1' or '5.0'
+
+**default:** 4.1
+
+**type:** str
+* appendable
+
+
+## **cassandra_num_tokens** / SCT_CASSANDRA_NUM_TOKENS
+
+num_tokens value to configure in cassandra.yaml.
+
+**default:** 16
+
+**type:** int
+
+
+## **cassandra_oracle_version** / SCT_CASSANDRA_ORACLE_VERSION
+
+Cassandra version for the oracle cluster, i.e. '4.1' or '5.0'
+
+**default:** 4.1
+
+**type:** str
+* appendable
+
+
+## **ami_id_db_cassandra_oracle** / SCT_AMI_ID_DB_CASSANDRA_ORACLE
+
+AMI ID for Cassandra oracle cluster nodes on AWS. Defaults to empty string, which causes fallback to the loader AMI (a standard Ubuntu image).
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **install_cassandra_exporter** / SCT_INSTALL_CASSANDRA_EXPORTER
+
+Install Criteo cassandra_exporter on Cassandra nodes for Prometheus metrics collection. The exporter connects to JMX (port 7199) and exposes metrics on port 8080.
+
+**default:** True
+
+**type:** bool
+
+
 ## **s3_baremetal_config** / SCT_S3_BAREMETAL_CONFIG
 
 Configuration for S3 in baremetal setups. This includes details such as endpoint URL, access key, secret key, and bucket name.
@@ -4009,31 +4067,11 @@ set c-s parameter '-pop' with gauss/uniform distribution for performance gradual
 
 ## **latte_schema_parameters** / SCT_LATTE_SCHEMA_PARAMETERS
 
-Optional. Allows to pass through custom rune script parameters to the 'latte schema' command.<br>Also used as a fallback source for keyspace/table in gradual performance tests when<br>perf_stress_keyspace/perf_stress_table are not set.<br>For example, {'keyspace': 'test_keyspace', 'table': 'test_table'}
+Optional. Allows to pass through custom rune script parameters to the 'latte schema' command.<br>For example, {'keyspace': 'test_keyspace', 'table': 'test_table'}
 
 **default:** N/A
 
 **type:** dict | str
-
-
-## **perf_stress_keyspace** / SCT_PERF_STRESS_KEYSPACE
-
-Keyspace name used in performance gradual throughput tests.<br>Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).<br>For latte, if not set, falls back to the 'keyspace' key in latte_schema_parameters.
-
-**default:** N/A
-
-**type:** str
-* appendable
-
-
-## **perf_stress_table** / SCT_PERF_STRESS_TABLE
-
-Table name used in performance gradual throughput tests.<br>Required for all stress tools (cassandra-stress, scylla-bench, cql-stress-cassandra-stress, latte).<br>For latte, if not set, falls back to the 'table' key in latte_schema_parameters.
-
-**default:** N/A
-
-**type:** str
-* appendable
 
 
 ## **num_loaders_step** / SCT_NUM_LOADERS_STEP
