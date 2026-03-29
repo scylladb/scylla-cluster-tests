@@ -258,9 +258,15 @@ def call(Map pipelineParams) {
                                                         esac
                                                     fi
 
-                                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                                                    export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
-                                                    export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                                    if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
+                                                        export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                                    fi
+                                                    if [[ -n "${params.ip_ssh_connections ? params.ip_ssh_connections : ''}" ]] ; then
+                                                        export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
+                                                    fi
+                                                    if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
+                                                        export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                                    fi
                                                     if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
                                                         export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
                                                     fi
