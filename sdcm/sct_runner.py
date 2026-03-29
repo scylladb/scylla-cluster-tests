@@ -236,7 +236,6 @@ class SctRunner(ABC):
 
         LOGGER.info("Installing required packages...")
         login_user = self.LOGIN_USER
-        public_key = self.key_pair.public_key.decode()
         result = remoter.sudo(
             shell_script_cmd(
                 quote="'",
@@ -251,8 +250,6 @@ class SctRunner(ABC):
 
             # Configure default user account.
             sudo -u {login_user} mkdir -p /home/{login_user}/.ssh || true
-            echo "{public_key}" >> /home/{login_user}/.ssh/authorized_keys
-            chmod 600 /home/{login_user}/.ssh/authorized_keys
             mkdir -p -m 777 /home/{login_user}/sct-results
             echo "cd ~/sct-results" >> /home/{login_user}/.bashrc
             chown -R {login_user}:{login_user} /home/{login_user}/
@@ -314,10 +311,64 @@ class SctRunner(ABC):
             adduser --disabled-password --gecos "" jenkins || true
             usermod -aG docker jenkins
             mkdir -p /home/jenkins/.ssh
-            echo "{public_key}" >> /home/jenkins/.ssh/authorized_keys
-            chmod 600 /home/jenkins/.ssh/authorized_keys
             chown -R jenkins:jenkins /home/jenkins
             echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
+
+            # Install boot-time SSH key sync service.
+            # Jenkins SSH plugin connects as the 'jenkins' user using scylla_test_id_ed25519.
+            # Cloud providers only inject the current SSH key for the primary OS user (ubuntu)
+            # at launch time, not for 'jenkins'. This systemd oneshot service runs after
+            # cloud-init completes on every boot and copies ubuntu's authorized_keys to jenkins,
+            # so key rotation in S3 (scylla-qa-keystore) takes effect without rebuilding images.
+            cat > /usr/local/bin/sct-sync-jenkins-ssh-keys.sh << 'SYNC_SCRIPT'
+#!/bin/bash
+set -euo pipefail
+
+LOGIN_USER="${{1:-ubuntu}}"
+SOURCE="/home/${{LOGIN_USER}}/.ssh/authorized_keys"
+TARGET="/home/jenkins/.ssh/authorized_keys"
+
+# Wait for cloud provider to populate the source authorized_keys (up to 120s)
+MAX_WAIT=120
+WAITED=0
+while [ ! -s "$SOURCE" ] && [ "$WAITED" -lt "$MAX_WAIT" ]; do
+    sleep 2
+    WAITED=$(( WAITED + 2 ))
+done
+
+if [ ! -s "$SOURCE" ]; then
+    echo "ERROR: $SOURCE not populated after ${{MAX_WAIT}}s" >&2
+    exit 1
+fi
+
+mkdir -p /home/jenkins/.ssh
+cp "$SOURCE" "$TARGET"
+chmod 600 "$TARGET"
+chown jenkins:jenkins "$TARGET"
+chown jenkins:jenkins /home/jenkins/.ssh
+
+echo "Synced SSH keys from $SOURCE to $TARGET"
+SYNC_SCRIPT
+            chmod +x /usr/local/bin/sct-sync-jenkins-ssh-keys.sh
+
+            cat > /etc/systemd/system/sct-jenkins-ssh-sync.service << 'UNIT_FILE'
+[Unit]
+Description=Sync SSH authorized keys from ubuntu to jenkins user
+After=cloud-init.service cloud-config.service cloud-final.service
+After=google-guest-agent.service google-accounts-daemon.service
+After=walinuxagent.service
+Wants=cloud-init.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/sct-sync-jenkins-ssh-keys.sh
+
+[Install]
+WantedBy=multi-user.target
+UNIT_FILE
+            systemctl daemon-reload
+            systemctl enable sct-jenkins-ssh-sync.service
 
             # Jenkins pipelines run /bin/sh for some reason.
             ln -sf /bin/bash /bin/sh
