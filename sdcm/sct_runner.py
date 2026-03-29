@@ -367,16 +367,6 @@ class SctRunner(ABC):
             chown -R jenkins:jenkins /home/jenkins
             echo "jenkins ALL=(ALL) NOPASSWD: ALL" | tee /etc/sudoers.d/jenkins
 
-            # Install boot-time SSH key sync service.
-            # Jenkins SSH plugin connects as the 'jenkins' user using scylla_test_id_ed25519.
-            # Cloud providers only inject the current SSH key for the primary OS user (ubuntu)
-            # at launch time, not for 'jenkins'. This systemd oneshot service runs after
-            # cloud-init completes on every boot and copies ubuntu's authorized_keys to jenkins,
-            # so key rotation in S3 (scylla-qa-keystore) takes effect without rebuilding images.
-            # Note: printf %s <b64> | base64 -d | tee is used instead of heredocs because this
-            # script runs inside bash -c '...' (single-quoted). Heredocs don't work there, and
-            # echo '...' would terminate the outer single-quoted string prematurely. base64 chars
-            # [A-Za-z0-9+/=] are all shell-safe unquoted, so printf %s works without any quoting.
             printf %s {sync_script_b64} | base64 -d | tee /usr/local/bin/sct-sync-jenkins-ssh-keys.sh
             chmod +x /usr/local/bin/sct-sync-jenkins-ssh-keys.sh
 
