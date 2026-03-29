@@ -78,21 +78,34 @@ def get_oci_ssh_key_pair(self):   return self.get_ssh_key_pair(name="scylla_test
 
 All backends use the same key from S3 bucket `scylla-qa-keystore`.
 
+### Jenkins Plugin SSH Connection per Backend
+
+The `jenkins` user on the runner is the **Jenkins agent user** that the Jenkins SSH plugin dials into when allocating builders. Each backend's builder code configures a different credential ID:
+
+| Backend | Builder file | Credential ID in Jenkins | Agent user | Key name |
+|---------|-------------|--------------------------|-----------|----------|
+| **AWS** | `sdcm/utils/aws_builder.py` line 62 | `user-jenkins_scylla_test_id_ed25519.pem` | `jenkins` | `scylla_test_id_ed25519` |
+| **GCE** | `sdcm/utils/gce_builder.py` line 68 | `user-jenkins_scylla_test_id_ed25519.pem` | `jenkins` | `scylla_test_id_ed25519` |
+| **OCI** | `sdcm/utils/builder_setup_groovy/oci_jenkind_plugin_config.groovy.tmpl` line 102 | `user-jenkins_scylla-qa-ec2-rsa.pem` | `ubuntu` | `scylla-qa-ec2` (older key) |
+| **Azure** | _(no dedicated builder yet)_ | — | — | — |
+
+**OCI is a special case**: the Groovy template uses a different credential (`scylla-qa-ec2`) and connects as `ubuntu` rather than `jenkins`. The `ubuntu` user already receives this key at boot via `oci-sct-runner-cloud-config.yaml` (OCI metadata fetch in `runcmd`). OCI therefore does **not** need the systemd sync service — it is already handled end-to-end by cloud-init.
+
 ### Gap Analysis
 
 If we remove key writes from `install_prereqs()`:
 
 | User | AWS | GCE | Azure | OCI | Status |
 |------|-----|-----|-------|-----|--------|
-| `ubuntu` | ✅ EC2 key pair | ✅ metadata | ✅ OS profile | ✅ metadata + cloud-init | **SAFE** — covered by cloud providers |
-| `jenkins` | ❌ | ❌ | ❌ | ❌ | **CRITICAL** — no launch-time injection |
+| `ubuntu` | ✅ EC2 key pair | ✅ metadata | ✅ OS profile | ✅ cloud-init metadata fetch | **SAFE** — covered by cloud providers |
+| `jenkins` | ❌ | ❌ | ❌ | N/A (OCI uses `ubuntu`) | **CRITICAL** for AWS/GCE/Azure — no launch-time injection |
 
 ## Goals
 
 1. **Decouple SSH keys from baked images** so key rotation in S3 does not require image rebuilds
 2. **Remove redundant `ubuntu` key write** from `install_prereqs()` — cloud providers already handle this
-3. **Add a boot-time mechanism** to inject the current SSH key into `jenkins` user's `authorized_keys` on every instance launch
-4. **Backend-agnostic solution** — a single mechanism that works across AWS, GCE, Azure, and OCI without per-backend cloud-init configs
+3. **Add a boot-time mechanism** to inject the current SSH key into `jenkins` user's `authorized_keys` on every instance launch (AWS, GCE, Azure only — OCI uses `ubuntu` with cloud-init)
+4. **Backend-agnostic solution** — a single systemd oneshot service works across AWS, GCE, and Azure; OCI is already solved via cloud-init
 
 ## Implementation Phases
 
@@ -231,10 +244,10 @@ If we remove key writes from `install_prereqs()`:
 6. Verify key content matches: `diff /home/ubuntu/.ssh/authorized_keys /home/jenkins/.ssh/authorized_keys`
 
 **Backends to test**:
-- [ ] AWS (EC2 key pair mechanism)
-- [ ] GCE (metadata `ssh-keys`)
-- [ ] Azure (OS profile `public_keys`)
-- [ ] OCI (metadata `ssh_authorized_keys` + cloud-init)
+- [ ] AWS (EC2 key pair → `jenkins` user via systemd sync)
+- [ ] GCE (metadata `ssh-keys` → `jenkins` user via systemd sync)
+- [ ] Azure (OS profile `public_keys` → `jenkins` user via systemd sync)
+- [ ] OCI — **different verification**: SSH as `ubuntu` with `scylla-qa-ec2` key (already handled by cloud-init; systemd sync service not needed)
 
 **Key rotation test** (optional but recommended on at least one backend):
 1. Build image with key A
@@ -298,7 +311,11 @@ If issues are found after deploying new images:
 - `sdcm/sct_runner.py` — `install_prereqs()` (lines 233–336), backend classes, `_create_instance()` methods
 - `sdcm/keystore.py` — `KeyStore` class, `get_*_ssh_key_pair()` methods (lines 86–103)
 - `sdcm/utils/aws_region.py` — `SCT_KEY_PAIR_NAME` constant (line 40), `update_sct_key_pair()` (lines 700–726)
-- `sdcm/runner_configs/oci-sct-runner-cloud-config.yaml` — OCI cloud-init SSH key fetch
+- `sdcm/utils/aws_builder.py` — Jenkins EC2 Fleet plugin config; uses `user-jenkins_scylla_test_id_ed25519.pem` credential, agent user `jenkins` (line 62)
+- `sdcm/utils/gce_builder.py` — Jenkins GCE Compute Engine plugin config; uses `user-jenkins_scylla_test_id_ed25519.pem` credential, agent user `jenkins` (line 68)
+- `sdcm/utils/oci_builder.py` — Jenkins OCI Compute Cloud plugin config driver
+- `sdcm/utils/builder_setup_groovy/oci_jenkind_plugin_config.groovy.tmpl` — OCI Groovy template; uses `user-jenkins_scylla-qa-ec2-rsa.pem` credential (older key), agent user `ubuntu` (lines 102, 112)
+- `sdcm/runner_configs/oci-sct-runner-cloud-config.yaml` — OCI cloud-init: fetches `scylla-qa-ec2` key from OCI metadata into `ubuntu`'s `authorized_keys` at boot
 - `sdcm/provision/azure/virtual_machine_provider.py` — Azure SSH key injection (lines 246–250)
 - `sdcm/provision/gce/instance_provider.py` — GCE metadata SSH key injection (line 229)
 - `sdcm/provision/oci/virtual_machine_provider.py` — OCI metadata SSH key injection (line 269)
