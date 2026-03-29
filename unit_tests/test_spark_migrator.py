@@ -8,8 +8,11 @@ import boto3
 from moto import mock_aws
 
 from sdcm.spark_migrator import (
+    SPARK4_INSTALL_DIR,
+    SPARK4_VERSION,
     MigratorConfig,
     SparkMigratorRunner,
+    build_spark4_bootstrap_actions,
     get_migrator_download_url,
     upload_migrator_jar_to_s3,
 )
@@ -175,3 +178,54 @@ def test_upload_migrator_jar_to_s3_downloads_and_uploads():
 
     body = s3_client.get_object(Bucket="test-jar-bucket", Key="jars/v2.0.0/scylla-migrator-assembly.jar")["Body"].read()
     assert body == b"fake-jar-bytes"
+
+
+# TODO: Spark 4.x workaround
+@mock_aws
+def test_build_spark4_bootstrap_actions():
+    """Test that bootstrap actions are built and script is uploaded to S3."""
+    s3_client = boto3.client("s3", region_name="us-east-1")
+    s3_client.create_bucket(Bucket="sct-emr-spark-migrator-us-east-1")
+
+    actions = build_spark4_bootstrap_actions("us-east-1")
+
+    assert len(actions) == 1
+    assert actions[0]["Name"] == f"Install Spark {SPARK4_VERSION}"
+    assert actions[0]["ScriptBootstrapAction"]["Path"].startswith("s3://")
+
+    body = (
+        s3_client.get_object(Bucket="sct-emr-spark-migrator-us-east-1", Key="scripts/bootstrap-spark4.sh")["Body"]
+        .read()
+        .decode("utf-8")
+    )
+    assert SPARK4_VERSION in body
+    assert SPARK4_INSTALL_DIR in body
+    assert "wget" in body
+
+
+@mock_aws
+def test_upload_runner_script():
+    """Test that the runner script is uploaded with correct spark-submit invocation."""
+    s3_client = boto3.client("s3", region_name="us-east-1")
+    s3_client.create_bucket(Bucket="sct-emr-spark-migrator-us-east-1")
+
+    mock_provisioner = MagicMock()
+    mock_provisioner.region_name = "us-east-1"
+
+    runner = SparkMigratorRunner(mock_provisioner)
+    uri = runner._upload_runner_script(
+        "s3://bucket/jars/v2.0.0/migrator.jar",
+        "s3://bucket/configs/test-id/config.yaml",
+    )
+
+    assert uri.startswith("s3://")
+    body = (
+        s3_client.get_object(Bucket="sct-emr-spark-migrator-us-east-1", Key="scripts/run-migrator.sh")["Body"]
+        .read()
+        .decode("utf-8")
+    )
+    assert SPARK4_INSTALL_DIR in body
+    assert "spark-submit" in body
+    assert "--deploy-mode cluster" in body
+    assert "s3://bucket/jars/v2.0.0/migrator.jar" in body
+    assert "s3://bucket/configs/test-id/config.yaml" in body

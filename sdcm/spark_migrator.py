@@ -29,6 +29,30 @@ LOGGER = logging.getLogger(__name__)
 MIGRATOR_GITHUB_REPO = "scylladb/scylla-migrator"
 MIGRATOR_JAR_NAME = "scylla-migrator-assembly.jar"
 
+# TODO: Spark 4.x workaround
+# The scylla-migrator requires Scala 2.13 which ships with Spark 4.x, but Amazon EMR provides only Spark 3.x
+# at the moment (which ships Scala 2.12).
+# The workaround installs Spark 4.x via a bootstrap action and uses a wrapper shell script
+# (through script-runner.jar) instead of a native Spark step.
+# Once Amazon EMR is bundled with Spark 4.x out of the box, this workaround can be removed.
+SPARK4_VERSION = "4.0.2"
+SPARK4_INSTALL_DIR = "/opt/spark4"
+_BOOTSTRAP_SCRIPT_S3_KEY = "scripts/bootstrap-spark4.sh"
+_SPARK4_PACKAGE = f"spark-{SPARK4_VERSION}-bin-hadoop3"
+_SPARK4_URL = f"https://downloads.apache.org/spark/spark-{SPARK4_VERSION}/{_SPARK4_PACKAGE}.tgz"
+_RUNNER_SCRIPT_S3_KEY = "scripts/run-migrator.sh"
+
+_BOOTSTRAP_SCRIPT_CONTENT = f"""#!/bin/bash
+set -ex
+cd /tmp
+wget -q "{_SPARK4_URL}"
+tar xzf "{_SPARK4_PACKAGE}.tgz"
+sudo mv /tmp/{_SPARK4_PACKAGE} {SPARK4_INSTALL_DIR}
+sudo chown -R hadoop:hadoop {SPARK4_INSTALL_DIR}
+rm -f /tmp/{_SPARK4_PACKAGE}.tgz
+echo "Bootstrap complete: Spark {SPARK4_VERSION} installed at {SPARK4_INSTALL_DIR}"
+"""
+
 
 def _ensure_s3_bucket(s3_client, bucket_name, region_name):
     """Create S3 bucket if it does not already exist.
@@ -50,6 +74,21 @@ def _ensure_s3_bucket(s3_client, bucket_name, region_name):
     if region_name != "us-east-1":
         create_params["CreateBucketConfiguration"] = {"LocationConstraint": region_name}
     s3_client.create_bucket(**create_params)
+
+
+# TODO: Spark 4.x workaround
+def build_spark4_bootstrap_actions(region_name, s3_bucket=None):
+    """Upload Spark 4.x bootstrap script to S3 and return EMR bootstrap actions."""
+    s3_bucket = s3_bucket or f"sct-emr-spark-migrator-{region_name}"
+    s3_client = boto3.client("s3", region_name=region_name)
+    _ensure_s3_bucket(s3_client, s3_bucket, region_name)
+    s3_client.put_object(Bucket=s3_bucket, Key=_BOOTSTRAP_SCRIPT_S3_KEY, Body=_BOOTSTRAP_SCRIPT_CONTENT.encode("utf-8"))
+    return [
+        {
+            "Name": f"Install Spark {SPARK4_VERSION}",
+            "ScriptBootstrapAction": {"Path": f"s3://{s3_bucket}/{_BOOTSTRAP_SCRIPT_S3_KEY}"},
+        },
+    ]
 
 
 def get_migrator_download_url(release_tag):
@@ -155,8 +194,55 @@ class SparkMigratorRunner:
     def __init__(self, emr_provisioner):
         self.emr_provisioner = emr_provisioner
 
+    # TODO: Spark 4.x workaround
+    @property
+    def s3_bucket(self):
+        return f"sct-emr-spark-migrator-{self.emr_provisioner.region_name}"
+
+    def _upload_runner_script(self, jar_s3_path, config_s3_path):
+        """Generate and upload a wrapper script that invokes standalone Spark 4.x."""
+        script_content = f"""#!/bin/bash
+set -ex
+
+# download the migrator JAR and config from S3
+aws s3 cp {jar_s3_path} /tmp/scylla-migrator-assembly.jar
+aws s3 cp {config_s3_path} /tmp/migrator-config.yaml
+
+# point YARN at standalone Spark 4.0 (EMR's bundled Spark ships Scala 2.12,
+# but the migrator requires Scala 2.13 which comes with Spark 4.0)
+export SPARK_HOME={SPARK4_INSTALL_DIR}
+export HADOOP_CONF_DIR=/etc/hadoop/conf
+export YARN_CONF_DIR=/etc/hadoop/conf
+
+# run on YARN in cluster mode so the driver runs on a cluster node
+{SPARK4_INSTALL_DIR}/bin/spark-submit \\
+  --deploy-mode cluster \\
+  --master yarn \\
+  --class com.scylladb.migrator.Migrator \\
+  --conf "spark.scylla.config=migrator-config.yaml" \\
+  --files /tmp/migrator-config.yaml \\
+  /tmp/scylla-migrator-assembly.jar
+"""
+        region_name = self.emr_provisioner.region_name
+        s3_client = boto3.client("s3", region_name=region_name)
+        _ensure_s3_bucket(s3_client, self.s3_bucket, region_name)
+        s3_client.put_object(
+            Bucket=self.s3_bucket,
+            Key=_RUNNER_SCRIPT_S3_KEY,
+            Body=script_content.encode("utf-8"),
+        )
+        s3_uri = f"s3://{self.s3_bucket}/{_RUNNER_SCRIPT_S3_KEY}"
+        LOGGER.info("Runner script uploaded to %s", s3_uri)
+        return s3_uri
+
+    # TODO: Spark 4.x workaround
     def submit_migration_job(self, cluster_id, jar_s3_path, migrator_config):
-        """Submit a spark-migrator job as an EMR Spark step.
+        """Submit a spark-migrator job as an EMR step.
+
+        Uses script-runner.jar with a wrapper script that invokes the standalone
+        Spark 4.x installation. This is part of the Spark 4.x workaround — once
+        EMR bundles Spark 4.x, this can be replaced with a native spark-submit step
+        using command-runner.jar.
 
         Args:
             cluster_id: EMR cluster ID.
@@ -166,22 +252,15 @@ class SparkMigratorRunner:
         Returns:
             str: Step ID of the submitted job.
         """
+        runner_script_uri = self._upload_runner_script(jar_s3_path, migrator_config.config_path)
+        script_runner_jar = (
+            f"s3://{self.emr_provisioner.region_name}.elasticmapreduce/libs/script-runner/script-runner.jar"
+        )
         step_id = self.emr_provisioner.add_step(
             cluster_id=cluster_id,
             step_name="spark-migrator",
-            jar="command-runner.jar",
-            args=[
-                "spark-submit",
-                "--deploy-mode",
-                "cluster",
-                "--class",
-                "com.scylladb.migrator.Migrator",
-                "--conf",
-                f"spark.scylla.config={migrator_config.config_path}",
-                "--files",
-                migrator_config.config_path,
-                jar_s3_path,
-            ],
+            jar=script_runner_jar,
+            args=[runner_script_uri],
         )
         LOGGER.info("Spark migrator job submitted as step %s on cluster %s", step_id, cluster_id)
         return step_id

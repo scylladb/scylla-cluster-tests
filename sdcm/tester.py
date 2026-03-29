@@ -82,6 +82,7 @@ from sdcm.mgmt import get_scylla_manager_tool
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.provision.aws.emr_provisioner import EmrClusterProvisioner, ensure_emr_roles
+from sdcm.spark_migrator import build_spark4_bootstrap_actions
 from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
@@ -2235,12 +2236,16 @@ class ClusterTester(unittest.TestCase):
             if subnets:
                 subnet_id = subnets.id
 
+        # TODO: Spark 4.x workaround
+        bootstrap_actions = build_spark4_bootstrap_actions(region_name)
+
         self.emr_cluster.create_emr_cluster(
             test_id=self.test_config.test_id(),
             user=self.params.get("email_recipients")[0] if self.params.get("email_recipients") else "unknown",
             vpc_subnet_id=subnet_id,
             test_name=self.params.get("user_prefix"),
             version=self.params.get("scylla_version"),
+            bootstrap_actions=bootstrap_actions,
         )
         self.emr_cluster.wait_for_emr_cluster_ready()
         self.log.info("EMR cluster %s is ready", self.emr_cluster.cluster_id)
