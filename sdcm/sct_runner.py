@@ -1373,6 +1373,7 @@ class OciSctRunner(SctRunner):
     IMAGE_BUILDER_INSTANCE_TYPE = "VM.Standard.E4.Flex-2-2"
     REGULAR_TEST_INSTANCE_TYPE = "VM.Standard.E4.Flex-2-8"  # 2 vcpus, 8G
     LONGTERM_TEST_INSTANCE_TYPE = "VM.Standard.E4.Flex-4-16"  # 4 vcpus, 16G
+    OCI_CLI_VERSION = "3.76.2"  # Pinned version for reproducibility
 
     @cached_property
     def BASE_IMAGE(self) -> str:
@@ -1476,6 +1477,45 @@ class OciSctRunner(SctRunner):
     @cached_property
     def key_pair(self) -> SSHKey:
         return KeyStore().get_oci_ssh_key_pair()
+
+    def install_prereqs(self, public_ip: str, connect_timeout: Optional[int] = None) -> None:
+        super().install_prereqs(public_ip=public_ip, connect_timeout=connect_timeout)
+
+        LOGGER.info("Installing OCI CLI v%s using the official Oracle installer...", self.OCI_CLI_VERSION)
+        remoter = self.get_remoter(host=public_ip, connect_timeout=connect_timeout)
+
+        remoter.sudo(
+            shell_script_cmd(
+                quote="'",
+                cmd=(
+                    "curl -fsSL https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh"
+                    " -o /tmp/oci_install.sh && chmod +x /tmp/oci_install.sh"
+                ),
+            )
+        )
+        remoter.sudo(
+            shell_script_cmd(
+                quote="'",
+                cmd=(
+                    f"OCI_CLI_SUPPRESS_PROMPT=True bash /tmp/oci_install.sh"
+                    f" --oci-cli-version {self.OCI_CLI_VERSION}"
+                    f" --install-dir /opt/oracle/oci-cli"
+                    f" --exec-dir /usr/local/bin"
+                    f" --accept-all-defaults"
+                ),
+            )
+        )
+
+        result = remoter.sudo(shell_script_cmd(quote="'", cmd="/usr/local/bin/oci --version"))
+        LOGGER.info("OCI CLI installed: %s", result.stdout.strip())
+
+        remoter.sudo(shell_script_cmd(quote="'", cmd="rm -f /tmp/oci_install.sh"))
+        # Flush all dirty pages to disk before we stop the instance.
+        # OCI's SOFTSTOP sends ACPI shutdown but we belt-and-suspenders
+        # with an explicit sync so pip-generated entry-point scripts
+        # (which are NOT fsynced by pip) survive the snapshot.
+        remoter.sudo(shell_script_cmd(quote="'", cmd="sync"))
+        remoter.stop()
 
     def _image(self, image_type: ImageType = ImageType.SOURCE) -> Any:
         if image_type == ImageType.SOURCE:
@@ -1614,7 +1654,11 @@ class OciSctRunner(SctRunner):
 
     def _stop_image_builder_instance(self, instance: Any) -> None:
         compute_client, _ = self.get_compute_and_network_clients_for_instance(instance)
-        compute_client.instance_action(instance_id=instance.id, action="STOP")
+        # SOFTSTOP sends an ACPI shutdown signal so the OS flushes dirty
+        # pages before powering off. The default STOP is a hard power-off
+        # that can leave freshly-written files (e.g. pip entry-points)
+        # as 0-byte in the resulting image snapshot.
+        compute_client.instance_action(instance_id=instance.id, action="SOFTSTOP")
         wait_for_instance_state(
             compute_client=compute_client,
             instance_id=instance.id,
