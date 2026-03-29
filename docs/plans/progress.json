@@ -208,6 +208,15 @@
       "pr": 13509,
       "phases_total": null,
       "phases_done": 0
+    },
+    {
+      "id": "ssh-key-decoupling",
+      "title": "SSH Key Decoupling",
+      "domain": "cluster",
+      "status": "draft",
+      "pr": null,
+      "phases_total": 3,
+      "phases_done": 0
     }
   ]
 }
