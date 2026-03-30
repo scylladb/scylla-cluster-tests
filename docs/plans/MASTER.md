@@ -28,7 +28,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | GCE Provisioning | `draft` | [gce-provisioning.md](infrastructure/gce-provisioning.md) |
 | Amazon EMR Spark Migrator | `pending_pr` | [#13909](https://github.com/scylladb/scylla-cluster-tests/pull/13909) |
 | Source-Destination Clusters | `pending_pr` | [#13908](https://github.com/scylladb/scylla-cluster-tests/pull/13908) |
-| Cassandra Cluster Support | `pending_pr` | [cassandra-cluster-support.md](infrastructure/cassandra-cluster-support.md) |
+| Cassandra Cluster Support | `draft` | [cassandra-cluster-support.md](infrastructure/cassandra-cluster-support.md) |
 | SSH Key Decoupling | `draft` | [ssh-key-decoupling.md](infrastructure/ssh-key-decoupling.md) |
 
 ### Nemesis — Chaos engineering, disruptors
@@ -36,7 +36,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Plan | Status | File / PR |
 |------|--------|-----------|
 | Nemesis Rework (Nemesis 2.0) | `in_progress` | [nemesis-rework.md](nemesis/nemesis-rework.md) |
-| Nemesis Extraction Phase 3 | `pending_pr` | [#13769](https://github.com/scylladb/scylla-cluster-tests/pull/13769) |
+| Nemesis Extraction Phase 3 | `in_progress` | [nemesis-extraction.md](nemesis/nemesis-extraction.md) |
 
 ### Stress Tools — Load generators
 
@@ -49,8 +49,8 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 |------|--------|-----------|
 | Jenkins Pipeline Config Linter | `draft` | [jenkins-pipeline-config-linter.md](jenkins/jenkins-pipeline-config-linter.md) |
 | Jenkins Uno-Choice Billing Project | `draft` | [jenkins-uno-choice-billing-project.md](jenkins/jenkins-uno-choice-billing-project.md) |
-| Centralized Trigger Matrix | `pending_pr` | [#13887](https://github.com/scylladb/scylla-cluster-tests/pull/13887) |
-| i8g Performance Jobs Migration | `pending_pr` | [#13629](https://github.com/scylladb/scylla-cluster-tests/pull/13629) |
+| Centralized Trigger Matrix | `draft` | [centralized-trigger-matrix.md](jenkins/centralized-trigger-matrix.md) |
+| i8g Performance Jobs Migration | `draft` | [i8g-performance-jobs-migration.md](i8g-performance-jobs-migration.md) |
 | curl Retry/Timeout Linting | `pending_pr` | [#13509](https://github.com/scylladb/scylla-cluster-tests/pull/13509) |
 
 ### Config — Configuration system
@@ -59,7 +59,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 |------|--------|-----------|
 | Resilient Test Config Dependencies | `pending_pr` | [#13982](https://github.com/scylladb/scylla-cluster-tests/pull/13982) |
 | Typed Config Access Migration | `pending_pr` | [#13878](https://github.com/scylladb/scylla-cluster-tests/pull/13878) |
-| SCT Config Validation and Lazy Images | `pending_pr` | [#13877](https://github.com/scylladb/scylla-cluster-tests/pull/13877) |
+| SCT Config Validation and Lazy Images | `draft` | [sct-config-validation-and-lazy-images.md](sct-config-validation-and-lazy-images.md) |
 | SCT Config Follow-up Refactoring | `pending_pr` | [#13845](https://github.com/scylladb/scylla-cluster-tests/pull/13845) |
 
 ### K8s — Kubernetes operator, K8s backends
