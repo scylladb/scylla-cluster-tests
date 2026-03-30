@@ -8,7 +8,7 @@ artifactsPipeline(
 
     test_config: 'test-cases/artifacts/azure-image.yaml',
     backend: 'azure',
-    instance_provision: 'spot',
+    provision_type: 'spot',
     availability_zone: '',
 
     timeout: [time: 145, unit: 'MINUTES'],
