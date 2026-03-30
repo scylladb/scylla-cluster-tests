@@ -38,10 +38,17 @@ def generate_nemesis_yaml(file_opener=open):
 class NemesisJobGenerator:
     """Generates Config files and pipelines for all nemesis"""
 
-    BACKEND_TO_REGION = {"aws": "eu-west-1", "gce": "us-east1", "azure": "eastus", "docker": "eu-west-1"}
+    BACKEND_TO_REGION = {
+        "aws": "eu-west-1",
+        "gce": "us-east1",
+        "oci": "us-ashburn-1",
+        "azure": "eastus",
+        "docker": "eu-west-1",
+    }
     BACKEND_TO_REGION_PARAM = {
         "aws": "region",
         "gce": "gce_datacenter",
+        "oci": "oci_region_name",
         "azure": "azure_region_name",
         "docker": "region",
     }
