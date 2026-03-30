@@ -22,25 +22,34 @@ SCT stores all credentials and secrets in a single shared S3 bucket (`scylla-qa-
 - **No unit test coverage**: There are zero unit tests for `KeyStore` itself. The only test (`unit_tests/test_sync.py`) is an integration test that requires real AWS credentials.
 - **Thread safety concerns**: While `BOTO3_CLIENT_CREATION_LOCK` protects client creation, the `s3` property (resource) has no lock, and concurrent `get_file_contents` calls could race.
 
+### Architectural Context: Hub-and-Spoke Secrets Management
+
+This plan covers **SCT's role as a consumer** within the organization's Hub-and-Spoke secrets architecture:
+
+- **Hub** (managed by infra team): Centrally manages credential generation, automated rotation across AWS/GCP/Azure/OCI, and pushes updated values to AWS Secrets Manager. The Hub handles the overlapping secrets (grace period) pattern — minting new keys while leaving old ones active for a configurable period (e.g., 7 days) to avoid breaking long-running SCT tests.
+- **Spoke** (AWS Secrets Manager): The delivery layer. Stores all secrets with strict prefixing (`sct/`, `jenkins/`, `dtest/`) and IAM policies that scope access per consumer.
+- **Consumer** (SCT — this plan): Fetches secrets dynamically at runtime. Never stores credentials in its internal databases or local filesystems beyond the test run. Never manages rotation — that is the Hub's responsibility.
+
 ### Why AWS Secrets Manager
 
-SCT operates across AWS, GCE, Azure, and OCI, but **all credential access originates from AWS** — Jenkins runs on AWS EC2, and developers authenticate via Okta-to-AWS. The KeyStore stores credentials *for* other clouds but is always accessed *from* AWS infrastructure with existing IAM roles. AWS Secrets Manager is the natural fit because:
+SCT runs on GCP infrastructure but fetches multi-cloud credentials from AWS Secrets Manager. Authentication uses **GCP Workload Identity Federation (WIF)**: the GCP Service Account attached to the SCT runner is mapped to an AWS IAM Role, enabling secretless cross-cloud access with no static AWS credentials on disk.
 
-- **Zero authentication changes**: Uses the same `boto3` SDK and IAM credentials SCT already has. No bootstrap problem (unlike GCP/Azure/Okta options that would require storing a credential to access the credential store).
-- **$8/month cost**: 20 secrets × $0.40/secret/month. Negligible compared to daily cloud provisioning costs.
-- **Per-secret IAM policies**: Each secret can have its own resource policy restricting access by IAM role, enabling team-scoped access control.
-- **Native audit trail**: CloudTrail logs every `GetSecretValue` call with caller identity, timestamp, and source IP. GuardDuty can alert on anomalous access patterns.
-- **Built-in rotation**: Lambda-based automatic rotation for supported credential types.
+AWS Secrets Manager is the organizational standard for the delivery layer because:
+
+- **Secretless authentication from GCP**: WIF eliminates the "chicken-and-egg" problem — no static AWS credentials needed on GCP-hosted runners.
+- **$8/month cost**: ~20 secrets x $0.40/secret/month. Negligible compared to daily cloud provisioning costs.
+- **Per-secret IAM policies**: SCT's IAM role is scoped to `sct/*` secrets only. It cannot access `jenkins/*` or `dtest/*` secrets.
+- **Native audit trail**: CloudTrail logs every `GetSecretValue` call with caller identity, timestamp, and source IP.
+- **High availability**: If the Hub goes down for maintenance, SCT continues to run using the currently valid secrets in Secrets Manager.
 - **Same SDK**: Replace `boto3.client("s3").get_object()` with `boto3.client("secretsmanager").get_secret_value()` — minimal code change.
-- **Jenkins integration**: All 20+ pipelines already inject `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` via Jenkins `credentials()`. Zero pipeline changes needed.
+- **Grace period for long-running tests**: The Hub's overlapping secrets pattern ensures that multi-day SCT test runs are never broken by mid-flight credential revocation.
 
 Alternatives evaluated and rejected:
-- **GCP Secret Manager / Azure Key Vault**: Chicken-and-egg problem — need cloud credentials to access the store that holds cloud credentials.
+- **GCP Secret Manager / Azure Key Vault**: Does not align with the organizational Hub-and-Spoke architecture where AWS SM is the delivery layer.
 - **Okta Privileged Access**: PAM-oriented, no Python SDK for secrets retrieval, requires separate API token bootstrap.
 - **Doppler**: Env-var-only injection doesn't fit SCT's `get_json()` pattern; flat org structure.
 - **Akeyless**: Enterprise pricing, opaque costs, overkill for ~20 static secrets.
-- **HashiCorp Vault (self-hosted)**: Significant operational overhead to run a Vault cluster for ~20 secrets.
-- **Infisical (self-hosted)**: Running another service (PostgreSQL + Redis + Docker) for ~20 secrets is disproportionate overhead.
+- **HashiCorp Vault / Infisical**: Being evaluated as Hub options by infra team. SCT is agnostic to the Hub implementation — it only reads from AWS SM.
 
 ## 2. Current State
 
@@ -126,7 +135,7 @@ All secrets are well within the 64KB Secrets Manager limit.
 
 ## 3. Goals
 
-1. **Migrate credential storage from S3 to AWS Secrets Manager** — all secrets stored in Secrets Manager with KMS encryption, per-secret IAM policies, and CloudTrail audit logging.
+1. **Migrate credential retrieval from S3 to AWS Secrets Manager** — SCT reads all secrets from Secrets Manager (populated and rotated by the central Hub) with KMS encryption, per-consumer IAM policies, and CloudTrail audit logging.
 2. **Add in-memory caching** to eliminate redundant API calls within a test run — target: reduce API calls by 80%+ for a typical test execution. Cache persists for the `KeyStore` instance lifetime (no TTL).
 3. **Maintain backward compatibility** — existing `KeyStore()` API surface (all public methods) must continue to work unchanged. Callers should not need modification.
 4. **Support S3 fallback during migration** — a configuration flag allows reading from S3 (old) or Secrets Manager (new) to enable gradual rollout without a big-bang cutover.
@@ -135,7 +144,7 @@ All secrets are well within the 64KB Secrets Manager limit.
 7. **Achieve >90% unit test coverage** for the `KeyStore` class with proper mocking (no real AWS calls).
 8. **Provide a singleton/shared instance pattern** so callers don't need to instantiate `KeyStore()` at every call site, while maintaining backward compatibility.
 9. **Add structured logging** for credential access — log which credential was fetched, when, and by which module, enabling audit capability beyond CloudTrail.
-10. **Establish a documented rotation policy** with tiered rotation frequencies (90/180/365 days) based on credential sensitivity, aligned with NIST 800-53 and PCI DSS standards.
+10. **Define rotation requirements for the Hub** — tiered rotation frequencies (90/180/365 days) based on credential sensitivity, aligned with NIST 800-53 and PCI DSS standards, with a 7-day grace period for long-running SCT tests.
 11. **Document all secrets** with standardized tags in Secrets Manager and detailed knowledge base pages in Confluence, covering recreation procedures, access scope, and dependency mapping.
 
 ## 4. Implementation Phases
@@ -210,6 +219,10 @@ All secrets are well within the 64KB Secrets Manager limit.
 
 **Description**: Add an AWS Secrets Manager backend to `KeyStore` while keeping the S3 backend as a fallback. A configuration flag (`SCT_KEYSTORE_BACKEND`) controls which backend is used. This enables gradual rollout: teams can switch to Secrets Manager individually and roll back to S3 if issues arise.
 
+Authentication to AWS Secrets Manager uses the standard boto3 credential chain. On GCP-hosted runners, this is provided via **Workload Identity Federation (WIF)**: the GCP Service Account assumes an AWS IAM Role scoped to `sct/*` secrets. On developer machines, existing AWS profiles (via Okta) continue to work. No SCT code changes are needed for authentication — boto3 handles it transparently.
+
+The `sync()` and `get_obj_if_needed()` methods (used for SSH key distribution to disk) must also support Secrets Manager. When the backend is `secretsmanager`, `sync()` fetches secrets via `get_file_contents()` (which dispatches to Secrets Manager) and writes them to disk, replacing the S3-based download path. ETag-based caching is not available for Secrets Manager, so `sync()` always writes the file when using this backend.
+
 **Dependencies**: Phase 1 (tests ensure no regressions), Phase 2 (caching and retry apply to both backends)
 
 **Deliverables**:
@@ -217,51 +230,52 @@ All secrets are well within the 64KB Secrets Manager limit.
 - `SCT_KEYSTORE_BACKEND` environment variable: `"s3"` (default, backward compatible) or `"secretsmanager"`
 - `get_file_contents()` dispatches to the configured backend
 - Binary secrets (SSH keys) stored as `SecretBinary`, JSON secrets stored as `SecretString`
-- Secrets Manager secret names use a configurable prefix (default: `sct/keystore/`) to namespace secrets and avoid collisions, e.g. `sct/keystore/scylla_test_id_ed25519`
-- `SCT_KEYSTORE_SM_PREFIX` environment variable for the prefix (default: `sct/keystore/`)
+- Secrets Manager secret names use a configurable prefix (default: `sct/`) to namespace secrets and avoid collisions, e.g. `sct/scylla_test_id_ed25519`
+- `SCT_KEYSTORE_SM_PREFIX` environment variable for the prefix (default: `sct/`)
+- `sync()` updated to work with both backends — fetches from Secrets Manager when configured, writes to disk as before
 - Update unit tests to cover both backends
 
 **Definition of Done**:
 - [ ] `SCT_KEYSTORE_BACKEND=secretsmanager` reads from Secrets Manager
 - [ ] `SCT_KEYSTORE_BACKEND=s3` (or unset) reads from S3 (existing behavior)
 - [ ] Binary and JSON secrets round-trip correctly through Secrets Manager
+- [ ] `sync()` writes SSH keys to disk correctly from both backends
 - [ ] Caching and retry logic work identically for both backends
 - [ ] Unit tests cover both backends using `moto`'s `@mock_aws` for Secrets Manager
 - [ ] Passes `uv run sct.py pre-commit`
 
 ---
 
-### Phase 4: Migration Script and Runbook
+### Phase 4: Validation Script and Cutover Runbook
 
-**Importance**: High — enables the actual cutover from S3 to Secrets Manager.
+**Importance**: High — enables confident cutover from S3 to Secrets Manager.
 
-**Description**: Create a one-time migration script that reads all secrets from the S3 bucket and creates corresponding secrets in AWS Secrets Manager. The migration script also applies the tagging and description metadata defined in the Secrets Inventory (Section 2). Include a runbook documenting the migration procedure, rollback steps, and validation checks.
+**Description**: Create a validation script that verifies all secrets SCT needs are present and readable in AWS Secrets Manager. The actual secret population is performed by the infra team (or the Hub's migration tooling) — SCT is a consumer, not a manager. This phase also provides an IAM policy template and a cutover runbook.
 
-**Dependencies**: Phase 3 (Secrets Manager backend implemented)
+**Dependencies**: Phase 3 (Secrets Manager backend implemented), infra team has populated `sct/*` secrets
 
 **Deliverables**:
-- Migration script `scripts/migrate_keystore_to_secrets_manager.py` that:
-  - Lists all objects in the S3 keystore bucket
-  - Creates each as a Secrets Manager secret (binary -> `SecretBinary`, JSON -> `SecretString`)
-  - Applies the configurable prefix (`sct/keystore/`)
-  - Applies tags and description from the secrets documentation schema (see Section 8)
-  - Validates round-trip: reads back each secret and compares with S3 original
-  - Dry-run mode that only reports what would be created
-  - Idempotent: skips secrets that already exist (with option to overwrite)
-- IAM policy template (JSON) for Secrets Manager access, scoped to `sct/keystore/*` resource ARN
-- Runbook in the PR description covering:
-  1. Pre-migration: verify AWS credentials, dry-run the script
-  2. Migration: run script, validate all secrets readable
-  3. Cutover: set `SCT_KEYSTORE_BACKEND=secretsmanager` in Jenkins environment
-  4. Validation: run a docker-backend test, verify credential access logs
-  5. Rollback: unset `SCT_KEYSTORE_BACKEND` (reverts to S3)
+- Validation script `scripts/validate_keystore_secrets.py` that:
+  - Reads the list of expected secrets from a manifest (derived from the Secrets Inventory in Section 2)
+  - Attempts to fetch each secret via `boto3.client("secretsmanager").get_secret_value()`
+  - Verifies binary secrets (SSH keys) are decodable and JSON secrets are parseable
+  - Optionally compares against S3 originals to confirm content matches (for initial migration verification)
+  - Reports pass/fail per secret with clear error messages
+  - Exit code 0 only if all secrets are readable
+- IAM policy template (JSON) for SCT's AWS role, scoped to read-only on `sct/*` secrets:
+  - `secretsmanager:GetSecretValue` and `secretsmanager:DescribeSecret` on `arn:aws:secretsmanager:*:*:secret:sct/*`
+  - No write, delete, or rotation permissions (those belong to the Hub)
+- Cutover runbook in the PR description covering:
+  1. Pre-cutover: run validation script to confirm all `sct/*` secrets are populated
+  2. Cutover: set `SCT_KEYSTORE_BACKEND=secretsmanager` in the SCT runner environment
+  3. Validation: run a docker-backend test, verify credential access logs
+  4. Rollback: unset `SCT_KEYSTORE_BACKEND` (reverts to S3)
 
 **Definition of Done**:
-- [ ] Migration script handles all secret types (binary and JSON)
-- [ ] Tags and descriptions applied to every migrated secret
-- [ ] Dry-run mode works without creating any secrets
-- [ ] Round-trip validation passes for all secrets
-- [ ] IAM policy template restricts access to `sct/keystore/*`
+- [ ] Validation script checks all expected secrets from the manifest
+- [ ] Clear error reporting for missing or malformed secrets
+- [ ] IAM policy template grants read-only access to `sct/*` only
+- [ ] Cutover runbook includes rollback procedure
 - [ ] Passes `uv run sct.py pre-commit`
 
 ---
@@ -275,7 +289,7 @@ All secrets are well within the 64KB Secrets Manager limit.
 **Deliverables**:
 - Update `AGENTS.md` environment variables section with:
   - `SCT_KEYSTORE_BACKEND` — Backend for credential storage (`s3` or `secretsmanager`)
-  - `SCT_KEYSTORE_SM_PREFIX` — Secrets Manager secret name prefix (default: `sct/keystore/`)
+  - `SCT_KEYSTORE_SM_PREFIX` — Secrets Manager secret name prefix (default: `sct/`)
 - Add docstrings to all `KeyStore` methods following Google format
 - Update the keystore section in repository documentation
 - Create initial Confluence page for secret knowledge base (see Section 9)
@@ -314,7 +328,8 @@ All secrets are well within the 64KB Secrets Manager limit.
 | No retry permanent | `get_file_contents` (Phase 2) | No retry on `NoSuchKey`/`ResourceNotFoundException` |
 | Shared instance | `get_keystore()` (Phase 2) | Returns same instance |
 | Backend switching | `SCT_KEYSTORE_BACKEND` | S3 vs Secrets Manager dispatch |
-| Migration script | `migrate_keystore_to_secrets_manager.py` | Dry-run, create, validate round-trip |
+| Validation script | `validate_keystore_secrets.py` | All expected secrets readable, clear error on missing |
+| Sync with SM backend | `sync()` | Writes SSH keys to disk from Secrets Manager |
 
 ### Integration Tests (Existing)
 
@@ -324,7 +339,8 @@ All secrets are well within the 64KB Secrets Manager limit.
 
 - Run a full SCT test with `--backend docker` and `SCT_KEYSTORE_BACKEND=secretsmanager` to verify credentials are fetched from Secrets Manager.
 - Set `SCT_KEYSTORE_BACKEND=secretsmanager` with a non-existent secret prefix and verify clear error message.
-- Run migration script in dry-run mode against the real S3 bucket to verify secret discovery.
+- Run validation script against real Secrets Manager to confirm all `sct/*` secrets are present.
+- Test WIF authentication from a GCP-hosted runner by running the validation script without static AWS credentials.
 
 ## 6. Success Criteria
 
@@ -335,7 +351,7 @@ All secrets are well within the 64KB Secrets Manager limit.
 5. **No behavioral regressions**: All existing unit and integration tests pass without modification (except adding mocks where `KeyStore` was previously unmocked).
 6. **Audit logging**: CloudTrail records every `GetSecretValue` call. Application logs show cache hit/miss for every credential access.
 7. **Resilient fetches**: Transient AWS errors are retried transparently; `ThrottlingException`/`SlowDown` errors no longer cause test failures.
-8. **Migration tooling**: One-command migration from S3 to Secrets Manager with dry-run, validation, and rollback capability.
+8. **Validation tooling**: Validation script confirms all expected `sct/*` secrets are present and readable in Secrets Manager. Cutover runbook with rollback procedure documented.
 9. **Secret metadata**: Every secret in Secrets Manager has the full standard tag schema applied. Every secret has a corresponding Confluence knowledge base page.
 10. **Rotation policy**: Documented rotation schedule with tiered frequencies. `rotation_due` tags set on all secrets. Process documented and tested.
 
@@ -345,17 +361,26 @@ All secrets are well within the 64KB Secrets Manager limit.
 |------|-----------|--------|------------|
 | Secrets Manager API throttling under high concurrency | Medium | Medium | In-memory caching (Phase 2) reduces API calls by 80%+. Default Secrets Manager quota is 10,000 requests/second — far above SCT's needs. Retry logic (Phase 2) handles transient throttling. |
 | Cache serves stale credentials after secret refresh | Low | Low | Credentials do not change during a test run. Cache lives for the `KeyStore` instance lifetime. For the rare case of mid-run refresh: `bypass_cache=True` and `clear_cache()` are available. Between runs, a new `KeyStore` instance starts with a fresh cache. |
-| Migration script misses secrets in S3 bucket | Low | High | Script lists all objects in bucket. Dry-run mode shows what will be migrated. Round-trip validation compares original and migrated values. |
+| Hub fails to populate all SCT secrets | Low | High | Validation script (Phase 4) checks all expected secrets from a manifest before cutover. CI can run this periodically to detect missing secrets early. |
 | Cost increase from Secrets Manager API calls | Low | Low | $0.05 per 10,000 API calls. With caching, a test run makes ~5 calls. Even 1,000 test runs/month = $0.025. Secret storage: 20 x $0.40 = $8/month. |
 | Shared instance causes issues with parallel test execution | Medium | Medium | `get_keystore()` is optional; direct `KeyStore()` instantiation still works. Cache is per-instance. |
 | Breaking change if callers depend on fresh S3 data per call | Low | Medium | Cache bypass parameter available; existing `KeyStore()` instantiation creates new instance with fresh cache. |
-| S3 `sync()` method doesn't apply to Secrets Manager | Low | Low | `sync()` and `get_obj_if_needed()` remain S3-only (they download files to disk for SSH key distribution). These methods bypass the backend dispatch and always use S3 directly, since their purpose is local file caching, not credential retrieval. |
+| `sync()` loses ETag caching with Secrets Manager | Low | Low | When backend is `secretsmanager`, `sync()` always writes the file (no ETag available). This is acceptable because `sync()` runs once at test startup and the files are small (<2KB each). The in-memory cache in `get_file_contents()` still prevents redundant API calls. |
 | Retry logic masks permanent failures | Low | Medium | Only retry transient error codes (`ThrottlingException`, `InternalServiceError`, `SlowDown`); raise immediately for `ResourceNotFoundException`, `AccessDenied` |
 | `moto` doesn't fully replicate Secrets Manager behavior | Medium | Low | Use `moto` for unit tests but validate with real Secrets Manager via migration script's round-trip check |
 | Deprecation warnings for SSH methods are noisy | Low | Low | Use `warnings.warn(..., DeprecationWarning, stacklevel=2)` which is suppressed by default in production; visible in tests with `-W default` |
 | Secret metadata becomes stale in Confluence/tags | Medium | Medium | Schedule quarterly review as part of rotation process (see Section 8). Assign owner per-secret who is responsible for keeping metadata current. |
+| GCP WIF to AWS IAM role trust fails | Low | High | S3 fallback (`SCT_KEYSTORE_BACKEND=s3`) remains available until WIF is proven stable. Developers can still use Okta-to-AWS profiles locally. WIF configuration is managed by infra team. |
+| Hub rotates a secret and SCT validation fails | Low | High | Grace period (7 days) means old credential is still active. SCT can continue using old credential while the issue is investigated. Validation script alerts SCT team immediately after rotation. |
 
-## 8. Key Refresh and Rotation Process
+## 8. Key Refresh and Rotation
+
+### Ownership
+
+**SCT does not own secret rotation.** The central Hub (managed by the infra team) is responsible for generating new credentials, pushing them to AWS Secrets Manager, and revoking old ones. This section documents:
+1. The rotation schedule that SCT's secrets should follow (communicated to the Hub team).
+2. SCT's requirements from the rotation process (grace period, no mid-flight breakage).
+3. How SCT validates that rotated secrets work.
 
 ### Industry Standards
 
@@ -367,9 +392,9 @@ All secrets are well within the 64KB Secrets Manager limit.
 | **SOC 2 Type II** | Requires documented rotation policy | Frequency based on organizational risk assessment |
 | **AWS Security Hub** | Flags secrets not rotated within 90 days | Default control: `SecretsManager.4` |
 
-### Recommended Rotation Schedule for SCT
+### Recommended Rotation Schedule for SCT Secrets
 
-Not all secrets carry equal risk. Rotation frequency should match the sensitivity and blast radius of each credential:
+Not all secrets carry equal risk. Rotation frequency should match the sensitivity and blast radius of each credential. These tiers should be communicated to the Hub team and configured in their rotation engine:
 
 | Tier | Rotation Frequency | Secrets | Rationale |
 |------|-------------------|---------|-----------|
@@ -377,47 +402,33 @@ Not all secrets carry equal risk. Rotation frequency should match the sensitivit
 | **Tier 2 — Medium sensitivity** | **180 days** | API credentials (`argus_rest_credentials.json`, `scylladb_jira.json`, `scylladb_upload.json`), database credentials (`housekeeping-db.json`), KMS configs (`azure_kms_config.json`, `gcp_kms_config.json`) | Access to internal services. Compromise is contained within SCT's operational scope. |
 | **Tier 3 — Low sensitivity** | **365 days** | Email config (`email_config.json`), LDAP config (`ldap_ms_ad.json`), QA users (`qa_users.json`), backup blob (`backup_azure_blob.json`) | Read-only or low-privilege access. Limited blast radius. |
 
-### Refresh Process
+### SCT's Requirements from the Rotation Process
 
-When a secret needs to be refreshed (rotated), follow this process:
+SCT tests can run for **multiple days** (longevity tests, performance regressions). The Hub's rotation process must use the **overlapping secrets (grace period) pattern** to avoid breaking in-flight tests:
 
-1. **Generate new credential** in the source system (e.g., create a new GCP service account key, generate a new SSH key pair, rotate an API token in the provider's UI).
+1. **Phase 1 — Mint and Sync**: The Hub generates a new credential in the source system and pushes it to AWS Secrets Manager. New SCT runs starting from this point fetch the new credential. The old credential remains active in the source system.
 
-2. **Update in Secrets Manager** using the AWS CLI or console:
-   ```bash
-   aws secretsmanager put-secret-value \
-     --secret-id sct/keystore/<secret_name> \
-     --secret-string '{"new": "credential_json"}'
-   ```
-   For binary secrets (SSH keys):
-   ```bash
-   aws secretsmanager put-secret-value \
-     --secret-id sct/keystore/<secret_name> \
-     --secret-binary fileb://new_key_file
-   ```
+2. **Phase 2 — Deferred Revocation**: After a grace period (recommended: **7 days** for SCT), the Hub revokes the old credential in the source system. By this time, all SCT test runs that started before the rotation have completed.
 
-3. **Update in all other locations** where this credential exists (see "Where Else This Key Exists" in the secret's Confluence page and the `other_locations` tag in Secrets Manager).
+**Why 7 days**: The longest SCT tests (longevity, large-scale performance) run for up to 5 days. A 7-day grace period provides a 2-day safety margin.
 
-4. **Validate** by running a test that uses the credential:
-   ```bash
-   SCT_KEYSTORE_BACKEND=secretsmanager uv run sct.py run-test \
-     longevity_test.LongevityTest.test_custom_time \
-     --backend docker --config test-cases/PR-provision-test.yaml
-   ```
+**SCT caching behavior during rotation**: SCT's in-memory cache persists for the `KeyStore` instance lifetime (the duration of a single test run). A test run that started before rotation will continue using the old credential from its cache. The next test run creates a new `KeyStore` instance and fetches the newly rotated credential. This is exactly the behavior the grace period pattern requires.
 
-5. **Revoke the old credential** in the source system after confirming the new one works.
+### Post-Rotation Validation from SCT Side
 
-6. **Update the Confluence knowledge base** with rotation date, who performed it, and any issues encountered.
+After the Hub rotates a secret, the SCT team should validate the new credential works:
 
-7. **Update the `last_rotated` and `rotated_by` tags** on the secret in Secrets Manager.
+```bash
+# Run the validation script to check all secrets are readable
+python scripts/validate_keystore_secrets.py
 
-### Automation Roadmap
+# Run a quick smoke test with the new credentials
+SCT_KEYSTORE_BACKEND=secretsmanager uv run sct.py run-test \
+  longevity_test.LongevityTest.test_custom_time \
+  --backend docker --config test-cases/PR-provision-test.yaml
+```
 
-For Phase 1 of this plan, rotation is manual. Future automation options:
-
-- **AWS Secrets Manager native rotation** (Lambda-based) — suitable for credentials where the source system has an API for key generation (e.g., AWS IAM keys, GCP service account keys).
-- **Scheduled CloudWatch Events** — trigger a reminder/alert when a secret approaches its rotation date based on the `rotation_due` tag.
-- **GuardDuty anomaly detection** — alert on unusual access patterns that may indicate a compromised credential.
+The validation script (Phase 4) can be integrated into CI to run periodically, alerting the SCT team if any expected secret is missing or malformed after a rotation.
 
 ## 9. Secret Documentation and Metadata
 
@@ -461,9 +472,9 @@ Each Confluence page should document:
 |---------|---------|---------|
 | **Purpose** | What this credential is used for in SCT | "GCP service account used by SCT to provision Scylla clusters on GCE. Used in `sdcm/utils/gce_utils.py` and `sdcm/cluster_k8s/gke.py`." |
 | **Access Scope** | What permissions/roles this credential grants | "Roles: `compute.admin`, `storage.admin` on project `gcp-sct-project-1`" |
-| **Who Has Access** | IAM roles/users that can read this secret | "IAM roles: `sct-jenkins-role`, `sct-developer-role`. Humans: infra-team members via Okta-to-AWS federation." |
+| **Who Has Access** | IAM roles/users that can read this secret | "IAM roles: `sct-runner-role` (via GCP WIF), `sct-developer-role` (via Okta). Hub service account has write access for rotation." |
 | **How to Recreate** | Step-by-step procedure to generate a new credential | "1. Go to GCP Console > IAM > Service Accounts. 2. Select `sct-provisioner@gcp-sct-project-1`. 3. Keys > Add Key > JSON. 4. Upload to Secrets Manager." |
-| **Where Else It Exists** | All locations where this credential is stored or cached | "1. AWS Secrets Manager (`sct/keystore/gcp-sct-project-1.json`). 2. Jenkins credentials store (`gcp-sct-project-1`). 3. May be cached on developer laptops in `~/.sct/`." |
+| **Where Else It Exists** | All locations where this credential is stored or cached | "1. AWS Secrets Manager (`sct/gcp-sct-project-1.json`). 2. Jenkins credentials store (`gcp-sct-project-1`). 3. May be cached on developer laptops in `~/.sct/`." |
 | **Dependencies** | What breaks if this credential is revoked | "All GCE-backend test runs. GKE cluster provisioning. GCP KMS encryption tests." |
 | **Rotation History** | Log of past rotations | "2026-03-15: Rotated by @jsmith (quarterly). 2025-12-10: Rotated by @jdoe (emergency — key leaked in logs)." |
 | **Emergency Contact** | Who to contact if this credential stops working | "@infra-team in #sct-infra Slack channel" |
