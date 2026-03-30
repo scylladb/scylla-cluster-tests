@@ -1248,7 +1248,7 @@ class ConfigurationTests(unittest.TestCase):
 def test_39_billing_project_from_job_name(monkeypatch):
     """Test that billing_project is set correctly from JOB_NAME."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "internal_test_data/minimal_test_case.yaml")
 
     # Test with scylla-5.2 prefix
     monkeypatch.setenv("JOB_NAME", "scylla-5.2/longevity/test")
@@ -1264,7 +1264,7 @@ def test_39_billing_project_from_job_name(monkeypatch):
 def test_39_billing_project_staging_not_set(monkeypatch):
     """Test that billing_project is NOT set to 'staging'."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "internal_test_data/minimal_test_case.yaml")
 
     # Test with staging folder - should not set billing_project
     monkeypatch.setenv("JOB_NAME", "scylla-staging/longevity/test")
