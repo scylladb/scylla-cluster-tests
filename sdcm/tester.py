@@ -533,10 +533,14 @@ class ClusterTester(unittest.TestCase):
         """
         scylla_version = self.db_cluster.nodes[0].scylla_version_detailed
 
-        expr = re.compile(
+        expr_with_build_id = re.compile(
             r"(?P<version>(?P<main>[\w.~]+)-(0.)?(?P<date>[0-9]{8,8}).(?P<commit>\w+)) with build-id (?P<build_id>[\dabcdef]+)"
         )
-        version_dict = expr.match(scylla_version).groupdict()
+        expr_without_build_id = re.compile(r"(?P<version>(?P<main>[\w.~]+)-(0.)?(?P<date>[0-9]{8,8}).(?P<commit>\w+))")
+        match = expr_with_build_id.match(scylla_version) or expr_without_build_id.match(scylla_version)
+        if not match:
+            raise ValueError(f"Unable to parse scylla version: {scylla_version}")
+        version_dict = match.groupdict()
         self.log.debug("Parsed scylla version: %s", version_dict)
 
         return Package(
