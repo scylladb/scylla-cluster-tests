@@ -188,9 +188,7 @@ class TestContainerManager(unittest.TestCase):
 
     def test_get_docker_client(self):
         with self.subTest("Default Docker client"):
-            self.assertEqual(
-                ContainerManager.get_docker_client(self.node, "c2"), dummy_default_client
-            )
+            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2"), dummy_default_client)
 
         with self.subTest("Docker client without name argument"):
             self.node.None_docker_client = Mock()
@@ -203,9 +201,7 @@ class TestContainerManager(unittest.TestCase):
 
         with self.subTest("Node-wide Docker client (None)"):
             self.node.docker_client = None
-            self.assertEqual(
-                ContainerManager.get_docker_client(self.node, "c2"), dummy_default_client
-            )
+            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2"), dummy_default_client)
 
         with self.subTest("Node-wide Docker client (not callable)"):
             self.node.docker_client = sentinel.node_property_docker_client
@@ -213,9 +209,7 @@ class TestContainerManager(unittest.TestCase):
 
         with self.subTest("Node-wide Docker client (callable, return None)"):
             self.node.docker_client = Mock(return_value=None)
-            self.assertEqual(
-                ContainerManager.get_docker_client(self.node, "c2"), dummy_default_client
-            )
+            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2"), dummy_default_client)
             self.node.docker_client.assert_called_once_with()
 
         with self.subTest("Node-wide Docker client (callable)"):
@@ -259,9 +253,7 @@ class TestContainerManager(unittest.TestCase):
         with self.subTest("Docker client per container family (callable, with member)"):
             self.node.docker_client = Mock(return_value=None)
             self.node.c2_docker_client = Mock(return_value=None)
-            self.assertEqual(
-                ContainerManager.get_docker_client(self.node, "c2:blah"), dummy_default_client
-            )
+            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2:blah"), dummy_default_client)
             self.node.c2_docker_client.assert_called_once_with("blah")
             self.node.docker_client.assert_called_once_with()
 
