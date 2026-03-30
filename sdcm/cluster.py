@@ -2069,7 +2069,9 @@ class BaseNode(AutoSshContainerMixin):
             "/usr/bin/scylla",
             "/opt/scylladb/libexec/scylla",
         ):
-            build_id_result = self.remoter.run(f"{scylla_executable} --build-id", ignore_status=True)
+            build_id_result = self.remoter.run(
+                f"{self.add_install_prefix(scylla_executable)} --build-id", ignore_status=True
+            )
             if build_id_result.ok:
                 return build_id_result.stdout.strip()
         return None
