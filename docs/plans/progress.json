@@ -1,5 +1,5 @@
 {
-  "generated": "2026-03-15",
+  "generated": "2026-03-30",
   "plans": [
     {
       "id": "ai-skills-framework",
@@ -82,6 +82,16 @@
       "phases_done": 1
     },
     {
+      "id": "nemesis-extraction-phase3",
+      "title": "Nemesis Extraction Phase 3",
+      "file": "nemesis/nemesis-extraction.md",
+      "domain": "nemesis",
+      "status": "in_progress",
+      "created": "2026-03-30",
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
       "id": "k8s-multitenancy-dict-config",
       "title": "K8s Multitenancy Dict Config",
       "file": "config/k8s-multitenancy-dict-config.md",
@@ -123,8 +133,8 @@
       "title": "Cassandra Cluster Support",
       "file": "infrastructure/cassandra-cluster-support.md",
       "domain": "cluster",
-      "status": "pending_pr",
-      "pr": 13916,
+      "status": "draft",
+      "created": "2026-03-08",
       "phases_total": null,
       "phases_done": 0
     },
@@ -149,9 +159,10 @@
     {
       "id": "centralized-trigger-matrix",
       "title": "Centralized Trigger Matrix",
+      "file": "jenkins/centralized-trigger-matrix.md",
       "domain": "ci-cd",
-      "status": "pending_pr",
-      "pr": 13887,
+      "status": "draft",
+      "created": "2026-03-05",
       "phases_total": null,
       "phases_done": 0
     },
@@ -167,9 +178,10 @@
     {
       "id": "sct-config-validation-and-lazy-images",
       "title": "SCT Config Validation and Lazy Images",
+      "file": "sct-config-validation-and-lazy-images.md",
       "domain": "config",
-      "status": "pending_pr",
-      "pr": 13877,
+      "status": "draft",
+      "created": "2026-03-04",
       "phases_total": null,
       "phases_done": 0
     },
@@ -183,20 +195,12 @@
       "phases_done": 0
     },
     {
-      "id": "nemesis-extraction-phase3",
-      "title": "Nemesis Extraction Phase 3",
-      "domain": "nemesis",
-      "status": "pending_pr",
-      "pr": 13769,
-      "phases_total": null,
-      "phases_done": 0
-    },
-    {
       "id": "i8g-performance-jobs-migration",
       "title": "i8g Performance Jobs Migration",
+      "file": "i8g-performance-jobs-migration.md",
       "domain": "ci-cd",
-      "status": "pending_pr",
-      "pr": 13629,
+      "status": "draft",
+      "created": "2026-03-22",
       "phases_total": null,
       "phases_done": 0
     },

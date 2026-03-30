@@ -84,6 +84,13 @@ repos:
         pass_filenames: false
         files: (^sdcm/nemesis/|templates/.*.j2)
 
+    -   id: generate-progress-svg
+        name: generate-progress-svg
+        entry: python3 scripts/generate_progress_svg.py
+        language: system
+        pass_filenames: false
+        files: ^docs/plans/progress\.json$
+
     -   id: uv-sort
         name: uv-sort
         entry: uv-sort

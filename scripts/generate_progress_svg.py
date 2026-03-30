@@ -232,7 +232,7 @@ def main():
     svg = generate_svg(data)
     output = Path(__file__).resolve().parent.parent / "docs" / "plans" / "assets" / "progress-roadmap.svg"
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(svg)
+    output.write_text(svg + "\n")
     print(f"Generated {output}")
 
 
