@@ -84,7 +84,15 @@ class DockerClient(docker.DockerClient):
         return res
 
 
-_docker = DockerClient.from_env(timeout=DOCKER_API_CALL_TIMEOUT)
+@cache
+def _default_docker_client() -> DockerClient:
+    """Create the default Docker client lazily on first call.
+
+    Calling ``DockerClient.from_env()`` at import time crashes when Docker
+    is not installed (e.g. in CI environments that only run unit tests).
+    Using ``@cache`` ensures the client is created once and reused.
+    """
+    return DockerClient.from_env(timeout=DOCKER_API_CALL_TIMEOUT)
 
 
 class _Name(SimpleNamespace):
@@ -163,7 +171,6 @@ class ContainerManager:
     """
 
     keep_alive_suffix = "---KEEPALIVE"
-    default_docker_client = _docker
 
     @classmethod
     def get_docker_client(cls, instance: INodeWithContainerManager, name: Optional[str] = None) -> DockerClient:
@@ -174,7 +181,7 @@ class ContainerManager:
 
     @classmethod
     def _get_docker_client_for_new_container(cls, instance: INodeWithContainerManager, name: _Name) -> DockerClient:
-        return cls._get_attr_for_name(instance, name, "docker_client", default=cls.default_docker_client)
+        return cls._get_attr_for_name(instance, name, "docker_client", default=_default_docker_client())
 
     @staticmethod
     def _get_attr_for_name(
@@ -410,7 +417,7 @@ class ContainerManager:
         cls, instance: INodeWithContainerManager, docker_client: DockerClient = None
     ) -> None:
         """Destroy, if any, containers that were created for the instance during previous test run(s)"""
-        docker_client = docker_client or cls.default_docker_client
+        docker_client = docker_client or _default_docker_client()
         filters = {
             "label": [
                 f"TestId={instance.tags['TestId']}",
@@ -515,12 +522,12 @@ class ContainerManager:
 
     @classmethod
     def get_containers_by_prefix(cls, prefix: str, docker_client: DockerClient = None) -> List[Container]:
-        docker_client = docker_client or cls.default_docker_client
+        docker_client = docker_client or _default_docker_client()
         return docker_client.containers.list(all=True, filters={"name": f"{prefix}*"})
 
     @classmethod
     def get_container_name_by_id(cls, c_id: str, docker_client: DockerClient = None) -> str:
-        docker_client = docker_client or cls.default_docker_client
+        docker_client = docker_client or _default_docker_client()
         return docker_client.containers.get(c_id).name
 
     @classmethod
