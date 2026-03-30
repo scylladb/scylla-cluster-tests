@@ -41,6 +41,7 @@ from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import Instance
 
 from sct_ssh import ssh_run_cmd
+from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE
 from sdcm.keystore import KeyStore
 from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance, provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
@@ -138,7 +139,7 @@ class SctRunnerInfo:  # pylint: disable=too-many-instance-attributes
 
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
-    VERSION = "1.9"  # Version of the Image
+    VERSION = "1.16"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -193,7 +194,6 @@ class SctRunner(ABC):
                                                   key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout)
 
     def install_prereqs(self, public_ip: str, connect_timeout: Optional[int] = None) -> None:
-        from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE  # pylint: disable=import-outside-toplevel
 
         LOGGER.info("Connecting instance...")
         remoter = self.get_remoter(host=public_ip, connect_timeout=connect_timeout)
