@@ -955,6 +955,7 @@ class SerialRestartOfElectedTopologyCoordinatorNemesis(NemesisBaseClass):
 class IsolateNodeWithProcessSignalNemesis(NemesisBaseClass):
     disruptive = True
     topology_changes = True
+    supports_high_disk_utilization = False  # Runs nodetool removenode
 
     def disrupt(self):
         self.runner.disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node()
@@ -964,6 +965,7 @@ class IsolateNodeWithProcessSignalNemesis(NemesisBaseClass):
 class IsolateNodeWithIptableRuleNemesis(NemesisBaseClass):
     disruptive = True
     topology_changes = True
+    supports_high_disk_utilization = False  # Runs nodetool removenode
 
     def disrupt(self):
         self.runner.disrupt_refuse_connection_with_block_scylla_ports_on_banned_node()
