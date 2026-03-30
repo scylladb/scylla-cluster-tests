@@ -58,7 +58,7 @@ class AbortDecommissionMonkey(NemesisBaseClass):
 
         _streaming_started = lambda: len(list(log_follower)) > 0
 
-        wait_for(_streaming_started, timeout=60)
+        wait_for(_streaming_started, timeout=600)
         # Abort the decommission task after streaming has started
         self.runner.target_node.run_nodetool(
             f"tasks abort {task_id}", warning_event_on_exception=(UnexpectedExit, Libssh2UnexpectedExit), retry=0
