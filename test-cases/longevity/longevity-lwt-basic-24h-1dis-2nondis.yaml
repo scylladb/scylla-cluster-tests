@@ -8,7 +8,7 @@ n_loaders: 3
 
 instance_type_db: 'i4i.large'
 
-nemesis_class_name: 'SisyphusMonkey:3'
+nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey', 'SisyphusMonkey']
 nemesis_selector: ["disruptive", "not disruptive", "not disruptive and not manager_operation"]
 nemesis_during_prepare: false
 space_node_threshold: 64424

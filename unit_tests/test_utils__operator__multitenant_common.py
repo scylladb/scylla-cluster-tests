@@ -98,9 +98,9 @@ class TestUtilsOperatorMultitenantCommon:
             ]
             # NOTE: StringOrList type always converts single strings to a list with one element
             assert tenant.params.get("prepare_verify_cmd") == ["fake__prepare_verify_cmd__all_tenants__single_str"]
-            for cmd_name in ("nemesis_selector", "stress_cmd_m", "stress_cmd", "stress_cmd_r"):
+            for cmd_name in ("stress_cmd_m", "stress_cmd", "stress_cmd_r"):
                 assert tenant.params.get(cmd_name) == [f"fake__{cmd_name}__all_tenants__part{j}" for j in range(1, 3)]
-            for cmd_name in ("stress_read_cmd", "stress_cmd_w"):
+            for cmd_name in ("stress_read_cmd", "stress_cmd_w", "nemesis_selector"):
                 # NOTE: StringOrList type always converts single strings to a list with one element
                 assert tenant.params.get(cmd_name) == [f"fake__{cmd_name}__all_tenants__single_str"]
             # NOTE: StringOrList type always converts single strings to a list with one element

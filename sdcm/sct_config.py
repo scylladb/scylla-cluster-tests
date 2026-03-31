@@ -875,13 +875,16 @@ class SCTConfiguration(BaseModel):
     nemesis_class_name: MultitenantValue(StringOrList) = SctField(
         description="""
                 Nemesis class to use (possible types in sdcm.nemesis).
-                Next syntax supporting:
-                - nemesis_class_name: "NemesisName"  Run one nemesis in single thread
-                - nemesis_class_name: "<NemesisName>:<num>" Run <NemesisName> in <num>
-                  parallel threads on different nodes. Ex.: "ChaosMonkey:2"
-                - nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run
-                  <NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2>
-                  parallel threads. Ex.: "DisruptiveMonkey:1 NonDisruptiveMonkey:2"
+                Supported syntax:
+                - nemesis_class_name: "NemesisName"
+                  Run one nemesis in a single thread.
+                - nemesis_class_name: ["NemesisA", "NemesisB"]
+                  Run NemesisA and NemesisB each in their own thread.
+                - nemesis_class_name: ["SisyphusMonkey", "SisyphusMonkey"]
+                  Run two SisyphusMonkey threads in parallel.
+                Note: the former 'Class:N' count syntax (e.g. "ChaosMonkey:2") and
+                space-separated strings (e.g. "DisruptiveMonkey NonDisruptiveMonkey") are no
+                longer supported. Use an explicit YAML list instead.
         """,
     )
     nemesis_interval: MultitenantValue(IntOrList) = SctField(
@@ -3221,6 +3224,8 @@ class SCTConfiguration(BaseModel):
             self._validate_nemesis_can_run_on_non_seed()
             self._validate_number_of_db_nodes_divides_by_az_number()
 
+        self._validate_nemesis_parallel_config()
+
         if self.get("use_zero_nodes"):
             self._validate_zero_token_backend_support(backend)
 
@@ -3337,6 +3342,40 @@ class SCTConfiguration(BaseModel):
         assert num_of_db_nodes > seeds_num, (
             "Nemesis cannot run when 'nemesis_filter_seeds' is true and seeds number is equal to nodes number"
         )
+
+    def _validate_nemesis_parallel_config(self) -> None:
+        """Validate that nemesis_selector and nemesis_seed list lengths match nemesis_class_name."""
+        class_names = self.get("nemesis_class_name")
+        if not class_names:
+            return
+        num_threads = len(class_names)
+
+        selectors = self.get("nemesis_selector")
+        if selectors and len(selectors) > 1 and len(selectors) != num_threads:
+            raise ValueError(
+                f"'nemesis_selector' has {len(selectors)} entries but 'nemesis_class_name' has "
+                f"{num_threads}. Either use a single selector (broadcast to all threads) or provide "
+                f"exactly one selector per class name.\n"
+                f"  nemesis_class_name: {class_names}\n"
+                f"  nemesis_selector:   {selectors}"
+            )
+
+        seeds = self.get("nemesis_seed")
+        if seeds is not None:
+            if isinstance(seeds, int):
+                seeds_list = [seeds]
+            elif isinstance(seeds, str):
+                seeds_list = seeds.split()
+            else:
+                seeds_list = seeds
+            if len(seeds_list) > 1 and len(seeds_list) != num_threads:
+                raise ValueError(
+                    f"'nemesis_seed' has {len(seeds_list)} entries but 'nemesis_class_name' has "
+                    f"{num_threads}. Either use a single seed (broadcast to all threads) or provide "
+                    f"exactly one seed per class name.\n"
+                    f"  nemesis_class_name: {class_names}\n"
+                    f"  nemesis_seed:       {seeds_list}"
+                )
 
     def _validate_number_of_db_nodes_divides_by_az_number(self):
         if self.get("cluster_backend").startswith("k8s"):
