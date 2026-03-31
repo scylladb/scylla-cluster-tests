@@ -4436,14 +4436,20 @@ class SCTConfiguration(BaseModel):
 
         if unified_package := self.get("unified_package"):
             with tempfile.TemporaryDirectory() as tmpdirname:
-                LOCALRUNNER.run(
-                    shell_script_cmd(f"""
-                    cd {tmpdirname}
-                    {curl_with_retry(unified_package, output="./unified_package.tar.gz", follow_redirects=True, fail_early=True)}
-                    tar xvfz ./unified_package.tar.gz
-                    """),
-                    verbose=False,
-                )
+                try:
+                    LOCALRUNNER.run(
+                        shell_script_cmd(f"""
+                        cd {tmpdirname}
+                        {curl_with_retry(unified_package, output="./unified_package.tar.gz", follow_redirects=True, fail_early=True)}
+                        tar xvfz ./unified_package.tar.gz
+                        """),
+                        verbose=False,
+                    )
+                except Exception as exc:
+                    raise FileNotFoundError(
+                        f"Unified package not found or failed to download: {unified_package}. "
+                        f"The URL may not exist or is not accessible."
+                    ) from exc
 
                 scylla_version = next(pathlib.Path(tmpdirname).glob("**/SCYLLA-VERSION-FILE")).read_text()
                 scylla_product = next(pathlib.Path(tmpdirname).glob("**/SCYLLA-PRODUCT-FILE")).read_text()
