@@ -1,2 +1,3 @@
 stress_image:
-  cql-stress-cassandra-stress: 'aleksbykov/cql-stress:strong-consistency'
+  # cql-stress-cassandra-stress: 'aleksbykov/cql-stress:strong-consistency'
+  cql-stress-cassandra-stress: 'jadw1/cql-stress:strong-consistency-load-balancing-v1'
