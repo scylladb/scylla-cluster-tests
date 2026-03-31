@@ -18,7 +18,7 @@ simulated_racks: 3
 
 instance_type_db: 'i4i.2xlarge'
 
-nemesis_class_name: 'SisyphusMonkey:1 SisyphusMonkey:1'
+nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']
 nemesis_selector: ["topology_changes", "schema_changes and not disruptive"]
 nemesis_interval: 10
 nemesis_during_prepare: false

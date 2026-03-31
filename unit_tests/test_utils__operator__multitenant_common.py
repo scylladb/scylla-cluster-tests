@@ -106,6 +106,7 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
                 tenant_id = f"{tenant.test_config.test_id()}-{tenant._test_index}"
             else:
                 tenant_id = f"id--{tenant._test_index}"
+<<<<<<< HEAD
             self.assertEqual(tenant.id(), tenant_id)
             self.assertEqual(
                 tenant.params.get("prepare_write_cmd"),
@@ -131,6 +132,53 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
             self.assertEqual(tenant.params.get("nemesis_exclude_disabled"), True)
             self.assertEqual(tenant.params.get("nemesis_multiply_factor"), 5)
             self.assertEqual(tenant.params.get("round_robin"), True)
+||||||| parent of bce3e484a (refactor(nemesis): remove Class:N count syntax, enforce explicit list format)
+            assert tenant.id() == tenant_id
+            assert tenant.params.get("prepare_write_cmd") == [
+                f"fake__prepare_write_cmd__all_tenants__part{j}" for j in range(1, 3)
+            ]
+            # NOTE: StringOrList type always converts single strings to a list with one element
+            assert tenant.params.get("prepare_verify_cmd") == ["fake__prepare_verify_cmd__all_tenants__single_str"]
+            for cmd_name in ("nemesis_selector", "stress_cmd_m", "stress_cmd", "stress_cmd_r"):
+                assert tenant.params.get(cmd_name) == [f"fake__{cmd_name}__all_tenants__part{j}" for j in range(1, 3)]
+            for cmd_name in ("stress_read_cmd", "stress_cmd_w"):
+                # NOTE: StringOrList type always converts single strings to a list with one element
+                assert tenant.params.get(cmd_name) == [f"fake__{cmd_name}__all_tenants__single_str"]
+            # NOTE: StringOrList type always converts single strings to a list with one element
+            assert tenant.params.get("nemesis_class_name") == ["FakeNemesisClassName"]
+            assert tenant.params.get("nemesis_interval") == 5
+            assert tenant.params.get("nemesis_sequence_sleep_between_ops") == 3
+            assert tenant.params.get("nemesis_during_prepare") is False
+            assert tenant.params.get("nemesis_seed") == 13
+            assert tenant.params.get("nemesis_add_node_cnt") == 1
+            assert tenant.params.get("space_node_threshold") == 13531
+            assert tenant.params.get("nemesis_filter_seeds") is False
+            assert tenant.params.get("nemesis_multiply_factor") == 5
+            assert tenant.params.get("round_robin") is True
+=======
+            assert tenant.id() == tenant_id
+            assert tenant.params.get("prepare_write_cmd") == [
+                f"fake__prepare_write_cmd__all_tenants__part{j}" for j in range(1, 3)
+            ]
+            # NOTE: StringOrList type always converts single strings to a list with one element
+            assert tenant.params.get("prepare_verify_cmd") == ["fake__prepare_verify_cmd__all_tenants__single_str"]
+            for cmd_name in ("stress_cmd_m", "stress_cmd", "stress_cmd_r"):
+                assert tenant.params.get(cmd_name) == [f"fake__{cmd_name}__all_tenants__part{j}" for j in range(1, 3)]
+            for cmd_name in ("stress_read_cmd", "stress_cmd_w", "nemesis_selector"):
+                # NOTE: StringOrList type always converts single strings to a list with one element
+                assert tenant.params.get(cmd_name) == [f"fake__{cmd_name}__all_tenants__single_str"]
+            # NOTE: StringOrList type always converts single strings to a list with one element
+            assert tenant.params.get("nemesis_class_name") == ["FakeNemesisClassName"]
+            assert tenant.params.get("nemesis_interval") == 5
+            assert tenant.params.get("nemesis_sequence_sleep_between_ops") == 3
+            assert tenant.params.get("nemesis_during_prepare") is False
+            assert tenant.params.get("nemesis_seed") == 13
+            assert tenant.params.get("nemesis_add_node_cnt") == 1
+            assert tenant.params.get("space_node_threshold") == 13531
+            assert tenant.params.get("nemesis_filter_seeds") is False
+            assert tenant.params.get("nemesis_multiply_factor") == 5
+            assert tenant.params.get("round_robin") is True
+>>>>>>> bce3e484a (refactor(nemesis): remove Class:N count syntax, enforce explicit list format)
 
     def test_multitenant_longevity_class_with_shared_options(self):
         self._multitenant_class_with_shared_options(FakeMultitenantLongevityTest)
