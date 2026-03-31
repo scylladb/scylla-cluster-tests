@@ -24,6 +24,7 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.adaptive_timeouts.load_info_store import (
     AdaptiveTimeoutStore,
     NodeLoadInfoService,
+    NodeLoadInfoServices,
     _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC,
     _I4I_LARGE_SHARD_COUNT,
 )
@@ -145,6 +146,13 @@ def mock_tablets_feature():
         yield mock_feature
 
 
+@pytest.fixture(autouse=True)
+def clear_node_load_info_services_singleton():
+    """Clear the NodeLoadInfoServices Singleton cache after each test to prevent cross-test pollution."""
+    yield
+    NodeLoadInfoServices()._services.clear()
+
+
 @mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
 def test_soft_timeout_is_raised_when_timeout_reached(publish_or_dump, fake_node, adaptive_timeout_store):
     with adaptive_timeout(
@@ -153,7 +161,7 @@ def test_soft_timeout_is_raised_when_timeout_reached(publish_or_dump, fake_node,
         assert timeout == 0.1
         time.sleep(0.2)
     publish_or_dump.assert_called_once()
-    metrics = MemoryAdaptiveTimeoutStore().get(operation=Operations.SOFT_TIMEOUT.name, timeout_occurred=True)
+    metrics = adaptive_timeout_store.get(operation=Operations.SOFT_TIMEOUT.name, timeout_occurred=True)
     assert metrics[0]["duration"] > 0.2
     assert metrics[0]["timeout"] == 0.1
     assert metrics[0]["timeout_occurred"] is True
@@ -171,7 +179,7 @@ def test_soft_timeout_is_not_raised_when_timeout_not_reached(publish_or_dump, fa
         time.sleep(0.2)
     publish_or_dump.assert_not_called()
     # still we store the metrics even when there's no timeout
-    assert MemoryAdaptiveTimeoutStore().get(operation="SOFT_TIMEOUT", timeout_occurred=False)
+    assert adaptive_timeout_store.get(operation="SOFT_TIMEOUT", timeout_occurred=False)
 
 
 @mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
@@ -181,7 +189,7 @@ def test_decommission_timeout_is_calculated_and_stored(publish_or_dump, fake_nod
     ) as timeout:
         assert timeout == 7200  # based on data size
     publish_or_dump.assert_not_called()
-    assert MemoryAdaptiveTimeoutStore().get(operation=Operations.DECOMMISSION.name, timeout_occurred=False)
+    assert adaptive_timeout_store.get(operation=Operations.DECOMMISSION.name, timeout_occurred=False)
 
 
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
