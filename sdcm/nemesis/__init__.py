@@ -282,7 +282,9 @@ class NemesisBaseClass(NemesisFlags, ABC):
 
 
 class NemesisRunner:
-    def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
+    def __init__(
+        self, tester_obj, termination_event, *args, nemesis_selector: Optional[str] = None, nemesis_seed=None, **kwargs
+    ):
         # *args -  compatible with CategoricalMonkey
         self.tester = tester_obj  # ClusterTester object
         self.nemesis_registry = NemesisRegistry(base_class=NemesisBaseClass, flag_class=NemesisFlags)
@@ -1272,7 +1274,7 @@ class NemesisRunner:
             self.cluster.clean_replacement_node_options(new_node)
             self.cluster.set_seeds()
             self.cluster.update_seed_provider()
-        except (NodeSetupFailed, NodeSetupTimeout):
+        except NodeSetupFailed, NodeSetupTimeout:
             self.log.warning("TestConfig of the '%s' failed, collecting logs and terminating node" % new_node)
             self.cluster.terminate_node(new_node)
             raise
@@ -1318,7 +1320,7 @@ class NemesisRunner:
             self.actions_log.info(f"New nodes initialized: {nodes_names}")
             self.cluster.set_seeds()
             self.cluster.update_seed_provider()
-        except (NodeSetupFailed, NodeSetupTimeout):
+        except NodeSetupFailed, NodeSetupTimeout:
             self.log.warning("TestConfig of the '%s' failed, collecting logs and terminating nodes" % new_nodes)
             for node in new_nodes:
                 self.cluster.terminate_node(node)
@@ -1989,10 +1991,17 @@ class NemesisRunner:
 
     @property
     def nemesis_selector(self) -> str:
-        if self._nemesis_selector:
+        # None means selector wasn't provided explicitly for this runner instance.
+        # In that case, fall back to config-level selector (if any) for direct instantiation paths
+        # such as `sct.py nemesis-list`. An explicit empty string means "run all nemeses".
+        if self._nemesis_selector is not None:
             return self._nemesis_selector
 
-        nemesis_selector = self.cluster.params.get("nemesis_selector") or ""
+        params_selector = self.cluster.params.get("nemesis_selector")
+        if isinstance(params_selector, list):
+            nemesis_selector = params_selector[0] if params_selector else ""
+        else:
+            nemesis_selector = params_selector or ""
         if self.cluster.params.get("nemesis_exclude_disabled"):
             if not nemesis_selector:
                 nemesis_selector = "not disabled"
@@ -2002,7 +2011,7 @@ class NemesisRunner:
         return self._nemesis_selector
 
     @nemesis_selector.setter
-    def nemesis_selector(self, value: str):
+    def nemesis_selector(self, value: Optional[str]):
         self._nemesis_selector = value
         if (
             value
@@ -3123,7 +3132,7 @@ class NemesisRunner:
                     long_running=True,
                     retry=0,
                 )
-            except (UnexpectedExit, Libssh2UnexpectedExit):
+            except UnexpectedExit, Libssh2UnexpectedExit:
                 self.actions_log.info("Repair failed as expected")
             except Exception:
                 self.log.error("Repair failed due to the unknown error")

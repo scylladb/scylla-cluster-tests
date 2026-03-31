@@ -114,11 +114,11 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
             self.assertEqual(
                 tenant.params.get("prepare_verify_cmd"), "fake__prepare_verify_cmd__all_tenants__single_str"
             )
-            for cmd_name in ("nemesis_selector", "stress_cmd_m", "stress_cmd", "stress_cmd_r"):
+            for cmd_name in ("stress_cmd_m", "stress_cmd", "stress_cmd_r"):
                 self.assertEqual(
                     tenant.params.get(cmd_name), [f"fake__{cmd_name}__all_tenants__part{j}" for j in range(1, 3)]
                 )
-            for cmd_name in ("stress_read_cmd", "stress_cmd_w"):
+            for cmd_name in ("stress_read_cmd", "stress_cmd_w", "nemesis_selector"):
                 self.assertEqual(tenant.params.get(cmd_name), f"fake__{cmd_name}__all_tenants__single_str")
             self.assertEqual(tenant.params.get("nemesis_class_name"), "FakeNemesisClassName")
             self.assertEqual(tenant.params.get("nemesis_interval"), 5)

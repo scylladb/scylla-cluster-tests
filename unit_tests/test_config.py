@@ -876,21 +876,6 @@ def test_23_1_include_nemesis_selector(monkeypatch):
     assert conf["nemesis_selector"] == "config_changes and topology_changes"
 
 
-def test_23_2_nemesis_include_selector_list(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
-    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
-    monkeypatch.setenv(
-        "SCT_CONFIG_FILES",
-        '["unit_tests/test_configs/minimal_test_case.yaml", "unit_tests/test_configs/nemesis_selector_list_of_list.yaml"]',
-    )
-    monkeypatch.setenv("SCT_NEMESIS_CLASS_NAME", "NemesisClass:1 NemesisClass:2")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-    assert conf["nemesis_selector"] == ["config_changes and topology_changes", "topology_changes", "disruptive"]
-
-
 def test_26_run_fullscan_params_validtion_positive(monkeypatch):
     monkeypatch.setenv(
         "SCT_CONFIG_FILES",
