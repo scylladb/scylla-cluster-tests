@@ -173,7 +173,7 @@ from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
-from sdcm.monitorstack.ui import AlternatorDashboard
+from sdcm.monitorstack.ui import AlternatorDashboard, GeminiDashboard
 from sdcm.logcollector import (
     GrafanaScreenShot,
     PrometheusSnapshots,
@@ -6438,6 +6438,12 @@ class BaseMonitorSet:
             )
         return self._sct_dashboard_json_file
 
+    @cached_property
+    def gemini_dashboard_json_file(self):
+        if not self.params.get("gemini_cmd"):
+            return None
+        return get_data_dir_path("gemini-grafana-dashboard.json")
+
     @staticmethod
     def sct_dashboard_json_file_content_update(update_params: dict, json_file: str):
         # Read json data to the string
@@ -7038,12 +7044,22 @@ class BaseMonitorSet:
             json_filename=self.sct_dashboard_json_file,
             throw_exc=False,
         )
+        if gemini_dashboard := self.gemini_dashboard_json_file:
+            wait.wait_for(
+                _register_grafana_json,
+                step=10,
+                text="Waiting to register '%s'..." % gemini_dashboard,
+                json_filename=gemini_dashboard,
+                throw_exc=False,
+            )
 
     def save_sct_dashboards_config(self, node):
         sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, "sct_monitoring_addons")
 
         node.remoter.run("mkdir -p {}".format(sct_monitoring_addons_dir), ignore_status=True)
         node.remoter.send_files(src=self.sct_dashboard_json_file, dst=sct_monitoring_addons_dir)
+        if gemini_dashboard := self.gemini_dashboard_json_file:
+            node.remoter.send_files(src=gemini_dashboard, dst=sct_monitoring_addons_dir)
 
     def update_default_time_range(self, start_timestamp: float, end_timestamp: float) -> None:
         """
@@ -7124,6 +7140,8 @@ class BaseMonitorSet:
         grafana_extra_dashboards = []
         if "alternator_port" in self.params:
             grafana_extra_dashboards = [AlternatorDashboard()]
+        if self.params.get("gemini_cmd"):
+            grafana_extra_dashboards.append(GeminiDashboard())
         date_time = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
         screenshot_collector = GrafanaScreenShot(
