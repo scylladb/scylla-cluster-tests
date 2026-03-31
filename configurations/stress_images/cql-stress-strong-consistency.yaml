@@ -1,0 +1,2 @@
+stress_image:
+  cql-stress-cassandra-stress: 'aleksbykov/cql-stress:strong-consistency'
