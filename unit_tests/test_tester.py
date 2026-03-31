@@ -51,7 +51,7 @@ class CriticalErrorNotCaughtTest(ClusterTesterForTests):
                 error="Reason to fail",
                 severity=Severity.CRITICAL,
             ).publish()
-            end_time = time.time() + 2
+            end_time = time.time() + 0.2
             while time.time() < end_time:
                 time.sleep(0.1)
         except Exception:  # noqa: BLE001
