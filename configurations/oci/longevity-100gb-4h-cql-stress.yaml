@@ -1,0 +1,12 @@
+# NOTE: it is config-wrapper for the test-cases/longevity/longevity-100gb-4h-cql-stress.yaml
+
+user_prefix: 'long-100gb-4h-oci'
+
+simulated_racks: 0
+availability_zone: "a,b,c" # use real AZs to balance limited DenseIO shapes usage
+
+# NOTE: use analog of the AWS "i4i.4xlarge" instance type
+oci_instance_type_db: "VM.DenseIO.E5.Flex:8" # <shape-name>:<ocpus>:<ram>:<nvmes>
+instance_provision: 'on_demand' # DenseIO shapes cannot be 'spot'
+
+oci_instance_type_loader:  "VM.Standard3.Flex:8:16" # <shape-name>:<ocpus>:<ram>:<nvmes>
