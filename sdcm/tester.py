@@ -1534,41 +1534,49 @@ class ClusterTester(unittest.TestCase):
         """
         Get a Nemesis class from parameters.
 
-        :return: Nemesis class.
-        :rtype: nemesis.Nemesis derived class
+        :return: list of dicts, each with keys 'nemesis', 'nemesis_selector', 'nemesis_seed'.
+        :rtype: list[dict]
         """
         nemesis_threads = []
         list_class_name = self.params.get("nemesis_class_name")
         nemesis_selectors = self.params.get("nemesis_selector")
         nemesis_seeds = self.params.get("nemesis_seed")
 
-        if nemesis_selectors:
-            nemesis_selectors = nemesis_selectors[:]
-        if nemesis_seeds and isinstance(nemesis_seeds, int):
+        # Normalize seeds to a list of ints (or None).
+        if isinstance(nemesis_seeds, int):
             nemesis_seeds = [nemesis_seeds]
-        if nemesis_seeds and isinstance(nemesis_seeds, str):
+        elif isinstance(nemesis_seeds, str):
             nemesis_seeds = [int(seed) for seed in nemesis_seeds.split()]
 
+        # Build the flat list of class names.  The old 'Class:N' count syntax and
+        # space-separated strings are no longer supported — use an explicit YAML list.
         nemesis_class_names = []
-        for i, klass in enumerate(list_class_name):
-            try:
-                nemesis_name, num = klass.strip().split(":")
-                nemesis_name = nemesis_name.strip()
-                num = int(num.strip())
-
-            except ValueError:
-                nemesis_name = klass.split(":")[0]
-                num = 1
-            for _ in range(num):
-                nemesis_class_names.append(nemesis_name)
+        for entry in list_class_name:
+            name = entry.strip()
+            if ":" in name:
+                raise ValueError(
+                    f"The 'Class:N' count syntax is no longer supported in 'nemesis_class_name'. "
+                    f"Got: {name!r}. Use an explicit YAML list to repeat a class, e.g.\n"
+                    f"  nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey', 'SisyphusMonkey']"
+                )
+            if " " in name:
+                raise ValueError(
+                    f"Space-separated 'nemesis_class_name' values are no longer supported. "
+                    f"Got: {name!r}. Use an explicit YAML list instead, e.g.\n"
+                    f"  nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']"
+                )
+            nemesis_class_names.append(name)
 
         for i, nemesis_name in enumerate(nemesis_class_names):
-            nemesis_selector = ""
-            if nemesis_selectors:
-                try:
-                    nemesis_selector = nemesis_selectors[i % len(nemesis_class_names)]
-                except IndexError as details:
-                    self.log.warning("Missing nemesis selector. use default. %s", details)
+            # Selector: single value broadcasts to all threads; exact-length list maps 1:1.
+            # Length parity is enforced at config-load time by _validate_nemesis_parallel_config.
+            if not nemesis_selectors:
+                nemesis_selector = ""
+            elif len(nemesis_selectors) == 1:
+                nemesis_selector = nemesis_selectors[0]
+            else:
+                nemesis_selector = nemesis_selectors[i]
+
             runner_clazz = getattr(nemesis, nemesis_name)
             if not issubclass(runner_clazz, nemesis.NemesisRunner):
                 if issubclass(runner_clazz, nemesis.NemesisBaseClass):
@@ -1580,11 +1588,19 @@ class ClusterTester(unittest.TestCase):
                 else:
                     raise ValueError(f"Nemesis class {runner_clazz} should be subclass of NemesisRunner.")
 
+            # Seed: single value broadcasts to all threads; exact-length list maps 1:1.
+            if not nemesis_seeds:
+                nemesis_seed = None
+            elif len(nemesis_seeds) == 1:
+                nemesis_seed = int(nemesis_seeds[0])
+            else:
+                nemesis_seed = int(nemesis_seeds[i])
+
             nemesis_threads.append(
                 {
                     "nemesis": runner_clazz,
                     "nemesis_selector": nemesis_selector,
-                    "nemesis_seed": int(nemesis_seeds[i % len(nemesis_seeds)]) if nemesis_seeds else None,
+                    "nemesis_seed": nemesis_seed,
                 }
             )
 
