@@ -2,7 +2,7 @@ import copy
 
 from sdcm.cluster_gce import GCENode
 from sdcm.utils.gce_utils import GceLoggingClient
-from unit_tests.lib.real_events import RealEventsTest
+from unit_tests.lib.fake_events import FakeEventsMixin
 
 
 class FakeGceLogClient(GceLoggingClient):
@@ -56,7 +56,7 @@ class FakeGceNode(GCENode):
         self._last_logs_fetch_time = 1656590843.0
 
 
-class TestGceErrorLog(RealEventsTest):
+class TestGceErrorLog(FakeEventsMixin):
     @staticmethod
     def logging_client():
         use_real_gce = False
@@ -67,9 +67,11 @@ class TestGceErrorLog(RealEventsTest):
 
     def test_host_error_log_entry_creates_sct_error_event(self):
         node = FakeGceNode(logging_client=self.logging_client())
-        with self.wait_for_n_events(self.get_events_logger(), count=3, timeout=10):
-            node.check_spot_termination()
-        error_events = self.get_event_log_file("error.log")
+        node.check_spot_termination()
+
+        # Check events captured in-memory by FakeEventsDevice
+        events_by_category = self.events.get_events_by_category()
+        error_events = "\n".join(events_by_category.get("ERROR", []))
         assert (
             "compute.instances.hostError on node longevity-10gb-3h-master-db-node-fac7b27a-0-6 "
             "at 2022-06-30" in error_events
@@ -78,7 +80,7 @@ class TestGceErrorLog(RealEventsTest):
             "compute.instances.automaticRestart on node longevity-10gb-3h-master-db-node-fac7b27a-0-6 "
             "at 2022-06-30 " in error_events
         )
-        warning_events = self.get_event_log_file("warning.log")
+        warning_events = "\n".join(events_by_category.get("WARNING", []))
         assert (
             "compute.instances.some on node longevity-10gb-3h-master-db-node-fac7b27a-0-6 "
             "at 2022-06-30" in warning_events
