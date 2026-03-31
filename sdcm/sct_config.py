@@ -990,17 +990,21 @@ class SCTConfiguration(dict):
         dict(
             name="nemesis_class_name",
             env="SCT_NEMESIS_CLASS_NAME",
-            type=_str,
+            type=str_or_list,
             k8s_multitenancy_supported=True,
+            k8s_per_tenant=True,
             help="""
                     Nemesis class to use (possible types in sdcm.nemesis).
-                    Next syntax supporting:
-                    - nemesis_class_name: "NemesisName"  Run one nemesis in single thread
-                    - nemesis_class_name: "<NemesisName>:<num>" Run <NemesisName> in <num>
-                      parallel threads on different nodes. Ex.: "ChaosMonkey:2"
-                    - nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run
-                      <NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2>
-                      parallel threads. Ex.: "ScyllaOperatorBasicOperationsMonkey:1 NonDisruptiveMonkey:2"
+                    Supported syntax:
+                    - nemesis_class_name: "NemesisName"
+                      Run one nemesis in a single thread.
+                    - nemesis_class_name: ["NemesisA", "NemesisB"]
+                      Run NemesisA and NemesisB each in their own thread.
+                    - nemesis_class_name: ["SisyphusMonkey", "SisyphusMonkey"]
+                      Run two SisyphusMonkey threads in parallel.
+                    Note: the former 'Class:N' count syntax (e.g. "ChaosMonkey:2") and
+                    space-separated strings (e.g. "DisruptiveMonkey NonDisruptiveMonkey") are no
+                    longer supported. Use an explicit YAML list instead.
             """,
         ),
         dict(
@@ -3825,8 +3829,8 @@ class SCTConfiguration(dict):
             ):
                 if not (
                     opt["name"] == "nemesis_selector"
-                    and isinstance(self.get("nemesis_class_name"), str)
-                    and len(self.get("nemesis_class_name").split(" ")) > 1
+                    and isinstance(self.get("nemesis_class_name"), list)
+                    and len(self.get("nemesis_class_name")) > 1
                 ):
                     raise ValueError("failed to validate {}".format(opt["name"])) from ex
             for list_element in self.get(opt["name"]):
@@ -3835,6 +3839,20 @@ class SCTConfiguration(dict):
                 except Exception as ex:  # noqa: BLE001
                     raise ValueError("failed to validate {}".format(opt["name"])) from ex
             opt["is_k8s_multitenant_value"] = True
+        else:
+            # For fields marked k8s_per_tenant=True the value is always a per-tenant scalar/list
+            # even though the type (e.g. str_or_list) accepts lists.  In k8s multitenant mode,
+            # if the value is a list whose length matches k8s_tenants_num, treat it as a per-tenant
+            # value so that multitenant_common splits it correctly.
+            k8s_tenants_num = self.get("k8s_tenants_num") or 0
+            if (
+                opt.get("k8s_per_tenant")
+                and k8s_tenants_num > 1
+                and opt.get("k8s_multitenancy_supported")
+                and isinstance(self.get(opt["name"]), list)
+                and len(self.get(opt["name"])) == k8s_tenants_num
+            ):
+                opt["is_k8s_multitenant_value"] = True
 
         choices = opt.get("choices")
         if choices:
@@ -3939,6 +3957,8 @@ class SCTConfiguration(dict):
             self._validate_seeds_number()
             self._validate_nemesis_can_run_on_non_seed()
             self._validate_number_of_db_nodes_divides_by_az_number()
+
+        self._validate_nemesis_parallel_config()
 
         if self.get("use_zero_nodes"):
             self._validate_zero_token_backend_support(backend)
@@ -4049,13 +4069,70 @@ class SCTConfiguration(dict):
         )
 
     def _validate_nemesis_can_run_on_non_seed(self) -> None:
-        if self.get("nemesis_filter_seeds") is False or self.get("nemesis_class_name") == "NoOpMonkey":
+        if self.get("nemesis_filter_seeds") is False or self.get("nemesis_class_name") in (
+            "NoOpMonkey",
+            ["NoOpMonkey"],
+        ):
             return
         seeds_num = self.get("seeds_num")
         num_of_db_nodes = sum([int(i) for i in str(self.get("n_db_nodes")).split(" ")]) + int(self.get("add_node_cnt"))
         assert num_of_db_nodes > seeds_num, (
             "Nemesis cannot run when 'nemesis_filter_seeds' is true and seeds number is equal to nodes number"
         )
+
+    def _validate_nemesis_parallel_config(self) -> None:
+        """Validate that nemesis_selector and nemesis_seed list lengths match nemesis_class_name.
+
+        Note: on this branch config values are stored as raw YAML types (strings stay strings)
+        because type conversion only happens for environment variables.  Normalize scalar values
+        to single-element lists before comparing lengths.
+
+        Also skip the length check when running in k8s multitenant mode: at validation time the
+        per-tenant list (e.g. ``["T1", "T2"]``) has not been split yet so the lengths would not
+        reflect the per-thread counts.
+        """
+        # Skip validation in k8s multitenant mode: per-tenant lists haven't been split yet.
+        if (self.get("cluster_backend") or "").startswith("k8s") and (self.get("k8s_tenants_num") or 0) > 1:
+            return
+
+        class_names = self.get("nemesis_class_name")
+        if not class_names:
+            return
+        # Normalize: a plain string means one thread.
+        if isinstance(class_names, str):
+            class_names = [class_names]
+        num_threads = len(class_names)
+
+        selectors = self.get("nemesis_selector")
+        if selectors:
+            # Normalize: a plain string is a single (broadcast) selector.
+            if isinstance(selectors, str):
+                selectors = [selectors]
+            if len(selectors) > 1 and len(selectors) != num_threads:
+                raise ValueError(
+                    f"'nemesis_selector' has {len(selectors)} entries but 'nemesis_class_name' has "
+                    f"{num_threads}. Either use a single selector (broadcast to all threads) or provide "
+                    f"exactly one selector per class name.\n"
+                    f"  nemesis_class_name: {class_names}\n"
+                    f"  nemesis_selector:   {selectors}"
+                )
+
+        seeds = self.get("nemesis_seed")
+        if seeds is not None:
+            if isinstance(seeds, int):
+                seeds_list = [seeds]
+            elif isinstance(seeds, str):
+                seeds_list = seeds.split()
+            else:
+                seeds_list = seeds
+            if len(seeds_list) > 1 and len(seeds_list) != num_threads:
+                raise ValueError(
+                    f"'nemesis_seed' has {len(seeds_list)} entries but 'nemesis_class_name' has "
+                    f"{num_threads}. Either use a single seed (broadcast to all threads) or provide "
+                    f"exactly one seed per class name.\n"
+                    f"  nemesis_class_name: {class_names}\n"
+                    f"  nemesis_seed:       {seeds_list}"
+                )
 
     def _validate_number_of_db_nodes_divides_by_az_number(self):
         if self.get("cluster_backend").startswith("k8s"):
