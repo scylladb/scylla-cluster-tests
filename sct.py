@@ -1603,7 +1603,7 @@ cli.add_command(investigate)
 @click.option(
     "-t", "--test", required=False, default=[""], multiple=True, help="Run specific test file from unit-tests directory"
 )
-@click.option("-n", required=False, default=2, help="Sets number of parallel tests to run, default is 2")
+@click.option("-n", required=False, default=4, help="Sets number of parallel tests to run, default is 4")
 @click.option("--junit-xml", required=False, default="", help="Path to write JUnit XML report")
 def unit_tests(test, n, junit_xml):
     args = ["-v", "-m", "not integration", f"-n{n}", *(f"unit_tests/{t}" for t in test)]
