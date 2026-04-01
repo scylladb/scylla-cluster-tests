@@ -982,9 +982,18 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         node.check_node_health()
 
     def _run_stress_workload(
-        self, workload_name: str, wait_for_finish: bool = False, round_robin: bool = False
+        self,
+        workload_name: str,
+        wait_for_finish: bool = False,
+        round_robin: bool = False,
+        reset_loader_cycle: bool = False,
     ) -> [CassandraStressThread]:
         """Runs workload from param name specified in test-case yaml"""
+        if reset_loader_cycle:
+            # NOTE: it will make stress commands be scheduled onto loaders starting from the first one
+            #       not keeping state from previous test stages.
+            #       Useful for running DC-specific stress commands from proper loaders in proper DCs.
+            self.loaders._loader_cycle = None
         self.actions_log.info(f"Starting {workload_name}")
         stress_commands = self.params.get(workload_name)
         workload_thread_pools = []
@@ -1117,7 +1126,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message="Step2 - Run 'read' command before upgrade").publish()
         step = itertools_count(start=1)
         stress_before_upgrade_thread_pools = self._run_stress_workload(
-            "stress_before_upgrade", wait_for_finish=False, round_robin=True
+            "stress_before_upgrade",
+            wait_for_finish=False,
+            round_robin=True,
+            reset_loader_cycle=True,
         )
         stress_before_upgrade_results = []
         for stress_before_upgrade_thread_pool in stress_before_upgrade_thread_pools:
@@ -1149,7 +1161,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         argus_results.submit_results_to_argus(argus_client=self.test_config.argus_client(), result_table=result_table)
 
         stress_during_entire_upgrade_thread_pools = self._run_stress_workload(
-            "stress_during_entire_upgrade", wait_for_finish=False, round_robin=True
+            "stress_during_entire_upgrade",
+            wait_for_finish=False,
+            round_robin=True,
+            reset_loader_cycle=True,
         )
 
         InfoEvent(message="Step3 - Upgrade cluster to '%s' version" % self.params.get("new_version")).publish()
@@ -1184,7 +1199,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message="Step6 - run 'stress_after_cluster_upgrade' stress command(s)").publish()
         time.sleep(60)
         stress_after_upgrade_thread_pools = self._run_stress_workload(
-            "stress_after_cluster_upgrade", wait_for_finish=False, round_robin=True
+            "stress_after_cluster_upgrade",
+            wait_for_finish=False,
+            round_robin=True,
+            reset_loader_cycle=True,
         )
         stress_after_upgrade_results = []
         for stress_after_upgrade_thread_pool in stress_after_upgrade_thread_pools:
