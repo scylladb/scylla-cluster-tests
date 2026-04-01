@@ -4306,7 +4306,7 @@ class NemesisRunner:
     def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:
         nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type)
         self.actions_log.info(f"New nodes added: {', '.join(node.name for node in nodes)}")
-        wait_no_tablets_migration_running(nodes[0])
+        ParallelObject(objects=self.cluster.data_nodes, timeout=7200).run(wait_no_tablets_migration_running)
         return nodes
 
     @latency_calculator_decorator(legend="Decommission nodes: remove nodes from cluster")
