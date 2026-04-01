@@ -13,7 +13,7 @@ instance_type_db: 'i4i.large'
 
 scylla_version: master:latest
 # ami_id_vector_store: vector-store-1-4-0-amd64-2026-01-20t09-48-49z # x64
-ami_id_vector_store: ami-vector-store-1-4-0-arm64-2026-01-20t09-33-37z #arm
+ami_id_vector_store: vector-store-1-5-0-arm64-2026-03-17t07-07-32z #arm
 enable_argus: true
 use_mgmt: false
 n_vector_store_nodes: 1
