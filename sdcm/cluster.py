@@ -6637,7 +6637,14 @@ class BaseMonitorSet:
 
     def start_scylla_monitoring(self, node):
         self._create_manager_prometheus_yaml(node=node)
-        labels = " ".join(f"--label {key}={value}" for key, value in node.tags.items())
+        # Write labels to a file on the remote node so Docker can read them via
+        # --label-file, avoiding shell word-splitting issues with values that
+        # contain spaces (e.g. billing_project="Trie-based index").
+        # start-all.sh expands $DOCKER_PARAM unquoted in `docker run`, so no
+        # shell quoting of individual --label flags can survive.
+        labels_file = f"{self.monitor_install_path}/docker_labels.txt"
+        labels_content = "\n".join(f"{key}={value}" for key, value in node.tags.items())
+        node.remoter.run(f"printf '%s' {shlex.quote(labels_content)} > {labels_file}")
         scylla_manager_servers_arg = ""
         if self.params.get("use_mgmt"):
             scylla_manager_servers_arg = f'-N `realpath "{self.monitoring_conf_dir}/scylla_manager_servers.yml"`'
@@ -6658,7 +6665,7 @@ class BaseMonitorSet:
             mkdir -p {self.monitoring_data_dir}
             echo "" > UA.sh
             PATH=$PATH:/usr/sbin ./start-all.sh \
-            -D "{labels} --env RENDERING_VIEWPORT_MAX_HEIGHT=15000 --env RENDERING_VIEWPORT_DEVICE_SCALE_FACTOR=4" \
+            -D "--label-file {labels_file} --env RENDERING_VIEWPORT_MAX_HEIGHT=15000 --env RENDERING_VIEWPORT_DEVICE_SCALE_FACTOR=4" \
             -s `realpath "{self.monitoring_conf_dir}/scylla_servers.yml"` \
             -n `realpath "{self.monitoring_conf_dir}/node_exporter_servers.yml"` \
             {scylla_manager_servers_arg} \
