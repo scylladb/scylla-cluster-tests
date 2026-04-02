@@ -3816,6 +3816,9 @@ class BaseNode(AutoSshContainerMixin):
         self.parent_cluster.wait_for_nodes_up_and_normal(nodes=[self])
         self.log.info("Waiting for native_transport to be ready")
         self.wait_native_transport()
+        if self.parent_cluster.params.get("use_mgmt"):
+            self.log.info("Waiting for scylla-manager-agent to be ready")
+            self.wait_manager_agent_up(verbose=verbose, timeout=180)
 
     def disable_firewall(self) -> None:
         if self.distro.is_rhel_like:
