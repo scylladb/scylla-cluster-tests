@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 import threading
 import time
+import unittest
 import unittest.mock
 
 from sdcm.sct_events.system import InfoEvent, SpotTerminationEvent
@@ -22,13 +23,13 @@ from sdcm.sct_events.events_processes import EVENTS_ANALYZER_ID, get_events_proc
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
-class TestEventsAnalyzer(EventsUtilsMixin):
+class TestEventsAnalyzer(unittest.TestCase, EventsUtilsMixin):
     @classmethod
-    def setup_class(cls) -> None:
+    def setUpClass(cls) -> None:
         cls.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
 
     @classmethod
-    def teardown_class(cls) -> None:
+    def tearDownClass(cls) -> None:
         cls.teardown_events_processes()
 
     def test_events_analyzer(self):
@@ -39,10 +40,10 @@ class TestEventsAnalyzer(EventsUtilsMixin):
         time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
         try:
-            assert isinstance(events_analyzer, EventsAnalyzer)
-            assert events_analyzer.is_alive()
-            assert events_analyzer._registry == self.events_main_device._registry
-            assert events_analyzer._registry == self.events_processes_registry
+            self.assertIsInstance(events_analyzer, EventsAnalyzer)
+            self.assertTrue(events_analyzer.is_alive())
+            self.assertEqual(events_analyzer._registry, self.events_main_device._registry)
+            self.assertEqual(events_analyzer._registry, self.events_processes_registry)
 
             event1 = InfoEvent(message="m1")
             event2 = SpotTerminationEvent(node="n1", message="m2")
@@ -52,7 +53,7 @@ class TestEventsAnalyzer(EventsUtilsMixin):
                     self.events_main_device.publish_event(event1)
                     self.events_main_device.publish_event(event2)
 
-            assert self.events_main_device.events_counter == initial_events_no + events_analyzer.events_counter
+            self.assertEqual(self.events_main_device.events_counter, initial_events_no + events_analyzer.events_counter)
 
             mock.assert_called_once()
         finally:

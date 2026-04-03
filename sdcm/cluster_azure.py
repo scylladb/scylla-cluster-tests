@@ -76,7 +76,6 @@ class AzureNode(cluster.BaseNode):
             rack=rack,
         )
 
-    @cluster.terminate_on_failure
     def init(self) -> None:
         super().init()
         # disable auditd service
@@ -167,6 +166,16 @@ class AzureNode(cluster.BaseNode):
         self.wait_till_tasks_threads_are_stopped()
         self._instance.terminate(wait=True)
         super().destroy()
+
+    def get_console_output(self):
+        # TODO adding console output from instance on Azure
+        self.log.warning("Method is not implemented for AzureNode")
+        return ""
+
+    def get_console_screenshot(self):
+        # TODO adding console output from instance on Azure
+        self.log.warning("Method is not implemented for AzureNode")
+        return b""
 
     def _get_ipv6_ip_address(self):
         # todo: fix it

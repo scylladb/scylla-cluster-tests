@@ -1,7 +1,8 @@
+import unittest
+import os
 import time
 import tempfile
 from abc import abstractmethod
-from pathlib import Path
 
 import pytest
 
@@ -14,7 +15,7 @@ from unit_tests.lib.mock_remoter import MockRemoter
 class FakeNode(BaseNode):
     def __init__(self, remoter, logdir):
         self.remoter = remoter
-        Path(logdir).mkdir(parents=True, exist_ok=True)
+        os.makedirs(logdir, exist_ok=True)
         self.logdir = logdir
 
     def wait_ssh_up(self, verbose=False, timeout=60):
@@ -85,13 +86,9 @@ class CoredumpExportFileTestThread(CoredumpExportFileThread):
 
 
 @pytest.mark.usefixtures("events")
-class CoredumpExportTestBase:
+class CoredumpExportTestBase(unittest.TestCase):
     maxDiff = None
     test_data_folder: str = None
-
-    @pytest.fixture(autouse=True)
-    def inject_test_data_dir(self, test_data_dir):
-        self.test_data_dir = test_data_dir
 
     @abstractmethod
     def _init_target_coredump_class(self, test_name: str) -> CoredumpThreadBase:
@@ -103,15 +100,21 @@ class CoredumpExportTestBase:
         time.sleep(1)
         coredump_thread.stop()
         coredump_thread.join(20)
-        assert not coredump_thread.is_alive(), "CoredumpExportThread thread did not stop in 20 seconds"
+        self.assertFalse(coredump_thread.is_alive(), "CoredumpExportThread thread did not stop in 20 seconds")
         results = coredump_thread.get_results()
         expected_results = coredump_thread.load_expected_results(
-            str(self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_results.json"))
+            os.path.join(
+                os.path.dirname(__file__),
+                "test_data",
+                "test_coredump",
+                self.test_data_folder,
+                test_name + "_results.json",
+            )
         )
         for coredump_status, expected_coredump_list in expected_results.items():
             result_coredump_list = results[coredump_status]
             try:
-                assert expected_coredump_list == result_coredump_list
+                self.assertEqual(expected_coredump_list, result_coredump_list)
             except Exception as exc:  # noqa: BLE001
                 raise AssertionError(
                     f"Got unexpected results for {coredump_status}: {str(result_coredump_list)}\n{str(exc)}"
@@ -126,8 +129,12 @@ class CoredumpExportExceptionTest(CoredumpExportTestBase):
         coredump_thread = CoredumpExportSystemdTestThread(
             FakeNode(
                 MockRemoter(
-                    responses=str(
-                        self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_remoter.json")
+                    responses=os.path.join(
+                        os.path.dirname(__file__),
+                        "test_data",
+                        "test_coredump",
+                        self.test_data_folder,
+                        test_name + "_remoter.json",
                     )
                 ),
                 tempfile.mkdtemp(),
@@ -152,8 +159,12 @@ class CoredumpExportSystemdTest(CoredumpExportTestBase):
         return CoredumpExportSystemdTestThread(
             FakeNode(
                 MockRemoter(
-                    responses=str(
-                        self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_remoter.json")
+                    responses=os.path.join(
+                        os.path.dirname(__file__),
+                        "test_data",
+                        "test_coredump",
+                        self.test_data_folder,
+                        test_name + "_remoter.json",
                     )
                 ),
                 tempfile.mkdtemp(),
@@ -182,8 +193,12 @@ class CoredumpExportFileTest(CoredumpExportTestBase):
         return CoredumpExportFileTestThread(
             FakeNode(
                 MockRemoter(
-                    responses=str(
-                        self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_remoter.json")
+                    responses=os.path.join(
+                        os.path.dirname(__file__),
+                        "test_data",
+                        "test_coredump",
+                        self.test_data_folder,
+                        test_name + "_remoter.json",
                     )
                 ),
                 tempfile.mkdtemp(),

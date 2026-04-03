@@ -3,8 +3,8 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
-def sct_runner_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
+def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
+def sct_runner_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
 
 def createRunConfiguration(String backend) {
 	def scylla_version = params.scylla_version ?: getLatestScyllaRelease('scylla')
@@ -13,37 +13,29 @@ def createRunConfiguration(String backend) {
         backend: backend,
         test_name: 'longevity_test.LongevityTest.test_custom_time',
         test_config: 'test-cases/PR-provision-test.yaml',
+        availability_zone: 'a',
         scylla_version: scylla_version,
-        availability_zone: '',
         region: 'eu-west-1',
     ]
-    if (backend == 'aws' || backend == 'vs-aws') {
-        configuration.availability_zone = 'a'
-    }
     if (backend == 'gce') {
         configuration.gce_datacenter = "us-east1"
     } else if (backend == 'azure') {
         configuration.azure_region_name = 'eastus'
-    } else if (backend == 'oci') {
-        configuration.oci_region_name = 'us-ashburn-1'
-        configuration.availability_zone = 'a,b,c'
-        configuration.simulated_racks = 0
-        configuration.oci_instance_type_db = 'VM.Standard3.Flex:4:32'
-        configuration.data_volume_disk_num = 2
-        configuration.data_volume_disk_type = 'ultra'
-        configuration.data_volume_disk_size = 50
-        configuration.provision_type = 'spot'
-        // TODO: set scylla version when we have Scylla releases in OCI
-        configuration.scylla_version = ''
-        // TODO: unset the image when 'scylla_version' gets specified
-        configuration.oci_image_db = 'ocid1.image.oc1.iad.aaaaaaaawlq4rpsf5j3blmia6vxuu3d7tdv5ir5x3izs4ogxmdyibskhpoxq'
+        configuration.availability_zone = ''
     } else if (backend.contains('docker')) {
         // use latest version of nightly image for docker backend, until we get rid off rebuilding docker image for SCT
         configuration.scylla_version = 'latest'
         configuration.docker_image = 'scylladb/scylla-nightly'
         configuration.test_config = "test-cases/PR-provision-test-docker.yaml"
-        configuration.availability_zone = 'a'
     } else if (backend in ['k8s-local-kind-aws', 'k8s-eks']) {
+        if (scylla_version.endsWith('latest')) {
+            configuration.scylla_version = 'latest'
+            configuration.docker_image = 'scylladb/scylla-nightly'
+            configuration.k8s_scylla_operator_helm_repo = 'https://storage.googleapis.com/scylla-operator-charts/latest'
+            configuration.k8s_scylla_operator_chart_version = 'latest'
+            configuration.k8s_enable_tls = 'false'
+            configuration.k8s_enable_sni = 'false'
+        }
         configuration.test_config = "test-cases/scylla-operator/functional.yaml"
         configuration.test_name = "functional_tests/scylla_operator"
         configuration.functional_tests = true
@@ -58,7 +50,6 @@ def createRunConfiguration(String backend) {
         }
         if (backend == 'xcloud-aws') {
             configuration.xcloud_provider = 'aws'
-            configuration.availability_zone = 'a'
             configuration.test_config = '["test-cases/PR-provision-test.yaml"]'
         }
     }
@@ -139,10 +130,7 @@ pipeline {
                         dockerLogin(params)
                         // also check the commit-message for the rules we want
                         sh 'touch ./.git/COMMIT_EDITMSG'
-                        sh '''#!/bin/bash
-                        set -o pipefail
-                        ./docker/env/hydra.sh pre-commit 2>&1 | tee precommit-output.log
-                        '''
+                        sh './docker/env/hydra.sh pre-commit'
                     }
                 }
             }
@@ -165,11 +153,9 @@ pipeline {
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    withEnv(["AWS_ACCESS_KEY_ID=", "AWS_SECRET_ACCESS_KEY="]) {
-                        script {
-                            checkoutQaInternal(params)
-                            sh './docker/env/hydra.sh unit-tests --junit-xml unit-tests-junit.xml'
-                        }
+                    script {
+                        checkoutQaInternal(params)
+                        sh './docker/env/hydra.sh unit-tests --junit-xml unit-tests-junit.xml'
                     }
                 }
             }
@@ -227,7 +213,7 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     script {
                         def curr_params = createRunConfiguration('docker')
-                        def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, curr_params.oci_region_name)
+                        def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name)
                         dockerLogin(params)
                         withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                             dir('scylla-cluster-tests') {
@@ -248,41 +234,19 @@ pipeline {
                                     ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} integration-tests --junit-xml integration-tests-junit.xml
                                     echo "end  integration-tests ..."
                                 """
-                                sh """#!/bin/bash
-                                    set -x
-                                    echo "Fetching integration test JUnit XML from runner ..."
-                                    RUNNER_IP=\$(cat sct_runner_ip||echo "")
-                                    if [ -n "\${RUNNER_IP}" ]; then
-                                        ./docker/env/hydra.sh fetch-junit-from-runner \${RUNNER_IP} -b docker || true
-                                        cp -f results/junit.xml integration-tests-junit.xml 2>/dev/null || true
-                                    fi
-                                """
                             }
                         }
                     }
                 }
-                dir('scylla-cluster-tests') {
-                    sh """#!/bin/bash
-                        set -x
-                        echo "fetching junit report from runner ..."
-                        RUNNER_IP=\$(cat sct_runner_ip||echo "")
-                        if [ -n "\${RUNNER_IP}" ]; then
-                            eval \$(ssh-agent)
-                            ssh-add ~/.ssh/scylla-test 2>/dev/null || true
-                            ssh-add ~/.ssh/scylla_test_id_ed25519 2>/dev/null || true
-                            scp -o StrictHostKeyChecking=no ubuntu@\${RUNNER_IP}:/home/ubuntu/scylla-cluster-tests/integration-tests-junit.xml integration-tests-junit.xml || echo "WARNING: Failed to fetch JUnit XML report"
-                            eval \$(ssh-agent -k)
-                        fi
-                    """
-                }
+                sh """#!/bin/bash
+                    RUNNER_IP=\$(cat scylla-cluster-tests/sct_runner_ip||echo "")
+                    echo "fetching junit report from runner ..."
+                    scp -o StrictHostKeyChecking=no ubuntu@\${RUNNER_IP}:/home/ubuntu/scylla-cluster-tests/integration-tests-junit.xml integration-tests-junit.xml || echo "WARNING: Failed to fetch JUnit XML report"
+                """
             }
             post {
                 always {
-                    script {
-                        dir('scylla-cluster-tests') {
-                            junit testResults: 'integration-tests-junit.xml', allowEmptyResults: true, keepProperties: true
-                        }
-                    }
+                    junit testResults: 'integration-tests-junit.xml', allowEmptyResults: true, keepProperties: true
                 }
                 success {
                     script {
@@ -305,7 +269,6 @@ pipeline {
                         "test-provision-aws", "test-provision-aws-reuse",
                         "test-provision-gce", "test-provision-gce-reuse",
                         "test-provision-azure", "test-provision-azure-reuse",
-                        "test-provision-oci", "test-provision-oci-reuse",
                         "test-provision-k8s-local-kind-aws", "test-provision-k8s-local-kind-aws-reuse",
                         "test-provision-k8s-eks", "test-provision-k8s-eks-reuse",
                         "test-provision-xcloud-aws", "test-provision-xcloud-aws-reuse",
@@ -325,7 +288,7 @@ pipeline {
                             sctParallelTests["provision test on ${backend}"] = {
                                 def curr_params = createRunConfiguration(backend)
                                 def working_dir = "${backend}/scylla-cluster-tests"
-                                def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, curr_params.oci_region_name, curr_params)
+                                def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, curr_params)
                                 withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                                     script {
                                         def result = null
@@ -348,32 +311,6 @@ pipeline {
                                                 result = 'FAILURE'
                                                 pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed')
                                             }
-                                        }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir(working_dir) {
-                                                    timeout(time: 30, unit: 'MINUTES') {
-                                                        if (curr_params.backend == 'xcloud') {
-                                                            echo "Scylla Cloud backend selected: provisioning loader nodes only on ${curr_params.xcloud_provider} cloud provider"
-                                                        }
-                                                        if (curr_params.backend == 'xcloud' || curr_params.backend == 'aws' || curr_params.backend == 'azure' || curr_params.backend == 'oci') {
-                                                            provisionResources(curr_params, builder.region)
-                                                        } else if (curr_params.backend.contains('docker')) {
-                                                            sh """
-                                                                echo 'Tests are to be executed on Docker backend in SCT-Runner. No additional resources to be provisioned.'
-                                                            """
-                                                        } else {
-                                                            sh """
-                                                                echo 'Skipping resource provisioning because this backend is not supported'
-                                                            """
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        } catch(Exception err) {
-                                            echo "${err}"
-                                            result = 'FAILURE'
-                                            pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Resource provisioning failed')
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
@@ -459,19 +396,6 @@ pipeline {
                         }
                     }
                     parallel sctParallelTests
-                }
-            }
-        }
-    }
-    post {
-        always {
-            script {
-                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    postTestSummaryComment(
-                        junitXmlPaths: ['unit-tests-junit.xml', 'scylla-cluster-tests/integration-tests-junit.xml'],
-                        precommitLog: 'precommit-output.log',
-                        stageName: 'Test Summary',
-                    )
                 }
             }
         }

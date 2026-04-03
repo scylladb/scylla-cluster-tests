@@ -14,7 +14,6 @@
 import re
 import os
 import logging
-from dataclasses import dataclass
 from enum import Enum, auto
 from string import Template
 from typing import List, Optional, Literal
@@ -29,9 +28,10 @@ import dateutil.parser
 from mypy_boto3_s3 import S3Client
 from botocore import UNSIGNED
 from botocore.client import Config
+
+from sdcm.utils.common import DEFAULT_AWS_REGION
 from sdcm.utils.repo_parser import Parser
 
-from sdcm.utils.aws_utils import DEFAULT_AWS_REGION
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events.system import ScyllaRepoEvent
 from sdcm.utils.decorators import retrying
@@ -71,9 +71,7 @@ SEMVER_REGEX = re.compile(
 
 SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
 ARGUS_VERSION_RE = re.compile(r"((?P<short>[\w.~]+)(-(0\.)?(?P<date>[0-9]{8,8})?\.(?P<commit>\w+).*)?)")
-SCYLLA_VERSION_GROUPED_RE = re.compile(
-    r"(?P<version>[\w.~]+(?:-(?:dev|enterprise))?)[-~](?:(?P<build>0|rc\d+)\.)?(?P<date>[\d]{8})\.(?P<commit_id>[a-f0-9]+)"
-)
+SCYLLA_VERSION_GROUPED_RE = re.compile(r"(?P<version>[\w.~]+)-(?P<build>0|rc\d)?\.?(?P<date>[\d]+)\.(?P<commit_id>\w+)")
 SSTABLE_FORMAT_VERSION_REGEX = re.compile(r"Feature (.*)_SSTABLE_FORMAT is enabled")
 ENABLED_SSTABLE_FORMAT_VERSION_REGEXP = re.compile(r"(.*)_SSTABLE_FORMAT")
 PRIMARY_XML_REGEX = re.compile(r'="(.*?primary.xml.(gz|zst)?)".*')
@@ -209,9 +207,6 @@ class ComparableScyllaVersion:
         #       any of the 'pre-release' ones.
         #       So, make empty 'pre-release' prevail over any defined one.
         return (self.v_major, self.v_minor, self.v_patch, self.v_pre_release or "xyz")
-
-    def isReleaseVersion(self):
-        return self.v_build == "" and self.v_pre_release == ""
 
     def __hash__(self):
         return hash(self.as_comparable())
@@ -515,58 +510,14 @@ def get_systemd_version(output: str) -> int:
     return 0
 
 
-def get_scylla_docker_repo_from_version(scylla_version: str):  # noqa: PLR0911
-    """
-    Get scylla docker repo based scylla version.
-
-    Supports various version formats:
-    - Simple versions: "5.2.1", "2024.2.0"
-    - Branch versions: "latest", "master:latest", "enterprise:latest"
-    - Full version tags: "2024.2.5-0.20250221.cb9e2a54ae6d-1", "2026.1.0~dev-0.20260119.4cde34f6f20b"
-
-    :param scylla_version: scylla version string
-    :param docker_image: docker image name
-
-    :return: scylla docker repo
-    """
-
-    # scylla_version can take on a variety of formats, so try to match non-standard/non-semver first
+def get_scylla_docker_repo_from_version(scylla_version: str):
     if scylla_version in ("latest", "master:latest"):
         return "scylladb/scylla-nightly"
-    elif scylla_version in ("enterprise", "enterprise:latest"):
+    if scylla_version in ("enterprise", "enterprise:latest"):
         return "scylladb/scylla-enterprise-nightly"
-
-    # Check if this is a full version tag (e.g., "2024.2.5-0.20250221.cb9e2a54ae6d-1")
-    # Full version tags are always non-release versions and go to nightly repos
-    if full_version_tag := parse_scylla_version_tag(scylla_version):
-        # Extract base version to determine enterprise vs non-enterprise
-        base_version = full_version_tag.base_version
-        try:
-            comparable_version = ComparableScyllaVersion(base_version)
-            if comparable_version <= "6.2.99" or comparable_version >= "2025.1.0~dev":
-                return "scylladb/scylla-nightly"
-            elif "6.2.99" < comparable_version < "2025.1.0~dev":
-                return "scylladb/scylla-enterprise-nightly"
-        except ValueError:
-            # If we can't parse the base version, default to scylla-nightly
-            return "scylladb/scylla-nightly"
-
-    # should be a semver then, but fail fast if not
-    try:
-        comparable_version = ComparableScyllaVersion(scylla_version)
-        if comparable_version <= "6.2.99" or comparable_version >= "2025.1.0~dev":
-            if comparable_version.isReleaseVersion():
-                return "scylladb/scylla"
-            else:
-                return "scylladb/scylla-nightly"
-        elif "6.2.99" < comparable_version < "2025.1.0~dev":
-            if comparable_version.isReleaseVersion():
-                return "scylladb/scylla-enterprise"
-            else:
-                return "scylladb/scylla-enterprise-nightly"
-    except ValueError:
-        pass
-    raise ValueError(f"Unsupported scylla version {scylla_version}, check test logic")
+    if is_enterprise(scylla_version):
+        return "scylladb/scylla-enterprise"
+    return "scylladb/scylla"
 
 
 def _list_repo_file_etag(s3_client: S3Client, prefix: str) -> Optional[dict]:
@@ -660,16 +611,7 @@ def resolve_latest_repo_symlink(url: str) -> str:
     return resolved_url
 
 
-def get_specific_tag_of_docker_image(docker_repo: str, architecture: Literal["x86_64", "aarch64"] = "x86_64") -> str:
-    """
-    Get the latest docker image tag from ScyllaDB S3 storage for given nightly docker repo.
-
-    :param docker_repo: docker repository name, e.g. 'scylladb/scylla-nightly'
-    :param architecture: architecture of the docker image, either 'x86_64' or 'aarch64' (default: 'x86_64')
-    :return: docker image tag string if found
-    :raises ValueError: if docker repo is not supported or tag info cannot be found
-    """
-
+def get_specific_tag_of_docker_image(docker_repo: str):
     if docker_repo == "scylladb/scylla-nightly":
         product = "scylla"
         branch = "master"
@@ -689,11 +631,9 @@ def get_specific_tag_of_docker_image(docker_repo: str, architecture: Literal["x8
     #    url-id: 2022-08-29T08:05:34Z
     #    docker-image-name: scylla-nightly:5.2.0-dev-0.20220829.67c91e8bcd61
     build_info = yaml.safe_load(res.content)
-    if tag := build_info.get(f"docker-image-name-{architecture}", build_info.get("docker-image-name")):
-        tag = tag.split(":", maxsplit=1)[1]
-        LOGGER.debug("found %s for %s repo", tag, docker_repo)
-        return tag
-    raise ValueError(f"Cannot find docker image tag info in {build_url} for architecture={architecture}")
+    tag = build_info["docker-image-name"].split(":", maxsplit=1)[1]
+    LOGGER.debug("found %s for %s repo", tag, docker_repo)
+    return tag
 
 
 def transform_non_semver_scylla_version_to_semver(scylla_version: str):
@@ -737,93 +677,6 @@ def get_git_tag_from_helm_chart_version(chart_version: str) -> str:
     else:
         raise ValueError(f"Got wrong chart version: {chart_version}")
     return git_tag
-
-
-@dataclass(frozen=True)
-class FullVersionTag:
-    """Represents a parsed full version tag.
-
-    Full version tags have the structure:
-        <base_version>-<build>.<date>.<commit_id>[optional-suffix]
-
-    Examples:
-        - 2024.2.5-0.20250221.cb9e2a54ae6d-1
-        - 5.2.0-dev-0.20220829.67c91e8bcd61
-        - 4.6.4-0.20220718.b60f14601-1
-
-    Attributes:
-        base_version (str): The version number (e.g., "2024.2.5", "5.2.0-dev")
-        build (str): The build number or release candidate (e.g., "0", "rc1")
-        date (str): The build date in YYYYMMDD format (e.g., "20250221")
-        commit_id (str): The git commit ID (e.g., "cb9e2a54ae6d")
-        full_tag (str): The complete original version tag string
-    """
-
-    base_version: str
-    build: str
-    date: str
-    commit_id: str
-    full_tag: str
-
-    @classmethod
-    def parse(cls, version_tag: str) -> Optional["FullVersionTag"]:
-        """Parse a full version tag string.
-
-        Args:
-            version_tag: Version tag string to parse
-
-        Returns:
-            FullVersionTag instance if the tag matches the expected format, None otherwise
-
-        Examples:
-            >>> tag = FullVersionTag.parse("2024.2.5-0.20250221.cb9e2a54ae6d-1")
-            >>> tag.base_version
-            '2024.2.5'
-            >>> tag.build
-            '0'
-            >>> tag.date
-            '20250221'
-            >>> tag.commit_id
-            'cb9e2a54ae6d'
-        """
-        match = SCYLLA_VERSION_GROUPED_RE.match(version_tag)
-        if not match:
-            return None
-
-        groups = match.groupdict()
-        if not bool(groups.get("version") and groups.get("date") and groups.get("commit_id")):
-            return None
-
-        return cls(
-            base_version=groups.get("version"),
-            build=groups.get("build") or "",
-            date=groups.get("date"),
-            commit_id=groups.get("commit_id"),
-            full_tag=version_tag,
-        )
-
-
-def parse_scylla_version_tag(version_tag: str) -> Optional[FullVersionTag]:
-    """Parse a Scylla version tag into its components.
-
-    This function parses full version tags that include build metadata like:
-    - 2024.2.5-0.20250221.cb9e2a54ae6d-1
-    - 5.2.0-dev-0.20220829.67c91e8bcd61
-    - 4.6.4-0.20220718.b60f14601-1
-
-    Args:
-        version_tag: The version tag string to parse
-
-    Returns:
-        FullVersionTag instance if parsing succeeds, None if the tag doesn't match the format
-
-    Examples:
-        >>> tag = parse_scylla_version_tag("2024.2.5-0.20250221.cb9e2a54ae6d-1")
-        >>> if tag:
-        ...     print(f"Base: {tag.base_version}, Commit: {tag.commit_id}")
-        Base: 2024.2.5, Commit: cb9e2a54ae6d
-    """
-    return FullVersionTag.parse(version_tag)
 
 
 class MethodVersionNotFound(Exception):

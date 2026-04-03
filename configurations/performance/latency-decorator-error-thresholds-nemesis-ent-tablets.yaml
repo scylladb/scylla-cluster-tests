@@ -5,7 +5,7 @@ latency_decorator_error_thresholds:
         fixed_limit: 7200
     terminate_node:
       duration:
-        fixed_limit: null
+        fixed_limit: 450
     add_new_nodes:
       duration:
         fixed_limit: 2500
@@ -24,7 +24,7 @@ latency_decorator_error_thresholds:
         fixed_limit: 3200
     terminate_node:
       duration:
-        fixed_limit: null
+        fixed_limit: 450
     add_new_nodes:
       duration:
         fixed_limit: 3200
@@ -43,7 +43,7 @@ latency_decorator_error_thresholds:
         fixed_limit: 4200
     terminate_node:
       duration:
-        fixed_limit: null
+        fixed_limit: 450
     add_new_nodes:
       duration:
         fixed_limit: 2500

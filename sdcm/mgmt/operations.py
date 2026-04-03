@@ -5,15 +5,13 @@ from datetime import datetime
 from functools import cached_property
 from pathlib import Path
 from textwrap import dedent
-from time import sleep
 
 import boto3
 import yaml
 from invoke import exceptions
 
-from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
+from sdcm.mgmt import TaskStatus
 from sdcm.mgmt.cli import ScyllaManagerTool
-from sdcm.mgmt.common import ObjectStorageUploadMode
 from sdcm import mgmt
 from sdcm.exceptions import FilesNotCorrupted
 from sdcm.remote import shell_script_cmd, LOCALRUNNER
@@ -26,7 +24,6 @@ from sdcm.utils.compaction_ops import CompactionOps
 from sdcm.utils.gce_utils import get_gce_storage_client
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.utils.time_utils import ExecutionTimer
-from sdcm.utils.version_utils import ComparableScyllaVersion
 
 
 class ClusterOperations(ClusterTester):
@@ -253,15 +250,6 @@ class SnapshotData:
 
 
 class SnapshotOperations(ClusterTester):
-    def _get_total_loaders(self) -> int:
-        """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string or list) formats."""
-        n_loaders = self.params.get("n_loaders")
-        if isinstance(n_loaders, int):
-            return n_loaders
-        if isinstance(n_loaders, list):
-            return sum(n_loaders)
-        return sum(int(n) for n in n_loaders.split())
-
     @staticmethod
     def get_snapshot_data(snapshot_name: str) -> SnapshotData:
         snapshots_config = "defaults/manager_restore_benchmark_snapshots.yaml"
@@ -328,7 +316,7 @@ class SnapshotOperations(ClusterTester):
 
     def get_all_snapshot_files(self, cluster_id):
         region_name = next(iter(self.params.region_names), "")
-        bucket_name = self.params.get("backup_bucket_location")[0].format(region=region_name)
+        bucket_name = self.params.get("backup_bucket_location").split()[0].format(region=region_name)
         if self.params.get("backup_bucket_backend") == "s3":
             return self._get_all_snapshot_files_s3(
                 cluster_id=cluster_id, bucket_name=bucket_name, region_name=region_name
@@ -370,7 +358,7 @@ class SnapshotPreparerOperations(ClusterTester):
 
     def calculate_rows_per_loader(self, overall_rows_num: int) -> int:
         """Calculate number of rows per loader thread based on the overall number of rows and the number of loaders."""
-        num_of_loaders = self._get_total_loaders()
+        num_of_loaders = int(self.params.get("n_loaders"))
         if overall_rows_num % num_of_loaders:
             raise ValueError(f"Overall rows number ({overall_rows_num}) should be divisible by the number of loaders")
         return int(overall_rows_num / num_of_loaders)
@@ -400,7 +388,7 @@ class SnapshotPreparerOperations(ClusterTester):
         params_to_use_in_cs_cmd["ks_name"] = ks_name
 
         cs_cmds = []
-        num_of_loaders = self._get_total_loaders()
+        num_of_loaders = int(self.params.get("n_loaders"))
         for loader_index in range(num_of_loaders):
             # Sequence params should be defined for every loader thread separately since vary for each thread
             params_to_use_in_cs_cmd["sequence_start"] = rows_per_loader * loader_index + 1
@@ -420,7 +408,7 @@ class SnapshotPreparerOperations(ClusterTester):
         dataset = snapshot.dataset
 
         rows_per_loader = self.calculate_rows_per_loader(overall_rows_num=dataset["num_of_rows"])
-        num_of_loaders = self._get_total_loaders()
+        num_of_loaders = int(self.params.get("n_loaders"))
 
         cs_cmds = []
         cs_cmd_template = snapshot.cs_read_cmd_template
@@ -545,8 +533,7 @@ class DatabaseOperations(ClusterTester):
         shuts down one node, insert one part of the rows and starts the node again.
         As a result, each node that was shut down will have missing rows and will require repair.
         """
-        n_db_nodes = self.params.get("n_db_nodes")
-        num_of_nodes = sum(n_db_nodes) if isinstance(n_db_nodes, list) else n_db_nodes
+        num_of_nodes = self.params.get("n_db_nodes")
         num_of_rows_per_insertion = int(total_num_of_rows / (num_of_nodes - 1))
         stress_command_template = (
             "cassandra-stress write cl=QUORUM n={} -schema 'keyspace={}"
@@ -590,22 +577,6 @@ class DatabaseOperations(ClusterTester):
 
 
 class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
-    def _get_total_loaders(self) -> int:
-        """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string or list) formats."""
-        n_loaders = self.params.get("n_loaders")
-        if isinstance(n_loaders, int):
-            return n_loaders
-        if isinstance(n_loaders, list):
-            return sum(n_loaders)
-        return sum(int(n) for n in n_loaders.split())
-
-    def _get_total_db_nodes(self) -> int:
-        """Get total number of db nodes, handling both single-DC (int) and multi-DC (list[int]) formats."""
-        n_db_nodes = self.params.get("n_db_nodes")
-        if isinstance(n_db_nodes, list):
-            return sum(n_db_nodes)
-        return n_db_nodes
-
     def _generate_load(self, keyspace_name: str = None):
         self.log.info("Starting c-s write workload")
         stress_cmd = self.params.get("stress_cmd")
@@ -628,14 +599,17 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
     def generate_background_read_load(self):
         self.log.info("Starting c-s read")
         stress_cmd = self.params.get("stress_read_cmd")
-        number_of_nodes = self._get_total_db_nodes()
-        number_of_loaders = self._get_total_loaders()
+        number_of_nodes = self.params.get("n_db_nodes")
+        number_of_loaders = self.params.get("n_loaders")
 
         throttle_per_node = 14666
         throttle_per_loader = int(throttle_per_node * number_of_nodes / number_of_loaders)
 
-        # Replace placeholder in each command (stress_read_cmd is always a list)
-        stress_cmd = [cmd.replace("<THROTTLE_PLACE_HOLDER>", str(throttle_per_loader)) for cmd in stress_cmd]
+        # Handle list of stress commands - replace placeholder in each command
+        if isinstance(stress_cmd, list):
+            stress_cmd = [cmd.replace("<THROTTLE_PLACE_HOLDER>", str(throttle_per_loader)) for cmd in stress_cmd]
+        else:
+            stress_cmd = stress_cmd.replace("<THROTTLE_PLACE_HOLDER>", str(throttle_per_loader))
 
         # Handle list of stress commands using the pattern from LoaderUtilsMixin._run_all_stress_cmds
         stress_queue = []
@@ -714,29 +688,19 @@ class ManagerTestFunctionsMixIn(
         return email_data
 
     @cached_property
-    def db_node(self):
-        return self.db_cluster.nodes[0]
-
-    @cached_property
-    def manager_node(self):
-        return self.monitors.nodes[0]
-
-    @cached_property
     def locations(self) -> list[str]:
         backend = self.params.get("backup_bucket_backend")
         region = next(iter(self.params.region_names), "")
         bucket_locations = self.params.get("backup_bucket_location")
 
-        buckets = [bucket.format(region=region) for bucket in bucket_locations]
+        buckets = (
+            [bucket.format(region=region) for bucket in bucket_locations]
+            if isinstance(bucket_locations, list)
+            else bucket_locations.format(region=region).split()
+        )
 
         # FIXME: Make it works with multiple locations or file a bug for scylla-manager.
         return [f"{backend}:{location}" for location in buckets[:1]]
-
-    @cached_property
-    def backup_method(self) -> ObjectStorageUploadMode | None:
-        if manager_backup_restore_method := self.params.get("manager_backup_restore_method"):
-            return ObjectStorageUploadMode(manager_backup_restore_method)
-        return None
 
     def get_dc_mapping(self) -> str | None:
         """Get the datacenter mapping string for the restore task if there are > 1 DCs (multiDC) in the cluster.
@@ -857,7 +821,6 @@ class ManagerTestFunctionsMixIn(
         restore_data=False,
         location_list=None,
         extra_params=None,
-        manager_backup_restore_method=None,
     ):
         location_list = location_list if location_list else self.locations
         dc_mapping = self.get_dc_mapping() if restore_data else None
@@ -868,18 +831,14 @@ class ManagerTestFunctionsMixIn(
             snapshot_tag=snapshot_tag,
             dc_mapping=dc_mapping,
             extra_params=extra_params,
-            manager_backup_restore_method=manager_backup_restore_method,
         )
         restore_task.wait_and_get_final_status(step=30, timeout=timeout)
         assert restore_task.status == TaskStatus.DONE, f"Restoration of {snapshot_tag} has failed!"
         InfoEvent(
             message=f"The restore task has ended successfully. Restore run time: {restore_task.duration}."
         ).publish()
-
-        should_restart = restore_schema and ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version) <= "2024.1"
-        if should_restart:
-            self.db_cluster.restart_scylla()
-
+        if restore_schema:
+            self.db_cluster.restart_scylla()  # After schema restoration, you should restart the nodes
         return restore_task
 
     def create_repair_and_alter_it_with_repair_control(self):
@@ -911,32 +870,24 @@ class ManagerTestFunctionsMixIn(
         repair_task.wait_and_get_final_status(step=30)
         InfoEvent(message="Repair ended").publish()
 
-    def upgrade_scylla_manager(
-        self, pre_upgrade_manager_version, target_upgrade_server_version, target_upgrade_agent_version
-    ):
-        self.log.debug("Stopping manager server")
-        self.manager_node.remoter.sudo("systemctl stop scylla-manager")
 
-        self.log.debug("Stopping manager agents")
-        for node in self.db_cluster.nodes:
-            node.remoter.sudo("systemctl stop scylla-manager-agent")
+def run_manager_backup(mgr_cluster, locations, object_storage_upload_mode=None, timeout=7200):
+    """
+    Perform a Manager backup task and wait for its completion.
 
-        self.log.debug("Upgrading manager server")
-        self.manager_node.upgrade_mgmt(target_upgrade_server_version, start_manager_after_upgrade=False)
+    Args:
+        mgr_cluster: The ManagerCluster object.
+        locations: List of backup locations.
+        object_storage_upload_mode: The upload mode (e.g., RCLONE or NATIVE).
+        timeout: Timeout for the backup task.
 
-        self.log.debug("Upgrading and starting manager agents")
-        for node in self.db_cluster.nodes:
-            node.upgrade_manager_agent(target_upgrade_agent_version)
-
-        self.log.debug("Starting manager server")
-        self.manager_node.remoter.sudo("systemctl start scylla-manager")
-        time_to_sleep = 30
-        self.log.debug("Sleep %s seconds, waiting for manager service ready to respond", time_to_sleep)
-        sleep(time_to_sleep)
-
-        self.log.debug("Comparing the new manager versions")
-        manager_tool = get_scylla_manager_tool(manager_node=self.manager_node)
-        new_manager_version = manager_tool.sctool.version
-        assert new_manager_version != pre_upgrade_manager_version, (
-            "Manager failed to upgrade - previous and new versions are the same. Test failed!"
-        )
+    Returns:
+        The completed backup task.
+    """
+    InfoEvent(message=f"Starting a Manager backup (Object Storage Upload Mode: {object_storage_upload_mode})").publish()
+    task = mgr_cluster.create_backup_task(
+        location_list=locations, rate_limit_list=["0"], object_storage_upload_mode=object_storage_upload_mode
+    )
+    backup_status = task.wait_and_get_final_status(timeout=timeout)
+    assert backup_status == TaskStatus.DONE, "Backup upload has failed!"
+    return task

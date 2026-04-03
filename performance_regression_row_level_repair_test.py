@@ -73,6 +73,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         prepare_write_cmd = self.params.get("prepare_write_cmd")
         if prepare_write_cmd:
+            self.create_test_stats(sub_type="write-prepare")
             stress_queue = []
             params = {"prefix": "preload-"}
             # Check if the prepare_cmd is a list of commands
@@ -116,6 +117,8 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
             for stress in stress_queue:
                 self.get_stress_results(queue=stress, store_results=False)
+
+            self.update_test_details()
         else:
             self.log.warning("No prepare command defined in YAML!")
 
@@ -213,6 +216,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.info("Repair (100% synced) time on node: {} is: {}".format(node1.name, repair_time))
 
         stats["repair_runtime_no_diff"] = repair_time
+        self.update_test_details(scylla_conf=True, extra_stats=stats)
 
         self.check_specified_stats_regression(stats)
 
@@ -270,6 +274,8 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.info("Repair (99.8% synced) time on node: {} is: {}".format(node3.name, repair_time))
 
         stats = {"repair_runtime_small_diff": repair_time}
+
+        self.update_test_details(scylla_conf=True, extra_stats=stats)
 
         self.check_specified_stats_regression(stats)
 
@@ -350,6 +356,8 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         stats = {"repair_runtime_large_partitions": repair_time}
 
+        self.update_test_details(scylla_conf=True, extra_stats=stats)
+
         self.check_specified_stats_regression(stats)
 
     def test_row_level_repair_during_load(self, preload_data=True):
@@ -399,5 +407,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.info("Repair (during r/w load) time on node: {} is: {}".format(node1.name, repair_time))
 
         stats = {"repair_runtime_during_load": repair_time}
+
+        self.update_test_details(scylla_conf=True, extra_stats=stats)
 
         self.check_specified_stats_regression(stats)

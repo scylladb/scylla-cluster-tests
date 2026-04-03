@@ -35,8 +35,7 @@ class VmArch(Enum):
 class DataDisk:
     type: str
     size: int
-    iops: int = 0
-    count: int = 1
+    iops: int
 
 
 @dataclass
@@ -49,7 +48,6 @@ class InstanceDefinition:
     tags: Dict[str, str] = field(default_factory=dict)
     arch: VmArch = VmArch.X86
     root_disk_size: int | None = None
-    root_disk_type: str | None = None
     data_disks: List[DataDisk] | None = None
     user_data: List[UserDataObject] | None = field(
         default_factory=list, repr=False
@@ -92,7 +90,6 @@ class VmInstance:
     creation_time: datetime | None
     instance_type: str
     _provisioner: "Provisioner"
-    private_dns_name: str | None = None
 
     def terminate(self, wait: bool = True) -> None:
         """terminates VM instance.

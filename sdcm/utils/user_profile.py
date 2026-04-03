@@ -36,6 +36,9 @@ def get_stress_command_for_profile(params, stress_cmds_part, search_for_user_pro
     if not stress_cmd:
         return []
 
+    if not isinstance(stress_cmd, list):
+        stress_cmd = [stress_cmd]
+
     return stress_cmd
 
 

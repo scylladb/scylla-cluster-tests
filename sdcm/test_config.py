@@ -25,7 +25,6 @@ from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.get_username import get_username
 from sdcm.utils.ldap import LdapServerNotReady
 from sdcm.utils.metaclasses import Singleton
-from sdcm.utils.sct_agent_installer import generate_agent_api_key, save_agent_api_key, load_agent_api_key
 
 if TYPE_CHECKING:
     from sdcm.sct_config import SCTConfiguration
@@ -45,9 +44,7 @@ class TestConfig(metaclass=Singleton):
     KEEP_ALIVE_DB_NODES = False
     KEEP_ALIVE_LOADER_NODES = False
     KEEP_ALIVE_MONITOR_NODES = False
-    KEEP_ALIVE_VECTOR_STORE_NODES = False
     KEEP_ALIVE_DEDICATED_HOST = False
-    KEEP_ALIVE_EMR_CLUSTER = False
 
     REUSE_CLUSTER = False
     MIXED_CLUSTER = False
@@ -66,7 +63,6 @@ class TestConfig(metaclass=Singleton):
     _latency_results_file_path = None
     _tester_obj = None
     _argus_client: ArgusSCTClient | MagicMock = MagicMock()
-    _agent_api_key = None
 
     backup_azure_blob_credentials = {}
 
@@ -197,12 +193,8 @@ class TestConfig(metaclass=Singleton):
             cls.KEEP_ALIVE_LOADER_NODES = bool(val == "keep")
         elif "monitor_nodes" in node_type:
             cls.KEEP_ALIVE_MONITOR_NODES = bool(val == "keep")
-        elif "vector_store_nodes" in node_type:
-            cls.KEEP_ALIVE_VECTOR_STORE_NODES = bool(val == "keep")
         elif "dedicated_host" in node_type:
             cls.KEEP_ALIVE_DEDICATED_HOST = bool(val == "keep")
-        elif "emr_cluster" in node_type:
-            cls.KEEP_ALIVE_EMR_CLUSTER = bool(val == "keep")
 
     @classmethod
     def should_keep_alive(cls, node_type: Optional[str]) -> bool:  # noqa: PLR0911
@@ -214,12 +206,8 @@ class TestConfig(metaclass=Singleton):
             return cls.KEEP_ALIVE_LOADER_NODES
         if "monitor" in node_type:
             return cls.KEEP_ALIVE_MONITOR_NODES
-        if "vector" in node_type:
-            return cls.KEEP_ALIVE_VECTOR_STORE_NODES
         if "dedicated_host" in node_type:
             return cls.KEEP_ALIVE_DEDICATED_HOST
-        if "emr" in node_type:
-            return cls.KEEP_ALIVE_EMR_CLUSTER
         return False
 
     @classmethod
@@ -308,19 +296,6 @@ class TestConfig(metaclass=Singleton):
         cls.VECTOR_ADDRESS = (address, port)
 
     @classmethod
-    def ensure_agent_api_key(cls):
-        """Ensure SCT agent API key is available"""
-        agent_config = cls._tester_obj.params.get("agent") if cls._tester_obj else {}
-        if not (agent_config.get("enabled") and agent_config.get("binary_url")):
-            return
-
-        if cls.agent_api_key():
-            return
-
-        cls.generate_and_save_agent_api_key()
-        LOGGER.info("Generated new SCT agent API key for test %s", cls.test_id())
-
-    @classmethod
     def configure_xcloud_connectivity(cls, node, params):
         if node.xcloud_connect_supported(params):
             ContainerManager.run_container(node, "xcloud_connect", params=params)
@@ -331,15 +306,10 @@ class TestConfig(metaclass=Singleton):
         host_port = cls.get_logging_service_host_port()
         if not host_port or not host_port[0]:
             host_port = None
-
-        agent_config = cls._tester_obj.params.get("agent")
-        install_agent = bool(agent_config.get("enabled", False) and agent_config.get("binary_url"))
-
         return ConfigurationScriptBuilder(
             syslog_host_port=host_port,
             logs_transport=cls._tester_obj.params.get("logs_transport") if cls._tester_obj else "syslog-ng",
             test_config=cls(),
-            install_agent=install_agent,
         ).to_string()
 
     @classmethod
@@ -394,31 +364,3 @@ class TestConfig(metaclass=Singleton):
             message="Argus is disabled by configuration",
             severity=Severity.WARNING,
         ).publish_or_dump()
-
-    @classmethod
-    def agent_api_key(cls) -> str | None:
-        return cls._agent_api_key
-
-    @classmethod
-    def set_agent_api_key(cls, api_key: str) -> None:
-        if not api_key:
-            raise ValueError("Agent API key cannot be empty")
-        cls._agent_api_key = api_key
-
-    @classmethod
-    def generate_and_save_agent_api_key(cls) -> str:
-        """Generate a new SCT agent API key and save it to SCT test results directory"""
-        api_key = generate_agent_api_key()
-        save_agent_api_key(cls.logdir(), api_key)
-        cls.set_agent_api_key(api_key)
-        LOGGER.info("New SCT agent API key has been generated and set for test %s", cls.test_id())
-        return api_key
-
-    @classmethod
-    def load_agent_api_key_from_logdir(cls, logdir: str | None = None) -> str | None:
-        """Load SCT agent API key from SCT test results directory"""
-        api_key = load_agent_api_key(logdir or cls.logdir())
-        if api_key:
-            cls.set_agent_api_key(api_key)
-        LOGGER.info("Existing SCT agent API key has been loaded and set for test %s", cls.test_id())
-        return api_key

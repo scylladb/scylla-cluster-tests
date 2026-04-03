@@ -7,9 +7,13 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
     test_name: 'mgmt_cli_test.ManagerSanityTests.test_manager_sanity',
-    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/manager/debian12.yaml", "configurations/disable_kms_key_rotation.yaml", "configurations/disable_client_encrypt.yaml"]''',
+    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/manager/debian12.yaml"]''',
 
     scylla_version: '2025.1',
 
-    downstream_jobs_to_run: 'debian12-upgrade-test'
+    post_behavior_db_nodes: 'destroy',
+    post_behavior_loader_nodes: 'destroy',
+    post_behavior_monitor_nodes: 'destroy',
+
+    downstream_jobs_to_run: 'debian11-upgrade-test'
 )

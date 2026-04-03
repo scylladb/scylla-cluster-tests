@@ -18,7 +18,7 @@ import logging
 import shutil
 import tarfile
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from textwrap import dedent
 from typing import Any, TYPE_CHECKING
@@ -78,17 +78,16 @@ JKS_TRUSTSTORE_FILE = Path(get_data_dir_path("ssl_conf", TLSAssets.JKS_TRUSTSTOR
 def install_client_certificate(remoter, node_identifier, force=False):
     if not force and remoter.run(f"ls {SCYLLA_SSL_CONF_DIR}", ignore_status=True).ok:
         return
-    dst = "/tmp/ssl_conf/"
+    dst = "/tmp/ssl_conf"
     remoter.run(f"mkdir -p {dst}")
     remoter.send_files(src=str(Path(get_data_dir_path("ssl_conf")) / node_identifier) + "/", dst=dst)
-    remoter.run(f"mkdir -p {dst}client/")
-    remoter.send_files(src=str(Path(get_data_dir_path("ssl_conf")) / "client") + "/", dst=dst + "client/")
+    remoter.send_files(src=str(Path(get_data_dir_path("ssl_conf")) / "client"), dst=dst)
     setup_script = dedent(f"""
         mkdir -p ~/.cassandra/
         cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
         sed -i '/ssl = true/a hostname = {node_identifier}' ~/.cassandra/cqlshrc
         sudo mkdir -p /root/.cassandra
-        [ "$HOME" = "/root" ] || sudo cp ~/.cassandra/cqlshrc /root/.cassandra
+        sudo cp ~/.cassandra/cqlshrc /root/.cassandra
         sudo mkdir -p /etc/scylla/
         sudo rm -rf {SCYLLA_SSL_CONF_DIR}
         sudo mv -f /tmp/ssl_conf/ /etc/scylla/
@@ -101,17 +100,13 @@ def install_encryption_at_rest_files(remoter):
     if remoter.sudo("ls /etc/encrypt_conf/system_key_dir", ignore_status=True).ok:
         return
     remoter.send_files(src=get_data_dir_path("encrypt_conf"), dst="/tmp/")
-
-    # Use scylla-test if scylla user doesnt exists
-    scylla_user = "scylla:scylla" if remoter.sudo("id scylla", ignore_status=True).ok else "scylla-test:scylla-test"
-
     remoter.sudo(
         shell_script_cmd(
-            dedent(f"""
+            dedent("""
         rm -rf /etc/encrypt_conf
         mv -f /tmp/encrypt_conf /etc
         mkdir -p /etc/scylla/encrypt_conf /etc/encrypt_conf/system_key_dir
-        chown -R {scylla_user} /etc/scylla /etc/encrypt_conf
+        chown -R scylla:scylla /etc/scylla /etc/encrypt_conf
     """)
         )
     )
@@ -140,8 +135,8 @@ def _create_ca(cname: str = "scylladb.com", valid_days: int = 365) -> None:
         .issuer_name(issuer)
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(timezone.utc))
-        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=valid_days))
+        .not_valid_before(datetime.utcnow())
+        .not_valid_after(datetime.utcnow() + timedelta(days=valid_days))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
         .add_extension(x509.SubjectKeyIdentifier.from_public_key(private_key.public_key()), critical=False)
         .sign(private_key, hashes.SHA256())
@@ -218,8 +213,8 @@ def create_certificate(
         .issuer_name(issuer)
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(timezone.utc))
-        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=valid_days))
+        .not_valid_before(datetime.utcnow())
+        .not_valid_after(datetime.utcnow() + timedelta(days=valid_days))
         .add_extension(x509.SubjectAlternativeName(alt_names), critical=False)
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .add_extension(x509.SubjectKeyIdentifier.from_public_key(private_key.public_key()), critical=False)
@@ -344,8 +339,8 @@ def update_certificate(node: BaseNode) -> None:
         .issuer_name(ca_cert.subject)
         .public_key(csr.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(timezone.utc))
-        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=180))
+        .not_valid_before(datetime.utcnow())
+        .not_valid_after(datetime.utcnow() + timedelta(days=180))
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .add_extension(x509.SubjectKeyIdentifier.from_public_key(csr.public_key()), critical=False)
         .add_extension(san_extension, critical=False)  # Add SAN extension from CSR

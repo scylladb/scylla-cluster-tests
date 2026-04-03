@@ -9,7 +9,7 @@ artifactsPipeline(
     test_config: 'test-cases/artifacts/azure-image.yaml',
     backend: 'azure',
     provision_type: 'spot',
-    availability_zone: 'b', // since on release we have some families which are more available on that zone
+    availability_zone: '',
 
     timeout: [time: 145, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy',

@@ -10,8 +10,8 @@ ip_ssh_connections: 'private'
 
 scylla_repo: ''
 
-manager_version: '3.9'
-manager_scylla_backend_version: '2025.4'
+manager_version: '3.8'
+manager_scylla_backend_version: '2025'
 # Notice: that centos (default monitor), ubuntu 22, ubuntu 20 and debian 11 monitors use 2024, while debian 10 ubuntu 18 use 2023, since we support both
 
 round_robin: false
@@ -30,15 +30,15 @@ scylla_linux_distro: 'ubuntu-focal'
 scylla_linux_distro_loader: 'ubuntu-jammy'
 ssh_transport: 'libssh2'
 
-monitor_branch: 'branch-4.14'
+monitor_branch: 'branch-4.11'
 
 space_node_threshold: 0
 
 cluster_health_check: true
-cluster_health_check_parallel_workers: 5
 
 add_node_cnt: 1
 
+reuse_cluster: false
 nemesis_class_name: 'NoOpMonkey'
 nemesis_during_prepare: true
 nemesis_interval: 5
@@ -56,30 +56,27 @@ post_behavior_db_nodes: "destroy"
 post_behavior_loader_nodes: "destroy"
 post_behavior_monitor_nodes: "destroy"
 post_behavior_k8s_cluster: "destroy"
-post_behavior_vector_store_nodes: "destroy"
-post_behavior_emr_cluster: "destroy"
 
 cloud_credentials_path: ''
 use_cloud_manager: false
 cloud_prom_bearer_token: ''
 
 backtrace_decoding: true
-backtrace_stall_decoding: true
-backtrace_decoding_disable_regex: null
 print_kernel_callstack: true
 
 update_db_packages: ''
 
 logs_transport: "vector"
 
+store_perf_results: false
 email_recipients: ['qa@scylladb.com']
 email_subject_postfix: ''
 
 collect_logs: false
-use_scylla_doctor_on_failure: true
 
 hinted_handoff: 'disabled'
 parallel_node_operations: true  # supported from Scylla 6.0
+
 server_encrypt: false
 client_encrypt: false
 peer_verification: true  # when client encryption is used, peer verification is enabled by default
@@ -93,9 +90,6 @@ compaction_strategy: 'SizeTieredCompactionStrategy'
 use_preinstalled_scylla: false
 
 alternator_enforce_authorization: false
-alternator_use_dns_routing: false
-alternator_loadbalancing: true
-alternator_trust_all_certificates: true
 alternator_access_key_id: ''
 alternator_secret_access_key: ''
 dynamodb_primarykey_type: 'HASH'
@@ -171,8 +165,8 @@ jepsen_test_count: 1
 jepsen_test_run_policy: all
 
 max_events_severities: ""
-scylla_mgmt_agent_version: '3.9.0'
-mgmt_docker_image: 'scylladb/scylla-manager:3.9.0'
+scylla_mgmt_agent_version: '3.8.0'
+mgmt_docker_image: 'scylladb/scylla-manager:3.8.0'
 k8s_log_api_calls: false
 k8s_deploy_monitoring: false
 k8s_minio_storage_size: '10Gi'
@@ -198,7 +192,7 @@ gce_pd_standard_disk_size_db: 0
 install_mode: 'repo'  # install from scylla_repo
 run_db_node_benchmarks: false
 
-nemesis_multiply_factor: 2
+nemesis_multiply_factor: 6
 
 scylla_apt_keys:
   - '17723034C56D4B19'  # ScyllaDB Package Signing Key 2018 <security@scylladb.com>
@@ -206,11 +200,12 @@ scylla_apt_keys:
   - 'D0A112E067426AB2'  # ScyllaDB Package Signing Key 2022 <security@scylladb.com>
   - '491C93B9DE7496A7'  # ScyllaDB Package Signing Key 2024 <security@scylladb.com>
   - 'A43E06657BAC99E3'  # ScyllaDB Package Signing Key 2024 (RSA) <security@scylladb.com>
-  - 'C503C686B007F39E'  # ScyllaDB Package Signing Key 2026 (RSA) <security@scylladb.com>
 
 raid_level: 0
 
 bare_loaders: false
+
+nemesis_exclude_disabled: true
 
 aws_fallback_to_next_availability_zone: false
 
@@ -226,6 +221,7 @@ use_hdrhistogram: false
 
 stop_on_hw_perf_failure: false
 
+custom_es_index: ''
 
 run_fullscan: []
 
@@ -270,7 +266,6 @@ scylla_doctor_version: "1.10"
 nemesis_double_load_during_grow_shrink_duration: 0
 
 enterprise_disable_kms: false
-enable_kms_key_rotation: true
 
 assert_linux_distro_features: []
 
@@ -281,38 +276,30 @@ zero_token_instance_type_db: 'i4i.large'
 use_zero_nodes: false
 
 latte_schema_parameters: {}
-perf_stress_keyspace: null
-perf_stress_table: null
 workload_name: ''
 latency_decorator_error_thresholds:
   write:
     default:
       P90 write:
-        fixed_limit: null
+        fixed_limit: 5
       P99 write:
         fixed_limit: 10
   read:
     default:
       P90 read:
-        fixed_limit: null
-      P99 read:
-        fixed_limit: 10
-  read_disk_only:
-    default:
-      P90 read:
-        fixed_limit: null
+        fixed_limit: 5
       P99 read:
         fixed_limit: 10
   mixed:
     default:
       P90 write:
-        fixed_limit: null
+        fixed_limit: 5
       P90 read:
-        fixed_limit: null
+          fixed_limit: 5
       P99 write:
-        fixed_limit: 10
+          fixed_limit: 10
       P99 read:
-        fixed_limit: 10
+          fixed_limit: 10
 
 mgmt_snapshots_preparer_params:
   # Such a configuration is used by Manager backup snapshots prepare test
@@ -333,9 +320,6 @@ mgmt_snapshots_preparer_params:
 
 adaptive_timeout_store_metrics: true
 
-# XCloud-specific defaults
-xcloud_scaling_config: null
-
 # Vector Search defaults
 n_vector_store_nodes: 0
 vector_store_port: 6080
@@ -343,20 +327,6 @@ vector_store_scylla_port: 9042
 vector_store_threads: 0  # 0 = defaults to number of cores on a node
 vector_store_docker_image: 'scylladb/vector-store'
 vector_store_version: ''
-download_from_s3: []
-# The object-storage method options in Scylla-Manager are: native/rclone/auto.
-# An empty value here, means Scylla-Manager will use its default value.
-manager_backup_restore_method: ''
 
+enable_argus_email_report : false
 argus_email_report_template: email_report_template_basic.yaml
-
-# SCT agent defaults
-agent:
-  enabled: false
-  port: 16000
-  binary_url: ""
-  max_concurrent_jobs: 10
-  log_level: "info"
-  tls: false
-
-c_s_driver_version: '3'

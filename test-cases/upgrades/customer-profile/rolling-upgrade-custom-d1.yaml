@@ -5,6 +5,7 @@ test_duration: 360
 cs_user_profiles:
     - scylla-qa-internal/custom_d1/rolling_upgrade_dataset.yaml,60m
 
+
 prepare_cs_user_profiles:
     - scylla-qa-internal/custom_d1/rolling_upgrade_dataset.yaml,30m
 
@@ -24,6 +25,10 @@ scylla_d_overrides_files: [
 ]
 
 user_prefix: 'rolling-upgrade-custom-d1'
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
 
 append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1'
 

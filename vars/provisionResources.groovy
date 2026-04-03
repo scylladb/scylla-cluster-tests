@@ -39,16 +39,8 @@ def call(Map params, String region){
         export SCT_AZURE_REGION_NAME=${params.azure_region_name}
     fi
 
-    if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
-        export SCT_OCI_REGION_NAME=${params.oci_region_name}
-    fi
-
     if [[ -n "${params.new_version ? params.new_version : ''}" ]] ; then
         export SCT_NEW_VERSION="${params.new_version}"
-    fi
-
-    if [[ -n "${params.oci_instance_type_db ? params.oci_instance_type_db : ''}" ]] ; then
-        export SCT_OCI_INSTANCE_TYPE_DB=${params.oci_instance_type_db}
     fi
 
     if [[ -n "${params.k8s_scylla_operator_docker_image ? params.k8s_scylla_operator_docker_image : ''}" ]] ; then
@@ -87,9 +79,6 @@ def call(Map params, String region){
     if [[ -n "${params.azure_image_db ? params.azure_image_db : ''}" ]] ; then
         export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
     fi
-    if [[ -n "${params.oci_image_db ? params.oci_image_db : ''}" ]] ; then
-        export SCT_OCI_IMAGE_DB="${params.oci_image_db}"
-    fi
     if [[ -n "${params.scylla_version ? params.scylla_version : ''}" ]] ; then
         export SCT_SCYLLA_VERSION="${params.scylla_version}"
     fi
@@ -104,7 +93,7 @@ def call(Map params, String region){
         export SCT_ORACLE_SCYLLA_VERSION="${params.oracle_scylla_version}"
     fi
 
-    if [[ -n "${params.gemini_seed ? params.gemini_seed : ''}" ]] ; then
+    if [[ -n "${params.gemini_seed ? params.genini_seed : ''}" ]] ; then
         export SCT_GEMINI_SEED="${params.gemini_seed}"
     fi
 
@@ -119,9 +108,6 @@ def call(Map params, String region){
     fi
     if [[ -n "${params.post_behavior_k8s_cluster ? params.post_behavior_k8s_cluster : ''}" ]] ; then
         export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
-    fi
-    if [[ -n "${params.post_behavior_vector_store_nodes ? params.post_behavior_vector_store_nodes : ''}" ]] ; then
-        export SCT_POST_BEHAVIOR_VECTOR_STORE_NODES="${params.post_behavior_vector_store_nodes}"
     fi
 
     if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
@@ -167,34 +153,13 @@ def call(Map params, String region){
         export PYTEST_ADDOPTS="${params.pytest_addopts}"
     fi
 
-    if [[ -n "${params.data_volume_disk_num ? params.data_volume_disk_num : ''}" ]] ; then
-        export SCT_DATA_VOLUME_DISK_NUM="${params.data_volume_disk_num}"
-    fi
-    if [[ -n "${params.data_volume_disk_type ? params.data_volume_disk_type : ''}" ]] ; then
-        export SCT_DATA_VOLUME_DISK_TYPE="${params.data_volume_disk_type}"
-    fi
-    if [[ -n "${params.data_volume_disk_size ? params.data_volume_disk_size : ''}" ]] ; then
-        export SCT_DATA_VOLUME_DISK_SIZE="${params.data_volume_disk_size}"
-    fi
-
-    # Handle backend-specific provisioning logic
-    if [[ "${params.backend}" == "xcloud" ]] ; then
-        echo "Scylla Cloud backend selected: provisioning loader nodes only on ${params.xcloud_provider} cloud provider"
-    fi
-
-    if [[ "${params.backend}" == "xcloud" ]] || [[ "${params.backend}" == "aws" ]] || [[ "${params.backend}" == "azure" ]] || [[ "${params.backend}" == "gce" ]] || [[ "${params.backend}" == "oci" ]] ; then
-        echo "Starting to resource provision ..."
-        RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        if [[ -n "\${RUNNER_IP}" ]] ; then
-            ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} provision-resources -b "${params.backend}" -t "${params.test_name}"
-        else
-            ./docker/env/hydra.sh provision-resources -b "${params.backend}" -t "${params.test_name}"
-        fi
-        echo "Finished resource provision"
-    elif [[ "${params.backend}" == *"docker"* ]] ; then
-        echo 'Tests are to be executed on Docker backend in SCT-Runner. No additional resources to be provisioned.'
+    echo "Starting to resource provision ..."
+    RUNNER_IP=\$(cat sct_runner_ip||echo "")
+    if [[ -n "\${RUNNER_IP}" ]] ; then
+        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} provision-resources -b "${params.backend}" -t "${params.test_name}"
     else
-        echo 'Skipping because non-AWS/Azure/GCE/OCI backends are not supported'
+        ./docker/env/hydra.sh provision-resources -b "${params.backend}" -t "${params.test_name}"
     fi
+    echo "Finished resource provision"
     """
 }

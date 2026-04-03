@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import time
+import unittest
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import SpotTerminationEvent
@@ -27,20 +28,20 @@ from sdcm.sct_events.file_logger import (
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
-class TestFileLogger(EventsUtilsMixin):
-    def setup_method(self) -> None:
+class TestFileLogger(unittest.TestCase, EventsUtilsMixin):
+    def setUp(self) -> None:
         self.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
         start_events_logger(_registry=self.events_processes_registry)
         self.file_logger = get_events_logger(_registry=self.events_processes_registry)
 
         time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
-        assert isinstance(self.file_logger, EventsFileLogger)
-        assert self.file_logger.is_alive()
-        assert self.file_logger._registry == self.events_main_device._registry
-        assert self.file_logger._registry == self.events_processes_registry
+        self.assertIsInstance(self.file_logger, EventsFileLogger)
+        self.assertTrue(self.file_logger.is_alive())
+        self.assertEqual(self.file_logger._registry, self.events_main_device._registry)
+        self.assertEqual(self.file_logger._registry, self.events_processes_registry)
 
-    def teardown_method(self) -> None:
+    def tearDown(self) -> None:
         self.file_logger.stop(timeout=3)
         self.teardown_events_processes()
 
@@ -73,23 +74,26 @@ class TestFileLogger(EventsUtilsMixin):
             self.events_main_device.publish_event(event_debug)
             self.events_main_device.publish_event(event_debug)
 
-        assert self.events_main_device.events_counter == self.file_logger.events_counter
+        self.assertEqual(self.events_main_device.events_counter, self.file_logger.events_counter)
 
         summary = get_logger_event_summary(_registry=self.events_processes_registry)
-        assert summary == {
-            Severity.NORMAL.name: 1,
-            Severity.WARNING.name: 2,
-            Severity.ERROR.name: 3,
-            Severity.CRITICAL.name: 4,
-            Severity.DEBUG.name: 5,
-        }
+        self.assertDictEqual(
+            summary,
+            {
+                Severity.NORMAL.name: 1,
+                Severity.WARNING.name: 2,
+                Severity.ERROR.name: 3,
+                Severity.CRITICAL.name: 4,
+                Severity.DEBUG.name: 5,
+            },
+        )
 
         grouped = get_events_grouped_by_category(_registry=self.events_processes_registry)
-        assert len(grouped[Severity.NORMAL.name]) == 1
-        assert len(grouped[Severity.WARNING.name]) == 2
-        assert len(grouped[Severity.ERROR.name]) == 3
-        assert len(grouped[Severity.CRITICAL.name]) == 4
-        assert len(grouped[Severity.DEBUG.name]) == 5
+        self.assertEqual(len(grouped[Severity.NORMAL.name]), 1)
+        self.assertEqual(len(grouped[Severity.WARNING.name]), 2)
+        self.assertEqual(len(grouped[Severity.ERROR.name]), 3)
+        self.assertEqual(len(grouped[Severity.CRITICAL.name]), 4)
+        self.assertEqual(len(grouped[Severity.DEBUG.name]), 5)
 
     def test_get_events_grouped_by_category_limit(self) -> None:
         with self.wait_for_n_events(self.file_logger, count=len(Severity) * 10, timeout=3):
@@ -99,13 +103,13 @@ class TestFileLogger(EventsUtilsMixin):
                     event.severity = severity
                     self.events_main_device.publish_event(event)
 
-        assert self.events_main_device.events_counter == self.file_logger.events_counter
+        self.assertEqual(self.events_main_device.events_counter, self.file_logger.events_counter)
 
         summary = get_logger_event_summary(_registry=self.events_processes_registry)
-        assert set(summary.values()) == {10}
+        self.assertEqual(set(summary.values()), {10})
 
         grouped = get_events_grouped_by_category(_registry=self.events_processes_registry, limit=5)
         for severity, group in grouped.items():
-            assert len(group) == 5
+            self.assertEqual(len(group), 5)
             for num, event in enumerate(group, start=0 if severity == Severity.CRITICAL.name else 5):
-                assert f"m-{num}-{severity}" in event
+                self.assertIn(f"m-{num}-{severity}", event)

@@ -1,9 +1,9 @@
 import tarfile
 import tempfile
+import unittest
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
-import pytest
 from invoke.exceptions import UnexpectedExit
 from invoke.watchers import StreamWatcher
 
@@ -24,9 +24,8 @@ class TestWatcher(StreamWatcher):
         self.submissions.append(output)
 
 
-class TestDockerCmdRunner:
-    @pytest.fixture(autouse=True)
-    def setup(self):
+class TestDockerCmdRunner(unittest.TestCase):
+    def setUp(self):
         self.node = DummyNode()
         self.runner = DockerCmdRunner(self.node)
         self.runner._container = MagicMock()
@@ -41,7 +40,7 @@ class TestDockerCmdRunner:
         runner._container = None
         result = runner._get_container()
 
-        assert result == runner._container
+        self.assertEqual(result, runner._container)
         mock_cm.get_container.assert_called_once_with(self.node, "node")
 
     @patch("sdcm.remote.docker_cmd_runner.ContainerManager")
@@ -52,7 +51,7 @@ class TestDockerCmdRunner:
         runner._container = mock_container
         result = runner._get_container()
 
-        assert result == mock_container
+        self.assertEqual(result, mock_container)
         mock_container.reload.assert_called_once()
         mock_cm.get_container.assert_not_called()
 
@@ -66,8 +65,8 @@ class TestDockerCmdRunner:
         runner._container = old_container
         result = runner._get_container()
 
-        assert result == new_container
-        assert result == runner._container
+        self.assertEqual(result, new_container)
+        self.assertEqual(result, runner._container)
         old_container.reload.assert_called_once()
         mock_cm.get_container.assert_called_once_with(self.node, "node")
 
@@ -78,7 +77,7 @@ class TestDockerCmdRunner:
         runner = DockerCmdRunner(self.node)
         runner._container = None
 
-        with pytest.raises(RuntimeError, match="could not be resolved"):
+        with self.assertRaises(RuntimeError, msg="could not be resolved"):
             runner._get_container()
 
         mock_cm.get_container.assert_called_once_with(self.node, "node")
@@ -90,17 +89,17 @@ class TestDockerCmdRunner:
 
             result = self.runner.connection
 
-            assert result == mock_container
+            self.assertEqual(result, mock_container)
             mock_get.assert_called_once()
 
     @patch("sdcm.remote.docker_cmd_runner.ContainerManager")
     def test_container_is_up(self, mock_cm):
         mock_cm.is_running.return_value = True
-        assert self.runner.is_up()
+        self.assertTrue(self.runner.is_up())
         mock_cm.is_running.assert_called_once_with(self.node, "node")
 
         mock_cm.is_running.return_value = False
-        assert not self.runner.is_up()
+        self.assertFalse(self.runner.is_up())
 
     def test_execute_command_success(self):
         """Test _execute_command with successful execution"""
@@ -110,10 +109,10 @@ class TestDockerCmdRunner:
         with patch.object(self.runner, "_get_container", return_value=mock_container):
             result = self.runner._execute_command("echo hello", 30, False, True, [])
 
-        assert result.exited == 0
-        assert result.stdout == "hello world"
-        assert result.stderr == ""
-        assert result.duration > 0
+        self.assertEqual(result.exited, 0)
+        self.assertEqual(result.stdout, "hello world")
+        self.assertEqual(result.stderr, "")
+        self.assertGreater(result.duration, 0)
         mock_container.exec_run.assert_called_once_with(
             ["sh", "-c", "echo hello"], tty=False, demux=True, stream=False, user=""
         )
@@ -123,7 +122,7 @@ class TestDockerCmdRunner:
         mock_container.exec_run.return_value = MagicMock(exit_code=1, output=(b"", b"error message"))
 
         with patch.object(self.runner, "_get_container", return_value=mock_container):
-            with pytest.raises(UnexpectedExit):
+            with self.assertRaises(UnexpectedExit):
                 self.runner._execute_command("false", 30, False, True, [])
 
     @patch("sdcm.remote.docker_cmd_runner.retrying")
@@ -140,7 +139,7 @@ class TestDockerCmdRunner:
             mock_setup.return_value = []
             result = self.runner.run("echo hello", timeout=30, verbose=True)
 
-        assert result == mock_result
+        self.assertEqual(result, mock_result)
         mock_setup.assert_called_once_with(True, None, None, timestamp_logs=False)
         mock_exec.assert_called_once_with("echo hello", 30, False, True, [], "")
         mock_print.assert_called_once_with(mock_result, True, False)
@@ -167,7 +166,7 @@ class TestDockerCmdRunner:
 
             result = self.runner.send_files(temp_file.name, "/dest/path")
 
-        assert result
+        self.assertTrue(result)
         mock_container.put_archive.assert_called_once()
         mock_create_tar.assert_called_once_with(temp_file.name, "/dest/path")
 
@@ -194,16 +193,16 @@ class TestDockerCmdRunner:
         ):
             result = self.runner.receive_files("/src/file.txt", temp_file.name)
 
-            assert result
+            self.assertTrue(result)
             temp_file.seek(0)
-            assert temp_file.read() == "hello world"
+            self.assertEqual(temp_file.read(), "hello world")
 
     def test_sudo_with_non_root_user(self):
         with patch.object(self.runner, "run", return_value=MagicMock()) as mock_run:
             cmd = "ls -la"
             result = self.runner.sudo(cmd, user="testuser")
 
-            assert result == mock_run.return_value
+            self.assertEqual(result, mock_run.return_value)
             mock_run.assert_called_once_with(
                 cmd=f"{cmd}",
                 timeout=None,

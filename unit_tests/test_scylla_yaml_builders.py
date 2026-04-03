@@ -15,6 +15,7 @@ import contextlib
 import json
 import os
 import tempfile
+import unittest
 from typing import List
 from unittest.mock import patch
 
@@ -59,7 +60,7 @@ class FakeNode:
     scylla_network_configuration = None
 
 
-class ScyllaYamlClusterAttrBuilderBase:
+class ScyllaYamlClusterAttrBuilderBase(unittest.TestCase):
     builder_class: ScyllaYamlAttrBuilderBase
 
     def _run_test(self, builder_params: dict, expected_as_dict: dict = None):
@@ -218,7 +219,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
         )
 
     def test_validation_gce(self):
-        with pytest.raises(RuntimeError):
+        with self.assertRaises(RuntimeError):
             self._run_test(
                 builder_params={
                     "test_config": TestConfigWithLdap,
@@ -232,7 +233,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
             )
 
     def test_validation_aws(self):
-        with pytest.raises(RuntimeError):
+        with self.assertRaises(RuntimeError):
             self._run_test(
                 builder_params={
                     "test_config": TestConfigWithoutLdap,
@@ -374,10 +375,6 @@ class ScyllaYamlNodeAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
         )
 
 
-# NOTE: BASE_FOLDER must remain a module-level constant because it is consumed by
-# @parameterized.expand() decorators below, which run at class-definition / import
-# time — before any pytest fixture can be injected.  This is a documented exception
-# to the "no __file__ outside conftest.py" rule.
 BASE_FOLDER = os.path.join(os.path.dirname(__file__), "test_data/test_scylla_yaml_builders")
 
 
@@ -472,7 +469,6 @@ class DummyNode(BaseNode):
                 device_index=0,
                 device_name="eth0",
                 mac_address="",
-                use_dns_names=False,
             ),
             NetworkInterface(
                 ipv4_public_address=None,
@@ -484,7 +480,6 @@ class DummyNode(BaseNode):
                 device_index=1,
                 device_name="eth1",
                 mac_address="",
-                use_dns_names=False,
             ),
         ]
 
@@ -553,7 +548,7 @@ class DummyNode(BaseNode):
             )
 
 
-class IntegrationTests:
+class IntegrationTests(unittest.TestCase):
     get_scylla_ami_version_output = ObjectDict(
         Architecture="x86_64",
         CreationDate="2022-10-13T13:17:17.000Z",

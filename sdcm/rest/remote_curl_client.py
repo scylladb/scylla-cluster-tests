@@ -11,8 +11,7 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
-import json
-from typing import Literal, TYPE_CHECKING, Any
+from typing import Literal, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
@@ -31,17 +30,15 @@ class RemoteCurlClient(RestClient):
 
     def run_remoter_curl(
         self,
-        method: Literal["GET", "POST", "DELETE"],
+        method: Literal["GET", "POST"],
         path: str,
         params: dict[str, str] | None,
-        data: dict[str, Any] | None = None,
         timeout: int = 120,
         retry: int = 0,
     ):
         prepared_request = self._prepare_request(method=method, path=path, params=params)
-        data_arg = f" -H 'Content-Type: application/json' -d '{json.dumps(data)}'" if data is not None else ""
         result = self._remoter.run(
-            f'curl -v -X {prepared_request.method}{data_arg} "{prepared_request.url}"', timeout=timeout, retry=retry
+            f'curl -v -X {prepared_request.method} "{prepared_request.url}"', timeout=timeout, retry=retry
         )
         if result.failed:
             raise ScyllaApiException(

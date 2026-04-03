@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import time
-import pytest
+import unittest
 import tempfile
 import logging
 from typing import TYPE_CHECKING
@@ -66,8 +66,8 @@ class LoaderSetDummy:
     name = "LoaderSetDummy"
 
 
-@pytest.mark.skip(reason="manual tests")
-class EC2ClientTests:
+@unittest.skip("manual tests")
+class EC2ClientTests(unittest.TestCase):
     @staticmethod
     def test_01():
         network_if = [
@@ -93,10 +93,10 @@ class EC2ClientTests:
         print(inst)
 
 
-@pytest.mark.skip(reason="manual tests")
-class TestCassandraStressExporter:
+@unittest.skip("manual tests")
+class TestCassandraStressExporter(unittest.TestCase):
     @classmethod
-    def setup_class(cls):
+    def setUpClass(cls):
         cls.prom_address = start_metrics_server()
         cls.metrics = nemesis_metrics_obj()
 
@@ -137,10 +137,10 @@ class TestCassandraStressExporter:
         res.result()
 
 
-@pytest.mark.skip(reason="manual tests")
-class TestCassandraStressHDRExporter:
+@unittest.skip("manual tests")
+class TestCassandraStressHDRExporter(unittest.TestCase):
     @classmethod
-    def setup_class(cls):
+    def setUpClass(cls):
         cls.prom_address = start_metrics_server()
         cls.metrics = nemesis_metrics_obj()
 
@@ -262,19 +262,19 @@ class TestCassandraStressHDRExporter:
         res.result(10)
 
 
-class BaseSCTEventsTest:
+class BaseSCTEventsTest(unittest.TestCase):
     @classmethod
-    def setup_class(cls):
+    def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
         start_events_device(cls.temp_dir)
         time.sleep(10)
 
     @classmethod
-    def teardown_class(cls):
+    def tearDownClass(cls):
         stop_events_device()
 
 
-@pytest.mark.skip(reason="manual tests")
+@unittest.skip("manual tests")
 class TestStressThread(BaseSCTEventsTest):
     def test_01(self):
         start_metrics_server()
@@ -326,7 +326,7 @@ class TestStressThread(BaseSCTEventsTest):
         res.result()
 
 
-@pytest.mark.skip(reason="manual tests")
+@unittest.skip("manual tests")
 class TestYcsbStressThread(BaseSCTEventsTest):
     def test_01(self):
         params = dict(alternator_port=8080)  # , dynamodb_primarykey_type='HASH_AND_RANGE')

@@ -98,6 +98,8 @@ class LoaderUtilsMixin:
 
     def _run_all_stress_cmds(self, stress_queue, params):
         stress_cmds = params["stress_cmd"]
+        if not isinstance(stress_cmds, list):
+            stress_cmds = [stress_cmds]
         # In some cases we want the same stress_cmd to run several times (can be used with round_robin or not).
         stress_multiplier = self.params.get("stress_multiplier")
         if stress_multiplier > 1:
@@ -119,6 +121,12 @@ class LoaderUtilsMixin:
                     ).publish()
                 else:
                     self._create_counter_table()
+
+            if "compression" in stress_cmd:
+                if "keyspace_name" not in stress_params:
+                    compression_prefix = re.search("compression=(.*)Compressor", stress_cmd).group(1)
+                    keyspace_name = "keyspace_{}".format(compression_prefix.lower())
+                    stress_params.update({"keyspace_name": keyspace_name})
 
             # Run all stress commands
             self.log.debug("stress cmd: {}".format(stress_cmd))
@@ -347,6 +355,8 @@ class LoaderUtilsMixin:
             for stress_op in workload_names:
                 stress_cmds = []
                 stress_params = params.get(stress_op)
+                if isinstance(stress_params, str):
+                    stress_params = [stress_params]
 
                 if not stress_params:
                     continue

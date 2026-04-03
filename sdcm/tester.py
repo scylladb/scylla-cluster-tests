@@ -10,7 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-import contextlib
 import shutil
 import configparser
 import importlib
@@ -35,6 +34,7 @@ from functools import partial, wraps, cache
 import threading
 import signal
 import json
+
 import botocore
 import yaml
 import pytest
@@ -48,10 +48,9 @@ from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
 from argus.client.sct.types import Package, EventsInfo, LogLink
 from argus.common.enums import TestStatus
-from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, wait
+from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
-from sdcm.provision.gce.kms_provider import GcpKmsProvider
 from sdcm.cluster import (
     BaseCluster,
     NoMonitorSet,
@@ -65,7 +64,6 @@ from sdcm.cluster import (
     MINUTE_IN_SEC,
 )
 from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
-from sdcm.cluster_oci import ScyllaOciCluster, LoaderSetOci, MonitorSetOci
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
@@ -81,14 +79,10 @@ from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThre
 from sdcm.mgmt import get_scylla_manager_tool
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
-from sdcm.provision.aws.emr_provisioner import EmrClusterProvisioner, ensure_emr_roles
-from sdcm.spark_migrator import build_spark4_bootstrap_actions
 from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
-from sdcm.provision.gce.provisioner import GceProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
-from sdcm.provision.oci.provisioner import OciProvisioner
 from sdcm.provision.provisioner import provisioner_factory
 from sdcm.provision.helpers.certificate import (
     create_ca,
@@ -99,6 +93,7 @@ from sdcm.provision.helpers.certificate import (
     CA_CERT_FILE,
     SCYLLA_SSL_CONF_DIR,
 )
+from sdcm.reporting.elastic_reporter import ElasticRunReporter
 from sdcm.reporting.tooling_reporter import PythonDriverReporter
 from sdcm.scan_operation_thread import ScanOperationThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
@@ -151,6 +146,11 @@ from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
 from sdcm.db_stats import PrometheusDBStats
+from sdcm.results_analyze import (
+    PerformanceResultsAnalyzer,
+    SpecifiedStatsPerformanceAnalyzer,
+    LatencyDuringOperationsPerformanceAnalyzer,
+)
 from sdcm.sct_config import init_and_verify_sct_config
 from sdcm.sct_events import Severity
 from sdcm.sct_events.setup import (
@@ -195,11 +195,14 @@ from sdcm.logcollector import (
     SirenManagerLogCollector,
     VectorStoreLogCollector,
 )
+from sdcm.send_email import build_reporter, save_email_data_to_file
 from sdcm.utils import alternator
+from sdcm.utils.profiler import ProfilerFactory
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER
 from sdcm.utils.gce_utils import get_gce_compute_instances_client
 from sdcm.utils.auth_context import temp_authenticator
 from sdcm.keystore import KeyStore
+from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 from sdcm.utils.hdrhistogram import (
     make_hdrhistogram_summary,
     make_hdrhistogram_summary_by_interval,
@@ -378,7 +381,7 @@ class ClusterInformation(NamedTuple):
     schema_versions: List[SchemaVersion]
 
 
-class ClusterTester(unittest.TestCase):
+class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     log = None
     actions_log = None
     localhost = None
@@ -394,8 +397,6 @@ class ClusterTester(unittest.TestCase):
     def __init__(self, methodName="runTest"):
         self.result = None
         super().__init__(methodName=methodName)
-        # Initialize test_config (was previously done in TestStatsMixin which was removed)
-        self.test_config = TestConfig()
 
     def _init_test_duration(self):
         self._stress_duration: int = self.params.get("stress_duration")
@@ -425,7 +426,7 @@ class ClusterTester(unittest.TestCase):
                 commit_id=git_status.get("branch.oid", get_git_commit_id()),
                 origin_url=git_status.get("upstream.url"),
                 branch_name=git_status.get("branch.upstream"),
-                sct_config=self.params.model_dump(),
+                sct_config=self.params.dict(),
             )
             self.log.info("Submitted Argus TestRun with test id %s", self.test_config.argus_client().run_id)
             self.test_config.argus_client().set_sct_runner(
@@ -441,27 +442,6 @@ class ClusterTester(unittest.TestCase):
             self.log.error("Failed to submit data to Argus", exc_info=True)
         except Exception:  # noqa: BLE001
             self.log.error("General Error submitting data to Argus", exc_info=True)
-
-    def pre_nemesis(self):
-        """Runs before nemesis execution"""
-
-    def post_nemesis(self):
-        """Runs after each nemesis execution"""
-
-    @contextlib.contextmanager
-    def run_nemesis_hooks(self):
-        """Runs hooks around nemesis invocation"""
-        try:
-            self.pre_nemesis()
-        except Exception:  # noqa: BLE001
-            self.log.error("pre_nemesis hook failed", exc_info=True)
-        try:
-            yield
-        finally:
-            try:
-                self.post_nemesis()
-            except Exception:  # noqa: BLE001
-                self.log.error("post_nemesis hook failed", exc_info=True)
 
     def start_argus_heartbeat_thread(self) -> threading.Event:
         def send_argus_heartbeat(client: ArgusSCTClient, stop_signal: threading.Event):
@@ -496,37 +476,6 @@ class ClusterTester(unittest.TestCase):
         except Exception:
             self.log.error("Error saving test status to Argus", exc_info=True)
 
-    def get_scylla_versions(self) -> dict:
-        """Get installed scylla package versions from the first DB node.
-
-        Returns a dict mapping package names (with '-enterprise' stripped) to
-        dicts with 'version', 'date', and 'commit_id' keys.
-        """
-        versions = {}
-        try:
-            node = self.db_cluster.nodes[0]
-            packages_installed = node.scylla_packages_installed
-            for line in packages_installed:
-                for package in [
-                    "scylla-jmx",
-                    "scylla-server",
-                    "scylla-tools",
-                    "scylla-enterprise-jmx",
-                    "scylla-enterprise-server",
-                    "scylla-enterprise-tools",
-                ]:
-                    match = re.search(r"(%s-(\S+)-(0.)?([0-9]{8,8})\.([0-9a-f]{4,12}))" % package, line, re.IGNORECASE)
-                    if match:
-                        versions[package.replace("-enterprise", "")] = {
-                            "version": match.group(2),
-                            "date": match.group(4),
-                            "commit_id": match.group(5),
-                        }
-        except Exception:
-            self.log.error("Failed getting scylla versions", exc_info=True)
-        self.log.debug("Scylla versions found: %s", versions)
-        return versions
-
     def generate_scylla_server_package(self) -> Package:
         """
         Used for offline tests for tracking scylla versions in Argus.
@@ -534,10 +483,9 @@ class ClusterTester(unittest.TestCase):
         scylla_version = self.db_cluster.nodes[0].scylla_version_detailed
 
         expr = re.compile(
-            r"(?P<version>(?P<main>[\w.~]+)-(0.)?(?P<date>[0-9]{8,8}).(?P<commit>\w+)) with build-id (?P<build_id>[\dabcdef]+)"
+            r"(?P<version>(?P<main>[\w.~]+)-(0.)?(?P<date>[0-9]{8,8}).(?P<commit>\w+).) with build-id (?P<build_id>[\dabcdef]+)"
         )
         version_dict = expr.match(scylla_version).groupdict()
-        self.log.debug("Parsed scylla version: %s", version_dict)
 
         return Package(
             name="scylla-server",
@@ -566,8 +514,6 @@ class ClusterTester(unittest.TestCase):
                 packages_to_submit.append(package)
             if len(versions) == 0:
                 packages_to_submit.append(self.generate_scylla_server_package())
-
-            self.log.debug("Collected Scylla and kernel packages: %s", packages_to_submit)
 
             packages_to_submit.extend(self.generate_operator_packages())
 
@@ -730,7 +676,7 @@ class ClusterTester(unittest.TestCase):
                     "gemini_write_ops": results.get("write_ops", -1),
                     "oracle_node_ami_id": self.params.get("ami_id_db_oracle"),
                     "oracle_node_instance_type": self.params.get("instance_type_db_oracle"),
-                    "oracle_node_scylla_version": self.cs_db_cluster.params.artifact_scylla_version
+                    "oracle_node_scylla_version": self.cs_db_cluster.nodes[0].scylla_version
                     if self.cs_db_cluster
                     else "N/A",
                     "oracle_nodes_count": self.params.get("n_test_oracle_db_nodes"),
@@ -902,8 +848,8 @@ class ClusterTester(unittest.TestCase):
           queries won't fail due to the lack of nodes in the cluster.
         :return:
         """
-        n_db_nodes = self.params.get("n_db_nodes")
-        min_nodes_dc = min(n_db_nodes if isinstance(n_db_nodes, list) else [n_db_nodes])
+        n_db_nodes = str(self.params.get("n_db_nodes"))
+        min_nodes_dc = min([int(nodes_num) for nodes_num in n_db_nodes.split() if int(nodes_num) > 0])
 
         # In case tablets are enabled, it's better to set RF smaller than dc-nodes-number, so decommission is allowed.
         rf_candidate = (
@@ -999,12 +945,6 @@ class ClusterTester(unittest.TestCase):
         if self.params.get("cluster_backend") != "aws":
             logging.debug("Skip configuring AWS KMS, test is not running on AWS")
             return
-        if not self.params.is_enterprise:
-            logging.debug("Skip configuring AWS KMS, not running enterprise version")
-            return
-        if ComparableScyllaVersion(self.params.artifact_scylla_version) < "2023.1.3":
-            logging.debug("Skip configuring AWS KMS, version does not support KMS")
-            return
         if self.params.get("enterprise_disable_kms"):
             logging.debug("Skip configuring AWS KMS, `enterprise_disable_kms` is set in the config")
             return
@@ -1069,7 +1009,7 @@ class ClusterTester(unittest.TestCase):
             logging.debug("Skip configuring Azure KMS, test uses mixed scylla versions")
             return
         try:
-            scylla_version = ComparableScyllaVersion(self.params.artifact_scylla_version)
+            scylla_version = ComparableScyllaVersion(self.params.scylla_version)
             if not (scylla_version >= "2025.4.0~dev"):
                 logging.debug(f"Skip configuring Azure KMS, Scylla version {scylla_version} does not support KMS")
                 return
@@ -1117,60 +1057,6 @@ class ClusterTester(unittest.TestCase):
         self.params["append_scylla_yaml"] = append_scylla_yaml
         return
 
-    def prepare_gcp_kms(self) -> None:  # noqa: PLR0911
-        if self.params.get("cluster_backend") != "gce":
-            logging.debug("Skip configuring GCP KMS, test is not running on GCE")
-            return
-        if self.params.get("enterprise_disable_kms"):
-            logging.debug("Skip configuring GCP KMS, `enterprise_disable_kms` is set in the config")
-            return
-        if self.params.get("db_type") == "mixed_scylla":
-            logging.debug("Skip configuring GCP KMS, test uses mixed scylla versions")
-            return
-
-        if not (scylla_encryption_options := self.params.get("scylla_encryption_options")):
-            logging.debug(
-                "Configuring GCP KMS: `scylla_encryption_options` is not set in the config, using default values"
-            )
-            self.params["scylla_encryption_options"] = (
-                "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'GcpKeyProviderFactory', 'gcp_host': 'scylla-gcp-kms'}"
-            )
-            scylla_encryption_options = self.params.get("scylla_encryption_options")
-
-        if not (gcp_host := (yaml.safe_load(scylla_encryption_options) or {}).get("gcp_host") or ""):
-            return
-
-        test_id = str(self.test_config.test_id())
-        append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
-        if "gcp_hosts" not in append_scylla_yaml:
-            append_scylla_yaml["gcp_hosts"] = {}
-
-        gcp_kms_provider = GcpKmsProvider()
-        key_info = gcp_kms_provider.get_or_create_keys_pool(test_id)
-        if not key_info:
-            self.log.error("Failed to setup GCP KMS key pool")
-            return
-
-        append_scylla_yaml["gcp_hosts"][gcp_host] = {
-            "gcp_project_id": key_info["project_id"],
-            "gcp_location": key_info["location"],
-            "master_key": key_info["key_uri"],
-        }
-
-        append_scylla_yaml["user_info_encryption"] = {
-            "enabled": True,
-            "key_provider": "GcpKeyProviderFactory",
-            "gcp_host": gcp_host,
-        }
-        append_scylla_yaml["system_info_encryption"] = {
-            "enabled": True,
-            "key_provider": "GcpKeyProviderFactory",
-            "gcp_host": gcp_host,
-        }
-
-        self.params["append_scylla_yaml"] = append_scylla_yaml
-        return
-
     def kafka_configure(self):
         if self.kafka_cluster:
             for connector_config in self.params.get("kafka_connectors"):
@@ -1195,6 +1081,11 @@ class ClusterTester(unittest.TestCase):
         self.test_config.set_tester_obj(self)
         RemoteCmdRunnerBase.set_default_ssh_transport(self.params.get("ssh_transport"))
 
+        self._profile_factory = None
+        if self.params.get("enable_test_profiling"):
+            self._profile_factory = ProfilerFactory(os.path.join(self.logdir, "profile.stats"))
+            self._profile_factory.activate()
+
         ip_ssh_connections = ssh_connection_ip_type(self.params)
         self.test_config.set_ip_ssh_connections(ip_ssh_connections)
         self._init_test_duration()
@@ -1207,12 +1098,6 @@ class ClusterTester(unittest.TestCase):
         post_behavior_loader_nodes = self.params.get("post_behavior_loader_nodes")
         self.log.debug("Post behavior for loader nodes %s", post_behavior_loader_nodes)
         self.test_config.keep_cluster(node_type="loader_nodes", val=post_behavior_loader_nodes)
-        post_behavior_vector_store_nodes = self.params.get("post_behavior_vector_store_nodes")
-        self.log.debug("Post behavior for vector store nodes %s", post_behavior_vector_store_nodes)
-        self.test_config.keep_cluster(node_type="vector_store_nodes", val=post_behavior_vector_store_nodes)
-        post_behavior_emr_cluster = self.params.get("post_behavior_emr_cluster")
-        self.log.debug("Post behavior for EMR cluster %s", post_behavior_emr_cluster)
-        self.test_config.keep_cluster(node_type="emr_cluster", val=post_behavior_emr_cluster)
         self.test_config.set_duration(self._duration)
         cluster_backend = self.params.get("cluster_backend")
         if cluster_backend in ("aws", "k8s-eks"):
@@ -1225,11 +1110,6 @@ class ClusterTester(unittest.TestCase):
             )
         elif cluster_backend == "azure":
             self.test_config.set_multi_region((self.params.get("simulated_regions") or 0) > 1)
-        elif cluster_backend == "oci":
-            regions = self.params.get("oci_region_name")
-            if isinstance(regions, str):
-                regions = [regions]
-            self.test_config.set_multi_region((self.params.get("simulated_regions") or 0) > 1 or len(regions) > 1)
 
         if self.params.get("backup_bucket_backend") == "azure":
             self.test_config.set_backup_azure_blob_credentials()
@@ -1240,10 +1120,13 @@ class ClusterTester(unittest.TestCase):
         self.test_config.set_intra_node_comm_public(self.params.get("intra_node_comm_public"))
 
         # for saving test details in DB
+        self.create_stats = self.params.get(key="store_perf_results")
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
         self.timeout_thread = None
+        self.email_reporter = build_reporter(self.__class__.__name__, self.params.get("email_recipients"), self.logdir)
+
         self.init_argus_run()
         self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
         PythonDriverReporter(argus_client=self.test_config.argus_client()).report()
@@ -1259,8 +1142,6 @@ class ClusterTester(unittest.TestCase):
             self.test_config.configure_vector(self.localhost)
         if self.params.get("cluster_backend") == "xcloud":
             self.test_config.configure_xcloud_connectivity(self.localhost, self.params)
-
-        self.test_config.ensure_agent_api_key()
 
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
         self.alternator = alternator.api.Alternator(sct_params=self.params)
@@ -1293,22 +1174,17 @@ class ClusterTester(unittest.TestCase):
         self.monitors = None
         self.siren_manager = None
         self.kafka_cluster = None
-        self.emr_cluster = None
         self.k8s_clusters = []
         self.connections = []
         make_threads_be_daemonic_by_default()
 
-        needs_ca = any(
-            [
-                self.params.get("client_encrypt"),
-                self.params.get("server_encrypt"),
-                self.params.get("agent").get("tls"),
-            ]
-        )
-        if not self.params.get("cluster_backend").startswith("k8s") and needs_ca:
+        if not self.params.get("cluster_backend").startswith("k8s") and any(
+            [self.params.get("client_encrypt"), self.params.get("server_encrypt")]
+        ):
             create_ca(self.localhost)
             if self.params.get("client_encrypt"):
-                update_cqlshrc(get_data_dir_path("ssl_conf", "client", "cqlshrc"))
+                cqlshrc_file = get_data_dir_path("ssl_conf", "client", "cqlshrc")
+                update_cqlshrc(cqlshrc_file)
 
         # download rpms for update_db_packages
         if self.params.get("update_db_packages"):
@@ -1317,7 +1193,6 @@ class ClusterTester(unittest.TestCase):
             self.download_encrypt_keys()
         self.prepare_kms_host()
         self.prepare_azure_kms()
-        self.prepare_gcp_kms()
 
         self.nemesis_allocator = NemesisNodeAllocator(self)
 
@@ -1421,10 +1296,14 @@ class ClusterTester(unittest.TestCase):
                 if db_cluster:
                     db_cluster.start_kms_key_rotation_thread()
                     db_cluster.start_azure_kms_key_rotation_thread()
-                    db_cluster.start_gcp_key_rotation_thread()
 
             for future in as_completed(futures):
                 future.result()
+
+        if self.create_stats:
+            self.create_test_stats()
+            # sync test_start_time with ES
+            self.start_time = self.get_test_start_time()
 
         # cancel reuse cluster - for new nodes added during the test
         self.test_config.reuse_cluster(False)
@@ -1538,7 +1417,9 @@ class ClusterTester(unittest.TestCase):
         nemesis_selectors = self.params.get("nemesis_selector")
         nemesis_seeds = self.params.get("nemesis_seed")
 
-        if nemesis_selectors:
+        if nemesis_selectors and isinstance(nemesis_selectors, str):
+            nemesis_selectors = [nemesis_selectors]
+        if nemesis_selectors and isinstance(nemesis_selectors, list):
             nemesis_selectors = nemesis_selectors[:]
         if nemesis_seeds and isinstance(nemesis_seeds, int):
             nemesis_seeds = [nemesis_seeds]
@@ -1546,7 +1427,7 @@ class ClusterTester(unittest.TestCase):
             nemesis_seeds = [int(seed) for seed in nemesis_seeds.split()]
 
         nemesis_class_names = []
-        for i, klass in enumerate(list_class_name):
+        for i, klass in enumerate(list_class_name.split(" ")):
             try:
                 nemesis_name, num = klass.strip().split(":")
                 nemesis_name = nemesis_name.strip()
@@ -1565,20 +1446,10 @@ class ClusterTester(unittest.TestCase):
                     nemesis_selector = nemesis_selectors[i % len(nemesis_class_names)]
                 except IndexError as details:
                     self.log.warning("Missing nemesis selector. use default. %s", details)
-            runner_clazz = getattr(nemesis, nemesis_name)
-            if not issubclass(runner_clazz, nemesis.NemesisRunner):
-                if issubclass(runner_clazz, nemesis.NemesisBaseClass):
-                    raise ValueError(
-                        "The 'nemesis_class_name' config option is allowed to store only nemesis classes "
-                        "which are 'NemesisRunner' class subclasses. "
-                        "Basic non-runner nemesis can be used in the 'nemesis_selector' config option only."
-                    )
-                else:
-                    raise ValueError(f"Nemesis class {runner_clazz} should be subclass of NemesisRunner.")
 
             nemesis_threads.append(
                 {
-                    "nemesis": runner_clazz,
+                    "nemesis": getattr(nemesis, nemesis_name),
                     "nemesis_selector": nemesis_selector,
                     "nemesis_seed": int(nemesis_seeds[i % len(nemesis_seeds)]) if nemesis_seeds else None,
                 }
@@ -1588,25 +1459,28 @@ class ClusterTester(unittest.TestCase):
         return nemesis_threads
 
     def get_cluster_gce(self, loader_info, db_info, monitor_info):  # noqa: PLR0912, PLR0914
-        datacenters = self.params.gce_datacenters
-        test_id = str(TestConfig().test_id())
-        provisioners: List[GceProvisioner] = []
-        for datacenter in datacenters:
-            provisioners.append(
-                provisioner_factory.create_provisioner(
-                    backend="gce",
-                    test_id=test_id,
-                    region=datacenter,
-                    availability_zone=self.params.get("availability_zone"),
-                    network_name=self.params.get("gce_network"),
-                )
-            )
+        if loader_info["n_nodes"] is None:
+            n_loader_nodes = self.params.get("n_loaders")
+            if isinstance(n_loader_nodes, int):
+                loader_info["n_nodes"] = [n_loader_nodes]
+            elif isinstance(n_loader_nodes, str):
+                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
+            else:
+                self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
+        if loader_info["type"] is None:
+            loader_info["type"] = self.params.get("gce_instance_type_loader")
+        if loader_info["disk_type"] is None:
+            loader_info["disk_type"] = self.params.get("gce_root_disk_type_loader")
+        if loader_info["disk_size"] is None:
+            loader_info["disk_size"] = self.params.get("root_disk_size_loader")
+        if loader_info["n_local_ssd"] is None:
+            loader_info["n_local_ssd"] = self.params.get("gce_n_local_ssd_disk_loader")
         if db_info["n_nodes"] is None:
             n_db_nodes = self.params.get("n_db_nodes")
             if isinstance(n_db_nodes, int):  # legacy type
                 db_info["n_nodes"] = [n_db_nodes]
-            elif isinstance(n_db_nodes, list):  # latest type to support multiple datacenters
-                db_info["n_nodes"] = n_db_nodes
+            elif isinstance(n_db_nodes, str):  # latest type to support multiple datacenters
+                db_info["n_nodes"] = [int(n) for n in n_db_nodes.split()]
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_db_nodes)))
         cpu = self.params.get("gce_instance_type_cpu_db")
@@ -1616,23 +1490,38 @@ class ClusterTester(unittest.TestCase):
             db_info["type"] = "custom-{}-{}-ext".format(cpu, int(mem) * 1024)
         if db_info["type"] is None:
             db_info["type"] = self.params.get("gce_instance_type_db")
-        if loader_info["n_nodes"] is None:
-            n_loader_nodes = self.params.get("n_loaders")
-            if isinstance(n_loader_nodes, int):  # legacy type
-                loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):
-                loader_info["n_nodes"] = n_loader_nodes
-            else:
-                self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
-        gce_image = self.params.get("gce_image_db").strip()
+        if db_info["disk_type"] is None:
+            db_info["disk_type"] = self.params.get("gce_root_disk_type_db")
+        if db_info["disk_size"] is None:
+            db_info["disk_size"] = self.params.get("root_disk_size_db")
+        if db_info["n_local_ssd"] is None:
+            db_info["n_local_ssd"] = self.params.get("gce_n_local_ssd_disk_db")
+        if monitor_info["n_nodes"] is None:
+            monitor_info["n_nodes"] = self.params.get("n_monitor_nodes")
+        if monitor_info["type"] is None:
+            monitor_info["type"] = self.params.get("gce_instance_type_monitor")
+        if monitor_info["disk_type"] is None:
+            monitor_info["disk_type"] = self.params.get("gce_root_disk_type_monitor")
+        if monitor_info["disk_size"] is None:
+            monitor_info["disk_size"] = self.params.get("root_disk_size_monitor")
+        if monitor_info["n_local_ssd"] is None:
+            monitor_info["n_local_ssd"] = self.params.get("gce_n_local_ssd_disk_monitor")
+
         user_prefix = self.params.get("user_prefix")
-        self.credentials.append(UserRemoteCredentials(key_file=self.params.get("user_credentials_path")))
+
+        gce_service = get_gce_compute_instances_client()
+        gce_datacenter = self.params.get("gce_datacenter").split()
+        TEST_LOG.info("Using GCE regions/datacenters: %s", gce_datacenter)
+
+        user_credentials = self.params.get("user_credentials_path")
+        self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
+
         cluster_additional_disks = {
             "pd-ssd": self.params.get("gce_pd_ssd_disk_size_db"),
             "pd-standard": self.params.get("gce_pd_standard_disk_size_db"),
         }
-        gce_service = get_gce_compute_instances_client()
 
+        service_accounts = KeyStore().get_gcp_service_accounts()
         db_type = self.params.get("db_type")
         common_params = dict(
             gce_image_username=self.params.get("gce_image_username"),
@@ -1640,8 +1529,7 @@ class ClusterTester(unittest.TestCase):
             credentials=self.credentials,
             user_prefix=user_prefix,
             params=self.params,
-            gce_datacenter=datacenters,
-            gce_service=gce_service,
+            gce_datacenter=gce_datacenter,
         )
         if db_type == "cloud_scylla":
             cloud_credentials = self.params.get("cloud_credentials_path")
@@ -1658,41 +1546,43 @@ class ClusterTester(unittest.TestCase):
             self.db_cluster = cluster_cloud.ScyllaCloudCluster(**params)
         else:
             self.db_cluster = ScyllaGCECluster(
-                gce_image=gce_image,
-                gce_image_type=self.params.get("gce_root_disk_type_db"),
-                gce_image_size=db_info.get("disk_size") or self.params.get("root_disk_size_db"),
+                gce_image=self.params.get("gce_image_db").strip(),
+                gce_image_type=db_info["disk_type"],
+                gce_image_size=db_info["disk_size"],
+                gce_n_local_ssd=db_info["n_local_ssd"],
                 gce_instance_type=db_info["type"],
-                gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_db"),
+                gce_service=gce_service,
                 n_nodes=db_info["n_nodes"],
                 add_disks=cluster_additional_disks,
-                provisioners=provisioners,
+                service_accounts=service_accounts,
                 **common_params,
             )
+
+        loader_additional_disks = {"pd-ssd": self.params.get("gce_pd_ssd_disk_size_loader")}
         self.loaders = LoaderSetGCE(
             gce_image=self.params.get("gce_image_loader"),
-            gce_image_type=self.params.get("gce_root_disk_type_loader"),
-            gce_image_size=loader_info.get("disk_size") or self.params.get("root_disk_size_loader"),
-            gce_instance_type=loader_info.get("type") or self.params.get("gce_instance_type_loader"),
-            gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_loader"),
+            gce_image_type=loader_info["disk_type"],
+            gce_image_size=loader_info["disk_size"],
+            gce_n_local_ssd=loader_info["n_local_ssd"],
+            gce_instance_type=loader_info["type"],
+            gce_service=gce_service,
             n_nodes=loader_info["n_nodes"],
-            provisioners=provisioners,
+            add_disks=loader_additional_disks,
             **common_params,
         )
-        if monitor_info["n_nodes"] is None:
-            monitor_info["n_nodes"] = self.params.get("n_monitor_nodes")
+
         if monitor_info["n_nodes"] > 0:
-            gce_image_monitor = self.params.get("gce_image_monitor")
-            if not gce_image_monitor:
-                gce_image_monitor = self.params.get("gce_image")
+            monitor_additional_disks = {"pd-ssd": self.params.get("gce_pd_ssd_disk_size_monitor")}
             self.monitors = MonitorSetGCE(
-                gce_image=gce_image_monitor,
-                gce_instance_type=monitor_info.get("type") or self.params.get("gce_instance_type_monitor"),
-                gce_image_size=monitor_info.get("disk_size") or self.params.get("root_disk_size_monitor"),
-                gce_image_type=self.params.get("gce_root_disk_type_monitor"),
-                gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
-                n_nodes=self.params.get("n_monitor_nodes"),
+                gce_image=self.params.get("gce_image_monitor").strip(),
+                gce_image_type=monitor_info["disk_type"],
+                gce_image_size=monitor_info["disk_size"],
+                gce_n_local_ssd=monitor_info["n_local_ssd"],
+                gce_instance_type=monitor_info["type"],
+                gce_service=gce_service,
+                n_nodes=monitor_info["n_nodes"],
+                add_disks=monitor_additional_disks,
                 targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
-                provisioners=provisioners,
                 **common_params,
             )
         else:
@@ -1715,8 +1605,8 @@ class ClusterTester(unittest.TestCase):
             n_db_nodes = self.params.get("n_db_nodes")
             if isinstance(n_db_nodes, int):  # legacy type
                 db_info["n_nodes"] = [n_db_nodes]
-            elif isinstance(n_db_nodes, list):  # latest type to support multiple datacenters
-                db_info["n_nodes"] = n_db_nodes
+            elif isinstance(n_db_nodes, str):  # latest type to support multiple datacenters
+                db_info["n_nodes"] = [int(n) for n in n_db_nodes.split()]
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_db_nodes)))
         db_info["type"] = self.params.get("azure_instance_type_db")
@@ -1724,8 +1614,8 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):  # legacy type
                 loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):  # latest type to support multiple datacenters
-                loader_info["n_nodes"] = n_loader_nodes
+            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
+                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
         azure_image = self.params.get("azure_image_db").strip()
@@ -1775,83 +1665,6 @@ class ClusterTester(unittest.TestCase):
         else:
             self.monitors = NoMonitorSet()
 
-    def get_cluster_oci(self, loader_info, db_info, monitor_info):
-        regions = self.params.get("oci_region_name")
-        if isinstance(regions, str):
-            regions = [regions]
-        test_id = str(TestConfig().test_id())
-        provisioners: List[OciProvisioner] = []
-        for region in regions:
-            provisioners.append(
-                provisioner_factory.create_provisioner(
-                    backend="oci",
-                    test_id=test_id,
-                    region=region,
-                    availability_zone=self.params.get("availability_zone"),
-                )
-            )
-        if db_info["n_nodes"] is None:
-            n_db_nodes = self.params.get("n_db_nodes")
-            if isinstance(n_db_nodes, int):  # legacy type
-                db_info["n_nodes"] = [n_db_nodes]
-            elif isinstance(n_db_nodes, list):  # latest type to support multiple datacenters
-                db_info["n_nodes"] = n_db_nodes
-            else:
-                self.fail("Unsupported parameter type: {}".format(type(n_db_nodes)))
-        db_info["type"] = self.params.get("oci_instance_type_db")
-        if loader_info["n_nodes"] is None:
-            n_loader_nodes = self.params.get("n_loaders")
-            if isinstance(n_loader_nodes, int):  # legacy type
-                loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):  # latest type to support multiple datacenters
-                loader_info["n_nodes"] = n_loader_nodes
-            else:
-                self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
-        oci_image = self.params.get("oci_image_db").strip()
-        user_prefix = self.params.get("user_prefix")
-        self.credentials.append(UserRemoteCredentials(key_file=self.params.get("user_credentials_path")))
-
-        common_params = dict(
-            credentials=self.credentials,
-            user_prefix=user_prefix,
-            params=self.params,
-            region_names=regions,
-        )
-        self.db_cluster = ScyllaOciCluster(
-            image_id=oci_image,
-            root_disk_size=db_info["disk_size"],
-            instance_type=db_info["type"],
-            provisioners=provisioners,
-            n_nodes=db_info["n_nodes"],
-            user_name=self.params.get("oci_image_username"),
-            **common_params,
-        )
-        self.loaders = LoaderSetOci(
-            image_id=self.params.get("oci_image_loader"),
-            root_disk_size=loader_info["disk_size"],
-            instance_type=self.params.get("oci_instance_type_loader"),
-            provisioners=provisioners,
-            n_nodes=loader_info["n_nodes"],
-            user_name=self.params.get("ami_loader_user"),
-            **common_params,
-        )
-
-        if monitor_info["n_nodes"] is None:
-            monitor_info["n_nodes"] = self.params.get("n_monitor_nodes")
-        if monitor_info["n_nodes"] > 0:
-            self.monitors = MonitorSetOci(
-                image_id=self.params.get("oci_image_monitor"),
-                root_disk_size=monitor_info["disk_size"],
-                instance_type=self.params.get("oci_instance_type_monitor"),
-                provisioners=provisioners,
-                n_nodes=monitor_info["n_nodes"],
-                targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
-                user_name=self.params.get("ami_monitor_user"),
-                **common_params,
-            )
-        else:
-            self.monitors = NoMonitorSet()
-
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         regions = self.params.get("region_name").split()
 
@@ -1859,8 +1672,8 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):  # legacy type
                 loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):
-                loader_info["n_nodes"] = n_loader_nodes
+            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
+                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
         if loader_info["type"] is None:
@@ -2214,42 +2027,6 @@ class ClusterTester(unittest.TestCase):
             else:
                 raise NotImplementedError(f"{kafka_backend=} not implemented")
 
-    def get_cluster_emr(self):
-        """Provision an EMR cluster if emr_release_label is configured."""
-        if not self.params.get("emr_release_label"):
-            return
-        region_name = self.params.region_names[0]
-        self.log.info("Provisioning EMR cluster in region %s...", region_name)
-
-        ensure_emr_roles(region_name)
-
-        aws_region = AwsRegion(region_name=region_name)
-        self.emr_cluster = EmrClusterProvisioner(
-            region_name=region_name,
-            params=self.params,
-        )
-
-        # Get VPC subnet for same-network placement with Scylla cluster
-        subnet_id = None
-        if aws_region.sct_vpc:
-            subnets = aws_region.sct_subnet(region_name + (self.params.get("availability_zone") or "a"))
-            if subnets:
-                subnet_id = subnets.id
-
-        # TODO: Spark 4.x workaround
-        bootstrap_actions = build_spark4_bootstrap_actions(region_name)
-
-        self.emr_cluster.create_emr_cluster(
-            test_id=self.test_config.test_id(),
-            user=self.params.get("email_recipients")[0] if self.params.get("email_recipients") else "unknown",
-            vpc_subnet_id=subnet_id,
-            test_name=self.params.get("user_prefix"),
-            version=self.params.get("scylla_version"),
-            bootstrap_actions=bootstrap_actions,
-        )
-        self.emr_cluster.wait_for_emr_cluster_ready()
-        self.log.info("EMR cluster %s is ready", self.emr_cluster.cluster_id)
-
     @staticmethod
     def _add_and_wait_for_cluster_nodes_in_parallel(clusters):
         def _add_and_wait_for_cluster_nodes(cluster):
@@ -2331,18 +2108,6 @@ class ClusterTester(unittest.TestCase):
 
         # Deploy main VM-based monitoring
         if self.params.get("n_monitor_nodes") > 0:
-            test_id = str(self.test_config.test_id())
-            provisioners: List[GceProvisioner] = []
-            for datacenter in gce_datacenters:
-                provisioners.append(
-                    provisioner_factory.create_provisioner(
-                        backend="k8s-gke",
-                        test_id=test_id,
-                        region=datacenter,
-                        availability_zone=self.params.get("availability_zone"),
-                        network_name=self.params.get("gce_network"),
-                    )
-                )
             for i in range(self.k8s_clusters[0].tenants_number):
                 self.log.debug("Create monitor for the DB cluster №%s", i + 1)
                 self.monitors_multitenant.append(
@@ -2357,7 +2122,6 @@ class ClusterTester(unittest.TestCase):
                         gce_datacenter=gce_datacenters,
                         gce_service=get_gce_compute_instances_client(),
                         credentials=self.credentials,
-                        provisioners=provisioners,
                         user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
                         n_nodes=self.params.get("n_monitor_nodes"),
                         targets={
@@ -2502,7 +2266,7 @@ class ClusterTester(unittest.TestCase):
             self.monitors = NoMonitorSet()
             self.monitors_multitenant = [self.monitors]
 
-    def get_cluster_cloud(self, loader_info, db_info, monitor_info):  # noqa: PLR0912, PLR0914
+    def get_cluster_cloud(self, loader_info, db_info, monitor_info):  # noqa: PLR0912
         cloud_api_client = ScyllaCloudAPIClient(
             api_url=self.params.cloud_env_credentials["base_url"],
             auth_token=self.params.cloud_env_credentials["api_token"],
@@ -2515,8 +2279,8 @@ class ClusterTester(unittest.TestCase):
             n_db_nodes = self.params.get("n_db_nodes")
             if isinstance(n_db_nodes, int):
                 db_info["n_nodes"] = [n_db_nodes]
-            elif isinstance(n_db_nodes, list):
-                db_info["n_nodes"] = n_db_nodes
+            elif isinstance(n_db_nodes, str):
+                db_info["n_nodes"] = [int(n) for n in n_db_nodes.split()]
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_db_nodes)))
 
@@ -2524,8 +2288,8 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):
                 loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):  # latest type to support multiple datacenters
-                loader_info["n_nodes"] = n_loader_nodes
+            elif isinstance(n_loader_nodes, str):
+                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
 
@@ -2612,26 +2376,13 @@ class ClusterTester(unittest.TestCase):
             if monitor_info["n_local_ssd"] is None:
                 monitor_info["n_local_ssd"] = self.params.get("gce_n_local_ssd_disk_monitor")
 
-            datacenters = gce_datacenter.split() if isinstance(gce_datacenter, str) else [gce_datacenter]
-            provisioners: List[GceProvisioner] = []
-            for datacenter in datacenters:
-                provisioners.append(
-                    provisioner_factory.create_provisioner(
-                        backend="gce",
-                        test_id=str(self.test_config.test_id()),
-                        region=datacenter,
-                        availability_zone=self.params.get("availability_zone"),
-                        network_name=self.params.get("gce_network"),
-                    )
-                )
-
             common_params = dict(
                 gce_image_username=self.params.get("gce_image_username"),
                 gce_network=self.params.get("gce_network"),
                 credentials=self.credentials,
                 user_prefix=user_prefix,
                 params=self.params,
-                gce_datacenter=datacenters,
+                gce_datacenter=gce_datacenter.split() if isinstance(gce_datacenter, str) else [gce_datacenter],
                 gce_service=get_gce_compute_instances_client(),
             )
 
@@ -2643,7 +2394,6 @@ class ClusterTester(unittest.TestCase):
                 gce_instance_type=loader_info["type"],
                 n_nodes=loader_info["n_nodes"],
                 add_disks=loader_additional_disks,
-                provisioners=provisioners,
                 **common_params,
             )
 
@@ -2658,7 +2408,6 @@ class ClusterTester(unittest.TestCase):
                     n_nodes=monitor_info["n_nodes"],
                     add_disks=monitor_additional_disks,
                     targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
-                    provisioners=provisioners,
                     **common_params,
                 )
             else:
@@ -2722,7 +2471,6 @@ class ClusterTester(unittest.TestCase):
             cluster_backend = "aws"
 
         self.get_cluster_kafka()
-        self.get_cluster_emr()
 
         if cluster_backend in ("aws", "aws-siren"):
             self.get_cluster_aws(loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
@@ -2740,8 +2488,6 @@ class ClusterTester(unittest.TestCase):
             self.get_cluster_k8s_eks(n_k8s_clusters=len(self.params.region_names))
         elif cluster_backend == "azure":
             self.get_cluster_azure(loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
-        elif cluster_backend == "oci":
-            self.get_cluster_oci(loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
         elif cluster_backend == "xcloud":
             self.get_cluster_cloud(loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
 
@@ -2749,7 +2495,17 @@ class ClusterTester(unittest.TestCase):
         #       for each of the Grafana instances (may be more than 1 in case of K8S multi-tenant setup)
         start_posting_grafana_annotations()
 
+    def _cs_add_node_flag(self, stress_cmd):
+        if "-node" not in stress_cmd:
+            if self.test_config.INTRA_NODE_COMM_PUBLIC:
+                ip = ",".join(self.db_cluster.get_node_public_ips())
+            else:
+                ip = self.db_cluster.get_node_private_ips()[0]
+            stress_cmd = "%s -node %s" % (stress_cmd, ip)
+        return stress_cmd
+
     def run_stress(self, stress_cmd, duration=None):
+        stress_cmd = self._cs_add_node_flag(stress_cmd)
         cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd, duration=duration)
         self.verify_stress_thread(cs_thread_pool)
 
@@ -2829,6 +2585,7 @@ class ClusterTester(unittest.TestCase):
         params=None,
         **_,
     ):
+        # stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration:
             timeout = self.get_duration(duration)
             if " duration" in stress_cmd:
@@ -2839,6 +2596,10 @@ class ClusterTester(unittest.TestCase):
         else:
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
 
+        if self.create_stats:
+            self.update_stress_cmd_details(
+                stress_cmd, prefix, stresser="cassandra-stress", aggregate=stats_aggregate_cmds
+            )
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
         cs_thread = CassandraStressThread(
             loader_set=self.loaders,
@@ -2884,6 +2645,10 @@ class ClusterTester(unittest.TestCase):
         else:
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
 
+        if self.create_stats:
+            self.update_stress_cmd_details(
+                stress_cmd, prefix, stresser="cassandra-stress", aggregate=stats_aggregate_cmds
+            )
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
         cs_thread = CqlStressCassandraStressThread(
             loader_set=self.loaders,
@@ -2915,6 +2680,8 @@ class ClusterTester(unittest.TestCase):
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
 
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         bench_thread = ScyllaBenchThread(
             stress_cmd,
             loader_set=self.loaders,
@@ -2937,6 +2704,8 @@ class ClusterTester(unittest.TestCase):
         if not self.params.get("stop_test_on_stress_failure"):
             stop_test_on_failure = False
 
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, stresser="cassandra-harry", aggregate=stats_aggregate_cmds)
         harry_thread = CassandraHarryThread(
             loader_set=self.loaders,
             stress_cmd=stress_cmd,
@@ -2954,6 +2723,9 @@ class ClusterTester(unittest.TestCase):
         self, stress_cmd, duration=None, stress_num=1, prefix="", round_robin=False, stats_aggregate_cmds=True, **_
     ):
         timeout = self.get_duration(duration)
+
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, prefix, stresser="ycsb", aggregate=stats_aggregate_cmds)
 
         return YcsbStressThread(
             loader_set=self.loaders,
@@ -2987,6 +2759,9 @@ class ClusterTester(unittest.TestCase):
         else:
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
 
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, prefix, stresser="latte", aggregate=stats_aggregate_cmds)
+
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
         return LatteStressThread(
             loader_set=self.loaders,
@@ -3003,6 +2778,9 @@ class ClusterTester(unittest.TestCase):
         self, stress_cmd, duration=None, stress_num=1, prefix="", round_robin=False, stats_aggregate_cmds=True, **_
     ):
         timeout = self.get_duration(duration)
+
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, prefix, stresser="hydra-kcl", aggregate=stats_aggregate_cmds)
 
         return KclStressThread(
             loader_set=self.loaders,
@@ -3026,6 +2804,9 @@ class ClusterTester(unittest.TestCase):
         **_,
     ):
         timeout = self.get_duration(duration)
+
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, prefix, stresser="nosqlbench", aggregate=stats_aggregate_cmds)
 
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
         return NoSQLBenchStressThread(
@@ -3057,6 +2838,9 @@ class ClusterTester(unittest.TestCase):
     ):
         timeout = self.get_duration(duration)
 
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, prefix, stresser="ndbench", aggregate=stats_aggregate_cmds)
+
         return NdBenchStressThread(
             loader_set=self.loaders,
             stress_cmd=stress_cmd,
@@ -3081,6 +2865,8 @@ class ClusterTester(unittest.TestCase):
     ):
         timeout = self.get_duration(duration)
 
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, prefix, stresser="cdcreader", aggregate=stats_aggregate_cmds)
         return CDCLogReaderThread(
             loader_set=self.loaders,
             termination_event=self.db_cluster.nemesis_termination_event,
@@ -3104,6 +2890,8 @@ class ClusterTester(unittest.TestCase):
             cmd = re.sub(r"\s--warmup\s+\d+[mhd]\s", f" --warmup {int(self._stress_duration * 0.2)}m ", cmd)
         else:
             timeout = get_timeout_from_stress_cmd(cmd) or self.get_duration(duration)
+        if self.create_stats:
+            self.update_stress_cmd_details(cmd, stresser="gemini", aggregate=False)
         return GeminiStressThread(
             test_cluster=self.db_cluster,
             oracle_cluster=self.cs_db_cluster,
@@ -3143,7 +2931,8 @@ class ClusterTester(unittest.TestCase):
         """
         results, errors = thread_pool.parse_results()
         if results:
-            pass
+            if self.create_stats:
+                self.update_stress_results(results)
         else:
             self.log.warning("There is no stress results, probably stress thread has failed.")
 
@@ -3167,16 +2956,23 @@ class ClusterTester(unittest.TestCase):
 
     def get_stress_results(self, queue, store_results=True) -> list[dict | None]:
         results = queue.parse_results()[0]
+        if store_results and self.create_stats:
+            self.update_stress_results(results)
         return results
 
     def get_stress_results_bench(self, queue):
         results = queue.get_stress_results_bench()
+        if self.create_stats:
+            self.update_stress_results(results)
         return results
 
     def verify_cdclog_reader_results(self, cdcreadstessors_queue, update_es=False):
         results = cdcreadstessors_queue.get_results()
         if not results:
             self.log.warning("There are no cdclog_reader results")
+        if self.create_stats and update_es:
+            self.log.debug(results)
+            self.update_stress_results(results)
 
         return results
 
@@ -3195,6 +2991,11 @@ class ClusterTester(unittest.TestCase):
             result = queue.verify_gemini_results(results)
             stats.update(result)
 
+        if self.create_stats:
+            self.update_stress_results(results, calculate_stats=False)
+            self.update(
+                {"status": stats["status"], "test_details": {"status": stats["status"]}, "errors": stats["errors"]}
+            )
         return stats
 
     @staticmethod
@@ -3796,16 +3597,6 @@ class ClusterTester(unittest.TestCase):
                 self.test_config.keep_cluster(node_type="monitor_nodes", val="keep")
                 self.set_keep_alive_on_failure(self.monitors)
 
-        if self.emr_cluster and self.emr_cluster.cluster_id:
-            action = actions_per_cluster_type["emr_cluster"]["action"]
-            self.log.info("Action for EMR cluster is %s", action)
-            if (action == "destroy") or (action == "keep-on-failure" and not critical_events):
-                self.emr_cluster.terminate_emr_cluster()
-                self.emr_cluster = None
-            elif action == "keep-on-failure" and critical_events:
-                self.log.info("Critical errors found. Keeping EMR cluster %s", self.emr_cluster.cluster_id)
-                self.test_config.keep_cluster(node_type="emr_cluster", val="keep")
-
         self.destroy_credentials()
 
     @silence(name="Save node schema", raise_error_event=False)
@@ -3819,94 +3610,6 @@ class ClusterTester(unittest.TestCase):
 
         with open(log_file_path, "w", encoding="utf-8") as res_file:
             res_file.write(result.strip())
-
-    @silence(name="Save nodetool output", raise_error_event=False)
-    def save_nodetool_output_in_file(self, node, sub_cmd: str, log_file: str):
-        """
-        Save nodetool command output to a file.
-
-        :param node: Node to run the command on
-        :param sub_cmd: nodetool subcommand (e.g., 'status', 'gossipinfo')
-        :param log_file: filename to save output to
-        """
-        self.log.info("Save nodetool %s output to %s/%s from node %s", sub_cmd, self.logdir, log_file, node.name)
-
-        log_file_path = Path(self.logdir) / log_file
-        try:
-            result = node.run_nodetool(sub_cmd=sub_cmd, ignore_status=True, publish_event=False, timeout=300)
-            if result.ok:
-                log_file_path.write_text(result.stdout.strip(), encoding="utf-8")
-            else:
-                self.log.warning("Failed to run nodetool %s on node %s: %s", sub_cmd, node.name, result.stderr)
-        except (UnexpectedExit, Failure, OSError) as exc:
-            self.log.warning("Exception while running nodetool %s on node %s: %s", sub_cmd, node.name, exc)
-
-    @silence(name="Gather failure statistics")
-    def gather_failure_statistics(self):
-        """
-        Gather extra statistics on test failure for debugging purposes.
-        Collects nodetool status, gossipinfo, compactionstats, and optionally scylla-doctor output.
-        """
-        if self.db_cluster is None:
-            return
-
-        self.log.info("Gathering failure statistics from cluster nodes...")
-
-        # collect nodetool status from first available node
-        for node in self.db_cluster.nodes:
-            if node._is_node_ready_run_scylla_commands():
-                self.save_nodetool_output_in_file(node, "status", "nodetool_status_failure.log")
-                break
-
-        ready_nodes = [node for node in self.db_cluster.nodes if node._is_node_ready_run_scylla_commands()]
-        if not ready_nodes:
-            self.log.warning("No ready nodes found for collecting gossipinfo and compactionstats")
-            return
-
-        def collect_node_stats(node):
-            try:
-                self.save_nodetool_output_in_file(node, "gossipinfo", f"nodetool_gossipinfo_failure_{node.name}.log")
-                self.save_nodetool_output_in_file(
-                    node, "compactionstats", f"nodetool_compactionstats_failure_{node.name}.log"
-                )
-                return node.name, True, None
-            except Exception as exc:  # noqa: BLE001
-                return node.name, False, str(exc)
-
-        with ThreadPoolExecutor(max_workers=len(ready_nodes)) as executor:
-            for future in as_completed(executor.submit(collect_node_stats, node) for node in ready_nodes):
-                node_name, success, error = future.result()
-                if not success:
-                    self.log.warning("Failed to collect stats from node %s: %s", node_name, error)
-
-        if self.params.get("use_scylla_doctor_on_failure"):
-            self.log.info("Running scylla-doctor on failure...")
-            try:
-                from utils.scylla_doctor import ScyllaDoctor, ScyllaDoctorException  # noqa: PLC0415
-
-                for node in ready_nodes:
-                    try:
-                        doctor = ScyllaDoctor(node=node, test_config=self.test_config, offline_install=True)
-                        doctor.install_scylla_doctor()
-                        doctor.run_scylla_doctor_and_collect_results()
-
-                        if doctor.json_result_file:
-                            local_json_path = os.path.join(self.logdir, f"scylla_doctor_{node.name}_vitals.json")
-                            node.remoter.receive_files(src=doctor.json_result_file, dst=local_json_path)
-                            self.log.debug("Downloaded scylla-doctor vitals from %s to %s", node.name, local_json_path)
-
-                        if doctor.scylla_logs_file:
-                            local_logs_path = os.path.join(self.logdir, f"scylla_doctor_{node.name}_logs.tar.gz")
-                            node.remoter.receive_files(src=doctor.scylla_logs_file, dst=local_logs_path)
-                            self.log.debug("Downloaded scylla-doctor logs from %s to %s", node.name, local_logs_path)
-
-                        self.log.info("Scylla-doctor completed for node %s", node.name)
-                    except (ScyllaDoctorException, UnexpectedExit, Failure, AssertionError) as exc:
-                        self.log.warning("Failed to run scylla-doctor on node %s: %s", node.name, exc)
-            except Exception as exc:  # noqa: BLE001
-                self.log.warning("Unexpected error when collecting scylla-doctor info: %s", exc)
-
-        self.log.info("Failure statistics collection completed")
 
     def save_schema(self):
         """
@@ -3931,9 +3634,6 @@ class ClusterTester(unittest.TestCase):
                 node=node, cmd="select JSON * from system.truncated", log_file="system_truncated.log"
             )
             self.save_cqlsh_output_in_file(
-                node=node, cmd="select JSON * from system.tablets", log_file="system_tablets.log"
-            )
-            self.save_cqlsh_output_in_file(
                 node=node, cmd="desc schema with internals", log_file="schema_with_internals.log"
             )
             break
@@ -3948,11 +3648,6 @@ class ClusterTester(unittest.TestCase):
         with silence(parent=self, name="Sending test end event"):
             InfoEvent(message="TEST_END").publish()
         self.save_schema()
-
-        test_status = self.get_test_status()
-        if test_status == "FAILED":
-            self.gather_failure_statistics()
-
         self.log.info("Post test validators are starting...")
         for validator_class in teardown_validators_list:
             validator_class(self.params, self).validate()
@@ -3981,14 +3676,20 @@ class ClusterTester(unittest.TestCase):
             self.collect_logs()
         self.collect_ssl_conf()
         self.clean_resources()
+        if self.create_stats:
+            self.update_test_with_errors()
         time.sleep(1)  # Sleep is needed to let final event being saved into files
         self.save_email_data()
-        time.sleep(1)  # Sleep is needed to let events from save_email_data being processed
         self.argus_collect_gemini_results()
         self.destroy_localhost()
         if not self.test_config.KEEP_ALIVE_DB_NODES:
             with silence(parent=self, name="Cleaning up SSL config directory"):
                 cleanup_ssl_config()
+
+        try:
+            ElasticRunReporter().report_run(run_id=self.test_config.test_id(), status=self.get_test_status())
+        except Exception:  # noqa: BLE001
+            pass
 
         self.log.info("Test ID: {}".format(self.test_config.test_id()))
 
@@ -4135,6 +3836,9 @@ class ClusterTester(unittest.TestCase):
         if s3_link:
             self.log.info(s3_link)
             self.argus_collect_logs({"sct_job_log": s3_link})
+
+            if self.create_stats:
+                self.update({"test_details": {"log_files": {"job_log": s3_link}}})
 
     @silence()
     def stop_event_device(self):
@@ -4311,6 +4015,156 @@ class ClusterTester(unittest.TestCase):
         used = int(res[0]["values"][0][1]) / (2**10)
         assert used >= size, f"Waiting for Scylla data dir to reach '{size}', current size is: '{used}'"
 
+    def check_latency_during_ops(self, hdr_tags: list[str]):
+        start_time = self.start_time if not self.create_stats else self._stats["test_details"]["start_time"]
+        end_time = time.time()
+        analyzer = LatencyDuringOperationsPerformanceAnalyzer
+        results_analyzer = analyzer(
+            es_index=self._test_index,
+            email_recipients=self.params.get("email_recipients"),
+            events=get_events_grouped_by_category(_registry=self.events_processes_registry),
+        )
+        with open(self.latency_results_file, encoding="utf-8") as file:
+            latency_results = json.load(file)
+        self.log.debug(
+            "latency_results were loaded from file %s and its result is %s", self.latency_results_file, latency_results
+        )
+        benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
+        if latency_results and self.create_stats:
+            workload = self._test_index.split("-")[-1]
+            histogram_total_data = self.get_hdrhistogram(
+                hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time
+            )
+            histogram_data_by_interval = self.get_hdrhistogram_by_interval(
+                hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time
+            )
+            latency_results["summary"] = {"hdr_summary": histogram_total_data, "hdr": histogram_data_by_interval}
+            latency_results = calculate_latency(latency_results)
+            latency_results = analyze_hdr_percentiles(latency_results)
+            with open(self.latency_results_file, "w", encoding="utf-8") as file:
+                json.dump(latency_results, file)
+            self.log.debug("collected latency values are: %s", latency_results)
+            self.update({"latency_during_ops": latency_results})
+            self.update_test_details()
+            try:
+                results_analyzer.check_regression(
+                    test_id=self._test_id,
+                    data=latency_results,
+                    node_benchmarks=benchmarks_results,
+                    email_subject_postfix=self.params.get("email_subject_postfix"),
+                )
+            except Exception as exc:  # noqa: BLE001
+                TestFrameworkEvent(
+                    message="Failed to check regression",
+                    trace=sys._getframe().f_back,
+                    source=self.__class__.__name__,
+                    source_method="check_regression",
+                    exception=exc,
+                ).publish_or_dump()
+
+    def check_regression(self):
+        results_analyzer = PerformanceResultsAnalyzer(
+            es_index=self._test_index,
+            email_recipients=self.params.get("email_recipients"),
+            events=get_events_grouped_by_category(
+                _registry=self.events_processes_registry, limit=self.params.get("events_limit_in_email")
+            ),
+        )
+        is_gce = bool(self.params.get("cluster_backend") == "gce")
+        benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
+        try:
+            results_analyzer.check_regression(
+                self._test_id,
+                is_gce,
+                email_subject_postfix=self.params.get("email_subject_postfix"),
+                use_wide_query=True,
+                node_benchmarks=benchmarks_results,
+                extra_jobs_to_compare=self.params.get("perf_extra_jobs_to_compare"),
+            )
+        except Exception as exc:  # noqa: BLE001
+            TestFrameworkEvent(
+                message="Failed to check regression",
+                trace=sys._getframe().f_back,
+                source=self.__class__.__name__,
+                source_method="check_regression",
+                exception=exc,
+            ).publish_or_dump()
+
+    def check_regression_with_baseline(self, subtest_baseline):
+        results_analyzer = PerformanceResultsAnalyzer(
+            es_index=self._test_index,
+            email_recipients=self.params.get("email_recipients"),
+            events=get_events_grouped_by_category(
+                _registry=self.events_processes_registry, limit=self.params.get("events_limit_in_email")
+            ),
+        )
+        is_gce = bool(self.params.get("cluster_backend") == "gce")
+        try:
+            results_analyzer.check_regression_with_subtest_baseline(
+                self._test_id,
+                base_test_id=self.test_config.test_id(),
+                subtest_baseline=subtest_baseline,
+                is_gce=is_gce,
+                extra_jobs_to_compare=self.params.get("perf_extra_jobs_to_compare"),
+            )
+        except Exception as exc:  # noqa: BLE001
+            TestFrameworkEvent(
+                message="Failed to check regression",
+                trace=sys._getframe().f_back,
+                source=self.__class__.__name__,
+                source_method="check_regression",
+                exception=exc,
+            ).publish_or_dump()
+
+    def check_regression_multi_baseline(self, subtests_info=None, metrics=None, email_subject=None):
+        results_analyzer = PerformanceResultsAnalyzer(
+            es_index=self._test_index,
+            email_recipients=self.params.get("email_recipients"),
+            events=get_events_grouped_by_category(
+                _registry=self.events_processes_registry, limit=self.params.get("events_limit_in_email")
+            ),
+        )
+        if email_subject is None:
+            email_subject = (
+                "Performance Regression Compare Results - {test.test_name} - "
+                "{test.software.scylla_server_any.version.as_string}"
+            )
+            email_postfix = self.params.get("email_subject_postfix")
+            if email_postfix:
+                email_subject += " - " + email_postfix
+        try:
+            return results_analyzer.check_regression_multi_baseline(
+                self._create_test_id(doc_id_with_timestamp=False),
+                metrics=metrics,
+                subtests_info=subtests_info,
+                subject=email_subject,
+            )
+        except Exception as exc:  # noqa: BLE001
+            TestFrameworkEvent(
+                message="Failed to check regression",
+                trace=sys._getframe().f_back,
+                source=self.__class__.__name__,
+                source_method="check_regression",
+                exception=exc,
+            ).publish_or_dump()
+
+    def check_specified_stats_regression(self, stats):
+        perf_analyzer = SpecifiedStatsPerformanceAnalyzer(
+            es_index=self._test_index,
+            email_recipients=self.params.get("email_recipients"),
+            events=get_events_grouped_by_category(_registry=self.events_processes_registry),
+        )
+        try:
+            perf_analyzer.check_regression(self._test_id, stats)
+        except Exception as exc:  # noqa: BLE001
+            TestFrameworkEvent(
+                message="Failed to check regression",
+                trace=sys._getframe().f_back,
+                source=self.__class__.__name__,
+                source_method="check_regression",
+                exception=exc,
+            ).publish_or_dump()
+
     @property
     def is_compaction_running(self):
         compaction_query = "sum(scylla_compaction_manager_compactions{})"
@@ -4446,14 +4300,14 @@ class ClusterTester(unittest.TestCase):
                 and (
                     [self.db_cluster.scylla_manager_node]
                     if self.params.get("cluster_backend") == "xcloud"
-                    else getattr(self.db_cluster, "manager_instance", None)
+                    else self.db_cluster.manager_instance
                 ),
                 "collector": SirenManagerLogCollector,
                 "logname": "monitoring_log",
             },
             {
                 "name": "vector_store",
-                "nodes": self._get_vector_store_nodes(),
+                "nodes": (self.db_cluster and hasattr(self.db_cluster, "vs_nodes") and self.db_cluster.vs_nodes),
                 "collector": VectorStoreLogCollector,
                 "logname": "vector_store_log",
             },
@@ -4488,6 +4342,16 @@ class ClusterTester(unittest.TestCase):
                 else:
                     self.log.warning("There are no logs for %s uploaded", cluster["name"])
         self.argus_collect_logs(logs_dict)
+
+        if self.create_stats:
+            with silence(parent=self, name="Publish log links"):
+                self.update(
+                    {
+                        "test_details": {
+                            "log_files": logs_dict,
+                        },
+                    }
+                )
 
         self.log.info(
             "Logs collected. Run command `hydra investigate show-logs %s' to get links", self.test_config.test_id()
@@ -4586,7 +4450,9 @@ class ClusterTester(unittest.TestCase):
 
     def get_nemesises_stats(self):
         nemesis_stats = {}
-        if self.db_cluster:
+        if self.create_stats:
+            nemesis_stats = self.get_doc_data(key="nemesis")
+        elif self.db_cluster:
             for nem in self.db_cluster.nemesis:
                 nemesis_stats.update(nem.stats)
         else:
@@ -4620,6 +4486,17 @@ class ClusterTester(unittest.TestCase):
             self.argus_collect_screenshots(grafana_screenshots)
         except Exception as exc:  # noqa: BLE001
             self.log.exception("Error while collecting screenshots:", exc_info=exc)
+
+        json_file_path = os.path.join(self.logdir, "email_data.json")
+
+        if email_data is not None:
+            email_data["grafana_screenshots"] = grafana_screenshots
+            email_data["reporter"] = self.email_reporter.__class__.__name__
+            self.log.debug("Save email data to file %s", json_file_path)
+            self.log.debug("Email data: %s", email_data)
+            save_email_data_to_file(email_data, json_file_path)
+        else:
+            self.log.info("failed to get email data, email will not be sent.")
 
     def argus_collect_screenshots(self, grafana_screenshots: list) -> None:
         if grafana_screenshots:
@@ -4690,12 +4567,9 @@ class ClusterTester(unittest.TestCase):
         elif backend in ("gce", "gce-siren", "k8s-gke"):
             scylla_instance_type = self.params.get("gce_instance_type_db") or "Unknown"
             region_name = self.params.get("gce_datacenter")
-        elif backend in ("azure",):
+        elif backend in ("azure"):
             scylla_instance_type = self.params.get("azure_instance_type_db") or "Unknown"
             region_name = self.params.get("azure_region_name")
-        elif backend in ("oci",):
-            scylla_instance_type = self.params.get("oci_instance_type_db") or "Unknown"
-            region_name = self.params.get("oci_region_name")
         elif backend in ("baremetal", "docker"):
             scylla_instance_type = "N/A"
             region_name = "N/A"
@@ -4856,16 +4730,3 @@ class ClusterTester(unittest.TestCase):
         """
         db_clusters = self.db_clusters_multitenant or [self.db_cluster]
         return [node for cluster in db_clusters for node in cluster.nodes]
-
-    def download_artifacts_from_s3(self):
-        """Downloads artifacts from an S3 to specified local directories.
-
-        This method retrieves S3 download configurations from SCT `download_from_s3` parameter and performs
-        the downloads for each configured source and destination mapping.
-        """
-        if download_config := self.params.get("download_from_s3"):
-            self.log.info("Starting download of artifacts from S3 with config: %s", download_config)
-            for dst_src_mapping in download_config:
-                dst_dir = list(dst_src_mapping.keys())[0]
-                for src_dir_s3_url in dst_src_mapping[dst_dir]:
-                    download_dir_from_cloud(url=src_dir_s3_url, dst_dir=dst_dir, skip_if_dst_dir_exists=False)

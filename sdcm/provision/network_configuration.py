@@ -19,7 +19,6 @@ class NetworkInterface:
     device_index: int
     device_name: Optional[str]
     mac_address: Optional[str]
-    use_dns_names: bool = False
 
 
 class ScyllaNetworkConfiguration:

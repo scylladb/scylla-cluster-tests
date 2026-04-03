@@ -55,8 +55,6 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):  
 
     if load_type == "mixed":
         load_type = ["read", "write"]
-    elif load_type == "read_disk_only":
-        load_type = ["read"]
     else:
         load_type = [load_type]
 

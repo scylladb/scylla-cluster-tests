@@ -28,7 +28,6 @@ from mypy_boto3_ec2.type_defs import (
     RequestLaunchTemplateDataTypeDef,
     LaunchTemplateTagSpecificationRequestTypeDef,
 )
-from botocore.exceptions import ClientError
 
 from sdcm import sct_abs_path, cluster
 from sdcm.cluster_aws import MonitorSetAWS
@@ -65,7 +64,7 @@ SUPPORTED_EBS_STORAGE_CLASSES = [
 
 EC2_INSTANCE_UPDATE_LOCK = Lock()
 
-ARCH_TO_IMAGE_TYPE_MAPPING = {"arm64": "AL2023_ARM_64_STANDARD", "x86_64": "AL2023_x86_64_STANDARD"}
+ARCH_TO_IMAGE_TYPE_MAPPING = {"arm64": "AL2_ARM_64", "x86_64": "AL2_x86_64"}
 
 
 def init_k8s_eks_cluster(
@@ -148,7 +147,6 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
                 instance_type=params.get("instance_type_loader"),
                 role_arn=params.get("eks_nodegroup_role_arn"),
                 disk_size=params.get("root_disk_size_monitor"),
-                labels={"scylla.scylladb.com/node-type": "scylla"},
                 k8s_cluster=k8s_cluster,
             ),
         )
@@ -166,13 +164,7 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
             ),
         )
     k8s_cluster.wait_all_node_pools_to_be_ready()
-
-    k8s_cluster.create_ebs_csi_driver_serviceaccount()
-    k8s_cluster.eks_client.create_addon(
-        clusterName=k8s_cluster.short_cluster_name,
-        addonName="aws-ebs-csi-driver",
-    )
-    k8s_cluster.deploy_ebs_csi_driver()
+    k8s_cluster.configure_ebs_csi_driver()
 
     k8s_cluster.deploy_cert_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
     if params.get("k8s_enable_sni"):
@@ -206,7 +198,7 @@ class EksNodePool(CloudK8sNodePool):
         ssh_key_pair_name: str = None,
         provision_type: Literal["ON_DEMAND", "SPOT"] = "ON_DEMAND",
         launch_template: str = None,
-        image_type: Literal["AL2023_x86_64_STANDARD", "AL2023_ARM_64_STANDARD"] = None,
+        image_type: Literal["AL2_x86_64", "AL2_x86_64_GPU", "AL2_ARM_64"] = None,
         disk_type: Literal["standard", "io1", "io2", "gp2", "gp3", "sc1", "st1"] = "gp3",
         k8s_version: str = None,
         is_deployed: bool = False,
@@ -214,7 +206,7 @@ class EksNodePool(CloudK8sNodePool):
     ):
         if not image_type:
             current_arch = get_arch_from_instance_type(instance_type=instance_type, region_name=k8s_cluster.region_name)
-            image_type = ARCH_TO_IMAGE_TYPE_MAPPING.get(current_arch, "AL2023_x86_64_STANDARD")
+            image_type = ARCH_TO_IMAGE_TYPE_MAPPING.get(current_arch, "AL2_x86_64")
         super().__init__(
             k8s_cluster=k8s_cluster,
             name=name,
@@ -246,6 +238,11 @@ class EksNodePool(CloudK8sNodePool):
         return f"sct-{self.k8s_cluster.short_cluster_name}-{self.name}"
 
     @property
+    def is_launch_template_required(self) -> bool:
+        # NOTE: use launch template to be able to specify the `gp3` disk type by default
+        return True
+
+    @property
     def _launch_template_cfg(self) -> dict:
         root_ebs_block_device_params = {
             "DeleteOnTermination": True,
@@ -268,19 +265,12 @@ class EksNodePool(CloudK8sNodePool):
             launch_template["TagSpecifications"] = [
                 LaunchTemplateTagSpecificationRequestTypeDef(ResourceType="instance", Tags=tags_as_ec2_tags(self.tags))
             ]
-        launch_template["MetadataOptions"] = {
-            "HttpTokens": "required",
-            "HttpPutResponseHopLimit": 2,
-        }
         return launch_template
-
-    @property
-    def tags(self) -> dict:
-        return {"Owner": "SCT", "Name": "SCT", **(super().tags or {})}
 
     @property
     def _node_group_cfg(self) -> dict:
         labels = {} if self.labels is None else self.labels
+        tags = {} if self.tags is None else self.tags
         node_labels = labels.copy()
         node_labels["node-pool"] = self.name
         node_pool_config = {
@@ -294,30 +284,35 @@ class EksNodePool(CloudK8sNodePool):
             "amiType": self.image_type,
             "nodeRole": self.role_arn,
             "labels": labels,
-            "tags": self.tags,
+            "tags": tags,
             "capacityType": self.provision_type.upper(),
             "version": self.k8s_version,
         }
-        node_pool_config["launchTemplate"] = {"name": self.launch_template_name}
+        if self.is_launch_template_required:
+            node_pool_config["launchTemplate"] = {"name": self.launch_template_name}
+        else:
+            node_pool_config["diskSize"] = self.disk_size
+            node_pool_config["remoteAccess"] = {
+                "ec2SshKey": self.ssh_key_pair_name,
+            }
         return node_pool_config
 
     def deploy(self) -> None:
         self.k8s_cluster.log.info("Deploy %s node pool with %d node(s)", self.name, self.num_nodes)
-        self.k8s_cluster.log.info(
-            "Deploy launch template %s with the configuration %s", self.launch_template_name, str(self._node_group_cfg)
-        )
-        create_launch_template_args = {
-            "LaunchTemplateName": self.launch_template_name,
-            "LaunchTemplateData": self._launch_template_cfg,
-        }
-        if self.tags:
-            create_launch_template_args["TagSpecifications"] = [
-                LaunchTemplateTagSpecificationRequestTypeDef(
-                    ResourceType="launch-template",
-                    Tags=tags_as_ec2_tags(self.tags),
-                )
-            ]
-        self.k8s_cluster.ec2_client.create_launch_template(**create_launch_template_args)
+        if self.is_launch_template_required:
+            self.k8s_cluster.log.info("Deploy launch template %s", self.launch_template_name)
+            create_launch_template_args = {
+                "LaunchTemplateName": self.launch_template_name,
+                "LaunchTemplateData": self._launch_template_cfg,
+            }
+            if self.tags:
+                create_launch_template_args["TagSpecifications"] = [
+                    LaunchTemplateTagSpecificationRequestTypeDef(
+                        ResourceType="launch-template",
+                        Tags=tags_as_ec2_tags(self.tags),
+                    )
+                ]
+            self.k8s_cluster.ec2_client.create_launch_template(**create_launch_template_args)
         self.k8s_cluster.eks_client.create_nodegroup(**self._node_group_cfg)
         self.is_deployed = True
 
@@ -429,7 +424,6 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                     "0.0.0.0/0",
                 ],
             },
-            accessConfig={"authenticationMode": "API_AND_CONFIG_MAP"},
             kubernetesNetworkConfig={"serviceIpv4Cidr": self.service_ipv4_cidr},
             logging={
                 "clusterLogging": [
@@ -441,7 +435,14 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
             },
             tags=self.tags,
         )
-
+        self.eks_client.create_addon(
+            clusterName=self.short_cluster_name, addonName="vpc-cni", addonVersion=self.vpc_cni_version
+        )
+        # TODO: think if we need to pin version, or select base on k8s version
+        self.eks_client.create_addon(
+            clusterName=self.short_cluster_name,
+            addonName="aws-ebs-csi-driver",
+        )
         if wait_till_functional:
             wait_for(
                 lambda: self.cluster_status == "ACTIVE",
@@ -450,10 +451,6 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                 timeout=1200,
                 text=f"Waiting till EKS cluster {self.short_cluster_name} become operational",
             )
-
-        self.eks_client.create_addon(
-            clusterName=self.short_cluster_name, addonName="vpc-cni", addonVersion=self.vpc_cni_version
-        )
 
     @property
     def cluster_info(self) -> dict:
@@ -465,25 +462,6 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
 
     def __str__(self):
         return f"{type(self).__name__} {self.name} | Version: {self.eks_cluster_version}"
-
-    def add_k8s_admin_principal(self):
-        eks = boto3.client("eks", region_name=self.region_name)
-        admin_principals = self.params.get("eks_admin_arn")
-
-        try:
-            for principal in admin_principals:
-                eks.create_access_entry(clusterName=self.short_cluster_name, principalArn=principal, type="STANDARD")
-                eks.associate_access_policy(
-                    clusterName=self.short_cluster_name,
-                    principalArn=principal,
-                    policyArn="arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy",
-                    accessScope={"type": "cluster"},
-                )
-
-        except ClientError as e:
-            err_code = e.response["Error"]["Code"]
-            err_message = e.response["Error"]["Message"]
-            self.log.error(f"Error while adding cluster admin principals: [{err_code}] {err_message}")
 
     def create_token_update_thread(self):
         return EksTokenUpdateThread(
@@ -502,8 +480,6 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         self.create_eks_cluster()
         self.log.info("Patch kubectl config")
         self.patch_kubectl_config()
-        self.log.info("Allow SCT roles to connect and manage cluster")
-        self.add_k8s_admin_principal()
         self.log.info("Create storage class")
         self.create_ebs_storge_class()
 
@@ -529,9 +505,16 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     def ebs_csi_driver_status(self) -> str:
         return self.ebs_csi_driver_info["status"]
 
-    def create_ebs_csi_driver_serviceaccount(self):
+    def configure_ebs_csi_driver(self):
         tags = ",".join([f"{key}={value}" for key, value in self.tags.items()])
 
+        wait_for(
+            lambda: self.ebs_csi_driver_status == "ACTIVE",
+            step=60,
+            throw_exc=True,
+            timeout=600,
+            text="Waiting till aws-ebs-csi-driver become operational",
+        )
         LOCALRUNNER.run(
             f"eksctl utils associate-iam-oidc-provider --region={self.region_name} --cluster={self.short_cluster_name} --approve"
         )
@@ -540,17 +523,9 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
             f"--cluster {self.short_cluster_name} "
             f"--attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy "
             f"--approve --role-name EKS_EBS-{self.short_cluster_name} --region {self.region_name} "
-            f"--tags {tags} --role-only --override-existing-serviceaccounts"
+            f"--tags {tags} --override-existing-serviceaccounts"
         )
 
-    def deploy_ebs_csi_driver(self):
-        wait_for(
-            lambda: self.ebs_csi_driver_status == "ACTIVE",
-            step=60,
-            throw_exc=True,
-            timeout=600,
-            text="Waiting till aws-ebs-csi-driver become operational",
-        )
         self.kubectl("rollout restart deployment ebs-csi-controller", namespace="kube-system")
 
     def tune_network(self):
@@ -912,9 +887,7 @@ class MonitorSetEKS(MonitorSetAWS):
         instances = sorted(instances, key=sort_by_index)
         return [ec2.get_instance(instance["InstanceId"]) for instance in instances]
 
-    def _create_instances(
-        self, count, ec2_user_data="", dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False, ami_id=None
-    ):
+    def _create_instances(self, count, ec2_user_data="", dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False):
         instances = super()._create_instances(
             count=count,
             ec2_user_data=ec2_user_data,
@@ -922,7 +895,6 @@ class MonitorSetEKS(MonitorSetAWS):
             az_idx=az_idx,
             instance_type=instance_type,
             is_zero_node=is_zero_node,
-            ami_id=ami_id,
         )
         for instance in instances:
             self._ec2_services[dc_idx].create_tags(

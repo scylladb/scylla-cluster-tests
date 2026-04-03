@@ -12,6 +12,8 @@ n_db_nodes: 3
 n_loaders: 3
 availability_zone: 'a,b,c'
 
+
+
 round_robin: true
 
 instance_type_db: 'i3en.6xlarge'
@@ -22,3 +24,8 @@ nemesis_seed: '018'
 nemesis_interval: 15
 
 user_prefix: 'longevity-user-profile-d'
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'

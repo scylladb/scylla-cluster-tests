@@ -10,8 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from __future__ import absolute_import, annotations
-
 import functools
 import json
 import socket
@@ -680,6 +678,3 @@ class AwsIAM:
         self.iam_client.create_policy_version(
             PolicyArn=policy_arn, PolicyDocument=json.dumps(policy_document), SetAsDefault=True
         )
-
-
-DEFAULT_AWS_REGION = "eu-west-1"

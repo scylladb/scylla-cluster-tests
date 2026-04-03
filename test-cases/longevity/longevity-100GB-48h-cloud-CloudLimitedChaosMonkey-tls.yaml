@@ -20,3 +20,7 @@ user_prefix: 'longevity-100gb-48h-cloud-limited-tls'
 space_node_threshold: 644245094
 
 server_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'

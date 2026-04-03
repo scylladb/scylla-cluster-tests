@@ -316,9 +316,6 @@ class CassandraStressHDRExporter(StressExporter):
             log_line=line,
             hst_log_start_time=self.log_start_time,
         )
-        if not summary_data:
-            LOGGER.warning("Got empty HDR histogram summary from line: %s", line.strip())
-            return []
         self.current_line_hdr_tag, percentiles = summary_data.popitem()
         return list(percentiles.values())
 
@@ -343,18 +340,6 @@ class CqlStressHDRExporter(CassandraStressHDRExporter):
                 gauge_name,
                 "Gauge for cql-stress hdr percentiles",
                 [f"cql_stress_hdr_{self.stress_operation}", "instance", "loader_idx", "cpu_idx", "type", "keyspace"],
-            )
-        return gauge_name
-
-
-class ScyllaBenchHDRExporter(CassandraStressHDRExporter):
-    def create_metrix_gauge(self):
-        gauge_name = f"collectd_scylla_bench_hdr_{self.stress_operation}_gauge"
-        if gauge_name not in self.METRICS_GAUGES:
-            self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
-                gauge_name,
-                "Gauge for scylla-bench hdr percentiles",
-                [f"scylla_bench_hdr_{self.stress_operation}", "instance", "loader_idx", "cpu_idx", "type", "keyspace"],
             )
         return gauge_name
 

@@ -15,7 +15,6 @@ import os
 import ipaddress
 import logging
 import re
-import time
 from functools import cached_property
 from typing import Any
 import functools
@@ -26,16 +25,10 @@ import requests
 from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.exceptions import WaitForTimeoutError
-from sdcm.reporting.tooling_reporter import VectorStoreVersionReporter
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
-from sdcm.utils.cloud_api_utils import (
-    compute_cluster_exp_hours,
-    build_cloud_cluster_name,
-    apply_keep_tag_to_name,
-    CLOUD_KEEP_ALIVE_HOURS,
-)
+from sdcm.utils.cloud_api_utils import XCLOUD_VS_INSTANCE_TYPES, compute_cluster_exp_hours, build_cloud_cluster_name
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.get_username import get_username
 from sdcm.utils.vector_store_utils import VectorStoreClusterMixin
@@ -268,16 +261,15 @@ class CloudNode(cluster.BaseNode):
     def _init_port_mapping(self):
         pass
 
+    # For cloud clusters, the keep duration is calculated and set during cluster creation.
+    # _set_keep_alive and _set_keep_duration methods in base classes are invoked after cluster
+    # creation, during nodes init, when it is already late to modify cluster details.
+    # The basic implementations of these methods remain here for backward compatibility.
     def _set_keep_alive(self) -> bool:
-        """Delegate to parent cluster to set keep-alive tag on cluster name."""
-        if self.parent_cluster:
-            return self.parent_cluster._set_keep_alive()
         return True
 
     def _set_keep_duration(self, duration_in_hours: int) -> None:
-        """Delegate to parent cluster to set keep duration tag on cluster name."""
-        if self.parent_cluster:
-            self.parent_cluster._set_keep_duration(duration_in_hours)
+        pass
 
     def restart(self):
         raise NotImplementedError(
@@ -533,21 +525,16 @@ class VectorStoreSetCloud(VectorStoreClusterMixin, cluster.BaseCluster):
             **kwargs,
         )
 
-    def _get_vs_info(self) -> dict:
-        """Fetch Vector Search info"""
-        return (
+    @property
+    def vs_nodes_data(self) -> list[dict]:
+        """Fetch Vector Search nodes data from Scylla Cloud API"""
+        vs_info = (
             self._api_client.get_vector_search_nodes(
                 account_id=self._account_id, cluster_id=self._cluster_id, dc_id=self._dc_id
             )
             or {}
         )
-
-    @property
-    def vs_nodes_data(self) -> list[dict]:
-        """Fetch active Vector Search nodes data"""
-        vs_info = self._get_vs_info()
-        all_nodes = [node for az in (vs_info.get("availabilityZones") or []) for node in az.get("nodes", [])]
-        return [node for node in all_nodes if node.get("status", "").upper() not in ("DELETED", "PENDING_DELETE")]
+        return [node for az in (vs_info.get("availabilityZones") or []) for node in az.get("nodes", [])]
 
     def init_vs_nodes_from_cluster(self) -> None:
         """Initialize CloudVSNode objects from Scylla Cloud API data"""
@@ -561,37 +548,18 @@ class VectorStoreSetCloud(VectorStoreClusterMixin, cluster.BaseCluster):
         self.nodes.extend(created_nodes)
 
     def wait_for_vs_nodes_ready(self, timeout: int = 600) -> None:
-        """Wait for Vector Search nodes to become active in all AZs"""
+        """Wait for Vector Search nodes to become active"""
         self.log.info("Waiting for Vector Search nodes to be ready")
-
-        expected_node_count = int(self.parent_db_cluster.params.get("n_vector_store_nodes"))
 
         def check_vs_nodes_status():
             try:
-                vs_info = self._get_vs_info()
-                availability_zones = vs_info.get("availabilityZones") or []
-
-                if not availability_zones:
-                    self.log.debug("No availability zones found yet")
+                all_nodes = self.vs_nodes_data
+                if not all_nodes:
                     return False
 
-                all_nodes = [
-                    node
-                    for az in availability_zones
-                    for node in az.get("nodes", [])
-                    if node.get("status", "").upper() not in ("DELETED", "PENDING_DELETE")
-                ]
                 active_count = sum(node.get("status", "").upper() == "ACTIVE" for node in all_nodes)
-                self.log.debug(
-                    "VS nodes status: %d/%d active (expected %d nodes across %d AZs)",
-                    active_count,
-                    len(all_nodes),
-                    expected_node_count,
-                    len(availability_zones),
-                )
-
-                return len(all_nodes) == expected_node_count and active_count == expected_node_count
-
+                self.log.debug("VS nodes status: %d/%d active", active_count, len(all_nodes))
+                return active_count == len(all_nodes)
             except Exception as e:  # noqa: BLE001
                 self.log.debug("Error checking VS nodes status: %s", e)
                 return False
@@ -657,8 +625,6 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self._deploy_vs_nodes = int(params.get("n_vector_store_nodes")) > 0
         self.vector_store_cluster = None
         self.manager_node = None
-
-        self.xcloud_scaling_config = params.get("xcloud_scaling_config")
 
         cluster_prefix = "db-cluster"
         node_prefix = "db-node"
@@ -795,8 +761,6 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self.log.debug("Cluster creation initiated. Cluster ID: %s", self._cluster_id)
         self._wait_for_cluster_ready()
 
-        self.name = cluster_config["cluster_name"]
-
         if self.vpc_peering_enabled:
             self.setup_vpc_peering(self.dc_id)
 
@@ -804,20 +768,9 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         nodes = self._init_nodes_from_cluster(count, dc_idx, rack)
         if self._deploy_vs_nodes:
-            self._wait_for_cloud_services()
             self._init_vector_store_cluster()
-            self._init_manager_node(wait_for_install=False)
-        else:
-            self._init_manager_node()
 
-        if self.vector_store_cluster and len(self.vector_store_cluster.nodes) > 0:
-            try:
-                node = self.vector_store_cluster.nodes[0]
-                VectorStoreVersionReporter(
-                    node.remoter, "/home/ubuntu/vector-store/vector-store", self.test_config.argus_client()
-                ).report()
-            except Exception:  # noqa: BLE001
-                LOGGER.warning("Error submitting vector store version, VS package won't show in Argus.", exc_info=True)
+        self._init_manager_node()
 
         self._cluster_created = True
         vs_node_count = len(self.vector_store_cluster.nodes) if self.vector_store_cluster else 0
@@ -873,118 +826,41 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self.nodes.extend(created_nodes)
         return created_nodes
 
-    def _init_manager_node(self, wait_for_install: bool = True) -> None:
+    @property
+    def vs_nodes_data(self) -> list[dict]:
+        """Fetch and flatten Vector Search nodes data from Scylla Cloud API"""
+        vs_info = self._api_client.get_vector_search_nodes(
+            account_id=self._account_id, cluster_id=self._cluster_id, dc_id=self.dc_id
+        )
+        return [node for az in (vs_info.get("availabilityZones") or []) for node in az.get("nodes", [])]
+
+    def _init_vs_nodes_from_cluster(self) -> list[CloudVSNode]:
+        """Decompose the created cluster VS nodes info into individual CloudVSNode objects"""
+        created_nodes = self._init_nodes_from_data(
+            nodes_data=self.vs_nodes_data, node_class=CloudVSNode, node_prefix="vs-node", dc_idx=0, rack=0
+        )
+        self.vs_nodes.extend(created_nodes)
+        return created_nodes
+
+    def _init_manager_node(self) -> None:
         localhost = TestConfig().tester_obj().localhost
         if not localhost.xcloud_connect_supported(self.params):
             self.log.debug("XCloud connectivity not supported, skipping Manager node initialization")
             return
 
         self.log.info("Initializing Manager node for cluster %s", self._cluster_id)
-        if wait_for_install:
-            self._wait_for_manager_node_ready()
 
+        self._wait_for_manager_node_ready()
         self.manager_node = CloudManagerNode(parent_cluster=self)
         self.manager_node._init_remoter()
         self.manager_node.wait_ssh_up()
         self.log.info("Manager node SSH connection established")
 
-    def _wait_for_cloud_services(self) -> None:
-        """Wait for both Manager and Vector Search services installation.
-
-        Cloud handles INSTALL_VECTOR_SEARCH and INSTALL_MANAGER requests sequentially
-        without a guaranteed order. This method detects which request is currently being
-        processed and waits for them one by one.
-        """
-        self.log.info("Waiting for cloud service installations (Manager + Vector Search)")
-
-        expected_types = {"INSTALL_MANAGER", "INSTALL_VECTOR_SEARCH"}
-        # wait for IN_PROGRESS first, then QUEUED
-        status_priority = {"IN_PROGRESS": 0, "QUEUED": 1, "COMPLETED": 2}
-
-        pending_requests = self._get_pending_service_requests(expected_types, status_priority)
-
-        for req in pending_requests:
-            self.log.debug("Waiting for %s (request ID: %s) to complete", req["requestType"], req["id"])
-            self._wait_for_cloud_request_completed(request_id=req["id"], request_type=req["requestType"])
-
-        self.log.info("All cloud service installations completed")
-
-    def _get_pending_service_requests(
-        self,
-        expected_types: set[str],
-        status_priority: dict[str, int],
-        retries: int = 5,
-        delay: int = 5,
-    ) -> list[dict]:
-        """Retrieve pending service requests and sort them by status priority."""
-        for attempt in range(1, retries + 1):
-            cluster_requests = self._api_client.get_cluster_requests(
-                account_id=self._account_id, cluster_id=self._cluster_id
-            )
-            requests = [req for req in cluster_requests if req.get("requestType") in expected_types]
-            found_types = {req["requestType"] for req in requests}
-
-            if found_types == expected_types:
-                pending = [req for req in requests if req.get("status", "").upper() != "COMPLETED"]
-                pending.sort(key=lambda r: status_priority.get(r.get("status", "").upper(), 99))
-                self.log.debug(
-                    "Found all service requests: %s (%d pending)",
-                    ", ".join(f"{r['requestType']}={r['status']}" for r in requests),
-                    len(pending),
-                )
-                return pending
-
-            self.log.debug(
-                "Attempt %d/%d: missing service requests %s, retrying in %ds",
-                attempt,
-                retries,
-                expected_types - found_types,
-                delay,
-            )
-            time.sleep(delay)
-
-        raise ScyllaCloudError(
-            f"Not all expected service requests ({expected_types}) appeared after {retries} attempts"
-        )
-
-    def _wait_for_cloud_request_completed(self, request_id: int, request_type: str, timeout: int = 600) -> None:
-        """Wait for a specific cluster request to reach COMPLETED status."""
-
-        def is_request_completed():
-            details = self._api_client.get_cluster_request_details(account_id=self._account_id, request_id=request_id)
-            status = details.get("status", "").upper()
-            self.log.debug(
-                "%s (request %s) status: %s (%s%%)",
-                request_type,
-                request_id,
-                status,
-                details.get("progressPercent", 0),
-            )
-
-            if status == "FAILED":
-                raise ScyllaCloudError(f"{request_type} installation failed: {details}")
-            return status == "COMPLETED"
-
-        wait.wait_for(
-            func=is_request_completed,
-            step=15,
-            text=f"Waiting for {request_type} to complete",
-            timeout=timeout,
-            throw_exc=True,
-        )
-        self.log.info("%s installation completed (request %s)", request_type, request_id)
-
     def _prepare_cluster_config(self, node_count: int, instance_type: str) -> dict[str, Any]:
-        if self.xcloud_scaling_config:
-            node_count = 0
-            instance_id = 0
-            tablets_mode = "enforced"
-        else:
-            instance_type_name = instance_type or self.params.cloud_provider_params.get("instance_type_db")
-            instance_id = self._api_client.get_instance_id_by_name(
-                cloud_provider_id=self.provider_id, region_id=self.region_id, instance_type_name=instance_type_name
-            )
-            tablets_mode = None
+        instance_type_name = instance_type or self.params.cloud_provider_params.get("instance_type_db")
+        instance_id = self._api_client.get_instance_id_by_name(
+            cloud_provider_id=self.provider_id, region_id=self.region_id, instance_type_name=instance_type_name
+        )
 
         allowed_ips = [format_ip_with_cidr(self._api_client.client_ip)]
         allowed_ips.extend(format_ip_with_cidr(ip) for ip in self._allowed_ips)
@@ -1005,21 +881,16 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             except CidrAllocationError as e:
                 raise ScyllaCloudError(f"CIDR allocation failed: {e}") from e
 
-        vs_config = None
-        if self._deploy_vs_nodes:
-            vs_instance_type_name = self.params.get("instance_type_vector_store")
-            vs_instance_types = self._api_client.get_vector_search_instance_types(
-                cloud_provider_id=self.provider_id, region_id=self.region_id
-            )
-            if vs_instance_type_name not in vs_instance_types:
-                raise ScyllaCloudError(
-                    f"Vector Search instance type '{vs_instance_type_name}' is unavailable. "
-                    f"Available types: {', '.join(vs_instance_types.keys())}"
-                )
-            vs_config = {
-                "nodeCount": int(self.params.get("n_vector_store_nodes")),
-                "defaultInstanceTypeId": vs_instance_types[vs_instance_type_name],
+        vs_config = (
+            {
+                "defaultNodes": int(self.params.get("n_vector_store_nodes")),
+                "defaultInstanceTypeId": XCLOUD_VS_INSTANCE_TYPES[self._cloud_provider][
+                    self.params.get("instance_type_vector_store")
+                ],
             }
+            if self._deploy_vs_nodes
+            else None
+        )
 
         expiration_hours = compute_cluster_exp_hours(
             self.test_config.TEST_DURATION, self.test_config.should_keep_alive(self.node_type)
@@ -1056,9 +927,8 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             "encryption_at_rest": None,
             "maintenance_windows": [],
             "prom_proxy": True,
-            "scaling": self.xcloud_scaling_config,
+            "scaling": {},
             "vector_search": vs_config,
-            "tablets": tablets_mode,
         }
 
     def _get_cluster_diagnostic_info(self) -> tuple[str, str]:
@@ -1110,7 +980,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         return cluster_status, "\n" + "\n".join(diagnostic_lines)
 
-    def _wait_for_cluster_ready(self, timeout: int = 1200) -> None:
+    def _wait_for_cluster_ready(self, timeout: int = 600) -> None:
         self.log.info("Waiting for Scylla Cloud cluster to be ready")
 
         def check_cluster_status():
@@ -1154,9 +1024,29 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             self.log.warning("No INSTALL_MANAGER request found for cluster %s", self._cluster_id)
             return
 
-        self._wait_for_cloud_request_completed(
-            request_id=mgr_request["id"], request_type="INSTALL_MANAGER", timeout=timeout
+        mgr_request_id = mgr_request.get("id")
+        self.log.info("Found INSTALL_MANAGER request (ID: %s), waiting for completion", mgr_request_id)
+
+        def is_manager_ready():
+            details = self._api_client.get_cluster_request_details(
+                account_id=self._account_id, request_id=mgr_request_id
+            )
+            status = details.get("status", "").upper()
+            self.log.debug("Manager installation status: %s (%s%%)", status, details.get("progressPercent", 0))
+
+            if status == "FAILED":
+                raise ScyllaCloudError(f"Manager installation failed: {details}")
+
+            return status == "COMPLETED"
+
+        wait.wait_for(
+            func=is_manager_ready,
+            step=15,
+            text="Waiting for Manager node installation to complete",
+            timeout=timeout,
+            throw_exc=True,
         )
+        self.log.info("Manager node installation completed")
 
     def get_promproxy_config(self):
         """Retrieve Prometheus proxy configuration for Scylla Cloud cluster"""
@@ -1166,34 +1056,6 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         """Handle subsequent add_nodes calls using cluster resize operations"""
         self.log.info("Resizing cluster to add %s nodes", count)
         raise NotImplementedError("Not yet implemented in POC")
-
-    def update_cluster_name(self, new_name: str) -> None:
-        """Update the name of the cluster"""
-        if not self._cluster_id:
-            raise ScyllaCloudError("Cannot update cluster name: cluster ID is not set")
-
-        if len(new_name) > 63:
-            raise ValueError(f"Cluster name exceeds maximum length of 63 characters: {len(new_name)}")
-
-        self.log.info("Updating cluster name from '%s' to '%s'", self.name, new_name)
-        self._api_client.update_cluster_name(
-            account_id=self._account_id, cluster_id=self._cluster_id, new_name=new_name
-        )
-        self.name = new_name
-        self.log.info("Cluster name updated successfully to '%s'", new_name)
-
-    def _set_keep_alive(self) -> bool:
-        """Set keep-alive tag on the cluster name."""
-        new_name = apply_keep_tag_to_name(self.name, CLOUD_KEEP_ALIVE_HOURS)
-        if new_name != self.name:
-            self.update_cluster_name(new_name)
-        return True
-
-    def _set_keep_duration(self, duration_in_hours: int) -> None:
-        """Update the cluster name with the keep duration tag."""
-        new_name = apply_keep_tag_to_name(self.name, duration_in_hours)
-        if new_name != self.name:
-            self.update_cluster_name(new_name)
 
     def destroy(self):
         self.log.info("Destroying Scylla Cloud cluster %s", self.name)
@@ -1254,13 +1116,10 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             or []
         )
         if vs_nodes:
-            all_vs_nodes = [
-                n
-                for az in vs_nodes
-                for n in az.get("nodes", [])
-                if n.get("status") not in ("DELETED", "PENDING_DELETE")
+            vs_nodes_per_az = [
+                n for n in vs_nodes[0].get("nodes", []) if n.get("status") not in ("DELETED", "PENDING_DELETE")
             ]
-            if all_vs_nodes and len(all_vs_nodes) != int(self.params.get("n_vector_store_nodes")):
+            if vs_nodes_per_az and len(vs_nodes_per_az) != int(self.params.get("n_vector_store_nodes")):
                 raise ScyllaCloudError(
                     "Vector Search node count mismatch. "
                     "Update 'n_vector_store_nodes' in test config or provision a new cluster."

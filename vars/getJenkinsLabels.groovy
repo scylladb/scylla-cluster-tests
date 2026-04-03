@@ -1,7 +1,7 @@
 #!groovy
 import groovy.json.JsonSlurperClassic
 
-def call(String backend, String region=null, String datacenter=null, String location=null, String oci_region=null ,Map overrides=null) {
+def call(String backend, String region=null, String datacenter=null, String location=null, Map overrides=null) {
     if (!(params instanceof Map)) {
         params = params.collectEntries()
     }
@@ -40,15 +40,12 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'aws-eu-west-3' : 'aws-sct-builders-eu-west-3-v3-asg',
                           'aws-ca-central-1' : 'aws-sct-builders-ca-central-1-v3-asg',
                           'gce-us-east1': "${gcp_project}-builders-us-east1-template-v7",
-                          'gce-us-east4': "${gcp_project}-builders-us-east4-template-v7",
                           'gce-us-west1': "${gcp_project}-builders-us-west1-template-v7",
                           'gce-us-central1': "${gcp_project}-builders-us-central1-template-v7",
                           'gce': "${gcp_project}-builders-us-east1-template-v7",
                           'aws': 'aws-sct-builders-eu-west-1-v3-asg',
                           'azure-eastus': 'aws-sct-builders-us-east-1-v3-asg',
                           'aws-fips': 'aws-sct-builders-us-east-1-v4-fibs-CI-FIPS',
-                          'oci-us-ashburn-1': 'oci-sct-builders-us-ashburn-1-v1',
-                          'oci-us-phoenix-1': 'oci-sct-builders-us-phoenix-1-v1',
                           ]
 
     def cloud_provider = getCloudProviderFromBackend(backend)
@@ -58,20 +55,17 @@ def call(String backend, String region=null, String datacenter=null, String loca
         cloud_provider = params.xcloud_provider?.trim()?.toLowerCase()
     }
 
-    if ((cloud_provider == 'aws' && region) || (cloud_provider == 'gce' && datacenter) || (cloud_provider == 'azure' && location) || (cloud_provider == 'aws-fibs' && region) || (cloud_provider == 'oci' && oci_region)) {
+    if ((cloud_provider == 'aws' && region) || (cloud_provider == 'gce' && datacenter) || (cloud_provider == 'azure' && location) || (cloud_provider == 'aws-fibs' && region)) {
         def supported_regions = []
 
         if (cloud_provider == 'aws') {
             supported_regions = ["eu-west-2", "eu-north-1", "eu-central-1", "us-west-2", "eu-west-3", "ca-central-1"]
         } else if (cloud_provider == 'gce') {
-            supported_regions = ["us-east1", "us-east4", "us-west1", "us-central1"]
+            supported_regions = ["us-east1", "us-west1", "us-central1"]
             region = datacenter
-        } else if (cloud_provider == 'azure') {
+        } else {
             supported_regions = ["eastus"]
             region = location
-        } else if (cloud_provider == 'oci') {
-            supported_regions = ["us-ashburn-1", "us-phoenix-1"]
-            region = oci_region
         }
 
         println("Finding builder for region: " + region)

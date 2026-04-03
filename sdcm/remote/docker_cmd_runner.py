@@ -153,20 +153,14 @@ class DockerCmdRunner(CommandRunner):
 
     @staticmethod
     def _create_tar_stream(src: str, dst: str) -> BytesIO:
-        """Create a tar stream from a file or directory.
-
-        When src is a directory ending with '/', only the directory contents are
-        archived (rsync-like semantics). Otherwise, the directory itself is included.
-        """
+        """Create a tar stream from a file or directory"""
         tar_stream = BytesIO()
-        src_path = Path(src.rstrip("/"))
+        src_path = Path(src)
         with tarfile.open(fileobj=tar_stream, mode="w") as tar:
             if src_path.is_dir():
-                # Trailing slash means copy contents only; no trailing slash means include the directory itself
-                relative_base = src_path if src.endswith("/") else src_path.parent
                 for file_path in src_path.rglob("*"):
                     if file_path.is_file():
-                        tar.add(str(file_path), arcname=str(file_path.relative_to(relative_base)))
+                        tar.add(str(file_path), arcname=str(file_path.relative_to(src_path.parent)))
             else:
                 arcname = Path(dst).name if not dst.endswith("/") else src_path.name
                 tar.add(str(src_path), arcname=arcname)

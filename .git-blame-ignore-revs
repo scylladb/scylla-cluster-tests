@@ -4,4 +4,4 @@
 # Run `git config blame.ignoreRevsFile .git-blame-ignore-revs` to enable.
 
 # reformat using ruff (https://github.com/scylladb/scylla-cluster-tests/pull/11291)
-e298929269e4a73a270ad453820c1325c2b04b07
+bbb74f5fb4af15ed2d986818974ca5a9f07ba502

@@ -56,13 +56,9 @@ def provision_instances_with_fallback(
             raise
 
     provisioned_instances = provisioner.get_or_create_instances(definitions=definitions)
-    for definition, v_m in zip(definitions, provisioned_instances):
-        if definition.use_public_ip:
-            hostname = v_m.public_ip_address if v_m.public_ip_address else v_m.private_ip_address
-        else:
-            hostname = v_m.private_ip_address
+    for v_m in provisioned_instances:
         ssh_login_info = {
-            "hostname": hostname,
+            "hostname": v_m.public_ip_address if v_m.public_ip_address else v_m.private_ip_address,
             "user": v_m.user_name,
             "key_file": f"~/.ssh/{v_m.ssh_key_name}",
         }
@@ -79,17 +75,12 @@ def provision_sct_resources(params: SCTConfiguration, test_config: TestConfig, *
     pricing_model = PricingModel(params.get("instance_provision"))
     provision_fallback_on_demand = params.get("instance_provision_fallback_on_demand")
     for request in definitions_per_region:
-        # Merge backend-specific configuration with provided provisioner config
-        backend_config = dict(provisioner_config)
-        if request.provisioner_config:
-            backend_config.update(request.provisioner_config)
-
         provisioner = provisioner_factory.create_provisioner(
             backend=request.backend,
             test_id=request.test_id,
             region=request.region,
             availability_zone=request.availability_zone,
-            **backend_config,
+            **provisioner_config,
         )
         provision_instances_with_fallback(
             provisioner=provisioner,

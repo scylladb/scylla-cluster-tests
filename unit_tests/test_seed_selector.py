@@ -1,8 +1,9 @@
+import unittest
 import tempfile
 import logging
 import shutil
+import os.path
 
-import pytest
 import sdcm.cluster
 from sdcm import sct_config
 from sdcm.test_config import TestConfig
@@ -51,23 +52,16 @@ class DummyCluster(sdcm.cluster.BaseScyllaCluster):
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
 
 
-class TestSeedSelector:
-    temp_dir = None
-    cluster = None
-
+class TestSeedSelector(unittest.TestCase):
     @classmethod
-    def setup_class(cls):
+    def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
         cls.cluster = None
 
     @classmethod
-    def teardown_class(cls):
+    def tearDownClass(cls):
         # stop_events_device()
         shutil.rmtree(cls.temp_dir)
-
-    @pytest.fixture(autouse=True)
-    def inject_test_data_dir(self, test_data_dir):
-        self.test_data_dir = test_data_dir
 
     def setup_cluster(self, nodes_number):
         self.cluster = DummyCluster()
@@ -88,37 +82,34 @@ class TestSeedSelector:
         self.setup_cluster(nodes_number=3)
         self.cluster.set_test_params(seeds_selector="first", seeds_num=2, db_type="scylla")
         self.cluster.set_seeds()
-        assert self.cluster.seed_nodes == [self.cluster.nodes[0], self.cluster.nodes[1]]
-        assert self.cluster.non_seed_nodes == [self.cluster.nodes[2]]
-        assert self.cluster.seed_nodes_addresses == [self.cluster.nodes[0].ip_address, self.cluster.nodes[1].ip_address]
+        self.assertTrue(self.cluster.seed_nodes == [self.cluster.nodes[0], self.cluster.nodes[1]])
+        self.assertTrue(self.cluster.non_seed_nodes == [self.cluster.nodes[2]])
+        self.assertTrue(
+            self.cluster.seed_nodes_addresses == [self.cluster.nodes[0].ip_address, self.cluster.nodes[1].ip_address]
+        )
 
     def test_reuse_cluster_seed(self):
         self.setup_cluster(nodes_number=3)
         self.cluster.set_test_params(seeds_selector="first", seeds_num=2, db_type="scylla")
-        original_scylla_yaml_path = sdcm.cluster.SCYLLA_YAML_PATH
-        try:
-            sdcm.cluster.SCYLLA_YAML_PATH = str(self.test_data_dir / "scylla.yaml")
-            TestConfig().reuse_cluster(True)
-            self.cluster.set_seeds()
-            assert self.cluster.seed_nodes == [self.cluster.nodes[1]]
-            assert self.cluster.non_seed_nodes == [self.cluster.nodes[0], self.cluster.nodes[2]]
-            assert self.cluster.seed_nodes_addresses == [self.cluster.nodes[1].ip_address]
-        finally:
-            sdcm.cluster.SCYLLA_YAML_PATH = original_scylla_yaml_path
-            TestConfig().reuse_cluster(False)
+        sdcm.cluster.SCYLLA_YAML_PATH = os.path.join(os.path.dirname(__file__), "test_data", "scylla.yaml")
+        TestConfig().reuse_cluster(True)
+        self.cluster.set_seeds()
+        self.assertTrue(self.cluster.seed_nodes == [self.cluster.nodes[1]])
+        self.assertTrue(self.cluster.non_seed_nodes == [self.cluster.nodes[0], self.cluster.nodes[2]])
+        self.assertTrue(self.cluster.seed_nodes_addresses == [self.cluster.nodes[1].ip_address])
 
     def test_random_2_seeds(self):
         self.setup_cluster(nodes_number=3)
         self.cluster.set_test_params(seeds_selector="random", seeds_num=2, db_type="scylla")
         self.cluster.set_seeds()
-        assert len(self.cluster.seed_nodes) == 2
-        assert len(self.cluster.non_seed_nodes) == 1
-        assert len(self.cluster.seed_nodes_addresses) == 2
+        self.assertTrue(len(self.cluster.seed_nodes) == 2)
+        self.assertTrue(len(self.cluster.non_seed_nodes) == 1)
+        self.assertTrue(len(self.cluster.seed_nodes_addresses) == 2)
 
     def test_first_1_seed(self):
         self.setup_cluster(nodes_number=1)
         self.cluster.set_test_params(seeds_selector="first", seeds_num=1, db_type="scylla")
         self.cluster.set_seeds()
-        assert self.cluster.seed_nodes == [self.cluster.nodes[0]]
-        assert self.cluster.non_seed_nodes == []
-        assert self.cluster.seed_nodes_addresses == [self.cluster.nodes[0].ip_address]
+        self.assertTrue(self.cluster.seed_nodes == [self.cluster.nodes[0]])
+        self.assertTrue(self.cluster.non_seed_nodes == [])
+        self.assertTrue(self.cluster.seed_nodes_addresses == [self.cluster.nodes[0].ip_address])

@@ -23,7 +23,7 @@ from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.adaptive_timeouts.load_info_store import AdaptiveTimeoutStore
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout, TABLETS_HARD_TIMEOUT
-from unit_tests.lib.fake_cluster import DummyDbCluster
+from unit_tests.test_cluster import DummyDbCluster
 
 LOGGER = logging.getLogger(__name__)
 
@@ -103,11 +103,7 @@ Token                  : (invoke with -T/--tokens to see all 256 tokens)
         r"nodetool info": Result(stdout=nodetool_info, exited=0),
         r"uptime": Result(stdout=" 10:00:00 up 1 day,  1:00,  1 user,  load average: 1.20, 2.30, 1.60", exited=0),
     }
-    remoter = RemoteCmdRunnerBase.create_remoter("test-node-host")
-    yield remoter
-    # Cleanup: stop the remoter to prevent any background threads
-    if hasattr(remoter, "stop"):
-        remoter.stop()
+    return RemoteCmdRunnerBase.create_remoter("test-node-host")
 
 
 @pytest.fixture

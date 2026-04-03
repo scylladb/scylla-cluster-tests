@@ -8,7 +8,7 @@ longevityPipeline(
     region: 'eu-north-1',
     availability_zone: 'a,b',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-50GB-3days-authorization-and-tls-ssl.yaml", "configurations/operator/50GB-no-tls.yaml", "configurations/auth_cassandra.yaml"]''',
+    test_config: '''["test-cases/longevity/longevity-50GB-3days-authorization-and-tls-ssl.yaml", "configurations/operator/50GB-no-tls.yaml"]''',
     email_recipients: 'qa@scylladb.com,scylla-operator@scylladb.com',
     k8s_enable_performance_tuning: true,
     post_behavior_db_nodes: 'destroy',

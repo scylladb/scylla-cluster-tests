@@ -1,17 +1,16 @@
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 import logging
+import datetime
 import yaml
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
+from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-if TYPE_CHECKING:
-    from sdcm.mgmt.cli import ManagerTask
-
 from sdcm.utils.distro import Distro
-from sdcm.utils.version_utils import find_scylla_repo
+from sdcm.utils.common import get_sct_root_path
 
 DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
 LOGGER = logging.getLogger(__name__)
@@ -72,16 +71,6 @@ def parse_size_to_bytes(size_str: str) -> int:
     return bytes_
 
 
-MANAGER_REPO_PATTERNS = {
-    "rhel": "https://downloads.scylladb.com/rpm/centos/scylladb-manager-{version}.repo",
-    "debian": "https://downloads.scylladb.com/deb/debian/scylladb-manager-{version}.list",
-}
-MANAGER_REPO_MASTER_LATEST = {
-    "rhel": "https://downloads.scylladb.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo",
-    "debian": "https://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list",
-}
-
-
 def get_persistent_snapshots():  # Snapshot sizes (dict keys) are in GB
     with open("defaults/manager_persistent_snapshots.yaml", encoding="utf-8") as mgmt_snapshot_yaml:
         persistent_manager_snapshots_dict = yaml.safe_load(mgmt_snapshot_yaml)
@@ -110,121 +99,47 @@ def duration_to_timedelta(duration_string):
         duration_string = duration_string[duration_string.find("m") + 1 :]
     if "s" in duration_string:
         total_seconds += int(duration_string[: duration_string.find("s")])
-    return timedelta(seconds=total_seconds)
+    return datetime.timedelta(seconds=total_seconds)
 
 
 def create_cron_list_from_timedelta(minutes=0, hours=0):
-    destined_time = datetime.now() + timedelta(hours=hours, minutes=minutes)
+    destined_time = datetime.datetime.now() + datetime.timedelta(hours=hours, minutes=minutes)
     cron_list = [str(destined_time.minute), str(destined_time.hour), "*", "*", "*"]
     return cron_list
 
 
-def calculate_task_end_time(start_time: str, duration: str) -> datetime:
-    """Calculate the end time of Manager task by adding a duration to a start time.
+def get_manager_repo_from_defaults(manager_version, distro):
+    with (Path(get_sct_root_path()) / "defaults/manager_versions.yaml").open(encoding="utf-8") as mgmt_config:
+        manager_repos_by_version_dict = yaml.safe_load(mgmt_config)["manager_repos_by_version"]
 
-    Args:
-        start_time: Start time in format "%d %b %y %H:%M:%S %Z" (e.g., "14 Jun 23 15:41:00 UTC")
-        duration: Duration string in format like "2d3h15m30s" where d=days, h=hours, m=minutes, s=seconds
-    """
-    duration = duration.strip().lower()
-
-    delta = duration_to_timedelta(duration_string=duration)
-
-    base_time = datetime.strptime(start_time, "%d %b %y %H:%M:%S %Z")
-    return base_time + delta
-
-
-class TaskRunDetails(BaseModel):
-    """Details of a Manager task run.
-
-    Attributes:
-        next_run: The datetime of the next scheduled run
-        latest_run_id: The ID of the latest run
-        start_time: The start time string from task history
-        end_time: The calculated end time as datetime
-        duration: The duration string (e.g., "2d3h15m30s")
-    """
-
-    next_run: datetime
-    latest_run_id: str
-    start_time: str
-    end_time: datetime
-    duration: str
-
-
-def get_task_run_details(task: "ManagerTask", wait: bool = True, timeout: int = 1000, step: int = 10) -> TaskRunDetails:
-    """Get details of the latest task run.
-
-    Args:
-        task: The manager task object to get details from
-        wait: Whether to wait for task completion before retrieving details
-        timeout: Maximum time to wait for task completion (seconds)
-        step: Poll interval when waiting (seconds)
-
-    Returns:
-        TaskRunDetails object containing task run details
-    """
-    if wait:
-        task.wait_and_get_final_status(timeout=timeout, step=step)
-
-    task_history = task.history
-    latest_run_id = task.latest_run_id
-    start_time = task.sctool.get_table_value(
-        parsed_table=task_history, column_name="start time", identifier=latest_run_id
-    )
-    next_run_time = datetime.strptime(task.next_run, "%d %b %y %H:%M:%S %Z")  # from `03 Feb 26 16:35:00 UTC`
-    duration = task.sctool.get_table_value(parsed_table=task_history, column_name="duration", identifier=latest_run_id)
-    end_time = calculate_task_end_time(duration=duration, start_time=start_time)
-
-    task_details = TaskRunDetails(
-        next_run=next_run_time,
-        latest_run_id=latest_run_id,
-        start_time=start_time,
-        end_time=end_time,
-        duration=duration,
-    )
-    LOGGER.debug("Task %s details: %s", task.id, task_details)
-    return task_details
-
-
-def get_manager_repo(manager_version: str, distro: Distro) -> str:
-    """Build the Scylla Manager repo URL for the given version and distro.
-
-    Constructs the URL from a pattern based on the distro family (RHEL or Debian).
-    The special value "master_latest" resolves to the latest unstable build URL.
-    Patch version components are stripped (e.g. "3.8.1" -> "3.8").
-
-    Args:
-        manager_version: Manager version string, e.g. "3.8", "3.8.1", or "master_latest".
-        distro: Distro object representing the target OS.
-
-    Returns:
-        Full URL to the repo file.
-    """
     # If the version is a patch version, we need to remove the patch part
     if len(version_parts := manager_version.split(".")) == 3:
         manager_version = f"{version_parts[0]}.{version_parts[1]}"
 
+    version_specific_repos = manager_repos_by_version_dict.get(manager_version, None)
+    assert version_specific_repos, f"Couldn't find manager version {manager_version} in manager defaults"
+
     distro_name = get_distro_name(distro)
 
-    if manager_version == "master_latest":
-        return MANAGER_REPO_MASTER_LATEST[distro_name]
+    repo_address = version_specific_repos.get(distro_name, None)
+    assert repo_address, f"Could not find manager repo for distro {distro_name} in version {manager_version}"
 
-    return MANAGER_REPO_PATTERNS[distro_name].format(version=manager_version)
+    return repo_address
 
 
-def get_manager_scylla_backend(scylla_backend_version_name: str, distro: Distro) -> str:
-    """Find the Scylla backend repo URL for the given version and distro.
+def get_manager_scylla_backend(scylla_backend_version_name, distro):
+    with (Path(get_sct_root_path()) / "defaults/manager_versions.yaml").open(encoding="utf-8") as mgmt_config:
+        scylla_backend_repos_by_version_dict = yaml.safe_load(mgmt_config)["scylla_backend_repo_by_version"]
 
-    Args:
-        scylla_backend_version_name: Scylla version string, e.g. "2025.4" or "2025.4.1".
-        distro: Distro object representing the target OS.
+    version_specific_repos = scylla_backend_repos_by_version_dict.get(scylla_backend_version_name, None)
+    assert version_specific_repos, f"Couldn't find scylla version {scylla_backend_version_name} in manager defaults"
 
-    Returns:
-        Full URL to the repo file.
-    """
     distro_name = get_distro_name(distro)
-    return find_scylla_repo(scylla_version=scylla_backend_version_name, dist_type=distro_name)
+
+    backend_repo_address = version_specific_repos.get(distro_name, None)
+    assert backend_repo_address, f"Could not find manager scylla backend repo for {distro}"
+
+    return backend_repo_address
 
 
 def reconfigure_scylla_manager(manager_node, logger, values_to_update=(), values_to_remove=()):

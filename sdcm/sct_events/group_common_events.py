@@ -10,20 +10,17 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-import logging
 from contextlib import contextmanager, ExitStack, ContextDecorator
 from functools import wraps
 from typing import ContextManager, Callable, Sequence
 
 from sdcm.cluster import TestConfig
 from sdcm.sct_events import Severity
-from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter, EventsFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
+from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 from sdcm.utils.issues import SkipPerIssues
-
-LOGGER = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -326,11 +323,7 @@ def ignore_scrub_invalid_errors():
 def ignore_compaction_stopped_exceptions():
     with ExitStack() as stack:
         stack.enter_context(
-            EventsSeverityChangerFilter(
-                new_severity=Severity.WARNING,
-                event_class=DatabaseLogEvent,
-                regex=r".*system_keyspace - update compaction history failed: seastar::gate_closed_exception.*",
-            )
+            DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, line="was stopped due to: user request")
         )
         yield
 
@@ -463,6 +456,14 @@ def ignore_raft_topology_cmd_failing():
             EventsSeverityChangerFilter(
                 new_severity=Severity.WARNING,
                 event_class=DatabaseLogEvent,
+                regex=r".*raft_topology - topology change coordinator fiber got error.*connection is closed",
+                extra_time_to_expiration=30,
+            )
+        )
+        stack.enter_context(
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent,
                 regex=r".*raft_topology - topology change coordinator fiber got error.*failed status returned from",
                 extra_time_to_expiration=30,
             )
@@ -520,22 +521,6 @@ def ignore_raft_topology_cmd_failing():
                 new_severity=Severity.WARNING,
                 event_class=DatabaseLogEvent,
                 regex=r".*raft_topology - transition_state::write_both_read_new, global_token_metadata_barrier failed.*connection is closed",
-                extra_time_to_expiration=30,
-            )
-        )
-        stack.enter_context(
-            EventsSeverityChangerFilter(
-                new_severity=Severity.WARNING,
-                event_class=DatabaseLogEvent,
-                regex=r".*raft_topology - transition_state::.*raft_topology_cmd::command::barrier failed.*connection is closed",
-                extra_time_to_expiration=30,
-            )
-        )
-        stack.enter_context(
-            EventsSeverityChangerFilter(
-                new_severity=Severity.WARNING,
-                event_class=DatabaseLogEvent,
-                regex=r".*raft_topology - raft_topology_cmd stream_ranges failed with: streaming::stream_exception \(Stream failed\)",
                 extra_time_to_expiration=30,
             )
         )
@@ -615,56 +600,6 @@ def ignore_ipv6_failure_to_assign():
             )
         )
         yield
-
-
-NODE_UNAVAILABLE_CONTEXTS: list[Callable[[], ContextManager]] = [
-    ignore_raft_topology_cmd_failing,
-    ignore_raft_transport_failing,
-    ignore_ycsb_connection_refused,
-    ignore_stream_mutation_fragments_errors,
-    ignore_compaction_stopped_exceptions,
-]
-
-
-@contextmanager
-def suppress_expected_unavailability_errors():
-    """Unified context manager for suppressing expected errors during node unavailability.
-
-    Activates a core set of event filters that cover the most common errors seen when
-    a Scylla node becomes temporarily unreachable (restart, shutdown, network block, etc.).
-
-    Args:
-        extra_contexts: Additional context managers (or callables returning them)
-            to activate alongside the core set. Use this for scenario-specific filters
-    """
-    LOGGER.debug("Entered the context of suppressing expected errors")
-    with ExitStack() as stack:
-        for ctx_factory in NODE_UNAVAILABLE_CONTEXTS:
-            stack.enter_context(ctx_factory())
-        yield
-
-
-@contextmanager
-def ignore_aborted_snapshot_upload_storage_io_errors():
-    with ExitStack() as stack:
-        if SkipPerIssues(
-            issues="https://github.com/scylladb/scylladb/issues/24642",
-            params=TestConfig().tester_obj().params,
-        ):
-            stack.enter_context(
-                EventsSeverityChangerFilter(
-                    new_severity=Severity.WARNING,
-                    event_class=DatabaseLogEvent,
-                    regex=r".*std::runtime_error \(Failed to parse ETag list\. Aborting multipart upload\.\)",
-                )
-            )
-            stack.enter_context(
-                EventsSeverityChangerFilter(
-                    new_severity=Severity.WARNING,
-                    event_class=DatabaseLogEvent,
-                    regex=r".*storage_io_error \(S3 error \(seastar::abort_requested_exception \(abort requested\)\)\)",
-                )
-            )
 
 
 def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):

@@ -13,13 +13,8 @@
 # Copyright (c) 2021 ScyllaDB
 from textwrap import dedent
 
-from sdcm.utils.mp_start import ensure_start_method
-
-ensure_start_method()
-
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta, UTC
-import json
+from datetime import datetime, timezone, timedelta
 import os
 import re
 import sys
@@ -32,13 +27,13 @@ import pprint
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial, reduce
-from typing import List, Literal
+from typing import List
 from uuid import UUID
 
 import pytest
 import click
 import yaml
-from rich.table import Table
+from prettytable import PrettyTable
 from argus.client.sct.types import LogLink
 from argus.client.base import ArgusClientError
 from argus.common.enums import TestStatus
@@ -54,20 +49,19 @@ from sdcm.provision import AzureProvisioner
 from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis.monkey.runners import SisyphusMonkey
-from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config, available_backends
+from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
+from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import (
     AwsSctRunner,
     GceSctRunner,
     AzureSctRunner,
-    OciSctRunner,
     get_sct_runner,
     clean_sct_runners,
     update_sct_runner_tags,
     list_sct_runners,
 )
-
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import argus_offline_collect_events, create_proxy_argus_s3_url, get_argus_client
@@ -75,18 +69,18 @@ from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
-from sdcm.utils.oci_utils import list_instances_oci
 from sdcm.utils.common import (
     S3Storage,
     aws_tags_to_dict,
     create_pretty_table,
-    rich_table_to_string,
+    format_timestamp,
     get_ami_images,
     get_ami_images_versioned,
     get_gce_images,
     get_gce_images_versioned,
     gce_meta_to_dict,
     get_builder_by_test_id,
+    get_testrun_dir,
     list_clusters_eks,
     list_clusters_gke,
     list_elastic_ips_aws,
@@ -98,12 +92,10 @@ from sdcm.utils.common import (
     list_instances_gce,
     list_logs_by_test_id,
     list_resources_docker,
+    list_parallel_timelines_report_urls,
     search_test_id_in_latest,
     get_latest_scylla_release,
     images_dict_in_json_format,
-    get_hdr_tags,
-    download_and_unpack_logs,
-    find_equivalent_ami,
 )
 from sdcm.nemesis.generator import generate_nemesis_yaml, NemesisJobGenerator
 from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
@@ -125,23 +117,26 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.gce_builder import GceBuilder
-from sdcm.utils.oci_region import OciRegion
-from sdcm.utils.oci_builder import OciBuilder
 from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.get_username import get_username
 from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
-from sdcm.utils.aws_utils import AwsArchType
+from sdcm.send_email import (
+    get_running_instances_for_email_report,
+    read_email_data_from_file,
+    build_reporter,
+    send_perf_email,
+)
+from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
 from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
-from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
+from sdcm.utils.es_index import create_index, get_mapping
+from sdcm.utils.version_utils import get_s3_scylla_repos_mapping
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
-from utils.build_system.throttle_categories import ThrottleCategoryManager, ThrottleCategory
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
 from sdcm.utils.docker_utils import get_ip_address_of_container
-from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
 from unit_tests.nemesis.fake_cluster import FakeTester
 from sdcm.logcollector import Collector
 
@@ -149,13 +144,20 @@ SUPPORTED_CLOUDS = (
     "aws",
     "gce",
     "azure",
-    "oci",
 )
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
 
 SCT_RUNNER_HOST = get_sct_runner_ip()
 
 LOGGER = setup_stdout_logger()
+
+
+def sct_option(name, sct_name, **kwargs):
+    sct_opt = SCTConfiguration.get_config_option(sct_name)
+    multimple_use = kwargs.pop("multiple", False)
+    return click.option(
+        name, type=kwargs.get("type", sct_opt["type"]), help=kwargs.get("help", sct_opt["help"]), multiple=multimple_use
+    )
 
 
 def install_callback(ctx, _, value):
@@ -232,7 +234,6 @@ def cli(ctx):
         "create-nemesis-pipelines",
         "create-nemesis-yaml",
         "pre-commit",
-        "unit-tests",
     ):
         try_auth_with_okta()
 
@@ -248,7 +249,7 @@ def cli(ctx):
 
 
 @cli.command("provision-resources", help="Provision resources for the test")
-@click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
+@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
 @click.option("-t", "--test-name", type=str, help="Test name")
 @click.option(
     "-c",
@@ -282,17 +283,12 @@ def provision_resources(backend, test_name: str, config: str):
     else:
         click.echo("No need provision logging service")
 
-    agent_config = params.get("agent")
-    if agent_config.get("enabled") and agent_config.get("binary_url"):
-        click.echo("Generate SCT agent API key")
-        test_config.generate_and_save_agent_api_key()
-
     click.echo(f"Provision {backend} cloud resources")
     try:
         if backend == "aws":
             layout = SCTProvisionLayout(params=params)
             layout.provision()
-        elif backend in ("azure", "gce", "oci"):
+        elif backend == "azure":
             provision_sct_resources(params=params, test_config=test_config)
         elif backend == "xcloud":
             cloud_provider = params.get("xcloud_provider").lower()
@@ -301,11 +297,11 @@ def provision_resources(backend, test_name: str, config: str):
             # 'cluster_backend' SCT config parameter to match the provider selected for cloud cluster.
             # This is only needed when provisioning resources is executed as a separate step of a test run
             if cloud_provider == "aws":
-                params.update({"cluster_backend": "aws"})
+                params.update({"cluster_backend": "aws", "xcloud_provisioning_mode": True})
                 try:
                     SCTProvisionLayout(params=params).provision()
                 finally:
-                    params.update({"cluster_backend": original_backend})
+                    params.update({"cluster_backend": original_backend, "xcloud_provisioning_mode": False})
         else:
             raise ValueError(f"backend {backend} is not supported")
     except Exception as exc:
@@ -357,14 +353,14 @@ def clean_aws_kms_aliases(ctx, regions, time_delta_h, dry_run):
     aws_kms.cleanup_old_aliases(**kwargs)
 
 
-@cli.command("clean-resources", help="clean tagged instances. Supported clouds: AWS|Azure|GCE|OCI")
+@cli.command("clean-resources", help="clean tagged instances in both clouds (AWS/GCE)")
 @click.option("--post-behavior", is_flag=True, default=False, help="clean all resources according to post behavior")
 @click.option("--user", type=str, help="user name to filter instances by")
 @click.option("--billing-project", type=str, help="billing project to filter instances by")
-@click.option("--test-id", "test_id", help="test id to filter by. Could be used multiple times", multiple=True)
+@sct_option("--test-id", "test_id", help="test id to filter by. Could be used multiple times", multiple=True)
 @click.option("--logdir", type=str, help="directory with test run")
 @click.option("--dry-run", is_flag=True, default=False, help="dry run")
-@click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
+@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
 @click.option(
     "--clean-runners",
     is_flag=True,
@@ -415,7 +411,6 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
         os.environ["SCT_REGION_NAME"] = os.environ.get("SCT_REGION_NAME", "")
         os.environ["SCT_GCE_DATACENTER"] = os.environ.get("SCT_GCE_DATACENTER", "")
         os.environ["SCT_AZURE_REGION_NAME"] = os.environ.get("SCT_AZURE_REGION_NAME", "")
-        os.environ["SCT_OCI_REGION_NAME"] = os.environ.get("SCT_OCI_REGION_NAME", "")
 
     if not post_behavior and user and not test_id and not logdir and not billing_project:
         click.echo(f"Clean all resources belong to user `{user}'")
@@ -482,13 +477,13 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
 @click.option("--billing-project", type=str, help="billing project to filter instances by")
 @click.option("--get-all", is_flag=True, default=False, help="All resources")
 @click.option("--get-all-running", is_flag=True, default=False, help="All running resources")
-@click.option("--test-id", "test_id", help="test id to filter by")
+@sct_option("--test-id", "test_id", help="test id to filter by")
 @click.option("--verbose", is_flag=True, default=False, help="if enable, will log progress")
 @click.option(
     "-b",
     "--backend",
     "backend_type",
-    type=click.Choice(available_backends + ["all"]),
+    type=click.Choice(SCTConfiguration.available_backends + ["all"]),
     default="all",
     help="use specific backend",
 )
@@ -497,8 +492,8 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
     "xcloud_envs",
     type=str,
     multiple=True,
-    default=["lab", "staging", "prod"],
-    help="ScyllaDB Cloud environments to check (can be specified multiple times). Defaults to lab, staging, and prod",
+    default=["lab", "staging"],
+    help="ScyllaDB Cloud environments to check (can be specified multiple times). Defaults to lab and staging",
 )
 @click.pass_context
 def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running, verbose, backend_type, xcloud_envs):  # noqa: PLR0912, PLR0914, PLR0915
@@ -531,82 +526,88 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
         aws_instances = list_instances_aws(tags_dict=params, running=get_all_running, verbose=verbose)
 
         if aws_instances:
-            aws_table = Table(*table_header, show_lines=False)
-            for instance in sorted(aws_instances, key=lambda i: i.get("LaunchTime", "")):
+            aws_table = PrettyTable(table_header)
+            aws_table.align = "l"
+            aws_table.sortby = "LaunchTime"
+            for instance in aws_instances:
                 tags = aws_tags_to_dict(instance.get("Tags"))
                 name = tags.get("Name", "N/A")
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project = tags.get("billing_project", "N/A")
                 aws_table.add_row(
-                    name,
-                    instance["Placement"]["AvailabilityZone"],
-                    instance.get("PublicIpAddress", "N/A") if get_all_running else instance["State"]["Name"],
-                    test_id,
-                    run_by_user,
-                    billing_project,
-                    str(instance["LaunchTime"].ctime()),
+                    [
+                        name,
+                        instance["Placement"]["AvailabilityZone"],
+                        instance.get("PublicIpAddress", "N/A") if get_all_running else instance["State"]["Name"],
+                        test_id,
+                        run_by_user,
+                        billing_project,
+                        instance["LaunchTime"].ctime(),
+                    ]
                 )
-            click.echo(rich_table_to_string(aws_table, title="Instances used on AWS"))
+            click.echo(aws_table.get_string(title="Instances used on AWS"))
         else:
             click.secho("Nothing found for selected filters in AWS!", fg="yellow")
 
         click.secho("Checking AWS Elastic IPs...", fg="green")
         elastic_ips_aws = list_elastic_ips_aws(tags_dict=params, verbose=verbose)
         if elastic_ips_aws:
-            aws_table = Table(
-                "AllocationId",
-                "PublicIP",
-                "TestId",
-                "RunByUser",
-                "billing_project",
-                "InstanceId (attached to)",
-                show_lines=False,
+            aws_table = PrettyTable(
+                ["AllocationId", "PublicIP", "TestId", "RunByUser", "billing_project", "InstanceId (attached to)"]
             )
-            for eip in sorted(elastic_ips_aws, key=lambda e: e.get("AllocationId", "")):
+            aws_table.align = "l"
+            aws_table.sortby = "AllocationId"
+            for eip in elastic_ips_aws:
                 tags = aws_tags_to_dict(eip.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project = tags.get("billing_project", "N/A")
                 aws_table.add_row(
-                    eip["AllocationId"],
-                    eip["PublicIp"],
-                    test_id,
-                    run_by_user,
-                    billing_project,
-                    eip.get("InstanceId", "N/A"),
+                    [
+                        eip["AllocationId"],
+                        eip["PublicIp"],
+                        test_id,
+                        run_by_user,
+                        billing_project,
+                        eip.get("InstanceId", "N/A"),
+                    ]
                 )
-            click.echo(rich_table_to_string(aws_table, title="EIPs used on AWS"))
+            click.echo(aws_table.get_string(title="EIPs used on AWS"))
         else:
             click.secho("No elastic ips found for selected filters in AWS!", fg="yellow")
 
         click.secho("Checking AWS Security Groups...", fg="green")
         security_groups = list_test_security_groups(tags_dict=params, verbose=verbose)
         if security_groups:
-            aws_table = Table("Name", "Id", "TestId", "RunByUser", "billing_project", show_lines=False)
-            for group in sorted(security_groups, key=lambda g: g.get("GroupId", "")):
+            aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser", "billing_project"])
+            aws_table.align = "l"
+            aws_table.sortby = "Id"
+            for group in security_groups:
                 tags = aws_tags_to_dict(group.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project = tags.get("billing_project", "N/A")
                 name = tags.get("Name", "N/A")
-                aws_table.add_row(name, group["GroupId"], test_id, run_by_user, billing_project)
-            click.echo(rich_table_to_string(aws_table, title="SGs used on AWS"))
+                aws_table.add_row([name, group["GroupId"], test_id, run_by_user, billing_project])
+            click.echo(aws_table.get_string(title="SGs used on AWS"))
         else:
             click.secho("No security groups found for selected filters in AWS!", fg="yellow")
 
         click.secho("Checking AWS Placement Groups...", fg="green")
         placement_groups = list_placement_groups_aws(tags_dict=params, available=get_all_running, verbose=verbose)
         if placement_groups:
-            aws_table = Table("Name", "Id", "TestId", "RunByUser", "billing_project", show_lines=False)
-            for group in sorted(placement_groups, key=lambda g: g.get("GroupId", "")):
+            aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser", "billing_project"])
+            aws_table.align = "l"
+            aws_table.sortby = "Id"
+            for group in placement_groups:
                 tags = aws_tags_to_dict(group.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project = tags.get("billing_project", "N/A")
                 name = tags.get("Name", "N/A")
-                aws_table.add_row(name, group["GroupId"], test_id, run_by_user, billing_project)
-            click.echo(rich_table_to_string(aws_table, title="SGs used on AWS"))
+                aws_table.add_row([name, group["GroupId"], test_id, run_by_user, billing_project])
+            click.echo(aws_table.get_string(title="SGs used on AWS"))
         else:
             click.secho("No placement groups found for selected filters in AWS!", fg="yellow")
 
@@ -616,21 +617,25 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                 click.secho(f"Checking GCE ({project})...", fg="green")
                 gce_instances = list_instances_gce(tags_dict=params, running=get_all_running, verbose=verbose)
                 if gce_instances:
-                    gce_table = Table(*table_header, show_lines=False)
-                    for instance in sorted(gce_instances, key=lambda i: i.creation_timestamp or ""):
+                    gce_table = PrettyTable(table_header)
+                    gce_table.align = "l"
+                    gce_table.sortby = "LaunchTime"
+                    for instance in gce_instances:
                         tags = gce_meta_to_dict(instance.metadata)
                         public_ips = gce_public_addresses(instance)
                         public_ips = ", ".join(public_ips) if None not in public_ips else "N/A"
                         gce_table.add_row(
-                            instance.name,
-                            instance.zone.split("/")[-1],
-                            public_ips if get_all_running else instance.status,
-                            tags.get("TestId", "N/A") if tags else "N/A",
-                            tags.get("RunByUser", "N/A") if tags else "N/A",
-                            tags.get("billing_project", "N/A") if tags else "N/A",
-                            str(instance.creation_timestamp),
+                            [
+                                instance.name,
+                                instance.zone.split("/")[-1],
+                                public_ips if get_all_running else instance.status,
+                                tags.get("TestId", "N/A") if tags else "N/A",
+                                tags.get("RunByUser", "N/A") if tags else "N/A",
+                                tags.get("billing_project", "N/A") if tags else "N/A",
+                                instance.creation_timestamp,
+                            ]
                         )
-                    click.echo(rich_table_to_string(gce_table, title="Resources used on GCE"))
+                    click.echo(gce_table.get_string(title="Resources used on GCE"))
                 else:
                     click.secho("Nothing found for selected filters in GCE!", fg="yellow")
 
@@ -638,62 +643,72 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
         click.secho("Checking EKS...", fg="green")
         eks_clusters = list_clusters_eks(tags_dict=params, verbose=verbose)
         if eks_clusters:
-            eks_table = Table(
-                "Name", "TestId", "Region", "RunByUser", "billing_project", "CreateTime", show_lines=False
-            )
-            for cluster in sorted(eks_clusters, key=lambda c: str(c.create_time or "")):
+            eks_table = PrettyTable(["Name", "TestId", "Region", "RunByUser", "billing_project", "CreateTime"])
+            eks_table.align = "l"
+            eks_table.sortby = "CreateTime"
+            for cluster in eks_clusters:
                 tags = cluster.metadata
                 eks_table.add_row(
-                    cluster.name,
-                    tags.get("TestId", "N/A") if tags else "N/A",
-                    cluster.region_name,
-                    tags.get("RunByUser", "N/A") if tags else "N/A",
-                    tags.get("billing_project", "N/A") if tags else "N/A",
-                    str(cluster.create_time),
+                    [
+                        cluster.name,
+                        tags.get("TestId", "N/A") if tags else "N/A",
+                        cluster.region_name,
+                        tags.get("RunByUser", "N/A") if tags else "N/A",
+                        tags.get("billing_project", "N/A") if tags else "N/A",
+                        cluster.create_time,
+                    ]
                 )
-            click.echo(rich_table_to_string(eks_table, title="EKS clusters"))
+            click.echo(eks_table.get_string(title="EKS clusters"))
         else:
             click.secho("Nothing found for selected filters in EKS!", fg="yellow")
 
         click.secho("Checking AWS Load Balancers...", fg="green")
         load_balancers = list_load_balancers_aws(tags_dict=params, verbose=verbose)
         if load_balancers:
-            aws_table = Table("Name", "Region", "TestId", "RunByUser", "billing_project", show_lines=False)
-            for elb in sorted(load_balancers, key=lambda e: e.get("ResourceARN", "").split(":")[-1]):
+            aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser", "billing_project"])
+            aws_table.align = "l"
+            aws_table.sortby = "Name"
+            for elb in load_balancers:
                 tags = aws_tags_to_dict(elb.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project = tags.get("billing_project", "N/A")
                 _, _, _, region, _, name = elb["ResourceARN"].split(":")
                 aws_table.add_row(
-                    name,
-                    region,
-                    test_id,
-                    run_by_user,
-                    billing_project,
+                    [
+                        name,
+                        region,
+                        test_id,
+                        run_by_user,
+                        billing_project,
+                    ]
                 )
-            click.echo(rich_table_to_string(aws_table, title="ELBs used on AWS"))
+            click.echo(aws_table.get_string(title="ELBs used on AWS"))
         else:
             click.secho("No load balancers found for selected filters in AWS!", fg="yellow")
 
         click.secho("Checking AWS Cloudformation Stacks ...", fg="green")
         cfn_stacks = list_cloudformation_stacks_aws(tags_dict=params, verbose=verbose)
         if cfn_stacks:
-            aws_table = Table("Name", "Region", "TestId", "RunByUser", "billing_project", show_lines=False)
-            for stack in sorted(cfn_stacks, key=lambda s: s.get("ResourceARN", "").split(":")[-1]):
+            aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser", "billing_project"])
+            aws_table.align = "l"
+            aws_table.sortby = "Name"
+            for stack in cfn_stacks:
                 tags = aws_tags_to_dict(stack.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project = tags.get("billing_project", "N/A")
                 _, _, _, region, _, name = stack["ResourceARN"].split(":")
                 aws_table.add_row(
-                    name,
-                    region,
-                    test_id,
-                    run_by_user,
-                    billing_project,
+                    [
+                        name,
+                        region,
+                        test_id,
+                        run_by_user,
+                        billing_project,
+                    ]
                 )
-            click.echo(rich_table_to_string(aws_table, title="Cloudformation Stacks used on AWS"))
+            click.echo(aws_table.get_string(title="Cloudformation Stacks used on AWS"))
         else:
             click.secho("No Cloudformation stacks found for selected filters in AWS!", fg="yellow")
 
@@ -701,20 +716,22 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
         click.secho("Checking GKE...", fg="green")
         gke_clusters = list_clusters_gke(tags_dict=params, verbose=verbose)
         if gke_clusters:
-            gke_table = Table(
-                "Name", "Region-AZ", "TestId", "RunByUser", "billing_project", "CreateTime", show_lines=False
-            )
-            for cluster in sorted(gke_clusters, key=lambda c: str(c.cluster_info.get("createTime", ""))):
+            gke_table = PrettyTable(["Name", "Region-AZ", "TestId", "RunByUser", "billing_project", "CreateTime"])
+            gke_table.align = "l"
+            gke_table.sortby = "CreateTime"
+            for cluster in gke_clusters:
                 tags = gce_meta_to_dict(cluster.metadata)
                 gke_table.add_row(
-                    cluster.name,
-                    cluster.zone,
-                    tags.get("TestId", "N/A") if tags else "N/A",
-                    tags.get("RunByUser", "N/A") if tags else "N/A",
-                    tags.get("billing_project", "N/A") if tags else "N/A",
-                    str(cluster.cluster_info["createTime"]),
+                    [
+                        cluster.name,
+                        cluster.zone,
+                        tags.get("TestId", "N/A") if tags else "N/A",
+                        tags.get("RunByUser", "N/A") if tags else "N/A",
+                        tags.get("billing_project", "N/A") if tags else "N/A",
+                        cluster.cluster_info["createTime"],
+                    ]
                 )
-            click.echo(rich_table_to_string(gke_table, title="GKE clusters"))
+            click.echo(gke_table.get_string(title="GKE clusters"))
         else:
             click.secho("Nothing found for selected filters in GKE!", fg="yellow")
 
@@ -724,46 +741,53 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
 
         if any(docker_resources.values()):
             if docker_resources.get("containers"):
-                docker_table = Table(
-                    "Name",
-                    "Builder",
-                    "Public IP" if get_all_running else "Status",
-                    "TestId",
-                    "RunByUser",
-                    "billing_project",
-                    "Created",
-                    show_lines=False,
+                docker_table = PrettyTable(
+                    [
+                        "Name",
+                        "Builder",
+                        "Public IP" if get_all_running else "Status",
+                        "TestId",
+                        "RunByUser",
+                        "billing_project",
+                        "Created",
+                    ]
                 )
+                docker_table.align = "l"
+                docker_table.sortby = "Created"
                 for builder_name, docker_containers in docker_resources["containers"].items():
                     for container in docker_containers:
                         container.reload()
                         docker_table.add_row(
-                            container.name,
-                            builder_name,
-                            get_ip_address_of_container(container) if get_all_running else container.status,
-                            container.labels.get("TestId", "N/A"),
-                            container.labels.get("RunByUser", "N/A"),
-                            container.labels.get("billing_project", "N/A"),
-                            str(container.attrs.get("Created", "N/A")),
+                            [
+                                container.name,
+                                builder_name,
+                                get_ip_address_of_container(container) if get_all_running else container.status,
+                                container.labels.get("TestId", "N/A"),
+                                container.labels.get("RunByUser", "N/A"),
+                                container.labels.get("billing_project", "N/A"),
+                                container.attrs.get("Created", "N/A"),
+                            ]
                         )
-                click.echo(rich_table_to_string(docker_table, title="Containers used on Docker"))
+                click.echo(docker_table.get_string(title="Containers used on Docker"))
             if docker_resources.get("images"):
-                docker_table = Table(
-                    "Name", "Builder", "TestId", "RunByUser", "billing_project", "Created", show_lines=False
-                )
+                docker_table = PrettyTable(["Name", "Builder", "TestId", "RunByUser", "billing_project", "Created"])
+                docker_table.align = "l"
+                docker_table.sortby = "Created"
                 for builder_name, docker_images in docker_resources["images"].items():
                     for image in docker_images:
                         image.reload()
                         for tag in image.tags:
                             docker_table.add_row(
-                                tag,
-                                builder_name,
-                                image.labels.get("TestId", "N/A"),
-                                image.labels.get("RunByUser", "N/A"),
-                                image.labels.get("billing_project", "N/A"),
-                                str(image.attrs.get("Created", "N/A")),
+                                [
+                                    tag,
+                                    builder_name,
+                                    image.labels.get("TestId", "N/A"),
+                                    image.labels.get("RunByUser", "N/A"),
+                                    image.labels.get("billing_project", "N/A"),
+                                    image.attrs.get("Created", "N/A"),
+                                ]
                             )
-                click.echo(rich_table_to_string(docker_table, title="Images used on Docker"))
+                click.echo(docker_table.get_string(title="Images used on Docker"))
         else:
             click.secho("Nothing found for selected filters in Docker!", fg="yellow")
 
@@ -778,18 +802,13 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
         if params.get("billing_project"):
             instances = [inst for inst in instances if inst.tags.get("billing_project") == params["billing_project"]]
         if instances:
-            azure_table = Table(
-                "Name",
-                "Region-AZ",
-                "PublicIP",
-                "TestId",
-                "RunByUser",
-                "billing_project",
-                "LaunchTime",
-                show_lines=False,
+            azure_table = PrettyTable(
+                ["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "billing_project", "LaunchTime"]
             )
+            azure_table.align = "l"
+            azure_table.sortby = "RunByUser"
 
-            for instance in sorted(instances, key=lambda i: i.tags.get("RunByUser", "")):
+            for instance in instances:
                 creation_time = (
                     instance.creation_time.isoformat(sep=" ", timespec="seconds") if instance.creation_time else "N/A"
                 )
@@ -798,48 +817,19 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                 run_by_user = tags.get("RunByUser", "N/A")
                 billing_project_value = tags.get("billing_project", "N/A")
                 azure_table.add_row(
-                    instance.name,
-                    instance.region,
-                    str(instance.public_ip_address),
-                    test_id,
-                    run_by_user,
-                    billing_project_value,
-                    creation_time,
+                    [
+                        instance.name,
+                        instance.region,
+                        instance.public_ip_address,
+                        test_id,
+                        run_by_user,
+                        billing_project_value,
+                        creation_time,
+                    ]
                 )
-            click.echo(rich_table_to_string(azure_table, title="Instances used on Azure"))
+            click.echo(azure_table.get_string(title="Instances used on Azure"))
         else:
             click.secho("Nothing found for selected filters in Azure!", fg="yellow")
-
-    def list_resources_on_oci():
-        click.secho("Checking OCI instances...", fg="green")
-        oci_instances = list_instances_oci(tags_dict=params, running=get_all_running, verbose=verbose)
-        if oci_instances:
-            oci_table = Table(*table_header, show_lines=False)
-            for instance in sorted(oci_instances, key=lambda i: i.get("LaunchTime", "")):
-                tags = instance.freeform_tags or {}
-                name = instance.display_name
-                region_az = f"{instance.region}-{instance.availability_domain}"
-
-                # Instance state in OCI is capitalized (RUNNING, STOPPED, TERMINATED)
-                state = instance.lifecycle_state
-
-                test_id = tags.get("SCT_TEST_ID") or tags.get("TestId", "N/A")
-                run_by_user = tags.get("RunByUser", "N/A")
-                billing_project = tags.get("billing_project", "N/A")
-                launch_time = instance.time_created.strftime("%Y-%m-%d %H:%M:%S")
-
-                oci_table.add_row(
-                    name,
-                    region_az,
-                    instance.public_ip_address if get_all_running else state,
-                    test_id,
-                    run_by_user,
-                    billing_project,
-                    launch_time,
-                )
-            click.echo(rich_table_to_string(oci_table, title="Instances used on OCI"))
-        else:
-            click.secho("Nothing found for selected filters in OCI!", fg="yellow")
 
     def list_resources_on_xcloud():
         """List ScyllaDB Cloud clusters across specified environments"""
@@ -876,19 +866,22 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                         filtered_clusters.append(cluster_details)
 
                     if filtered_clusters:
-                        xcloud_table = Table(
-                            "Name",
-                            "Environment",
-                            "Status",
-                            "Provider",
-                            "TestId",
-                            "RunByUser",
-                            "billing_project",
-                            "CreatedAt",
-                            show_lines=False,
+                        xcloud_table = PrettyTable(
+                            [
+                                "Name",
+                                "Environment",
+                                "Status",
+                                "Provider",
+                                "TestId",
+                                "RunByUser",
+                                "billing_project",
+                                "CreatedAt",
+                            ]
                         )
+                        xcloud_table.align = "l"
+                        xcloud_table.sortby = "CreatedAt"
 
-                        for cluster in sorted(filtered_clusters, key=lambda c: str(c.get("createdAt", ""))):
+                        for cluster in filtered_clusters:
                             cluster_name = cluster.get("clusterName", "N/A")
                             cluster_status = cluster.get("status", "N/A")
                             cloud_provider = cluster.get("cloudProvider", {}).get("name", "N/A")
@@ -903,17 +896,19 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                             cluster_billing_project = "N/A"
 
                             xcloud_table.add_row(
-                                cluster_name,
-                                environment,
-                                cluster_status,
-                                cloud_provider,
-                                short_test_id,
-                                cluster_user,
-                                cluster_billing_project,
-                                str(created_at),
+                                [
+                                    cluster_name,
+                                    environment,
+                                    cluster_status,
+                                    cloud_provider,
+                                    short_test_id,
+                                    cluster_user,
+                                    cluster_billing_project,
+                                    created_at,
+                                ]
                             )
 
-                        click.echo(rich_table_to_string(xcloud_table, title=f"ScyllaDB Cloud clusters ({environment})"))
+                        click.echo(xcloud_table.get_string(title=f"ScyllaDB Cloud clusters ({environment})"))
                     else:
                         click.secho(
                             f"Nothing found for selected filters in ScyllaDB Cloud ({environment})!", fg="yellow"
@@ -927,7 +922,6 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
     backend_listing_map = {
         "aws": list_resources_on_aws,
         "gce": list_resources_on_gce,
-        "oci": list_resources_on_oci,
         "k8s-gke": list_resources_on_gke,
         "k8s-eks": list_resources_on_eks,
         "docker": list_resources_on_docker,
@@ -966,14 +960,9 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
     show_default=True,
     help="architecture of the AMI",
 )
-@click.option("-o", "--output-format", type=click.Choice(["table", "json"]), default="table", help="")
+@click.option("-o", "--output-format", type=str, default="table", help="")
 def list_images(  # noqa: PLR0912, PLR0914
-    cloud_provider: str,
-    branch: str,
-    version: str,
-    regions: List[str],
-    arch: str,
-    output_format: Literal["table", "json"] = "table",
+    cloud_provider: str, branch: str, version: str, regions: List[str], arch: str, output_format: str = "table"
 ):
     if len(regions) == 0:
         regions = [NemesisJobGenerator.BACKEND_TO_REGION[cloud_provider]]
@@ -982,21 +971,13 @@ def list_images(  # noqa: PLR0912, PLR0914
     # Convert arch string to VmArch enum using built-in enum value constructor
     arch_enum = VmArch(arch)
 
-    version_fields = ["Backend", "Name", "ImageId", "CreationDate", "ScyllaVersion"]
-    version_fields_aws = ["Backend", "Name", "ImageId", "CreationDate", "NameTag", "ScyllaVersion"]
-
-    branch_fields = ["Backend", "Name", "ImageId", "CreationDate", "BuildId", "Arch", "ScyllaVersion"]
-    branch_fields_aws = [
-        "Backend",
-        "Name",
-        "ImageId",
-        "CreationDate",
-        "NameTag",
-        "BuildId",
-        "Arch",
-        "ScyllaVersion",
-        "OwnerId",
-    ]
+    version_fields = ["Backend", "Name", "ImageId", "CreationDate"]
+    version_fields_with_tag_name = version_fields + ["NameTag"]
+    #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
+    branch_specific_fields = ["BuildId", "Arch", "ScyllaVersion"]
+    account_field = ["OwnerId"]
+    branch_fields = version_fields + branch_specific_fields
+    branch_fields_with_tag_name = version_fields_with_tag_name + branch_specific_fields + account_field
     if version and branch:
         click.echo("Use --version or --branch, not both.")
         return
@@ -1010,69 +991,41 @@ def list_images(  # noqa: PLR0912, PLR0914
                     rows = get_ami_images_versioned(region_name=region, arch=arch_enum, version=version)
                     if output_format == "table":
                         click.echo(
-                            rich_table_to_string(
-                                create_pretty_table(rows=rows, field_names=version_fields_aws),
-                                title=f"AWS Machine Images by Version in region {region}",
+                            create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
+                                title=f"AWS Machine Images by Version in region {region}"
                             )
                         )
-                    elif output_format == "json":
-                        ami_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields_aws)
+                    elif output_format == "text":
+                        ami_images_json = images_dict_in_json_format(
+                            rows=rows, field_names=version_fields_with_tag_name
+                        )
                         click.echo(ami_images_json)
                 case "gce":
                     rows = get_gce_images_versioned(version=version, arch=arch_enum)
                     if output_format == "table":
                         click.echo(
-                            rich_table_to_string(
-                                create_pretty_table(rows=rows, field_names=version_fields),
-                                title="GCE Machine Images by version",
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="GCE Machine Images by version"
                             )
                         )
-                    elif output_format == "json":
+                    elif output_format == "text":
                         gce_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
                         click.echo(gce_images_json)
                 case "azure":
-                    # Check if this is a full version tag (e.g., "2026.1.0~dev-0.20260124.edda66886e94")
-                    if parse_scylla_version_tag(version):
-                        # Full version tag: use get_scylla_images for exact matching in private galleries
-                        azure_images = azure_utils.get_scylla_images(
-                            scylla_version=version, region_name=region, arch=arch_enum
-                        )
-                        rows = []
-                        for image in azure_images:
-                            rows.append(
-                                [
-                                    "Azure",
-                                    image.name,
-                                    image.id,
-                                    "N/A",
-                                    image.tags.get("scylla_version", "N/A"),
-                                ]
-                            )
-                    else:
-                        # Simple version: use get_released_scylla_images for community gallery
-                        azure_images = azure_utils.get_released_scylla_images(
-                            scylla_version=version, region_name=region, arch=arch_enum
-                        )
-                        rows = []
-                        for image in azure_images:
-                            rows.append(
-                                [
-                                    "Azure",
-                                    image.name,
-                                    image.unique_id,
-                                    "N/A",
-                                    image.artifact_tags.get("scylla_version", "N/A"),
-                                ]
-                            )
+                    azure_images = azure_utils.get_released_scylla_images(
+                        scylla_version=version, region_name=region, arch=arch_enum
+                    )
+                    rows = []
+                    for image in azure_images:
+                        rows.append(["Azure", image.name, image.unique_id, "N/A"])
 
                     if output_format == "table":
                         click.echo(
-                            rich_table_to_string(
-                                create_pretty_table(rows=rows, field_names=version_fields),
-                                title="Azure Machine Images by version",
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="Azure Machine Images by version"
                             )
                         )
-                    elif output_format == "json":
+                    elif output_format == "text":
                         azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
                         click.echo(azure_images_json)
 
@@ -1088,24 +1041,24 @@ def list_images(  # noqa: PLR0912, PLR0914
                     ami_images = get_ami_images(branch=branch, region=region, arch=arch_enum)
                     if output_format == "table":
                         click.echo(
-                            rich_table_to_string(
-                                create_pretty_table(rows=ami_images, field_names=branch_fields_aws),
-                                title=f"AMI Machine Images for {branch} in region {region}",
+                            create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
+                                title=f"AMI Machine Images for {branch} in region {region}"
                             )
                         )
-                    elif output_format == "json":
-                        ami_images_json = images_dict_in_json_format(rows=ami_images, field_names=branch_fields_aws)
+                    elif output_format == "text":
+                        ami_images_json = images_dict_in_json_format(
+                            rows=ami_images, field_names=branch_fields_with_tag_name
+                        )
                         click.echo(ami_images_json)
                 case "gce":
                     gce_images = get_gce_images(branch=branch, arch=arch_enum)
                     if output_format == "table":
                         click.echo(
-                            rich_table_to_string(
-                                create_pretty_table(rows=gce_images, field_names=branch_fields),
-                                title=f"GCE Machine Images for {branch}",
+                            create_pretty_table(rows=gce_images, field_names=branch_fields).get_string(
+                                title=f"GCE Machine Images for {branch}"
                             )
                         )
-                    elif output_format == "json":
+                    elif output_format == "text":
                         gce_images_json = images_dict_in_json_format(rows=gce_images, field_names=branch_fields)
                         click.echo(gce_images_json)
                 case "azure":
@@ -1114,116 +1067,19 @@ def list_images(  # noqa: PLR0912, PLR0914
                     )
                     rows = []
                     for image in azure_images:
-                        rows.append(["Azure", image.name, image.id, "N/A", image.tags.get("scylla_version", "N/A")])
+                        rows.append(["Azure", image.name, image.id, "N/A"])
 
                     if output_format == "table":
                         click.echo(
-                            rich_table_to_string(
-                                create_pretty_table(rows=rows, field_names=version_fields),
-                                title="Azure Machine Images by version",
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="Azure Machine Images by version"
                             )
                         )
-                    elif output_format == "json":
+                    elif output_format == "text":
                         azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
                         click.echo(azure_images_json)
                 case _:
                     click.echo(f"Cloud provider {cloud_provider} is not supported")
-
-
-@cli.command("find-ami-equivalent", help="Find equivalent AMI in different region or architecture")
-@click.option("--ami-id", required=True, type=str, help="Source AMI ID to find equivalents for")
-@click.option("--source-region", required=True, type=str, help="AWS region where source AMI is located")
-@click.option(
-    "-r",
-    "--target-region",
-    "target_regions",
-    type=str,
-    multiple=True,
-    help="Target region(s) to search for equivalents. Can be specified multiple times. "
-    "If not specified, searches in source region only.",
-)
-@click.option(
-    "-a",
-    "--target-arch",
-    type=click.Choice(AwsArchType.__args__),
-    help="Target architecture (x86_64 or arm64). If not specified, uses same arch as source AMI.",
-)
-@click.option(
-    "-o",
-    "--output-format",
-    type=click.Choice(["table", "json", "text"]),
-    default="table",
-    help="Output format: 'table' for human-readable table, 'json' for structured data, or 'text' for AMI IDs only",
-)
-def find_ami_equivalent(
-    ami_id: str,
-    source_region: str,
-    target_regions: tuple[str, ...],
-    target_arch: AwsArchType | None,
-    output_format: str,
-):
-    """Find equivalent AMIs in different regions or architectures based on tags."""
-    add_file_logger()
-
-    # Convert tuple to list or None
-    target_regions_list = list(target_regions) if target_regions else None
-
-    # Find equivalent AMIs
-    results = find_equivalent_ami(
-        ami_id=ami_id, source_region=source_region, target_regions=target_regions_list, target_arch=target_arch
-    )
-
-    if not results:
-        click.echo(f"No equivalent AMIs found for {ami_id}")
-        return
-
-    if output_format == "table":
-        # Create pretty table output
-        field_names = [
-            "Region",
-            "AMI ID",
-            "Name",
-            "Architecture",
-            "Creation Date",
-            "Name Tag",
-            "Scylla Version",
-            "Build ID",
-            "Owner ID",
-        ]
-        table = Table(*field_names, show_lines=False)
-
-        for result in results:
-            table.add_row(
-                result["region"],
-                result["ami_id"],
-                result["name"],
-                result["architecture"],
-                result["creation_date"],
-                result["name_tag"],
-                result["scylla_version"],
-                result["build_id"][:6] if result["build_id"] else "N/A",
-                result["owner_id"],
-            )
-
-        title = f"Equivalent AMIs for {ami_id} (source: {source_region})"
-        if target_arch:
-            title += f" - Target arch: {target_arch}"
-        click.echo(rich_table_to_string(table, title=title))
-
-    elif output_format == "json":
-        # Create JSON output for pipeline usage
-        output = {
-            "source_ami_id": ami_id,
-            "source_region": source_region,
-            "target_arch": target_arch,
-            "results": results,
-        }
-        click.echo(json.dumps(output, indent=2))
-
-    elif output_format == "text":
-        # Output only AMI IDs, one per line
-        for result in results:
-            click.echo(result["ami_id"])
 
 
 @cli.command("list-repos", help="List repos url of Scylla formal versions")
@@ -1257,12 +1113,13 @@ def list_repos(dist_type, dist_version):
 
     repo_maps = get_s3_scylla_repos_mapping(dist_type, dist_version)
 
-    tbl = Table("Version Family", "Repo Url", show_lines=False)
+    tbl = PrettyTable(["Version Family", "Repo Url"])
+    tbl.align = "l"
 
     for version_prefix, repo_url in repo_maps.items():
-        tbl.add_row(version_prefix, repo_url)
+        tbl.add_row([version_prefix, repo_url])
 
-    click.echo(rich_table_to_string(tbl, title="Scylla Repos"))
+    click.echo(tbl.get_string(title="Scylla Repos"))
 
 
 @cli.command("get-scylla-base-versions", help="Get Scylla base versions of upgrade")
@@ -1270,7 +1127,7 @@ def list_repos(dist_type, dist_version):
 @click.option("-r", "--scylla-repo", type=str, help="Scylla repo")
 @click.option("-d", "--linux-distro", type=str, help="Linux Distribution type")
 @click.option("-o", "--only-print-versions", type=bool, default=False, required=False, help="")
-@click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
+@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
 @click.option(
     "--base_version_all_sts_versions",
     is_flag=True,
@@ -1310,16 +1167,17 @@ def get_scylla_base_versions(
         click.echo(f"Base Versions: {' '.join(version_list)}")
         return
 
-    tbl = Table("Version Family", "Repo Url", show_lines=False)
+    tbl = PrettyTable(["Version Family", "Repo Url"])
+    tbl.align = "l"
     for version in version_list:
-        tbl.add_row(version, version_detector.repo_maps[version])
-    click.echo(rich_table_to_string(tbl, title="Base Versions"))
+        tbl.add_row([version, version_detector.repo_maps[version]])
+    click.echo(tbl.get_string(title="Base Versions"))
     return
 
 
 @cli.command("output-conf", help="Output test configuration readed from the file")
 @click.argument("config_files", type=str, default="")
-@click.option("-b", "--backend", type=click.Choice(available_backends))
+@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends))
 def output_conf(config_files, backend):
     add_file_logger()
 
@@ -1355,7 +1213,7 @@ def _run_yaml_test(backend, full_path, env):
 
 
 @cli.command(help="Test yaml in test-cases directory")
-@click.option("-b", "--backend", type=click.Choice(available_backends), default="aws")
+@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), default="aws")
 @click.option("-i", "--include", type=str, default="")
 @click.option("-e", "--exclude", type=str, default="")
 def lint_yamls(backend, exclude: str, include: str):
@@ -1407,7 +1265,7 @@ def lint_yamls(backend, exclude: str, include: str):
 
 @cli.command(help="Check test configuration file")
 @click.argument("config_file", type=str, default="")
-@click.option("-b", "--backend", type=click.Choice(available_backends), default="aws")
+@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), default="aws")
 def conf(config_file, backend):
     add_file_logger()
 
@@ -1446,6 +1304,32 @@ def update_conf_docs():
     click.secho(f"docs written into {markdown_file}")
 
 
+@cli.command("perf-regression-report", help="Generate and send performance regression report")
+@click.option("-i", "--es-id", required=True, type=str, help="Id of the run in Elastic Search")
+@click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
+@click.option("--es-index", default="performancestatsv2", help="Elastic Search index")
+@click.option("--extra-jobs-to-compare", default=None, type=str, multiple=True, help="Extra jobs to compare")
+def perf_regression_report(es_id, emails, es_index, extra_jobs_to_compare):
+    add_file_logger()
+    emails = emails.split(",")
+    if not emails:
+        LOGGER.warning("No email recipients. Email will not be sent")
+        sys.exit(1)
+    results_analyzer = PerformanceResultsAnalyzer(es_index=es_index, email_recipients=emails, logger=LOGGER)
+    results_analyzer.check_regression(es_id, extra_jobs_to_compare=extra_jobs_to_compare)
+
+    logdir = Path(get_test_config().logdir())
+    email_results_file = logdir / "email_data.json"
+    test_results = read_email_data_from_file(email_results_file)
+    if not test_results:
+        LOGGER.error("Test Results file not found")
+        sys.exit(1)
+    LOGGER.info("Email will be sent to next recipients: %s", emails)
+    start_time = format_timestamp(time.time())
+    logs = list_logs_by_test_id(test_results.get("test_id", es_id.split("_")[0]))
+    send_perf_email(results_analyzer, test_results, logs, emails, logdir, start_time)
+
+
 @click.group(help="Group of commands for investigating testrun")
 def investigate():
     pass
@@ -1465,10 +1349,11 @@ def show_log(test_id, output_format, update_argus: bool):
     files = list_logs_by_test_id(test_id)
 
     if output_format == "table":
-        table = Table("Date", "Log type", "Link", show_lines=False)
+        table = PrettyTable(["Date", "Log type", "Link"])
+        table.align = "l"
         for log in files:
-            table.add_row(log["date"].strftime("%Y%m%d_%H%M%S"), log["type"], log["link"])
-        click.echo(rich_table_to_string(table, title="Log links for testrun with test id {}".format(test_id)))
+            table.add_row([log["date"].strftime("%Y%m%d_%H%M%S"), log["type"], log["link"]])
+        click.echo(table.get_string(title="Log links for testrun with test id {}".format(test_id)))
     elif output_format == "markdown":
         click.echo("\n## Logs\n")
         for log in files:
@@ -1478,7 +1363,7 @@ def show_log(test_id, output_format, update_argus: bool):
         try:
             store_logs_in_argus(
                 test_id=test_id,
-                logs=reduce(lambda acc, log: acc[log["type"]].append(log["s3_url"]) or acc, files, defaultdict(list)),
+                logs=reduce(lambda acc, log: acc[log["type"]].append(log["link"]) or acc, files, defaultdict(list)),
                 update=True,
             )
         except Exception:  # noqa: BLE001
@@ -1510,10 +1395,10 @@ def show_monitor(test_id, date_time, kill, cluster_name):
             continue
 
         click.echo(f"Monitoring stack for cluster {cluster} restored")
-        table = Table("Service", "Container", "Link", show_lines=False)
+        table = PrettyTable(["Service", "Container", "Link"], align="l")
         for docker in get_monitoring_stack_services(ports=containers_ports):
-            table.add_row(docker["service"], docker["name"], f"http://{SCT_RUNNER_HOST}:{docker['port']}")
-        click.echo(rich_table_to_string(table, title=f"Monitoring stack services for cluster {cluster}"))
+            table.add_row([docker["service"], docker["name"], f"http://{SCT_RUNNER_HOST}:{docker['port']}"])
+        click.echo(table.get_string(title=f"Monitoring stack services for cluster {cluster}"))
         click.echo("")
         if kill:
             kill_running_monitoring_stack_services(ports=containers_ports)
@@ -1546,11 +1431,12 @@ def search_builder(test_id):
     add_file_logger()
 
     results = get_builder_by_test_id(test_id)
-    tbl = Table("Builder Name", "Public IP", "path", show_lines=False)
+    tbl = PrettyTable(["Builder Name", "Public IP", "path"])
+    tbl.align = "l"
     for result in results:
-        tbl.add_row(result["builder"]["name"], result["builder"]["public_ip"], result["path"])
+        tbl.add_row([result["builder"]["name"], result["builder"]["public_ip"], result["path"]])
 
-    click.echo(rich_table_to_string(tbl, title="Found builders for Test-id: {}".format(test_id)))
+    click.echo(tbl.get_string(title="Found builders for Test-id: {}".format(test_id)))
 
 
 @investigate.command("show-events", help="Return content of file events_log/events for running job by test-id")
@@ -1686,7 +1572,7 @@ class OutputLogger:
 
 @cli.command("run-test", help="Run SCT test using unittest")
 @click.argument("argv")
-@click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
+@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
 @click.option(
     "-c",
     "--config",
@@ -1725,7 +1611,7 @@ def run_test(argv, backend, config, logdir):
 
 @cli.command("run-pytest", help="Run tests using pytest")
 @click.argument("target")
-@click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
+@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
 @click.option(
     "-c",
     "--config",
@@ -1813,9 +1699,10 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
     collector = Collector(test_id=test_id, params=config, test_dir=logdir)
 
-    collected_logs, collection_error = collector.run()
+    collected_logs = collector.run()
 
-    table = Table("Cluster set", "Link", show_lines=False)
+    table = PrettyTable(["Cluster set", "Link"])
+    table.align = "l"
     for cluster_type, s3_links in collected_logs.items():
         for link in s3_links:
             current_cluster_type = cluster_type
@@ -1827,19 +1714,14 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
             if cluster_type == "sct-runner" and cluster_type not in link:
                 current_cluster_type = link.split("/")[-1].split("-")[0]
             table.add_row(
-                current_cluster_type, create_proxy_argus_s3_url(link).format(collector.test_id, link.split("/")[-1])
+                [current_cluster_type, create_proxy_argus_s3_url(link).format(collector.test_id, link.split("/")[-1])]
             )
 
-    click.echo(rich_table_to_string(table, title="Collected logs by test-id: {}".format(collector.test_id)))
+    click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
     update_sct_runner_tags(backend=backend, test_id=collector.test_id, tags={"logs_collected": True})
 
-    # Always send collected logs to Argus, even if there were collection errors
     if collector.test_id:
         store_logs_in_argus(test_id=UUID(collector.test_id), logs=collected_logs)
-
-    # Raise error only after logs have been sent to Argus
-    if collection_error:
-        raise RuntimeError(collection_error)
 
 
 def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]], update: bool = False):
@@ -1868,6 +1750,19 @@ def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]], u
         LOGGER.error("Error saving logs to argus", exc_info=True)
 
 
+def get_test_results_for_failed_test(test_status, start_time):
+    return {
+        "job_url": os.environ.get("BUILD_URL"),
+        "subject": f"{test_status}: {os.environ.get('JOB_NAME')}: {start_time}",
+        "start_time": start_time,
+        "end_time": format_timestamp(time.time()),
+        "grafana_screenshots": "",
+        "nodes": "",
+        "test_id": "",
+        "username": "",
+    }
+
+
 @cli.command("send-email", help="Send email with results for testrun")
 @click.option("--test-id", help="Test-id of run")
 @click.option("--test-status", help="Override test status FAILED|ABORTED")
@@ -1876,15 +1771,17 @@ def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]], u
 @click.option("--runner-ip", type=str, required=False, help="Sct runner ip for the running test")
 @click.option("--email-recipients", help="Send email to next recipients")
 @click.option("--logdir", help="Directory where to find testrun folder")
-def send_email(
+def send_email(  # noqa: PLR0914, PLR0912
     test_id=None,
     test_status=None,
     start_time=None,
     started_by=None,
-    runner_ip=None,
+    runner_ip=None,  # noqa: PLR0912
     email_recipients=None,
     logdir=None,
 ):
+    if started_by is None:
+        started_by = get_username()
     add_file_logger()
 
     if not email_recipients:
@@ -1893,30 +1790,105 @@ def send_email(
     LOGGER.info("Email will be sent to next recipients: %s", email_recipients)
     email_recipients = email_recipients.split(",")
     sct_config = SCTConfiguration()
+    if sct_config.get("enable_argus_email_report"):
+        LOGGER.info("Sending email for test %s...", test_id)
+        client = init_argus_client(os.environ.get("SCT_TEST_ID"))
+        run = client.get_run()
+        title_template_data = {**dict(sct_config), **run}
 
-    LOGGER.info("Sending email for test %s...", test_id)
-    client = init_argus_client(os.environ.get("SCT_TEST_ID"))
-    run = client.get_run()
-    title_template_data = {**dict(sct_config), **run}
+        template = sct_config.get("argus_email_report_template")
+        if not template:
+            LOGGER.error("Argus Email Report is enabled but the template file is not defined.")
+            sys.exit(1)
 
-    template = sct_config.get("argus_email_report_template")
-    if not template:
-        LOGGER.error("Argus Email Report template file is not defined.")
+        p = Path(f"./argus_report_templates/{template}")
+        if not p.exists():
+            LOGGER.error("Argus Email Report is enabled but the template does not exist.")
+            sys.exit(1)
+
+        with p.open() as f:
+            template = yaml.safe_load(f)
+
+        title: str = (
+            template["title"] if ("{" not in template["title"]) else template["title"].format(title_template_data)
+        )
+        LOGGER.info("Sending email to %s with title %s and sections: %s", email_recipients, title, template)
+        client.send_email(recipients=email_recipients, title=title, sections=template["sections"])
+        return
+
+    if not logdir:
+        logdir = os.path.expanduser("~/sct-results")
+    test_results = None
+    if start_time is None:
+        start_time = format_timestamp(time.time())
+    else:
+        start_time = format_timestamp(int(start_time))
+    testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
+    if testrun_dir:
+        with open(os.path.join(testrun_dir, "test_id"), encoding="utf-8") as file:
+            test_id = file.read().strip()
+        email_results_file = os.path.join(testrun_dir, "email_data.json")
+        if not os.path.exists(email_results_file):
+            email_results_file = "email_data.json" if os.path.exists("email_data.json") else None
+        if not email_results_file:
+            LOGGER.error("Results file not found")
+        else:
+            test_results = read_email_data_from_file(email_results_file)
+    else:
+        LOGGER.warning("Failed to find test directory for %s", test_id)
+    if not test_results:
+        if not test_status:
+            test_status = "ABORTED"
+        test_results = get_test_results_for_failed_test(test_status, start_time)
+        if started_by:
+            test_results["username"] = started_by
+        if test_id:
+            test_results.update(
+                {
+                    "test_id": test_id,
+                    "nodes": get_running_instances_for_email_report(test_id, runner_ip),
+                    "log_links": list_logs_by_test_id(test_id),
+                }
+            )
+        reporter = build_reporter("TestAborted", email_recipients, testrun_dir)
+        if reporter:
+            reporter.send_report(test_results)
+            sys.exit(1)
+        else:
+            LOGGER.error("failed to get a reporter")
+            sys.exit(1)
+        return
+    job_name = os.environ.get("JOB_NAME", "")
+    if reporter := test_results.get("reporter", ""):
+        test_results["nodes"] = get_running_instances_for_email_report(test_id, runner_ip)
+        test_results["logs_links"] = list_logs_by_test_id(test_results.get("test_id", test_id))
+        if "longevity" in job_name:
+            pt_report_urls = list_parallel_timelines_report_urls(test_id=test_results.get("test_id", test_id))
+            test_results["parallel_timelines_report"] = pt_report_urls[0] if pt_report_urls else None
+
+        reporter = build_reporter(reporter, email_recipients, testrun_dir)
+        if not reporter:
+            LOGGER.warning("No reporter found")
+            sys.exit(1)
+        try:
+            reporter.send_report(test_results)
+        except Exception:  # noqa: BLE001
+            LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
+            build_reporter("TestAborted", email_recipients, testrun_dir).send_report(
+                {
+                    "job_url": os.environ.get("BUILD_URL"),
+                    "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
+                }
+            )
+    elif any(["email_body" in value for value in test_results.values()]):
+        # figure out it's a perf tests with multiple emails in single file
+        # based on the structure of file
+        logs = list_logs_by_test_id(test_results.get("test_id", test_id))
+        reporter = BaseResultsAnalyzer(es_index=test_id, email_recipients=email_recipients)
+        send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time)
+    else:
+        LOGGER.warning("failed to figure out what what to send out")
         sys.exit(1)
-
-    p = Path(f"./argus_report_templates/{template}")
-    if not p.exists():
-        LOGGER.error("Argus Email Report template does not exist: %s", p)
-        sys.exit(1)
-
-    with p.open() as f:
-        template = yaml.safe_load(f)
-
-    title: str = (
-        template["title"] if ("{" not in template["title"]) else template["title"].format(**title_template_data)
-    )
-    LOGGER.info("Sending email to %s with title %s and sections: %s", email_recipients, title, template)
-    client.send_email(recipients=email_recipients, title=title, sections=template["sections"])
 
 
 @cli.command("create-operator-test-release-jobs", help="Create pipeline jobs for a new scylla-operator branch/release")
@@ -1961,7 +1933,7 @@ def create_qa_tools_jobs(username, password, sct_branch, sct_repo, triggers):
 @cli.command("create-performance-jobs", help="Create pipeline jobs for performance")
 @click.argument("username", envvar="JENKINS_USERNAME", type=str, required=False)
 @click.argument("password", envvar="JENKINS_PASSWORD", type=str, required=False)
-@click.option("--sct_branch", default="branch-perf-v17", type=str)
+@click.option("--sct_branch", default="branch-perf-v15", type=str)
 @click.option("--sct_repo", default="git@github.com:scylladb/scylla-cluster-tests.git", type=str)
 @click.option("--triggers/--no-triggers", default=False)
 def create_performance_jobs(username, password, sct_branch, sct_repo, triggers):
@@ -2028,50 +2000,6 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
         server.create_job_tree(base_path)
 
 
-@cli.command(
-    "configure-jenkins-throttle", help="Create/update Jenkins throttle-concurrents categories for perf regions"
-)
-@click.argument("username", envvar="JENKINS_USERNAME", type=str, required=False)
-@click.argument("password", envvar="JENKINS_PASSWORD", type=str, required=False)
-@click.option("--dry-run", is_flag=True, default=False, help="Print categories without applying changes")
-@click.option(
-    "--suffix",
-    multiple=True,
-    default=["i8g"],
-    help="Additional suffixes to create per region (e.g. --suffix i8g --suffix i4i). "
-    "Base categories (no suffix) are always created.",
-)
-def configure_jenkins_throttle(username, password, dry_run, suffix):
-    add_file_logger()
-
-    # AWS regions used by performance tests
-    aws_regions = [
-        "us-east-1",
-        "eu-west-1",
-        "eu-west-2",
-        "eu-west-3",
-        "eu-north-1",
-    ]
-
-    categories = [ThrottleCategory(name=f"SCT-perf-{region}", max_total=1, max_per_node=1) for region in aws_regions]
-    for sfx in suffix:
-        categories += [
-            ThrottleCategory(name=f"SCT-perf-{region}-{sfx}", max_total=1, max_per_node=1) for region in aws_regions
-        ]
-    if dry_run:
-        click.echo("Would ensure the following throttle categories:")
-        for cat in categories:
-            click.echo(f"  {cat.name}: max_total={cat.max_total}, max_per_node={cat.max_per_node}")
-        return
-
-    manager = ThrottleCategoryManager(username=username, password=password)
-    changed = manager.ensure_categories(categories)
-    if changed:
-        click.echo(f"Created/updated {len(changed)} categories: {changed}")
-    else:
-        click.echo("All categories already up to date")
-
-
 @cli.command("prepare-regions", help="Configure all required resources for SCT runs in selected cloud region")
 @cloud_provider_option
 @click.option("-r", "--regions", type=CloudRegion(), help="Cloud region", multiple=True)
@@ -2086,8 +2014,6 @@ def prepare_regions(cloud_provider, regions):
             region = AzureRegion(region_name=region)  # noqa: PLW2901
         elif cloud_provider == "gce":
             region = GceRegion(region_name=region)  # noqa: PLW2901
-        elif cloud_provider == "oci":
-            region = OciRegion(region_name=region)  # noqa: PLW2901
         else:
             raise Exception(f"Unsupported Cloud provider: `{cloud_provider}")
         region.configure()
@@ -2108,7 +2034,7 @@ def configure_aws_peering(regions):
     help=f"Create an SCT runner image in the selected cloud region."
     f" If the requested region is not a source region"
     f" (aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION},"
-    f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}, oci: {OciSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
+    f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
     f" source region and then copied to the chosen one.",
 )
 @cloud_provider_option
@@ -2117,8 +2043,6 @@ def configure_aws_peering(regions):
 def create_runner_image(cloud_provider, region, availability_zone):
     if cloud_provider == "aws":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
-    elif cloud_provider == "oci":
-        assert availability_zone, "Availability zone is required for OCI"
     add_file_logger()
     os.environ.setdefault("SCT_CLUSTER_BACKEND", cloud_provider)
     sct_config = SCTConfiguration()
@@ -2217,10 +2141,10 @@ def set_runner_tags(runner_ip, tags):
 @cli.command("clean-runner-instances", help="Clean all unused SCT runner instances")
 @click.option("-ip", "--runner-ip", required=False, type=str, default="")
 @click.option("-ts", "--test-status", type=str, help="The result of the test run")
-@click.option("-b", "--backend", type=click.Choice(available_backends), help="Specific backend to use")
+@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Specific backend to use")
 @click.option("--user", type=str, help="user name to filter instances by")
 @click.option("--billing-project", type=str, help="billing project to filter instances by")
-@click.option("--test-id", "test_id", help="test id to filter by. Could be used multiple times", multiple=True)
+@sct_option("--test-id", "test_id", help="test id to filter by. Could be used multiple times", multiple=True)
 @click.option("--dry-run", is_flag=True, default=False, help="dry run")
 @click.option("--force", is_flag=True, default=False, help="Skip cleaning logic and terminate the instance")
 def clean_runner_instances(runner_ip, test_status, backend, user, billing_project, test_id, dry_run, force):
@@ -2237,6 +2161,49 @@ def clean_runner_instances(runner_ip, test_status, backend, user, billing_projec
     )
 
 
+@cli.command("generate-pt-report", help="Generate parallel timelines representation for the SCT test events")
+@click.option("-t", "--test-id", envvar="SCT_TEST_ID", help="Test ID to search in sct-results")
+@click.option("-d", "--logdir", envvar="HOME", type=click.Path(exists=True), help="Directory with sct-results folder")
+def generate_parallel_timelines_report(logdir: str | None, test_id: str | None) -> None:
+    add_file_logger()
+
+    event_log_file = "raw_events.log"
+
+    LOGGER.debug("Searching for the required test run directory in %s...", logdir)
+    testrun_dir = get_testrun_dir(os.path.join(logdir, "sct-results"), test_id)
+    if not testrun_dir:
+        click.secho(message=f"Couldn't find directory for the required test run in '{logdir}'! Aborting...", fg="red")
+        sys.exit(1)
+    LOGGER.info("Found the test run directory '%s'", testrun_dir)
+
+    LOGGER.debug("Searching for the %s in %s...", event_log_file, testrun_dir)
+    raw_events_log_path = next(Path(testrun_dir).glob(f"**/{event_log_file}"), None)
+
+    if raw_events_log_path is None:
+        click.secho(message=f"Couldn't find '{event_log_file}' in '{testrun_dir}'! Aborting...", fg="red")
+        sys.exit(1)
+    LOGGER.info("Found the file '%s'", raw_events_log_path)
+    pt_report_generator = ParallelTimelinesReportGenerator(events_file=raw_events_log_path)
+    pt_report_generator.generate_full_report()
+
+
+@cli.command("create-es-index", help="Create ElasticSearch index with mapping ")
+@click.option("-n", "--name", envvar="SCT_ES_INDEX_NAME", required=True, help="ES index name")
+@click.option(
+    "-f",
+    "--mapping-file",
+    envvar="SCT_MAPPING_FILEPATH",
+    type=click.Path(exists=True),
+    required=True,
+    help="Full path to es index mapping file",
+)
+def create_es_index(name: str, mapping_file: str) -> None:
+    add_file_logger()
+
+    mapping_data = get_mapping(mapping_file)
+    create_index(index_name=name, mappings=mapping_data)
+
+
 @cli.command("configure-jenkins-builders", help="Configure all required jenkins builders for SCT")
 @cloud_provider_option
 @click.option("-r", "--regions", type=CloudRegion(), default=[], help="Cloud regions", multiple=True)
@@ -2250,14 +2217,12 @@ def configure_jenkins_builders(cloud_provider, regions):
             AwsBuilder.configure_in_all_region(regions=regions)
         case "gce":
             GceBuilder.configure_in_all_region(regions=regions)
-        case "oci":
-            OciBuilder.configure_in_all_region(regions=regions)
         case "azure":
             raise NotImplementedError("configure_jenkins_builders doesn't support Azure yet")
 
 
 @cli.command("nemesis-list", help="get the list of select disrupt function for SisyphusMonkey")
-@click.option("-b", "--backend", type=click.Choice(available_backends), help="Backend to use")
+@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
 @click.option(
     "-c",
     "--config",
@@ -2351,7 +2316,7 @@ def finish_argus_test_run(jenkins_status):
 @click.option(
     "-b",
     "--backend",
-    type=click.Choice(available_backends),
+    type=click.Choice(SCTConfiguration.available_backends),
     help="Allows to skip making backend detection API calls.",
 )
 def fetch_junit(runner_ip, backend):
@@ -2410,135 +2375,6 @@ def upload_artifact_file(test_id: str, file_path: str, use_argus: bool, public: 
     else:
         LOGGER.error("File %s does not exist", file.absolute())
         return
-
-
-@cli.command(
-    "hdr-investigate",
-    help="Analyze HDR file for latency spikes.\n"
-    "Usage example:\n"
-    "hydra hdr-investigate --stress-operation READ --throttled-load true "
-    '--test-id 8732ecb1-7e1f-44e7-b109-6d789b15f4b5 --start-time "2025-09-14\\ 20:45:18" '
-    "--duration-from-start-min 30",
-)
-@click.option(
-    "--test-id",
-    type=str,
-    required=False,
-    help="If hdr_folder is not provided, logs will be downloaded from argus using this test_id",
-)
-@click.option(
-    "--stress-tool",
-    default="cassandra-stress",
-    required=False,
-    type=click.Choice(["cassandra-stress", "scylla-bench", "latte"], case_sensitive=False),
-    help="stress tool name. Supported tools: cassandra-stress|scylla-bench|latte",
-)
-@click.option(
-    "--stress-operation",
-    required=True,
-    type=click.Choice(["READ", "WRITE"], case_sensitive=False),
-    help="Supported stress operations: READ|WRITE",
-)
-@click.option("--throttled-load", type=bool, required=True, help="Is the load throttled or not")
-@click.option("--start-time", type=str, required=True, help="Start time in format 'YYYY-MM-DD\\ HH:MM:SS'")
-@click.option(
-    "--duration-from-start-min",
-    type=int,
-    required=True,
-    help="Time period in minutes in HDR file to investigate, started from start-time ",
-)
-@click.option(
-    "--error-threshold-ms",
-    type=int,
-    default=10,
-    required=False,
-    help="Error threshold in ms for P99 to consider it as a spike",
-)
-@click.option("--hdr-summary-interval-sec", type=int, default=600, required=False, help="Interval in seconds for scan")
-@click.option("--hdr-folder", type=str, default=None, required=False, help="Path to folder with hdr files. ")
-def hdr_investigate(
-    test_id: str,
-    stress_tool: str,
-    stress_operation: str,
-    throttled_load: bool,
-    start_time: str,
-    duration_from_start_min: int,
-    error_threshold_ms: int,
-    hdr_summary_interval_sec: int,
-    hdr_folder: str,
-) -> None:
-    """
-    Analyze HDR file for latency spikes.
-
-    This function scans HDR files to identify intervals with high latency spikes.
-    It performs a scan to find intervals with the highest P99 latency
-    Args:
-        test_id (str): Test ID. If `hdr_folder` is not provided, logs will be downloaded from Argus using this ID to /tmp/<test-id> folder.
-        stress_tool (str): Name of the stress tool. Supported: cassandra-stress, scylla-bench, latte.
-        stress_operation (str): Stress operation type. Supported: READ, WRITE.
-        throttled_load (bool): Whether the load is throttled.
-        start_time (str): Start time in format 'YYYY-MM-DD HH:MM:SS'.
-        duration_from_start_min (int): Time period in minutes in HDR file to investigate, starting from `start_time`.
-        error_threshold_ms (int): Error threshold in ms for P99 to consider it as a spike.
-        hdr_summary_interval_sec (int): Interval in seconds for scan.
-        hdr_folder (str): Path to folder with HDR files. If not provided, logs will be downloaded from Argus.
-
-    Returns:
-        None
-
-    Usage example:
-       hydra hdr-investigate --stress-operation READ --throttled-load true --test-id 8732ecb1-7e1f-44e7-b109-6d789b15f4b5
-       --start-time \"2025-09-14\\ 20:45:18\" --duration-from-start-min 30
-    """
-    stress_operation = stress_operation.upper()
-
-    try:
-        start_time_ms = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC).timestamp()
-    except ValueError:
-        raise ValueError("start_time must be in 'YYYY-MM-DD HH:MM:SS' format")
-
-    if not hdr_folder:
-        if not test_id:
-            raise ValueError("Either test_id or hdr_folder must be provided")
-
-        hdr_folder = download_and_unpack_logs(test_id, log_type="loader-set")
-
-    hdr_tags = get_hdr_tags(stress_tool, stress_operation, throttled_load)
-
-    # Step 1: Coarse scan
-    end_time_ms = start_time_ms + duration_from_start_min * 60
-    hdr_summaries = make_hdrhistogram_summary_by_interval(
-        hdr_tags, stress_operation, hdr_folder, start_time_ms, end_time_ms, interval=hdr_summary_interval_sec
-    )
-
-    summaries = []
-    for tag in hdr_tags:
-        # Find intervals for this tag
-        tag_hdr_summaries = [(summary.get(f"{stress_operation}--{tag}", {})) for summary in hdr_summaries]
-        # Filter intervals where percentile_99 > error threshold. Meaning it is a spike
-        tag_summaries = [
-            s for s in tag_hdr_summaries if s and "percentile_99" in s and s["percentile_99"] > error_threshold_ms
-        ]
-        # Sort by percentile_99 descending
-        tag_summaries.sort(key=lambda x: x["percentile_99"], reverse=True)
-        for num, operation in enumerate(tag_summaries, start=1):
-            p99 = {}
-            # Convert to human readable time
-            dt_start = datetime.fromtimestamp(operation["start_time"] / 1000, UTC).strftime("%Y-%m-%d %H:%M:%S")
-            dt_end = datetime.fromtimestamp(operation["end_time"] / 1000, UTC).strftime("%Y-%m-%d %H:%M:%S")
-            if operation["percentile_99"] > error_threshold_ms:
-                p99[f"{dt_start} - {dt_end}"] = operation["percentile_99"]
-            summaries.append({"tag": tag, "spikes": p99})
-
-    hdr_table = Table("Tag", "Timeframe", "P99", show_lines=False)
-    for group in summaries:
-        # Example: group: {'tag': 'READ-st', 'spikes': {'2025-08-25 10:22:40 - 2025-08-25 10:32:40': 487.85}}
-        for time_frame, p99 in group["spikes"].items():
-            hdr_table.add_row(group["tag"], time_frame, str(p99))
-    click.echo(
-        f"\nFound P99 spikes higher than {error_threshold_ms} ms for tags {hdr_tags} with interval {hdr_summary_interval_sec} seconds\n"
-    )
-    click.echo(rich_table_to_string(hdr_table, title="HDR Latency Spikes"))
 
 
 cli.add_command(sct_ssh.ssh)

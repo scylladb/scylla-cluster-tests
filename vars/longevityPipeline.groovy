@@ -5,7 +5,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name)
     def functional_test = pipelineParams.functional_test
 
     pipeline {
@@ -19,20 +19,21 @@ def call(Map pipelineParams) {
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID = UUID.randomUUID().toString()
             SCT_GCE_PROJECT = "${params.gce_project}"
+            SCT_ENABLE_ARGUS_REPORT = "1"
             SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
             separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
-               description: 'aws|gce|azure|oci|docker|xcloud',
+               description: 'aws|gce|azure|docker|xcloud',
                name: 'backend')
 
-            string(defaultValue: "${pipelineParams.get('xcloud_provider', 'aws')}",
-                   description: 'Cloud provider for Scylla Cloud backend (only used when backend=xcloud). Supported providers: aws, gce',
-                   name: 'xcloud_provider')
+            choice(name: 'xcloud_provider',
+                   choices: ['aws', 'gce'],
+                   description: 'Cloud provider for Scylla Cloud backend (only used when backend=xcloud). Supported providers: aws, gce',)
 
             string(defaultValue: "${pipelineParams.get('xcloud_env', 'lab')}",
-                   description: 'Scylla Cloud environment (only used when backend=xcloud). Supported environments: lab, staging, prod',
+                   description: 'Scylla Cloud environment (only used when backend=xcloud). Supported environments: lab',
                    name: 'xcloud_env')
 
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
@@ -44,10 +45,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
                    description: 'Azure location',
                    name: 'azure_region_name')
-            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
-                   description: 'Oracle location',
-                   name: 'oci_region_name')
-            string(defaultValue: "${pipelineParams.get('availability_zone', '')}",
+            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
                description: 'Availability zone',
                name: 'availability_zone')
 
@@ -67,14 +65,9 @@ def call(Map pipelineParams) {
 	    string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
 	    string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
 	    string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
-	    string(defaultValue: '', description: 'Oracle image for ScyllaDB ', name: 'oci_image_db')
 	    string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs:// ', name: 'update_db_packages')
-            string(defaultValue: "${pipelineParams.get('scylla_version', '')}",
-                   description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
-                   name: 'scylla_version')
-            string(defaultValue: '',
-                   description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
-                   name: 'scylla_repo')
+            string(name: 'scylla_version', defaultValue: '', description: 'Version of ScyllaDB')
+            string(name: 'scylla_repo', defaultValue: '', description: 'Repository for ScyllaDB')
 
             // Provisioning Configuration
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
@@ -99,9 +92,6 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_k8s_cluster', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_k8s_cluster')
-            string(defaultValue: "${pipelineParams.get('post_behavior_vector_store_nodes', 'destroy')}",
-                   description: 'keep|keep-on-failure|destroy',
-                   name: 'post_behavior_vector_store_nodes')
 
             // SSH Configuration
             separator(name: 'SSH_CONFIG', sectionHeader: 'SSH Configuration')
@@ -112,7 +102,7 @@ def call(Map pipelineParams) {
             // Manager Configuration
             separator(name: 'MANAGER_CONFIG', sectionHeader: 'Manager Configuration')
             string(defaultValue: "${pipelineParams.get('manager_version', '')}",
-                   description: 'master_latest|3.9|3.8',
+                   description: 'master_latest|3.8|3.7',
                    name: 'manager_version')
 
             string(defaultValue: '',
@@ -191,6 +181,10 @@ def call(Map pipelineParams) {
             choice(choices: getBillingProjectChoices(),
                    description: 'Billing project for the test run (dynamically fetched from finops repository)',
                    name: 'billing_project')
+            string(defaultValue: "${pipelineParams.get('perf_extra_jobs_to_compare', '')}",
+                   description: 'jobs to compare performance results with, for example if running in staging, '
+                                + 'we still can compare with official jobs',
+                   name: 'perf_extra_jobs_to_compare')
             text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
                     description: (
                         'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
@@ -333,7 +327,20 @@ def call(Map pipelineParams) {
                         wrap([$class: 'BuildUser']) {
                             dir('scylla-cluster-tests') {
                                 timeout(time: 30, unit: 'MINUTES') {
-                                    provisionResources(params, builder.region)
+                                    if (params.backend == 'xcloud') {
+                                        echo "Scylla Cloud backend selected: provisioning loader nodes only on ${params.xcloud_provider} cloud provider"
+                                    }
+                                    if (params.backend == 'xcloud' || params.backend == 'aws' || params.backend == 'azure') {
+                                        provisionResources(params, builder.region)
+                                    } else if (params.backend.contains('docker')) {
+                                        sh """
+                                            echo 'Tests are to be executed on Docker backend in SCT-Runner. No additional resources to be provisioned.'
+                                        """
+                                    } else {
+                                        sh """
+                                            echo 'Skipping because non-AWS/Azure backends are not supported'
+                                        """
+                                    }
                                     completed_stages['provision_resources'] = true
                                 }
                             }
@@ -350,6 +357,22 @@ def call(Map pipelineParams) {
                                     timeout(time: testRunTimeout, unit: 'MINUTES') {
                                         runSctTest(params, builder.region, functional_test, pipelineParams)
                                         completed_stages['run_tests'] = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage("Parallel timelines report") {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        runGeneratePTReport(testDuration)
+                                        completed_stages['generate_parallel_timelines_report'] = true
                                     }
                                 }
                             }

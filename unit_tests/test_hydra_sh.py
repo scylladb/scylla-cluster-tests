@@ -3,6 +3,7 @@ import dataclasses
 import os
 import re
 import tempfile
+import unittest
 from functools import cached_property
 from typing import Dict, Union, Tuple, Iterable, Sequence, List
 
@@ -97,8 +98,8 @@ class LongevityPipelineTest:
     @staticmethod
     def docker_run_prefix(runner: bool):
         if runner:
-            return "docker -H ssh://ubuntu@1.1.1.1 run --rm --privileged -h ip-1.1.1.1.*"
-        return "docker run --rm --privileged .*"
+            return "docker -H ssh://ubuntu@1.1.1.1 run --rm -it --privileged -h ip-1.1.1.1.*"
+        return "docker run --rm -it --privileged .*"
 
     def sct_path(self, runner: bool):
         if runner:
@@ -235,7 +236,6 @@ class LongevityPipelineTest:
             "SCT_TEST_ID": self.test_id,
             "HOME": self.test_home_dir,
             "USER": "root",
-            "BUILD_TAG": "1234",
             "SCT_CLUSTER_BACKEND": self.backend,
             "SCT_CONFIG_FILES": '["/jenkins/slave/workspace/siren-tests/longevity-tests/cloud-longevity-small-data-'
             'set-1h-gcp/siren-tests/sct_plugin/configurations/scylla_cloud_nemesis_small_set.yaml"]',
@@ -398,7 +398,7 @@ class LongevityPipelineTest:
         )
 
 
-class TestHydraSh:
+class TestHydraSh(unittest.TestCase):
     cmd_runner = LocalCmdRunner()
 
     @pytest.fixture(autouse=True)

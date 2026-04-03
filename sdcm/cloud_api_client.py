@@ -144,7 +144,7 @@ class ScyllaCloudAPIClient:
     @cached_property
     def current_scylla_version(self) -> dict:
         """Get the latest ScyllaDB Cloud version that can be used to create a new cluster"""
-        return next(v for v in reversed(self.get_scylla_versions()["scyllaVersions"]) if v["newCluster"] == "ENABLED")
+        return next(v for v in reversed(self.get_scylla_versions()) if v["newCluster"] == "ENABLED")
 
     def get_regions(self, *, cloud_provider_id: int, defaults: bool = False) -> dict[str, Any]:
         """Get regions supported by a given cloud provider"""
@@ -158,16 +158,11 @@ class ScyllaCloudAPIClient:
         regions = self.get_regions(cloud_provider_id=cloud_provider_id)["regions"]
         return next(region for region in regions if region["externalId"] == region_name)["id"]
 
-    def get_instance_types(
-        self, *, cloud_provider_id: int, region_id: int, defaults: bool = False, target: str | None = None
-    ) -> dict[str, Any]:
-        """
-        Get instance types available for a given cloud provider and region"""
+    def get_instance_types(self, *, cloud_provider_id: int, region_id: int, defaults: bool = False) -> dict[str, Any]:
+        """Get instance types available for a given cloud provider and region"""
         params = {}
         if defaults:
             params["defaults"] = "true"
-        if target:
-            params["target"] = target
         return self.request("GET", f"/deployment/cloud-provider/{cloud_provider_id}/region/{region_id}", params=params)
 
     def get_instance_id_by_name(self, *, cloud_provider_id: int, region_id: int, instance_type_name: str) -> int:
@@ -180,13 +175,6 @@ class ScyllaCloudAPIClient:
                 f"Instance type '{instance_type_name}' not found in region_id: {region_id} for cloud_provider_id: "
                 f"{cloud_provider_id}, available instance types: {', '.join(t['externalId'] for t in instance_types)}"
             )
-
-    def get_vector_search_instance_types(self, *, cloud_provider_id: int, region_id: int) -> dict[str, int]:
-        """Get Vector Search instance types for a given cloud provider and region"""
-        response = self.get_instance_types(
-            cloud_provider_id=cloud_provider_id, region_id=region_id, target="VECTOR_SEARCH"
-        )
-        return {instance["externalId"]: instance["id"] for instance in response["instances"]}
 
     @cached_property
     def cloud_provider_ids(self) -> dict[CloudProviderType, int]:
@@ -274,10 +262,9 @@ class ScyllaCloudAPIClient:
         jump_start: bool,
         encryption_at_rest: dict | None,
         maintenance_windows: list[dict],
-        scaling: dict[str, Any],
+        scaling: dict[str, str],
         prom_proxy: bool,
         vector_search: dict | None,
-        tablets: str | None,
     ) -> dict[str, Any]:
         """
         Create cluster-create request.
@@ -304,7 +291,6 @@ class ScyllaCloudAPIClient:
         :param scaling: scaling configuration
         :param prom_proxy: whether to enable Prometheus proxy for the cluster (default: False)
         :param vector_search: Vector Search configuration
-        :param tablets: tablets configuration, should be set to "enforced" for XCloud cluster
 
         :return: created cluster details
         """
@@ -331,7 +317,6 @@ class ScyllaCloudAPIClient:
             scaling=scaling,
             promProxy=prom_proxy,
             vectorSearch=vector_search,
-            tablets=tablets,
         )
         return self._parse_response_data(response)
 
@@ -445,7 +430,7 @@ class ScyllaCloudAPIClient:
         return self.request(
             "POST",
             f"/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search",
-            nodeCount=number_of_nodes,
+            defaultNodes=number_of_nodes,
             defaultInstanceTypeId=instance_type_id,
         )
 

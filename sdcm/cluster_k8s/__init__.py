@@ -62,12 +62,10 @@ from sdcm.log import SDCMAdapter
 from sdcm.mgmt import AnyManagerCluster
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.sct_events.database import ScyllaYamlUpdateEvent
 import sdcm.utils.sstable.load_inventory as datasets
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.common import download_from_github, shorten_cluster_name, walk_thru_data
-from sdcm.utils.docker_utils import get_docker_hub_credentials
 from sdcm.utils.k8s import (
     add_pool_node_affinity,
     convert_cpu_units_to_k8s_value,
@@ -98,7 +96,7 @@ from sdcm.utils.remote_logger import (
     HaproxyIngressLogger,
 )
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
-from sdcm.utils.version_utils import ComparableScyllaOperatorVersion, ComparableScyllaVersion
+from sdcm.utils.version_utils import ComparableScyllaOperatorVersion
 from sdcm.wait import wait_for
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
 
@@ -135,8 +133,8 @@ MINIO_NAMESPACE = "minio"
 SCYLLA_CONFIG_NAME = "scylla-config"
 SCYLLA_AGENT_CONFIG_NAME = "scylla-agent-config"
 
-K8S_LOCAL_VOLUME_PROVISIONER_VERSION = "0.5.0"  # without 'v' prefix
-SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER = "3.7.0"
+K8S_LOCAL_VOLUME_PROVISIONER_VERSION = "0.3.0"  # without 'v' prefix
+SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER = "3.2.6"
 
 # NOTE: add custom annotations to a ServiceAccount used by a ScyllaCluster
 #       It is needed to make sure that annotations survive operator upgrades
@@ -330,7 +328,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         self.params = params
         self.api_call_rate_limiter = None
         self.k8s_scylla_cluster_name = self.params.get("k8s_scylla_cluster_name")
-        self.docker_hub_auth_secret = "docker-auth"
         self.scylla_config_lock = RLock()
         self.scylla_restart_required = False
         self.scylla_cpu_limit = None
@@ -496,22 +493,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         namespaces = yaml.safe_load(self.kubectl("get namespaces -o yaml").stdout)
         if not [ns["metadata"]["name"] for ns in namespaces["items"] if ns["metadata"]["name"] == namespace]:
             self.kubectl(f"create namespace {namespace}")
-            self.create_docker_hub_auth_secret(namespace)
         else:
             self.log.warning("The '%s' namespace already exists.")
-
-    def create_docker_hub_auth_secret(self, namespace: str) -> None:
-        self.log.info("Create docker hub auth secret in '%s'", namespace)
-        docker_hub_url = "https://index.docker.io/v1/"
-        docker_hub_creds = get_docker_hub_credentials()
-        self.kubectl(
-            f"create secret docker-registry {self.docker_hub_auth_secret} "
-            f"--docker-server={docker_hub_url} "
-            f"--docker-username={docker_hub_creds['username']} "
-            f"--docker-password={docker_hub_creds['password']} "
-            f"--docker-email={docker_hub_creds['email']}",
-            namespace=namespace,
-        )
 
     @cached_property
     def cert_manager_log(self) -> str:
@@ -1039,19 +1022,13 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
         scylla_args = self.params.get("append_scylla_args")
 
-        version = self.params.get("scylla_version")
-        if version.startswith("master"):
-            tag = version.split(":", maxsplit=1)[1]
-        else:
-            tag = version
-
         return HelmValues(
             {
                 "nameOverride": "",
                 "fullnameOverride": cluster_name,
                 "scyllaImage": {
                     "repository": self.params.get("docker_image"),
-                    "tag": tag,
+                    "tag": self.params.get("scylla_version"),
                 },
                 "agentImage": {
                     "repository": "scylladb/scylla-manager-agent",
@@ -1174,7 +1151,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             if obj["kind"] != "DaemonSet":
                 return
             for container_data in obj["spec"]["template"]["spec"]["containers"]:
-                if "scylladb/local-csi-driver" in container_data["image"]:
+                if "scylladb/k8s-local-volume-provisioner" in container_data["image"]:
                     container_data["image"] = (
                         f"{container_data['image'].split(':')[0]}:{K8S_LOCAL_VOLUME_PROVISIONER_VERSION}"
                     )
@@ -1201,7 +1178,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             repo_dst_dir = os.path.join(tmp_dir_name, "dynamic-local-volume-provisioner")
 
             download_from_github(
-                repo="scylladb/local-csi-driver",
+                repo="scylladb/k8s-local-volume-provisioner",
                 tag=f"tags/v{K8S_LOCAL_VOLUME_PROVISIONER_VERSION}",
                 dst_dir=repo_dst_dir,
             )
@@ -1846,43 +1823,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                 scylla_config_map[filename] = new_data_as_str
             self.scylla_restart_required = True
 
-    @contextlib.contextmanager
-    def remote_scylla_yaml(self, namespace: str = SCYLLA_NAMESPACE) -> ContextManager[ScyllaYaml]:
-        """Update scylla.yaml using ConfigMap resource
-
-        Returns a ScyllaYaml object with no default values, matching base cluster implementation.
-        """
-        with self.scylla_config_map(namespace=namespace) as scylla_config_map:
-            old_data = yaml.safe_load(scylla_config_map.get("scylla.yaml", "")) or {}
-            # Create ScyllaYaml object with no defaults (model_construct bypasses validation and defaults)
-            new_scylla_yaml = ScyllaYaml.model_construct(**old_data)
-            old_scylla_yaml = new_scylla_yaml.model_copy()
-            yield new_scylla_yaml
-
-            # Compute diff and update if changed
-            diff = old_scylla_yaml.diff(new_scylla_yaml)
-            if not diff:
-                ScyllaYamlUpdateEvent(
-                    node_name=str(self), message=f"ScyllaYaml has not been changed on {self}"
-                ).publish()
-                return
-
-            # Convert to dict and update config map
-            new_data_dict = new_scylla_yaml.model_dump(
-                exclude_none=True,
-                exclude_unset=True,
-                exclude_defaults=True,
-            )
-
-            if not new_data_dict:
-                scylla_config_map.pop("scylla.yaml", None)
-            else:
-                scylla_config_map["scylla.yaml"] = yaml.safe_dump(new_data_dict)
-
-            ScyllaYamlUpdateEvent(
-                node_name=str(self), message=f"ScyllaYaml has been changed on {self}. Diff: {diff}"
-            ).publish()
-            self.scylla_restart_required = True
+    def remote_scylla_yaml(self, namespace: str = SCYLLA_NAMESPACE) -> ContextManager:
+        return self.manage_file_in_scylla_config_map(filename="scylla.yaml", namespace=namespace)
 
     def remote_cassandra_rackdc_properties(self, namespace: str = SCYLLA_NAMESPACE) -> ContextManager:
         return self.manage_file_in_scylla_config_map(filename="cassandra-rackdc.properties", namespace=namespace)
@@ -1894,15 +1836,17 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         with self.remote_scylla_yaml(namespace=namespace) as scylla_yml:
             # Process cluster params
             if self.params.get("experimental_features"):
-                scylla_yml.experimental_features = self.params.get("experimental_features")
+                scylla_yml["experimental_features"] = self.params.get("experimental_features")
             if self.params.get("hinted_handoff"):
-                scylla_yml.hinted_handoff_enabled = self.params.get("hinted_handoff").lower()
+                scylla_yml["hinted_handoff_enabled"] = self.params.get("hinted_handoff").lower() in ("enabled", "true")
             if self.params.get("endpoint_snitch"):
-                scylla_yml.endpoint_snitch = self.params.get("endpoint_snitch")
+                scylla_yml["endpoint_snitch"] = self.params.get("endpoint_snitch")
 
             # Process method kwargs
             if kwargs.get("murmur3_partitioner_ignore_msb_bits"):
-                scylla_yml.murmur3_partitioner_ignore_msb_bits = int(kwargs.pop("murmur3_partitioner_ignore_msb_bits"))
+                scylla_yml["murmur3_partitioner_ignore_msb_bits"] = int(
+                    kwargs.pop("murmur3_partitioner_ignore_msb_bits")
+                )
 
             self.log.info("K8S SCYLLA_YAML: %s", scylla_yml)
             if kwargs:
@@ -2263,24 +2207,13 @@ class BaseScyllaPodContainer(BasePodContainer):
 
     parent_cluster: ScyllaPodCluster
 
-    def __str__(self):
-        # TODO: when new network_configuration will be supported by all backends, copy this function from sdcm.cluster_aws.AWSNode.__str__
-        #  to here
-        return "Node %s [%s | %s%s]%s" % (
-            self.name,
-            self.public_ip_address,
-            self.private_ip_address,
-            " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
-            self._dc_info_str(),
-        )
-
     def actual_scylla_yaml(self) -> ContextManager[ScyllaYaml]:
         return super().remote_scylla_yaml()
 
     def actual_cassandra_rackdc_properties(self) -> ContextManager:
         return super().remote_cassandra_rackdc_properties()
 
-    def remote_scylla_yaml(self) -> ContextManager[ScyllaYaml]:
+    def remote_scylla_yaml(self) -> ContextManager:
         """
         Scylla Operator handles 'scylla.yaml' file updates using ConfigMap resource
         and we don't need to update it on each node separately.
@@ -2355,8 +2288,11 @@ class BaseScyllaPodContainer(BasePodContainer):
 
     def init(self) -> None:
         super().init()
-        if self.distro.is_rhel_like:
-            self.install_package(package_name="iproute")
+        if self.distro.is_rhel_like and not self.remoter.sudo("rpm -q iproute", ignore_status=True).ok:
+            # need this because of scylladb/scylla#7560
+            # Time to time 'yum install -y iproute' fails, let's download the package and install it afterwards
+            self.remoter.sudo("yum install --downloadonly iproute", retry=5)
+            self.remoter.sudo("yum install -y iproute")
         self.remoter.sudo("mkdir -p /var/lib/scylla/coredumps", ignore_status=True)
         self.scylla_network_configuration = ScyllaNetworkConfiguration(
             network_interfaces=self.network_interfaces, scylla_network_config=[]
@@ -2377,7 +2313,7 @@ class BaseScyllaPodContainer(BasePodContainer):
             """)
         )
         k8s_node_name = self.node_name
-        self.k8s_cluster.kubectl(f"drain {k8s_node_name} -n scylla --ignore-daemonsets --delete-emptydir-data")
+        self.k8s_cluster.kubectl(f"drain {k8s_node_name} -n scylla --ignore-daemonsets --delete-local-data")
         time.sleep(5)
         self.k8s_cluster.kubectl(f"uncordon {k8s_node_name}")
 
@@ -2385,7 +2321,7 @@ class BaseScyllaPodContainer(BasePodContainer):
         # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
         self.stop_scylla()
         with self.remote_scylla_yaml() as scylla_yml:
-            scylla_yml.murmur3_partitioner_ignore_msb_bits = murmur3_partitioner_ignore_msb_bits
+            scylla_yml["murmur3_partitioner_ignore_msb_bits"] = murmur3_partitioner_ignore_msb_bits
         self.soft_reboot()
         search_reshard = self.follow_system_log(patterns=["Reshard", "Reshap"])
         self.wait_db_up(timeout=self.pod_readiness_timeout * 60)
@@ -2734,7 +2670,7 @@ class PodCluster(cluster.BaseCluster):
                 if candidate_namespace not in namespaces:
                     # NOTE: the namespaces must match for all the K8S clusters
                     for k8s_cluster in self.k8s_clusters:
-                        k8s_cluster.create_namespace(candidate_namespace)
+                        k8s_cluster.kubectl(f"create namespace {candidate_namespace}")
                     return candidate_namespace
                 # TODO: make it work correctly for case with reusage of multi-tenant cluster
                 k8s_cluster = self.k8s_clusters[0]
@@ -2866,12 +2802,11 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         self.k8s_clusters[dc_idx].log.debug(
             "Replace `%s' with `%s' in %s's spec", path, value, self.scylla_cluster_name
         )
-        request_body = [{"op": "replace", "path": path, "value": value}]
-        # Scylla >= 2025.x images are published to scylladb/scylla instead of scylladb/scylla-enterprise
-        if path.__contains__("version") and ComparableScyllaVersion(value) >= "2025.1.0":
-            request_body.append({"op": "replace", "path": "/spec/repository", "value": "scylladb/scylla"})
         return self._k8s_scylla_cluster_api(dc_idx=dc_idx).patch(
-            body=request_body, name=self.scylla_cluster_name, namespace=self.namespace, content_type=JSON_PATCH_TYPE
+            body=[{"op": "replace", "path": path, "value": value}],
+            name=self.scylla_cluster_name,
+            namespace=self.namespace,
+            content_type=JSON_PATCH_TYPE,
         )
 
     def get_scylla_cluster_value(self, path: str, dc_idx: int = 0) -> Optional[ANY_KUBERNETES_RESOURCE]:
@@ -2934,7 +2869,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
     def scylla_config_map(self, dc_idx: int = 0) -> ContextManager:
         return self.k8s_clusters[dc_idx].scylla_config_map()
 
-    def remote_scylla_yaml(self, dc_idx: int = 0) -> ContextManager[ScyllaYaml]:
+    def remote_scylla_yaml(self, dc_idx: int = 0) -> ContextManager:
         return self.k8s_clusters[dc_idx].remote_scylla_yaml()
 
     def remote_cassandra_rackdc_properties(self, dc_idx: int = 0) -> ContextManager:
@@ -3192,6 +3127,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
     def upgrade_scylla_cluster(self, new_version: str) -> None:
         self.replace_scylla_cluster_value("/spec/version", new_version)
+        new_image = f"{self.params.get('docker_image')}:{new_version}"
 
         if not self.nodes:
             return True
@@ -3200,17 +3136,13 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             timeout=self.nodes[0].pod_replace_timeout * 2 * 60, sleep_time=self.PodContainerClass.pod_readiness_delay
         )
         def wait_till_any_node_get_new_image(nodes_with_old_image: list):
-            old_nodes = nodes_with_old_image.copy()
-            for node in old_nodes:
+            for node in nodes_with_old_image.copy():
                 # NOTE: 'node.image' may be 'docker.io/scylladb/scylla:4.5.3'
-                # as well as 'scylladb/scylla-enterprise:2024.1.19' or 'scylladb/scylla:2025.1.5'
-                if node.image.endswith(new_version):
+                #       as well as 'scylladb/scylla:4.5.3'
+                if node.image.endswith(new_image):
                     nodes_with_old_image.remove(node)
                     return True
-            actual_versions = [f"{node.name}: {node.image}" for node in old_nodes]
-            raise RuntimeError(
-                f"No node was upgraded. Expected image version '{new_version}', but found {actual_versions}"
-            )
+            raise RuntimeError("No node was upgraded")
 
         nodes = self.nodes.copy()
         while nodes:

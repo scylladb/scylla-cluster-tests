@@ -305,8 +305,8 @@ class UpgradeSchemaTest(ClusterTester):
 
         duration = 15 * len(self.db_cluster.nodes)
 
-        stress_cmds = self.params.get("stress_cmd")
-        cs_thread_pools = [self.run_stress_thread(stress_cmd=cmd, duration=duration) for cmd in stress_cmds]
+        stress_cmd = self._cs_add_node_flag(self.params.get("stress_cmd"))
+        cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd, duration=duration)
 
         l = len(self.db_cluster.nodes)
         # prepare an array containing the indexes
@@ -336,5 +336,4 @@ class UpgradeSchemaTest(ClusterTester):
             cql_client.shutdown()
             cql_client = None
         self.log.info("test_upgrade_schema completed without errors")
-        for cs_thread_pool in cs_thread_pools:
-            self.verify_stress_thread(cs_thread_pool)
+        self.verify_stress_thread(cs_thread_pool)

@@ -66,7 +66,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
             @latency_calculator_decorator(cycle_name=cycle_name, row_name=row_name)
             def execute_workload_with_latency_calculator_decorator(self, *args, **kwargs):
-                return self._workload(**kwargs)
+                return self._workload(*args, **kwargs)
 
             ret = execute_workload_with_latency_calculator_decorator(
                 self, test_name=test_name, stress_num=stress_num, **kwargs
@@ -89,6 +89,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         keyspace_num=1,
         prefix="",
         debug_message="",
+        save_stats=True,
         is_alternator=True,
     ):
         if not is_alternator:
@@ -97,6 +98,10 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         if debug_message:
             self.log.debug(debug_message)
 
+        if save_stats:
+            self.create_test_stats(
+                test_name=test_name, sub_type=sub_type, doc_id_with_timestamp=True, append_sub_test_to_name=False
+            )
         self.log.info(f"Starting stress cmd: {stress_cmd}")
         stress_queue = self.run_stress_thread(
             stress_cmd=stress_cmd,
@@ -113,6 +118,9 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.log.error(traceback.format_exc())
             raise
         self.log.info(f"Completed stress cmd: {stress_cmd}")
+        self.build_histogram(self.params["workload_name"], hdr_tags=self.hdr_tags)
+        if save_stats:
+            self.update_test_details(scylla_conf=True, alternator=is_alternator)
 
     def create_cql_ks_and_table(self, field_number):
         node = self.db_cluster.nodes[0]
@@ -133,6 +141,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         if prepare_write_cmd:
             # create new document in ES with doc_id = test_id + timestamp
             # allow to correctly save results for future compare
+            self.create_test_stats(sub_type="write-prepare", doc_id_with_timestamp=True)
             stress_queue = []
             params = {"prefix": "preload-"}
             for stress_type in ["dynamodb", "scylla"]:
@@ -172,6 +181,8 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             for stress in stress_queue:
                 self.get_stress_results(queue=stress, store_results=False)
             self.log.debug("Loaders completed.")
+            self.build_histogram("<unused>", hdr_tags=["_tag_"])
+            self.update_test_details()
         else:
             self.log.warning("No prepare command defined in YAML!")
 
@@ -398,7 +409,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             if condition
         )
 
-        single_test_duration_in_seconds = int(60 * (self.params.get("stress_duration") - 5) / len(tests_to_run))
+        single_test_duration_in_seconds = int(60 * self.params.get("stress_duration") / len(tests_to_run))
         target_ops_per_sec_for_unlimited_scenario = 999999
         try:
             rate = self.params.get("alternator_stress_rate")

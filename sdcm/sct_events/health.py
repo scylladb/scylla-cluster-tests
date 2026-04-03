@@ -34,7 +34,6 @@ class ClusterHealthValidatorEvent(ContinuousEvent):
     NodesNemesis: Type[SctEventProtocol]
     ScyllaCloudClusterServerDiagnostic: Type[SctEventProtocol]
     Group0TokenRingInconsistency: Type[SctEventProtocol]
-    ParallelHealthCheckFailure: Type[SctEventProtocol]
 
     def __init__(
         self, node=None, message: Optional[str] = None, error: Optional[str] = None, severity=Severity.NORMAL
@@ -88,9 +87,6 @@ ClusterHealthValidatorEvent.add_subevent_type(
 )
 ClusterHealthValidatorEvent.add_subevent_type(
     "Group0TokenRingInconsistency", severity=Severity.ERROR, mixin=ClusterHealthValidatorSubEvents
-)
-ClusterHealthValidatorEvent.add_subevent_type(
-    "ParallelHealthCheckFailure", severity=Severity.ERROR, mixin=ClusterHealthValidatorSubEvents
 )
 
 

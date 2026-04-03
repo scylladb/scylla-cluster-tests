@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import time
+import unittest
 import unittest.mock
 
 from sdcm.sct_events import Severity
@@ -36,13 +37,13 @@ from sdcm.wait import wait_for
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
-class TestGrafana(EventsUtilsMixin):
+class TestGrafana(unittest.TestCase, EventsUtilsMixin):
     @classmethod
-    def setup_class(cls) -> None:
+    def setUpClass(cls) -> None:
         cls.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
 
     @classmethod
-    def teardown_class(cls) -> None:
+    def tearDownClass(cls) -> None:
         cls.teardown_events_processes()
 
     def test_grafana(self):
@@ -54,20 +55,20 @@ class TestGrafana(EventsUtilsMixin):
         time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
         try:
-            assert isinstance(grafana_annotator, GrafanaAnnotator)
-            assert grafana_annotator.is_alive()
-            assert grafana_annotator._registry == self.events_main_device._registry
-            assert grafana_annotator._registry == self.events_processes_registry
+            self.assertIsInstance(grafana_annotator, GrafanaAnnotator)
+            self.assertTrue(grafana_annotator.is_alive())
+            self.assertEqual(grafana_annotator._registry, self.events_main_device._registry)
+            self.assertEqual(grafana_annotator._registry, self.events_processes_registry)
 
-            assert isinstance(grafana_aggregator, GrafanaEventAggregator)
-            assert grafana_aggregator.is_alive()
-            assert grafana_aggregator._registry == self.events_main_device._registry
-            assert grafana_aggregator._registry == self.events_processes_registry
+            self.assertIsInstance(grafana_aggregator, GrafanaEventAggregator)
+            self.assertTrue(grafana_aggregator.is_alive())
+            self.assertEqual(grafana_aggregator._registry, self.events_main_device._registry)
+            self.assertEqual(grafana_aggregator._registry, self.events_processes_registry)
 
-            assert isinstance(grafana_postman, GrafanaEventPostman)
-            assert grafana_postman.is_alive()
-            assert grafana_postman._registry == self.events_main_device._registry
-            assert grafana_postman._registry == self.events_processes_registry
+            self.assertIsInstance(grafana_postman, GrafanaEventPostman)
+            self.assertTrue(grafana_postman.is_alive())
+            self.assertEqual(grafana_postman._registry, self.events_main_device._registry)
+            self.assertEqual(grafana_postman._registry, self.events_processes_registry)
 
             grafana_aggregator.time_window = 1
 
@@ -80,22 +81,20 @@ class TestGrafana(EventsUtilsMixin):
                                 ClusterHealthValidatorEvent.NodeStatus(severity=Severity.NORMAL)
                             )
                     time.sleep(1)
-                assert mock.call_count == 0
+                self.assertEqual(mock.call_count, 0)
 
                 start_posting_grafana_annotations(_registry=self.events_processes_registry)
                 wait_for(lambda: mock.call_count == runs * 5, timeout=10, step=0.1, throw_exc=False)
 
-                assert mock.call_count == runs * 5
-                assert mock.call_args.kwargs["json"]["tags"] == [
-                    "ClusterHealthValidatorEvent",
-                    "NORMAL",
-                    "events",
-                    "NodeStatus",
-                ]
+                self.assertEqual(mock.call_count, runs * 5)
+                self.assertEqual(
+                    mock.call_args.kwargs["json"]["tags"],
+                    ["ClusterHealthValidatorEvent", "NORMAL", "events", "NodeStatus"],
+                )
 
-            assert self.events_main_device.events_counter == grafana_annotator.events_counter
-            assert grafana_annotator.events_counter == grafana_aggregator.events_counter
-            assert grafana_postman.events_counter <= grafana_aggregator.events_counter
+            self.assertEqual(self.events_main_device.events_counter, grafana_annotator.events_counter)
+            self.assertEqual(grafana_annotator.events_counter, grafana_aggregator.events_counter)
+            self.assertLessEqual(grafana_postman.events_counter, grafana_aggregator.events_counter)
         finally:
             grafana_annotator.stop(timeout=1)
             grafana_aggregator.stop(timeout=1)

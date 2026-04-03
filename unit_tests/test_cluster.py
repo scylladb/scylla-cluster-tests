@@ -11,19 +11,26 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import json
 import logging
+import os.path
 import re
 import shutil
 import tempfile
 import time
-import unittest.mock
-from datetime import datetime, timezone
+import unittest
+from datetime import datetime
+from functools import cached_property
+from typing import List
+from weakref import proxy as weakproxy
 
 import pytest
 from invoke import Result
 
-from sdcm.cluster import BaseMonitorSet
+from sdcm import sct_config
+from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet, BaseScyllaCluster
 from sdcm.db_log_reader import DbLogReader
+from sdcm.sct_events import Severity
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
@@ -36,42 +43,53 @@ from sdcm.utils.common import (
 from sdcm.utils.distro import Distro
 from sdcm.nemesis.utils.indexes import get_column_names
 from sdcm.utils.version_utils import ComparableScyllaVersion
-from sdcm.remote import LocalCmdRunner
-from sdcm.sct_config import SCTConfiguration
-from unit_tests.dummy_remote import DummyRemote, LocalNode
-from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, DummyScyllaCluster, NodetoolDummyNode
+from unit_tests.dummy_remote import DummyRemote
+from unit_tests.lib.events_utils import EventsUtilsMixin
+from unit_tests.test_utils_common import DummyNode
 
 
-class TestBaseNode:
-    @pytest.fixture(autouse=True)
-    def setup_events(self, events_function_scope, tmp_path):
-        """Use per-test events fixture for proper isolation between tests."""
-        self._events = events_function_scope
-        self._tmp_path = tmp_path
-        self._init_node()
+class DummyDbCluster(BaseCluster, BaseScyllaCluster):
+    def __init__(self, nodes, params=None):
+        self.nodes = nodes
+        self.params = params or sct_config.SCTConfiguration()
+        self.params["region_name"] = "test_region"
+        self.racks_count = 0
+        self.added_password_suffix = False
+        self.log = logging.getLogger(__name__)
+        self.node_type = "scylla-db"
+        self.name = "dummy_db_cluster"
+        self.vector_store_cluster = None
 
-    def _init_node(self):
-        if not hasattr(self, "_node"):
-            self._node = DummyNode(
-                name="test_node",
-                parent_cluster=None,
-                base_logdir=str(self._tmp_path),
-                ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
-            )
-            self._node.parent_cluster = DummyDbCluster(nodes=[self._node])
-            self._node.init()
-            self._node.remoter = DummyRemote()
+    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+        for _ in range(count):
+            self.nodes += [self.nodes[-1]]
 
-    @pytest.fixture(autouse=True)
-    def inject_test_data_dir(self, setup_events, test_data_dir):  # noqa: ARG002
-        self.test_data_dir = test_data_dir
-        self.node.system_log = str(test_data_dir / "system.log")
+    def wait_for_init(*_, node_list=None, verbose=False, timeout=None, **__):
+        pass
 
-    @property
+    def validate_seeds_on_all_nodes(self):
+        pass
+
+
+class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
+    @classmethod
+    def setUpClass(cls):
+        cls.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
+
+    @cached_property
     def node(self):
-        return self._node
+        dummy_node = DummyNode(
+            name="test_node",
+            parent_cluster=None,
+            base_logdir=self.temp_dir,
+            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
+        )
+        dummy_node.parent_cluster = DummyDbCluster(nodes=[dummy_node])
+        dummy_node.init()
+        dummy_node.remoter = DummyRemote()
+        return dummy_node
 
-    @property
+    @cached_property
     def _db_log_reader(self):
         return DbLogReader(
             system_log=self.node.system_log,
@@ -80,159 +98,168 @@ class TestBaseNode:
             system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
             decoding_queue=None,
             log_lines=False,
-            backtrace_stall_decoding=True,
-            backtrace_decoding_disable_regex=None,
         )
 
     def _read_and_publish_events(self, log_text=None):
         if log_text:
             with tempfile.NamedTemporaryFile(mode="wt") as temp_log:
                 self.node.system_log = temp_log.name
-                db_log_reader = self._db_log_reader
 
                 for line in log_text.splitlines(keepends=True):
                     temp_log.write(line)
                     temp_log.flush()
-                    db_log_reader._read_and_publish_events()
+                    self._db_log_reader._read_and_publish_events()
         else:
             self._db_log_reader._read_and_publish_events()
 
+    @classmethod
+    def tearDownClass(cls):
+        cls.teardown_events_processes()
+
+    def setUp(self):
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
+
     def test_search_system_log(self):
         critical_errors = list(self.node.follow_system_log(start_from_beginning=True))
-        assert 33 == len(critical_errors)
+        self.assertEqual(33, len(critical_errors))
 
     def test_search_system_log_specific_log(self):
         errors = list(
             self.node.follow_system_log(patterns=["Failed to load schema version"], start_from_beginning=True)
         )
-        assert len(errors) == 2
+        self.assertEqual(len(errors), 2)
 
     def test_search_system_interlace_reactor_stall(self):
-        self.node.system_log = str(self.test_data_dir / "system_interlace_stall.log")
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_interlace_stall.log")
 
         self._read_and_publish_events()
 
-        events = self._events.published_events
+        with self.get_raw_events_log().open() as events_file:
+            events = [json.loads(line) for line in events_file]
 
-        event_a, event_b = events[-2], events[-1]
-        print(event_a)
-        print(event_b)
+            event_a, event_b = events[-2], events[-1]
+            print(event_a)
+            print(event_b)
 
-        assert event_a["type"] == "REACTOR_STALLED"
-        assert event_a["line_number"] == 0
-        assert event_b["type"] == "REACTOR_STALLED"
-        assert event_b["line_number"] == 3
+            assert event_a["type"] == "REACTOR_STALLED"
+            assert event_a["line_number"] == 0
+            assert event_b["type"] == "REACTOR_STALLED"
+            assert event_b["line_number"] == 3
 
     def test_search_kernel_callstack(self):
         self.node.parent_cluster = {"params": {"print_kernel_callstack": True}}
-        self.node.system_log = str(self.test_data_dir / "kernel_callstack.log")
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "kernel_callstack.log")
         self._read_and_publish_events()
+        with self.get_raw_events_log().open() as events_file:
+            events = [json.loads(line) for line in events_file]
 
-        events = self._events.published_events
+            event_a, event_b = events[-2], events[-1]
+            print(event_a)
+            print(event_b)
 
-        event_a, event_b = events[-2], events[-1]
-        print(event_a)
-        print(event_b)
-
-        assert event_a["type"] == "KERNEL_CALLSTACK"
-        assert event_a["line_number"] == 2
-        assert event_b["type"] == "KERNEL_CALLSTACK"
-        assert event_b["line_number"] == 5
+            assert event_a["type"] == "KERNEL_CALLSTACK"
+            assert event_a["line_number"] == 2
+            assert event_b["type"] == "KERNEL_CALLSTACK"
+            assert event_b["line_number"] == 5
 
     def test_search_cdc_invalid_request(self):
-        self.node.system_log = str(self.test_data_dir / "system_cdc_invalid_request.log")
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_cdc_invalid_request.log")
         with unittest.mock.patch("sdcm.sct_events.group_common_events.TestConfig"):
             with unittest.mock.patch("sdcm.sct_events.group_common_events.SkipPerIssues") as skip_per_issues:
                 skip_per_issues.return_value = False
                 with ignore_upgrade_schema_errors():
                     self._read_and_publish_events()
 
-        cdc_err_events = [
-            line
-            for line in self._events.get_events_by_category()["ERROR"]
-            if "cdc - Could not retrieve CDC streams" in line
-        ]
-        assert cdc_err_events != []
+        time.sleep(0.2)
+        with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
+            cdc_err_events = [line for line in events_file if "cdc - Could not retrieve CDC streams" in line]
+            assert cdc_err_events != []
 
     def test_search_power_off(self):
-        self.node.system_log = str(self.test_data_dir / "power_off.log")
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "power_off.log")
         with DbEventsFilter(db_event=InstanceStatusEvent.POWER_OFF, node=self.node):
             self._read_and_publish_events()
 
         InstanceStatusEvent.POWER_OFF().add_info(
             node="A",
             line_number=22,
-            line=f"{datetime.fromtimestamp(time.time() + 1, tz=timezone.utc):%Y-%m-%dT%H:%M:%S+00:00} "
+            line=f"{datetime.utcfromtimestamp(time.time() + 1):%Y-%m-%dT%H:%M:%S+00:00} "
             "longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Powering Off...",
         ).publish()
 
-        events = [line for line in self._events.get_events_by_category()["WARNING"] if "Powering Off" in line]
-        assert events
+        time.sleep(0.1)
+        with self.get_events_logger().events_logs_by_severity[Severity.WARNING].open() as events_file:
+            events = [line for line in events_file if "Powering Off" in line]
+            assert events
 
     def test_search_system_suppressed_messages(self):
-        self.node.system_log = str(self.test_data_dir / "system_suppressed_messages.log")
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_suppressed_messages.log")
 
         self._read_and_publish_events()
 
-        events = self._events.published_events
+        with self.get_raw_events_log().open() as events_file:
+            events = [json.loads(line) for line in events_file]
 
-        event_a = events[-1]
-        print(event_a)
+            event_a = events[-1]
+            print(event_a)
 
-        assert event_a["type"] == "SUPPRESSED_MESSAGES", "Not expected event type {}".format(event_a["type"])
-        assert event_a["line_number"] == 6, "Not expected event line number {}".format(event_a["line_number"])
+            assert event_a["type"] == "SUPPRESSED_MESSAGES", "Not expected event type {}".format(event_a["type"])
+            assert event_a["line_number"] == 6, "Not expected event line number {}".format(event_a["line_number"])
 
     def test_search_one_line_backtraces(self):
-        self.node.system_log = str(self.test_data_dir / "system_one_line_backtrace.log")
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_one_line_backtrace.log")
 
         self._read_and_publish_events()
 
-        events = self._events.published_events
+        with self.get_raw_events_log().open() as events_file:
+            events = [json.loads(line) for line in events_file]
 
-        backtraces = [event for event in events if event["type"] == "BACKTRACE"]
-        assert len(backtraces) == 2
-        for event_backtrace in backtraces:
-            assert event_backtrace["raw_backtrace"]
+            backtraces = [event for event in events if event["type"] == "BACKTRACE"]
+            assert len(backtraces) == 2
+            for event_backtrace in backtraces:
+                assert event_backtrace["raw_backtrace"]
 
-        oversized_events = [event for event in events if event["type"] == "OVERSIZED_ALLOCATION"]
-        assert len(oversized_events) == 2
-        for event_oversized in oversized_events:
-            print(event_oversized)
-            assert event_oversized["raw_backtrace"]
+            oversized_events = [event for event in events if event["type"] == "OVERSIZED_ALLOCATION"]
+            assert len(oversized_events) == 2
+            for event_oversized in oversized_events:
+                print(event_oversized)
+                assert event_oversized["raw_backtrace"]
 
-        print(events[-1])
+            print(events[-1])
 
     def test_gate_closed_ignored_exception_is_catched(self):
-        self.node.system_log = str(self.test_data_dir / "gate_closed_ignored_exception.log")
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "gate_closed_ignored_exception.log")
 
         self._read_and_publish_events()
 
-        events = self._events.published_events
+        with self.get_raw_events_log().open() as events_file:
+            events = [json.loads(line) for line in events_file]
 
-        event_backtrace1, event_backtrace2 = events[-2], events[-1]
-        print(event_backtrace1)
-        print(event_backtrace2)
+            event_backtrace1, event_backtrace2 = events[-2], events[-1]
+            print(event_backtrace1)
+            print(event_backtrace2)
 
-        assert event_backtrace1["type"] == "GATE_CLOSED"
-        assert event_backtrace1["line_number"] == 1
-        assert event_backtrace2["type"] == "GATE_CLOSED"
-        assert event_backtrace2["line_number"] == 3
+            assert event_backtrace1["type"] == "GATE_CLOSED"
+            assert event_backtrace1["line_number"] == 1
+            assert event_backtrace2["type"] == "GATE_CLOSED"
+            assert event_backtrace2["line_number"] == 3
 
     def test_compaction_stopped_exception_is_catched(self):
-        self.node.system_log = str(self.test_data_dir / "compaction_stopped_exception.log")
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "compaction_stopped_exception.log")
 
         self._read_and_publish_events()
 
-        events = self._events.published_events
+        with self.get_raw_events_log().open() as events_file:
+            events = [json.loads(line) for line in events_file]
 
-        event_backtrace1, event_backtrace2 = events[-3], events[-2]
-        print(event_backtrace1)
-        print(event_backtrace2)
+            event_backtrace1, event_backtrace2 = events[-3], events[-2]
+            print(event_backtrace1)
+            print(event_backtrace2)
 
-        assert event_backtrace1["type"] == "COMPACTION_STOPPED"
-        assert event_backtrace1["line_number"] == 0
-        assert event_backtrace2["type"] == "COMPACTION_STOPPED"
-        assert event_backtrace2["line_number"] == 1
+            assert event_backtrace1["type"] == "COMPACTION_STOPPED"
+            assert event_backtrace1["line_number"] == 0
+            assert event_backtrace2["type"] == "COMPACTION_STOPPED"
+            assert event_backtrace2["line_number"] == 1
 
     def test_appending_to_log(self):
         logs = """
@@ -244,35 +271,37 @@ INFO  2022-07-14 09:28:35,102 [shard 1] database - Flushed non-system tables
 
         self._read_and_publish_events(logs)
 
-        events = self._events.published_events
-        reactor_stalls = [event for event in events if event["type"] == "REACTOR_STALLED"]
-        assert len(reactor_stalls) == 1
-        event = reactor_stalls[0]
-        assert event["type"] == "REACTOR_STALLED"
-        assert event["line_number"] == 2
-        assert "Reactor stalled for 32 ms on shard 1" in event["line"]
+        with self.get_raw_events_log().open() as events_file:
+            events = [json.loads(line) for line in events_file]
+            reactor_stalls = [event for event in events if event["type"] == "REACTOR_STALLED"]
+            assert len(reactor_stalls) == 1
+            event = reactor_stalls[0]
+            assert event["type"] == "REACTOR_STALLED"
+            assert event["line_number"] == 2
+            assert "Reactor stalled for 32 ms on shard 1" in event["line"]
 
 
 class VersionDummyRemote:
     def __init__(self, test, results):
+        self.test = weakproxy(test)
         self.results = iter(results)
 
     def run(self, cmd, *_, **__):
         expected_cmd, result = next(self.results)
-        assert cmd == expected_cmd
+        self.test.assertEqual(cmd, expected_cmd)
         return Result(exited=result[0], stdout=result[1], stderr=result[2])
 
 
-class TestBaseNodeGetScyllaVersion:
+class TestBaseNodeGetScyllaVersion(unittest.TestCase):
     @classmethod
-    def setup_class(cls):
+    def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
 
     @classmethod
-    def teardown_class(cls):
+    def tearDownClass(cls):
         shutil.rmtree(cls.temp_dir)
 
-    def setup_method(self):
+    def setUp(self):
         self.node = DummyNode(
             name="test_node",
             parent_cluster=None,
@@ -289,8 +318,8 @@ class TestBaseNodeGetScyllaVersion:
                 ("rpm --query --queryformat '%{VERSION}' scylla", (0, "3.3.rc1", "")),
             ),
         )
-        assert "3.3.rc1" == self.node.scylla_version
-        assert "3.3.rc1" == self.node.scylla_version_detailed
+        self.assertEqual("3.3.rc1", self.node.scylla_version)
+        self.assertEqual("3.3.rc1", self.node.scylla_version_detailed)
 
     def test_no_scylla_binary_other(self):
         self.node.distro = Distro.DEBIAN11
@@ -301,8 +330,8 @@ class TestBaseNodeGetScyllaVersion:
                 ("dpkg-query --show --showformat '${Version}' scylla", (0, "3.3~rc1-0.20200209.0d0c1d43188-1", "")),
             ),
         )
-        assert "3.3.rc1" == self.node.scylla_version
-        assert "3.3.rc1-0.20200209.0d0c1d43188-1" == self.node.scylla_version_detailed
+        self.assertEqual("3.3.rc1", self.node.scylla_version)
+        self.assertEqual("3.3.rc1-0.20200209.0d0c1d43188-1", self.node.scylla_version_detailed)
 
     def test_scylla(self):
         self.node.remoter = VersionDummyRemote(
@@ -312,8 +341,8 @@ class TestBaseNodeGetScyllaVersion:
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        assert "3.3.rc1" == self.node.scylla_version
-        assert "3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx" == self.node.scylla_version_detailed
+        self.assertEqual("3.3.rc1", self.node.scylla_version)
+        self.assertEqual("3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx", self.node.scylla_version_detailed)
 
     def test_scylla_master(self):
         self.node.remoter = VersionDummyRemote(
@@ -323,8 +352,8 @@ class TestBaseNodeGetScyllaVersion:
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        assert "666.development" == self.node.scylla_version
-        assert "666.development-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
+        self.assertEqual("666.development", self.node.scylla_version)
+        self.assertEqual("666.development-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
 
     def test_scylla_master_new_format(self):
         self.node.remoter = VersionDummyRemote(
@@ -334,8 +363,8 @@ class TestBaseNodeGetScyllaVersion:
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        assert "4.4.dev" == self.node.scylla_version
-        assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
+        self.assertEqual("4.4.dev", self.node.scylla_version)
+        self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
 
     def test_scylla_enterprise(self):
         self.node.is_enterprise = True
@@ -346,8 +375,8 @@ class TestBaseNodeGetScyllaVersion:
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        assert "2019.1.4" == self.node.scylla_version
-        assert "2019.1.4-0.20191217.b59e92dbd with build-id xxx" == self.node.scylla_version_detailed
+        self.assertEqual("2019.1.4", self.node.scylla_version)
+        self.assertEqual("2019.1.4-0.20191217.b59e92dbd with build-id xxx", self.node.scylla_version_detailed)
 
     def test_scylla_enterprise_no_scylla_binary(self):
         self.node.is_enterprise = True
@@ -359,8 +388,8 @@ class TestBaseNodeGetScyllaVersion:
                 ("rpm --query --queryformat '%{VERSION}' scylla-enterprise", (0, "2019.1.4", "")),
             ),
         )
-        assert "2019.1.4" == self.node.scylla_version
-        assert "2019.1.4" == self.node.scylla_version_detailed
+        self.assertEqual("2019.1.4", self.node.scylla_version)
+        self.assertEqual("2019.1.4", self.node.scylla_version_detailed)
 
     def test_scylla_binary_version_unparseable(self):
         self.node.remoter = VersionDummyRemote(
@@ -370,8 +399,8 @@ class TestBaseNodeGetScyllaVersion:
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        assert self.node.scylla_version is None
-        assert "x.y.z with build-id xxx" == self.node.scylla_version_detailed
+        self.assertIsNone(self.node.scylla_version)
+        self.assertEqual("x.y.z with build-id xxx", self.node.scylla_version_detailed)
 
     def test_get_scylla_version_from_second_attempt(self):
         self.node.distro = Distro.DEBIAN11
@@ -390,8 +419,8 @@ class TestBaseNodeGetScyllaVersion:
                 ),
             ),
         )
-        assert self.node.scylla_version is None
-        assert self.node.scylla_version_detailed is None
+        self.assertIsNone(self.node.scylla_version)
+        self.assertIsNone(self.node.scylla_version_detailed)
 
         self.node.remoter = VersionDummyRemote(
             self,
@@ -400,8 +429,8 @@ class TestBaseNodeGetScyllaVersion:
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        assert "4.4.dev" == self.node.scylla_version
-        assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
+        self.assertEqual("4.4.dev", self.node.scylla_version)
+        self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
 
     def test_forget_scylla_version(self):
         self.node.remoter = VersionDummyRemote(
@@ -411,8 +440,8 @@ class TestBaseNodeGetScyllaVersion:
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        assert "4.4.dev" == self.node.scylla_version
-        assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
+        self.assertEqual("4.4.dev", self.node.scylla_version)
+        self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
 
         self.node.remoter = VersionDummyRemote(
             self,
@@ -422,25 +451,25 @@ class TestBaseNodeGetScyllaVersion:
             ),
         )
 
-        assert "4.4.dev" == self.node.scylla_version
-        assert "4.4.dev-0.20200205.2816404f575 with build-id xxx" == self.node.scylla_version_detailed
+        self.assertEqual("4.4.dev", self.node.scylla_version)
+        self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
 
         self.node.forget_scylla_version()
 
-        assert "3.3.rc1" == self.node.scylla_version
-        assert "3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx" == self.node.scylla_version_detailed
+        self.assertEqual("3.3.rc1", self.node.scylla_version)
+        self.assertEqual("3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx", self.node.scylla_version_detailed)
 
 
-class TestBaseMonitorSet:
+class TestBaseMonitorSet(unittest.TestCase):
     @classmethod
-    def setup_class(cls):
+    def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
 
     @classmethod
-    def teardown_class(cls):
+    def tearDownClass(cls):
         shutil.rmtree(cls.temp_dir)
 
-    def setup_method(self):
+    def setUp(self):
         self.node = DummyNode(
             name="test_node",
             parent_cluster=None,
@@ -448,7 +477,7 @@ class TestBaseMonitorSet:
             ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
         )
         self.db_cluster = DummyDbCluster([self.node])
-        self.monitor_cluster = BaseMonitorSet({"db_cluster": self.db_cluster}, params=SCTConfiguration())
+        self.monitor_cluster = BaseMonitorSet({"db_cluster": self.db_cluster}, {})
         self.monitor_cluster.log = logging
 
     def test_monitoring_version(self):
@@ -462,10 +491,51 @@ class TestBaseMonitorSet:
                 ("/usr/bin/scylla --build-id", (0, "xxx", "")),
             ),
         )
-        assert self.monitor_cluster.monitoring_version == "master"
+        self.assertEqual(self.monitor_cluster.monitoring_version, "master")
 
 
-class TestNodetoolStatus:
+class NodetoolDummyNode(BaseNode):
+    def __init__(self, resp, myregion=None, myname=None, myrack=None, db_up=True):
+        self.resp = resp
+        self.myregion = myregion
+        self.myname = myname
+        self.parent_cluster = None
+        self.rack = myrack
+        self._db_up = db_up
+
+    @property
+    def region(self):
+        return self.myregion
+
+    @property
+    def name(self):
+        return self.myname
+
+    def run_nodetool(self, *args, **kwargs):
+        return Result(exited=0, stderr="", stdout=self.resp)
+
+    def db_up(self):
+        """return True if the database is up
+        Couldn't be a property, because BaseNode.db_up is a method
+        """
+        return self._db_up
+
+
+class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):
+    nodes: List["NodetoolDummyNode"]
+
+    def __init__(self, params):
+        self.nodes = params
+        self.name = "dummy_cluster"
+        self.added_password_suffix = False
+        self.log = logging.getLogger(self.name)
+
+    def get_ip_to_node_map(self):
+        """returns {ip: node} map for all nodes in cluster to get node by ip"""
+        return {node.myname: node for node in self.nodes}
+
+
+class TestNodetoolStatus(unittest.TestCase):
     def test_can_get_nodetool_status_typical(self):
         resp = "\n".join(
             [
@@ -1182,7 +1252,7 @@ def test_exclusive_connection(docker_scylla, docker_scylla_2, params, events):
                 )
 
 
-class TestNodetool:
+class TestNodetool(unittest.TestCase):
     def test_describering_parsing(self):
         """Test "nodetool describering" output parsing"""
         resp = "\n".join(
@@ -1218,15 +1288,3 @@ class TestNodetool:
         min_token, max_token = keyspace_min_max_tokens(node=node, keyspace="")
         assert min_token == -9193109213506951143
         assert max_token == 9202125676696964746
-
-
-def test_base_node_init_with_none_ssh_login_info():
-    """Verify that node initialization does not crash when ssh_login_info is not defined."""
-    node = LocalNode(
-        name="test_local_node",
-        parent_cluster=DummyDbCluster(nodes=[]),
-    )
-
-    node.init()
-
-    assert isinstance(node.remoter, LocalCmdRunner), f"Expected LocalCmdRunner, got {type(node.remoter)}"

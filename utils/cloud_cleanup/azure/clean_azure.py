@@ -15,18 +15,29 @@
 
 import argparse
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 from typing import Callable
 
 
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.log import setup_stdout_logger
-from utils.cloud_cleanup import update_argus_resource_status, should_keep, get_keep_hours_from_tags, DEFAULT_KEEP_HOURS
+from utils.cloud_cleanup import update_argus_resource_status
 
 LOGGER = setup_stdout_logger()
 azure_service = AzureService()
 resource_client = azure_service.resource
 compute_client = azure_service.compute
+DEFAULT_KEEP_HOURS = 14
+
+
+def get_keep_hours(v_m, default=DEFAULT_KEEP_HOURS):
+    keep = v_m.tags.get("keep", "").lower() if v_m.tags else None
+    if keep == "alive":
+        return -1
+    try:
+        return int(keep)
+    except (ValueError, TypeError):
+        return default
 
 
 def get_vm_creation_time(v_m, resource_group_name):
@@ -36,7 +47,7 @@ def get_vm_creation_time(v_m, resource_group_name):
     except ValueError:
         LOGGER.info("Error parsing creation time tag of VM: %s", creation_time_str)
         # set creation time to now in instance.tags so next time will be processed properly
-        creation_time = datetime.now(timezone.utc)
+        creation_time = datetime.utcnow()
         tags = v_m.tags or {}
         tags.update({"creation_time": creation_time.isoformat(sep=" ", timespec="seconds")})
         try:
@@ -63,7 +74,7 @@ def get_rg_creation_time(resource_group):
         creation_time = datetime.fromisoformat(creation_time_str)
     except ValueError:
         LOGGER.info("Error parsing creation time tag of RG: %s", creation_time_str)
-        creation_time = datetime.now(timezone.utc)
+        creation_time = datetime.utcnow()
         tags = resource_group.tags or {}
         tags.update({"creation_time": creation_time.isoformat(sep=" ", timespec="seconds")})
         resource_group.tags = tags
@@ -79,6 +90,17 @@ def get_keep_action(v_m) -> Callable:
     if not keep_action:
         keep_action = "terminate"
     return keep_action
+
+
+def should_keep(creation_time, keep_hours):
+    if keep_hours <= 0:
+        return True
+    try:
+        keep_date = creation_time + timedelta(hours=keep_hours)
+        return datetime.utcnow() < keep_date
+    except (TypeError, ValueError) as exc:
+        LOGGER.info("error while defining if should keep: %s. Keeping.", exc)
+        return True
 
 
 def delete_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False):
@@ -140,8 +162,7 @@ def clean_azure_instances(dry_run=False):
         for v_m in compute_client.virtual_machines.list(resource_group.name):
             test_id = v_m.tags.get("TestId", "").lower() if v_m.tags else ""
             if should_keep(
-                creation_time=get_vm_creation_time(v_m, resource_group.name),
-                keep_hours=get_keep_hours_from_tags(v_m.tags if v_m.tags else {}),
+                creation_time=get_vm_creation_time(v_m, resource_group.name), keep_hours=get_keep_hours(v_m)
             ):
                 LOGGER.info("Keeping VM: %s in resource group: %s", v_m.name, resource_group.name)
                 clean_group = False  # skip cleaning group if there's at least one VM to keep

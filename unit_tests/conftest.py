@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import json
 import os
 import logging
 import collections
@@ -21,22 +20,10 @@ import uuid
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock, PropertyMock
-
-# Single source-of-truth for directory roots used across unit-test fixtures.
-# Only this module is allowed to reference __file__ for path construction;
-# all other unit-test files must consume the `test_data_dir` / `data_dir`
-# fixtures defined below.
-UNIT_TESTS_DIR: Path = Path(__file__).parent
-
-from sdcm.utils.mp_start import ensure_start_method
-
-ensure_start_method()
 
 import pytest
 
 from sdcm import wait, sct_config
-from sdcm.keystore import KeyStore, SSHKey
 from sdcm.localhost import LocalHost
 from sdcm.cluster import BaseNode
 from sdcm.cluster_docker import VectorStoreSetDocker
@@ -59,7 +46,7 @@ from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
-from unit_tests.lib.fake_events import make_fake_events
+from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.lib.fake_provisioner import FakeProvisioner
 from unit_tests.lib.fake_region_definition_builder import FakeDefinitionBuilder
 from unit_tests.lib.fake_remoter import FakeRemoter
@@ -112,14 +99,11 @@ def mock_remote_scylla_yaml(scylla_node):
 
 @pytest.fixture(scope="module")
 def events():
-    with make_fake_events() as device:
-        yield device
+    mixing = EventsUtilsMixin()
+    mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
+    yield mixing
 
-
-@pytest.fixture(scope="function")
-def events_function_scope():
-    with make_fake_events() as device:
-        yield device
+    mixing.teardown_events_processes()
 
 
 @pytest.fixture(scope="session")
@@ -127,21 +111,9 @@ def prom_address():
     yield start_metrics_server()
 
 
-@pytest.fixture(scope="session")
-def test_data_dir() -> Path:
-    """Return the path to unit_tests/test_data/."""
-    return UNIT_TESTS_DIR / "test_data"
-
-
-@pytest.fixture(scope="session")
-def data_dir() -> Path:
-    """Return the path to the top-level data_dir/ directory."""
-    return UNIT_TESTS_DIR.parent / "data_dir"
-
-
 @contextmanager
 def create_ssl_dir(test_id: str):
-    ssl_dir = (UNIT_TESTS_DIR.parent / "data_dir" / f"ssl_conf_{test_id}").absolute()
+    ssl_dir = (Path(__file__).parent.parent / "data_dir" / f"ssl_conf_{test_id}").absolute()
     ssl_dir.mkdir(parents=True, exist_ok=True)
 
     localhost = LocalHost(user_prefix="unit_test_fake_user", test_id="unit_test_fake_test_id")
@@ -160,7 +132,7 @@ def configure_scylla_node(docker_scylla_args: dict, params, ssl_dir: Path | None
     # make sure the path to the file is base on the host path, and not as the docker internal path i.e. /sct/
     # since we are going to mount it in a DinD (docker-inside-docker) setup
     base_dir = os.environ.get("_SCT_BASE_DIR", None)
-    entryfile_path = Path(base_dir) if base_dir else UNIT_TESTS_DIR.parent
+    entryfile_path = Path(base_dir) if base_dir else Path(__file__).parent.parent
     entryfile_path = entryfile_path / "docker" / "scylla-sct" / ("entry_ssl.sh" if ssl else "entry.sh")
 
     alternator_flags = f"--alternator-port {ALTERNATOR_PORT} --alternator-write-isolation=always"
@@ -353,105 +325,10 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
         destroy_vector_store_cluster(vector_store_cluster)
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def fake_remoter():
-    """Ensure all tests use FakeRemoter instead of real SSH remoters.
-
-    This is autouse to prevent any test from accidentally creating real SSH
-    connections which could interfere with parallel test execution.
-    """
     RemoteCmdRunnerBase.set_default_remoter_class(FakeRemoter)
     return FakeRemoter
-
-
-@pytest.fixture(scope="session")
-def mock_cloud_services(tmp_path_factory):
-    """Prevent unit tests from making real AWS/GCE/Azure API calls.
-
-    This session-scoped fixture mocks cloud service calls that would otherwise
-    require real credentials. It covers:
-    - convert_name_to_ami_if_needed: resolves 'resolve:ssm:' AMI patterns via AWS SSM
-    - find_scylla_repo: calls get_s3_scylla_repos_mapping which lists S3 buckets
-    - get_s3_scylla_repos_mapping: lists S3 buckets for version-to-repo mapping
-    - get_arch_from_instance_type: calls EC2 DescribeInstanceTypes
-    - KeyStore: accesses S3 for credentials and SSH keys
-    - _file validator: SCTConfiguration uses ExistingFile (pydantic BeforeValidator)
-      to check user_credentials_path exists on disk
-
-    Session scope ensures mocks are active for module-scoped fixtures too.
-    This fixture is not autouse — it is injected automatically by
-    ``pytest_collection_modifyitems`` for all tests that are NOT marked as
-    ``integration``, so integration tests always use real credentials.
-    """
-    # Redirect HOME to a temp directory (inspired by pytest-home) so dummy SSH
-    # key files are created there instead of polluting the real home directory.
-    # Backend defaults set user_credentials_path to ~/.ssh/scylla_test_id_ed25519
-    # (or ~/.ssh/scylla-test for baremetal). The pydantic ExistingFile validator
-    # expands ~ via HOME, so pointing HOME to a fake dir with these files works.
-    fake_home = tmp_path_factory.mktemp("home")
-    ssh_dir = fake_home / ".ssh"
-    ssh_dir.mkdir()
-    orig_home = os.environ.get("HOME")
-    os.environ["HOME"] = str(fake_home)
-    for key_name in ("scylla_test_id_ed25519", "scylla-test"):
-        (ssh_dir / key_name).touch(mode=0o600)
-
-    def fake_find_scylla_repo(scylla_version, dist_type="centos", dist_version=None):
-        """Return a plausible repo URL without accessing S3."""
-        bucket = "downloads.scylladb.com"
-        version_prefix = scylla_version.split(":")[0] if ":" in scylla_version else scylla_version
-        # Strip any patch version (e.g. "2025.4.1" -> "2025.4")
-        parts = version_prefix.split(".")
-        if len(parts) > 2:
-            version_prefix = ".".join(parts[:2])
-        if dist_type in ("centos", "rocky", "rhel"):
-            return f"https://s3.amazonaws.com/{bucket}/rpm/centos/scylla-{version_prefix}.repo"
-        elif dist_type in ("ubuntu", "debian"):
-            return f"https://s3.amazonaws.com/{bucket}/deb/debian/scylla-{version_prefix}.list"
-        raise ValueError(f"repo for scylla version {scylla_version} wasn't found")
-
-    def fake_get_file_contents(self, file_name):
-        """Return fake content for common KeyStore files."""
-        defaults = {
-            "email_config.json": b'{"user": "test", "password": "test"}',
-            "azure.json": b'{"subscription_id": "test", "tenant_id": "test", "client_id": "test", "client_secret": "test"}',
-            "backup_azure_blob.json": b'{"account": "test", "key": "test"}',
-            "azure_kms_config.json": b'{"shared_vault_name": "test-vault", "resource_group": "test-rg", "identity_name": "test-identity", "managed_identity_principal_id": "test-principal-id", "sct_service_principal_id": "test-sct-principal", "num_of_keys": 1}',
-        }
-        return defaults.get(file_name, b"{}")
-
-    def fake_get_json(self, json_file):
-        return json.loads(fake_get_file_contents(self, json_file))
-
-    mock_ssh_key = SSHKey(
-        name="scylla_test_id_ed25519",
-        public_key=b"ssh-rsa AAAA fake-public-key scylla_test_id_ed25519\n",
-        private_key=b"dummy-key\n",
-    )
-
-    with (
-        patch("sdcm.utils.common.convert_name_to_ami_if_needed", side_effect=lambda param, region_names: param),
-        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda param, region_names: param),
-        patch("sdcm.utils.version_utils.find_scylla_repo", side_effect=fake_find_scylla_repo),
-        patch("sdcm.sct_config.find_scylla_repo", side_effect=fake_find_scylla_repo),
-        patch("sdcm.mgmt.common.find_scylla_repo", side_effect=fake_find_scylla_repo),
-        patch("sdcm.utils.version_utils.get_s3_scylla_repos_mapping", return_value={}),
-        patch("sdcm.utils.aws_utils.get_arch_from_instance_type", return_value="x86_64"),
-        patch("sdcm.sct_config.get_arch_from_instance_type", return_value="x86_64"),
-        patch.object(KeyStore, "get_file_contents", fake_get_file_contents),
-        patch.object(KeyStore, "get_json", fake_get_json),
-        patch.object(KeyStore, "get_ssh_key_pair", return_value=mock_ssh_key),
-        patch.object(KeyStore, "download_file", return_value=None),
-        patch.object(KeyStore, "sync", return_value=None),
-        patch.object(KeyStore, "s3", new_callable=PropertyMock, return_value=MagicMock()),
-        patch.object(KeyStore, "s3_client", new_callable=PropertyMock, return_value=MagicMock()),
-    ):
-        yield
-
-    if orig_home is not None:
-        os.environ["HOME"] = orig_home
-    else:
-        os.environ.pop("HOME", None)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -486,20 +363,6 @@ def fixture_params(request: pytest.FixtureRequest, monkeypatch):
 @pytest.fixture(scope="function", autouse=True)
 def fixture_cleanup_continuous_events_registry():
     ContinuousEventsRegistry().cleanup_registry()
-
-
-def pytest_collection_modifyitems(items):
-    """Inject mock_cloud_services fixture into every non-integration test.
-
-    Integration tests (marked with ``@pytest.mark.integration``) use real cloud
-    credentials and must not have cloud services mocked.  All other tests run
-    without credentials and need the mock to be active, so we add the fixture
-    name directly to their fixture list rather than relying on autouse, which
-    would activate the mock for integration tests as well.
-    """
-    for item in items:
-        if item.get_closest_marker("integration") is None:
-            item.fixturenames.insert(0, "mock_cloud_services")
 
 
 def pytest_sessionfinish():

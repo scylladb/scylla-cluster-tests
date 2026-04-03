@@ -27,11 +27,11 @@ from invoke.runners import Result
 
 from sdcm.utils.decorators import retrying
 
-from .base import RetryableNetworkException, CommandRunner, RetryMixin
+from .base import RetryableNetworkException, CommandRunner
 from .local_cmd_runner import LocalCmdRunner
 
 
-class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
+class RemoteCmdRunnerBase(CommandRunner):
     port: int = 22
     connect_timeout: int = 60
     key_file: Optional[str] = None
@@ -165,23 +165,10 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
 
     def stop(self):
         self._close_connection()
-        # Clean up connection from thread map to prevent id() reuse issues
-        # When a remoter is garbage collected, Python may reuse its id() for a new object.
-        # Without cleanup, the new object would inherit the stale connection.
-        self._remove_connection_from_thread_map()
-
-    def _remove_connection_from_thread_map(self):
-        """Remove connection from thread map to prevent stale connection reuse when id() is recycled."""
-        key = str(id(self))
-        if hasattr(self.connection_thread_map, key):
-            delattr(self.connection_thread_map, key)
 
     def _close_connection(self):
-        # Get connection directly from thread map without triggering recreation via self.connection property
-        key = str(id(self))
-        connection = getattr(self.connection_thread_map, key, None)
-        if connection:
-            connection.close()
+        if self.connection:
+            self.connection.close()
 
     def _open_connection(self):
         self.connection.open()
@@ -466,7 +453,7 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         """
         Check if rsync is available on the remote host.
         """
-        result = self.run("/usr/bin/rsync --version", ignore_status=True)
+        result = self.run("rsync --version", ignore_status=True)
         return result.ok
 
     def _encode_remote_paths(self, paths: List[str], escape=True) -> str:
@@ -706,6 +693,20 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         if hasattr(exc, "result"):
             self._print_command_results(exc.result, verbose, ignore_status)
         return True
+
+    def _get_retry_params(self, retry: int = 1) -> dict:
+        if retry == 0:
+            # Won't retry on any case
+            allowed_exceptions = tuple()
+            retry = 1
+        elif retry == 1:
+            # Only retry 3 times on network exception
+            allowed_exceptions = (RetryableNetworkException,)
+            retry = self.default_run_retry
+        else:
+            # Retry times that user wants on any exception
+            allowed_exceptions = (Exception,)
+        return {"n": retry, "sleep_time": 5, "allowed_exceptions": allowed_exceptions}
 
     def run(
         self,

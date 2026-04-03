@@ -1,7 +1,7 @@
 #! groovy
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name)
 
     pipeline {
         agent none
@@ -10,14 +10,15 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_GCE_PROJECT = "${params.gce_project}"
+            SCT_ENABLE_ARGUS_REPORT = "1"
             SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
             separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
-                   description: 'aws|gce|azure|oci|docker',
+                   description: 'aws|gce|azure|docker',
                    name: 'backend')
-            string(defaultValue: "${pipelineParams.get('availability_zone', '')}",
+            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
                description: 'Availability zone',
                name: 'availability_zone')
             string(defaultValue: '',
@@ -49,9 +50,6 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'a Azure Image to run against',
                    name: 'azure_image_db')
-            string(defaultValue: '',
-                   description: 'an Oracle Image to run against',
-                   name: 'oci_image_db')
             string(defaultValue: "${pipelineParams.get('region', '')}",
                    description: 'AWS region with Scylla AMI (for AMI test, ignored otherwise)',
                    name: 'region')
@@ -61,9 +59,6 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
                    description: 'Azure location',
                    name: 'azure_region_name')
-            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
-                   description: 'OCI (Oracle) location',
-                   name: 'oci_region_name')
             string(defaultValue: '',
                    description: "a Scylla docker image to run against (for docker backend.) Should be `scylladb/scylla' for official images",
                    name: 'scylla_docker_image')
@@ -193,17 +188,12 @@ def call(Map pipelineParams) {
                                                     if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
                                                         export SCT_AZURE_REGION_NAME=${params.azure_region_name}
                                                     fi
-                                                    if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
-                                                        export SCT_OCI_REGION_NAME=${params.oci_region_name}
-                                                    fi
                                                     if [[ ! -z "${params.scylla_ami_id}" ]]; then
                                                         export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
                                                     elif [[ ! -z "${params.gce_image_db}" ]]; then
                                                         export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
                                                     elif [[ ! -z "${params.azure_image_db}" ]]; then
                                                         export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
-                                                    elif [[ ! -z "${params.oci_image_db}" ]]; then
-                                                        export SCT_OCI_IMAGE_DB="${params.oci_image_db}"
                                                     elif [[ ! -z "${params.scylla_version}" ]]; then
                                                         export SCT_SCYLLA_VERSION="${params.scylla_version}"
                                                     elif [[ ! -z "${params.scylla_repo}" ]]; then
@@ -252,21 +242,12 @@ def call(Map pipelineParams) {
                                                             "azure")
                                                                 export SCT_AZURE_INSTANCE_TYPE_DB="${instance_type}"
                                                                 ;;
-                                                            "oci")
-                                                                export SCT_OCI_INSTANCE_TYPE_DB="${instance_type}"
-                                                                ;;
                                                         esac
                                                     fi
 
-                                                    if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
-                                                        export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                                                    fi
-                                                    if [[ -n "${params.ip_ssh_connections ? params.ip_ssh_connections : ''}" ]] ; then
-                                                        export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
-                                                    fi
-                                                    if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
-                                                        export SCT_INSTANCE_PROVISION="${params.provision_type}"
-                                                    fi
+                                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                                    export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
+                                                    export SCT_INSTANCE_PROVISION="${params.provision_type}"
                                                     if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
                                                         export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
                                                     fi

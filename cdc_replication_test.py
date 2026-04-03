@@ -29,7 +29,6 @@ from sdcm import cluster
 from sdcm.tester import ClusterTester
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.nemesis.monkey.runners import CategoricalMonkey
-from sdcm.stress_thread import get_timeout_from_stress_cmd
 
 
 class Mode(Enum):
@@ -334,7 +333,7 @@ class CDCReplicationTest(ClusterTester):
         loader_node = self.loaders.nodes[0]
         self.log.info("Comparing table contents using scylla-migrate...")
         res = loader_node.remoter.run(
-            cmd="set -o pipefail; ./scylla-migrate check --master-address {} --replica-address {}"
+            cmd="./scylla-migrate check --master-address {} --replica-address {}"
             " --ignore-schema-difference {} {}.{} 2>&1 | tee scylla-migrate.log".format(
                 self.db_cluster.nodes[0].external_address,
                 self.cs_db_cluster.nodes[0].external_address,
@@ -391,7 +390,6 @@ class CDCReplicationTest(ClusterTester):
             """
             (cat >runreplicator.sh && chmod +x runreplicator.sh && tmux new-session -d -s 'replicator' ./runreplicator.sh) <<'EOF'
             #!/bin/bash
-            set -o pipefail
 
             java -cp replicator.jar com.scylladb.cdc.replicator.Main -k {} -t {} -s {} -d {} -cl one -m {} 2>&1 | tee cdc-replicator.log
             EOF
@@ -413,15 +411,12 @@ class CDCReplicationTest(ClusterTester):
 
     def start_gemini(self, seed: Optional[int] = None) -> GeminiStressThread:
         params = {"gemini_seed": seed} if seed else {}
-        stress_cmd = self.params.get("gemini_cmd")
-        # Parse duration from gemini CLI command, fallback to test_duration if parsing fails
-        timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(None)
         return GeminiStressThread(
             test_cluster=self.db_cluster,
             oracle_cluster=None,
             loaders=self.loaders,
-            stress_cmd=stress_cmd,
-            timeout=timeout,
+            stress_cmd=self.params.get("gemini_cmd"),
+            timeout=self.get_duration(None),
             params=params,
         ).run()
 
@@ -448,7 +443,7 @@ class CDCReplicationTest(ClusterTester):
         email_data.update(
             {
                 "nemesis_details": self.get_nemesises_stats(),
-                "nemesis_name": str(self.params.get("nemesis_class_name")),
+                "nemesis_name": self.params.get("nemesis_class_name"),
                 "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
                 "number_of_oracle_nodes": self.params.get("n_test_oracle_db_nodes"),
                 "oracle_ami_id": self.params.get("ami_id_db_oracle"),
@@ -457,4 +452,5 @@ class CDCReplicationTest(ClusterTester):
                 "consistency_status": self.consistency_ok,
             }
         )
+
         return email_data

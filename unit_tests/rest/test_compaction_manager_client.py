@@ -14,11 +14,28 @@
 
 from functools import partial
 
+from sdcm.remote.libssh2_client import Result
 from sdcm.rest.compaction_manager_client import CompactionManagerClient
 
 
-def test_compaction_manager_stop_compaction(fake_node):
-    client = CompactionManagerClient(fake_node)
+class FakeRemoter:
+    def run(
+        self,
+        cmd: str,
+        timeout: int,
+        retry: int,
+    ) -> Result:
+        return Result(stdout=cmd, stderr="", exited=0)
+
+
+class FakeNode:
+    @property
+    def remoter(self):
+        return FakeRemoter()
+
+
+def test_compaction_manager_stop_compaction():
+    client = CompactionManagerClient(FakeNode())
     result = partial(client.stop_compaction, compaction_type="reshape")()
 
     assert result.stdout == 'curl -v -X POST "http://localhost:10000/compaction_manager/stop_compaction?type=RESHAPE"'

@@ -49,8 +49,8 @@ import yaml
 import requests
 from paramiko import SSHException
 from tenacity import RetryError
+from invoke import Result
 from invoke.exceptions import UnexpectedExit, Failure
-from invoke.runners import Result
 from cassandra import ConsistencyLevel, DriverException
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver
@@ -63,7 +63,7 @@ from argus.client.sct.types import LogLink
 from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.db_log_reader import DbLogReader
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
-from sdcm.mgmt.common import get_manager_repo, get_manager_scylla_backend
+from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
@@ -73,6 +73,7 @@ from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificate
 from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuilder
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.provision.helpers.certificate import (
+    create_ca,
     install_client_certificate,
     install_encryption_at_rest_files,
     create_certificate,
@@ -90,7 +91,6 @@ from sdcm.remote import (
     shell_script_cmd,
     RetryableNetworkException,
 )
-from sdcm.remote.agent_cmd_runner import AgentCmdRunner
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.remote.remote_long_running import run_long_running_cmd
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
@@ -105,9 +105,6 @@ from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_utils import AzureService
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
-from sdcm.utils.gcp_kms import GcpKms
-from sdcm.provision.gce.kms_provider import GcpKmsProvider
-from google.cloud.exceptions import GoogleCloudError
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.common import (
@@ -193,7 +190,6 @@ from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
 from sdcm.utils.raft import get_raft_mode
-from sdcm.utils.sct_agent_installer import reconfigure_agent_script, DEFAULT_AGENT_CERTS_DIR
 from sdcm.coredump import CoredumpExportSystemdThread
 from sdcm.keystore import KeyStore
 from sdcm.paths import (
@@ -210,7 +206,6 @@ from sdcm.exceptions import (
     KillNemesis,
     NodeNotReady,
     SstablesNotFound,
-    WaitForTimeoutError,
 )
 from sdcm.utils.replication_strategy_utils import ReplicationStrategy, DataCenterTopologyRfControl
 
@@ -232,58 +227,6 @@ MAX_TIME_WAIT_FOR_DECOMMISSION: int = HOUR_IN_SEC * 6
 LOGGER = logging.getLogger(__name__)
 
 
-DNS_FAILURE_PATTERNS = (
-    "Temporary failure resolving",
-    "Could not resolve",
-    "Name or service not known",
-)
-
-
-def _dns_resolves(node: "BaseNode", dns_host: str) -> bool:
-    remoter = node.remoter
-    assert remoter is not None
-    result = remoter.run(
-        f"getent hosts {dns_host}",
-        ignore_status=True,
-        verbose=False,
-    )
-    return getattr(result, "exit_status", 1) == 0
-
-
-def _get_command_error_output(exc: Failure | UnexpectedExit | Libssh2_UnexpectedExit) -> str:
-    result = getattr(exc, "result", None)
-    error_output = ""
-    if result is not None:
-        error_output += getattr(result, "stdout", "") or ""
-        error_output += getattr(result, "stderr", "") or ""
-    if error_output:
-        return error_output
-
-    for arg in getattr(exc, "args", ()):
-        if arg:
-            error_output += str(arg)
-    if error_output:
-        return error_output
-
-    return exc.__class__.__name__
-
-
-def _is_dns_network_error(output: str) -> bool:
-    return any(pattern in output for pattern in DNS_FAILURE_PATTERNS)
-
-
-class _ScyllaSetupDnsRetryError(Exception):
-    def __init__(self, original_exception: Failure | UnexpectedExit | Libssh2_UnexpectedExit):
-        super().__init__(str(original_exception))
-        self.original_exception = original_exception
-
-
-class _ScyllaSetupNonRetryableError(Exception):
-    def __init__(self, original_exception: Failure | UnexpectedExit | Libssh2_UnexpectedExit):
-        super().__init__(str(original_exception))
-        self.original_exception = original_exception
-
-
 class NodeError(Exception):
     def __init__(self, msg=None):
         super().__init__()
@@ -302,10 +245,6 @@ class PrometheusSnapshotErrorException(Exception):
 
 class ScyllaRequirementError(Exception):
     pass
-
-
-class ClusterHealthCheckError(Exception):
-    """Raised when one or more nodes fail their health check during parallel execution."""
 
 
 class NodeStayInClusterAfterDecommission(Exception):
@@ -348,30 +287,6 @@ class TokenRingMember:
         return getattr(self, item)
 
 
-def terminate_on_failure(func):
-    """Decorator for node init() that terminates the node if initialization fails.
-
-    If initialization raises, the node's parent_cluster.terminate_node() is called
-    (which collects logs and destroys the cloud instance) before re-raising.
-    scylla_shards=0 is passed to avoid SSH calls on a node that never completed init.
-    """
-
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        try:
-            return func(self, *args, **kwargs)
-        except Exception:  # noqa: BLE001
-            if self.parent_cluster:
-                self.log.error("Failed to initialize node %s, collecting logs and terminating", self.name)
-                try:
-                    self.parent_cluster.terminate_node(self, scylla_shards=0)
-                except Exception:  # noqa: BLE001
-                    self.log.error("Failed to terminate node %s after init failure", self.name)
-            raise
-
-    return wrapper
-
-
 class BaseNode(AutoSshContainerMixin):
     CQL_PORT = 9042
     CQL_SSL_PORT = 9142
@@ -407,6 +322,7 @@ class BaseNode(AutoSshContainerMixin):
 
         self.remoter: Optional[RemoteCmdRunnerBase] = None
 
+        self._use_dns_names: bool = parent_cluster.params.get("use_dns_names") if parent_cluster else False
         self._spot_monitoring_thread = None
         self._journal_thread = None
         self._docker_log_process = None
@@ -530,17 +446,11 @@ class BaseNode(AutoSshContainerMixin):
         self.log = SDCMAdapter(self.log, extra={"prefix": str(self)})
         if self.ssh_login_info:
             self.ssh_login_info["hostname"] = self.external_address
-
-            self.remoter = RemoteCmdRunnerBase.create_remoter(**self.ssh_login_info)
-
-            # Start task threads after ssh is up, otherwise the dense ssh attempts from task
-            # threads will make SCT builder to be blocked by sshguard of gce instance.
-            self.wait_ssh_up(verbose=True)
-            self.wait_for_cloud_init()
-
-            self._reconfigure_agent(self.remoter)
-
         self._init_remoter(self.ssh_login_info)
+        # Start task threads after ssh is up, otherwise the dense ssh attempts from task
+        # threads will make SCT builder to be blocked by sshguard of gce instance.
+        self.wait_ssh_up(verbose=True)
+        self.wait_for_cloud_init()
         if not self.test_config.REUSE_CLUSTER:
             self.set_hostname()
             self.configure_remote_logging()
@@ -620,111 +530,8 @@ class BaseNode(AutoSshContainerMixin):
         except Exception:
             self.log.error("Error saving resource state to Argus", exc_info=True)
 
-    def _setup_agent_tls_certs(self, ssh_remoter):
-        """Generate and push TLS certificates for the SCT agent."""
-        if not CA_CERT_FILE.exists():
-            raise FileNotFoundError(f"CA certificate not found: {CA_CERT_FILE}")
-
-        certs_dir = DEFAULT_AGENT_CERTS_DIR
-        local_cert_dir = Path(get_data_dir_path("ssl_conf")) / "agent" / self.ip_address
-        local_cert_dir.mkdir(parents=True, exist_ok=True)
-
-        cert_file = local_cert_dir / "server.crt"
-        key_file = local_cert_dir / "server.key"
-
-        create_certificate(
-            cert_file=cert_file,
-            key_file=key_file,
-            cname=self.name,
-            ca_cert_file=CA_CERT_FILE,
-            ca_key_file=CA_KEY_FILE,
-            ip_addresses=list({addr for addr in [self.ip_address, self.public_ip_address] if addr}),
-            dns_names=list({name for name in [self.public_dns_name, self.private_dns_name] if name}),
-        )
-
-        ssh_remoter.run(f"sudo mkdir -p {certs_dir}", verbose=False)
-        ssh_remoter.send_files(src=str(cert_file), dst="/tmp/agent_server.crt")
-        ssh_remoter.send_files(src=str(key_file), dst="/tmp/agent_server.key")
-        ssh_remoter.run("chmod 600 /tmp/agent_server.key", verbose=False)
-        ssh_remoter.run(
-            f"sudo mv /tmp/agent_server.crt {certs_dir}/server.crt && "
-            f"sudo mv /tmp/agent_server.key {certs_dir}/server.key && "
-            f"sudo chmod 600 {certs_dir}/server.key && "
-            f"sudo chmod 644 {certs_dir}/server.crt",
-            verbose=False,
-        )
-
-        self.log.info("Agent TLS certificates installed on %s", self.name)
-        return f"{certs_dir}/server.crt", f"{certs_dir}/server.key"
-
-    def _reconfigure_agent(self, ssh_remoter):
-        """Reconfigure SCT agent with current API key and optionally enable TLS"""
-        agent_config = self.parent_cluster.params.get("agent")
-        agent_enabled = agent_config.get("enabled", False) and self.parent_cluster.node_type in (
-            "scylla-db",
-            "loader",
-            "monitor",
-        )
-        agent_api_key = self.test_config.agent_api_key()
-
-        if not (agent_enabled and agent_api_key):
-            return
-
-        if ssh_remoter.run("systemctl is-active sct-agent.service", ignore_status=True, verbose=False).exited != 0:
-            return
-
-        agent_tls = agent_config.get("tls")
-        tls_cert_file, tls_key_file = self._setup_agent_tls_certs(ssh_remoter) if agent_tls else ("", "")
-
-        self.log.info("Reconfiguring SCT agent on node %s (tls=%s)", self.name, agent_tls)
-        script = reconfigure_agent_script(
-            api_keys=[agent_api_key],
-            port=agent_config.get("port"),
-            max_concurrent_jobs=agent_config.get("max_concurrent_jobs"),
-            log_level=agent_config.get("log_level"),
-            tls=agent_tls,
-            tls_cert_file=tls_cert_file,
-            tls_key_file=tls_key_file,
-        )
-
-        ssh_remoter.run(f"sudo bash -cxe {shlex.quote(script)}", verbose=True)
-
     def _init_remoter(self, ssh_login_info):
-        agent_config = self.parent_cluster.params.get("agent")
-        agent_enabled = agent_config.get("enabled", False) and self.parent_cluster.node_type in (
-            "scylla-db",
-            "loader",
-            "monitor",
-        )
-        agent_api_key = self.test_config.agent_api_key()
-
-        if agent_enabled and agent_api_key:
-            agent_hostname = (
-                self.public_ip_address or self.external_address
-                if self.test_config.IP_SSH_CONNECTIONS == "public"
-                else self.private_ip_address
-            )
-            agent_tls = agent_config.get("tls")
-
-            self.remoter = AgentCmdRunner(
-                hostname=agent_hostname,
-                api_key=agent_api_key,
-                port=agent_config.get("port"),
-                user=ssh_login_info.get("user", "root") if ssh_login_info else "root",
-                tls=agent_tls,
-                ca_cert=str(CA_CERT_FILE) if agent_tls else None,
-            )
-            self.log.info(
-                "Using SCT agent for command execution at %s:%s (tls=%s)",
-                agent_hostname,
-                agent_config.get("port"),
-                agent_tls,
-            )
-        else:
-            if agent_enabled:
-                self.log.info("SCT agent is enabled but API key is not available, falling back to SSH")
-            self.remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
-
+        self.remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
         self.log.debug(self.remoter.ssh_debug_cmd())
 
     def _init_port_mapping(self):
@@ -780,23 +587,22 @@ class BaseNode(AutoSshContainerMixin):
 
     @property
     def db_node_instance_type(self) -> Optional[str]:
-        backend, instance_type, params = self.parent_cluster.cluster_backend, None, self.parent_cluster.params
+        backend = self.parent_cluster.cluster_backend
         if backend in ("aws", "aws-siren"):
             if self._is_zero_token_node:
-                instance_type = params.get("zero_token_instance_type_db") or params.get("instance_type_db")
-            else:
-                instance_type = params.get("instance_type_db")
-        elif backend in ("gce", "gce-siren"):
-            instance_type = params.get("gce_instance_type_db")
+                return self.parent_cluster.params.get("zero_token_instance_type_db") or self.parent_cluster.params.get(
+                    "instance_type_db"
+                )
+            return self.parent_cluster.params.get("instance_type_db")
         elif backend == "azure":
-            instance_type = params.get("azure_instance_type_db")
-        elif backend == "oci":
-            instance_type = params.get("oci_instance_type_db")
+            return self.parent_cluster.params.get("azure_instance_type_db")
+        elif backend in ("gce", "gce-siren"):
+            return self.parent_cluster.params.get("gce_instance_type_db")
         elif backend == "docker":
-            instance_type = "docker"
+            return "docker"
         else:
-            self.log.warning("Unrecognized backend type, defaulting to 'None' for db instance type.")
-        return instance_type
+            self.log.warning("Unrecognized backend type, defaulting to 'Unknown' fordb instance type.")
+            return None
 
     @property
     def _proposed_scylla_yaml_properties(self) -> dict:
@@ -1287,18 +1093,13 @@ class BaseNode(AutoSshContainerMixin):
         """
         return self.external_address
 
-    @cached_property
-    def use_dns_names(self) -> bool:
-        """Return whether this node should use DNS names instead of IP addresses."""
-        return bool(self.parent_cluster and self.parent_cluster.params.get("use_dns_names"))
-
     @property
     def scylla_listen_address(self) -> str:
         """The address the Scylla is bound.
 
         Use it for localhost connections (e.g., cqlsh)
         """
-        if self.use_dns_names:
+        if self._use_dns_names:
             return self.private_dns_name
         return self.ip_address
 
@@ -1366,8 +1167,6 @@ class BaseNode(AutoSshContainerMixin):
             system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
             decoding_queue=self.test_config.DECODING_QUEUE,
             log_lines=self.parent_cluster.params.get("logs_transport") in ["syslog-ng", "vector"],
-            backtrace_stall_decoding=self.parent_cluster.params.get("backtrace_stall_decoding"),
-            backtrace_decoding_disable_regex=self.parent_cluster.params.get("backtrace_decoding_disable_regex"),
         )
         self._db_log_reader_thread.start()
 
@@ -1607,8 +1406,6 @@ class BaseNode(AutoSshContainerMixin):
 
     def destroy(self):
         self.stop_task_threads()
-        if self.remoter:
-            self.remoter.stop()
         ContainerManager.destroy_all_containers(self)
         self._terminate_node_in_argus()
         LOGGER.info("%s destroyed", self)
@@ -1940,7 +1737,7 @@ class BaseNode(AutoSshContainerMixin):
                 on_datetime,
                 log_time,
                 log_size,
-                line[:100],
+                line[100],
             )
             yield log_file
 
@@ -2375,7 +2172,7 @@ class BaseNode(AutoSshContainerMixin):
             self.download_scylla_manager_repo(self.parent_cluster.params.get("scylla_mgmt_agent_address"))
         else:
             manager_version = self.parent_cluster.params.get("manager_version")
-            agent_repo_url = get_manager_repo(manager_version, self.distro)
+            agent_repo_url = get_manager_repo_from_defaults(manager_version, self.distro)
             self.download_scylla_manager_repo(agent_repo_url)
             # If patch version, this specific patch version should be installed. Otherwise, the latest is installed.
             if len(manager_version.split(".")) == 3:
@@ -2748,94 +2545,6 @@ class BaseNode(AutoSshContainerMixin):
             self.remoter.run(f"sudo grep Xmx {jmx_file}")
             self.log.info("result after changing scylla-jmx heap above")
 
-    def check_dns_ready(self, timeout=60, interval=5, dns_host="scylladb.com"):
-        """Check that DNS resolution is working on the node.
-
-        Uses wait.wait_for() for consistent retry behavior with the rest of SCT.
-
-        Args:
-            timeout: Maximum time in seconds to wait for DNS readiness.
-            interval: Time in seconds between retries.
-            dns_host: Hostname to resolve for the check.
-
-        Returns:
-            True if DNS resolution succeeds within the timeout, False otherwise.
-        """
-
-        try:
-            wait.wait_for(
-                lambda: _dns_resolves(self, dns_host),
-                step=interval,
-                text=f"DNS readiness on {self.name}",
-                timeout=timeout,
-            )
-            return True
-        except WaitForTimeoutError:
-            self.log.error("DNS readiness check failed after %d seconds", timeout)
-            self._capture_dns_diagnostics()
-            return False
-
-    def _capture_dns_diagnostics(self):
-        """Capture DNS/network diagnostic information for debugging."""
-        remoter = self.remoter
-        assert remoter is not None
-        resolv_conf_result = remoter.run("cat /etc/resolv.conf", ignore_status=True, verbose=False)
-        self.log.info("DNS diagnostics [%s]:\n%s", "cat /etc/resolv.conf", resolv_conf_result.stdout)
-
-        resolver_status_result = remoter.run(
-            "resolvectl status 2>/dev/null || systemd-resolve --status 2>/dev/null || true",
-            ignore_status=True,
-            verbose=False,
-        )
-        self.log.info(
-            "DNS diagnostics [%s]:\n%s",
-            "resolvectl status 2>/dev/null || systemd-resolve --status 2>/dev/null || true",
-            resolver_status_result.stdout,
-        )
-
-        network_status_result = remoter.run("nmcli device show 2>/dev/null || true", ignore_status=True, verbose=False)
-        self.log.info(
-            "DNS diagnostics [%s]:\n%s", "nmcli device show 2>/dev/null || true", network_status_result.stdout
-        )
-
-    def _refresh_package_cache_after_dns_error(self):
-        remoter = self.remoter
-        assert remoter is not None
-        if self.distro.is_rhel_like:
-            remoter.run("sudo yum makecache", ignore_status=True)
-            return
-        remoter.run("sudo apt-get update", ignore_status=True)
-
-    @retrying(n=3, sleep_time=10, allowed_exceptions=(_ScyllaSetupDnsRetryError,))
-    def _run_scylla_setup_with_dns_retry(self, setup_cmd):
-        """Run scylla_setup command, retrying on DNS/network errors after refreshing package cache.
-
-        Uses @retrying pattern but with DNS-specific error filtering: only DNS/network
-        errors trigger a retry, all other failures are raised immediately.
-
-        Args:
-            setup_cmd: The full scylla_setup command to execute.
-
-        Raises:
-            Failure, UnexpectedExit, Libssh2_UnexpectedExit: If the command fails
-                with a non-DNS error or after exhausting retries.
-        """
-
-        remoter = self.remoter
-        assert remoter is not None
-        try:
-            remoter.run(setup_cmd)
-        except (Failure, UnexpectedExit, Libssh2_UnexpectedExit) as exc:
-            error_output = _get_command_error_output(exc)
-            if _is_dns_network_error(error_output):
-                self.log.warning(
-                    "scylla_setup failed with DNS/network error, retrying after refreshing package cache",
-                )
-                self._capture_dns_diagnostics()
-                self._refresh_package_cache_after_dns_error()
-                raise _ScyllaSetupDnsRetryError(exc) from exc
-            raise _ScyllaSetupNonRetryableError(exc) from exc
-
     @log_run_info
     def scylla_setup(self, disks, devname: str):
         """
@@ -2843,31 +2552,27 @@ class BaseNode(AutoSshContainerMixin):
         :param disks: list of disk names
         """
         extra_setup_args = self.parent_cluster.params.get("append_scylla_setup_args")
-        remoter = self.remoter
-        assert remoter is not None
-        result = remoter.run("sudo /usr/lib/scylla/scylla_setup --help")
+        result = self.remoter.run("sudo /usr/lib/scylla/scylla_setup --help")
         if "--swap-directory" in result.stdout:
             # swap setup is supported
             extra_setup_args += " --swap-directory / "
         if self.parent_cluster.params.get("unified_package"):
             extra_setup_args += " --no-verify-package "
-        setup_cmd = "sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --setup-nic-and-disks {}".format(
-            devname, ",".join(disks), extra_setup_args
+        self.remoter.run(
+            "sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --setup-nic-and-disks {}".format(
+                devname, ",".join(disks), extra_setup_args
+            )
         )
-        try:
-            self._run_scylla_setup_with_dns_retry(setup_cmd)
-        except (_ScyllaSetupDnsRetryError, _ScyllaSetupNonRetryableError) as exc:
-            raise exc.original_exception from exc
 
-        result = remoter.run("cat /proc/mounts")
+        result = self.remoter.run("cat /proc/mounts")
         assert " /var/lib/scylla " in result.stdout, "RAID setup failed, scylla directory isn't mounted correctly"
-        remoter.run("sudo sync")
+        self.remoter.run("sudo sync")
         self.log.info("io.conf right after setup")
-        remoter.run("sudo cat /etc/scylla.d/io.conf")
+        self.remoter.run("sudo cat /etc/scylla.d/io.conf")
 
-        remoter.run("sudo systemctl enable scylla-server.service")
+        self.remoter.run("sudo systemctl enable scylla-server.service")
         if self.is_service_exists(service_name="scylla-jmx"):
-            remoter.run("sudo systemctl enable scylla-jmx.service")
+            self.remoter.run("sudo systemctl enable scylla-jmx.service")
 
     def upgrade_mgmt(self, scylla_mgmt_address, start_manager_after_upgrade=True):
         self.log.debug("Upgrade scylla-manager via repo: %s", scylla_mgmt_address)
@@ -2917,7 +2622,7 @@ class BaseNode(AutoSshContainerMixin):
             self.download_scylla_manager_repo(self.parent_cluster.params.get("scylla_mgmt_address"))
         else:
             manager_version = self.parent_cluster.params.get("manager_version")
-            manager_repo_url = get_manager_repo(manager_version, self.distro)
+            manager_repo_url = get_manager_repo_from_defaults(manager_version, self.distro)
             self.download_scylla_manager_repo(manager_repo_url)
             # If patch version, this specific patch version should be installed. Otherwise, the latest is installed.
             if len(manager_version.split(".")) == 3:
@@ -2990,13 +2695,8 @@ class BaseNode(AutoSshContainerMixin):
         self._scylla_manager_journal_thread.start()
 
     def stop_scylla_manager_log_capture(self, timeout=10):
-        from sdcm.remote.agent_cmd_runner import AgentCmdRunner  # noqa: PLC0415
-
-        if isinstance(self.remoter, AgentCmdRunner):
-            self.remoter.cancel_streaming_command("sudo journalctl -u scylla-manager -f")
-        else:
-            self.remoter.run('sudo pkill -f "sudo journalctl -u scylla-manager -f"', ignore_status=True, verbose=True)
-
+        cmd = 'sudo pkill -f "sudo journalctl -u scylla-manager -f"'
+        self.remoter.run(cmd, ignore_status=True, verbose=True)
         self._scylla_manager_journal_thread.join(timeout)
         self._scylla_manager_journal_thread = None
 
@@ -3816,24 +3516,12 @@ class BaseNode(AutoSshContainerMixin):
         self.parent_cluster.wait_for_nodes_up_and_normal(nodes=[self])
         self.log.info("Waiting for native_transport to be ready")
         self.wait_native_transport()
-        if self.parent_cluster.params.get("use_mgmt"):
-            self.log.info("Waiting for scylla-manager-agent to be ready")
-            self.wait_manager_agent_up(verbose=verbose, timeout=180)
 
     def disable_firewall(self) -> None:
-        if self.distro.is_rhel_like:
-            self.remoter.sudo("systemctl stop iptables", ignore_status=True)
-            self.remoter.sudo("systemctl disable iptables", ignore_status=True)
-            self.remoter.sudo("systemctl stop firewalld", ignore_status=True)
-            self.remoter.sudo("systemctl disable firewalld", ignore_status=True)
-
-        # For Ubuntu/Debian, specially on OCI where iptables rules might be persistent
-        elif self.distro.is_debian_like:
-            self.remoter.sudo("iptables -F", ignore_status=True)
-            self.remoter.sudo("iptables -P INPUT ACCEPT", ignore_status=True)
-            self.remoter.sudo("iptables -P FORWARD ACCEPT", ignore_status=True)
-            self.remoter.sudo("iptables -P OUTPUT ACCEPT", ignore_status=True)
-            self.remoter.sudo("netfilter-persistent flush", ignore_status=True)
+        self.remoter.sudo("systemctl stop iptables", ignore_status=True)
+        self.remoter.sudo("systemctl disable iptables", ignore_status=True)
+        self.remoter.sudo("systemctl stop firewalld", ignore_status=True)
+        self.remoter.sudo("systemctl disable firewalld", ignore_status=True)
 
     def upgrade_ssh_packages(self) -> None:
         """
@@ -4172,15 +3860,12 @@ class BaseCluster:
     def wait_for_init(self):
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
-    def add_nodes(
-        self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None, image_id=None
-    ):
+    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         """
         :param count: number of nodes to add
         :param ec2_user_data:
         :param dc_idx: datacenter index, used as an index for self.datacenter list
         :param instance_type: type of instance to use, can override what's defined in configuration
-        :param image_id: image ID to use, can override what's defined in configuration
         :return: list of Nodes
         """
         raise NotImplementedError("Derived class must implement 'add_nodes' method!")
@@ -4197,8 +3882,6 @@ class BaseCluster:
                     self.params.get("oracle_user_data_format_version") or user_data_format_version
                 )
 
-        agent_config = self.params.get("agent")
-        supported_node_types = ("scylla-db", "loader", "monitor")
         user_data_builder = ScyllaUserDataBuilder(
             cluster_name=self.name,
             bootstrap=enable_auto_bootstrap,
@@ -4207,7 +3890,6 @@ class BaseCluster:
             syslog_host_port=self.test_config.get_logging_service_host_port(),
             test_config=self.test_config,
             install_docker=self.node_type == "loader",
-            install_agent=(agent_config.get("enabled") and self.node_type in supported_node_types),
         )
         return user_data_builder.to_string()
 
@@ -5135,7 +4817,7 @@ class BaseScyllaCluster:
 
     @property
     def seed_nodes_addresses(self):
-        if self.nodes and self.nodes[0].use_dns_names:
+        if self.params.get("use_dns_names"):
             seed_nodes_addresses = [node.private_dns_name for node in self.nodes if node.is_seed]
         else:
             seed_nodes_addresses = [node.ip_address for node in self.nodes if node.is_seed]
@@ -5161,6 +4843,38 @@ class BaseScyllaCluster:
                         node_name=node.name, exp_ips=self.seed_nodes_addresses, act_ip=ip
                     )
                 )
+
+    @contextlib.contextmanager
+    def patch_params(self) -> SCTConfiguration:
+        new_params, old_params = self.params.copy(), self.params
+        yield new_params
+        if new_params != old_params:
+            self.params = new_params
+            for node in self.nodes:
+                node.config_setup(append_scylla_args=self.get_scylla_args())
+                node.restart_scylla()
+
+    def enable_client_encrypt(self):
+        create_ca(self.test_config.tester_obj().localhost)
+        for node in self.nodes:
+            node.create_node_certificate(
+                cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
+                cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
+                csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR,
+            )
+            # Create client facing node certificate, for client-to-node communication
+            node.create_node_certificate(
+                node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY
+            )
+            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+                shutil.copy(src, node.ssl_conf_dir)
+        self.log.debug("Enabling client encryption on nodes")
+        with self.patch_params() as params:
+            params["client_encrypt"] = True
+
+    def disable_client_encrypt(self):
+        with self.patch_params() as params:
+            params["client_encrypt"] = False
 
     def _update_db_binary(self, new_scylla_bin, node_list, start_service=True):
         self.log.debug("User requested to update DB binary...")
@@ -5416,51 +5130,8 @@ class BaseScyllaCluster:
             if self.nemesis_count == 1:
                 node_for_timeout = next((n for n in self.nodes if not n.running_nemesis), self.nodes[0])
                 with adaptive_timeout(Operations.HEALTHCHECK, node=node_for_timeout, timeout=len(self.nodes) * 30):
-                    # Parallel health check execution
-                    parallel_workers = self.params.get("cluster_health_check_parallel_workers")
-                    # Ensure at least 1 worker. Values above 10 are not recommended:
-                    # higher parallelism risks API rate limiting and connection exhaustion,
-                    # and testing shows diminishing returns beyond 10 workers.
-                    parallel_workers = max(1, parallel_workers)
-
-                    if parallel_workers == 1 or len(self.nodes) == 1:
-                        # Sequential execution for single worker or single node
-                        for node in self.nodes:
-                            node.check_node_health()
-                    else:
-                        # Parallel execution
-                        self.log.debug(
-                            "Running health checks on %d nodes with %d parallel workers",
-                            len(self.nodes),
-                            parallel_workers,
-                        )
-                        failed_nodes = []
-                        with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
-                            futures = {executor.submit(node.check_node_health): node for node in self.nodes}
-                            for future in as_completed(futures):
-                                node = futures[future]
-                                try:
-                                    future.result()
-                                except Exception as exc:  # noqa: BLE001
-                                    failed_nodes.append((node, exc))
-                                    # Log and publish error event for visibility in Argus
-                                    self.log.error(
-                                        "Health check for node %s generated an exception: %s",
-                                        node.name,
-                                        exc,
-                                    )
-                                    ClusterHealthValidatorEvent.ParallelHealthCheckFailure(
-                                        node=node,
-                                        error=f"Health check failed with exception: {exc}",
-                                        severity=Severity.ERROR,
-                                    ).publish()
-                        if failed_nodes:
-                            for node, exc in failed_nodes:
-                                self.log.error("Health check failure details for %s: %s", node.name, exc, exc_info=exc)
-                            names = ", ".join(n.name for n, _ in failed_nodes)
-                            raise ClusterHealthCheckError(
-                                f"Health check failed on {len(failed_nodes)} node(s): {names}"
-                            ) from failed_nodes[0][1]
+                    for node in self.nodes:
+                        node.check_node_health()
             else:
                 chc_event.message = "Test runs with parallel nemesis. Nodes health checks are disabled."
                 return
@@ -5646,8 +5317,6 @@ class BaseScyllaCluster:
     def start_kms_key_rotation_thread(self) -> None:
         if self.params.get("cluster_backend") != "aws":
             return None
-        if not self.params.get("enable_kms_key_rotation"):
-            return None
         kms_key_rotation_interval = self.params.get("kms_key_rotation_interval") or 60
         kms_key_alias_name = ""
         append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
@@ -5753,34 +5422,6 @@ class BaseScyllaCluster:
         self.log.info("Started Azure KMS rotation thread for test: %s", test_id)
         return None
 
-    def start_gcp_key_rotation_thread(self) -> None:
-        if self.params.get("cluster_backend") != "gce":
-            return None
-        if not self.params.get("enable_kms_key_rotation"):
-            return None
-
-        test_id = str(self.test_config.test_id())
-
-        def _rotate():
-            gcp_credentials = KeyStore().get_gcp_credentials()
-            gcp_kms_config = KeyStore().get_gcp_kms_config()
-
-            project_id = gcp_credentials["project_id"]
-            location = gcp_kms_config["keyring_location"]
-            key_name = GcpKmsProvider.get_key_name_for_test(test_id)
-            gcp_kms = GcpKms(project_id, location, key_name)
-            while True:
-                time.sleep(self.params.get("kms_key_rotation_interval") * 60)
-                try:
-                    gcp_kms.rotate_key()
-                    self.log.info("GCP KMS key rotated for test %s: %s", test_id, key_name)
-                except GoogleCloudError as e:
-                    self.log.error("Failed to rotate GCP KMS key '%s': %s", key_name, e)
-
-        threading.Thread(target=_rotate, daemon=True, name="GcpKmsRotationThread").start()
-        self.log.info("Started GCP KMS rotation thread for test: %s", test_id)
-        return None
-
     def scylla_configure_non_root_installation(self, node, devname):
         node.stop_scylla_server(verify_down=False)
         node.remoter.run(
@@ -5803,7 +5444,7 @@ class BaseScyllaCluster:
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # noqa: PLR0912, PLR0914, PLR0915
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
 
-        if node.distro.is_rhel_like or self.params.get("cluster_backend") == "oci":
+        if node.distro.is_rhel_like:
             node.disable_firewall()
             node.upgrade_ssh_packages()
 
@@ -5921,8 +5562,6 @@ class BaseScyllaCluster:
 
         if self.params.get("force_run_iotune"):
             node.remoter.sudo(cmd="scylla_io_setup", timeout=600)
-            if self.params.get("cluster_backend") == "azure":
-                node.remoter.sudo(cmd="/opt/scylladb/scripts/perftune.py --nic eth1 --tune net", timeout=600)
 
         if self.params.get("gce_setup_hybrid_raid"):
             gce_n_local_ssd_disk_db = self.params.get("gce_n_local_ssd_disk_db")
@@ -6051,14 +5690,6 @@ class BaseScyllaCluster:
     @staticmethod
     def _scylla_post_install(node: BaseNode, new_scylla_installed: bool, devname: str) -> None:
         if new_scylla_installed:
-            if not node.check_dns_ready():
-                raise NodeSetupFailed(
-                    node=node,
-                    error_msg="DNS readiness check failed before scylla_setup. "
-                    "Network/DNS is not available on the node. "
-                    "Check network connectivity and DNS configuration. "
-                    "Diagnostics have been captured in the node log.",
-                )
             try:
                 disks = node.detect_disks(nvme=True)
             except AssertionError:
@@ -6219,9 +5850,8 @@ class BaseScyllaCluster:
 
         target_node_ip = node.ip_address
         node_allocator = self.test_config.tester_obj().nemesis_allocator
-        verification_candidates = [n for n in self.data_nodes if n != node]
         with node_allocator.run_nemesis(
-            nemesis_label="verify decommission", node_list=verification_candidates
+            nemesis_label="verify decommission", node_list=self.data_nodes
         ) as verification_node:
             node_ip_list = get_node_ip_list(verification_node)
             missing_host_ids = verification_node.raft.search_inconsistent_host_ids()
@@ -6433,9 +6063,6 @@ class BaseLoaderSet:
         node.log.info("Setup in BaseLoaderSet")
         node.wait_ssh_up(verbose=verbose)
 
-        if self.params.get("cluster_backend") == "oci":
-            node.disable_firewall()
-
         if node.distro.is_rhel_like:
             node.install_epel()
 
@@ -6636,7 +6263,7 @@ class BaseMonitorSet:
             # scylla version can be branch-version:latest, or master:latest
             # only version is needed
             return scylla_version.lstrip("branch-").split(":")[0]
-        scylla_version = self.targets["db_cluster"].params.artifact_scylla_version
+        scylla_version = self.targets["db_cluster"].nodes[0].scylla_version
         self.log.debug("Using %s ScyllaDB version to derive monitoring version", scylla_version)
         if scylla_version and "dev" not in scylla_version:
             if version := re.match(r"(\d+\.\d+)", scylla_version):
@@ -6687,7 +6314,7 @@ class BaseMonitorSet:
         node.log.info("TestConfig in BaseMonitorSet")
         node.wait_ssh_up()
 
-        if node.distro.is_rhel_like or self.params.get("cluster_backend") == "oci":
+        if node.distro.is_rhel_like:
             node.disable_firewall()
             node.upgrade_ssh_packages()
 
@@ -6759,26 +6386,6 @@ class BaseMonitorSet:
             return sct_public_ip + ":" + self.local_metrics_addr.split(":")[1]
         else:
             return self.local_metrics_addr
-
-    def _allow_runner_metrics_ports_on_oci(self) -> None:
-        if self.params.get("cluster_backend") != "oci" or not self.sct_ip_port:
-            return
-
-        match = re.search(r"(\d+)$", self.sct_ip_port)
-        if not match:
-            self.log.warning("Failed to parse SCT metrics port from '%s'", self.sct_ip_port)
-            return
-
-        metrics_port = match.group(1)
-        cmd = dedent(f"""
-            sudo iptables -C INPUT -p tcp --dport 9100 -j ACCEPT || sudo iptables -I INPUT -p tcp --dport 9100 -j ACCEPT
-            sudo iptables -C INPUT -p tcp --dport {metrics_port} -j ACCEPT || sudo iptables -I INPUT -p tcp --dport {metrics_port} -j ACCEPT
-            sudo ip6tables -C INPUT -p tcp --dport 9100 -j ACCEPT || sudo ip6tables -I INPUT -p tcp --dport 9100 -j ACCEPT
-            sudo ip6tables -C INPUT -p tcp --dport {metrics_port} -j ACCEPT || sudo ip6tables -I INPUT -p tcp --dport {metrics_port} -j ACCEPT
-            sudo ufw allow 9100/tcp || true
-            sudo ufw allow {metrics_port}/tcp || true
-        """)
-        LOCALRUNNER.run(cmd, ignore_status=True)
 
     @wait_for_init_wrap
     def wait_for_init(self, *args, **kwargs):
@@ -7041,7 +6648,6 @@ class BaseMonitorSet:
                 )
 
             if self.sct_ip_port:
-                self._allow_runner_metrics_ports_on_oci()
                 sct_targets = [{"targets": [self.sct_ip_port], "labels": {"dc": "sct-runner"}}]
                 update_scrape_configs(scrape_configs, sct_targets)
             with open(local_template, "w", encoding="utf-8") as output_file:

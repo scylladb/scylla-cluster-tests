@@ -243,6 +243,7 @@ def latency_calculator_decorator(
             test_name = tester.__repr__().split("testMethod=")[-1].split(">")[0]
             if not monitoring_set or not monitoring_set.nodes or not tester.params.get("use_hdrhistogram"):
                 return res
+
             try:
                 monitor = monitoring_set.nodes[0]
                 screenshots = monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)

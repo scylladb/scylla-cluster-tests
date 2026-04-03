@@ -185,7 +185,7 @@ def enable_default_filters(sct_config: SCTConfiguration):
     EventsSeverityChangerFilter(
         new_severity=Severity.WARNING,
         event_class=DatabaseLogEvent.ABORTING_ON_SHARD,
-        regex=r".*\brpc\b.*aborting on shard \d+",
+        regex=r".*Parent connection [\d]+ is aborting on shard",
     ).publish()
 
     # As written in https://github.com/scylladb/scylladb/issues/20950#issuecomment-2411387784

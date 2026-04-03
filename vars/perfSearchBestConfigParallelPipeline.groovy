@@ -4,7 +4,7 @@ import groovy.json.JsonSlurperClassic
 def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, null /* azure placeholder */, params.oci_region_name)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
 
     pipeline {
         agent none
@@ -24,7 +24,7 @@ def call(Map pipelineParams) {
                description: 'us-east-1|eu-west-1',
                name: 'region')
 
-            string(defaultValue: "${pipelineParams.get('availability_zone', '')}",
+            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
                 description: 'Availability zone',
                 name: 'availability_zone')
 
@@ -33,12 +33,8 @@ def call(Map pipelineParams) {
                    name: 'gce_datacenter')
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
-            string(defaultValue: '',
-                   description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
-                   name: 'scylla_version')
-            string(defaultValue: '',
-                   description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
-                   name: 'scylla_repo')
+            string(defaultValue: '', description: '', name: 'scylla_version')
+            string(defaultValue: '', description: '', name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'on_demand|spot_fleet|spot',
                    name: 'provision_type')

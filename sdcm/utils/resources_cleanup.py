@@ -17,20 +17,16 @@ import os
 import time
 import ipaddress
 from unittest.mock import MagicMock
-from collections import defaultdict
 
 from botocore.exceptions import ClientError
 import boto3
 import google.api_core.exceptions
-import oci
 from google.cloud.compute_v1.types import Instance as GceInstance
 from mypy_boto3_ec2 import EC2Client
 
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, ScyllaCloudAPIError
-from sdcm.provision.oci.constants import TAG_NAMESPACE
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
-from sdcm.provision.aws.emr_provisioner import list_emr_clusters
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_kms import AwsKms
@@ -59,14 +55,6 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.gce_utils import (
     GkeCleaner,
     get_gce_compute_instances_client,
-)
-from sdcm.utils.oci_utils import (
-    delete_oci_volume_with_retry,
-    OciService,
-    oci_keep_action,
-    SUPPORTED_REGIONS,
-    get_oci_compartment_id,
-    list_instances_oci,
 )
 
 
@@ -113,8 +101,6 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
                 clean_clusters_gke(tags_dict, dry_run=dry_run)
                 clean_orphaned_gke_disks(tags_dict, dry_run=dry_run)
 
-    if cluster_backend in ("aws", ""):
-        clean_emr_clusters(tags_dict, regions=aws_regions, dry_run=dry_run)
     if cluster_backend in ("aws", "k8s-eks", ""):
         clean_instances_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         if config.region_names:
@@ -134,6 +120,8 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
                 clean_instances_gce(tags_dict, dry_run=dry_run)
     if cluster_backend in ("azure", ""):
         azure_regions = config.get("azure_region_name") or []
+        if isinstance(azure_regions, str):
+            azure_regions = [region for azure_region in azure_regions for region in azure_region.split(" ")]
         clean_instances_azure(tags_dict, regions=azure_regions, dry_run=dry_run)
     # Always clean local Docker resources for all backends (except k8s-local which has no resources)
     # Tests on any backend may create local Docker containers for stress tools, monitoring, etc.
@@ -141,12 +129,6 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
         clean_resources_docker(tags_dict, dry_run=dry_run)
     if cluster_backend in ("xcloud",):
         clean_clusters_scylla_cloud(tags_dict, config, dry_run=dry_run)
-    if cluster_backend in ("oci", ""):
-        clean_instances_oci(tags_dict, dry_run=dry_run)
-        clean_orphan_block_volumes_oci(
-            tags_dict=tags_dict,
-            dry_run=dry_run,
-        )
     return True
 
 
@@ -194,144 +176,6 @@ def clean_resources_docker(tags_dict: dict, dry_run: bool = False) -> None:
             delete_image(image)
         except Exception:  # noqa: BLE001
             LOGGER.error("Failed to delete image tag(s) %s on host `%s'", image.tags, image.client.info()["Name"])
-
-
-def _oci_tags_match(resource_tags: dict, tags_dict: dict) -> bool:
-    for tag_k, tag_v in tags_dict.items():
-        if tag_k not in resource_tags:
-            return False
-        if isinstance(tag_v, list):
-            if resource_tags[tag_k] not in tag_v:
-                return False
-        elif resource_tags[tag_k] != tag_v:
-            return False
-    return True
-
-
-def clean_instances_oci(tags_dict: dict, dry_run=False):
-    """Remove all instances with specific tags in OCI."""
-    if not tags_dict:
-        LOGGER.error("tags_dict not provided (can't clean all instances)")
-        return
-
-    all_instances = list_instances_oci(tags_dict=tags_dict, verbose=False)
-    if not all_instances:
-        LOGGER.info("There are no instances to remove in OCI")
-        return
-
-    instances_by_region = defaultdict(list)
-    for instance in all_instances:
-        instances_by_region[instance.region].append(instance)
-    for region, instances in instances_by_region.items():
-        compute_client = OciService().get_compute_client(region=region)
-        for instance in instances:
-            tags = (instance.defined_tags or {}).get(TAG_NAMESPACE, {})
-            node_type = tags.get("NodeType", "")
-            keep_action = oci_keep_action(tags)
-            display_name = instance.display_name
-            instance_id = instance.id
-            test_id = tags.get("TestId", tags_dict.get("TestId"))
-
-            if node_type == "sct-runner":
-                LOGGER.info("Skipping SCT Runner instance '%s'", instance_id)
-                continue
-
-            if keep_action not in ("terminate", ""):
-                LOGGER.info(
-                    "Post behavior keeps OCI instance '%s' [name=%s] running/stopped. keep_action=%s",
-                    instance_id,
-                    display_name,
-                    keep_action,
-                )
-                if instance.lifecycle_state == "RUNNING" and not dry_run:
-                    try:
-                        compute_client.instance_action(instance_id, "STOP")
-                        LOGGER.info("Stopped OCI instance %s (id: %s)", display_name, instance_id)
-                    except Exception as e:  # noqa: BLE001
-                        LOGGER.error("Failed to stop OCI instance %s (id: %s): %s", display_name, instance_id, e)
-                continue
-
-            LOGGER.info(
-                "Going to terminate OCI instance '%s' [name=%s] in region %s", instance_id, display_name, region
-            )
-            if dry_run:
-                continue
-            try:
-                compute_client.terminate_instance(instance_id)
-                argus_client = init_argus_client(test_id)
-                terminate_resource_in_argus(client=argus_client, resource_name=display_name)
-                LOGGER.info("Terminated OCI instance %s (id: %s)", display_name, instance_id)
-            except Exception as e:  # noqa: BLE001
-                LOGGER.error("Failed to terminate OCI instance %s (id: %s): %s", display_name, instance_id, e)
-
-
-def clean_orphan_block_volumes_oci(tags_dict: dict, dry_run: bool = False, regions: list[str] | None = None) -> None:
-    """Clean orphan OCI block volumes created for non-dense shapes.
-
-    Targets only AVAILABLE volumes with names ending in "-vol-<N>".
-    Cleanup respects `keep_action` tag (`terminate`/empty => delete, anything else => keep).
-    """
-    if not tags_dict:
-        LOGGER.error("tags_dict not provided (can't clean all OCI volumes)")
-        return
-
-    compartment_id = get_oci_compartment_id()
-    regions = regions or SUPPORTED_REGIONS
-    for region in regions:
-        block_storage_client = OciService().get_block_storage_client(region=region)
-        try:
-            volumes = list(
-                oci.pagination.list_call_get_all_results_generator(
-                    block_storage_client.list_volumes,
-                    yield_mode="record",
-                    compartment_id=compartment_id,
-                    lifecycle_state="AVAILABLE",
-                )
-            )
-        except Exception as exc:  # noqa: BLE001
-            LOGGER.warning("Failed to list OCI block volumes in region %s: %s", region, exc)
-            continue
-
-        if not volumes:
-            continue
-
-        for volume in volumes:
-            volume_name = volume.display_name or ""
-            if "-vol-" not in volume_name:
-                continue
-
-            volume_tags = (volume.defined_tags or {}).get(TAG_NAMESPACE, {})
-            volume_matches_tags = _oci_tags_match(volume_tags, tags_dict) if volume_tags else False
-
-            if not volume_matches_tags:
-                continue
-
-            keep_action = oci_keep_action(volume_tags)
-            if keep_action not in ("terminate", ""):
-                LOGGER.info(
-                    "Post behavior keeps OCI block volume '%s' in region %s. keep_action=%s",
-                    volume.id,
-                    region,
-                    keep_action,
-                )
-                continue
-
-            LOGGER.info(
-                "Going to delete OCI block volume '%s' [name=%s] in region %s",
-                volume.id,
-                volume_name,
-                region,
-            )
-
-            if dry_run:
-                continue
-            delete_oci_volume_with_retry(
-                block_storage_client=block_storage_client,
-                volume_id=volume.id,
-                volume_name=volume_name,
-                region=region,
-                logger=LOGGER,
-            )
 
 
 def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
@@ -550,7 +394,6 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
     Remove all instances with specific tags GCE
 
     :param tags_dict: key-value pairs used for filtering
-    :param dry_run: if True, only log what would be deleted without actually deleting
     :return: None
     """
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
@@ -691,42 +534,6 @@ def clean_clusters_eks(tags_dict: dict, regions: list = None, dry_run: bool = Fa
                 LOGGER.error(exc)
 
     ParallelObject(eks_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
-
-
-def clean_emr_clusters(tags_dict: dict, regions: list = None, dry_run: bool = False) -> None:
-    """Discover and terminate EMR clusters matching the given tags.
-
-    Args:
-        tags_dict: Dictionary of tags to filter resources (must include TestId or RunByUser).
-        regions: List of AWS regions to search. If None, searches all regions.
-        dry_run: If True, only log what would be deleted without terminating.
-    """
-    assert tags_dict, "tags_dict not provided (can't clean all EMR clusters)"
-    regions = regions or all_aws_regions()
-
-    for region in regions:
-        matching_clusters = list_emr_clusters(tags_dict=tags_dict, region_name=region)
-        if not matching_clusters:
-            LOGGER.info("No EMR clusters to clean up in %s", region)
-            continue
-
-        emr_client = boto3.client("emr", region_name=region)
-        for cluster_info in matching_clusters:
-            cluster_id = cluster_info["ClusterId"]
-            cluster_name = cluster_info.get("Name", "N/A")
-            LOGGER.info(
-                "Going to terminate EMR cluster '%s' (ID: %s) in %s [state: %s]",
-                cluster_name,
-                cluster_id,
-                region,
-                cluster_info.get("State", "unknown"),
-            )
-            if not dry_run:
-                try:
-                    emr_client.terminate_job_flows(JobFlowIds=[cluster_id])
-                    LOGGER.info("EMR cluster %s termination initiated", cluster_id)
-                except Exception as exc:  # noqa: BLE001
-                    LOGGER.error("Failed to terminate EMR cluster %s: %s", cluster_id, exc)
 
 
 def clean_resources_according_post_behavior(params, config, logdir, dry_run=False):

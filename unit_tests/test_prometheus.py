@@ -11,9 +11,9 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import os
 import json
-
-import pytest
+import unittest
 
 from sdcm.prometheus import PrometheusAlertManagerListener
 
@@ -49,18 +49,17 @@ class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListene
         pass
 
 
-class TestPrometheusAlertManager:
-    @pytest.fixture(autouse=True)
-    def inject_test_data_dir(self, test_data_dir):
-        self.test_data_dir = test_data_dir
-
+class PrometheusAlertManagerTest(unittest.TestCase):
     def test_alert_manager_listener_artificial_run(self):
-        with (self.test_data_dir / "test_prometheus" / "test_alert_manager_listener_artificial_run.yaml").open(
-            encoding="utf-8"
+        with open(
+            os.path.join(
+                os.path.dirname(__file__), "test_data/test_prometheus/test_alert_manager_listener_artificial_run.yaml"
+            ),
+            encoding="utf-8",
         ) as file:
             test_data = json.load(file)
         listener = PrometheusAlertManagerListenerArtificialTest(artificial_alerts=test_data["post"])
         listener.start()
         listener.join()
         result = listener.get_result()
-        assert result == test_data["expected"]
+        self.assertEqual(result, test_data["expected"])

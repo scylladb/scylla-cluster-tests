@@ -26,7 +26,9 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
         return TestConfig()
 
     def provision(self):
-        use_scylla_cloud = self._params.get("cluster_backend") == "xcloud" or self._params.get("xcloud_provider")
+        use_scylla_cloud = self._params.get("cluster_backend") == "xcloud" or self._params.get(
+            "xcloud_provisioning_mode"
+        )
 
         if self.placement_group:
             self.placement_group.provision()

@@ -110,29 +110,10 @@ export SCT_SCYLLA_VERSION=5.2.1
 hydra run-test longevity_test.LongevityTest.test_custom_time --backend docker --config test-cases/PR-provision-test-docker.yaml
 ```
 
-#### Run test with ScyllaDB Cloud (xcloud) backend:
-```bash
-export SCT_SCYLLA_VERSION=2025.3.0
-export SCT_XCLOUD_PROVIDER=aws
-export SCT_XCLOUD_ENV=lab
-
-hydra run-test longevity_test.LongevityTest.test_custom_time --backend xcloud --config test-cases/PR-provision-test.yaml
-```
-For more details on xcloud backend, see [xcloud backend documentation](./docs/xcloud-backend.md)
-
 You can specify a specific scylla version by:
 ```bash
-# Simple version (release)
 export SCT_SCYLLA_VERSION=2025.1
-
-# Branch version (nightly)
-export SCT_SCYLLA_VERSION=master:latest
-
-# Full version tag (specific build with commit hash)
-export SCT_SCYLLA_VERSION=2024.2.5-0.20250221.cb9e2a54ae6d-1
 ```
-
-For detailed information on full version tag support, see `docs/full-version-tag-usage.md`
 
 For debugging a standard nemesis setup you can simply use a default nemesis setup.
 Use the yaml files as in https://github.com/scylladb/scylla-cluster-tests/blob/master/jenkins-pipelines/oss/nemesis/longevity-5gb-1h-AbortRepairMonkey-docker.jenkinsfile:
@@ -142,19 +123,17 @@ hydra run-test longevity_test.LongevityTest.test_custom_time --backend docker \
 -c configurations/nemesis/AbortRepairMonkey.yaml \
 -c configurations/nemesis/additional_configs/docker_backend.yaml
 ```
-For debugging a specific nemesis setup you can edit the nemesis configuration to run.
-Change the relevant parameters in test-cases/PR-provision-test-docker.yaml like below:
-```yaml
+For debugging a specific nemesis setup you can edit a nemesis class name to run.
+Change the relevant parameters and nemesis class name to the one you want to debug in test-cases/PR-provision-test-docker.yaml like below:
+```
 test_duration: 60
 stress_cmd: "cassandra-stress write cl=QUORUM duration=5m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) ' -mode cql3 native -rate threads=10 -pop seq=1..100000 -log interval=5"
 n_db_nodes: 4
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'DecommissionMonkey'  # Filter to run only DecommissionMonkey
+nemesis_selector: 'DecommissionMonkey'
 nemesis_interval: 5
 ```
-The `nemesis_class_name` specifies the runner (e.g. `SisyphusMonkey`), while `nemesis_selector` filters which nemesis classes to include using boolean flag expressions or class names.
-For more details on nemesis architecture, flags, and configuration, see the [Nemesis Developer Guide](./docs/nemesis.md).
-For docker backend supported nemesis, check [docker backend specifics](./docs/docker-backend-overview.md).
+For more details on docker backend supported nemesis, please check [docker backend specifics](./docs/docker-backend-overview.md)
 ```bash
 #### You can also enter the containerized SCT environment using:
 ```bash
@@ -198,7 +177,6 @@ SCT_CLUSTER_BACKEND= hydra clean-resources --test-id `cat ~/sct-results/latest/t
 * `azure` -
 * `docker` - should be used for local development
 * `baremetal` - can be used to run with already setup cluster
-* `xcloud` - ScyllaDB Cloud managed clusters
 
 * `k8s-eks` -
 * `k8s-gke` -
@@ -218,18 +196,8 @@ All the test run configurations are stored in `test-cases` directory.
 Important: Some tests use custom hardcoded operations due to their nature,
 so those tests won't honor what is set in `test-cases/your_config.yaml`.
 
-### Configuration Documentation
+the available configuration options are listed in [configuration_options](./docs/configuration_options.md)
 
-- **[SCT Configuration Guide](./docs/sct-configuration.md)** - Comprehensive guide on how the configuration system works and how to add new options
-- **[Configuration Options Reference](./docs/configuration_options.md)** - Auto-generated list of all available configuration options
-
-
-## Development Plans
-
-![Progress Roadmap](docs/plans/assets/progress-roadmap.svg)
-
-Active implementation plans for SCT are tracked in [docs/plans/MASTER.md](docs/plans/MASTER.md).
-For guidelines on creating new plans, see [docs/plans/INSTRUCTIONS.md](docs/plans/INSTRUCTIONS.md).
 
 ## Types of Tests
 ### [Artifact tests](./docs/artifacts_test.md)
@@ -240,4 +208,3 @@ For guidelines on creating new plans, see [docs/plans/INSTRUCTIONS.md](docs/plan
 ### Manager Tests (TODO: write explanation for them)
 ### [K8S Functional Tests](./docs/k8s-functional-test.md)
 ### [Microbenchmarking Tests](./docs/microbenchmarking.md)
-### [Performance Tests](./docs/performance-tests.md)

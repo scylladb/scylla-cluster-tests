@@ -13,7 +13,7 @@
 
 from __future__ import absolute_import
 
-import pytest
+import unittest
 
 from sdcm.utils.distro import Distro, DistroError
 
@@ -261,103 +261,102 @@ VERSION_ID 18.04
 }
 
 
-class TestDistro:
+class TestDistro(unittest.TestCase):
     def test_unknown(self):
-        assert Distro.UNKNOWN.is_unknown
+        self.assertTrue(Distro.UNKNOWN.is_unknown)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Unknown"])
-        assert distro.is_unknown
+        self.assertTrue(distro.is_unknown)
 
     def test_debian11(self):
-        assert Distro.DEBIAN11.is_debian11
+        self.assertTrue(Distro.DEBIAN11.is_debian11)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 11"])
-        assert distro.is_debian11
-        assert distro.is_debian
+        self.assertTrue(distro.is_debian11)
+        self.assertTrue(distro.is_debian)
 
     def test_debian12(self):
-        assert Distro.DEBIAN12.is_debian12
+        self.assertTrue(Distro.DEBIAN12.is_debian12)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 12"])
-        assert distro.is_debian12
-        assert distro.is_debian
+        self.assertTrue(distro.is_debian12)
+        self.assertTrue(distro.is_debian)
 
     def test_centos7(self):
-        assert Distro.CENTOS7.is_centos7
+        self.assertTrue(Distro.CENTOS7.is_centos7)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["CentOS 7"])
-        assert distro.is_centos7
-        assert distro.is_rhel_like
+        self.assertTrue(distro.is_centos7)
+        self.assertTrue(distro.is_rhel_like)
 
     def test_centos8(self):
-        assert Distro.CENTOS8.is_centos8
+        self.assertTrue(Distro.CENTOS8.is_centos8)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["CentOS 8"])
-        assert distro.is_centos8
-        assert distro.is_rhel_like
+        self.assertTrue(distro.is_centos8)
+        self.assertTrue(distro.is_rhel_like)
 
     def test_rhel7(self):
-        assert Distro.RHEL7.is_rhel7
+        self.assertTrue(Distro.RHEL7.is_rhel7)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["RHEL 7"])
-        assert distro.is_rhel7
-        assert distro.is_rhel_like
+        self.assertTrue(distro.is_rhel7)
+        self.assertTrue(distro.is_rhel_like)
 
     def test_rhel8(self):
-        assert Distro.RHEL8.is_rhel8
+        self.assertTrue(Distro.RHEL8.is_rhel8)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["RHEL 8"])
-        assert distro.is_rhel8
-        assert distro.is_rhel_like
+        self.assertTrue(distro.is_rhel8)
+        self.assertTrue(distro.is_rhel_like)
 
     def test_oel7(self):
-        assert Distro.OEL7.is_oel7
+        self.assertTrue(Distro.OEL7.is_oel7)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["OEL 7.3"])
-        assert distro.is_oel7
-        assert distro.is_rhel_like
+        self.assertTrue(distro.is_oel7)
+        self.assertTrue(distro.is_rhel_like)
 
     def test_oel8(self):
-        assert Distro.OEL8.is_oel8
+        self.assertTrue(Distro.OEL8.is_oel8)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["OEL 8.1"])
-        assert distro.is_oel8
-        assert distro.is_rhel_like
+        self.assertTrue(distro.is_oel8)
+        self.assertTrue(distro.is_rhel_like)
 
     def test_sles15(self):
-        assert Distro.SLES15.is_sles15
+        self.assertTrue(Distro.SLES15.is_sles15)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["SLES 15"])
-        assert distro.is_sles15
-        assert distro.is_sles
+        self.assertTrue(distro.is_sles15)
+        self.assertTrue(distro.is_sles)
 
     def test_ubuntu20(self):
-        assert Distro.UBUNTU20.is_ubuntu20
+        self.assertTrue(Distro.UBUNTU20.is_ubuntu20)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 20.04"])
-        assert distro.is_ubuntu20
-        assert distro.is_ubuntu
+        self.assertTrue(distro.is_ubuntu20)
+        self.assertTrue(distro.is_ubuntu)
 
     def test_ubuntu22(self):
-        assert Distro.UBUNTU22.is_ubuntu22
+        self.assertTrue(Distro.UBUNTU22.is_ubuntu22)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 22.04"])
-        assert distro.is_ubuntu22
-        assert distro.is_ubuntu
+        self.assertTrue(distro.is_ubuntu22)
+        self.assertTrue(distro.is_ubuntu)
 
     def test_amazon2023(self):
-        assert Distro.AMAZON2023.is_amazon2023
+        self.assertTrue(Distro.AMAZON2023.is_amazon2023)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Amazon Linux 2023"])
-        assert distro.is_amazon2023
-        assert distro.is_rhel_like
+        self.assertTrue(distro.is_amazon2023)
+        self.assertTrue(distro.is_rhel_like)
 
     def test_rocky8(self):
-        assert Distro.ROCKY8.is_rocky8
+        self.assertTrue(Distro.ROCKY8.is_rocky8)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Rocky Linux 8"])
-        assert distro.is_rocky8
-        assert distro.is_rhel_like
+        self.assertTrue(distro.is_rocky8)
+        self.assertTrue(distro.is_rhel_like)
 
     def test_rocky9(self):
-        assert Distro.ROCKY9.is_rocky9
+        self.assertTrue(Distro.ROCKY9.is_rocky9)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Rocky Linux 9"])
-        assert distro.is_rocky9
-        assert distro.is_rhel_like
+        self.assertTrue(distro.is_rocky9)
+        self.assertTrue(distro.is_rhel_like)
 
     def test_parsing_error(self):
-        with pytest.raises(DistroError):
-            Distro.from_os_release(DISTROS_OS_RELEASE["Garbage"])
+        self.assertRaises(DistroError, Distro.from_os_release, DISTROS_OS_RELEASE["Garbage"])
 
     def test_debian_like(self):
-        assert Distro.DEBIAN11.is_debian11
+        self.assertTrue(Distro.DEBIAN11.is_debian11)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 11"])
         invalid_distro = Distro.from_os_release(DISTROS_OS_RELEASE["Amazon Linux 2"])
-        assert distro.is_debian_like
-        assert not invalid_distro.is_debian_like
+        self.assertTrue(distro.is_debian_like)
+        self.assertFalse(invalid_distro.is_debian_like)

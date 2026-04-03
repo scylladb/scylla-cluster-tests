@@ -51,6 +51,7 @@ from sdcm.utils.common import (
     list_instances_aws,
     list_instances_gce,
     remove_files,
+    get_builder_by_test_id,
     get_testrun_dir,
     search_test_id_in_latest,
     filter_aws_instances_by_type,
@@ -849,7 +850,7 @@ class LogCollector:
     def archive_to_tarfile(self, src_path: str, add_test_id_to_archive: bool = False) -> str:
         src_name = os.path.basename(src_path)
         if add_test_id_to_archive:
-            # Add test_id to the archive name when archive is created per log file, like: sct.log
+            # Add test_id to the archive name when archive is created per log file, like: sct.log, email_data.json
             extension = f".{src_name.split('.')[-1]}"
             if extension in [".log", ".json"]:
                 src_name = src_name.replace(extension, f"-{self.test_id.split('-')[0]}{extension}")
@@ -1082,6 +1083,7 @@ class BaseSCTLogCollector(LogCollector):
 
     log_entities = [
         FileLog(name="profile.stats", search_locally=True),
+        FileLog(name="email_data.json", search_locally=True),
         FileLog(name="left_processes.log", search_locally=True),
         FileLog(name="raw_events.log", search_locally=True),
         FileLog(name="events.log", search_locally=True),
@@ -1109,11 +1111,27 @@ class BaseSCTLogCollector(LogCollector):
         for ent in self.log_entities:
             ent.collect(None, self.local_dir, None, local_search_path=local_search_path)
         if not os.listdir(self.local_dir):
-            error_msg = (
-                f"No local files found for {self.cluster_log_type}. SCT runner logs should be available locally."
-            )
-            LOGGER.error(error_msg)
-            raise FileNotFoundError(error_msg)
+            LOGGER.warning("No any local files")
+            LOGGER.info("Searching on builders")
+            builders = get_builder_by_test_id(self.test_id)
+
+            for obj in builders:
+                builder = CollectingNode(
+                    name=obj["builder"]["name"],
+                    ssh_login_info={
+                        "hostname": obj["builder"]["public_ip"],
+                        "user": obj["builder"]["user"],
+                        "key_file": obj["builder"]["key_file"],
+                    },
+                    instance=None,
+                    global_ip=obj["builder"]["public_ip"],
+                )
+                for ent in self.log_entities:
+                    ent.collect_from_builder(builder, self.local_dir, obj["path"])
+
+            if not os.listdir(self.local_dir):
+                LOGGER.warning("Nothing found")
+                return []
 
         return self.create_archive_and_upload()
 
@@ -1372,6 +1390,20 @@ class JepsenLogCollector(LogCollector):
         return s3_link
 
 
+class ParallelTimelinesReportCollector(BaseSCTLogCollector):
+    """
+    Collect HTML file with parallel timelines report and upload it to S3
+    """
+
+    log_entities = [FileLog(name="parallel-timelines-report.html", search_locally=True)]
+    cluster_log_type = "parallel-timelines-report"
+    cluster_dir_prefix = "parallel-timelines-report"
+
+    @property
+    def is_collect_to_a_single_archive(self) -> bool:
+        return True
+
+
 class SSTablesCollector(BaseSCTLogCollector):
     """
     Collect corrupted sstables from db node.
@@ -1491,6 +1523,7 @@ class Collector:
         self.loader_set = []
         self.kubernetes_set = []
         self.sct_set = []
+        self.pt_report_set = []
         self.cluster_log_collectors = {}
         self.localhost = None
         if self.backend.startswith("k8s"):
@@ -1502,7 +1535,6 @@ class Collector:
         self.cluster_log_collectors |= {
             ScyllaLogCollector: self.db_cluster,
             SchemaLogCollector: self.sct_set,
-            FailureStatisticsCollector: self.sct_set,
             BaseSCTLogCollector: self.sct_set,
             PythonSCTLogCollector: self.sct_set,
             LoaderLogCollector: self.loader_set,
@@ -1511,6 +1543,7 @@ class Collector:
             VectorStoreLogCollector: self.vector_store_set,
             SSTablesCollector: self.db_cluster,
             JepsenLogCollector: self.loader_set,
+            ParallelTimelinesReportCollector: self.pt_report_set,
         }
         if self.params.get("server_encrypt") or self.params.get("client_encrypt"):
             self.cluster_log_collectors[SSLConfCollector] = self.sct_set
@@ -1581,34 +1614,81 @@ class Collector:
     def get_aws_instances_by_testid(self):
         instances = list_instances_aws({"TestId": self.test_id}, running=True)
         filtered_instances = filter_aws_instances_by_type(instances)
-
-        node_types = {
-            "db_nodes": ("db_cluster", "ami_db_scylla_user", "scylla-db"),
-            "monitor_nodes": ("monitor_set", "ami_monitor_user", "monitor"),
-            "loader_nodes": ("loader_set", "ami_loader_user", "loader"),
-            "kubernetes_nodes": ("kubernetes_set", "ami_loader_user", "loader"),
-            "vs_nodes": ("vector_store_set", "ami_vector_store_user", "vector-store"),
-        }
-        for node_type, (attr, user_key, node_tag) in node_types.items():
-            for instance in filtered_instances[node_type]:
-                name = next((tag["Value"] for tag in instance["Tags"] if tag["Key"] == "Name"), None)
-                ssh_login_info = {
-                    "hostname": self.get_aws_ip_address(instance),
-                    "user": self.params.get(user_key),
-                    "key_file": self.params.get("user_credentials_path"),
-                }
-                getattr(self, attr).append(
-                    CollectingNode(
-                        name=name,
-                        ssh_login_info=ssh_login_info,
-                        instance=instance,
-                        global_ip=self.get_aws_ip_address(instance),
-                        tags={**self.tags, "NodeType": node_tag},
-                    )
+        for instance in filtered_instances["db_nodes"]:
+            name = [tag["Value"] for tag in instance["Tags"] if tag["Key"] == "Name"]
+            self.db_cluster.append(
+                CollectingNode(
+                    name=name[0],
+                    ssh_login_info={
+                        "hostname": self.get_aws_ip_address(instance),
+                        "user": self.params.get("ami_db_scylla_user"),
+                        "key_file": self.params.get("user_credentials_path"),
+                    },
+                    instance=instance,
+                    global_ip=self.get_aws_ip_address(instance),
+                    tags={
+                        **self.tags,
+                        "NodeType": "scylla-db",
+                    },
                 )
-
+            )
+        for instance in filtered_instances["monitor_nodes"]:
+            name = [tag["Value"] for tag in instance["Tags"] if tag["Key"] == "Name"]
+            self.monitor_set.append(
+                CollectingNode(
+                    name=name[0],
+                    ssh_login_info={
+                        "hostname": self.get_aws_ip_address(instance),
+                        "user": self.params.get("ami_monitor_user"),
+                        "key_file": self.params.get("user_credentials_path"),
+                    },
+                    instance=instance,
+                    global_ip=self.get_aws_ip_address(instance),
+                    tags={
+                        **self.tags,
+                        "NodeType": "monitor",
+                    },
+                )
+            )
         if self.params.get("use_cloud_manager"):
             self.find_and_append_cloud_manager_instance_to_collecting_nodes()
+
+        for instance in filtered_instances["loader_nodes"]:
+            name = [tag["Value"] for tag in instance["Tags"] if tag["Key"] == "Name"]
+            self.loader_set.append(
+                CollectingNode(
+                    name=name[0],
+                    ssh_login_info={
+                        "hostname": self.get_aws_ip_address(instance),
+                        "user": self.params.get("ami_loader_user"),
+                        "key_file": self.params.get("user_credentials_path"),
+                    },
+                    instance=instance,
+                    global_ip=self.get_aws_ip_address(instance),
+                    tags={
+                        **self.tags,
+                        "NodeType": "loader",
+                    },
+                )
+            )
+        for instance in filtered_instances["kubernetes_nodes"]:
+            name = [tag["Value"] for tag in instance["Tags"] if tag["Key"] == "Name"]
+            self.kubernetes_set.append(
+                CollectingNode(
+                    name=name[0],
+                    ssh_login_info={
+                        "hostname": self.get_aws_ip_address(instance),
+                        "user": self.params.get("ami_loader_user"),
+                        "key_file": self.params.get("user_credentials_path"),
+                    },
+                    instance=instance,
+                    global_ip=self.get_aws_ip_address(instance),
+                    tags={
+                        **self.tags,
+                        "NodeType": "loader",
+                    },
+                )
+            )
 
     def get_gce_ip_address(self, instance):
         return (
@@ -1869,20 +1949,14 @@ class Collector:
 
         Run collect log operations as standalon process or run
         as single stage in pipeline for defined cluster sets
-
-        Returns:
-            tuple: (results dict, error_msg str or None)
-                - results: dict of collected logs by cluster type
-                - error_msg: error message if critical collectors failed, None otherwise
         """
         results = {}
-        failed_critical_collectors = []
         self.localhost = LocalHost(user_prefix=self.params.get("user_prefix"), test_id=self.test_id)
 
         self.define_test_id()
         if not self.test_id:
             LOGGER.warning("No test_id provided or found")
-            return results, None
+            return results
         self.get_running_cluster_sets(self.backend)
 
         local_dir_with_logs = get_testrun_dir(self.sct_result_dir, self.test_id)
@@ -1901,29 +1975,15 @@ class Collector:
                     LOGGER.info("collected data for %s\n%s\n", log_collector.cluster_log_type, result)
                 else:
                     LOGGER.warning("There are no logs collected for %s", log_collector.cluster_log_type)
-            except Exception as exc:  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 LOGGER.warning(
                     "%s is not able to collect logs. Moving to the next log collector",
                     log_collector.__class__.__name__,
                     exc_info=True,
                 )
-                # Track critical collector failures (SCT runner logs)
-                # Check if collector is BaseSCTLogCollector or any of its subclasses
-                if issubclass(cluster_log_collector, BaseSCTLogCollector):
-                    failed_critical_collectors.append((log_collector.cluster_log_type, str(exc)))
 
         self.localhost.destroy()
-
-        # Prepare error message if critical SCT logs are missing, but don't raise yet
-        # Allow caller to handle the error after uploading logs to Argus
-        error_msg = None
-        if failed_critical_collectors:
-            error_msg = "Failed to collect critical SCT runner logs: " + ", ".join(
-                f"{collector_type} ({error})" for collector_type, error in failed_critical_collectors
-            )
-            LOGGER.error(error_msg)
-
-        return results, error_msg
+        return results
 
     def create_base_storage_dir(self, test_dir=None):
         date_time_formatted = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
@@ -1944,28 +2004,6 @@ class SchemaLogCollector(BaseSCTLogCollector):
     ]
     cluster_log_type = "schema-logs"
     cluster_dir_prefix = "schema-logs"
-
-
-class FailureStatisticsCollector(LogCollector):
-    """Failure diagnostic statistics log collector
-
-    Collects diagnostic files generated on test failure:
-    - nodetool status, gossipinfo, compactionstats outputs
-    - scylla-doctor vitals and logs (if enabled)
-
-    Extends:
-        LogCollector
-    """
-
-    log_entities = [
-        FileLog(name="nodetool_status_failure.log", search_locally=True),
-        FileLog(name="nodetool_gossipinfo_failure_*", search_locally=True),
-        FileLog(name="nodetool_compactionstats_failure_*", search_locally=True),
-        FileLog(name="scylla_doctor_*_vitals.json", search_locally=True),
-        FileLog(name="scylla_doctor_*_logs.tar.gz", search_locally=True),
-    ]
-    cluster_log_type = "failure-statistics"
-    cluster_dir_prefix = "failure-statistics"
 
 
 def check_archive(remoter, path: str) -> bool:

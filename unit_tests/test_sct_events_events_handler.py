@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2022 ScyllaDB
 import time
+import unittest
 import unittest.mock
 
 
@@ -22,13 +23,13 @@ from sdcm.test_config import TestConfig
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
-class TestEventsHandler(EventsUtilsMixin):
+class TestEventsHandler(unittest.TestCase, EventsUtilsMixin):
     @classmethod
-    def setup_class(cls) -> None:
+    def setUpClass(cls) -> None:
         cls.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
 
     @classmethod
-    def teardown_class(cls) -> None:
+    def tearDownClass(cls) -> None:
         cls.teardown_events_processes()
 
     def test_events_handler(self):

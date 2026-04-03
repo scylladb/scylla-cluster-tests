@@ -16,14 +16,6 @@ export UV_PROJECT_ENVIRONMENT=.venv
 uv sync
 ```
 
-> **⚠️ PROTECTED FILE — `.python-version`**
-> Never commit changes to `.python-version`. This file is managed by the project maintainers and
-> controls the Python version used across CI and all developer environments. If you need a different
-> Python version locally to work around a dependency build failure, make the change temporarily in
-> your local workspace **without staging or committing it**. Instead, add a PR comment describing
-> the compatibility issue (e.g. "fastavro 1.11.1 fails to build on Python 3.14; tests were run
-> locally with Python 3.12") so maintainers can decide whether to update the pinned version.
-
 ### Using Hydra (Docker/Podman container environment)
 ```bash
 # Install hydra
@@ -103,12 +95,8 @@ The `sdcm/` directory is the heart of the SCT framework. Here's a detailed break
 #### Core Files
 - `cluster.py` - Base classes for cluster management, node operations, and connectivity
 - `tester.py` - Base test class used by all tests, handles test setup/teardown and reporting
-- `nemesis/` - Chaos engineering module (package) — see [Nemesis Developer Guide](docs/nemesis.md) for details
-  - `__init__.py` - `NemesisBaseClass`, `NemesisRunner`, all `disrupt_*` methods, and auto-discovery mechanism
-  - `registry.py` - `NemesisRegistry` for discovering and filtering nemesis by boolean flag expressions
-  - `generator.py` - `NemesisJobGenerator` for generating Jenkins pipelines and test configs
-  - `monkey/` - Individual nemesis classes (`NemesisBaseClass` subclasses) and composite runners (`NemesisRunner` subclasses)
-  - `utils/` - Shared utilities: `NemesisNodeAllocator`, index helpers, node operations (iptables, SIGSTOP)
+- `nemesis.py` - Core chaos engineering framework with disruptors for testing resilience
+- `nemesis_registry.py` - Registry of all chaos operations available for testing
 - `sct_config.py` - Configuration management and parameter handling
 - `log.py` - Logging setup and utilities
 - `db_stats.py` - Database metrics collection using Prometheus
@@ -152,6 +140,7 @@ The `sdcm/` directory is the heart of the SCT framework. Here's a detailed break
 - `reporting/` - Test result reporting
   - `elastic_reporter.py` - Elasticsearch-based reporting
   - `tooling_reporter.py` - Tools and libraries reporting
+- `parallel_timeline_report/` - Timeline visualization of events
 
 #### Scylla Manager Integration
 - `mgmt/` - Scylla Manager integration
@@ -215,15 +204,7 @@ The `sdcm/` directory is the heart of the SCT framework. Here's a detailed break
 
 ### Nemesis Operations
 
-Nemesis are chaos operations that test database resilience. For a comprehensive guide, see [docs/nemesis.md](docs/nemesis.md).
-
-**Architecture:**
-- `NemesisBaseClass` — Abstract base for individual disruptions (a.k.a. "Monkeys"). Each subclass sets boolean flags and implements `disrupt()`.
-- `NemesisRunner` — Orchestrator that contains all `disrupt_*` methods (the actual disruption logic), handles node selection, metrics, and error reporting.
-- `NemesisRegistry` — Discovery mechanism that filters nemesis using boolean flag expressions (e.g. `"not disruptive"`, `"topology_changes and not limited"`).
-- `NemesisNodeAllocator` — Thread-safe singleton preventing conflicting nemesis on the same node.
-
-**Common nemesis categories:**
+Nemesis are chaos operations that test database resilience. Common types:
 - Node operations (stop/start, reboot, terminate, decommission)
 - Network disruptions (block, delay, partition)
 - Disk operations (fill disk, corrupt data)
@@ -255,127 +236,10 @@ Nemesis are chaos operations that test database resilience. For a comprehensive 
 2. Run unit tests locally: `uv run sct.py unit-tests`
 3. Test with docker backend first: `--backend docker`
 4. Use cluster reuse for faster iteration
-5. Run pre-commit before commit, and after commit: `uv run sct.py pre-commit`
+5. Run pre-commit before pushing: `uv run sct.py pre-commit`
 
 ### Debugging SCT Tests
 - Check logs in `~/sct-results/latest/`
-
-### Code Style Guidelines
-
-**IMPORTANT: Avoid inline imports at all cost**
-
-- All imports at the top of the file, NOT inside functions/methods
-- **Exception:** Only for hard-to-overcome cyclic dependencies (add comment above the import explaining why)
-
-**Import grouping standard:**
-1. Built-in modules (e.g., `import os`, `from typing import List`)
-2. Third-party modules (e.g., `import pytest`, `from boto3 import client`)
-3. Internal modules (e.g., `from sdcm.cluster import BaseNode`)
-
-Separate each group with a blank line.
-Within each group, sort imports alphabetically.
-
-### Unit Testing Guidelines
-
-**IMPORTANT: Use pytest style, NOT unittest.TestCase**
-
-All unit tests in `unit_tests/` should follow pytest conventions:
-
-**❌ DON'T:** `class TestMyFeature(unittest.TestCase)` with `setUp()` and `self.assertEqual()`
-
-**✅ DO:** Use pytest functions, fixtures, and simple `assert` statements
-
-**Key Principles:**
-
-1. **Use fixtures for setup/teardown** - `@pytest.fixture` to avoid code repetition, access via function parameters
-2. **Use parametrize for multiple test cases** - `@pytest.mark.parametrize("input,expected", [...])` for efficient variation testing
-3. **Scope fixtures appropriately** - Use `scope="module"` for expensive setup, `scope="function"` (default) for clean state
-4. **Use conftest.py for shared fixtures** - Place common fixtures in `unit_tests/conftest.py`, auto-discovered by pytest
-5. **Prefer simple assertions** - Use `assert x == y` not `self.assertEqual(x, y)`
-
-## Documentation Standards
-
-When writing or updating documentation in this repository, follow these standards to ensure consistency and quality:
-
-### Docstrings
-
-- **Format**: Follow Google Python docstring format
-- **Include**: Description, Args, Returns, Raises sections where applicable
-- **Example**:
-  ```python
-  def check_cluster_health(self, nodes=None):
-      """Check the health of cluster nodes.
-
-      Args:
-          nodes: List of nodes to check. If None, checks all nodes.
-
-      Returns:
-          bool: True if all nodes are healthy, False otherwise.
-
-      Raises:
-          ClusterHealthError: If critical health issues are detected.
-      """
-  ```
-
-### Configuration Parameters
-
-For detailed information about the SCT configuration system, see [docs/sct-configuration.md](docs/sct-configuration.md).
-
-When documenting configuration parameters:
-- **Type**: Specify the parameter type (str, int, bool, list, dict)
-- **Default value**: Always include the default value
-- **Valid range**: Document acceptable values or ranges
-- **Usage example**: Provide a practical example
-
-**Example**:
-```python
-cluster_health_check_parallel_workers: int = SctField(
-    description="""
-        Number of parallel workers for health checks.
-
-        Default: 5
-        Valid range: 1-10 (max recommended: 10)
-        Example: cluster_health_check_parallel_workers: 10
-    """,
-)
-```
-
-For adding new configuration options, follow the guide in [docs/sct-configuration.md](docs/sct-configuration.md#adding-new-configuration-options).
-
-### Code Comments
-
-- **Purpose**: Explain "why" not "what" - focus on intent and context
-- **When to use**: For complex logic, non-obvious decisions, or important constraints
-- **Avoid**: Redundant comments that just restate the code
-
-**Good example**:
-```python
-# Skip health check if nemesis was skipped to avoid wasting 2+ hours on large clusters
-if nemesis_skipped:
-    return
-```
-
-**Bad example**:
-```python
-# Set x to 5
-x = 5
-```
-
-### User Documentation
-
-When writing user-facing documentation:
-- **Context**: Provide background and explain why something is useful
-- **Examples**: Include practical, tested examples that users can copy
-- **Common use cases**: Document typical scenarios and recommended configurations
-- **Troubleshooting**: Anticipate common issues and provide solutions
-
-### Migration Notes
-
-When documenting changes that affect existing users:
-- **Clearly mark breaking changes**: Use bold or special formatting
-- **Provide upgrade paths**: Explain how to migrate from old to new approach
-- **Include before/after examples**: Show the old way and the new way side by side
-- **Document deprecation timeline**: If applicable, specify when deprecated features will be removed
 
 ## Environment Variables
 
@@ -389,17 +253,6 @@ Critical environment variables:
 - `AWS_PROFILE` - AWS profile for authentication (if using OKTA)
 
 ## Common Issues and Solutions
-
-### Python Version Compatibility
-
-`.python-version` is pinned to a specific version (currently `3.14`) and **must never be modified in a commit**.
-If a dependency fails to build with the pinned version (e.g. `fastavro` wheel not yet available for `3.14`):
-
-1. Temporarily override it in your local workspace only: `echo "3.12" > .python-version` (do **not** stage this file)
-2. Create the venv and run tests: `uv sync && .venv/bin/python -m pytest …`
-3. Restore the original value: `git checkout -- .python-version`
-4. Add a comment to the PR explaining the compatibility issue so a maintainer can update
-   the pinned version if needed.
 
 ### AWS/Cloud Authentication
 - Use OKTA for AWS access (preferred)
@@ -424,32 +277,3 @@ Jenkins pipelines are in `jenkins-pipelines/` organized by:
 - `manager/` - Scylla Manager tests
 
 Pipeline utilities are in `vars/` directory.
-
-## Skills
-
-Modular, task-specific guidance for AI agents lives in the `skills/` directory. Each skill is a self-contained directory with a `SKILL.md` entry point and optional `references/` and `workflows/` subdirectories.
-
-| Skill | Description | Path |
-|-------|-------------|------|
-| designing-skills | Guides the design and structuring of AI agent skills for SCT. Use when creating new skills, reviewing existing skills, or editing SKILL.md files. | `skills/designing-skills/SKILL.md` |
-| fix-backport-conflicts | Fix inline merge conflict markers in backport PRs. Use when a backport PR has unresolved conflict markers or a cherry-pick produced merge conflicts. | `skills/fix-backport-conflicts/SKILL.md` |
-| profiling-sct-code | Profile Python code in SCT to find CPU, memory, and concurrency bottlenecks. Use when a test or operation is unexpectedly slow or memory usage grows unbounded. | `skills/profiling-sct-code/SKILL.md` |
-| writing-plans | Use when asked to generate an implementation plan, draft a plan, or design a phased feature rollout for SCT. | `skills/writing-plans/SKILL.md` |
-| writing-unit-tests | Guides writing and debugging unit tests for SCT using pytest. Use when creating test files in unit_tests/, adding test cases, or mocking external services. | `skills/writing-unit-tests/SKILL.md` |
-| writing-integration-tests | Guides writing integration tests that interact with real external services. Use when creating tests requiring Docker, AWS, GCE, Azure, OCI, or Kubernetes backends. | `skills/writing-integration-tests/SKILL.md` |
-| commit-summary | Generate weekly commit summary reports for the SCT repository | `skills/commit-summary/SKILL.md` |
-| writing-nemesis | Guides writing new nemesis (chaos disruptions). Use when creating NemesisBaseClass subclasses or implementing disruption logic. | `skills/writing-nemesis/SKILL.md` |
-
-When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
-
-## Implementation Plans
-
-I have strict standards for feature planning. You can find the full guidelines in `docs/plans/INSTRUCTIONS.md`.
-
-**Rule:** When I ask you to "generate an implementation plan" or "draft a plan", you MUST read `docs/plans/INSTRUCTIONS.md` and follow the structure defined there. Do not apply this format to regular coding questions.
-
-**Plan types:** The `writing-plans` skill supports two formats:
-- **Full plans** (7-section, `docs/plans/`): For multi-phase work, 1K+ LOC. Requires YAML frontmatter, MASTER.md registration, and progress.json tracking. PRs with a `plans` label use this format.
-- **Mini-plans** (4-section, `docs/plans/mini-plans/`): For single-PR changes under ~1K LOC. No frontmatter, no registration. Disposable after merge.
-
-The skill routes automatically based on the PR `plans` label, user input, or task size estimate.

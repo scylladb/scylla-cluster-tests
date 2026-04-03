@@ -147,7 +147,7 @@ class ScyllaYaml(BaseModel):
     cross_node_timeout: bool = None  # False
     internode_send_buff_size_in_bytes: int = None  # 0
     internode_recv_buff_size_in_bytes: int = None  # 0
-    internode_compression: Literal["none", "all", "dc", "rack"] = None  # "none"
+    internode_compression: Literal["none", "all", "dc"] = None  # "none"
     internode_compression_enable_advanced: bool = None
     rpc_dict_training_when: Literal["always", "never", "when_leader"] = None
     rpc_dict_training_min_time_seconds: int = None
@@ -211,10 +211,6 @@ class ScyllaYaml(BaseModel):
     request_scheduler_options: RequestSchedulerOptions = None  # None
     thrift_framed_transport_size_in_mb: int = None  # 15
     thrift_max_message_length_in_mb: int = None  # 16
-
-    auth_superuser_name: str = None
-    auth_superuser_salted_password: str = None
-
     authenticator: (
         Literal[
             "org.apache.cassandra.auth.PasswordAuthenticator",

@@ -14,6 +14,7 @@
 
 import json
 import logging
+from pathlib import Path
 
 import pytest
 
@@ -23,13 +24,13 @@ from unit_tests.provisioner.fake_azure_service import FakeAzureService
 
 
 @pytest.fixture
-def azure_service(test_data_dir):
-    return FakeAzureService(test_data_dir)
+def azure_service():
+    return FakeAzureService(Path(__file__).parent / "test_data")
 
 
 def test_can_get_scylla_images_based_on_branch(azure_service):
     images = get_scylla_images("master:latest", "eastus", azure_service=azure_service)
-    assert images[0].name == "2025.1208.222124"
+    assert images[0].name == "ScyllaDB-2022.1.rc9-0.20220721.9c95c3a8c-1-build-11"
     assert len(images) == 1
 
 
@@ -51,29 +52,14 @@ def test_unparsable_scylla_versions_are_logged(azure_service, caplog):
     assert "Couldn't parse scylla version from images: ['ScyllaDB-5.-98ad.1.dev_0: ScyllaDB-5.']" in caplog.text
 
 
-def generate_images_json_file(test_data_dir):
+def generate_images_json_file():
     """generates azure_images_list.json based on real Azure images for unit tests purposes."""
     resource_group = "SCYLLA-IMAGES"
     images = AzureService().compute.images.list_by_resource_group(
         resource_group_name=resource_group,
     )
-    with open(test_data_dir / resource_group / "azure_images_list.json", "w", encoding="utf-8") as images_file:
-        serialized_images = [image.serialize() | {"name": image.name} for image in images]
-        images_file.write(json.dumps(serialized_images, indent=2))
-
-
-def generate_gallery_images_json_file(test_data_dir, gallery_name="scylladb_dev", image_name="master"):
-    """generates azure_images_list.json based on real Azure images for unit tests purposes."""
-    resource_group = "SCYLLA-IMAGES"
-    images = AzureService().compute.gallery_image_versions.list_by_gallery_image(
-        resource_group_name=resource_group,
-        gallery_name=gallery_name,
-        gallery_image_name=image_name,
-    )
     with open(
-        test_data_dir / resource_group / f"{gallery_name}_{image_name}_gallery_images_list.json",
-        "w",
-        encoding="utf-8",
+        Path(__file__).parent / "test_data" / resource_group / "azure_images_list.json", "w", encoding="utf-8"
     ) as images_file:
         serialized_images = [image.serialize() | {"name": image.name} for image in images]
         images_file.write(json.dumps(serialized_images, indent=2))

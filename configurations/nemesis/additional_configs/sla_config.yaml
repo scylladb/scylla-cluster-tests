@@ -8,3 +8,7 @@ stress_cmd:
 n_loaders: 3
 instance_type_loader: "c5.2xlarge"
 sla: true
+authenticator: "PasswordAuthenticator"
+authenticator_user: "cassandra"
+authenticator_password: "cassandra"
+authorizer: "CassandraAuthorizer"

@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-import contextlib
+
 import time
 import logging
 import datetime
@@ -118,14 +118,6 @@ class NemesisMetrics:
             self._disrupt_gauge.labels(disrupt).dec()
         except Exception as ex:
             LOGGER.exception("Cannot stop metrics event: %s", ex)
-
-    @contextlib.contextmanager
-    def event(self, disrupt):
-        self.event_start(disrupt)
-        try:
-            yield
-        finally:
-            self.event_stop(disrupt)
 
 
 class PrometheusAlertManagerListener(threading.Thread):
@@ -253,7 +245,7 @@ class PrometheusAlertManagerListener(threading.Thread):
 
         assert duration or (start and end), "should define duration or (start and end)"
         if not start:
-            start = datetime.datetime.now(datetime.timezone.utc)
+            start = datetime.datetime.utcnow()
         if not end:
             end = start + datetime.timedelta(seconds=duration)
         silence_data = {

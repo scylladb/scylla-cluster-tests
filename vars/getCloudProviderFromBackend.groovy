@@ -8,7 +8,6 @@ def call(String backend) {
         'aws-siren': 'aws',
         'gce-siren': 'gce',
         'azure': 'azure',
-        'oci': 'oci',
         'docker': 'aws',
         'baremetal': 'aws',
         'docker-fips': 'aws-fips',

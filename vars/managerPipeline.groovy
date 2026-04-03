@@ -37,7 +37,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name)
 
     pipeline {
         agent {
@@ -72,9 +72,6 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
                    description: 'Azure location',
                    name: 'azure_region_name')
-            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
-                   description: 'Oracle Cloud location',
-                   name: 'oci_region_name')
             string(defaultValue: "",
                description: 'Availability zone',
                name: 'availability_zone')
@@ -82,22 +79,15 @@ def call(Map pipelineParams) {
 
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
             string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
-            string(defaultValue: "${pipelineParams.get('scylla_version', '2025.3')}",
-                   description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
-                   name: 'scylla_version')
+            string(defaultValue: "${pipelineParams.get('scylla_version', '2025.3')}", description: '', name: 'scylla_version')
             // When branching to manager version branch, set scylla_version to the latest release
-            string(defaultValue: '',
-                   description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
-                   name: 'scylla_repo')
+            string(defaultValue: '', description: '', name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('gce_image_db', '')}",
                    description: "gce image of scylla (since scylla_version doesn't work with gce)",
                    name: 'gce_image_db')  // TODO: remove setting once hydra is able to discover scylla images in gce from scylla_version
             string(defaultValue: "${pipelineParams.get('azure_image_db', '')}",
                    description: '',
                    name: 'azure_image_db')
-            string(defaultValue: "${pipelineParams.get('oci_image_db', '')}",
-                   description: '',
-                   name: 'oci_image_db')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
@@ -136,7 +126,7 @@ def call(Map pipelineParams) {
                    name: 'scylla_mgmt_pkg')
 
             string(defaultValue: "${pipelineParams.get('target_manager_version', '')}",
-                   description: 'master_latest|3.9|3.8. Only for upgrade test',
+                   description: 'master_latest|3.8|3.7. Only for upgrade test',
                    name: 'target_manager_version')
 
             string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_server_address', '')}",
@@ -270,7 +260,7 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: 30, unit: 'MINUTES') {
-                                        if (params.backend == 'aws' || params.backend == 'azure' || params.backend == 'gce' || params.backend == 'oci') {
+                                        if (params.backend == 'aws' || params.backend == 'azure') {
                                             provisionResources(params, builder.region)
                                         } else if (params.backend.contains('docker')) {
                                             sh """
@@ -278,7 +268,7 @@ def call(Map pipelineParams) {
                                             """
                                         } else {
                                             sh """
-                                                echo 'Skipping because non-AWS/Azure/GCE/OCI backends are not supported'
+                                                echo 'Skipping because non-AWS/Azure backends are not supported'
                                             """
                                         }
                                         completed_stages['provision_resources'] = true
@@ -314,9 +304,6 @@ def call(Map pipelineParams) {
                                         if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
                                             export SCT_AZURE_REGION_NAME=${params.azure_region_name}
                                         fi
-                                        if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
-                                            export SCT_OCI_REGION_NAME=${params.oci_region_name}
-                                        fi
                                         export SCT_CONFIG_FILES=${test_config}
                                         export SCT_COLLECT_LOGS=false
 
@@ -336,8 +323,6 @@ def call(Map pipelineParams) {
                                             export SCT_GCE_IMAGE_DB="${params.gce_image_db}"  #TODO: remove it once scylla_version supports gce image detection
                                         elif [[ ! -z "${params.azure_image_db}" ]] ; then
                                             export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"  #TODO: remove it once scylla_version supports azure image detection
-                                        elif [[ ! -z "${params.oci_image_db}" ]] ; then
-                                            export SCT_OCI_IMAGE_DB="${params.oci_image_db}"
                                         elif [[ ! -z "${params.scylla_repo}" ]] ; then
                                             export SCT_SCYLLA_REPO="${params.scylla_repo}"
                                         else

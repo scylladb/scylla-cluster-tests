@@ -12,7 +12,6 @@
 # Copyright (c) 2020 ScyllaDB
 from functools import cached_property
 
-from argus.common.enums import NemesisStatus
 from sdcm.sct_events import Severity
 from sdcm.sct_events.continuous_event import ContinuousEvent
 
@@ -45,17 +44,3 @@ class DisruptionEvent(ContinuousEvent):
         if self.full_traceback:
             fmt += "\n{0.full_traceback}"
         return fmt
-
-    @property
-    def nemesis_status(self) -> NemesisStatus:
-        if self.severity == Severity.ERROR:
-            return NemesisStatus.FAILED
-        if self.is_skipped:
-            return NemesisStatus.SKIPPED
-        return NemesisStatus.SUCCEEDED
-
-    def add_simple_error(self, error: str, traceback: str):
-        """Allows adding single error with less lines"""
-        self.add_error([error])
-        self.full_traceback = traceback
-        self.severity = Severity.ERROR

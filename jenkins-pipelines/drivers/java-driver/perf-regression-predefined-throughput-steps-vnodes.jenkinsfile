@@ -1,0 +1,12 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+perfRegressionParallelPipeline(
+    backend: "aws",
+    region: "us-east-1",
+    test_name: "performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest",
+    test_config: '''["test-cases/performance/perf-regression-predefined-throughput-steps.yaml", "configurations/performance/cassandra_stress_gradual_load_reduced_steps_number.yaml", "configurations/disable_kms.yaml", "configurations/tablets_disabled.yaml", "configurations/disable_speculative_retry.yaml", "configurations/performance/latency-decorator-error-thresholds-steps-ent-vnodes.yaml"]''',
+    sub_tests: ["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_write_gradual_increase_load"],
+)

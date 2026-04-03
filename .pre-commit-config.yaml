@@ -41,11 +41,7 @@ repos:
         args: [--allow-missing-credentials]
     -   id: detect-private-key
         language: system  # Override the language
-        exclude: >
-             (?x)^(
-                  unit_tests/test_oci_utils.py|
-                  data_dir/ssl_conf/.*
-             )$
+        exclude: ^data_dir/ssl_conf/.*$
 
 -   repo: local
     hooks:
@@ -83,13 +79,6 @@ repos:
         language: system
         pass_filenames: false
         files: (^sdcm/nemesis/|templates/.*.j2)
-
-    -   id: generate-progress-svg
-        name: generate-progress-svg
-        entry: python3 scripts/generate_progress_svg.py
-        language: system
-        pass_filenames: false
-        files: ^docs/plans/progress\.json$
 
     -   id: uv-sort
         name: uv-sort

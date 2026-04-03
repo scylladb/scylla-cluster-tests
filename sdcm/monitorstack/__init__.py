@@ -46,30 +46,6 @@ PROMETHEUS_DOCKER_PORT = get_free_port(
 COMMAND_TIMEOUT = 1800
 
 
-def get_monitoring_container_ports() -> set[int]:
-    """Return host ports already claimed by monitoring stack containers.
-
-    Queries Docker for containers whose names follow the monitoring stack naming
-    (agraf-PORT, aprom-PORT, aalert-PORT) and extracts their port numbers.
-    """
-    result = LocalCmdRunner().run("docker ps -a --format '{{.Names}}'", ignore_status=True, verbose=False)
-    if not result.ok or not result.stdout.strip():
-        return set()
-
-    prefixes = (f"{GRAFANA_DOCKER_NAME}-", f"{PROMETHEUS_DOCKER_NAME}-", f"{ALERT_DOCKER_NAME}-")
-    ports = set()
-    for raw_name in result.stdout.strip().splitlines():
-        container_name = raw_name.strip()
-        for prefix in prefixes:
-            if container_name.startswith(prefix):
-                try:
-                    ports.add(int(container_name[len(prefix) :]))
-                except ValueError:
-                    pass
-                break
-    return ports
-
-
 class ErrorUploadSCTDashboard(Exception):
     pass
 
@@ -466,43 +442,13 @@ def restore_annotations_data(monitoring_stack_dir, grafana_docker_port):
         raise
 
 
-def get_available_port_candidates(base_port, tenants_number, occupied_ports):
-    """Generate list of candidate ports, excluding occupied ones."""
-    return [p for p in range(base_port, base_port + tenants_number) if p not in occupied_ports] + [0]
-
-
-def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version, tenants_number):
-    # pick ports once so retries reuse the same container names and can clean up after themselves
-    occupied_ports = get_monitoring_container_ports()
-
-    def pick_port(base_port):
-        return get_free_port(ports_to_try=get_available_port_candidates(base_port, tenants_number, occupied_ports))
-
-    graf_port = pick_port(GRAFANA_DOCKER_PORT)
-    alert_port = pick_port(ALERT_DOCKER_PORT)
-    prom_port = pick_port(PROMETHEUS_DOCKER_PORT)
-
-    _start_dockers_with_ports(
-        monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version, graf_port, alert_port, prom_port
-    )
-    return {"grafana_docker_port": graf_port, "alert_docker_port": alert_port, "prometheus_docker_port": prom_port}
-
-
 @retrying(n=3, sleep_time=5, message="Start docker containers")
-def _start_dockers_with_ports(
-    monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version, graf_port, alert_port, prom_port
-):
+def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version, tenants_number):
+    graf_port = get_free_port(ports_to_try=[GRAFANA_DOCKER_PORT + i for i in range(tenants_number)] + [0])
+    alert_port = get_free_port(ports_to_try=[ALERT_DOCKER_PORT + i for i in range(tenants_number)] + [0])
+    prom_port = get_free_port(ports_to_try=[PROMETHEUS_DOCKER_PORT + i for i in range(tenants_number)] + [0])
+
     lr = LocalCmdRunner()
-
-    # force-remove our containers from any previous attempt so retries start clean
-    # (releases TSDB locks, frees container names and ports)
-    for name in [
-        f"{GRAFANA_DOCKER_NAME}-{graf_port}",
-        f"{PROMETHEUS_DOCKER_NAME}-{prom_port}",
-        f"{ALERT_DOCKER_NAME}-{alert_port}",
-    ]:
-        lr.run(f"docker rm -f {name}", ignore_status=True, verbose=False)
-
     lr.run(
         "cd {monitoring_dockers_dir}; ./kill-all.sh -g {graf_port} -m {alert_port} -p {prom_port}".format(**locals()),
         ignore_status=True,
@@ -546,9 +492,6 @@ def _start_dockers_with_ports(
             # patch to make podman work for result that don't have https://github.com/scylladb/scylla-monitoring/pull/2149
             sed -i 's/DOCKER_HOST/HOST_ADDRESS/' *.sh
 
-            # allow concurrent restores: don't abort if monitoring containers from another restore exist
-            sed -i '/monitoring docker instances.*exist/,/exit 1/ s/exit 1/true/' start-all.sh
-
             echo "" > UA.sh
             bash -x ./start-all.sh \
             $(grep -q -- --no-renderer ./start-all.sh && echo "--no-renderer")  \
@@ -567,6 +510,7 @@ def _start_dockers_with_ports(
         LOGGER.error("Failure to start monitoring stack stdout: %s", res.stdout)
 
         raise Exception("fail to start monitoring stack")
+    return {"grafana_docker_port": graf_port, "alert_docker_port": alert_port, "prometheus_docker_port": prom_port}
 
 
 def is_docker_available():

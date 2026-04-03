@@ -9,5 +9,5 @@ rollingUpgradePipeline(
     linux_distro: 'ubuntu-focal',
     use_preinstalled_scylla: true,
     test_name: 'upgrade_test.UpgradeTest.test_generic_cluster_upgrade',
-    test_config: '''["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-with-null-inserts.yaml", "configurations/auth_cassandra.yaml"]'''
+    test_config: '''["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-with-null-inserts.yaml"]'''
 )

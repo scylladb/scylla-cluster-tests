@@ -150,7 +150,7 @@ if [[ -n "${CREATE_RUNNER_INSTANCE}" ]]; then
 fi
 
 # if running on Build server
-if [[ -n "$JENKINS_URL" || -n "$BUILD_TAG" || -n "$GITHUB_ACTIONS" ]]; then
+if [[ ${USER} == "jenkins" || ${USER} == "runner" ]]; then
     echo "Running on Build Server..."
     HOST_NAME=`hostname`
 else
@@ -168,7 +168,7 @@ else
   die "Please make sure you install either podman or docker on this machine to run hydra"
 fi
 
-if [[  -n "$JENKINS_URL" || -n "$BUILD_TAG" || -n "$GITHUB_ACTIONS" || -z "`$tool images ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION} -q`" ]]; then
+if [[ ${USER} == "jenkins" || ${USER} == "runner" || -z "`$tool images ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION} -q`" ]]; then
     echo "Pull version $VERSION from Docker Hub..."
     $tool pull ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION}
 else
@@ -251,7 +251,7 @@ function run_in_docker () {
     echo "Going to run '${CMD_TO_RUN}'..."
     $([[ -n "$HYDRA_DRY_RUN" ]] && echo echo) \
     $tool ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} --privileged \
-        -h "${HOST_NAME:0:64}" \
+        -h ${HOST_NAME} \
         -v "${SCT_DIR}:${SCT_DIR}" \
         -v /tmp:/tmp \
         -v /var/tmp:/var/tmp \

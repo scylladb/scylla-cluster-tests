@@ -264,7 +264,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
         # Example of kubectl command output:
         #   $ kubectl version --client --short
         #   Client Version: v1.18.5
-        return LOCALRUNNER.run("kubectl version --client").stdout.rsplit(None, 1)[-1][1:]
+        return LOCALRUNNER.run("kubectl version --client --short").stdout.rsplit(None, 1)[-1][1:]
 
     def docker_pull(self, image):
         self.log.info("Pull `%s' to docker environment", image)
@@ -359,7 +359,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
 
     @cached_property
     def dynamic_local_volume_provisioner_image(self):
-        return f"scylladb/local-csi-driver:{K8S_LOCAL_VOLUME_PROVISIONER_VERSION}"
+        return f"scylladb/k8s-local-volume-provisioner:{K8S_LOCAL_VOLUME_PROVISIONER_VERSION}"
 
     @cached_property
     def cert_manager_images(self):

@@ -31,8 +31,6 @@ def registry():
         ("", {CustomNemesisA, CustomNemesisB, CustomNemesisC, CustomNemesisAD}),
         (None, {CustomNemesisA, CustomNemesisB, CustomNemesisC, CustomNemesisAD}),
         ("flag_true", {CustomNemesisB, CustomNemesisAD}),  # flag_true is set to False in CustomNemesisA
-        ("CustomNemesisA", {CustomNemesisA}),
-        ("CustomNemesisA or CustomNemesisAD", {CustomNemesisA, CustomNemesisAD}),
     ],
 )
 def test_filter_subclasses_by_single_flag(registry, logical_phrase, expected_classes):
@@ -81,6 +79,7 @@ def test_gather_properties(registry):
             "flag_d": False,
             "flag_true": False,
             "flag_common": True,
+            "disabled": False,
         },
         "CustomNemesisB": {
             "flag_a": False,
@@ -89,6 +88,7 @@ def test_gather_properties(registry):
             "flag_d": False,
             "flag_true": True,
             "flag_common": True,
+            "disabled": True,
         },
         "CustomNemesisC": {
             "flag_a": True,
@@ -97,6 +97,7 @@ def test_gather_properties(registry):
             "flag_d": False,
             "flag_true": False,
             "flag_common": True,
+            "disabled": False,
         },
         "CustomNemesisAD": {
             "flag_a": True,
@@ -105,6 +106,7 @@ def test_gather_properties(registry):
             "flag_d": True,
             "flag_true": True,
             "flag_common": True,
+            "disabled": False,
         },
     }
 

@@ -6,7 +6,7 @@ def completed_stages = [:]
 (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name)
 
     // since this is a boolean param, we need to handle its default value upfront, we can't do it in the parameters section
     // we'll keep it as boolean to simplify its usage later on
@@ -19,10 +19,17 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_GCE_PROJECT = "${params.gce_project}"
+            SCT_ENABLE_ARGUS_REPORT = "1"
             SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
             separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
+            string(defaultValue: '',
+                   description: 'a Azure Image to run against',
+                   name: 'azure_image_db')
+            string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
+                   description: 'Azure location',
+                   name: 'azure_region_name')
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
                description: 'aws|gce|azure',
                name: 'backend')
@@ -33,24 +40,15 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
-            string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
-                   description: 'Azure Cloud region',
-                   name: 'azure_region_name')
-            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
-                   description: 'Oracle Cloud region',
-                   name: 'oci_region_name')
             string(defaultValue: "",
                description: 'Availability zone',
                name: 'availability_zone')
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
             string(defaultValue: "${pipelineParams.get('scylla_ami_id', '')}", description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
             string(defaultValue: "${pipelineParams.get('gce_image_db', '')}", description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
-            string(defaultValue: "${pipelineParams.get('azure_image_db', '')}", description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
-            string(defaultValue: "${pipelineParams.get('oci_image_db', '')}", description: 'Oracle image for ScyllaDB ', name: 'oci_image_db')
+	        string(defaultValue: "${pipelineParams.get('azure_image_db', '')}", description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
 
-            string(defaultValue: '',
-                   description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
-                   name: 'new_scylla_repo')
+            string(defaultValue: '', description: '', name: 'new_scylla_repo')
             booleanParam(defaultValue: base_version_all_sts_versions,
                          description: 'Whether to include all supported STS versions as base versions',
                          name: 'base_version_all_sts_versions')
@@ -115,7 +113,7 @@ def call(Map pipelineParams) {
             string(defaultValue: 'next',
                    description: 'Default branch to be used for scylla and other repositories. Default is "next".',
                    name: 'byo_default_branch')
-            text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
+            string(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
                    description: 'Extra environment variables to inject (format: KEY1=VAL1\nKEY2=VAL2)',
                    name: 'extra_environment_variables')
         }
@@ -284,11 +282,11 @@ def call(Map pipelineParams) {
                                                         wrap([$class: 'BuildUser']) {
                                                             dir('scylla-cluster-tests') {
                                                                 timeout(time: 30, unit: 'MINUTES') {
-                                                                    if (params.backend == 'aws' || params.backend == 'azure' || params.backend == 'gce' || params.backend == 'oci') {
+                                                                    if (params.backend == 'aws' || params.backend == 'azure') {
                                                                         provisionResources(params_mapping[base_version], builder.region)
                                                                     } else {
                                                                         sh """
-                                                                            echo 'Skipping because non-AWS/Azure/GCE backends are not supported'
+                                                                            echo 'Skipping because non-AWS/Azure backends are not supported'
                                                                         """
                                                                     }
                                                                     completed_stages[base_version]['provision_resources'] = true
@@ -348,6 +346,7 @@ def call(Map pipelineParams) {
                                                     }
                                                 }
                                                 stage("Send email for Upgrade from ${base_version}") {
+                                                    def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                                     catchError(stageResult: 'FAILURE') {
                                                         wrap([$class: 'BuildUser']) {
                                                             dir('scylla-cluster-tests') {

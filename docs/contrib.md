@@ -30,8 +30,7 @@ git config blame.ignoreRevsFile .git-blame-ignore-revs
 ```
 
 For PRs with formatting changes, add the `Formatting` label to your PR. This will trigger the automation that:
-- Extracts all format commit SHAs from your PR
-   - It only affects commits starting with `format`, e.g. `format: Add lint rules`
+- Extracts all commit SHAs from your PR
 - Adds them to `.git-blame-ignore-revs` with descriptive comments
 - Automatically commits and pushes the changes to your PR branch
 
@@ -52,94 +51,6 @@ Once you have changes in the requirements.in or in Hydra Dockerfile
 - change the version in docker/env/version
 - run ``./docker/env/build_n_push.sh`` to build and push to Docker Hub
 
-
-### Staging Trigger — triggering staging Jenkins jobs
-
-The `staging_trigger.py` tool (backed by the `utils/staging_trigger/` package) lets you
-trigger, browse, and generate Jenkins staging jobs from the command line.
-
-#### Quick start
-
-```bash
-# Interactive: browse jobs, select, trigger (default mode)
-python staging_trigger.py trigger
-
-# Filter jobs interactively
-python staging_trigger.py trigger "longevity*"
-
-# Direct trigger (no interaction)
-python staging_trigger.py trigger -b my-branch longevity-100gb-4h-test
-
-# Trigger from a PR (auto-detects repo/branch)
-python staging_trigger.py trigger --pr 12345 manager-ubuntu20-sanity-test
-
-# Dry run — see what would be triggered without actually triggering
-python staging_trigger.py trigger -n
-
-# Override any Jenkins parameter
-python staging_trigger.py trigger -b my-branch longevity-100gb-4h-test \
-    --set scylla_version=2025.1 --set provision_type=spot
-
-# Export selected jobs as YAML config
-python staging_trigger.py trigger -o my_tests.yaml
-
-# Trigger from a YAML config file
-python staging_trigger.py run-config my_tests.yaml
-
-# Generate Jenkins pipeline jobs from jenkinsfiles (interactive)
-python staging_trigger.py generate -b my-branch
-```
-
-#### Library usage
-
-```python
-from staging_trigger import StagingTrigger
-
-trigger = StagingTrigger.from_preset("longevity", branch="my-branch")
-trigger.select_jobs("longevity-100gb-4h-test")
-trigger.run()
-
-# Or from a PR number
-trigger = StagingTrigger.from_pr(12345, preset_name="longevity")
-trigger.select_jobs("longevity-100gb-4h-test")
-trigger.run()
-```
-
-#### Presets
-
-Jobs are configured using presets that set sensible defaults for each category:
-
-| Preset | Description |
-|--------|-------------|
-| `longevity` | Longevity, rolling-upgrade, gemini, and jepsen tests |
-| `manager` | Scylla Manager tests |
-| `artifacts` | Artifact/package deployment tests |
-| `perf` | Performance regression tests |
-| `dtest` | Python dtests (with topology variants) |
-
-#### YAML config files
-
-For mass-triggering, create a YAML config file:
-
-```yaml
-folder: scylla-staging/<username>
-branch: my-feature-branch
-params:
-  scylla_version: "master:latest"
-  email_recipients: user@scylladb.com
-jobs:
-  - name: longevity-100gb-4h-test
-    preset: longevity
-  - name: manager-ubuntu20-sanity-test
-    preset: manager
-    params:
-      manager_version: "3.8"
-  - name: dtest-pytest-gating
-    preset: dtest
-    dtest_topologies: [no-tablets, tablets]
-```
-
-Then trigger with: `python staging_trigger.py run-config my_tests.yaml`
 
 ### Creating pipeline jobs for new branch
 
@@ -166,45 +77,6 @@ hydra create-operator-test-release-jobs \
 
 ### [Docker Based Loaders](./docker-loaders.md)
 
-### AI-Assisted Development (Skills & Prompts)
-
-This project includes reusable AI prompts for common development tasks. They are available
-for both **Claude Code** and **GitHub Copilot**.
-
-#### Available prompts
-
-| Prompt | Description |
-|--------|-------------|
-| `fix-backport-conflicts` | Resolve inline merge conflict markers in backport PRs and recommit cleanly with original authorship preserved |
-
-#### Using with Claude Code
-
-Claude Code skills live in `.claude/skills/`. Invoke them as slash commands:
-
-```
-/fix-backport-conflicts 13920
-```
-
-This will check out the PR, find inline conflict markers, resolve them, and recommit
-with the original author and commit messages preserved.
-
-#### Using with GitHub Copilot (VS Code)
-
-Copilot reusable prompts live in `.github/prompts/`. To use them:
-
-1. Open **Copilot Chat** (`Ctrl+Shift+I`)
-2. Switch to **Agent mode** (drop-down at the top of the chat panel)
-3. Type `#` and select `fix-backport-conflicts` from the list
-4. Add context, e.g.: `#fix-backport-conflicts fix PR 13920`
-
-#### Adding new prompts
-
-To add a new reusable prompt:
-
-1. Create a Claude Code skill in `.claude/skills/<name>/SKILL.md` (with YAML frontmatter)
-2. Create a matching Copilot prompt in `.github/prompts/<name>.prompt.md` (plain markdown)
-3. Add an entry to the table above in this document
-
 ### Directory Structure of the project
 
 1. A library, called `sdcm` (stands for scylla distributed cluster
@@ -215,7 +87,7 @@ To add a new reusable prompt:
 
    * `sdcm.cluster`: Base classes for Clusters
    * `sdcm.remote`: SSH library
-   * `sdcm.nemesis`: Nemesis package — chaos engineering framework with auto-discovery, a registry for filtering by flags, and individual disruption classes (see [docs/nemesis.md](nemesis.md))
+   * `sdcm.nemesis`: Nemesis classes (a nemesis is a class that does disruption in the node)
    * `sdcm.tester`: Contains the base test class, see below.
 
 2. A data directory, aptly named `data_dir`. It contains:

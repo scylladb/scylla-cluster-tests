@@ -14,22 +14,13 @@
 import os
 import re
 import logging
-import shutil
 from typing import Optional, Union, Dict
 from functools import cached_property
 
 
 from sdcm import cluster
-from sdcm.provision.helpers.certificate import (
-    CA_CERT_FILE,
-    JKS_TRUSTSTORE_FILE,
-    TLSAssets,
-    export_pem_cert_to_pkcs12_keystore,
-    install_client_certificate,
-)
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.docker_cmd_runner import DockerCmdRunner
-from sdcm.reporting.tooling_reporter import VectorStoreVersionReporter
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
@@ -448,26 +439,8 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
         if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
 
-        if any([self.params.get("server_encrypt"), self.params.get("client_encrypt")]):
-            self._generate_db_node_certs(node)
-            install_client_certificate(node.remoter, node.ip_address, force=True)
-
         node.config_setup(append_scylla_args=self.get_scylla_args())
         node.restart_scylla(verify_up_before=True)
-
-    def _generate_db_node_certs(self, node):
-        """Generate per-node SSL certificates for a Docker DB node."""
-        node.create_node_certificate(
-            cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
-            cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
-            csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR,
-        )
-        node.create_node_certificate(
-            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT,
-            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY,
-        )
-        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
-            shutil.copy(src, node.ssl_conf_dir)
 
     def node_startup(self, node, verbose=False, timeout=3600):
         if not ContainerManager.is_running(node, "node"):
@@ -525,7 +498,7 @@ class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
 
         kwargs["cluster_prefix"] = cluster.prepend_user_prefix(kwargs.get("cluster_prefix"), "vs-set")
         kwargs.setdefault("node_prefix", "vs-node")
-        kwargs.setdefault("node_type", "vector-store")
+        kwargs.setdefault("node_type", "vs")
 
         if not vs_docker_image_tag:
             vs_docker_image_tag = "latest"
@@ -563,12 +536,7 @@ class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
         if container is None:
             ContainerManager.run_container(node, "node")
             ContainerManager.wait_for_status(node, "node", status="running")
-        try:
-            VectorStoreVersionReporter(
-                node.remoter, "docker exec node /opt/vector-store/vector-store", self.test_config.argus_client()
-            ).report()
-        except Exception:  # noqa: BLE001
-            LOGGER.warning("Error submitting vector store version, VS package won't show in Argus.", exc_info=True)
+
         node.init()
         return node
 
@@ -620,21 +588,7 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
 
         self._install_docker_cli(node, verbose=verbose)
         if self.params.get("client_encrypt"):
-            self._generate_loader_certs(node)
             node.config_client_encrypt()
-
-    def _generate_loader_certs(self, node):
-        """Generate SSL client certificates for a Docker loader node."""
-        node.create_node_certificate(
-            node.ssl_conf_dir / TLSAssets.CLIENT_CERT, node.ssl_conf_dir / TLSAssets.CLIENT_KEY
-        )
-        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
-            shutil.copy(src, node.ssl_conf_dir)
-        export_pem_cert_to_pkcs12_keystore(
-            node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
-            node.ssl_conf_dir / TLSAssets.CLIENT_KEY,
-            node.ssl_conf_dir / TLSAssets.PKCS12_KEYSTORE,
-        )
 
     def _install_docker_cli(self, node, verbose=False):
         result = node.remoter.run("docker --version", ignore_status=True, verbose=False)
@@ -696,10 +650,6 @@ class DockerMonitoringNode(cluster.BaseNode):
     def wait_for_cloud_init(self):
         pass
 
-    def wait_ssh_up(self, verbose=True, timeout=500):
-        # backend does not use SSH, but LOCALRUNNER for commands execution
-        pass
-
     @staticmethod
     def is_docker() -> bool:
         return True
@@ -722,10 +672,6 @@ class DockerMonitoringNode(cluster.BaseNode):
 
     def _refresh_instance_state(self):
         return ["127.0.0.1"], ["127.0.0.1"]
-
-    def refresh_ip_address(self):
-        # IP is always localhost for local monitoring node
-        pass
 
     @cached_property
     def grafana_address(self):
@@ -776,7 +722,7 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
             base_logdir=self.logdir,
             node_prefix=self.node_prefix,
             node_index=node_index,
-            ssh_login_info=None,
+            ssh_login_info=dict(hostname=None, user=self.node_container_user, key_file=self.node_container_key_file),
         )
         node.init()
         return node

@@ -16,23 +16,23 @@ import time
 import hashlib
 import shutil
 import logging
+import unittest
 import unittest.mock
 from pathlib import Path
 
 import pytest
 
+from sdcm import sct_config
+from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
+from sdcm.utils.distro import Distro
 from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud, get_testrun_dir
 from sdcm.utils.sstable import load_inventory
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 
-from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, FakeSstableRemoter
-
-from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, FakeSstableRemoter
-
 logging.basicConfig(level=logging.DEBUG)
 
 
-class TestUtils:
+class TestUtils(unittest.TestCase):
     def test_scylla_bench_metrics_conversion(self):
         metrics = {
             "4ms": 4.0,
@@ -50,7 +50,7 @@ class TestUtils:
             assert actual == converted, f"Expected {converted}, got {actual}"
 
 
-class TestDownloadDir:
+class TestDownloadDir(unittest.TestCase):
     @staticmethod
     def clear_cloud_downloaded_path(url):
         md5 = hashlib.md5()
@@ -66,13 +66,7 @@ class TestDownloadDir:
         def touch_file(client, bucket, key, local_file_path):
             Path(local_file_path).touch()
 
-        with (
-            unittest.mock.patch("sdcm.utils.common._s3_download_file", new=touch_file),
-            unittest.mock.patch("sdcm.utils.common.boto3.client") as mock_s3_client,
-        ):
-            mock_s3_client.return_value.list_objects_v2.return_value = {
-                "Contents": [{"Key": "rpm/centos/scylladb-nightly/scylla/7/x86_64/repodata/repomd.xml"}]
-            }
+        with unittest.mock.patch("sdcm.utils.common._s3_download_file", new=touch_file):
             update_db_packages = download_dir_from_cloud(sct_update_db_packages)
 
         assert os.path.exists(os.path.join(update_db_packages, "repomd.xml"))
@@ -90,11 +84,8 @@ class TestDownloadDir:
 
         self.clear_cloud_downloaded_path(sct_update_db_packages)
         test_file_names = ["sct_test/", "sct_test/bentsi.txt", "sct_test/charybdis.fs"]
-        fake_client = unittest.mock.MagicMock()
-        fake_client.list_blobs.return_value = [FakeObject(name=fname) for fname in test_file_names]
         with unittest.mock.patch(
-            "sdcm.utils.common.get_gce_storage_client",
-            return_value=(fake_client, {}),
+            "google.cloud.storage.Client.list_blobs", return_value=[FakeObject(name=fname) for fname in test_file_names]
         ):
             update_db_packages = download_dir_from_cloud(sct_update_db_packages)
         for fname in test_file_names:
@@ -107,12 +98,106 @@ class TestDownloadDir:
         assert update_db_packages is None
 
 
-class TestSstableLoadUtils:
+class Remoter:
+    def __init__(self, system_log):
+        self.system_log = system_log
+
+    def run(self, *args, **kwargs):
+        lines = [
+            "[shard 11] sstables_loader - load_and_stream: started ops_uuid=a2661989-6836-418f-aa67-2c5466499848, process [0-1] out",
+            "[shard  2] sstables_loader - Done loading new SSTables for keyspace=keyspace1, table=standard1, load_and_stream=true, "
+            "primary_replica_only=false, status=succeeded",
+        ]
+        for line in lines:
+            with open(self.system_log, "a", encoding="utf-8") as file:
+                file.write(f"{line}\n")
+
+
+class DummyDbCluster(BaseCluster, BaseScyllaCluster):
+    def __init__(self, nodes):
+        self.nodes = nodes
+        self.params = sct_config.SCTConfiguration()
+        self.params["region_name"] = "test_region"
+        self.racks_count = 0
+        self.added_password_suffix = False
+        self.log = logging.getLogger(__name__)
+        self.node_type = "scylla-db"
+        self.vector_store_cluster = None
+
+    def start_nemesis(self):
+        pass
+
+
+class DummyNode(BaseNode):
+    _system_log = None
+    is_enterprise = False
+    is_product_enterprise = False
+    distro = Distro.CENTOS7
+
+    def init(self):
+        super().init()
+        self.remoter.stop()
+        self.remoter = Remoter(self.system_log)
+
+    def do_default_installations(self):
+        pass  # we don't need to install anything for this unittests
+
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
+        pass
+
+    def _get_private_ip_address(self) -> str:
+        return "127.0.0.1"
+
+    def _get_public_ip_address(self) -> str:
+        return "127.0.0.1"
+
+    @property
+    def cql_address(self):
+        return "127.0.0.1"
+
+    def start_task_threads(self) -> None:
+        # disable all background threads
+        pass
+
+    @property
+    def system_log(self) -> str:
+        return self._system_log
+
+    @system_log.setter
+    def system_log(self, log: str):
+        self._system_log = log
+
+    def wait_for_cloud_init(self):
+        pass
+
+    def set_hostname(self) -> None:
+        pass
+
+    def configure_remote_logging(self):
+        pass
+
+    def wait_ssh_up(self, verbose=True, timeout=500) -> None:
+        pass
+
+    @property
+    def is_nonroot_install(self) -> bool:
+        return False
+
+    @property
+    def scylla_shards(self):
+        return 0
+
+    @property
+    def cpu_cores(self) -> int:
+        return 0
+
+
+class TestSstableLoadUtils(unittest.TestCase):
     node = None
     temp_dir = None
 
     @classmethod
-    def setup_class(cls):
+    def setUpClass(cls):
         cls.node = DummyNode(
             name="test_node",
             parent_cluster=None,
@@ -123,8 +208,8 @@ class TestSstableLoadUtils:
         cls.node.init()
 
     @pytest.fixture(autouse=True)
-    def fixture_setup(self, tmp_path, test_data_dir):
-        source = test_data_dir / "load_and_stream.log"
+    def fixture_setup(self, tmp_path):
+        source = os.path.join(os.path.dirname(__file__), "test_data", "load_and_stream.log")
         target = tmp_path / "load_and_stream.log"
         shutil.copy(source, target)
         self.node.system_log = str(target)
@@ -209,7 +294,7 @@ class TestSstableLoadUtils:
             )
 
     def test_load_and_stream_waits_for_log_lines(self):
-        self.node.remoter = FakeSstableRemoter(self.node.system_log)
+        self.node.remoter = Remoter(self.node.system_log)
         SstableLoadUtils.run_load_and_stream(self.node, start_timeout=1, end_timeout=2)
 
 

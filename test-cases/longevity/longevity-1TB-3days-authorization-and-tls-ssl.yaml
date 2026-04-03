@@ -24,10 +24,16 @@ nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '555'
 nemesis_interval: 30
 
+
 user_prefix: 'longevity-tls-1tb-3d-stcs'
 space_node_threshold: 644245094
 server_encrypt: true
 client_encrypt: true
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'
 
 nemesis_during_prepare: false
 use_preinstalled_scylla: true

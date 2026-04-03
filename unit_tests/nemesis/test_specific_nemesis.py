@@ -11,7 +11,7 @@ from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
 from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
 from sdcm.nemesis.monkey.runners import CategoricalMonkey
 from unit_tests.nemesis.fake_cluster import FakeTester
-from unit_tests.nemesis import TestNemesisClass
+from unit_tests.nemesis.test_sisyphus import TestNemesisClass
 
 LOGGER = logging.getLogger(__name__)
 

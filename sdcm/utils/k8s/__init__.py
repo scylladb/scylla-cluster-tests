@@ -829,8 +829,6 @@ class HelmContainerMixin:
         if timeout is not None:
             # timeout in Go duration format
             command.extend(("--timeout", timeout))
-        # Inject Docker Hub authentication secrets
-        command.extend(("--set", f"'imagePullSecrets[0].name={kluster.docker_hub_auth_secret}'"))
         return self.helm(kluster, *command, prepend_command=prepend_command, namespace=namespace, values=values)
 
     helm_install = partialmethod(_helm_install_or_upgrade, "install")

@@ -1,0 +1,48 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>
+        <span>System under test </span>
+    </h3>
+    <div>
+        <ul>
+            <li>Scylla version: {{ scylla_version }}</li>
+            <li>Scylla ami id: {{ scylla_ami_id }}</li>
+            <li>Region: {{region}}</li>
+            <li>Instance type: {{ scylla_instance_type }}</li>
+            <li>Number of scylladb nodes: {{ number_of_db_nodes }}</li>
+        </ul>
+    </div>
+    <h3>
+        <span>SL cassandra-stress comparison results</span>
+    </h3>
+    {% if workload_comparison %}
+    <div>
+        <table class='nodes_info_table'>
+            <tr>
+                <th>
+                    <span>Metric</span>
+                </th>
+                {% for column in workload_comparison["op rate"].keys() %}
+                    <th>{{ column }}</th>
+                {% endfor %}
+            </tr>
+            {% for metric in workload_comparison.keys() %}
+            <tr>
+                <td>{{ metric }}</td>
+                {% for item in workload_comparison[metric].values() %}
+                    {% if item is boolean %}
+                        {% if item is true %}
+                            <td style="color: green">{{ item }}</td>
+                        {% else %}
+                            <td style="color: red">{{ item }}</td>
+                        {% endif %}
+                    {% else %}
+                        <td>{{ "%.2f"|format(item) }}</td>
+                    {% endif %}
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+{% endblock %}

@@ -14,3 +14,8 @@ space_node_threshold: 644
 
 # We want to run each user load on its own loader
 round_robin: true
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'

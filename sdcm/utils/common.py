@@ -36,7 +36,7 @@ import io
 import tempfile
 import ctypes
 import shlex
-from typing import Iterable, List, Optional, Dict, Union, Literal, Any, Type, Callable, TYPE_CHECKING
+from typing import Iterable, List, Optional, Dict, Union, Literal, Any, Type, Callable
 from urllib.parse import urlparse, urljoin
 from unittest.mock import Mock
 from textwrap import dedent
@@ -59,8 +59,7 @@ from google.cloud.storage import Blob as GceBlob
 from google.cloud.compute_v1.types import Metadata as GceMetadata, Instance as GceInstance
 from google.cloud.compute_v1 import ListImagesRequest, Image as GceImage
 from packaging.version import Version
-from rich.console import Console
-from rich.table import Table
+from prettytable import PrettyTable
 
 from sdcm.provision.provisioner import VmArch
 from sdcm.sct_events import Severity
@@ -73,7 +72,6 @@ from sdcm.utils.aws_utils import (
     get_ssm_ami,
     get_by_owner_ami,
     vmarch_to_aws,
-    DEFAULT_AWS_REGION,
 )
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.decorators import retrying
@@ -94,18 +92,30 @@ from sdcm.utils.gce_utils import (
     get_gce_compute_regions_client,
     get_gce_storage_client,
 )
-from sdcm.utils.version_utils import parse_scylla_version_tag
 
-if TYPE_CHECKING:
-    from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger("utils")
+DEFAULT_AWS_REGION = "eu-west-1"
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
 SCYLLA_AMI_OWNER_ID_LIST = ["797456418907", "158855661827"]
 SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
 CREATE_TABLE_REGEX = re.compile(
     r"CREATE\s+TABLE\s+(?P<keyspace>[^\s.]+)\.(?P<table>[^\s(]+)\s*\([^)]+\)(?P<options>[^;]*)"
 )
+
+
+class KeyBasedLock:
+    """Class designed for creating locks based on hashable keys."""
+
+    def __init__(self):
+        self.key_lock_mapping = {}
+        self.handler_lock = threading.Lock()
+
+    def get_lock(self, hashable_key):
+        with self.handler_lock:
+            if hashable_key not in self.key_lock_mapping:
+                self.key_lock_mapping[hashable_key] = threading.Lock()
+            return self.key_lock_mapping[hashable_key]
 
 
 def deprecation(message):
@@ -125,7 +135,6 @@ def _remote_get_file(remoter, src, dst, user_agent=None):
     cmd = "curl -L {} -o {}".format(src, dst)
     if user_agent:
         cmd += " --user-agent %s" % user_agent
-    cmd += f" && chmod 644 {dst}"
     return remoter.run(cmd, ignore_status=True)
 
 
@@ -446,21 +455,15 @@ def list_logs_by_test_id(test_id):
         # return the old date to display them earlier
         return datetime.datetime(2019, 1, 1, 1, 1, 1)
 
-    s3_storage = S3Storage()
-    log_files = s3_storage.search_by_path(path=test_id)
+    log_files = S3Storage().search_by_path(path=test_id)
     for log_file in log_files:
         for log_type in log_types:
             if log_type in log_file:
-                # Generate original S3 URL for Argus storage
-                s3_url = f"https://{s3_storage.bucket_name}.s3.amazonaws.com/{log_file}"
-                # Generate proxied URL for display
-                proxied_url = create_proxy_argus_s3_url(log_file).format(test_id, log_file.split("/")[-1])
                 results.append(
                     {
                         "file_path": log_file,
                         "type": log_type,
-                        "link": proxied_url,
-                        "s3_url": s3_url,
+                        "link": create_proxy_argus_s3_url(log_file).format(test_id, log_file.split("/")[-1]),
                         "date": convert_to_date(log_file.split("/")[1]),
                     }
                 )
@@ -468,6 +471,18 @@ def list_logs_by_test_id(test_id):
     results = sorted(results, key=lambda x: x["date"])
 
     return results
+
+
+def list_parallel_timelines_report_urls(test_id: str) -> list[str | None]:
+    name_to_search = "parallel-timelines-report"
+    available_logs_paths = S3Storage().search_by_path(path=test_id)
+    report_path_list = [log_file_path for log_file_path in available_logs_paths if name_to_search in log_file_path]
+    LOGGER.debug("Found saved report files:\n%s", ", ".join(report_path_list))
+    # log_file_path looks like
+    # 88605a0b-aa5a-4da9-bb58-5dd2a94c5350/20220109_092346/parallel-timelines-report-88605a0b.tar.gz
+    # Perform reverse order sorting by date inside this path
+    report_path_list.sort(key=lambda x: x.split("/")[1], reverse=True)
+    return [f"https://{S3Storage.bucket_name}.s3.amazonaws.com/{report_path}" for report_path in report_path_list]
 
 
 def all_aws_regions(cached=False):
@@ -1039,20 +1054,11 @@ def _get_ami_versions(
     version_processor_fn: Callable | None = None,
 ) -> list[EC2Image]:
     """Get AMI versions with configurable filters."""
-
     version_filter = "*"
-
     if version and version != "all":
-        # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
-        if parse_scylla_version_tag(version):
-            # For full version tags, use exact matching (no wildcards)
-            version_filter = f"{version}*"
-            extra_filters = []
-        else:
-            # For simple versions or other formats, use the existing logic
-            version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
-            # Apply wildcard replacement for simple versions
-            version_filter = version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
+        version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
+
+    version_filter = version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
 
     ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
     images = []
@@ -1115,28 +1121,18 @@ def get_scylla_gce_images_versions(
     #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
     # or you can see brief explanation here:
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
-    filters = "(family eq 'scylla(-enterprise)?')(labels.environment eq 'production')"
+    filters = "(family eq 'scylla(-enterprise)?')( labels.environment eq 'production' )"
     if version and version != "all":
-        # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
-        if parse_scylla_version_tag(version):
-            # For full version tags, use the complete tag for exact matching
-            # GCE labels require dots to be replaced with dashes
-            normalized_version = version.replace(".", "-").replace("~", "-")
-            filters += f"(labels.scylla_version eq '{normalized_version}')"
+        filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
+        if "rc" not in version and len(version.split(".")) < 3:
+            filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
         else:
-            # For simple versions, use the existing wildcard logic
-            filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
-            if "rc" not in version and len(version.split(".")) < 3:
-                filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
-            else:
-                filters += "')"
-
+            filters += "')"
     if arch:
         if arch != VmArch.X86:
             #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
             LOGGER.warning("--arch option not implemented currently for GCE machine images.")
         filters += f" (architecture eq {vmarch_to_gcp(arch)})"
-
     images_client, _ = get_gce_compute_images_client()
     return sorted(
         images_client.list(ListImagesRequest(filter=filters, project=project)),
@@ -1244,8 +1240,6 @@ class FileFollowerThread:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
-        if self.future:
-            self.future.result(timeout=30)
 
     def run(self):
         raise NotImplementedError()
@@ -1420,7 +1414,7 @@ def get_ami_images(branch: str, region: str, arch: VmArch) -> list:
                 tags.get("Name"),
                 tags.get("build-id", tags.get("build_id", r"N\A"))[:6],
                 tags.get("arch"),
-                tags.get("scylla_version"),
+                tags.get("ScyllaVersion"),
                 ami.owner_id,
             ]
         )
@@ -1432,15 +1426,6 @@ def get_ec2_image_name_tag(ami: EC2Image) -> str:
     if ami.tags:
         for tag in ami.tags:
             if tag["Key"] == "Name":
-                return tag["Value"]
-    return ""
-
-
-def get_ec2_image_version_tag(ami: EC2Image) -> str:
-    """Get the scylla_version tag from an EC2 AMI."""
-    if ami.tags:
-        for tag in ami.tags:
-            if tag["Key"] == "scylla_version":
                 return tag["Value"]
     return ""
 
@@ -1507,122 +1492,14 @@ def convert_name_to_ami_if_needed(
 
 def get_ami_images_versioned(region_name: str, arch: VmArch, version: str) -> list[list[str]]:
     return [
-        ["AWS", ami.name, ami.image_id, ami.creation_date, get_ec2_image_name_tag(ami), get_ec2_image_version_tag(ami)]
+        ["AWS", ami.name, ami.image_id, ami.creation_date, get_ec2_image_name_tag(ami)]
         for ami in get_scylla_ami_versions(region_name=region_name, arch=vmarch_to_aws(arch), version=version)
     ]
 
 
-def find_equivalent_ami(
-    ami_id: str, source_region: str, target_regions: list[str] | None = None, target_arch: AwsArchType | None = None
-) -> list[dict[str, str]]:
-    """
-    Find equivalent AMIs in different regions or architectures based on image tags.
-
-    :param ami_id: Source AMI ID to find equivalents for
-    :param source_region: AWS region where the source AMI is located
-    :param target_regions: List of target regions to search in (if None, searches in source region only)
-    :param target_arch: Target architecture (x86_64 or arm64). If None, uses same arch as source
-    :return: List of dictionaries containing equivalent AMI information
-    """
-    # Get the source AMI and its tags - try both default account and ScyllaDB images account
-    # Combine tags from both accounts if available
-    source_ami = None
-    source_tags = {}
-    source_arch = None
-
-    for ec2_resource in (
-        boto3.resource("ec2", region_name=source_region),
-        get_scylla_images_ec2_resource(region_name=source_region),
-    ):
-        try:
-            ami = ec2_resource.Image(ami_id)
-            ami.load()
-            # First successful load sets the source_ami and architecture
-            if source_ami is None:
-                source_ami = ami
-                source_arch = ami.architecture
-            # Combine tags from all accounts
-            if ami.tags:
-                for tag in ami.tags:
-                    source_tags[tag["Key"]] = tag["Value"]
-        except ClientError as exc:
-            LOGGER.debug("Failed to load AMI %s in region %s with current credentials: %s", ami_id, source_region, exc)
-            continue
-
-    if source_ami is None:
-        LOGGER.error("Failed to load AMI %s in region %s from any account", ami_id, source_region)
-        return []
-
-    if not source_tags:
-        LOGGER.warning("Source AMI %s has no tags, cannot find equivalents", ami_id)
-        return []
-
-    # Determine target architecture
-    search_arch = target_arch if target_arch else source_arch
-
-    # Determine regions to search
-    if target_regions is None:
-        search_regions = [source_region]
-    else:
-        search_regions = target_regions
-
-    # Use all tags from the source AMI for matching, except "Name" and "arch"
-    matching_tags = [(key, value) for key, value in source_tags.items() if key not in ("Name", "arch")]
-
-    if not matching_tags:
-        LOGGER.warning("Source AMI %s has no tags to match after filtering", ami_id)
-        return []
-
-    LOGGER.info("Searching for AMIs with tags: %s", matching_tags)
-    results = []
-    # Search for equivalent AMIs in target regions
-    for region in search_regions:
-        target_ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region)
-
-        # Search using ScyllaDB official image resources
-        for client, owner in zip(
-            (target_ec2_resource, get_scylla_images_ec2_resource(region_name=region)), SCYLLA_AMI_OWNER_ID_LIST
-        ):
-            filters = [
-                {"Name": "architecture", "Values": [search_arch]},
-            ]
-
-            # Add tag filters based on what we found in source AMI
-            for tag_key, tag_value in matching_tags:
-                filters.append({"Name": f"tag:{tag_key}", "Values": [tag_value]})
-
-            try:
-                images = list(client.images.filter(Owners=[owner], Filters=filters))
-
-                for image in images:
-                    image_tags = {tag["Key"]: tag["Value"] for tag in (image.tags or [])}
-
-                    results.append(
-                        {
-                            "region": region,
-                            "ami_id": image.image_id,
-                            "name": image.name,
-                            "architecture": image.architecture,
-                            "creation_date": image.creation_date,
-                            "name_tag": image_tags.get("Name", ""),
-                            "scylla_version": image_tags.get("scylla_version", ""),
-                            "build_id": image_tags.get("build-id", image_tags.get("build_id", "")),
-                            "owner_id": image.owner_id,
-                        }
-                    )
-            except ClientError as exc:
-                LOGGER.warning("Failed to search for AMIs in region %s: %s", region, exc)
-                continue
-
-    # Sort by creation date (newest first)
-    results.sort(key=lambda x: x["creation_date"], reverse=True)
-
-    return results
-
-
 def get_gce_images_versioned(version: str = None, arch: VmArch = None) -> list[list[str]]:
     return [
-        ["GCE", image.name, image.self_link, image.creation_timestamp, image.labels.get("scylla_version", "")]
+        ["GCE", image.name, image.self_link, image.creation_timestamp]
         for image in get_scylla_gce_images_versions(version=version, arch=arch)
     ]
 
@@ -1655,27 +1532,11 @@ def get_gce_images(branch: str, arch: VmArch) -> list:
     return rows
 
 
-def rich_table_to_string(table: Table, title: str | None = None) -> str:
-    """Render a Rich Table to a plain-text string.
-
-    Uses the actual terminal width so that columns fold automatically on
-    narrow screens.  When no terminal is detected (e.g. CI / piped output)
-    the fallback width is 120 columns.
-    """
-    if title:
-        table.title = title
-    width = shutil.get_terminal_size(fallback=(120, 24)).columns
-    console = Console(width=width, no_color=True)
-    with console.capture() as capture:
-        console.print(table)
-    return capture.get()
-
-
-def create_pretty_table(rows: list[str] | list[list[str]], field_names: list[str]) -> Table:
-    tbl = Table(*field_names, show_lines=False)
+def create_pretty_table(rows: list[str] | list[list[str]], field_names: list[str]) -> PrettyTable:
+    tbl = PrettyTable(field_names=field_names, align="l")
 
     for row in rows:
-        tbl.add_row(*[str(cell) for cell in row])
+        tbl.add_row(row)
 
     return tbl
 
@@ -1880,10 +1741,10 @@ def create_remote_storage_dir(node, path="") -> Optional[str, None]:
 def format_timestamp(timestamp):
     try:
         # try convert seconds
-        return datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
     except ValueError:
         # try convert miliseconds
-        return datetime.datetime.fromtimestamp(timestamp / 1000, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.datetime.utcfromtimestamp(timestamp / 1000).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def wait_ami_available(client, ami_id):
@@ -1963,38 +1824,35 @@ def gce_download_dir(bucket, path, target):
         obj.download_to_filename(filename=local_file_path)
 
 
-def download_dir_from_cloud(url, dst_dir=None, skip_if_dst_dir_exists=True):
+def download_dir_from_cloud(url):
     """
     download a directory from AWS S3 or from google storage
 
     :param url: a url that starts with `s3://` or `gs://`
-    :param dst_dir: destination directory to download the content to
-    :param skip_if_dst_dir_exists: skip download if
-    :return: the temp directory created with the downloaded content or dst_dir if it was provided
+    :return: the temp directory create with the downloaded content
     """
     if not url:
         return url
 
     md5 = hashlib.md5()  # deepcode ignore insecureHash: can't change it
     md5.update(url.encode("utf-8"))
-    if not dst_dir:
-        dst_dir = os.path.join("/tmp/download_from_cloud", md5.hexdigest())
+    tmp_dir = os.path.join("/tmp/download_from_cloud", md5.hexdigest())
     parsed = urlparse(url)
-    LOGGER.info("Downloading [%s] to [%s]", url, dst_dir)
-    if os.path.isdir(dst_dir) and os.listdir(dst_dir) and skip_if_dst_dir_exists:
-        LOGGER.warning("[{}] already exists, skipping download".format(dst_dir))
+    LOGGER.info("Downloading [%s] to [%s]", url, tmp_dir)
+    if os.path.isdir(tmp_dir) and os.listdir(tmp_dir):
+        LOGGER.warning("[{}] already exists, skipping download".format(tmp_dir))
     elif url.startswith("s3://"):
-        s3_download_dir(parsed.hostname, parsed.path, dst_dir)
+        s3_download_dir(parsed.hostname, parsed.path, tmp_dir)
     elif url.startswith("gs://"):
-        gce_download_dir(parsed.hostname, parsed.path, dst_dir)
+        gce_download_dir(parsed.hostname, parsed.path, tmp_dir)
     elif os.path.isdir(url):
-        dst_dir = url
+        tmp_dir = url
     else:
         raise ValueError("Unsupported url schema or non-existing directory [{}]".format(url))
-    if not dst_dir.endswith("/"):
-        dst_dir += "/"
+    if not tmp_dir.endswith("/"):
+        tmp_dir += "/"
     LOGGER.info("Finished downloading [%s]", url)
-    return dst_dir
+    return tmp_dir
 
 
 def filter_aws_instances_by_type(instances):
@@ -2003,7 +1861,6 @@ def filter_aws_instances_by_type(instances):
         "loader_nodes": [],
         "monitor_nodes": [],
         "kubernetes_nodes": [],
-        "vs_nodes": [],
     }
 
     for instance in instances:
@@ -2020,8 +1877,6 @@ def filter_aws_instances_by_type(instances):
             filtered_instances["loader_nodes"].append(instance)
         elif "-k8s-" in name:
             filtered_instances["kubernetes_nodes"].append(instance)
-        elif "vs-node" in name:
-            filtered_instances["vs_nodes"].append(instance)
 
     return filtered_instances
 
@@ -2167,9 +2022,7 @@ def get_post_behavior_actions(config):
         "db_nodes": {"node_types": ["scylla-db"], "action": None},
         "monitor_nodes": {"node_types": ["monitor"], "action": None},
         "loader_nodes": {"node_types": ["loader"], "action": None},
-        "vector_store_nodes": {"node_types": ["vector-store"], "action": None},
         "k8s_cluster": {"node_types": ["k8s"], "action": None},
-        "emr_cluster": {"node_types": ["emr"], "action": None},
     }
 
     for key, value in action_per_type.items():
@@ -2979,64 +2832,3 @@ def format_size(size_in_bytes):
         if size_in_bytes < 1024:
             return f"{size_in_bytes:.2f} {unit}"
         size_in_bytes /= 1024
-
-
-def get_hdr_tags(stress_tool: str, stress_operation: str, throttled_load: bool) -> list:
-    match stress_tool:
-        case "cassandra-stress":
-            suffix = "-rt" if throttled_load else "-st"
-            if stress_operation == "MIXED":
-                hdr_tags = [f"WRITE{suffix}", f"READ{suffix}"]
-            elif stress_operation == "READ":
-                hdr_tags = [f"READ{suffix}"]
-            elif stress_operation == "WRITE":
-                hdr_tags = [f"WRITE{suffix}"]
-            else:
-                raise ValueError(f"Unsupported stress_operation: {stress_operation}")
-        case "scylla-bench":
-            if stress_operation.lower() in ("write", "counter_update"):
-                return ["co-fixed"]
-            elif stress_operation.lower() == "mixed":
-                return ["co-fixed-write", "co-fixed-read"]
-            elif stress_operation.lower() in ("read", "counter_read", "scan"):
-                return ["co-fixed"]
-            else:
-                raise ValueError(f"Unknown scylla-bench mode: {stress_operation}")
-        case "latte":
-            # TODO: will be defined later
-            raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")
-        case _:
-            raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")
-
-    return hdr_tags
-
-
-def download_and_unpack_logs(test_id: str, log_type: str, download_to: str = None) -> str:
-    logs_links = list_logs_by_test_id(test_id)
-    tmp_dir = download_to or os.path.join("/tmp/", test_id)
-    if not os.path.exists(tmp_dir):
-        os.makedirs(tmp_dir)
-    logs_file = ""
-    for log in logs_links:
-        if log["type"] == log_type:
-            logs_file = S3Storage().download_file(link=log["link"], dst_dir=tmp_dir)
-            LOGGER.debug("Downloaded %slog to %s", log_type, logs_file)
-
-    if not logs_file:
-        raise ValueError("%s not found in argus logs", log_type)
-
-    LOGGER.debug("Unpacking loader logs...")
-    from sdcm.monitorstack import extract_file_from_tar_archive  # noqa: PLC0415 # avoid circular import
-
-    hdr_folder = extract_file_from_tar_archive(pattern=log_type, archive=logs_file, extract_dir=tmp_dir)
-    LOGGER.debug("%s logs unpacked to %s", log_type, hdr_folder[test_id])
-    if not hdr_folder:
-        raise ValueError(f"Failed to unpack logs {logs_file} for test_id {test_id}")
-
-    return hdr_folder[test_id]
-
-
-def get_node_disk_usage(node: "BaseNode") -> float:
-    """Returns disk usage percentage for a node"""
-    result = node.remoter.run("df --output=pcent /var/lib/scylla | sed 1d | sed 's/%//'")
-    return float(result.stdout.strip())

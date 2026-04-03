@@ -134,9 +134,6 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         """
 
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
-
-        self.download_artifacts_from_s3()
-
         stress_queue = []
 
         # prepare write workload
@@ -552,7 +549,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             {
                 "node_benchmarks": benchmarks_results,
                 "nemesis_details": nemeses_stats,
-                "nemesis_name": str(self.params.get("nemesis_class_name")),
+                "nemesis_name": self.params.get("nemesis_class_name"),
                 "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
             }
         )

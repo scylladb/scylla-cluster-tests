@@ -12,6 +12,13 @@ n_loaders: 4
 n_monitor_nodes: 1
 region_name: us-east-1
 backup_bucket_location: 'manager-backup-tests-us-east-1'
+append_scylla_yaml:
+  auto_snapshot: false
+  object_storage_endpoints:
+    - name: s3.us-east-1.amazonaws.com
+      port: 443
+      https: true
+      aws_region: us-east-1
 aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'
 user_prefix: 'manager-backup-benchmark'
 use_hdrhistogram: true
@@ -28,10 +35,10 @@ round_robin: true
 # Convert to "disk MB/s" using 1000/1024: 625 * 1000 / 1024 = ~610.35 MB/s
 # Take 75% of that: 0.75 * 610.35 = ~457.76 MB/s
 append_scylla_args: '--stream_io_throughput_mb_per_sec 458 --blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
-backtrace_decoding: true
-backtrace_stall_decoding: false
+backtrace_decoding: false
 argus_email_report_template: email_report_performance.yaml
 
+store_perf_results: false
 use_prepared_loaders: false
 use_placement_group: true
 use_capacity_reservation: false

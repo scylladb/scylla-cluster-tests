@@ -52,6 +52,9 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     def setUp(self):
         super().setUp()
 
+        # need to remove the email_data.json file, as in the builders, it will accumulate and it will send multiple
+        # emails for each test. When we move to use SCT Runners, it won't be necessary.
+        self._clean_email_data()
         if self.params.get("run_db_node_benchmarks"):
             self.log.info("Validate node benchmarks results")
             compare_results = self.db_cluster.get_node_benchmarks_results() or {}
@@ -186,10 +189,14 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         keyspace_num=1,
         prefix="",
         debug_message="",
+        save_stats=True,
     ):
         if debug_message:
             self.log.debug(debug_message)
 
+        if save_stats:
+            if not self.exists():
+                self.create_test_stats(sub_type=sub_type)
         stress_queue = self.run_stress_thread(
             stress_cmd=stress_cmd,
             stress_num=stress_num,
@@ -197,7 +204,24 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             prefix=prefix,
             stats_aggregate_cmds=False,
         )
-        self.get_stress_results(queue=stress_queue, store_results=True)
+        results = self.get_stress_results(queue=stress_queue, store_results=True)
+        if save_stats:
+            self.update_test_details(scylla_conf=True)
+            self.display_results(results, test_name=test_name)
+            self.check_regression()
+            total_ops = self._get_total_ops()
+            self.log.debug("Total ops: {}".format(total_ops))
+            return total_ops
+        return None
+
+    def _get_total_ops(self):
+        return self._stats["results"]["stats_total"]["op rate"]
+
+    @staticmethod
+    def _clean_email_data():
+        email_data_path = "email_data.json"
+        with open(email_data_path, "w", encoding="utf-8"):
+            pass
 
     def _stop_load_when_nemesis_threads_end(self):
         for nemesis_thread in self.db_cluster.nemesis_threads:
@@ -219,6 +243,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         if prepare_write_cmd:
             # create new document in ES with doc_id = test_id + timestamp
             # allow to correctly save results for future compare
+            self.create_test_stats(sub_type="write-prepare", doc_id_with_timestamp=True)
             stress_queue = []
             params = {"prefix": "preload-"}
             # Check if the prepare_cmd is a list of commands
@@ -259,6 +284,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
             for stress in stress_queue:
                 self.get_stress_results(queue=stress, store_results=False)
+
+            self.update_test_details()
         else:
             self.log.warning("No prepare command defined in YAML!")
 
@@ -278,35 +305,80 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     def run_read_workload(self, nemesis=False):
         base_cmd_r = self.params.get("stress_cmd_r")
-        self.run_workload(stress_cmd=base_cmd_r, nemesis=nemesis, sub_type="read")
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(sub_type="read", doc_id_with_timestamp=True)
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1, stats_aggregate_cmds=False)
+        if nemesis:
+            interval = self.params.get("nemesis_interval")
+            time.sleep(interval)  # Sleeping one interval before starting the nemesis
+            self.db_cluster.add_nemesis(
+                nemesis=self.get_nemesis_class(), tester_obj=self, hdr_tags=stress_queue.hdr_tags
+            )
+            self.db_cluster.start_nemesis(interval=interval)
+        results = self.get_stress_results(queue=stress_queue)
+
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
+        self.update_test_details()
+        self.display_results(results, test_name="test_latency" if not nemesis else "test_latency_with_nemesis")
+        self.check_regression()
 
     def run_write_workload(self, nemesis=False):
         base_cmd_w = self.params.get("stress_cmd_w")
-        self.run_workload(stress_cmd=base_cmd_w, nemesis=nemesis, sub_type="write")
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(sub_type="write", doc_id_with_timestamp=True)
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1, stats_aggregate_cmds=False)
+        if nemesis:
+            self.db_cluster.add_nemesis(
+                nemesis=self.get_nemesis_class(), tester_obj=self, hdr_tags=stress_queue.hdr_tags
+            )
+            self.db_cluster.start_nemesis(interval=self.params.get("nemesis_interval"))
+        results = self.get_stress_results(queue=stress_queue)
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
+        self.update_test_details()
+        self.display_results(results, test_name="test_latency")
+        self.check_regression()
 
     def run_mixed_workload(self, nemesis=False):
         base_cmd_m = self.params.get("stress_cmd_m")
-        self.run_workload(stress_cmd=base_cmd_m, nemesis=nemesis, sub_type="mixed")
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(sub_type="mixed", doc_id_with_timestamp=True)
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=1, stats_aggregate_cmds=False)
+        if nemesis:
+            self.db_cluster.add_nemesis(
+                nemesis=self.get_nemesis_class(), tester_obj=self, hdr_tags=stress_queue.hdr_tags
+            )
+            self.db_cluster.start_nemesis(interval=self.params.get("nemesis_interval"))
+        results = self.get_stress_results(queue=stress_queue)
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
+        self.update_test_details(scylla_conf=True)
+        self.display_results(results, test_name="test_latency")
+        self.check_regression()
 
     def run_workload(self, stress_cmd, nemesis=False, sub_type=None):
         # create new document in ES with doc_id = test_id
         # allow to correctly save results for future compare
         self.stress_cmd = stress_cmd
-        stress_queues = self._run_all_stress_cmds(
-            [], params={"stress_cmd": stress_cmd, "stress_num": 1, "stats_aggregate_cmds": False}
-        )
-        all_hdr_tags = [tag for queue in stress_queues for tag in queue.hdr_tags]
+        test_index = f"latency-during-ops-{sub_type}"
+        self.create_test_stats(sub_type=sub_type, append_sub_test_to_name=False, test_index=test_index)
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
         if nemesis:
             interval = self.params.get("nemesis_interval")
             time.sleep(interval * 60)  # Sleeping one interval (in minutes) before starting the nemesis
-            self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self, hdr_tags=all_hdr_tags)
+            self.db_cluster.add_nemesis(
+                nemesis=self.get_nemesis_class(), tester_obj=self, hdr_tags=stress_queue.hdr_tags
+            )
             self.db_cluster.start_nemesis(interval=interval, cycles_count=1)
             self._stop_load_when_nemesis_threads_end()
-
-        results = []
-        for stress_queue in stress_queues:
-            results.extend(self.get_stress_results(queue=stress_queue))
+        results = self.get_stress_results(queue=stress_queue)
+        self.update_test_details(scrap_metrics_step=60)
         self.display_results(results, test_name="test_latency" if not nemesis else "test_latency_with_nemesis")
+        if nemesis:
+            self.check_latency_during_ops(hdr_tags=stress_queue.hdr_tags)
+        else:
+            self.check_regression()
 
     def prepare_mv(self, on_populated=False):
         with self.db_cluster.cql_connection_patient_exclusive(self.db_cluster.nodes[0]) as session:
@@ -342,8 +414,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         ops_without_mv = self._workload(
             stress_cmd=base_cmd_w,
             stress_num=2,
-            test_name=test_name,
             sub_type="write_without_mv",
+            test_name=test_name,
             keyspace_num=1,
             debug_message="First write cassandra-stress command: {}".format(base_cmd_w),
         )
@@ -355,8 +427,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         ops_with_mv = self._workload(
             stress_cmd=base_cmd_w,
             stress_num=2,
-            test_name=test_name,
             sub_type="write_with_mv",
+            test_name=test_name,
             keyspace_num=1,
             debug_message="Second write cassandra-stress command: {}".format(base_cmd_w),
         )
@@ -382,22 +454,24 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         base_cmd_w = self.params.get("stress_cmd_w")
         base_cmd_r = self.params.get("stress_cmd_r")
 
+        self.create_test_stats()
         # prepare schema and data before read
         self._workload(
             stress_cmd=base_cmd_p,
             stress_num=2,
             test_name=test_name,
-            keyspace_num=1,
             prefix="preload-",
+            keyspace_num=1,
             debug_message="Prepare the test, run cassandra-stress command: {}".format(base_cmd_p),
+            save_stats=False,
         )
 
         # run a read workload
         ops_without_mv = self._workload(
             stress_cmd=base_cmd_r,
             stress_num=2,
-            test_name=test_name,
             sub_type="read_without_mv",
+            test_name=test_name,
             keyspace_num=1,
             debug_message="First read cassandra-stress command: {}".format(base_cmd_r),
         )
@@ -410,17 +484,18 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 stress_cmd=base_cmd_w,
                 stress_num=2,
                 test_name=test_name,
-                keyspace_num=1,
                 prefix="preload-",
+                keyspace_num=1,
                 debug_message="Prepare test before second cassandra-stress command: {}".format(base_cmd_w),
+                save_stats=False,
             )
 
         # run a read workload
         ops_with_mv = self._workload(
             stress_cmd=base_cmd_r,
             stress_num=2,
-            test_name=test_name,
             sub_type="read_with_mv",
+            test_name=test_name,
             keyspace_num=1,
             debug_message="Second read cassandra-stress command: {}".format(base_cmd_r),
         )
@@ -443,6 +518,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         base_cmd_p = self.params.get("prepare_write_cmd")
         base_cmd_m = self.params.get("stress_cmd_m")
 
+        self.create_test_stats()
         # run a write workload as a preparation
         self._workload(
             stress_cmd=base_cmd_p,
@@ -451,14 +527,15 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             keyspace_num=1,
             prefix="preload-",
             debug_message="Prepare the test, run cassandra-stress command: {}".format(base_cmd_p),
+            save_stats=False,
         )
 
         # run a mixed workload without MV
         ops_without_mv = self._workload(
             stress_cmd=base_cmd_m,
             stress_num=2,
-            test_name=test_name,
             sub_type="mixed_without_mv",
+            test_name=test_name,
             keyspace_num=1,
             debug_message="First mixed cassandra-stress command: {}".format(base_cmd_m),
         )
@@ -469,8 +546,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         ops_with_mv = self._workload(
             stress_cmd=base_cmd_p,
             stress_num=2,
-            test_name=test_name,
             sub_type="mixed_with_mv",
+            test_name=test_name,
             keyspace_num=1,
             debug_message="Second start of mixed cassandra-stress command: {}".format(base_cmd_p),
         )
@@ -540,16 +617,19 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             stress_multiplier = stress_multiplier_w
         # create new document in ES with doc_id = test_id + timestamp
         # allow to correctly save results for future compare
+        self.create_test_stats(doc_id_with_timestamp=True)
         self.run_fstrim_on_all_db_nodes()
 
         # run a workload
-        stress_queues = self._run_all_stress_cmds(
-            [], params={"stress_cmd": base_cmd_w, "stress_num": stress_multiplier, "stats_aggregate_cmds": False}
+        stress_queue = self.run_stress_thread(
+            stress_cmd=base_cmd_w, stress_num=stress_multiplier, stats_aggregate_cmds=False
         )
-        results = []
-        for stress_queue in stress_queues:
-            results.extend(self.get_stress_results(queue=stress_queue))
+        results = self.get_stress_results(queue=stress_queue)
+
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
+        self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name="test_write")
+        self.check_regression()
 
     def test_read(self):
         """
@@ -569,17 +649,20 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         # create new document in ES with doc_id = test_id + timestamp
         # allow to correctly save results for future compare
+        self.create_test_stats(doc_id_with_timestamp=True)
         # wait compactions will be finished
         self.wait_no_compactions_running(n=240, sleep_time=180)
         self.run_fstrim_on_all_db_nodes()
         # run a read workload
-        stress_queues = self._run_all_stress_cmds(
-            [], params={"stress_cmd": base_cmd_r, "stress_num": stress_multiplier, "stats_aggregate_cmds": False}
+        stress_queue = self.run_stress_thread(
+            stress_cmd=base_cmd_r, stress_num=stress_multiplier, stats_aggregate_cmds=False
         )
-        results = []
-        for stress_queue in stress_queues:
-            results.extend(self.get_stress_results(queue=stress_queue))
+        results = self.get_stress_results(queue=stress_queue)
+
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
+        self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name="test_read")
+        self.check_regression()
 
     def test_mixed(self):
         """
@@ -599,16 +682,19 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         # run a mixed workload
         # create new document in ES with doc_id = test_id + timestamp
         # allow to correctly save results for future compare
+        self.create_test_stats(doc_id_with_timestamp=True)
         # wait compactions will be finished
         self.wait_no_compactions_running(n=240, sleep_time=180)
         self.run_fstrim_on_all_db_nodes()
-        stress_queues = self._run_all_stress_cmds(
-            [], params={"stress_cmd": base_cmd_m, "stress_num": stress_multiplier, "stats_aggregate_cmds": False}
+        stress_queue = self.run_stress_thread(
+            stress_cmd=base_cmd_m, stress_num=stress_multiplier, stats_aggregate_cmds=False
         )
-        results = []
-        for stress_queue in stress_queues:
-            results.extend(self.get_stress_results(queue=stress_queue))
+        results = self.get_stress_results(queue=stress_queue)
+
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
+        self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name="test_mixed")
+        self.check_regression()
 
     def test_latency(self):
         """
@@ -714,19 +800,13 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self.log.debug("Run stress test with user profile {}".format(user_profile))
             assert os.path.exists(user_profile), "File not found: {}".format(user_profile)
             self.log.debug("Stress cmd: {}".format(stress_cmd))
-            stress_queues = self._run_all_stress_cmds(
-                [],
-                params={
-                    "stress_cmd": stress_cmd,
-                    "stress_num": 1,
-                    "profile": user_profile,
-                    "stats_aggregate_cmds": False,
-                },
+            stress_queue = self.run_stress_thread(
+                stress_cmd=stress_cmd, stress_num=1, profile=user_profile, stats_aggregate_cmds=False
             )
-            results = []
-            for stress_queue in stress_queues:
-                results.extend(self.get_stress_results(queue=stress_queue))
+            results = self.get_stress_results(queue=stress_queue)
+            self.update_test_details(scylla_conf=True)
             self.display_results(results, test_name=test_name)
+            self.check_regression()
             self.log.debug("Finish stress test with user profile {}".format(user_profile))
 
         def get_mv_name(user_profile):
@@ -769,6 +849,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         test_name = "test_mv_write"
         duration = self.params.get("test_duration")
         self.log.debug("Start materialized views performance test. Test duration {} minutes".format(duration))
+        self.create_test_stats()
         cmd_no_mv = self.params.get("stress_cmd_no_mv")
         cmd_no_mv_profile = self.params.get("stress_cmd_no_mv_profile")
 
@@ -819,10 +900,13 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             "32 -concurrency 512 -replication-factor 3"
         )
 
+        self.create_test_stats()
         stress_queue = self.run_stress_thread_bench(stress_cmd=base_cmd_r, stats_aggregate_cmds=False)
         results = self.get_stress_results_bench(queue=stress_queue)
 
+        self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name="test_read_bench")
+        self.check_regression()
 
     # Large Partition Tests
     def test_timeseries_bench(self):
@@ -835,6 +919,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             "-concurrency=48 -max-rate=150000 -rows-per-request=5000"
         )
 
+        self.create_test_stats(sub_type="write")
         self._scylla_bench_prepare_table()
         self.run_stress_thread_bench(stress_cmd=cmd_w, stats_aggregate_cmds=False)
         start_timestamp = int(time.time())
@@ -846,10 +931,35 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             "-rows-per-request=1000000 -no-lower-bound -start-timestamp=%s -duration=60m" % start_timestamp
         )
 
+        self.create_test_stats(sub_type="read")
         stress_queue = self.run_stress_thread_bench(stress_cmd=cmd_r, stats_aggregate_cmds=False)
         results = self.get_stress_results_bench(queue=stress_queue)
+        self.update_test_details()
         self.display_results(results, test_name="test_timeseries_read_bench")
+        self.check_regression()
         self.kill_stress_thread()
+
+    def build_histogram(self, workload: str, hdr_tags: list):
+        if not self.params["use_hdrhistogram"]:
+            return
+
+        self.log.debug(f"building histograms for tags {hdr_tags}")
+        start_time = self.get_test_start_time() or self.start_time
+        end_time = time.time()
+
+        histogram_total_data = self.get_hdrhistogram(
+            hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time
+        )
+        self.update_hdrhistograms(histogram_name="test_histogram", histogram_data=histogram_total_data)
+
+        histogram_data_by_interval = self.get_hdrhistogram_by_interval(
+            hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time
+        )
+
+        self.update_hdrhistograms(
+            histogram_name="test_histogram_by_interval", histogram_data=histogram_data_by_interval
+        )
+        self.log.debug(f"building histograms for tags {hdr_tags} completed")
 
 
 class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
@@ -883,12 +993,14 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
         self.tester = self
         self.monitoring_set = self.monitors
 
-        stress_queues = self._run_all_stress_cmds(
-            [], params={"stress_cmd": stress_cmd, "stress_num": 1, "stats_aggregate_cmds": False}
-        )
-        all_hdr_tags = [tag for queue in stress_queues for tag in queue.hdr_tags]
+        if sub_type is None:
+            sub_type = "read" if " read " in stress_cmd else "write" if " write " in stress_cmd else "mixed"
+        test_index = f"latency-during-upgrade-{sub_type}"
+        self.create_test_stats(sub_type=sub_type, append_sub_test_to_name=False, test_index=test_index)
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
         time.sleep(60)  # postpone measure steady state latency to skip c-s start period when latency is high
-        self.steady_state_latency(hdr_tags=all_hdr_tags)
+        self.steady_state_latency(hdr_tags=stress_queue.hdr_tags)
+        versions_list = []
 
         def _get_version_and_build_id_from_node(node):
             version = node.remoter.run("scylla --version")
@@ -897,25 +1009,29 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
 
         for node in self.db_cluster.nodes:
             base_version, base_build_id = _get_version_and_build_id_from_node(node)
-            self.log.debug("Upgrading node %s with version %s and build id %S", node.name, base_version, base_build_id)
-            self.upgrade_node(node, hdr_tags=all_hdr_tags)
+            self.upgrade_node(node, hdr_tags=stress_queue.hdr_tags)
             target_version, target_build_id = _get_version_and_build_id_from_node(node)
-            self.log.debug(
-                "Finished upgrading node %s. Current version is %s and build id is %S",
-                node.name,
-                target_version,
-                target_build_id,
+            versions_list.append(
+                {
+                    "base_version": base_version,
+                    "base_build_id": base_build_id,
+                    "target_version": target_version,
+                    "target_build_id": target_build_id,
+                    "node_name": node.name,
+                }
             )
             time.sleep(120)  # sleeping 2 min to give time for cache to re-heat
-        self.post_upgrades_steady_state(hdr_tags=all_hdr_tags)
+        self.post_upgrades_steady_state(hdr_tags=stress_queue.hdr_tags)
 
         # TODO: check if all `base_version` and all `target_version` are the same
+        self.update({"base_target_versions": versions_list})
         self._stop_stress_when_finished()
-        results = []
-        for stress_queue in stress_queues:
-            results.extend(self.get_stress_results(queue=stress_queue))
+        results = self.get_stress_results(queue=stress_queue)
+        self.update_test_details(scrap_metrics_step=60)
         self.display_results(results, test_name="test_latency_with_upgrade")
+        self.update_test_details(scrap_metrics_step=60)
         self.display_results(results, test_name="test_latency_during_upgrade")
+        self.check_latency_during_ops(hdr_tags=stress_queue.hdr_tags)
 
     def _prepare_latency_with_upgrade(self):
         self.run_fstrim_on_all_db_nodes()
@@ -964,16 +1080,17 @@ class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
 
-        stress_queues = self._run_all_stress_cmds(
-            [], params={"stress_cmd": self.params.get("stress_cmd_r"), "stress_num": 1, "stats_aggregate_cmds": False}
+        self.create_test_stats(sub_type="read", append_sub_test_to_name=False, test_index="mv-overloading-latency-read")
+        stress_queue = self.run_stress_thread(
+            stress_cmd=self.params.get("stress_cmd_r"), stress_num=1, stats_aggregate_cmds=False
         )
-        all_hdr_tags = [tag for queue in stress_queues for tag in queue.hdr_tags]
 
-        self.steady_state_read_workload_latency(hdr_tags=all_hdr_tags)  # stress_cmd_r
-        self.do_rewrite_workload(hdr_tags=all_hdr_tags)  # stress_cmd_no_mv + #stress_cmd_r
-        self.wait_mv_sync(hdr_tags=all_hdr_tags)  # stress_cmd_r
-        self.do_rewrite_workload_with_mv(hdr_tags=all_hdr_tags)  # stress_cmd_mv + #stress_cmd_r
+        self.steady_state_read_workload_latency(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_r
+        self.do_rewrite_workload(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_no_mv + #stress_cmd_r
+        self.wait_mv_sync(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_r
+        self.do_rewrite_workload_with_mv(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_mv + #stress_cmd_r
         self.loaders.kill_stress_thread()
+        self.check_latency_during_ops(hdr_tags=stress_queue.hdr_tags)
 
     @latency_calculator_decorator
     def steady_state_read_workload_latency(self, hdr_tags: list[str]):
@@ -987,12 +1104,8 @@ class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest
         # NOTE: 'latency_calculator_decorator' was designed to use exactly main stress hdr file info here.
         # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
         base_cmd = self.params.get("stress_cmd_no_mv")
-        stress_queues = self._run_all_stress_cmds(
-            [], params={"stress_cmd": base_cmd, "stress_num": 1, "stats_aggregate_cmds": False}
-        )
-        results = []
-        for stress_queue in stress_queues:
-            results.extend(self.get_stress_results(queue=stress_queue, store_results=False))
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
+        results = self.get_stress_results(queue=stress_queue, store_results=False)
         self.display_results(results, test_name="do_rewrite_workload")
 
     @latency_calculator_decorator
@@ -1012,10 +1125,6 @@ class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest
         # NOTE: 'latency_calculator_decorator' was designed to use exactly main stress hdr file info here.
         # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
         base_cmd = self.params.get("stress_cmd_mv")
-        stress_queues = self._run_all_stress_cmds(
-            [], params={"stress_cmd": base_cmd, "stress_num": 1, "stats_aggregate_cmds": False}
-        )
-        results = []
-        for stress_queue in stress_queues:
-            results.extend(self.get_stress_results(queue=stress_queue, store_results=False))
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
+        results = self.get_stress_results(queue=stress_queue, store_results=False)
         self.display_results(results, test_name="do_rewrite_workload_with_mv")
