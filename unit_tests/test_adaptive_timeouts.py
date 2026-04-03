@@ -97,9 +97,16 @@ Counter Cache          : entries 0, size 0 bytes, capacity 0 bytes, 0 hits, 0 re
 Percent Repaired       : 0.0%
 Token                  : (invoke with -T/--tokens to see all 256 tokens)
 """
+    node_exporter_metrics = """
+node_load1 1.20
+node_load5 2.30
+node_load15 1.60
+node_boot_time_seconds 1678308000
+    """
     fake_remoter.result_map = {
         r"cat /etc/scylla.d/io_properties.yaml": Result(stdout=io_properties, stderr="", exited=0),
         r"curl -s localhost:9180/metrics": Result(stdout=scylla_metrics, exited=0),
+        r"curl -s localhost:9100/metrics": Result(stdout=node_exporter_metrics, exited=0),
         r"nodetool info": Result(stdout=nodetool_info, exited=0),
         r"uptime": Result(stdout=" 10:00:00 up 1 day,  1:00,  1 user,  load average: 1.20, 2.30, 1.60", exited=0),
     }
