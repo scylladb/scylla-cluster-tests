@@ -3,7 +3,6 @@ AbortRepairMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -20,7 +19,6 @@ AddDropColumnMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -37,7 +35,6 @@ AddRemoveDcNemesis:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: true
   manager_operation: false
@@ -54,7 +51,6 @@ AddRemoveMvNemesis:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -71,7 +67,6 @@ AddRemoveRackNemesis:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -88,7 +83,6 @@ BlockNetworkMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -105,7 +99,6 @@ BootstrapStreamingErrorNemesis:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -122,7 +115,6 @@ CDCStressorMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -139,7 +131,6 @@ ClusterRollingRestart:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -156,7 +147,6 @@ ClusterRollingRestartRandomOrder:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -173,7 +163,6 @@ CorruptThenRebuildMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -190,7 +179,6 @@ CorruptThenRepairMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -207,7 +195,6 @@ CorruptThenScrubMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -224,7 +211,6 @@ CreateIndexNemesis:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -241,7 +227,6 @@ DecommissionMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: true
   manager_operation: false
@@ -258,7 +243,6 @@ DecommissionSeedNode:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -275,7 +259,6 @@ DecommissionStreamingErrMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -292,7 +275,6 @@ DeleteByPartitionsMonkey:
   delete_rows: true
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -309,7 +291,6 @@ DeleteByRowsRangeMonkey:
   delete_rows: true
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -326,7 +307,6 @@ DeleteOverlappingRowRangesMonkey:
   delete_rows: true
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -343,7 +323,6 @@ DisableBinaryGossipExecuteMajorCompaction:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -360,7 +339,6 @@ DrainKubernetesNodeThenDecommissionAndAddScyllaNode:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -377,7 +355,6 @@ DrainKubernetesNodeThenReplaceScyllaNode:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -394,7 +371,6 @@ DrainerMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -411,7 +387,6 @@ EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -428,7 +403,6 @@ EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -445,7 +419,6 @@ EndOfQuotaNemesis:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -462,7 +435,6 @@ EnospcAllNodesMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -479,7 +451,6 @@ EnospcMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -496,7 +467,6 @@ GrowShrinkClusterNemesis:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -513,7 +483,6 @@ GrowShrinkZeroTokenNode:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -530,7 +499,6 @@ HardRebootNodeMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -547,7 +515,6 @@ IsolateNodeWithIptableRuleNemesis:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -564,7 +531,6 @@ IsolateNodeWithProcessSignalNemesis:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -581,7 +547,6 @@ KillMVBuildingCoordinator:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -598,7 +563,6 @@ LoadAndStreamMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -615,7 +579,6 @@ MajorCompactionMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -632,7 +595,6 @@ MemoryStressMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -649,7 +611,6 @@ MgmtBackup:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: true
   manager_operation: true
@@ -666,7 +627,6 @@ MgmtBackupSpecificKeyspaces:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: true
   manager_operation: true
@@ -683,7 +643,6 @@ MgmtCorruptThenRepair:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: true
@@ -700,7 +659,6 @@ MgmtRepair:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: true
@@ -717,7 +675,6 @@ MgmtRestore:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: true
@@ -734,7 +691,6 @@ ModifyTableBloomFilterFpChanceMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -751,7 +707,6 @@ ModifyTableCachingMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -768,7 +723,6 @@ ModifyTableCommentMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -785,7 +739,6 @@ ModifyTableCompactionMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -802,7 +755,6 @@ ModifyTableCompressionMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -819,7 +771,6 @@ ModifyTableCrcCheckChanceMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -836,7 +787,6 @@ ModifyTableDclocalReadRepairChanceMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -853,7 +803,6 @@ ModifyTableDefaultTimeToLiveMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -870,7 +819,6 @@ ModifyTableGcGraceTimeMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -887,7 +835,6 @@ ModifyTableMaxIndexIntervalMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -904,7 +851,6 @@ ModifyTableMemtableFlushPeriodInMsMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -921,7 +867,6 @@ ModifyTableMinIndexIntervalMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -938,7 +883,6 @@ ModifyTableReadRepairChanceMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -955,7 +899,6 @@ ModifyTableSpeculativeRetryMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -972,7 +915,6 @@ ModifyTableTwcsWindowSizeMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -989,7 +931,6 @@ MultipleHardRebootNodeMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1006,7 +947,6 @@ NemesisSequence:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1023,7 +963,6 @@ NoCorruptRepairMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1040,7 +979,6 @@ NodeRestartWithResharding:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1057,7 +995,6 @@ NodeTerminateAndReplace:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1074,7 +1011,6 @@ NodeToolCleanupMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1091,7 +1027,6 @@ OperatorNodeReplace:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1108,7 +1043,6 @@ OperatorNodetoolFlushAndReshard:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1125,7 +1059,6 @@ PauseLdapNemesis:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: true
   manager_operation: false
@@ -1142,7 +1075,6 @@ RandomInterruptionNetworkMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1159,7 +1091,6 @@ RebuildStreamingErrMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1176,7 +1107,6 @@ RefreshBigMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1193,7 +1123,6 @@ RefreshMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1210,7 +1139,6 @@ RejectInterNodeNetworkMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1227,7 +1155,6 @@ RejectNodeExporterNetworkMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1244,7 +1171,6 @@ RejectThriftNetworkMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1261,7 +1187,6 @@ RemoveServiceLevelMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1278,7 +1203,6 @@ RepairStreamingErrMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1295,7 +1219,6 @@ ResetLocalSchemaMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1312,7 +1235,6 @@ RestartThenRepairNodeMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1329,7 +1251,6 @@ RollingRestartConfigChangeInternodeCompression:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1346,7 +1267,6 @@ ScyllaKillMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1363,7 +1283,6 @@ SerialRestartOfElectedTopologyCoordinatorNemesis:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1380,7 +1299,6 @@ SlaDecreaseSharesDuringLoad:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1397,7 +1315,6 @@ SlaIncreaseSharesByAttachAnotherSlDuringLoad:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1414,7 +1331,6 @@ SlaIncreaseSharesDuringLoad:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1431,7 +1347,6 @@ SlaMaximumAllowedSlsWithMaxSharesDuringLoad:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1448,7 +1363,6 @@ SlaReplaceUsingDetachDuringLoad:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1465,7 +1379,6 @@ SlaReplaceUsingDropDuringLoad:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1482,7 +1395,6 @@ SnapshotOperations:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1499,7 +1411,6 @@ SoftRebootNodeMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1516,7 +1427,6 @@ SslHotReloadingNemesis:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1533,7 +1443,6 @@ StartStopCleanupCompaction:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1550,7 +1459,6 @@ StartStopMajorCompaction:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1567,7 +1475,6 @@ StartStopScrubCompaction:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1584,7 +1491,6 @@ StartStopValidationCompaction:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1601,7 +1507,6 @@ StopStartInterfacesNetworkMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1618,7 +1523,6 @@ StopStartMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1635,7 +1539,6 @@ StopWaitStartMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1652,7 +1555,6 @@ SwitchBetweenPasswordAuthAndSaslauthdAuth:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1669,7 +1571,6 @@ TerminateAndRemoveNodeMonkey:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1686,7 +1587,6 @@ TerminateKubernetesHostThenDecommissionAndAddScyllaNode:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1703,7 +1603,6 @@ TerminateKubernetesHostThenReplaceScyllaNode:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1720,7 +1619,6 @@ ToggleAuditNemesisSyslog:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1737,7 +1635,6 @@ ToggleCDCMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1754,7 +1651,6 @@ ToggleGcModeMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1771,7 +1667,6 @@ ToggleLdapConfiguration:
   delete_rows: false
   disruptive: true
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: true
   manager_operation: false
@@ -1788,7 +1683,6 @@ ToggleTableIcsMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1805,7 +1699,6 @@ TopPartitions:
   delete_rows: false
   disruptive: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1822,7 +1715,6 @@ TruncateLargeParititionMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1839,7 +1731,6 @@ TruncateMonkey:
   delete_rows: false
   disruptive: false
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1856,7 +1747,6 @@ ValidateHintedHandoffShortDowntime:
   delete_rows: false
   disruptive: true
   free_tier_set: true
-  has_steady_run: false
   kubernetes: true
   limited: false
   manager_operation: false
