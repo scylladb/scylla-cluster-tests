@@ -21,7 +21,12 @@ from invoke import Result
 
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.adaptive_timeouts.load_info_store import AdaptiveTimeoutStore
+from sdcm.utils.adaptive_timeouts.load_info_store import (
+    AdaptiveTimeoutStore,
+    NodeLoadInfoService,
+    _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC,
+    _I4I_LARGE_SHARD_COUNT,
+)
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout, TABLETS_HARD_TIMEOUT
 from unit_tests.lib.fake_cluster import DummyDbCluster
 
@@ -77,6 +82,15 @@ scylla_lsa_free_space{shard="0"} 3749052416.000000
 scylla_lsa_free_space{shard="1"} 3750100992.000000
 scylla_lsa_free_space{shard="2"} 3750887424.000000
     """
+    # 107374182400 bytes == 102400 MB == 100 GB
+    node_exporter_metrics = """
+node_load1 1.20
+node_load5 2.30
+node_load15 1.60
+node_boot_time_seconds 1678343052.0
+node_filesystem_size_bytes{device="/dev/sda1",fstype="ext4",mountpoint="/var/lib/scylla"} 107374182400.0
+node_filesystem_avail_bytes{device="/dev/sda1",fstype="ext4",mountpoint="/var/lib/scylla"} 53687091200.0
+    """
     nodetool_info = """
 Using /etc/scylla/scylla.yaml as the config file
 ID                     : aa7409d6-4129-4e6a-96f8-e571abdabe7c
@@ -100,8 +114,10 @@ Token                  : (invoke with -T/--tokens to see all 256 tokens)
     fake_remoter.result_map = {
         r"cat /etc/scylla.d/io_properties.yaml": Result(stdout=io_properties, stderr="", exited=0),
         r"curl -s localhost:9180/metrics": Result(stdout=scylla_metrics, exited=0),
+        r"curl -s localhost:9100/metrics": Result(stdout=node_exporter_metrics, exited=0),
         r"nodetool info": Result(stdout=nodetool_info, exited=0),
         r"uptime": Result(stdout=" 10:00:00 up 1 day,  1:00,  1 user,  load average: 1.20, 2.30, 1.60", exited=0),
+        r"cat /etc/scylla/scylla.yaml": Result(stdout="", exited=0),
     }
     remoter = RemoteCmdRunnerBase.create_remoter("test-node-host")
     yield remoter
@@ -170,14 +186,17 @@ def test_decommission_timeout_is_calculated_and_stored(publish_or_dump, fake_nod
 
 @mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
 @mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
-def test_tablets_decommission_uses_predefined_timeouts(
+def test_tablets_decommission_timeout_is_calculated_from_data_size(
     hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
 ):
     mock_tablets_feature.return_value = True
     with adaptive_timeout(
         operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
     ) as timeout:
-        assert timeout == TABLETS_HARD_TIMEOUT
+        # node_data_size_mb=102400, expected_throughput=69/2*3=103.5 → estimated≈989.4s
+        # hard = int(estimated * 4) = 3957
+        expected_hard = int(102400 / (_I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3) * 4)
+        assert timeout == expected_hard
 
     soft_timeout_mock.assert_not_called()
     hard_timeout_mock.assert_not_called()
@@ -200,3 +219,104 @@ def test_tablets_new_node_uses_predefined_timeouts(
     hard_timeout_mock.assert_not_called()
     metrics = adaptive_timeout_store.get(operation=Operations.NEW_NODE.name)
     assert metrics[0].get("tablets_enabled") is True
+
+
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_tablets_tablet_migration_timeout_is_calculated_from_disk_size(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
+):
+    mock_tablets_feature.return_value = True
+    with adaptive_timeout(
+        operation=Operations.TABLET_MIGRATION, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+    ) as timeout:
+        # node_disk_size_mb=102400, expected_throughput=69/2*3=103.5
+        # estimated = 102400 * 0.9 / 103.5 ≈ 889.9s
+        # hard = int(estimated * 4) = 3559
+        expected_hard = int(102400 * 0.9 / (_I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3) * 4)
+        assert timeout == expected_hard
+
+    soft_timeout_mock.assert_not_called()
+    hard_timeout_mock.assert_not_called()
+    metrics = adaptive_timeout_store.get(operation=Operations.TABLET_MIGRATION.name)
+    assert metrics[0].get("tablets_enabled") is True
+
+
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_tablet_migration_timeout_fallback_uses_caller_timeout(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
+):
+    mock_tablets_feature.return_value = True
+    # Force metrics gathering to fail by making node_disk_size_mb raise
+    with mock.patch.object(
+        NodeLoadInfoService, "node_disk_size_mb", new_callable=mock.PropertyMock, side_effect=ValueError("no disk")
+    ):
+        with adaptive_timeout(
+            operation=Operations.TABLET_MIGRATION, node=fake_node, stats_storage=adaptive_timeout_store, timeout=3600
+        ) as timeout:
+            assert timeout == 3600  # fallback returns caller timeout (or 6 hours if not provided)
+
+
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_tablet_migration_uses_formula_when_tablets_disabled(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store
+):
+    # With tablets disabled, non-tablets formula: max(int(102400 MB * 0.9 * 0.03), 7200) = max(2764, 7200) = 7200 s
+    # hard_timeout is None, so yields soft_timeout directly.
+    with adaptive_timeout(
+        operation=Operations.TABLET_MIGRATION, node=fake_node, stats_storage=adaptive_timeout_store, timeout=7200
+    ) as timeout:
+        assert timeout == 7200
+
+    soft_timeout_mock.assert_not_called()
+    hard_timeout_mock.assert_not_called()
+
+
+def test_node_disk_size_mb(fake_node):
+    """node_disk_size_mb should return total /var/lib/scylla filesystem size in MB.
+
+    The fixture provides node_filesystem_size_bytes = 107374182400 bytes (100 GB = 102400 MB).
+    """
+    service = NodeLoadInfoService(
+        remoter=fake_node.remoter,
+        name=fake_node.name,
+        scylla_version=fake_node.scylla_version_detailed,
+        node_idx="0",
+    )
+    # 107374182400 bytes / 1024 / 1024 == 102400 MB
+    assert service.node_disk_size_mb == 102400
+
+
+def _make_service(fake_node, scylla_yaml_content: str) -> NodeLoadInfoService:
+    """Helper that builds a NodeLoadInfoService with a custom scylla.yaml mock."""
+    fake_node.remoter.result_map[r"cat /etc/scylla/scylla.yaml"] = Result(stdout=scylla_yaml_content, exited=0)
+    return NodeLoadInfoService(
+        remoter=fake_node.remoter,
+        name=fake_node.name,
+        scylla_version=fake_node.scylla_version_detailed,
+        node_idx="0",
+    )
+
+
+def test_expected_throughput_uses_scylla_yaml_value(fake_node):
+    """When stream_io_throughput_mb_per_sec is set and non-zero, return it directly."""
+    service = _make_service(fake_node, "stream_io_throughput_mb_per_sec: 200\n")
+    assert service.expected_throughput == 200.0
+
+
+def test_expected_throughput_falls_back_to_estimate_when_missing(fake_node):
+    """When stream_io_throughput_mb_per_sec is absent, estimate from shard count.
+
+    The fixture has 3 shards, so the estimate is _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3 == 103.5.
+    """
+    service = _make_service(fake_node, "cluster_name: test\n")
+    # shards_count == 3 (3 scylla_lsa_free_space entries in the metrics fixture)
+    assert service.expected_throughput == _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
+
+
+def test_expected_throughput_falls_back_to_estimate_when_zero(fake_node):
+    """When stream_io_throughput_mb_per_sec is explicitly 0, fall back to the estimate."""
+    service = _make_service(fake_node, "stream_io_throughput_mb_per_sec: 0\n")
+    assert service.expected_throughput == _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
