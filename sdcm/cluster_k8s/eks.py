@@ -862,6 +862,7 @@ class EksScyllaPodCluster(ScyllaPodCluster):
         rack: int = 0,
         enable_auto_bootstrap: bool = False,
         instance_type=None,
+        after_config=None,
     ) -> List[EksScyllaPodContainer]:
         new_nodes = super().add_nodes(
             count=count,
@@ -870,6 +871,7 @@ class EksScyllaPodCluster(ScyllaPodCluster):
             rack=rack,
             enable_auto_bootstrap=enable_auto_bootstrap,
             instance_type=instance_type,
+            after_config=after_config,
         )
         for node in new_nodes:
             ec2_instance_id = node.ec2_instance_id
