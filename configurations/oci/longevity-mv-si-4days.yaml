@@ -1,0 +1,12 @@
+# NOTE: it is config-wrapper for the test-cases/longevity/longevity-mv-si-4days.yaml
+
+user_prefix: 'long-mv-si-4d-oci'
+
+simulated_racks: 0
+availability_zone: "a,b,c" # use real AZs to balance limited DenseIO shapes usage
+
+# NOTE: use analog of the AWS "i4i.8xlarge" instance type
+oci_instance_type_db: "VM.DenseIO.E5.Flex:16" # <shape-name>:<ocpus>:<ram>:<nvmes>
+instance_provision: 'on_demand' # DenseIO shapes cannot be 'spot'
+
+oci_instance_type_loader:  "VM.Standard3.Flex:8:32" # <shape-name>:<ocpus>:<ram>:<nvmes>
