@@ -272,7 +272,9 @@ class NemesisBaseClass(NemesisFlags, ABC):
 
 
 class NemesisRunner:
-    def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
+    def __init__(
+        self, tester_obj, termination_event, *args, nemesis_selector: Optional[str] = None, nemesis_seed=None, **kwargs
+    ):
         # *args -  compatible with CategoricalMonkey
         self.tester = tester_obj  # ClusterTester object
         self.nemesis_registry = NemesisRegistry(base_class=NemesisBaseClass, flag_class=NemesisFlags)
@@ -2053,14 +2055,19 @@ class NemesisRunner:
 
     @property
     def nemesis_selector(self) -> str:
-        if self._nemesis_selector:
+        # None means selector wasn't provided explicitly for this runner instance.
+        # In that case, fall back to config-level selector (if any) for direct instantiation paths
+        # such as `sct.py nemesis-list`. An explicit empty string means "run all nemeses".
+        if self._nemesis_selector is not None:
             return self._nemesis_selector
 
-        self._nemesis_selector = self.cluster.params.get("nemesis_selector") or ""
-        return self._nemesis_selector
+        params_selector = self.cluster.params.get("nemesis_selector")
+        if isinstance(params_selector, list):
+            return params_selector[0] if params_selector else ""
+        return params_selector or ""
 
     @nemesis_selector.setter
-    def nemesis_selector(self, value: str):
+    def nemesis_selector(self, value: Optional[str]):
         self._nemesis_selector = value
 
     @property
