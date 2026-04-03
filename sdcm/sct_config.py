@@ -71,6 +71,7 @@ from sdcm.utils.version_utils import (
     find_scylla_repo,
     is_enterprise,
     ComparableScyllaVersion,
+    latest_unified_package,
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import (
@@ -2544,8 +2545,41 @@ class SCTConfiguration(BaseModel):
         dist_type = scylla_linux_distro.split("-")[0]
         dist_version = scylla_linux_distro.split("-")[-1]
 
+        # 6.0) handle relocatable:<version> scylla_version format
+        relocatable_arch = None  # Track arch resolved from relocatable: format for use in section 6.0.1
         if scylla_version := self.get("scylla_version"):
-            if self.get("cluster_backend") in ["docker", "k8s-eks", "k8s-gke"] and not self.get("docker_image"):
+            if scylla_version.startswith("relocatable:"):
+                self.log.info("Resolving scylla_version='%s' to unified package URL", scylla_version)
+                # Parse format: relocatable:<branch>:<arch>
+                # Examples: relocatable:latest, relocatable:master:x86_64, relocatable:branch-2025.1:aarch64
+                parts = scylla_version.split(":")
+                branch = parts[1] if len(parts) > 1 and parts[1] not in ("latest", "") else "master"
+                arch = parts[2] if len(parts) > 2 and parts[2] else "x86_64"
+                backend = self.get("cluster_backend")
+                if backend == "aws" and len(parts) <= 2:
+                    # Auto-detect arch from AWS instance type when not explicitly specified
+                    arch = self._get_normalized_arch(self.get("instance_type_db"), region_name=region_names[0])
+                elif backend != "aws" and len(parts) <= 2:
+                    # TODO: get_arch_from_instance_type should be implemented for all backends, not just AWS
+                    self.log.warning(
+                        "Architecture auto-detection is only supported on AWS backend. "
+                        "Defaulting to '%s'. Use 'relocatable:<branch>:<arch>' format to specify "
+                        "architecture explicitly, e.g. 'relocatable:master:aarch64'",
+                        arch,
+                    )
+                relocatable_arch = arch
+                unified_url = latest_unified_package(arch=arch, branch=branch)
+                self.log.info("Resolved unified package URL: %s", unified_url)
+                self["unified_package"] = unified_url
+                # ami_id_db_scylla auto-setting is handled below in section 6.0.1
+                self["scylla_version"] = ""
+                scylla_version = ""
+
+            if (
+                scylla_version
+                and self.get("cluster_backend") in ["docker", "k8s-eks", "k8s-gke"]
+                and not self.get("docker_image")
+            ):
                 self["docker_image"] = get_scylla_docker_repo_from_version(scylla_version)
             if self.get("cluster_backend") in (
                 "docker",
@@ -2694,6 +2728,31 @@ class SCTConfiguration(BaseModel):
                         )
                         target_ami_list.append(ami)
                     self.target_db_image_ids = [ami.image_id for ami in target_ami_list]
+
+        # 6.0.1) when unified_package is used (either directly or resolved from relocatable:),
+        #        override use_preinstalled_scylla and ami_db_scylla_user for AWS
+        if self.get("unified_package"):
+            self.log.info("unified_package is set, forcing use_preinstalled_scylla=False")
+            self["use_preinstalled_scylla"] = False
+            if self.get("cluster_backend") == "aws":
+                self.log.info("unified_package is set on AWS backend, forcing ami_db_scylla_user='ubuntu'")
+                self["ami_db_scylla_user"] = "ubuntu"
+                if not self.get("ami_id_db_scylla"):
+                    # Use arch from relocatable: format if available, otherwise detect from instance type
+                    arch = relocatable_arch or self._get_normalized_arch(
+                        self.get("instance_type_db"), region_name=region_names[0]
+                    )
+                    ubuntu_ssm_map = {
+                        "x86_64": "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
+                        "aarch64": "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id",
+                    }
+                    ami_ssm = ubuntu_ssm_map.get(arch, ubuntu_ssm_map["x86_64"])
+                    self.log.info(
+                        "unified_package: auto-setting ami_id_db_scylla to Ubuntu 24.04 base AMI for arch=%s: %s",
+                        arch,
+                        ami_ssm,
+                    )
+                    self["ami_id_db_scylla"] = convert_name_to_ami_if_needed(ami_ssm, tuple(region_names))
 
         # 6.1) handle oracle_scylla_version if exists
         if (oracle_scylla_version := self.get("oracle_scylla_version")) and self.get("db_type") == "mixed_scylla":
@@ -3286,6 +3345,32 @@ class SCTConfiguration(BaseModel):
         if backtrace_decoding_disable_regex := self.get("backtrace_decoding_disable_regex"):
             re.compile(backtrace_decoding_disable_regex)
 
+    def _get_normalized_arch(self, instance_type: str, region_name: str, default: str = "x86_64") -> str:
+        """Detect architecture from AWS instance type and normalize to Scylla package naming.
+
+        Args:
+            instance_type: AWS instance type (e.g. "i4i.large", "im4gn.xlarge").
+            region_name: AWS region to query.
+            default: Fallback architecture when detection fails.
+
+        Returns:
+            Normalized architecture string: "x86_64" or "aarch64".
+        """
+        try:
+            arch = get_arch_from_instance_type(instance_type, region_name=region_name)
+            # Normalize AWS arch naming ("arm64") to Scylla package naming ("aarch64")
+            if arch == "arm64":
+                arch = "aarch64"
+            return arch
+        except Exception:  # noqa: BLE001
+            self.log.warning(
+                "Could not detect architecture from instance type '%s' in %s, defaulting to '%s'",
+                instance_type,
+                region_name,
+                default,
+            )
+            return default
+
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get("docker_image")
         scylla_version = self.get("scylla_version")
@@ -3478,7 +3563,11 @@ class SCTConfiguration(BaseModel):
         if not self.get("use_preinstalled_scylla") and not backend == "baremetal" and not self.get("unified_package"):
             options_must_exist += ["scylla_repo"]
 
-        if self.get("db_type") == "cloud_scylla":
+        # When unified_package is set, backend-specific image is not required since
+        # Scylla will be installed from the unified package on top of a base OS image.
+        if self.get("unified_package"):
+            pass
+        elif self.get("db_type") == "cloud_scylla":
             options_must_exist += ["cloud_cluster_id"]
         elif backend == "aws":
             options_must_exist += ["ami_id_db_scylla"]
@@ -3497,10 +3586,11 @@ class SCTConfiguration(BaseModel):
 
         if not options_must_exist:
             return
-        assert all(self.get(o) for o in options_must_exist), (
+        missing_options = [o for o in options_must_exist if not self.get(o)]
+        assert not missing_options, (
             "scylla version/repos wasn't configured correctly\n"
-            f"configure those options: {options_must_exist}\n"
-            f"and those environment variables: {['SCT_' + o.upper() for o in options_must_exist]}"
+            f"missing options: {missing_options}\n"
+            f"set those environment variables: {['SCT_' + o.upper() for o in missing_options]}"
         )
 
     def _check_partition_range_with_data_validation_correctness(self):
@@ -3628,7 +3718,7 @@ class SCTConfiguration(BaseModel):
                 LOCALRUNNER.run(
                     shell_script_cmd(f"""
                     cd {tmpdirname}
-                    curl {unified_package} -o ./unified_package.tar.gz
+                    curl -fL {unified_package} -o ./unified_package.tar.gz
                     tar xvfz ./unified_package.tar.gz
                     """),
                     verbose=False,

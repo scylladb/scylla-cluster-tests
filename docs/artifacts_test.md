@@ -118,6 +118,30 @@ If you want to run against some official ScyllaDB Docker image, you should go to
 SCT_SCYLLA_VERSION="<tag you've chose>" hydra run-test artifacts_test --backend docker --config test-cases/artifacts/docker.yaml
 ```
 
+## Unified Package (Relocatable)
+
+You can test using a unified (relocatable) package tarball. This performs an offline installation
+without requiring a package repository. Scylla Manager is not included in the unified package.
+
+Using a direct URL:
+```sh
+export SCT_UNIFIED_PACKAGE="https://downloads.scylladb.com/unstable/scylla/master/relocatable/latest/scylla-unified-6.3.0~dev-0.20260101.abcdef123456.x86_64.tar.gz"
+hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos9.yaml
+```
+
+Or automatically resolve the latest unified package:
+```sh
+export SCT_SCYLLA_VERSION=relocatable:latest
+hydra run-test artifacts_test --backend aws --config test-cases/artifacts/centos9.yaml
+```
+
+For non-root offline installation:
+```sh
+export SCT_UNIFIED_PACKAGE="<url to unified package>"
+export SCT_NONROOT_OFFLINE_INSTALL=true
+hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos9.yaml
+```
+
 # Scylla Doctor Version Management
 
 ## Overview
