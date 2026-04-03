@@ -15,7 +15,7 @@ import os
 from functools import cached_property
 
 
-AUTO_SSH_IMAGE = "jnovack/autossh:1.2.2"
+AUTO_SSH_IMAGE = "jnovack/autossh:2.1.0"
 AUTO_SSH_LOGFILE = "autossh.log"
 
 
@@ -32,18 +32,17 @@ class AutoSshContainerMixin:
         port = self.ssh_login_info.get("port", "22")
         user = self.ssh_login_info["user"]
         volumes = {os.path.expanduser(self.ssh_login_info["key_file"]): {"bind": "/id_rsa", "mode": "ro,z"}}
-
         return dict(
             image=AUTO_SSH_IMAGE,
             name=f"{self.name}-{hostname.replace(':', '-')}-autossh",
             environment=dict(
-                SSH_HOSTNAME=hostname,
-                SSH_HOSTPORT=port,
-                SSH_HOSTUSER=user,
-                SSH_TUNNEL_HOST="127.0.0.1",
+                SSH_REMOTE_HOST=hostname,
+                SSH_REMOTE_PORT=port,
+                SSH_REMOTE_USER=user,
+                SSH_TARGET_HOST="127.0.0.1",
                 SSH_MODE=ssh_mode,
-                SSH_TUNNEL_LOCAL=local_port,
-                SSH_TUNNEL_REMOTE=remote_port,
+                SSH_TARGET_PORT=local_port,
+                SSH_TUNNEL_PORT=remote_port,
                 AUTOSSH_GATETIME=0,
             ),
             network_mode="host",
