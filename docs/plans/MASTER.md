@@ -47,6 +47,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 
 | Plan | Status | File / PR |
 |------|--------|-----------|
+| Jenkins Pipeline Cluster Reuse | `draft` | [jenkins-reuse-cluster.md](jenkins/jenkins-reuse-cluster.md) |
 | Jenkins Pipeline Config Linter | `draft` | [jenkins-pipeline-config-linter.md](jenkins/jenkins-pipeline-config-linter.md) |
 | Jenkins Uno-Choice Billing Project | `draft` | [jenkins-uno-choice-billing-project.md](jenkins/jenkins-uno-choice-billing-project.md) |
 | Centralized Trigger Matrix | `draft` | [centralized-trigger-matrix.md](jenkins/centralized-trigger-matrix.md) |
