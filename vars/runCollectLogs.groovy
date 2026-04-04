@@ -30,6 +30,10 @@ def call(Map params, String region){
 
     export SCT_CONFIG_FILES=${test_config}
 
+    if [[ -n "${params.reuse_cluster ?: ''}" ]] ; then
+        export SCT_REUSE_CLUSTER="${params.reuse_cluster}"
+    fi
+
     echo "start collect logs ..."
     RUNNER_IP=\$(cat sct_runner_ip||echo "")
     if [[ -n "\${RUNNER_IP}" ]] ; then

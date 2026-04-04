@@ -103,6 +103,12 @@ def call(Map pipelineParams) {
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_vector_store_nodes')
 
+            // Cluster Reuse
+            separator(name: 'CLUSTER_REUSE', sectionHeader: 'Cluster Reuse')
+            string(defaultValue: '',
+                   description: 'Test ID of an existing cluster to reuse. When set, provisioning is skipped and the existing cluster is used.',
+                   name: 'reuse_cluster')
+
             // SSH Configuration
             separator(name: 'SSH_CONFIG', sectionHeader: 'SSH Configuration')
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
@@ -319,7 +325,7 @@ def call(Map pipelineParams) {
                     script {
                         wrap([$class: 'BuildUser']) {
                             dir('scylla-cluster-tests') {
-                                timeout(time: 5, unit: 'MINUTES') {
+                                timeout(time: params.reuse_cluster ? 10 : 5, unit: 'MINUTES') {
                                     createSctRunner(params, runnerTimeout , builder.region)
                                 }
                             }

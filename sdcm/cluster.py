@@ -67,7 +67,7 @@ from sdcm.mgmt.common import get_manager_repo, get_manager_scylla_backend
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
-from sdcm.provision.common.utils import disable_daily_apt_triggers
+from sdcm.provision.common.utils import configure_vector_target_script, disable_daily_apt_triggers
 from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder
 from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificateAttrBuilder
 from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuilder
@@ -314,6 +314,18 @@ class NodeStayInClusterAfterDecommission(Exception):
 
 class NodeCleanedAfterDecommissionAborted(Exception):
     """raise after decommission aborted and node cleaned from group0(Raft)"""
+
+
+def reconfigure_vector_on_node(node, params, test_config):
+    """Update vector config on a reused node to point to the current runner's vector container."""
+    if params.get("logs_transport") != "vector" or not test_config.VECTOR_ADDRESS:
+        return
+
+    host, port = test_config.VECTOR_ADDRESS
+    node.log.info("Reconfiguring vector to %s:%s", host, port)
+    script = configure_vector_target_script(host=host, port=port)
+    node.remoter.sudo(shell_script_cmd(script, quote="'"))
+    node.remoter.sudo("systemctl restart vector.service")
 
 
 def prepend_user_prefix(user_prefix: str, base_name: str):
@@ -6066,7 +6078,7 @@ class BaseScyllaCluster:
             node.scylla_setup(disks, devname)
 
     def _reuse_cluster_setup(self, node):
-        pass
+        reconfigure_vector_on_node(node, self.params, self.test_config)
 
     def _generate_db_node_certs(self, node):
         """Generate per-node SSL certificates for a DB node"""
@@ -6445,6 +6457,7 @@ class BaseLoaderSet:
 
         if TestConfig().REUSE_CLUSTER:
             self.kill_stress_thread()
+            reconfigure_vector_on_node(node, self.params, TestConfig())
             if self.params.get("client_encrypt") and not (node.ssl_conf_dir / TLSAssets.CLIENT_CERT).exists():
                 self._generate_loader_certs(node)
                 install_client_certificate(node.remoter, node.ip_address, force=True)
@@ -6697,6 +6710,7 @@ class BaseMonitorSet:
         self.mgmt_auth_token = self.monitor_id
 
         if self.test_config.REUSE_CLUSTER:
+            reconfigure_vector_on_node(node, self.params, self.test_config)
             self.configure_scylla_monitoring(node)
             self.restart_scylla_monitoring(sct_metrics=True)
             set_grafana_url(f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}")
