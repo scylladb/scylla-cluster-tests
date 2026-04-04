@@ -246,16 +246,12 @@ class LatteStressThread(DockerBasedStressThread):
         # TODO: fix usage of the "$HOME". Code works when home is "/". It will fail for non-root.
         log_id = self._build_log_file_id(loader_idx, cpu_idx, "")
         remote_hdr_file_name = f"hdrh-latte-{self.stress_operation}-{log_id}.hdr"
-        LOGGER.debug("latte remote HDR histogram log file: %s", remote_hdr_file_name)
+        LOGGER.info("latte remote HDR histogram log file: %s", remote_hdr_file_name)
         local_hdr_file_name = os.path.join(loader.logdir, remote_hdr_file_name)
-        LOGGER.debug("latte HDR local file %s", local_hdr_file_name)
+        LOGGER.info("latte HDR local file %s", local_hdr_file_name)
 
-        loader.remoter.run(f"touch $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False)
-        remote_hdr_file_name_full_path = loader.remoter.run(
-            f"realpath $HOME/{remote_hdr_file_name}",
-            ignore_status=False,
-            verbose=False,
-        ).stdout.strip()
+        remote_hdr_file_name_full_path = os.path.join('/tmp/hdr-loader', remote_hdr_file_name)
+        # loader.remoter.run(f"mkdir /tmp/hdr-loader", ignore_status=True, verbose=False)
         cmd_runner = cleanup_context = RemoteDocker(
             loader,
             self.docker_image_name,
@@ -264,17 +260,17 @@ class LatteStressThread(DockerBasedStressThread):
                 "--network=host "
                 "--security-opt seccomp=unconfined "
                 f"--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker}"
-                f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}"
+                f" -v /tmp/hdr-loader:/tmp/hdr:z"
             ),
         )
         hosts = " ".join([i.cql_address for i in self.node_list])
         stress_cmd = self.build_stress_cmd(cmd_runner, loader, hosts)
         if self.params.get("use_hdrhistogram"):
-            stress_cmd += f" --hdrfile={remote_hdr_file_name}"
+            stress_cmd += f" --hdrfile=/tmp/hdr/{remote_hdr_file_name}"
             hdrh_logger_context = HDRHistogramFileLogger(
                 node=loader,
                 remote_log_file=remote_hdr_file_name_full_path,
-                target_log_file=os.path.join(loader.logdir, remote_hdr_file_name),
+                target_log_file=local_hdr_file_name,
             )
             # NOTE: running dozens of commands in parallel on a single SCT runner
             #       it is easy to get stress command to run earlier than the HDRH file
@@ -295,7 +291,7 @@ class LatteStressThread(DockerBasedStressThread):
         except Exception:  # noqa: BLE001
             LOGGER.info("Failed to collect latte version information", exc_info=True)
 
-        LOGGER.debug("running: %s", stress_cmd)
+        LOGGER.info("running: %s", stress_cmd)
         result, keyspace_holder = {}, LatteKeyspaceHolder()
         with (
             cleanup_context,

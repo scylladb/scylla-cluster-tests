@@ -1,0 +1,26 @@
+test_duration: 60
+
+prepare_write_cmd:
+  - >-
+    latte run --function insert --threads 4 --duration 50000 data_dir/latte/vector_search/vector_search_perf_preload.rn
+
+stress_cmd:
+  - >-
+    latte run --function execute_read_query --connections 2 --rate 50 --duration 300s data_dir/latte/vector_search/vector_search_perf_run.rn
+
+instance_type_loader: 'c6i.2xlarge'
+instance_type_db: 'i4i.large'
+
+scylla_version: master:latest
+# ami_id_vector_store: vector-store-1-4-0-amd64-2026-01-20t09-48-49z # x64
+ami_id_vector_store: vector-store-1-5-0-arm64-2026-03-17t07-07-32z #arm
+enable_argus: true
+use_mgmt: false
+n_vector_store_nodes: 1
+n_loaders: 1
+n_db_nodes: 1
+use_hdrhistogram: true
+
+download_from_s3:
+  - data_dir/latte/vector_search:
+     - 's3://vector-search-sct/'

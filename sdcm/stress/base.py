@@ -42,6 +42,7 @@ class DockerBasedStressThread:
         params=None,
         stop_test_on_failure=True,
     ):
+        LOGGER.info(f"QWERTY starting {self.__class__.__name__} init")
         self.loader_set: BaseLoaderSet = loader_set
         self.stress_cmd = stress_cmd
         self.timeout = timeout
@@ -109,6 +110,7 @@ class DockerBasedStressThread:
         for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
             results.append(future.result())
 
+        LOGGER.debug("Finished waiting for stress tasks results")
         return results
 
     def parse_results(self) -> tuple[list, dict]:
