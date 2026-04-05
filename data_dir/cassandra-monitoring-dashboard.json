@@ -1,0 +1,166 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "cassandra-sct-overview",
+    "title": "SCT Cassandra Overview",
+    "tags": ["cassandra", "sct"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "title": "Write Latency (p99)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "cassandra_stats{name=\"org.apache.cassandra.metrics.client_request.write.latency.99thpercentile\"}",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "µs"
+          }
+        }
+      },
+      {
+        "title": "Read Latency (p99)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "cassandra_stats{name=\"org.apache.cassandra.metrics.client_request.read.latency.99thpercentile\"}",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "µs"
+          }
+        }
+      },
+      {
+        "title": "Write Throughput (ops/s)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(cassandra_stats{name=\"org.apache.cassandra.metrics.client_request.write.latency.count\"}[1m])",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "title": "Read Throughput (ops/s)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(cassandra_stats{name=\"org.apache.cassandra.metrics.client_request.read.latency.count\"}[1m])",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "title": "JVM Heap Usage",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "jvm_memory_bytes_used{area=\"heap\"}",
+            "legendFormat": "Used {{instance}}"
+          },
+          {
+            "expr": "jvm_memory_bytes_max{area=\"heap\"}",
+            "legendFormat": "Max {{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes"
+          }
+        }
+      },
+      {
+        "title": "Compaction Pending Tasks",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "cassandra_stats{name=\"org.apache.cassandra.metrics.compaction.pendingtasks.value\"}",
+            "legendFormat": "{{instance}}"
+          }
+        ]
+      },
+      {
+        "title": "Key Cache Hit Rate",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "cassandra_stats{name=\"org.apache.cassandra.metrics.cache.keycache.hitrate.value\"}",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      {
+        "title": "Row Cache Hit Rate",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 24},
+        "targets": [
+          {
+            "expr": "cassandra_stats{name=\"org.apache.cassandra.metrics.cache.rowcache.hitrate.value\"}",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      {
+        "title": "GC Pause Time (rate)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "rate(jvm_gc_collection_seconds_sum[1m])",
+            "legendFormat": "{{gc}} {{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      }
+    ],
+    "schemaVersion": 39,
+    "version": 1
+  },
+  "overwrite": true
+}
