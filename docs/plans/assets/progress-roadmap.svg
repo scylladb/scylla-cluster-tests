@@ -4,7 +4,7 @@
 <text x="420" y="84" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#8899AA">23 plans across 8 domains</text>
 <rect x="30" y="120" width="780" height="50" rx="6" fill="#1B2A4A" stroke="#2A3F5F" stroke-width="1"/>
 <circle cx="50" cy="148" r="5" fill="#607D8B"/>
-<text x="60" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">Draft: 13</text>
+<text x="60" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">Draft: 14</text>
 <circle cx="180" cy="148" r="5" fill="#FFC107"/>
 <text x="190" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">In Progress: 2</text>
 <circle cx="310" cy="148" r="5" fill="#2196F3"/>
@@ -14,14 +14,14 @@
 <circle cx="570" cy="148" r="5" fill="#4CAF50"/>
 <text x="580" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">Complete: 0</text>
 <circle cx="700" cy="148" r="5" fill="#9E9E9E"/>
-<text x="710" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">Pending PR: 8</text>
+<text x="710" y="152" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#E0E6ED">Pending PR: 7</text>
 <rect x="40" y="175" width="760" height="20" rx="10" fill="#1B2A4A" stroke="#2A3F5F" stroke-width="1"/>
 <rect x="40" y="175" width="66.08695652173913" height="20" rx="10" fill="#FFC107"/>
 <text x="73.04347826086956" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">2</text>
-<rect x="106.08695652173913" y="175" width="429.5652173913043" height="20" rx="0" fill="#607D8B"/>
-<text x="320.86956521739125" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">13</text>
-<rect x="535.6521739130435" y="175" width="264.3478260869565" height="20" rx="0" fill="#9E9E9E"/>
-<text x="667.8260869565217" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">8</text>
+<rect x="106.08695652173913" y="175" width="462.60869565217394" height="20" rx="0" fill="#607D8B"/>
+<text x="337.3913043478261" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">14</text>
+<rect x="568.695652173913" y="175" width="231.30434782608697" height="20" rx="0" fill="#9E9E9E"/>
+<text x="684.3478260869565" y="189" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0D1B2A">7</text>
 <rect x="30" y="220" width="380" height="32" rx="4" fill="#1B2A4A" stroke="#00BCD4" stroke-width="1"/>
 <text x="42" y="241" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" fill="#00BCD4">cluster</text>
 <text x="398" y="241" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#8899AA">6 plans</text>
@@ -83,20 +83,20 @@
 <text x="442" y="345" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" fill="#00BCD4">ci-cd</text>
 <text x="798" y="345" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#8899AA">5 plans</text>
 <circle cx="444" cy="370" r="4" fill="#607D8B"/>
-<text x="456" y="374" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">Jenkins Pipeline Config Linter</text>
+<text x="456" y="374" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">Jenkins Pipeline Cluster Reuse</text>
 <text x="798" y="374" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#607D8B">Draft</text>
 <circle cx="444" cy="398" r="4" fill="#607D8B"/>
-<text x="456" y="402" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">Jenkins Uno-Choice Billing Project</text>
+<text x="456" y="402" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">Jenkins Pipeline Config Linter</text>
 <text x="798" y="402" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#607D8B">Draft</text>
 <circle cx="444" cy="426" r="4" fill="#607D8B"/>
-<text x="456" y="430" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">Centralized Trigger Matrix</text>
+<text x="456" y="430" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">Jenkins Uno-Choice Billing Project</text>
 <text x="798" y="430" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#607D8B">Draft</text>
 <circle cx="444" cy="454" r="4" fill="#607D8B"/>
-<text x="456" y="458" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">i8g Performance Jobs Migration</text>
+<text x="456" y="458" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">Centralized Trigger Matrix</text>
 <text x="798" y="458" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#607D8B">Draft</text>
-<circle cx="444" cy="482" r="4" fill="#9E9E9E"/>
-<text x="456" y="486" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">curl Retry/Timeout Linting</text>
-<text x="798" y="486" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#9E9E9E">Pending PR</text>
+<circle cx="444" cy="482" r="4" fill="#607D8B"/>
+<text x="456" y="486" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#E0E6ED">i8g Performance Jobs Migration</text>
+<text x="798" y="486" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#607D8B">Draft</text>
 <rect x="430" y="512" width="380" height="32" rx="4" fill="#1B2A4A" stroke="#00BCD4" stroke-width="1"/>
 <text x="442" y="533" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" fill="#00BCD4">k8s</text>
 <text x="798" y="533" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#8899AA">1 plans</text>
