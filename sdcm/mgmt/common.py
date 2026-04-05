@@ -13,6 +13,91 @@ from sdcm.utils.common import get_sct_root_path
 
 DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
 LOGGER = logging.getLogger(__name__)
+<<<<<<< HEAD
+||||||| parent of aac40c98c (fix(mgmt_cli_test.py): report restored data size to Argus)
+# Regex to extract the backup size from the `sctool progress` command output
+# Example output line:
+# ╭─────────────┬──────────┬────────────┬────────────┬──────────────┬────────╮
+# │ Host        │ Progress │       Size │    Success │ Deduplicated │ Failed │
+# ├─────────────┼──────────┼────────────┼────────────┼──────────────┼────────┤
+# │ 10.12.4.125 │     100% │ 422.434GiB │ 422.434GiB │           0B │     0B │
+# │ 10.12.4.25  │     100% │ 422.413GiB │ 422.413GiB │           0B │     0B │
+BACKUP_SIZE_REGEX = re.compile(r".+100% │ (.*?) │ ", re.MULTILINE)
+
+MANAGER_REPO_PATTERNS = {
+    "rhel": "https://downloads.scylladb.com/rpm/centos/scylladb-manager-{version}.repo",
+    "debian": "https://downloads.scylladb.com/deb/debian/scylladb-manager-{version}.list",
+}
+MANAGER_REPO_MASTER_LATEST = {
+    "rhel": "https://downloads.scylladb.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo",
+    "debian": "https://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list",
+}
+=======
+# Regex to extract the backup size from the `sctool progress` command output
+# Example output line:
+# ╭─────────────┬──────────┬────────────┬────────────┬──────────────┬────────╮
+# │ Host        │ Progress │       Size │    Success │ Deduplicated │ Failed │
+# ├─────────────┼──────────┼────────────┼────────────┼──────────────┼────────┤
+# │ 10.12.4.125 │     100% │ 422.434GiB │ 422.434GiB │           0B │     0B │
+# │ 10.12.4.25  │     100% │ 422.413GiB │ 422.413GiB │           0B │     0B │
+BACKUP_SIZE_REGEX = re.compile(r".+100% │ (.*?) │ ", re.MULTILINE)
+SIZE_PATTERN = re.compile(r"^([\d.]+)\s*([KMGTPE]?i?B)$", re.IGNORECASE)
+
+
+def parse_size_to_bytes(size_str: str) -> int:
+    """Parse a human-readable size string into bytes.
+
+    Supports units: B, KB, KiB, MB, MiB, GB, GiB, TB, TiB, PB, PiB.
+    Handles optional spaces and case-insensitive units.
+    """
+    if not size_str:
+        raise ValueError("Empty size string")
+    s = size_str.strip()
+    # Normalize: remove spaces in unit like 'GiB'
+    match = SIZE_PATTERN.match(s)
+    if not match:
+        raise ValueError(f"Unrecognized size format: {size_str}")
+
+    value = float(match.group(1))
+    unit = match.group(2).upper()
+
+    # Define multipliers
+    powers_2 = {
+        "B": 1,
+        "KIB": 1024,
+        "MIB": 1024**2,
+        "GIB": 1024**3,
+        "TIB": 1024**4,
+        "PIB": 1024**5,
+        "EIB": 1024**6,
+    }
+    powers_10 = {
+        "KB": 1000,
+        "MB": 1000**2,
+        "GB": 1000**3,
+        "TB": 1000**4,
+        "PB": 1000**5,
+        "EB": 1000**6,
+    }
+
+    if unit in powers_2:
+        bytes_ = int(value * powers_2[unit])
+    elif unit in powers_10:
+        bytes_ = int(value * powers_10[unit])
+    else:
+        # Fallback: treat unknown as bytes
+        bytes_ = int(value)
+    return bytes_
+
+MANAGER_REPO_PATTERNS = {
+    "rhel": "https://downloads.scylladb.com/rpm/centos/scylladb-manager-{version}.repo",
+    "debian": "https://downloads.scylladb.com/deb/debian/scylladb-manager-{version}.list",
+}
+MANAGER_REPO_MASTER_LATEST = {
+    "rhel": "https://downloads.scylladb.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo",
+    "debian": "https://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list",
+}
+>>>>>>> aac40c98c (fix(mgmt_cli_test.py): report restored data size to Argus)
 
 
 def get_persistent_snapshots():  # Snapshot sizes (dict keys) are in GB
@@ -180,3 +265,89 @@ class AgentBackupParameters(BaseModel):
     low_level_retries: Optional[int] = 20
 
     model_config = ConfigDict(arbitrary_types_allowed=False)
+<<<<<<< HEAD
+||||||| parent of aac40c98c (fix(mgmt_cli_test.py): report restored data size to Argus)
+
+
+def get_backup_size(mgr_cluster, task_id):
+    """
+    Returns the generated backup size of a given Manager backup Task.
+    """
+    res = mgr_cluster.sctool.run(cmd=f"progress {task_id} -c {mgr_cluster.id}", parse_table_res=False)
+    match = BACKUP_SIZE_REGEX.search(res.stdout)
+    if match:
+        return match.group(1)
+    else:
+        raise ValueError(f"Backup size not found in the output in {res.stdout}")
+
+
+class ObjectStorageUploadMode(str, Enum):
+    AUTO = "auto"
+    RCLONE = "rclone"
+    NATIVE = "native"
+=======
+
+
+def get_backup_size(mgr_cluster, task_id):
+    """
+    Returns the generated backup size of a given Manager backup Task.
+    """
+    res = mgr_cluster.sctool.run(cmd=f"progress {task_id} -c {mgr_cluster.id}", parse_table_res=False)
+    match = BACKUP_SIZE_REGEX.search(res.stdout)
+    if match:
+        return match.group(1)
+    else:
+        raise ValueError(f"Backup size not found in the output in {res.stdout}")
+
+
+class ObjectStorageUploadMode(str, Enum):
+    AUTO = "auto"
+    RCLONE = "rclone"
+    NATIVE = "native"
+
+
+def parse_bandwidth_value(bandwidth_str: str) -> float | None:
+    """Parse bandwidth value from Manager output string.
+
+    Args:
+        bandwidth_str: String containing bandwidth value (e.g., "22.313MiB/s/shard")
+
+    Returns:
+        Float value of bandwidth in MiB/s/shard, or None if parsing fails
+    """
+    bandwidth_match = re.search(r"(\d+\.\d+)", bandwidth_str)
+    if bandwidth_match:
+        return float(bandwidth_match.group(1))
+    else:
+        LOGGER.warning(f"Bandwidth value is non-numeric: {bandwidth_str.strip()}. Returning None.")
+        return None
+
+
+def calculate_restore_metrics(
+    total_seconds: int,
+    repair_seconds: int,
+    download_bw: float | None = None,
+    load_and_stream_bw: float | None = None,
+) -> dict[str, int | float]:
+    """Calculate restore metrics for Argus reporting.
+
+    Args:
+        total_seconds: Total restore time in seconds
+        repair_seconds: Post-restore repair time in seconds
+        download_bw: Download bandwidth in MiB/s/shard (optional)
+        load_and_stream_bw: Load&stream bandwidth in MiB/s/shard (optional)
+
+    Returns:
+        Dictionary containing restore metrics (restore time, repair time, total, and bandwidth values)
+    """
+    results = {
+        "restore time": (total_seconds - repair_seconds),
+        "repair time": repair_seconds,
+        "total": total_seconds,
+    }
+    if download_bw:
+        results["download bandwidth"] = download_bw
+    if load_and_stream_bw:
+        results["l&s bandwidth"] = load_and_stream_bw
+    return results
+>>>>>>> aac40c98c (fix(mgmt_cli_test.py): report restored data size to Argus)
