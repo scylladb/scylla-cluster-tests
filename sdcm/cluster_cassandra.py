@@ -25,6 +25,7 @@ import yaml
 from sdcm import wait
 from sdcm.cassandra_exporter_setup import CassandraExporterSetup
 from sdcm.exceptions import KillNemesis, NodeNotReady
+from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.remote.remote_file import remote_file, dict_to_yaml_file, yaml_file_to_dict
 from sdcm.sct_config import TestConfig
 from sdcm.utils.common import raise_exception_in_thread
@@ -387,6 +388,7 @@ class BaseCassandraCluster:
         """
         node.wait_ssh_up(verbose=verbose)
         self._setup_data_device(node)
+        NodeExporterSetup.install(node=node)
         self._install_jdk(node)
         self._add_cassandra_apt_repo(node)
         self._install_cassandra(node)

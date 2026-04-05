@@ -7387,6 +7387,13 @@ class BaseMonitorSet:
         if gemini_dashboard := self.gemini_dashboard_json_file:
             node.remoter.send_files(src=gemini_dashboard, dst=sct_monitoring_addons_dir)
 
+        from sdcm.cluster_cassandra import BaseCassandraCluster  # noqa: PLC0415 - avoid circular import
+
+        if isinstance(self.targets.get("db_cluster"), BaseCassandraCluster):
+            cassandra_dash = get_data_dir_path("cassandra-monitoring-dashboard.json")
+            if os.path.exists(cassandra_dash):
+                node.remoter.send_files(src=cassandra_dash, dst=sct_monitoring_addons_dir)
+
     def update_default_time_range(self, start_timestamp: float, end_timestamp: float) -> None:
         """
         Specify the Grafana time range for all dashboards by updating the JSON files.

@@ -929,6 +929,83 @@ class ScyllaLogCollector(LogCollector):
         return super().collect_logs(local_search_path)
 
 
+class CassandraLogCollector(LogCollector):
+    """Cassandra cluster log collecting.
+
+    Collects Cassandra-specific logs, configuration files, and system info.
+    Skips Scylla-specific paths that don't exist on Cassandra nodes.
+    """
+
+    log_entities = [
+        # Cassandra application logs (file-based, not journald — need sudo)
+        CommandLog(
+            name="cassandra-system.log",
+            command="sudo cat /var/log/cassandra/system.log 2>/dev/null || echo 'not found'",
+        ),
+        CommandLog(
+            name="cassandra-debug.log", command="sudo cat /var/log/cassandra/debug.log 2>/dev/null || echo 'not found'"
+        ),
+        CommandLog(
+            name="cassandra-gc.log", command="sudo cat /var/log/cassandra/gc.log 2>/dev/null || echo 'not found'"
+        ),
+        # Cassandra service journal (captures start-stop-daemon messages)
+        FileLog(
+            name="system.log",
+            command="sudo journalctl --no-tail --no-pager -u cassandra.service -o short-precise",
+            search_locally=True,
+        ),
+        FileLog(name="system_*", search_locally=True),
+        FileLog(name="schema.log", search_locally=True, collect_from_parent=True),
+        # Cassandra configuration files
+        CommandLog(
+            name="cassandra.yaml", command="sudo cat /etc/cassandra/cassandra.yaml 2>/dev/null || echo 'not found'"
+        ),
+        CommandLog(
+            name="cassandra-env.sh", command="sudo cat /etc/cassandra/cassandra-env.sh 2>/dev/null || echo 'not found'"
+        ),
+        CommandLog(
+            name="cassandra-rackdc.properties",
+            command="sudo cat /etc/cassandra/cassandra-rackdc.properties 2>/dev/null || echo 'not found'",
+        ),
+        CommandLog(
+            name="jvm.options",
+            command="sudo cat /etc/cassandra/jvm.options 2>/dev/null || echo 'not found'",
+        ),
+        CommandLog(
+            name="jvm11-server.options",
+            command="sudo cat /etc/cassandra/jvm11-server.options 2>/dev/null || echo 'not found'",
+        ),
+        # System info
+        CommandLog(name="cpu_info", command="cat /proc/cpuinfo"),
+        CommandLog(name="mem_info", command="cat /proc/meminfo"),
+        CommandLog(name="interrupts", command="cat /proc/interrupts"),
+        CommandLog(name="vmstat", command="cat /proc/vmstat"),
+        CommandLog(name="dmesg.log", command="sudo dmesg -P"),
+        CommandLog(name="systemctl.status", command="sudo systemctl status --all --full --no-pager"),
+        CommandLog(name="df.log", command="df -h"),
+        CommandLog(name="cloud-init-output.log", command="sudo cat /var/log/cloud-init-output.log 2>/dev/null"),
+        CommandLog(name="cloud-init.log", command="sudo cat /var/log/cloud-init.log 2>/dev/null"),
+        # Cassandra data directory info (sizes, not contents)
+        CommandLog(
+            name="cassandra-data-sizes.log",
+            command="sudo du -sh /var/lib/cassandra/* 2>/dev/null || echo 'no data'",
+        ),
+        # Cassandra nodetool diagnostics
+        CommandLog(name="nodetool-status.log", command="nodetool status 2>&1 || echo 'nodetool failed'"),
+        CommandLog(name="nodetool-info.log", command="nodetool info 2>&1 || echo 'nodetool failed'"),
+        CommandLog(name="nodetool-cfstats.log", command="nodetool cfstats 2>&1 || echo 'nodetool failed'"),
+        CommandLog(name="nodetool-tpstats.log", command="nodetool tpstats 2>&1 || echo 'nodetool failed'"),
+    ]
+
+    cluster_log_type = "db-cluster"
+    cluster_dir_prefix = "db-cluster"
+    collect_timeout = 600
+
+    def collect_logs(self, local_search_path=None) -> list[str]:
+        self.collect_logs_for_inactive_nodes(local_search_path)
+        return super().collect_logs(local_search_path)
+
+
 def save_kallsyms_map(node):
     LOGGER.info("Saving kallsyms map from host: %s", node.name)
     if remote_node_dir := create_remote_storage_dir(node):
@@ -1503,8 +1580,11 @@ class Collector:
                 KubernetesMustGatherLogCollector: self.kubernetes_set,
                 KubernetesAPIServerLogCollector: self.kubernetes_set,
             }
+        db_collector = (
+            CassandraLogCollector if params.get("db_type") in ("cassandra", "mixed_cassandra") else ScyllaLogCollector
+        )
         self.cluster_log_collectors |= {
-            ScyllaLogCollector: self.db_cluster,
+            db_collector: self.db_cluster,
             SchemaLogCollector: self.sct_set,
             FailureStatisticsCollector: self.sct_set,
             BaseSCTLogCollector: self.sct_set,
