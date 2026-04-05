@@ -7069,6 +7069,24 @@ class BaseMonitorSet:
                     )
                 )
 
+            # Add Cassandra exporter targets if db_cluster is a Cassandra cluster
+            from sdcm.cluster_cassandra import BaseCassandraCluster  # noqa: PLC0415 - circular dependency
+
+            if isinstance(self.targets["db_cluster"], BaseCassandraCluster):
+                from sdcm.cassandra_exporter_setup import CASSANDRA_EXPORTER_PORT  # noqa: PLC0415
+
+                cassandra_targets = [
+                    f"{getattr(n, self.DB_NODES_IP_ADDRESS)}:{CASSANDRA_EXPORTER_PORT}"
+                    for n in self.targets["db_cluster"].nodes
+                ]
+                scrape_configs.append(
+                    dict(
+                        job_name="cassandra_exporter",
+                        honor_labels=True,
+                        static_configs=[dict(targets=cassandra_targets)],
+                    )
+                )
+
             if self.sct_ip_port:
                 self._allow_runner_metrics_ports_on_oci()
                 sct_targets = [{"targets": [self.sct_ip_port], "labels": {"dc": "sct-runner"}}]
@@ -7315,6 +7333,20 @@ class BaseMonitorSet:
                 json_filename=gemini_dashboard,
                 throw_exc=False,
             )
+
+        # Register Cassandra monitoring dashboard if a Cassandra cluster exists
+        from sdcm.cluster_cassandra import BaseCassandraCluster  # noqa: PLC0415 - circular dependency
+
+        if isinstance(self.targets.get("db_cluster"), BaseCassandraCluster):
+            cassandra_dash = get_data_dir_path("cassandra-monitoring-dashboard.json")
+            if os.path.exists(cassandra_dash):
+                wait.wait_for(
+                    _register_grafana_json,
+                    step=10,
+                    text="Waiting to register Cassandra dashboard...",
+                    json_filename=cassandra_dash,
+                    throw_exc=False,
+                )
 
     def save_sct_dashboards_config(self, node):
         sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, "sct_monitoring_addons")
