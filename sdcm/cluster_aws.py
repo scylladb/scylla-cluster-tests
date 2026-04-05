@@ -13,12 +13,9 @@
 
 import json
 import logging
-import os
 import random
 import re
-import tempfile
 import time
-import uuid
 from collections.abc import Callable
 from contextlib import ExitStack
 from datetime import datetime
@@ -33,6 +30,7 @@ from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import EC2ServiceResource
 
 from sdcm import ec2_client, cluster, wait
+from sdcm.cluster_cassandra import BaseCassandraCluster, CassandraNodeMixin
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
@@ -1207,7 +1205,37 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         super().destroy()
 
 
-class CassandraAWSCluster(ScyllaAWSCluster):
+class CassandraAWSNode(CassandraNodeMixin, AWSNode):
+    """AWS node running Cassandra instead of Scylla.
+
+    MRO puts CassandraNodeMixin before AWSNode/BaseNode, so the mixin's
+    overrides win.  The explicit forwarding below makes that choice visible
+    to static-analysis tools and prevents silent regressions if the
+    inheritance order ever changes.
+    """
+
+    # --- Explicit MRO forwarding to CassandraNodeMixin ---
+    remote_scylla_yaml = CassandraNodeMixin.remote_scylla_yaml
+    smp = CassandraNodeMixin.smp
+    cpuset = CassandraNodeMixin.cpuset
+    _gen_nodetool_cmd = CassandraNodeMixin._gen_nodetool_cmd
+    extract_seeds_from_scylla_yaml = CassandraNodeMixin.extract_seeds_from_scylla_yaml
+    is_server_encrypt = CassandraNodeMixin.is_server_encrypt
+    raft = CassandraNodeMixin.raft
+    cql_address = CassandraNodeMixin.cql_address
+    wait_native_transport = CassandraNodeMixin.wait_native_transport
+    db_up = CassandraNodeMixin.db_up
+    config_setup = CassandraNodeMixin.config_setup
+    get_scylla_binary_version = CassandraNodeMixin.get_scylla_binary_version
+
+
+class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
+    """Cassandra cluster provisioned on AWS EC2.
+
+    Installs Cassandra during node_setup() via the official apt repository.
+    Uses a standard Ubuntu base AMI (no custom Cassandra-specific AMI needed).
+    """
+
     def __init__(
         self,
         ec2_ami_id,
@@ -1221,17 +1249,11 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         user_prefix=None,
         n_nodes=3,
         params=None,
+        node_type: str = "cs-db",
     ):
-        if ec2_block_device_mappings is None:
-            ec2_block_device_mappings = []
-        # We have to pass the cluster name in advance in user_data
-        cluster_uuid = uuid.uuid4()
+        cluster_uuid = self.test_config.test_id()
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "cs-db-cluster")
         node_prefix = cluster.prepend_user_prefix(user_prefix, "cs-db-node")
-        node_type = "cs-db"
-        shortid = str(cluster_uuid)[:8]
-        name = "%s-%s" % (cluster_prefix, shortid)
-        user_data = "--clustername %s --totalnodes %s --version community --release 2.1.15" % (name, sum(n_nodes))
 
         super().__init__(
             ec2_ami_id=ec2_ami_id,
@@ -1239,7 +1261,6 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             ec2_security_group_ids=ec2_security_group_ids,
             ec2_instance_type=ec2_instance_type,
             ec2_ami_username=ec2_ami_username,
-            ec2_user_data=user_data,
             ec2_block_device_mappings=ec2_block_device_mappings,
             cluster_uuid=cluster_uuid,
             services=services,
@@ -1251,63 +1272,51 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             node_type=node_type,
         )
 
-    def get_seed_nodes(self):
-        node = self.nodes[0]
-        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix="sct-cassandra"), "cassandra.yaml")
-        node.remoter.receive_files(src="/etc/cassandra/cassandra.yaml", dst=yaml_dst_path)
-        with open(yaml_dst_path, encoding="utf-8") as yaml_stream:
-            conf_dict = yaml.safe_load(yaml_stream)
-            try:
-                return conf_dict["seed_provider"][0]["parameters"][0]["seeds"].split(",")
-            except Exception as exc:  # noqa: BLE001
-                raise ValueError("Unexpected cassandra.yaml. Contents:\n%s" % yaml_stream.read()) from exc
-
-    def add_nodes(
-        self,
-        count,
-        ec2_user_data="",
-        dc_idx=0,
-        rack=0,
-        enable_auto_bootstrap=False,
-        instance_type=None,
-        after_config=None,
-        **kwargs,
+    def _create_node(
+        self, instance, ami_username, node_prefix, node_index, base_logdir, dc_idx, rack, after_config=None
     ):
-        if not ec2_user_data:
-            if self.nodes:
-                seeds = ",".join(self.get_seed_nodes())
-                ec2_user_data = "--clustername %s --totalnodes %s --seeds %s --version community --release 2.1.15" % (
-                    self.name,
-                    count,
-                    seeds,
-                )
-        ec2_user_data = self.update_bootstrap(ec2_user_data, enable_auto_bootstrap)
-        added_nodes = super().add_nodes(
-            count=count,
-            ec2_user_data=ec2_user_data,
+        ec2_service = self._ec2_services[0 if self.params.get("simulated_regions") else dc_idx]
+        credentials = self._credentials[0 if self.params.get("simulated_regions") else dc_idx]
+        node = CassandraAWSNode(
+            ec2_instance=instance,
+            ec2_service=ec2_service,
+            credentials=credentials,
+            parent_cluster=self,
+            ami_username=ami_username,
+            node_prefix=node_prefix,
+            node_index=node_index,
+            base_logdir=base_logdir,
             dc_idx=dc_idx,
             rack=rack,
-            instance_type=instance_type,
             after_config=after_config,
-            **kwargs,
         )
-        return added_nodes
+        node.init()
+        return node
 
+    # Explicit MRO forwarding: BaseCassandraCluster provides the Cassandra-specific
+    # implementations; these overrides make the resolution explicit and avoid silent
+    # fallback to AWSCluster/ScyllaCluster methods.
     def node_setup(self, node, verbose=False, timeout=3600):
-        node.wait_ssh_up(verbose=verbose)
-        node.wait_db_up(verbose=verbose)
+        return BaseCassandraCluster.node_setup(self, node, verbose=verbose, timeout=timeout)
 
-        if self.test_config.REUSE_CLUSTER:
-            # for reconfigure syslog-ng
-            node.run_startup_script()
-            return
+    def node_startup(self, node, verbose=False, timeout=3600):
+        return BaseCassandraCluster.node_startup(self, node, verbose=verbose, timeout=timeout)
 
-        node.remoter.run("sudo apt-get update")
-        node.remoter.run("sudo apt-get install -o DPkg::Lock::Timeout=300 -y openjdk-6-jdk")
+    def get_node_ips_param(self, public_ip=True):
+        return BaseCassandraCluster.get_node_ips_param(self, public_ip=public_ip)
 
     @cluster.wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
-        self.get_seed_nodes()
+        node_list = node_list if node_list else self.nodes
+        for node in node_list:
+            wait.wait_for(
+                func=self.check_node_db_up,
+                step=10,
+                text=f"{node.name}: Waiting for Cassandra to be up (nodetool status UN)",
+                timeout=timeout or 1200,
+                throw_exc=True,
+                node=node,
+            )
 
 
 class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):

@@ -4105,6 +4105,83 @@ class BaseCluster:
         """returns {ip: node} map for all nodes in cluster to get node by ip"""
         return {ip: node for node in self.nodes for ip in node.get_all_ip_addresses()}
 
+    @retrying(n=3, sleep_time=5)
+    def get_nodetool_status(
+        self, verification_node: Optional[BaseNode] = None, dc_aware: bool = True
+    ) -> dict[str, dict]:
+        """
+            Runs nodetool status and generates status structure.
+            Status format if dc_aware = True (default):
+            status = {
+                "datacenter1": {
+                    "ip1": {
+                        'state': state,
+                        'load': load,
+                        'tokens': tokens,
+                        'owns': owns,
+                        'host_id': host_id,
+                        'rack': rack
+                    }
+                }
+            }
+            Status format if dc_aware = False:
+            status = {
+                "ip1": {
+                        'state': state,
+                        'load': load,
+                        'tokens': tokens,
+                        'owns': owns,
+                        'host_id': host_id,
+                        'rack': rack
+                    }
+            }
+        :param verification_node: node to run the nodetool on
+        :param dc_aware: return with dc if True, return without dc if False
+        :return: dict
+        """
+        if not verification_node:
+            verification_node = random.choice(self.nodes)
+        status = {}
+        res = verification_node.run_nodetool("status", publish_event=False)
+
+        data_centers = res.stdout.split("Datacenter: ")
+        # see TestNodetoolStatus test in test_cluster.py
+        pattern = re.compile(
+            r"(?P<state>\w{2})\s+"
+            r"(?P<ip>[\w:.]+)\s+"
+            r"(?P<load>[\d.]+ [\w]+|\?)\s+"
+            r"(?P<tokens>[\d]+)\s+"
+            r"(?P<owns>[\w?]+)\s+"
+            r"(?P<host_id>[\w-]+)\s+"
+            r"(?P<rack>[\w]+|$)"
+        )
+
+        for dc in data_centers:
+            if not dc:
+                continue
+            lines = dc.splitlines()
+            dc_name = lines[0]
+            status[dc_name] = {}
+            for line in lines[1:]:
+                match = pattern.match(line)
+                if not match:
+                    continue
+                node_info = match.groupdict()
+                node_ip = to_inet_ntop_format(node_info.pop("ip"))
+                # NOTE: following replacement is needed for the K8S case where
+                #       registered IP is different than the one used for network connections
+                if verification_node.is_kubernetes():
+                    for node in self.nodes:
+                        if node_ip in node.get_all_ip_addresses() and node_ip != node.ip_address:
+                            node_ip = node.ip_address
+                node_info["load"] = node_info["load"].replace(" ", "")
+                status[dc_name][node_ip] = node_info
+
+        if not dc_aware:
+            status = {key: value for dc_value in status.values() for key, value in dc_value.items()}
+
+        return status
+
     def init_log_directory(self):
         assert "_SCT_TEST_LOGDIR" in os.environ
         self.logdir = os.path.join(os.environ["_SCT_TEST_LOGDIR"], self.name)
@@ -5362,83 +5439,6 @@ class BaseScyllaCluster:
             if node_list is None:
                 node_list = self.nodes
             self._update_db_packages(new_scylla_bin, node_list, start_service=start_service)
-
-    @retrying(n=3, sleep_time=5)
-    def get_nodetool_status(
-        self, verification_node: Optional[BaseNode] = None, dc_aware: bool = True
-    ) -> dict[str, dict]:
-        """
-            Runs nodetool status and generates status structure.
-            Status format if dc_aware = True (default):
-            status = {
-                "datacenter1": {
-                    "ip1": {
-                        'state': state,
-                        'load': load,
-                        'tokens': tokens,
-                        'owns': owns,
-                        'host_id': host_id,
-                        'rack': rack
-                    }
-                }
-            }
-            Status format if dc_aware = False:
-            status = {
-                "ip1": {
-                        'state': state,
-                        'load': load,
-                        'tokens': tokens,
-                        'owns': owns,
-                        'host_id': host_id,
-                        'rack': rack
-                    }
-            }
-        :param verification_node: node to run the nodetool on
-        :param dc_aware: return with dc if True, return without dc if False
-        :return: dict
-        """
-        if not verification_node:
-            verification_node = random.choice(self.nodes)
-        status = {}
-        res = verification_node.run_nodetool("status", publish_event=False)
-
-        data_centers = res.stdout.split("Datacenter: ")
-        # see TestNodetoolStatus test in test_cluster.py
-        pattern = re.compile(
-            r"(?P<state>\w{2})\s+"
-            r"(?P<ip>[\w:.]+)\s+"
-            r"(?P<load>[\d.]+ [\w]+|\?)\s+"
-            r"(?P<tokens>[\d]+)\s+"
-            r"(?P<owns>[\w?]+)\s+"
-            r"(?P<host_id>[\w-]+)\s+"
-            r"(?P<rack>[\w]+|$)"
-        )
-
-        for dc in data_centers:
-            if not dc:
-                continue
-            lines = dc.splitlines()
-            dc_name = lines[0]
-            status[dc_name] = {}
-            for line in lines[1:]:
-                match = pattern.match(line)
-                if not match:
-                    continue
-                node_info = match.groupdict()
-                node_ip = to_inet_ntop_format(node_info.pop("ip"))
-                # NOTE: following replacement is needed for the K8S case where
-                #       registered IP is different than the one used for network connections
-                if verification_node.is_kubernetes():
-                    for node in self.nodes:
-                        if node_ip in node.get_all_ip_addresses() and node_ip != node.ip_address:
-                            node_ip = node.ip_address
-                node_info["load"] = node_info["load"].replace(" ", "")
-                status[dc_name][node_ip] = node_info
-
-        if not dc_aware:
-            status = {key: value for dc_value in status.values() for key, value in dc_value.items()}
-
-        return status
 
     @staticmethod
     def get_nodetool_info(node, **kwargs):
@@ -7100,6 +7100,24 @@ class BaseMonitorSet:
                     )
                 )
 
+            # Add Cassandra exporter targets if db_cluster is a Cassandra cluster
+            from sdcm.cluster_cassandra import BaseCassandraCluster  # noqa: PLC0415 - circular dependency
+
+            if isinstance(self.targets["db_cluster"], BaseCassandraCluster):
+                from sdcm.cassandra_exporter_setup import CASSANDRA_EXPORTER_PORT  # noqa: PLC0415
+
+                cassandra_targets = [
+                    f"{getattr(n, self.DB_NODES_IP_ADDRESS)}:{CASSANDRA_EXPORTER_PORT}"
+                    for n in self.targets["db_cluster"].nodes
+                ]
+                scrape_configs.append(
+                    dict(
+                        job_name="cassandra_exporter",
+                        honor_labels=True,
+                        static_configs=[dict(targets=cassandra_targets)],
+                    )
+                )
+
             if self.sct_ip_port:
                 self._allow_runner_metrics_ports_on_oci()
                 sct_targets = [{"targets": [self.sct_ip_port], "labels": {"dc": "sct-runner"}}]
@@ -7346,6 +7364,20 @@ class BaseMonitorSet:
                 json_filename=gemini_dashboard,
                 throw_exc=False,
             )
+
+        # Register Cassandra monitoring dashboard if a Cassandra cluster exists
+        from sdcm.cluster_cassandra import BaseCassandraCluster  # noqa: PLC0415 - circular dependency
+
+        if isinstance(self.targets.get("db_cluster"), BaseCassandraCluster):
+            cassandra_dash = get_data_dir_path("cassandra-monitoring-dashboard.json")
+            if os.path.exists(cassandra_dash):
+                wait.wait_for(
+                    _register_grafana_json,
+                    step=10,
+                    text="Waiting to register Cassandra dashboard...",
+                    json_filename=cassandra_dash,
+                    throw_exc=False,
+                )
 
     def save_sct_dashboards_config(self, node):
         sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, "sct_monitoring_addons")

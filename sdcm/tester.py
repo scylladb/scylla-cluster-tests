@@ -70,6 +70,7 @@ from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
 from sdcm.cluster_aws import CassandraAWSCluster
+from sdcm.cluster_cassandra import BaseCassandraCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
@@ -184,6 +185,7 @@ from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from sdcm.stress.latte_thread import LatteStressThread
 from sdcm.cdclog_reader_thread import CDCLogReaderThread
 from sdcm.logcollector import (
+    CassandraLogCollector,
     KubernetesAPIServerLogCollector,
     KubernetesLogCollector,
     KubernetesMustGatherLogCollector,
@@ -555,23 +557,32 @@ class ClusterTester(unittest.TestCase):
         try:
             self.log.info("Collecting packages for Argus...")
             packages_to_submit = []
-            versions = self.get_scylla_versions()
             kernel_version = self.db_cluster.nodes[0].kernel_version
             kernel_package = Package(name="kernel", date="", version=kernel_version, revision_id="", build_id="")
             packages_to_submit.append(kernel_package)
-            for package_name, package_info in versions.items():
-                package = Package(
-                    name=package_name,
-                    date=package_info.get("date", "#NO_DATE"),
-                    version=package_info.get("version", "#NO_VERSION"),
-                    revision_id=package_info.get("commit_id", "#NO_COMMIT"),
-                    build_id=package_info.get("build_id", "#NO_BUILDID"),
-                )
-                packages_to_submit.append(package)
-            if len(versions) == 0:
-                packages_to_submit.append(self.generate_scylla_server_package())
 
-            self.log.debug("Collected Scylla and kernel packages: %s", packages_to_submit)
+            if isinstance(self.db_cluster, BaseCassandraCluster):
+                cassandra_version = (
+                    self.db_cluster.nodes[0].get_scylla_binary_version() or self.db_cluster.cassandra_version
+                )
+                packages_to_submit.append(
+                    Package(name="cassandra", date="", version=cassandra_version, revision_id="", build_id="")
+                )
+            else:
+                versions = self.get_scylla_versions()
+                for package_name, package_info in versions.items():
+                    package = Package(
+                        name=package_name,
+                        date=package_info.get("date", "#NO_DATE"),
+                        version=package_info.get("version", "#NO_VERSION"),
+                        revision_id=package_info.get("commit_id", "#NO_COMMIT"),
+                        build_id=package_info.get("build_id", "#NO_BUILDID"),
+                    )
+                    packages_to_submit.append(package)
+                if len(versions) == 0:
+                    packages_to_submit.append(self.generate_scylla_server_package())
+
+            self.log.debug("Collected packages: %s", packages_to_submit)
 
             packages_to_submit.extend(self.generate_operator_packages())
 
@@ -620,10 +631,13 @@ class ClusterTester(unittest.TestCase):
     def argus_get_scylla_version(self):
         try:
             self.log.info("Collection Scylla version for argus...")
-            version_regex = re.compile(r"(([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)")
             version_str = self.db_cluster.nodes[0].get_scylla_binary_version()
-            if version_str and (match := version_regex.match(version_str)):
-                version = match.group(2)
+            if version_str:
+                version_regex = re.compile(r"(([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)")
+                if match := version_regex.match(version_str):
+                    version = match.group(2)
+                else:
+                    version = version_str.strip()
                 self.test_config.argus_client().update_scylla_version(version=version)
                 return
         except Exception:
@@ -1012,8 +1026,8 @@ class ClusterTester(unittest.TestCase):
         if self.params.get("enterprise_disable_kms"):
             logging.debug("Skip configuring AWS KMS, `enterprise_disable_kms` is set in the config")
             return
-        if self.params.get("db_type") == "mixed_scylla":
-            logging.debug("Skip configuring AWS KMS, test uses mixed scylla versions")
+        if self.params.get("db_type") in ("mixed_scylla", "mixed_cassandra"):
+            logging.debug("Skip configuring AWS KMS, test uses mixed cluster versions")
             return
 
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options")):
@@ -1069,8 +1083,8 @@ class ClusterTester(unittest.TestCase):
         if self.params.get("enterprise_disable_kms"):
             logging.debug("Skip configuring Azure KMS, `enterprise_disable_kms` is set in the config")
             return
-        if self.params.get("db_type") == "mixed_scylla":
-            logging.debug("Skip configuring Azure KMS, test uses mixed scylla versions")
+        if self.params.get("db_type") in ("mixed_scylla", "mixed_cassandra"):
+            logging.debug("Skip configuring Azure KMS, test uses mixed cluster versions")
             return
         try:
             scylla_version = ComparableScyllaVersion(self.params.artifact_scylla_version)
@@ -1128,8 +1142,8 @@ class ClusterTester(unittest.TestCase):
         if self.params.get("enterprise_disable_kms"):
             logging.debug("Skip configuring GCP KMS, `enterprise_disable_kms` is set in the config")
             return
-        if self.params.get("db_type") == "mixed_scylla":
-            logging.debug("Skip configuring GCP KMS, test uses mixed scylla versions")
+        if self.params.get("db_type") in ("mixed_scylla", "mixed_cassandra"):
+            logging.debug("Skip configuring GCP KMS, test uses mixed cluster versions")
             return
 
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options")):
@@ -1469,6 +1483,9 @@ class ClusterTester(unittest.TestCase):
             return
         if db_cluster.nodes[0].raft.is_consistent_topology_changes_enabled:
             self.log.debug("Skipping change rf of system_auth because with consistent topology auth-v2 is enabled")
+            return
+        if isinstance(db_cluster, BaseCassandraCluster):
+            self.log.debug("Skipping change rf of system_auth for Cassandra cluster")
             return
         self.set_ks_strategy_to_network_and_rf_according_to_cluster(keyspace="system_auth", db_cluster=db_cluster)
 
@@ -1965,7 +1982,7 @@ class ClusterTester(unittest.TestCase):
                 n_nodes=db_info["n_nodes"],
             )
 
-        def create_cluster(db_type="scylla"):
+        def create_cluster(db_type="scylla"):  # noqa: PLR0911
             cl_params = _get_instance_params()
             cl_params.update(common_params)
             if db_type == "scylla":
@@ -1979,8 +1996,20 @@ class ClusterTester(unittest.TestCase):
             elif db_type == "cassandra":
                 return CassandraAWSCluster(
                     ec2_ami_id=self.params.get("ami_id_db_cassandra").split(),
-                    ec2_ami_username=self.params.get("ami_db_cassandra_user"),
+                    ec2_ami_username="ubuntu",
                     **cl_params,
+                )
+            elif db_type == "mixed_cassandra":
+                self.test_config.mixed_cluster(True)
+                ami_id = self.params.get("ami_id_db_cassandra_oracle") or self.params.get("ami_id_loader")
+                return CassandraAWSCluster(
+                    ec2_ami_id=ami_id.split(),
+                    ec2_ami_username="ubuntu",
+                    ec2_instance_type=self.params.get("instance_type_db_oracle"),
+                    ec2_block_device_mappings=db_info["device_mappings"],
+                    n_nodes=[self.params.get("n_test_oracle_db_nodes")],
+                    node_type="oracle-db",
+                    **(common_params | {"user_prefix": user_prefix + "-cassandra-oracle"}),
                 )
             elif db_type == "mixed_scylla":
                 self.test_config.mixed_cluster(True)
@@ -2017,6 +2046,9 @@ class ClusterTester(unittest.TestCase):
         elif db_type == "mixed_scylla":
             self.db_cluster = create_cluster("scylla")
             self.cs_db_cluster = create_cluster("mixed_scylla")
+        elif db_type == "mixed_cassandra":
+            self.db_cluster = create_cluster("scylla")
+            self.cs_db_cluster = create_cluster("mixed_cassandra")
         elif db_type == "cloud_scylla":
             self.db_cluster = create_cluster("cloud_scylla")
         else:
@@ -2063,13 +2095,23 @@ class ClusterTester(unittest.TestCase):
         )
         common_params = dict(user_prefix=self.params.get("user_prefix"), params=self.params)
 
-        self.db_cluster = cluster_docker.ScyllaDockerCluster(
-            n_nodes=[
-                self.params.get("n_db_nodes"),
-            ],
-            **container_node_params,
-            **common_params,
-        )
+        db_type = self.params.get("db_type")
+        if db_type == "cassandra":
+            self.db_cluster = cluster_docker.CassandraDockerCluster(
+                docker_image=self.params.get("docker_image_cassandra"),
+                docker_image_tag=self.params.get("cassandra_version"),
+                node_key_file=self.credentials[0].key_file,
+                n_nodes=[self.params.get("n_db_nodes")],
+                **common_params,
+            )
+        else:
+            self.db_cluster = cluster_docker.ScyllaDockerCluster(
+                n_nodes=[
+                    self.params.get("n_db_nodes"),
+                ],
+                **container_node_params,
+                **common_params,
+            )
 
         if self.params.get("n_vector_store_nodes") > 0:
             self.db_cluster.vector_store_cluster = cluster_docker.VectorStoreSetDocker(
@@ -2081,6 +2123,10 @@ class ClusterTester(unittest.TestCase):
                 node_key_file=self.credentials[0].key_file,
             )
 
+        # TODO: for Docker backend, loaders are Scylla containers used only as a Docker host
+        # to launch stress tool containers (RemoteDocker) via docker-in-docker.
+        # This is wasteful — stress containers could run directly on the host via LOCALRUNNER.
+        # See docs/plans/infrastructure/cassandra-cluster-support.md for refactor notes.
         self.loaders = cluster_docker.LoaderSetDocker(
             n_nodes=self.params.get("n_loaders"), **container_node_params, **common_params
         )
@@ -4457,8 +4503,18 @@ class ClusterTester(unittest.TestCase):
             {
                 "name": "db_cluster",
                 "nodes": self.db_cluster and self.db_cluster.nodes,
-                "collector": ScyllaLogCollector,
+                "collector": CassandraLogCollector
+                if isinstance(self.db_cluster, BaseCassandraCluster)
+                else ScyllaLogCollector,
                 "logname": "db_cluster_log",
+            },
+            {
+                "name": "cs_db_cluster",
+                "nodes": self.cs_db_cluster and self.cs_db_cluster.nodes,
+                "collector": CassandraLogCollector
+                if isinstance(self.cs_db_cluster, BaseCassandraCluster)
+                else ScyllaLogCollector,
+                "logname": "cs_db_cluster_log",
             },
             {
                 "name": "loaders",

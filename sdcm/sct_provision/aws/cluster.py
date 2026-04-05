@@ -25,6 +25,7 @@ from sdcm.provision.common.provisioner import TagsType
 from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.aws.instance_parameters_builder import (
+    CassandraInstanceParamsBuilder,
     ScyllaInstanceParamsBuilder,
     LoaderInstanceParamsBuilder,
     MonitorInstanceParamsBuilder,
@@ -251,9 +252,19 @@ class DBCluster(ClusterBase):
     _ZEROTOKEN_NODE_NUM_PARAM_NAME = "n_db_zero_token_nodes"
     _ZEROTOKEN_NODE_INSTANCE_TYPE_PARAM_NAME = "zero_token_instance_type_db"
     _USE_ZERO_NODES_PARAM_NAME = "use_zero_nodes"
-    _INSTANCE_PARAMS_BUILDER = ScyllaInstanceParamsBuilder
     _ZERO_TOKEN_INSTANCE_PARAMS_BUILDER = ScyllaZeroTokenParamsBuilder
-    _USER_PARAM = "ami_db_scylla_user"
+
+    @cached_property
+    def _is_cassandra(self) -> bool:
+        return self.params.get("db_type") in ("cassandra", "mixed_cassandra")
+
+    @cached_property
+    def _INSTANCE_PARAMS_BUILDER(self):
+        return CassandraInstanceParamsBuilder if self._is_cassandra else ScyllaInstanceParamsBuilder
+
+    @cached_property
+    def _USER_PARAM(self):
+        return "ami_db_scylla_user"
 
     @property
     def _user_data(self) -> str:

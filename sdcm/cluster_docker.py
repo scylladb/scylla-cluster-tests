@@ -18,7 +18,6 @@ import shutil
 from typing import Optional, Union, Dict
 from functools import cached_property
 
-
 from sdcm import cluster
 from sdcm.provision.helpers.certificate import (
     CA_CERT_FILE,
@@ -36,6 +35,7 @@ from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, Contai
 from sdcm.utils.health_checker import check_nodes_status
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import get_my_public_ip
+from sdcm.cluster_cassandra import BaseCassandraCluster, CassandraNodeMixin
 from sdcm.utils.vector_store_utils import VectorStoreClusterMixin, VectorStoreNodeMixin
 
 DEFAULT_SCYLLA_DB_IMAGE = "scylladb/scylla-nightly"
@@ -264,7 +264,11 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
 
     def install_sudo(self, user: str = "scylla", verbose=False):
         """Install and configure passwordless sudo"""
-        pkg_mgr = "microdnf" if self.distro.is_rhel_like else "apt"
+        if self.distro.is_rhel_like:
+            pkg_mgr = "microdnf"
+        else:
+            pkg_mgr = "apt"
+            self.remoter.run("apt update", verbose=verbose, ignore_status=True, user="root")
         self.remoter.run(f"{pkg_mgr} install -y sudo", verbose=verbose, ignore_status=True, user="root")
 
         self.remoter.run("mkdir -p /etc/sudoers.d", user="root", ignore_status=True, verbose=verbose)
@@ -527,6 +531,134 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
                 self.log.warning("Failed destroy vector store cluster: %s", e)
 
         super().destroy()
+
+
+DEFAULT_CASSANDRA_IMAGE = "cassandra"
+DEFAULT_CASSANDRA_IMAGE_TAG = "4.1"
+
+
+class CassandraDockerNode(CassandraNodeMixin, DockerNode):
+    """A Cassandra node running in a Docker container.
+
+    MRO puts CassandraNodeMixin before DockerNode/BaseNode, so the mixin's
+    overrides win.  The explicit forwarding below makes that choice visible
+    to static-analysis tools and prevents silent regressions if the
+    inheritance order ever changes.
+    """
+
+    # --- Explicit MRO forwarding to CassandraNodeMixin ---
+    remote_scylla_yaml = CassandraNodeMixin.remote_scylla_yaml
+    smp = CassandraNodeMixin.smp
+    cpuset = CassandraNodeMixin.cpuset
+    _gen_nodetool_cmd = CassandraNodeMixin._gen_nodetool_cmd
+    extract_seeds_from_scylla_yaml = CassandraNodeMixin.extract_seeds_from_scylla_yaml
+    is_server_encrypt = CassandraNodeMixin.is_server_encrypt
+    raft = CassandraNodeMixin.raft
+    cql_address = CassandraNodeMixin.cql_address
+    wait_native_transport = CassandraNodeMixin.wait_native_transport
+    db_up = CassandraNodeMixin.db_up
+    config_setup = CassandraNodeMixin.config_setup
+    get_scylla_binary_version = CassandraNodeMixin.get_scylla_binary_version
+
+    def node_container_run_args(self, seed_ip):
+        env_vars = self.parent_cluster.cassandra_env_vars(self, seed_ip)
+        return dict(
+            name=self.name,
+            image=self.node_container_image_tag,
+            environment=env_vars,
+            network=self.parent_cluster.params.get("docker_network"),
+            nano_cpus=10**9,
+        )
+
+
+class CassandraDockerCluster(BaseCassandraCluster, DockerCluster):
+    """Cassandra cluster on Docker backend for development and CI."""
+
+    def __init__(
+        self,
+        docker_image: str = DEFAULT_CASSANDRA_IMAGE,
+        docker_image_tag: str = DEFAULT_CASSANDRA_IMAGE_TAG,
+        node_key_file: Optional[str] = None,
+        user_prefix: Optional[str] = None,
+        n_nodes: Union[list, str] = 1,
+        params: dict = None,
+    ) -> None:
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, "cs-cluster")
+        node_prefix = cluster.prepend_user_prefix(user_prefix, "cs-node")
+        super().__init__(
+            docker_image=docker_image,
+            docker_image_tag=docker_image_tag,
+            node_key_file=node_key_file,
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            node_type="cs-db",
+            n_nodes=n_nodes,
+            params=params,
+        )
+
+    def _create_node(self, node_index, container=None):
+        node = CassandraDockerNode(
+            parent_cluster=self,
+            container=container,
+            ssh_login_info=dict(hostname=None, user=self.node_container_user, key_file=self.node_container_key_file),
+            base_logdir=self.logdir,
+            node_prefix=self.node_prefix,
+            node_index=node_index,
+        )
+
+        if container is None:
+            ContainerManager.run_container(
+                node, "node", seed_ip=self.nodes[0].public_ip_address if node_index else None
+            )
+            ContainerManager.wait_for_status(node, "node", status="running")
+
+        node.init()
+
+        return node
+
+    def cassandra_env_vars(self, node, seed_ip) -> dict:
+        """Compute Docker env vars for the Cassandra container.
+
+        Args:
+            node: The node being configured.
+            seed_ip: IP address of the seed node, or None for the first node.
+
+        Returns:
+            Dict of environment variables for the Cassandra Docker container.
+        """
+        seeds = seed_ip or ""
+        num_tokens = self.params.get("cassandra_num_tokens") or 16
+        return {
+            "CASSANDRA_CLUSTER_NAME": self.name,
+            "CASSANDRA_SEEDS": seeds,
+            "CASSANDRA_ENDPOINT_SNITCH": "SimpleSnitch",
+            "CASSANDRA_NUM_TOKENS": str(num_tokens),
+            "MAX_HEAP_SIZE": "512M",
+            "HEAP_NEWSIZE": "64M",
+        }
+
+    def node_setup(self, node, verbose=False, timeout=3600):
+        # Docker: image entrypoint handles Cassandra installation and config
+        pass
+
+    def node_startup(self, node, verbose=False, timeout=3600):
+        # Docker: container start is the startup
+        pass
+
+    # Explicit MRO forwarding: BaseCassandraCluster provides the Cassandra-specific
+    # implementation; this override makes the resolution explicit.
+    def get_node_ips_param(self, public_ip=True):
+        return BaseCassandraCluster.get_node_ips_param(self, public_ip=public_ip)
+
+    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=60, sleep_time=3, timeout=0):
+        # Docker Cassandra: CQL port check is sufficient
+        pass
+
+    @cluster.wait_for_init_wrap
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
+        node_list = node_list if node_list else self.nodes
+        for node in node_list:
+            node.wait_db_up(timeout=timeout or 300)
 
 
 class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
