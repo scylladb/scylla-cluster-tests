@@ -1199,6 +1199,10 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 class CassandraAWSNode(CassandraNodeMixin, AWSNode):
     """AWS node running Cassandra instead of Scylla."""
 
+    # Cassandra nodes use CassandraNodeMixin.remote_scylla_yaml (reads cassandra.yaml)
+    # rather than BaseNode.remote_scylla_yaml (reads scylla.yaml). MRO resolves this
+    # correctly because CassandraNodeMixin is listed before AWSNode.
+
 
 class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
     """Cassandra cluster provisioned on AWS EC2.
@@ -1260,6 +1264,18 @@ class CassandraAWSCluster(BaseCassandraCluster, AWSCluster):
         )
         node.init()
         return node
+
+    # Explicit MRO forwarding: BaseCassandraCluster provides the Cassandra-specific
+    # implementations; these overrides make the resolution explicit and avoid silent
+    # fallback to AWSCluster/ScyllaCluster methods.
+    def node_setup(self, node, verbose=False, timeout=3600):
+        return BaseCassandraCluster.node_setup(self, node, verbose=verbose, timeout=timeout)
+
+    def node_startup(self, node, verbose=False, timeout=3600):
+        return BaseCassandraCluster.node_startup(self, node, verbose=verbose, timeout=timeout)
+
+    def get_node_ips_param(self, public_ip=True):
+        return BaseCassandraCluster.get_node_ips_param(self, public_ip=public_ip)
 
     @cluster.wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):

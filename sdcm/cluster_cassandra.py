@@ -477,12 +477,12 @@ class BaseCassandraCluster:
         dist_name = f"{major}{minor}x"  # e.g., "41x" for 4.1, "50x" for 5.0
         node.remoter.sudo(
             "curl -fsSL https://downloads.apache.org/cassandra/KEYS "
-            "| sudo tee /etc/apt/trusted.gpg.d/cassandra.asc > /dev/null",
+            "| tee /etc/apt/trusted.gpg.d/cassandra.asc > /dev/null",
             retry=3,
         )
         node.remoter.sudo(
             f'echo "deb https://debian.cassandra.apache.org {dist_name} main" '
-            f"| sudo tee /etc/apt/sources.list.d/cassandra.sources.list",
+            f"| tee /etc/apt/sources.list.d/cassandra.sources.list",
         )
         node.remoter.sudo("apt-get update", retry=3)
 
@@ -524,14 +524,15 @@ class BaseCassandraCluster:
         # Use sed to update individual keys in the existing cassandra.yaml.
         # Pattern ^#? handles entries that are commented out by default
         # (e.g., broadcast_rpc_address is "# broadcast_rpc_address: 1.2.3.4").
+        # Use '|' as sed delimiter to avoid conflicts with '/' in values.
         for key, value in yaml_updates.items():
             if key == "seed_provider":
-                node.remoter.sudo(f"sed -i 's/- seeds: .*/- seeds: \"{seeds}\"/' {CASSANDRA_YAML_PATH}")
+                node.remoter.sudo(f"sed -i 's|- seeds: .*|- seeds: \"{seeds}\"|' {CASSANDRA_YAML_PATH}")
             elif key == "cluster_name":
                 # cluster_name may be quoted — handle both forms
-                node.remoter.sudo(f"sed -i \"s/^cluster_name:.*/cluster_name: '{value}'/\" {CASSANDRA_YAML_PATH}")
+                node.remoter.sudo(f"sed -i \"s|^cluster_name:.*|cluster_name: '{value}'|\" {CASSANDRA_YAML_PATH}")
             else:
-                node.remoter.sudo(f"sed -Ei 's/^#? *{key}:.*/{key}: {value}/' {CASSANDRA_YAML_PATH}")
+                node.remoter.sudo(f"sed -Ei 's|^#? *{key}:.*|{key}: {value}|' {CASSANDRA_YAML_PATH}")
 
     def _configure_cassandra_env(self, node):
         """Set JVM heap sizes in cassandra-env.sh."""

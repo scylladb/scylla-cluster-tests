@@ -3478,7 +3478,7 @@ class SCTConfiguration(BaseModel):
         current_region_param_name = region_param_names[backend]
         multi_region_params = list(self.multi_region_params)
         # For Cassandra db_type, check ami_id_db_cassandra instead of ami_id_db_scylla
-        if self.get("db_type") in ("cassandra",) and "ami_id_db_scylla" in multi_region_params:
+        if self.get("db_type") in ("cassandra", "mixed_cassandra") and "ami_id_db_scylla" in multi_region_params:
             multi_region_params[multi_region_params.index("ami_id_db_scylla")] = "ami_id_db_cassandra"
         region_count = {}
         for opt in multi_region_params:
@@ -3652,7 +3652,7 @@ class SCTConfiguration(BaseModel):
         elif self.get("db_type") == "cloud_scylla":
             options_must_exist += ["cloud_cluster_id"]
         elif backend == "aws":
-            if self.get("db_type") in ("cassandra",):
+            if self.get("db_type") in ("cassandra", "mixed_cassandra"):
                 options_must_exist += ["ami_id_db_cassandra"]
             else:
                 options_must_exist += ["ami_id_db_scylla"]

@@ -528,6 +528,10 @@ DEFAULT_CASSANDRA_IMAGE_TAG = "4.1"
 class CassandraDockerNode(CassandraNodeMixin, DockerNode):
     """A Cassandra node running in a Docker container."""
 
+    # Cassandra nodes use CassandraNodeMixin.remote_scylla_yaml (reads cassandra.yaml)
+    # rather than BaseNode.remote_scylla_yaml (reads scylla.yaml). MRO resolves this
+    # correctly because CassandraNodeMixin is listed before DockerNode.
+
     def node_container_run_args(self, seed_ip):
         env_vars = self.parent_cluster.cassandra_env_vars(self, seed_ip)
         return dict(
@@ -559,7 +563,7 @@ class CassandraDockerCluster(BaseCassandraCluster, DockerCluster):
             node_key_file=node_key_file,
             cluster_prefix=cluster_prefix,
             node_prefix=node_prefix,
-            node_type="scylla-db",
+            node_type="cs-db",
             n_nodes=n_nodes,
             params=params,
         )
@@ -612,6 +616,11 @@ class CassandraDockerCluster(BaseCassandraCluster, DockerCluster):
     def node_startup(self, node, verbose=False, timeout=3600):
         # Docker: container start is the startup
         pass
+
+    # Explicit MRO forwarding: BaseCassandraCluster provides the Cassandra-specific
+    # implementation; this override makes the resolution explicit.
+    def get_node_ips_param(self, public_ip=True):
+        return BaseCassandraCluster.get_node_ips_param(self, public_ip=public_ip)
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=60, sleep_time=3, timeout=0):
         # Docker Cassandra: CQL port check is sufficient
