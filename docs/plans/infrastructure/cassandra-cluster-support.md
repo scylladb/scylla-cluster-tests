@@ -1,8 +1,8 @@
 ---
-status: draft
+status: in-progress
 domain: cluster
 created: 2026-03-08
-last_updated: 2026-03-19
+last_updated: 2026-03-22
 owner: fruch
 ---
 # Cassandra Cluster Support in SCT
@@ -578,10 +578,13 @@ stress_cmd: '...'
 **Note on sequencing:** Phases 1 and 2 should land in the same PR or immediately sequential PRs. If Phase 1 is merged and Phase 2 is delayed, the codebase will have a non-mixin `CassandraDockerCluster` as permanent state, which creates technical debt.
 
 **Definition of Done:**
-- [ ] `CassandraDockerCluster` starts a Cassandra container, waits for CQL, and is reachable on port 9042
+- [x] `CassandraDockerCluster` starts a Cassandra container, waits for CQL, and is reachable on port 9042
+  - PR [#14164](https://github.com/scylladb/scylla-cluster-tests/pull/14164): `CassandraDockerNode`, `CassandraDockerCluster`, `CassandraYamlAttrProxy`
+  - Tested with Cassandra 4.1 and 5.0 (longevity_test.LongevityTest.test_custom_time)
+  - Overrides: `remote_scylla_yaml` → `cassandra.yaml`, `nodetool` path, `raft` → `NoRaft`, `wait_native_transport` → CQL port check
 - [ ] Gemini test runs with `--backend docker` using Cassandra oracle (`db_type: mixed_cassandra`)
 - [ ] Gemini successfully compares Scylla (test) vs Cassandra (oracle) reads with no unexpected errors
-- [ ] Unit test verifying Docker env var mapping (`_cassandra_env_vars()`) for single-node and multi-node clusters
+- [x] Unit test verifying Docker env var mapping (`_cassandra_env_vars()`) for single-node and multi-node clusters
 - [ ] Integration test verifying `CassandraDockerCluster` starts and CQL port is reachable
 
 ---
