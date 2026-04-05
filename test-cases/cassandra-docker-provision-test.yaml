@@ -1,0 +1,18 @@
+test_duration: 5
+n_db_nodes: 1
+n_loaders: 1
+
+db_type: cassandra
+docker_image_cassandra: 'cassandra'
+cassandra_version: '5.0'
+
+# Loaders still use a Scylla image (has cassandra-stress built in)
+scylla_version: '2025.3.0'
+
+user_prefix: 'cassandra-docker-test'
+
+# Cassandra does not use Scylla's KMS encryption-at-rest or CommitLogCheckThread
+enable_kms_key_rotation: false
+run_commit_log_check_thread: false
+
+stress_cmd: ["cassandra-stress write cl=ONE duration=1m -schema 'replication(strategy=SimpleStrategy,replication_factor=1)' -mode cql3 native -rate threads=10 -pop seq=1..10000 -log interval=5"]

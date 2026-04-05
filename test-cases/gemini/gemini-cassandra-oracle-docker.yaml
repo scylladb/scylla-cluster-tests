@@ -1,0 +1,26 @@
+test_duration: 10
+n_db_nodes: 1
+n_test_oracle_db_nodes: 1
+n_loaders: 1
+
+db_type: mixed_cassandra
+docker_image_cassandra: 'cassandra'
+cassandra_oracle_version: '4.1'
+
+# Loaders still use a Scylla image (has cassandra-stress built in)
+scylla_version: '2025.3.0'
+
+user_prefix: 'gemini-cs-oracle'
+
+# Cassandra does not expose the Scylla REST API (port 10000) used by CommitLogCheckThread
+run_commit_log_check_thread: false
+
+gemini_cmd: |
+  --duration 5m
+  --warmup 30s
+  --concurrency 5
+  --mode mixed
+  --max-tables 1
+  --max-columns 5
+  --max-partition-keys 2
+  --max-clustering-keys 2
