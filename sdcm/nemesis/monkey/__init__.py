@@ -989,6 +989,7 @@ class IsolateNodeWithIptableRuleNemesis(NemesisBaseClass):
 class KillMVBuildingCoordinator(NemesisBaseClass):
     disruptive = True
     topology_changes = True
+    supports_high_disk_utilization = False  # Creating an MV consumes disk space
 
     def disrupt(self):
         self.runner.disrupt_kill_mv_building_coordinator()
