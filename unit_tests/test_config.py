@@ -1092,3 +1092,34 @@ class TestCommonTags:
         tags = TestConfig.common_tags()
         assert "JenkinsJobTag" not in tags
         assert "JenkinsJob" not in tags
+
+
+def test_vector_store_ami_name_resolved_to_ami_id(monkeypatch):
+    """Verify that ami_id_vector_store goes through convert_name_to_ami_if_needed.
+
+    Regression test for scylladb/scylla-cluster-tests#13104 which accidentally
+    dropped ami_id_vector_store from the ami_id_params list during the pydantic
+    config refactor, causing image name-to-AMI resolution to be skipped.
+    """
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-db-scylla")
+    monkeypatch.setenv("SCT_AMI_ID_VECTOR_STORE", "vector-store-1-5-0-arm64-2026-03-17t07-07-32z")
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_VECTOR_STORE", "i4i.large")
+    monkeypatch.setenv("SCT_AMI_VECTOR_STORE_USER", "ubuntu")
+    monkeypatch.setenv("SCT_N_VECTOR_STORE_NODES", "1")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+
+    resolved_names = {}
+
+    def fake_convert(param, region_names):
+        if not param.startswith("ami-"):
+            resolved_names[param] = f"ami-{param}"
+            return f"ami-{param}"
+        return param
+
+    with unittest.mock.patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=fake_convert):
+        sct_config.SCTConfiguration()
+
+    assert "vector-store-1-5-0-arm64-2026-03-17t07-07-32z" in resolved_names, (
+        "convert_name_to_ami_if_needed was not called for ami_id_vector_store"
+    )

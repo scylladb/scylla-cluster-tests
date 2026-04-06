@@ -2389,6 +2389,7 @@ class SCTConfiguration(BaseModel):
         "ami_id_monitor",
         "ami_id_db_cassandra",
         "ami_id_db_oracle",
+        "ami_id_vector_store",
     ]
     aws_supported_regions: Annotated[list, IgnoredType] = [
         "eu-west-1",
