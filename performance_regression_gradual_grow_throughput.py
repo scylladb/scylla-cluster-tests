@@ -258,6 +258,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 self._run_cql_commands(post_prepare_cql_cmd)
 
     def preload_data(self, compaction_strategy=None):
+        if self.params.get("pre_create_keyspace"):
+            self._pre_create_keyspace()
+
         population_commands: list = self.params.get("prepare_write_cmd")
 
         self.log.info("Population c-s commands: %s", population_commands)
