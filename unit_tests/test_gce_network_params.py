@@ -11,18 +11,18 @@
 #
 # Copyright (c) 2025 ScyllaDB
 import json
-from pathlib import Path
 
 import pytest
 
 from sdcm.utils.gce_network_params import (
     GcpInstanceNetworkInfo,
+    _GCP_NET_PARAMS_FILE,
     calculate_stream_io_throughput,
     get_gcp_instance_network_info,
 )
 
 
-GCP_NET_PARAMS_FILE = Path(__file__).parent / "../sdcm/provision/common/gcp_net_params.json"
+GCP_NET_PARAMS_FILE = _GCP_NET_PARAMS_FILE.resolve()
 
 
 class TestGcpNetParamsJson:

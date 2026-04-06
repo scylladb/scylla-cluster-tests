@@ -73,10 +73,13 @@ def _load_gcp_net_params() -> dict[str, GcpInstanceNetworkInfo]:
 
     result: dict[str, GcpInstanceNetworkInfo] = {}
     for entry in raw:
+        if len(entry) < 3:
+            LOGGER.warning("Skipping malformed GCP net params entry (too few elements): %s", entry)
+            continue
         instance_type = entry[0]
         description = entry[1]
         default_bw = float(entry[2])
-        tier1_bw = float(entry[3]) if len(entry) > 3 and entry[3] is not None else None
+        tier1_bw = float(entry[3]) if len(entry) >= 4 and entry[3] is not None else None
         result[instance_type] = GcpInstanceNetworkInfo(
             instance_type=instance_type,
             description=description,
