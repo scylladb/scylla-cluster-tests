@@ -76,6 +76,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Health Check Optimization | `draft` | [health-check-optimization.md](infrastructure/health-check-optimization.md) |
 | Full Version Tag Lookup | `draft` | [full-version-tag-lookup.md](config/full-version-tag-lookup.md) |
 | Keystore Improvements | `pending_pr` | [#14055](https://github.com/scylladb/scylla-cluster-tests/pull/14055) |
+| Performance Testing Strategy | `draft` | [performance-testing-strategy.md](performance-testing-strategy.md) |
 
 ### AI Tooling — AI skills, agent guidance
 
@@ -96,6 +97,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Nemesis Extraction Phase 3 | Nemesis Rework | Phase 3 continues the extraction started in Nemesis 2.0 |
 | SCT Config Follow-up Refactoring | SCT Config Validation and Lazy Images | Follow-up work after initial config validation |
 | Typed Config Access Migration | SCT Config Follow-up Refactoring | Type safety layer on top of refactored config |
+| Performance Testing Strategy | i8g Performance Jobs Migration | Statistical baselines simplify i8g threshold recalibration |
 
 ## Domain Coverage Gaps
 

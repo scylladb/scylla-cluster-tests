@@ -231,6 +231,16 @@
       "pr": null,
       "phases_total": 3,
       "phases_done": 0
+    },
+    {
+      "id": "performance-testing-strategy",
+      "title": "Performance Testing Strategy",
+      "file": "performance-testing-strategy.md",
+      "domain": "framework",
+      "status": "draft",
+      "created": "2026-04-06",
+      "phases_total": 7,
+      "phases_done": 0
     }
   ]
 }
