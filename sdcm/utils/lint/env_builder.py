@@ -21,10 +21,13 @@ logger = logging.getLogger(__name__)
 #   - scylla_version: chosen so resolution stays offline —
 #     get_scylla_docker_repo_from_version() maps it to a nightly repo and
 #     _replace_docker_image_latest_tag() only hits the network for "latest".
+#     The numeric part must stay representative of what an unpinned pipeline actually
+#     runs (master / latest release), because validations may compare it: a 0.0.0
+#     placeholder read as "ancient Scylla" and failed every version-gated check.
 #   - k8s_scylla_operator_docker_image: only k8s-eks requires it; a plain image
 #     reference is enough for the structural check.
 _RUNTIME_REQUIRED_PARAM_PLACEHOLDERS: dict[str, tuple[str, str]] = {
-    "scylla_version": ("SCT_SCYLLA_VERSION", "0.0.0-lint-placeholder"),
+    "scylla_version": ("SCT_SCYLLA_VERSION", "2026.1.0-lint-placeholder"),
     "k8s_scylla_operator_docker_image": (
         "SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE",
         "scylladb/scylla-operator:lint-placeholder",

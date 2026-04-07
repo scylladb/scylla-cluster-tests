@@ -597,6 +597,27 @@ def _load_docker_images_defaults_cached():
     return None
 
 
+#: First Scylla release whose Docker image entrypoint accepts the `--dc`/`--rack` arguments.
+DOCKER_RACK_ARG_MIN_VERSION = "2026.1.0-dev"
+
+
+def simulated_racks_enabled(params) -> bool:
+    """True when simulated racks actually take effect.
+
+    Racks need both more than one rack and more than one DB node to spread over.  A single-node
+    cluster stays in one rack whatever `simulated_racks` says: the snitch auto-resolution leaves
+    `endpoint_snitch` alone, so nothing ever reads the rack.  It must therefore not pay any of the
+    cost of racks either -- in particular the Scylla >= 2026.1 requirement of the Docker
+    `--dc`/`--rack` entrypoint arguments, which older images reject outright.
+
+    Kept in one place because three call sites have to agree on it: the Docker version check and
+    the snitch auto-resolution in `SCTConfiguration.__init__`, and the `--dc`/`--rack` injection in
+    `NodeContainerMixin.node_container_run_args`.  `n_db_nodes` is the configured topology and is
+    never mutated at runtime, so growing a cluster does not change the answer mid-test.
+    """
+    return (params.get("simulated_racks") or 0) > 1 and sum(params.get("n_db_nodes") or []) > 1
+
+
 class SCTConfiguration(BaseModel):
     """
     Class the hold the SCT configuration
@@ -2399,7 +2420,10 @@ class SCTConfiguration(BaseModel):
     )
     simulated_racks: int = SctField(
         description="""Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate racks.
-         Provide number of racks to simulate.""",
+         Provide number of racks to simulate. Takes effect only with more than one DB node: a
+         single-node cluster stays in one rack and `endpoint_snitch` is left alone. On the docker
+         backend the rack is passed to the image entrypoint as `--dc/--rack`, which requires Scylla
+         >= 2026.1; an older image fails the configuration, so set 1 to opt out.""",
     )
     rack_aware_loader: Boolean = SctField(
         description="When enabled, loaders will look for nodes on the same rack.",
@@ -3284,15 +3308,14 @@ class SCTConfiguration(BaseModel):
                 except TypeError as exp:
                     raise ValueError(f" Got error: {exp!r}, on item '{param}'") from exp
 
+        # 14.1 On Docker, simulated racks are injected as --dc/--rack entrypoint arguments at container
+        #      creation, which the Scylla image entrypoint only understands since 2026.1. Check it here,
+        #      before section 15 forces the snitch and before any container is created.
+        if cluster_backend == "docker" and simulated_racks_enabled(self):
+            self._validate_docker_simulated_racks()
+
         # 15 Force endpoint_snitch to GossipingPropertyFileSnitch if using simulated_regions or simulated_racks
-        n_db_nodes = self.get("n_db_nodes")
-        num_of_db_nodes = sum(n_db_nodes or [])
-        if (
-            (self.get("simulated_regions") or 0) > 1
-            or (self.get("simulated_racks") or 0) > 1
-            and num_of_db_nodes > 1
-            and cluster_backend != "docker"
-        ):
+        if (self.get("simulated_regions") or 0) > 1 or simulated_racks_enabled(self):
             if snitch := self.get("endpoint_snitch"):
                 assert snitch.endswith("GossipingPropertyFileSnitch"), (
                     f"Simulating racks requires endpoint_snitch to be GossipingPropertyFileSnitch while it set to {self['endpoint_snitch']}"
@@ -4112,6 +4135,37 @@ class SCTConfiguration(BaseModel):
                         f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
                         f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
                     )
+
+    def _validate_docker_simulated_racks(self) -> None:
+        """Reject `simulated_racks` on Docker images that predate the --dc/--rack entrypoint arguments.
+
+        On Docker a rack is injected as a `--dc`/`--rack` entrypoint argument at container creation.
+        Scylla 2026.1 is the first release whose entrypoint accepts them and writes
+        `cassandra-rackdc.properties` before the first boot; older images forward the arguments
+        verbatim to the Scylla binary, which rejects them and exits, so the container never comes up.
+
+        The configuration is unrunnable, so fail here rather than at container creation: an error
+        naming the version requirement beats a container that dies on startup with no explanation.
+        A Docker test-case that must run on older images sets `simulated_racks: 1` itself.
+        """
+        scylla_version = self.get("scylla_version") or ""
+        try:
+            image_version = ComparableScyllaVersion(scylla_version)
+        except ValueError:
+            # Branched versions ('master:latest' and friends) are not comparable and are always new enough.
+            self.log.debug(
+                "Cannot determine whether Scylla docker image '%s' supports the --rack entrypoint argument "
+                "(scylla_version=%r); assuming it does.",
+                self.get("docker_image"),
+                scylla_version,
+            )
+            return
+        if image_version < DOCKER_RACK_ARG_MIN_VERSION:
+            raise ValueError(
+                f"simulated_racks={self.get('simulated_racks')} is not supported on Scylla {scylla_version} "
+                f"(docker backend): the --dc/--rack entrypoint arguments were added in "
+                f"{DOCKER_RACK_ARG_MIN_VERSION}. Use a 2026.1+ image or set simulated_racks: 1."
+            )
 
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get("docker_image")

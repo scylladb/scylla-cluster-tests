@@ -77,7 +77,7 @@ def test_02_verify_config(conf):
 def test_05_docker(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     assert "docker_image" in conf.dump_config()
@@ -780,8 +780,8 @@ def test_37_raises_error_for_invalid_thread_count_type(monkeypatch):
         ("k8s-gke", "2024.1.21", "scylladb/scylla-enterprise"),
         ("k8s-eks", "2025.4.0", "scylladb/scylla"),
         ("k8s-gke", "2025.4.0", "scylladb/scylla"),
-        ("docker", "2025.1.0", "scylladb/scylla"),
-        ("docker", "2025.1.0-dev", "scylladb/scylla-nightly"),
+        ("docker", "2026.1.0", "scylladb/scylla"),
+        ("docker", "2026.1.0-dev", "scylladb/scylla-nightly"),
     ),
 )
 def test_38_verify_scylla_version_lookup_k8s(monkeypatch, backend, version, expected_repo):
@@ -947,6 +947,8 @@ def test_migrator_source_hosts_and_test_id_mutually_exclusive(monkeypatch):
 def test_env_var_whitespace_is_stripped(monkeypatch, raw_value, expected):
     """Environment variable values with leading/trailing whitespace are trimmed (SCT-340)."""
     monkeypatch.setenv("SCT_SCYLLA_VERSION", raw_value)
+    # The versions under test predate the --dc/--rack Docker entrypoint args (Scylla 2026.1).
+    monkeypatch.setenv("SCT_SIMULATED_RACKS", "1")
     conf = sct_config.SCTConfiguration()
     assert conf.get("scylla_version") == expected
 
@@ -1339,3 +1341,126 @@ def test_keystore_env_is_exported_before_init_resolves_xcloud_version(monkeypatc
     sct_config.SCTConfiguration()
 
     assert seen == ["s3"], f"KeyStore built during __init__ saw {seen}, config file asked for s3"
+
+
+GOSSIPING_SNITCH = "org.apache.cassandra.locator.GossipingPropertyFileSnitch"
+
+
+@pytest.mark.parametrize(
+    "simulated_racks, n_db_nodes, expected",
+    [
+        pytest.param(3, [3], True, id="racks-and-nodes"),
+        pytest.param(3, [1], False, id="single-node-cannot-span-racks"),
+        pytest.param(1, [3], False, id="racks-off"),
+        pytest.param(0, [3], False, id="racks-zero"),  # configurations/disable_simulated_racks.yaml
+        pytest.param(3, [1, 1], True, id="multi-dc-two-nodes"),
+        pytest.param(3, [1, 0], False, id="multi-dc-one-node"),
+        pytest.param(None, [3], False, id="racks-unset"),
+        pytest.param(3, None, False, id="nodes-unset"),
+    ],
+)
+def test_simulated_racks_enabled(simulated_racks, n_db_nodes, expected):
+    """The predicate three call sites share.
+
+    The Docker version check and the snitch auto-resolution in `SCTConfiguration.__init__`,
+    and the --dc/--rack injection in `NodeContainerMixin.node_container_run_args`, all have to
+    agree on when simulated racks actually take effect.
+    """
+    params = {"simulated_racks": simulated_racks, "n_db_nodes": n_db_nodes}
+
+    assert sct_config.simulated_racks_enabled(params) is expected
+
+
+def test_simulated_racks_enabled_with_missing_keys():
+    """Absent options read the same as unset ones -- no KeyError, racks off."""
+    assert sct_config.simulated_racks_enabled({}) is False
+
+
+def _build_docker_config(monkeypatch, n_db_nodes, scylla_version, simulated_racks=None):
+    """Build an SCTConfiguration for the docker backend.
+
+    `simulated_racks=None` leaves the option unset, so it is inherited from
+    defaults/test_default.yaml (3) rather than supplied by the test-case.
+    """
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", scylla_version)
+    monkeypatch.setenv("SCT_N_DB_NODES", str(n_db_nodes))
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    if simulated_racks is not None:
+        monkeypatch.setenv("SCT_SIMULATED_RACKS", str(simulated_racks))
+    return sct_config.SCTConfiguration()
+
+
+@pytest.mark.parametrize(
+    "n_db_nodes, simulated_racks, expected_snitch",
+    [
+        # Racks off: nothing to check, nothing to override.
+        pytest.param(1, 1, None, id="1-node-racks-off"),
+        pytest.param(3, 1, None, id="3-nodes-racks-off"),
+        # Racks on, but a single DB node never reaches the snitch auto-resolution.
+        pytest.param(1, 3, None, id="1-node-racks-on"),
+        # Racks on: several nodes, so the snitch must follow.
+        pytest.param(3, None, GOSSIPING_SNITCH, id="3-nodes-inherited-default"),
+        pytest.param(3, 2, GOSSIPING_SNITCH, id="3-nodes-racks-on"),
+    ],
+)
+def test_docker_simulated_racks_on_supported_image(monkeypatch, n_db_nodes, simulated_racks, expected_snitch):
+    """On a 2026.1+ image every (nodes, racks) combination builds, with `simulated_racks` untouched.
+
+    `simulated_racks` is the single source of truth downstream -- `BaseScyllaCluster.racks_count`,
+    the snitch auto-resolution and the --dc/--rack injection in `node_container_run_args` -- so
+    sct_config must not rewrite it behind the test-case's back.
+    """
+    conf = _build_docker_config(monkeypatch, n_db_nodes, "2026.1.0", simulated_racks)
+    conf.verify_configuration()
+
+    assert conf.get("simulated_racks") == (simulated_racks if simulated_racks is not None else 3)
+    assert conf.get("endpoint_snitch") == expected_snitch
+
+
+@pytest.mark.parametrize(
+    "n_db_nodes, simulated_racks",
+    [
+        pytest.param(3, None, id="3-nodes-inherited-default"),
+        pytest.param(3, 2, id="3-nodes-racks-on"),
+    ],
+)
+def test_docker_simulated_racks_rejected_on_old_image(monkeypatch, n_db_nodes, simulated_racks):
+    """Racks on a pre-2026.1 image are unrunnable, so fail at configuration time.
+
+    The entrypoint forwards --dc/--rack to the Scylla binary, which rejects them and exits;
+    failing here names the version requirement instead of leaving a container dead on startup.
+    A Docker test-case that must run on older images sets `simulated_racks: 1` itself.
+    """
+    with pytest.raises(ValueError, match="is not supported on Scylla 2025.1.0"):
+        _build_docker_config(monkeypatch, n_db_nodes, "2025.1.0", simulated_racks)
+
+
+@pytest.mark.parametrize(
+    "n_db_nodes, simulated_racks",
+    [
+        pytest.param(1, 1, id="1-node-racks-off"),
+        pytest.param(3, 1, id="3-nodes-racks-off"),
+        pytest.param(1, 3, id="1-node-racks-on"),
+        pytest.param(1, None, id="1-node-inherited-default"),
+    ],
+)
+def test_docker_no_version_requirement_without_effective_racks(monkeypatch, n_db_nodes, simulated_racks):
+    """Racks that cannot take effect impose no version requirement.
+
+    `simulated_racks: 1` opts out explicitly; a single DB node cannot span racks at all, so
+    no --dc/--rack argument is ever built and any image will do.
+    """
+    conf = _build_docker_config(monkeypatch, n_db_nodes, "2025.1.0", simulated_racks)
+    conf.verify_configuration()
+
+    assert conf.get("endpoint_snitch") is None
+
+
+def test_docker_simulated_racks_allowed_on_branched_version(monkeypatch):
+    """Branched versions are not comparable; assume they support --dc/--rack."""
+    monkeypatch.setenv("SCT_DOCKER_IMAGE", "scylladb/scylla-nightly")
+    conf = _build_docker_config(monkeypatch, n_db_nodes=3, scylla_version="master:latest", simulated_racks=2)
+
+    assert conf.get("simulated_racks") == 2
+    assert conf.get("endpoint_snitch") == GOSSIPING_SNITCH

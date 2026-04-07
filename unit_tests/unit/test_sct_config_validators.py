@@ -171,7 +171,7 @@ def test_list_of_stress_tools_with_scalar_gemini_cmd(monkeypatch):
     """list_of_stress_tools must not iterate gemini_cmd char-by-char."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     monkeypatch.setenv("SCT_GEMINI_CMD", "gemini --duration 10m")
 
@@ -187,7 +187,7 @@ def test_list_of_stress_tools_with_list_stress_cmd(monkeypatch):
     """list_of_stress_tools works correctly with list[str] stress_cmd values."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     monkeypatch.setenv("SCT_STRESS_CMD", "cassandra-stress write n=1000000")
 
