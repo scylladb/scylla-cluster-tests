@@ -102,6 +102,10 @@ class CollectingNode:
             "Name": self.name,
         }
 
+    def add_install_prefix(self, path: str) -> str:
+        """CollectingNode always connects to a standard Scylla install — no prefix needed."""
+        return path
+
     @cached_property
     def distro(self):
         LOGGER.debug("Trying to detect Linux distribution...")

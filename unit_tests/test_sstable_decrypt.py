@@ -20,6 +20,7 @@ from unittest.mock import patch
 import pytest
 from invoke import Result
 
+from sdcm.logcollector import CollectingNode
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.sstable.sstable_utils import (
     decrypt_sstable_files_on_node,
@@ -296,3 +297,28 @@ def test_decrypt_sstable_files_on_node_upgrade_failure_returns_none(setup_node):
         )
         is None
     )
+
+
+# ---------------------------------------------------------------------------
+# CollectingNode contract — logcollector.py passes CollectingNode to
+# decrypt_sstables_on_node, so the full call must work end-to-end.
+# ---------------------------------------------------------------------------
+
+
+def test_decrypt_sstables_on_node_with_collecting_node(fake_remoter):
+    """decrypt_sstables_on_node works when called with a real CollectingNode (the logcollector path)."""
+    snap = "/var/lib/scylla/data/ks/tbl-uuid/snapshots/snap"
+    data_file = f"{snap}/me-big-Data.db"
+    fake_remoter.result_map = {
+        re.compile(r"cat .*/schema\.cql"): ok(SCHEMA_WITH_ENCRYPTION),
+        re.compile(r"ls .*/\*-Data\.db.*"): ok(data_file),
+        re.compile(r"echo .* \| base64 -d > /tmp/sct_decrypt_schema.*"): ok(),
+        re.compile(r"rm -rf .*/decrypted"): ok(),
+        re.compile(r"mkdir -p .*/decrypted"): ok(),
+        re.compile(r".*scylla sstable upgrade.*"): ok("Upgraded."),
+        re.compile(r"ls .*/decrypted/"): ok("me-new-big-Data.db"),
+        re.compile(r"rm -f /tmp/sct_decrypt_schema.*"): ok(),
+    }
+    node = CollectingNode(name="test-node")
+    node.remoter = RemoteCmdRunnerBase.create_remoter("test-node")
+    assert decrypt_sstables_on_node(node, snap, keyspace="ks", table="tbl") == f"{snap}/decrypted"
