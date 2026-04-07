@@ -276,7 +276,7 @@ def test_build_env_xcloud_params():
     assert env["SCT_XCLOUD_PROVIDER"] == "aws"
     assert env["SCT_XCLOUD_ENV"] == "staging"
     # xcloud requires scylla_version (injected by Jenkins at runtime) — lint fills a placeholder
-    assert env["SCT_SCYLLA_VERSION"] == "0.0.0-lint-placeholder"
+    assert env["SCT_SCYLLA_VERSION"] == "2026.1.0-lint-placeholder"
 
 
 @pytest.mark.parametrize(
@@ -293,7 +293,7 @@ def test_build_env_injects_scylla_version_placeholder(backend):
     """Backends that require scylla_version get a working placeholder for linting."""
     config = _make_config(params={"backend": backend})
     env = build_env(config)
-    assert env["SCT_SCYLLA_VERSION"] == "0.0.0-lint-placeholder"
+    assert env["SCT_SCYLLA_VERSION"] == "2026.1.0-lint-placeholder"
 
 
 def test_build_env_injects_operator_docker_image_for_eks():
