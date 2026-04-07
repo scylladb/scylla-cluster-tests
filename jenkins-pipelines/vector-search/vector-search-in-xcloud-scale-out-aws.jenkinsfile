@@ -1,0 +1,14 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'xcloud',
+    xcloud_provider: 'aws',
+    xcloud_env: 'staging',
+    region: 'us-east-1',
+    scylla_version: 'release:latest',
+    test_name: 'scylla_cloud_e2e_test.ScyllaCloudVectorSearchXCloudTest.test_vs_functions_while_xcloud_cluster_scaling',
+    test_config: '''["test-cases/vector-search/vector-search-xcloud-scale-out.yaml", "configurations/xcloud_scaling/i8g-storage-target-80.yaml"]'''
+)
