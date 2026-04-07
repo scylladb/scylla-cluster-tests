@@ -18,6 +18,7 @@ LOGGER = logging.getLogger(__name__)
 
 TABLETS_SOFT_TIMEOUT = 1 * 60 * 60
 TABLETS_HARD_TIMEOUT = 3 * 60 * 60
+_STREAMING_OVERHEAD = 600  # add 10 minutes overhead for operations other than streaming
 
 
 def _get_decommission_timeout(
@@ -26,11 +27,12 @@ def _get_decommission_timeout(
     """Calculate timeout for decommission operation based on node load info. Still experimental, used to gather historical data."""
     try:
         node_info = node_info_service.as_dict()
+        LOGGER.debug(f"Estimating decommission timeout with {node_info=}")
         if tablets_enabled:
             node_info["tablets_enabled"] = True
-            estimated = node_info_service.node_data_size_mb / node_info_service.expected_throughput
-            soft_timeout = int(estimated * 2)
-            hard_timeout = int(estimated * 4)
+            estimated = int(node_info_service.node_data_size_mb / node_info_service.expected_throughput)
+            soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
+            hard_timeout = estimated * 4 + _STREAMING_OVERHEAD
             return (soft_timeout, hard_timeout), node_info
         else:
             # For non-tablet cases, calculate based on data size
@@ -75,11 +77,12 @@ def _get_tablet_migration_timeout(
     """
     try:
         node_info = node_info_service.as_dict()
+        LOGGER.debug(f"Estimating tablet migration timeout with {node_info=}")
         if tablets_enabled:
             node_info["tablets_enabled"] = True
-            estimated = node_info_service.node_disk_size_mb * 0.9 / node_info_service.expected_throughput
-            soft_timeout = int(estimated * 2)
-            hard_timeout = int(estimated * 4)
+            estimated = int(node_info_service.node_disk_size_mb * 0.9 / node_info_service.expected_throughput)
+            soft_timeout = estimated * 2 + _STREAMING_OVERHEAD
+            hard_timeout = estimated * 4 + _STREAMING_OVERHEAD
             return (soft_timeout, hard_timeout), node_info
         else:
             soft_timeout = max(int(node_info_service.node_disk_size_mb * 0.9 * 0.03), 7200)  # 2 hours minimum
