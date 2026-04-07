@@ -1,6 +1,6 @@
 ---
 status: draft
-domain: framework
+domain: performance
 created: 2026-04-06
 last_updated: 2026-04-06
 owner: fruch
@@ -15,8 +15,8 @@ SCT's performance regression testing relies on hardcoded `fixed_limit` threshold
 - **No drift detection**: A P99 latency creeping from 2ms to 5ms goes unnoticed when the threshold is 10ms. Gradual regressions accumulate across releases until they cross the fixed limit.
 - **Manual threshold recalibration**: Every hardware migration (e.g., i4i to i8g) requires manually adjusting dozens of threshold values across multiple YAML files. The ongoing i8g migration (`docs/plans/i8g-performance-jobs-migration.md`) highlights this cost.
 - **No root-cause attribution**: When a regression is detected, only latency and throughput are recorded. There is no system-level data (CPU utilization, disk IOPS, compaction pressure, memory) to diagnose whether the regression is compute-bound, I/O-bound, or memory-bound.
-- **Coarse nemesis impact measurement**: Nemesis-latency tests (`test_latency_*_with_nemesis` in `performance_regression_test.py`) report aggregate latency without per-phase breakdown (baseline, disruption, recovery), making it impossible to distinguish slow recovery from high-impact disruption.
-- **No version-over-version trend**: Upgrade tests (`LatteStressLatencyComparison` in `sdcm/argus_results.py`) run standalone without historical comparison across releases.
+- **No automatic SLA comparison for nemesis tests**: Nemesis-latency tests (`test_latency_*_with_nemesis` in `performance_regression_test.py`) collect per-operation latency, but the SLA is not compared to a baseline automatically. The throughput used was aimed at 50% of maximum but has never been recalibrated. There is no per-phase breakdown (baseline, disruption, recovery), making it impossible to distinguish slow recovery from high-impact disruption.
+- **No automatic trend detection across releases**: Upgrade tests (`LatteStressLatencyComparison` in `sdcm/argus_results.py`) store results in Argus with version metadata, but there is no automatic trend detection or degradation alerting across releases.
 
 ## 2. Current State
 
@@ -38,7 +38,7 @@ SCT's performance regression testing relies on hardcoded `fixed_limit` threshold
 1. Regression detection needs statistical baselines alongside (not replacing) fixed limits.
 2. System-level metrics (CPU, disk, memory, compaction) must be collected at each performance step.
 3. Nemesis performance tests need structured phase measurement (baseline/disruption/recovery).
-4. Upgrade results need version-over-version trend tracking in Argus.
+4. Upgrade results in Argus need automatic trend detection and degradation alerting across releases (version data already exists).
 5. Efficiency scoring needs implementation for cross-hardware and cross-cloud comparison.
 
 ## 3. Goals
@@ -59,10 +59,10 @@ SCT's performance regression testing relies on hardcoded `fixed_limit` threshold
 
 **Dependencies**: None
 
-**Description**: Implement a baseline service that stores historical performance results and computes statistical thresholds. This replaces the sole reliance on `fixed_limit` with a hybrid approach: statistical detection for drift + fixed limits for SLA backstops.
+**Description**: Argus already stores historical performance results and has the data model for baseline tracking. This phase adds statistical comparison logic on top of existing Argus data, replacing sole reliance on `fixed_limit` with a hybrid approach: statistical detection for drift + fixed limits for SLA backstops.
 
 **Deliverables**:
-- PR 1.1: Baseline data model and storage layer (Argus or local JSON) with partition key (test_name, step_name, instance_type, architecture)
+- PR 1.1: Statistical comparison layer on top of existing Argus historical data, with partition key (test_name, step_name, instance_type, architecture)
 - PR 1.2: Sliding window computation (mean, stdev, N=10) with configurable k-factor
 - PR 1.3: Integration into `sdcm/utils/decorators.py` validation path -- run statistical check alongside existing `fixed_limit` check
 - PR 1.4: Configuration parameters in `sdcm/sct_config.py` for window size, k-factor, and enable/disable toggle
@@ -81,6 +81,13 @@ SCT's performance regression testing relies on hardcoded `fixed_limit` threshold
 **Dependencies**: None (can proceed in parallel with Phase 1)
 
 **Description**: Extend the performance decorator to query Prometheus for system-level metrics (CPU, memory, disk IOPS, compaction, cache) at the start and end of each step, and store snapshots alongside latency results.
+
+**Related Jira Items**:
+- SCT-188: "Add grow/shrink operations to performance test cases" (related to expanding perf coverage)
+- QAINFRA-59: "Auto generate complete test job from customer inputs" (related to customer workload)
+- SCT-24: "Create and keep separate docs for performance tests" (docs improvement)
+- QAINFRA-38: "Recurring SCT Performance Testing on xcloud backend" (xcloud perf)
+- Note: Historical Jira items requesting CPU/memory metrics collection predate the current Jira project -- the requirement has been a known gap.
 
 **Deliverables**:
 - PR 2.1: Prometheus query helper in `sdcm/utils/latency.py` or new `sdcm/utils/perf_metrics.py` for system metric collection
@@ -119,17 +126,17 @@ SCT's performance regression testing relies on hardcoded `fixed_limit` threshold
 
 **Dependencies**: Phase 1 (statistical baselines)
 
-**Description**: Extend upgrade test result reporting to include version metadata and enable version-over-version trend queries.
+**Description**: Argus already has version tables that store source and target version metadata for upgrade tests. This phase adds automatic trend detection on top of the existing version data, enabling version-over-version degradation alerting without manual inspection.
 
 **Deliverables**:
-- PR 4.1: Add source_version and target_version fields to `LatteStressLatencyComparison` and related Argus tables in `sdcm/argus_results.py`
-- PR 4.2: Degradation percentage computation and integration with statistical baseline comparison
+- PR 4.1: Automatic degradation percentage computation using existing Argus version table data
+- PR 4.2: Integration with Phase 1 statistical baselines for version-over-version trend detection and alerting
 
 **Definition of Done**:
-- [ ] Upgrade test results in Argus include source and target version metadata
-- [ ] Degradation percentage computed automatically between versions
+- [ ] Degradation percentage computed automatically from existing Argus version tables
+- [ ] Trend detection alerts when version-over-version degradation exceeds threshold
 - [ ] Statistical baseline comparison works for upgrade results
-- [ ] Unit tests for version metadata handling and degradation computation
+- [ ] Unit tests for degradation computation and trend detection
 
 ### Phase 5: i8g Migration (Ongoing)
 
@@ -148,24 +155,7 @@ SCT's performance regression testing relies on hardcoded `fixed_limit` threshold
 - [ ] No manual `fixed_limit` edits required for i8g threshold calibration
 - [ ] Existing i4i baselines remain unaffected (partitioned by instance_type)
 
-### Phase 6: Customer Workload Framework (1-2 PRs)
-
-**Importance**: Low -- independent capability
-
-**Dependencies**: None
-
-**Description**: Create template configurations and documentation for reproducing customer-reported performance issues as SCT test cases.
-
-**Deliverables**:
-- PR 6.1: Template YAML configs in `test-cases/performance/` for common customer patterns (read-heavy, write-heavy, mixed, large-partition)
-- PR 6.2: Documentation for environment mapping (customer attributes to SCT parameters)
-
-**Definition of Done**:
-- [ ] At least 4 template YAML configs for common workload patterns
-- [ ] Documentation maps customer environment attributes to SCT parameters
-- [ ] Templates validated with Docker backend
-
-### Phase 7: Trend Detection & Efficiency Scoring (2-3 PRs)
+### Phase 6: Trend Detection & Efficiency Scoring (2-3 PRs)
 
 **Importance**: Medium -- depends on baseline data accumulation
 
@@ -174,16 +164,33 @@ SCT's performance regression testing relies on hardcoded `fixed_limit` threshold
 **Description**: Implement trend detection alerts and Kleinrock's Power-based efficiency scoring for cross-hardware comparison.
 
 **Deliverables**:
-- PR 7.1: Trend detection: M consecutive degrading runs or monotonic slope alerts
-- PR 7.2: Efficiency score computation (throughput/latency per step, cost-normalized value score)
-- PR 7.3: Comparison report output for cross-hardware and cross-cloud results
+
+- PR 6.1: Trend detection algorithms
+  - **Consecutive degradation detection**: Flag when M consecutive runs (default M=5) each show >D% degradation (default D=1%) compared to the previous run
+  - **Linear regression over sliding window**: Compute slope over N-run window (default N=10); alert when slope exceeds S%/run (default S=0.5%)
+  - **Implementation**: Use `numpy.polyfit` (degree 1) for slope computation on the existing Argus result time series
+  - **Integration points**: Query Argus result tables for historical data; results partitioned by (test_name, step_name, instance_type, architecture)
+
+- PR 6.2: Alerting integration
+  - **Mechanism**: Implement as Argus validation rules that run post-result-upload
+  - **Notification**: Generate SCT events (`PerformanceTrendAlert`) that flow through existing event pipeline to email reports and Argus UI
+  - **Configuration**: Per-test overrides for M, D, N, S thresholds via `sct_config.py` parameters
+
+- PR 6.3: Efficiency scoring and cross-hardware comparison
+  - **Efficiency score**: `Step_Score = Target_Throughput_OPS / P99_Latency_ms`, `Total_Score = Sum(Step_Score_i)` (Kleinrock's Power metric adaptation)
+  - **Value score**: `Value_Score = Total_Score / Hourly_Cluster_Cost` where cost includes both DB and loader nodes
+  - **Cross-hardware comparison**: Generate comparison matrices across instance types and clouds using the same workload definition; normalize by cost for fair comparison
+  - **Cross-hardware methodology**: Same test case YAML, same data size, same step definitions; only hardware and cloud vary. Results compared via efficiency and value scores, not raw throughput (which is expected to differ).
 
 **Definition of Done**:
-- [ ] Alert generated when 5 consecutive runs each degrade >1%
-- [ ] Alert generated when linear regression slope exceeds 0.5%/run over 10 runs
+- [ ] Consecutive degradation detection flags M=5 consecutive >1% degrading runs
+- [ ] Linear regression slope detection alerts when slope exceeds 0.5%/run over 10 runs
+- [ ] Trend detection integrates with Argus result tables as data source
+- [ ] Alerting produces SCT events visible in test reports and Argus UI
 - [ ] Efficiency score and value score computed and stored in Argus
-- [ ] Unit tests for trend detection and scoring algorithms
-- [ ] Comparison report produces human-readable output matrix
+- [ ] Unit tests for trend detection algorithms (linear regression, consecutive detection)
+- [ ] Unit tests for efficiency and value score computation
+- [ ] Comparison report produces human-readable output matrix for at least 2 hardware configurations
 
 ## 5. Testing Requirements
 
@@ -195,7 +202,7 @@ SCT's performance regression testing relies on hardcoded `fixed_limit` threshold
 | 2 | Prometheus query construction, metric parsing, snapshot storage | `unit_tests/test_perf_metrics.py` |
 | 3 | Phase segmentation, impact factor computation, SLA validation | `unit_tests/test_nemesis_perf.py` |
 | 4 | Version metadata handling, degradation percentage | `unit_tests/test_upgrade_tracking.py` |
-| 7 | Trend detection algorithms, efficiency scoring, value score | `unit_tests/test_trend_detection.py` |
+| 6 | Trend detection algorithms, efficiency scoring, value score | `unit_tests/test_trend_detection.py` |
 
 ### Integration Tests
 
@@ -207,7 +214,7 @@ SCT's performance regression testing relies on hardcoded `fixed_limit` threshold
 
 - Phase 1: Validate statistical regression detection against known regression (inject artificial latency increase)
 - Phase 5: Run i8g staircase test and verify baselines populate correctly
-- Phase 7: Verify comparison report output with real multi-hardware data
+- Phase 6: Verify comparison report output with real multi-hardware data
 
 ## 6. Success Criteria
 
@@ -228,4 +235,3 @@ SCT's performance regression testing relies on hardcoded `fixed_limit` threshold
 | Argus schema changes break existing result consumers | Medium | High | Add new fields as optional columns; maintain backward compatibility; version the result table schema |
 | Nemesis phase boundaries imprecise (disruption start/end timing) | Medium | Medium | Use SCT event timestamps for precise phase boundaries; add configurable tolerance window |
 | i8g baseline establishment takes too long (10 runs at weekly cadence = 10 weeks) | High | Medium | Run initial baseline establishment at higher frequency (daily for 2 weeks); accept wider confidence interval with N=5 initially |
-| Customer workload templates diverge from actual customer environments | Medium | Low | Templates are starting points; document explicitly that customization is expected; maintain in qa-internal for sensitive details |

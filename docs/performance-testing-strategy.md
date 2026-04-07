@@ -164,7 +164,7 @@ For each step in throughput_targets:
 
 ### Pillar 3: Performance Under Operations (Nemesis)
 
-**Problem**: Some nemesis-latency tests exist (`test_latency_read_with_nemesis`, `test_latency_write_with_nemesis`, `test_latency_mixed_with_nemesis` in `performance_regression_test.py`) but measure impact coarsely -- no per-operation breakdown, no structured SLA per operation type.
+**Problem**: Some nemesis-latency tests exist (`test_latency_read_with_nemesis`, `test_latency_write_with_nemesis`, `test_latency_mixed_with_nemesis` in `performance_regression_test.py`) and do collect per-operation latency. However, the SLA is not compared to a baseline automatically, and the throughput used during nemesis tests was originally aimed at 50% of maximum throughput but has never been recalibrated. There is no structured phase breakdown (baseline, disruption, recovery) and no per-operation SLA validation framework.
 
 **Framework**:
 1. **Baseline Phase** -- steady-state load for 5-10 min, establish P99 baseline
@@ -185,13 +185,14 @@ For each step in throughput_targets:
 | Schema change | 1.5x | 1 min | Lightweight |
 
 > **Reference**: [Principles of Chaos Engineering](https://principlesofchaos.org/)
-> **Reference**: [ScyllaDB Rolling Upgrade Procedure](https://docs.scylladb.com/stable/upgrade/)
 
 ### Pillar 4: Upgrade Performance Tracking
 
-**Problem**: Rolling upgrade tests exist (`perf-regression-latency-650gb-upgrade.yaml`, `LatteStressLatencyComparison` in `sdcm/argus_results.py`) but each run is standalone -- no version-over-version trend.
+**Problem**: Rolling upgrade tests exist (`perf-regression-latency-650gb-upgrade.yaml`, `LatteStressLatencyComparison` in `sdcm/argus_results.py`). Version-to-version comparison and impact tracking is largely already happening in Argus. What's missing is automatic trend detection across releases and integration with statistical baselines.
 
-**Enhancement**: Track upgrade impact factors in Argus with version metadata (source_version, target_version). Compute degradation percentages automatically. Integrate with Pillar 1 for trend detection across releases.
+**Enhancement**: Build on existing Argus version tracking to add automatic trend detection across releases. Integrate with Pillar 1 statistical baselines so that version-over-version degradation is flagged automatically rather than requiring manual inspection.
+
+> **Reference**: [ScyllaDB Rolling Upgrade Procedure](https://docs.scylladb.com/stable/upgrade/)
 
 ### Pillar 5: Customer Workload Reproduction
 
@@ -265,8 +266,8 @@ Operations: rolling restart, decommission, node replace, rolling upgrade, tablet
 ### Category 4: Upgrade Performance (Existing, Enhanced)
 Before/after comparison with version-over-version trend tracking.
 
-### Category 5: Max Throughput Discovery (Existing)
-Binary-search optimization in `MaximumPerformanceSearchTest` (`performance_search_max_throughput_test.py`). Results seed staircase step definitions.
+### Category 5: Max Throughput Discovery (Needs Rebuild)
+The current implementation (`MaximumPerformanceSearchTest` in `performance_search_max_throughput_test.py`) was not proven useful and needs to be rebuilt using latte. The new implementation should leverage latte's precise throughput control and latency measurement to produce reliable max throughput baselines that seed staircase step definitions.
 
 ### Category 6: Customer Workload Reproduction (New)
 Template-driven reproduction. Details in qa-internal.
@@ -293,34 +294,32 @@ Upgrade tests: percentage change in metrics. Flag regression when degradation ex
 
 ## 7. Stress Tool Guidelines
 
-| Tool | Language | Best For | Limitations |
-|------|----------|----------|-------------|
-| cassandra-stress | Java | Complex profiles, legacy compatibility | Thread-per-client model, GC overhead, max ~32 threads/process |
-| scylla-bench | Go | High throughput (>500k OPS), zero GC | Limited profile support, different output format |
-| latte | Rust | Low-latency measurement, Rune scripting | Incompatible with c-s YAML profiles |
-| YCSB | Java | Industry-standard benchmarks, per-op latencies | Limited workload customization |
+**latte is the default tool for all new performance tests.** It is the most versatile option, offering precise latency measurement, Rune scripting for custom workloads, and Rust-based efficiency with no GC overhead.
 
-**Decision Tree**:
-- Need complex workload profiles? -> cassandra-stress
-- Need >500k OPS from minimal hardware? -> scylla-bench
-- Need precise latency with custom logic? -> latte
-- Need industry-standard comparison? -> YCSB
+Only use other tools when there is a specific reason:
 
+| Tool | When to Use Instead of latte |
+|------|------------------------------|
+| cassandra-stress | Legacy profile compatibility (existing c-s YAML profiles that would be costly to rewrite) |
+| scylla-bench | Go driver testing (when the goal is specifically to test the Go driver path) |
+| YCSB | Industry-standard benchmark comparison (when results must be comparable to published YCSB numbers) |
+
+> **Reference**: [latte](https://github.com/pkolaczk/latte), [SCT PR #13574: Adding latte support](https://github.com/scylladb/scylla-cluster-tests/pull/13574/)
 > **Reference**: [cassandra-stress docs](https://docs.scylladb.com/manual/master/operating-scylla/admin-tools/cassandra-stress.html)
 > **Reference**: [scylla-bench](https://github.com/scylladb/scylla-bench)
-> **Reference**: [latte](https://github.com/pkolaczk/latte), [SCT PR #13574: Adding latte support](https://github.com/scylladb/scylla-cluster-tests/pull/13574/)
-> **Reference**: [Comparing Stress Tools for Cassandra](https://thelastpickle.com/blog/2020/04/06/comparing-stress-tools.html)
 
 ## 8. Cloud Tuning Guidelines
 
-| Parameter | AWS (e.g., i4i) | GCP (e.g., c2d/n2) | Azure (e.g., Lsv3) | Logic |
-|-----------|-----------------|---------------------|---------------------|-------|
-| Loader Threads | High (800-1200) | Moderate (600-800) | High (800+) | AWS ENA requires higher parallelism for PPS limits |
-| Connection Count | High | Low/Moderate | High | GCP creates overhead on high connection counts |
-| Disk Type | Instance Store (NVMe) | Local SSD (Scratch) | Local NVMe | Never use network storage for perf tests |
-| Step Multiplier | 1.0x - 1.2x | 0.8x - 1.0x | 1.0x | Adjust based on relative CPU strength |
+| Parameter | AWS (e.g., i4i) | GCP (e.g., c2d/n2) | Azure (e.g., Lsv3) | OCI (e.g., BM.DenseIO2) | Logic |
+|-----------|-----------------|---------------------|---------------------|--------------------------|-------|
+| Loader Threads | High (800-1200) | Moderate (600-800) | High (800+) | High (800-1200) | AWS ENA requires higher parallelism for PPS limits |
+| Connection Count | High | Low/Moderate | High | Moderate | GCP creates overhead on high connection counts |
+| Disk Type | Instance Store (NVMe) | Local SSD (Scratch) | Local NVMe | Local NVMe | Never use network storage for perf tests |
+| Step Multiplier | 1.0x - 1.2x | 0.8x - 1.0x | 1.0x | TBD | Adjust based on relative CPU strength |
 
-**Hardware Coefficient**: Do not manually edit YAML for every instance type. Derive new targets as: `New_Targets[] = Baseline_Targets[] * Coefficient`.
+**Note**: The tuning parameters above need validation with actual cross-reference test data across clouds. Values shown are starting points based on known cloud characteristics, not empirically verified coefficients.
+
+**Hardware Coefficient** *(Needs Investigation)*: The idea of deriving new targets as `New_Targets[] = Baseline_Targets[] * Coefficient` was proposed to avoid manually editing YAML for every instance type. However, it is unclear how to reliably determine the coefficients, and the approach has not been validated. This needs further investigation with real cross-hardware test data before adoption.
 
 ## 9. Pipeline & Scheduling
 
