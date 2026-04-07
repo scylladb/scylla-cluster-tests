@@ -5018,6 +5018,7 @@ class NemesisRunner:
                 with self.action_log_scope("Add new node in new DC"):
                     new_node = self._add_new_node_in_new_dc()
                 node_added = True
+                self.cluster.wait_for_schema_agreement()
                 status = self.tester.db_cluster.get_nodetool_status()
                 new_dc_list = [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")]
                 assert new_dc_list, "new datacenter was not registered"
