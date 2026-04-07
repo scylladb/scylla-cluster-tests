@@ -660,6 +660,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # Use large_partition_stress_during_upgrade for schema creation if defined
         large_partition_stress_during_upgrade = self.params.get("large_partition_stress_during_upgrade")
         if large_partition_stress_during_upgrade:
+            if isinstance(large_partition_stress_during_upgrade, str):
+                large_partition_stress_during_upgrade = [large_partition_stress_during_upgrade]
             sb_create_schema_cmds = [f"{cmd} -duration=1m" for cmd in large_partition_stress_during_upgrade]
             sb_create_schemas = self._run_all_stress_cmds([], params={"stress_cmd": sb_create_schema_cmds})
             for sb_create_schema in sb_create_schemas:
