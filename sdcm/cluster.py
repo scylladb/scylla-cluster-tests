@@ -3602,9 +3602,9 @@ class BaseNode(AutoSshContainerMixin):
         path = "/storage_service/native_transport"
         self.log.debug(f"Checking if node is fully started, using API call to {path}")
         native_transport_query = build_node_api_command(path_url=path)
-        res = self.remoter.run(native_transport_query)
+        res = self.remoter.run(native_transport_query, ignore_status=True, verbose=False)
         if res.return_code != 0:
-            raise NodeNotReady(f"Node {self.name} did not join the cluster yet")
+            raise NodeNotReady(f"Node {self.name} API server not ready yet (curl exit code {res.return_code})")
 
     def wait_node_fully_start(self, verbose=True, timeout=3600):
         self.log.info("Waiting scylla services to start after node boot or reboot")
