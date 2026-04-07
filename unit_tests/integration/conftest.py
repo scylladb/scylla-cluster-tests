@@ -128,10 +128,15 @@ def configure_scylla_node(docker_scylla_args: dict, params, ssl_dir: Path | None
     ssl_mount = f" -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z" if ssl else ""
 
     env_vars = "-e VECTOR_SEARCH_TEST=true" if docker_scylla_args.get("scylla_docker_image") else ""
+    # native_entrypoint=True bypasses the SCT entry.sh wrapper (which enables
+    # PasswordAuthenticator) and lets the image's own entrypoint run, so the node
+    # boots without authentication. Used by rack tests against Scylla >= 2026.1.
+    if docker_scylla_args.get("native_entrypoint"):
+        entry_opts = ""
+    else:
+        entry_opts = f"-v {entryfile_path}:/entry.sh:z --entrypoint /entry.sh"
     extra_docker_opts = (
-        f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh:z'
-        f"{ssl_mount}"
-        f" --user root {env_vars} --entrypoint /entry.sh"
+        f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" {entry_opts}{ssl_mount} --user root {env_vars}'
     )
 
     if seeds := docker_scylla_args.get("seeds"):
@@ -139,10 +144,14 @@ def configure_scylla_node(docker_scylla_args: dict, params, ssl_dir: Path | None
     else:
         seeds = ""
 
+    rack = docker_scylla_args.get("rack")
+    dc = docker_scylla_args.get("dc", "datacenter1")
+    rack_args = f" --dc={dc} --rack=RACK{rack}" if rack is not None else ""
+
     scylla = RemoteDocker(
         LocalNode("scylla", cluster),
         image_name=docker_version,
-        command_line=f"--smp 1 {alternator_flags}{seeds}",
+        command_line=f"--smp 1 {alternator_flags}{seeds}{rack_args}",
         extra_docker_opts=extra_docker_opts,
         docker_network=docker_network,
     )
