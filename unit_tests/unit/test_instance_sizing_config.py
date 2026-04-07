@@ -101,7 +101,7 @@ def test_literal_instance_type_passes_through_unchanged(monkeypatch):
 def test_docker_backend_skips_resolution(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
 
     catalog_loaded = []
@@ -191,7 +191,7 @@ def test_missing_catalog_directory_logs_warning_and_skips(monkeypatch, caplog):
 def test_resolve_instance_sizes_method_direct(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
     monkeypatch.setenv("SCT_CONFIG_FILES", _MINIMAL_CONFIG)
 
     conf = sct_config.SCTConfiguration()
