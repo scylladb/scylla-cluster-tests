@@ -155,14 +155,14 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             execution_result = session.execute(cmd)
             self.log.info(f"Created index {self.Index} on {self.Keyspace}.{self.Table} with statement: {cmd}")
 
-        for x in range(0, 60):
+        while True:
             res = vs_node.remoter.run(f"curl http://localhost:6080/api/v1/indexes/{self.Keyspace}/{self.Index}/status", ignore_status=True)
+            self.log.info(f"Index status response: {res.stdout}")
+            self.log.info(f"Index status response: {res.stderr}")
             if '"status":"SERVING"' in res.stdout:
                 self.log.info(f"Index {self.Index} is SERVING")
                 break
-            self.log.info(f"Index status response: {res.stdout}")
-            self.log.info(f"Index status response: {res.stderr}")
-            time.sleep(0.1)
+            time.sleep(1)
         end_time = time.time()
 
         self.log.info("Index built successfully, took {:.2f} seconds".format(end_time - start_time))
