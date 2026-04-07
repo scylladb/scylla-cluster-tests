@@ -4786,7 +4786,7 @@ Number of simulated regions for the test
 
 ## **simulated_racks** / SCT_SIMULATED_RACKS
 
-Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate racks.<br>Provide number of racks to simulate.
+Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate racks.<br>Provide number of racks to simulate. Takes effect only with more than one DB node: a<br>single-node cluster stays in one rack and `endpoint_snitch` is left alone. On the docker<br>backend the rack is passed to the image entrypoint as `--dc/--rack`, which requires Scylla<br>>= 2026.1; an older image fails the configuration, so set 1 to opt out.
 
 **default:** 3
 
