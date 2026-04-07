@@ -18,7 +18,7 @@ def test_long_command_failing():
         run_long_running_cmd(LOCALRUNNER, cmd="sleep 1 && bbb", timeout=100)
 
     assert exc_info.value.result.command == "sleep 1 && bbb"
-    assert "line 1: bbb: command not found" in exc_info.value.result.stderr
+    assert "bbb" in exc_info.value.result.stderr  # message is locale-dependent; only check the command name
     assert exc_info.value.result.stdout == ""
     assert exc_info.value.result.exited == 127
     assert exc_info.value.result.return_code == 127
