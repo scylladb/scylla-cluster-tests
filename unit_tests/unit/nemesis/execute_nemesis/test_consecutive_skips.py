@@ -13,13 +13,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from sdcm.exceptions import UnsupportedNemesis
-from unit_tests.nemesis.execute_nemesis import (
+from unit_tests.unit.nemesis.execute_nemesis import (
     CustomTestNemesis,
     SkippingTestNemesis,
     TestNemesisRunner,
     VersionNotFoundTestNemesis,
 )
-from unit_tests.nemesis.fake_cluster import FakeTester, PARAMS
+from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS
 
 
 @pytest.fixture

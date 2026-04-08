@@ -10,8 +10,8 @@ import pytest
 
 from sdcm.nemesis.monkey.runners import SisyphusMonkey
 from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator
-from unit_tests.nemesis import TestNemesisClass
-from unit_tests.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
+from unit_tests.unit.nemesis import TestNemesisClass
+from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
 from unit_tests.lib.fake_tester import ClusterTesterForTests
 
 

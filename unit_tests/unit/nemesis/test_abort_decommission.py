@@ -10,7 +10,7 @@ from sdcm.exceptions import UnsupportedNemesis
 from sdcm.nemesis.monkey.abort_decommission import AbortDecommissionMonkey
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.remote.libssh2_client.result import Result as Libssh2Result
-from unit_tests.nemesis import TestRunner
+from unit_tests.unit.nemesis import TestRunner
 
 _MODULE = "sdcm.nemesis.monkey.abort_decommission"
 

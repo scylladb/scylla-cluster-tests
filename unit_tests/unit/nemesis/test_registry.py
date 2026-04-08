@@ -5,7 +5,7 @@ Should not be dependent on the implementation of Nemesis class
 
 import pytest
 from sdcm.nemesis.registry import NemesisRegistry
-from unit_tests.nemesis import (
+from unit_tests.unit.nemesis import (
     CustomNemesisA,
     CustomNemesisAD,
     CustomNemesisB,

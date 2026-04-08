@@ -3,14 +3,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from unit_tests.nemesis.execute_nemesis import (
+from unit_tests.unit.nemesis.execute_nemesis import (
     TestNemesisRunner,
     CustomTestNemesis,
     SkippingTestNemesis,
     FailingTestNemesis,
     KillTestNemesis,
 )
-from unit_tests.nemesis.fake_cluster import FakeTester, PARAMS
+from unit_tests.unit.nemesis.fake_cluster import FakeTester, PARAMS
 
 
 @pytest.fixture
