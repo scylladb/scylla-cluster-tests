@@ -19,7 +19,7 @@ import pytest
 
 from sdcm.provision.azure.utils import get_scylla_images
 from sdcm.utils.azure_utils import AzureService
-from unit_tests.provisioner.fake_azure_service import FakeAzureService
+from unit_tests.unit.provisioner.fake_azure_service import FakeAzureService
 
 
 @pytest.fixture

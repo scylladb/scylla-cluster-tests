@@ -6,7 +6,7 @@ import pytest
 import sdcm.cluster
 from sdcm import sct_config
 from sdcm.test_config import TestConfig
-from unit_tests.dummy_remote import DummyRemote
+from unit_tests.lib.dummy_remote import DummyRemote
 
 
 class DummyNode(sdcm.cluster.BaseNode):

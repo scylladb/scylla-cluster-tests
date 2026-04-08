@@ -16,7 +16,7 @@ from unittest.mock import patch
 import pytest
 
 from sdcm.gemini_thread import GeminiStressThread
-from unit_tests.dummy_remote import LocalLoaderSetDummy
+from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 
 class MockCluster:
