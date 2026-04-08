@@ -14,7 +14,7 @@
 import pytest
 
 from sdcm.cassandra_harry_thread import CassandraHarryThread
-from unit_tests.dummy_remote import LocalLoaderSetDummy
+from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
     pytest.mark.usefixtures("events"),
