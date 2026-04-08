@@ -1377,41 +1377,6 @@ class JepsenLogCollector(LogCollector):
         return s3_link
 
 
-def resolve_snapshot_path(node: "CollectingNode", sstable_dir: str, keyspace: str, table_name: str) -> str | None:
-    """Return a snapshot path for *table_name* on *node*, or None if none can be found.
-
-    Tries ``nodetool snapshot`` first.  When that fails (e.g. the node has already been
-    destroyed), falls back to the most recent snapshot directory left on disk by
-    ``teardown_validators``.
-    """
-    try:
-        result = node.remoter.run(f"nodetool snapshot {keyspace} -cf {table_name}")
-        try:
-            snapshot_dir = result.stdout.split("Snapshot directory: ")[1].strip()
-            return f"{sstable_dir}/snapshots/{snapshot_dir}"
-        except IndexError:
-            LOGGER.error("Cannot extract snapshot directory from stdout: %s", result.stdout)
-    except Exception as snapshot_error:  # noqa: BLE001
-        LOGGER.warning(
-            "nodetool snapshot failed (node may be gone): %s — trying most recent existing snapshot",
-            snapshot_error,
-        )
-    # Node is unreachable — fall back to the most recent snapshot left by teardown_validators
-    existing = [
-        p.rstrip("/")
-        for p in node.remoter.run(
-            f"ls -td {sstable_dir}/snapshots/*/",
-            ignore_status=True,
-        ).stdout.split()
-        if p.strip()
-    ]
-    if not existing:
-        LOGGER.error("No existing snapshots found in %s/snapshots/ — cannot collect sstables", sstable_dir)
-        return None
-    LOGGER.info("Using existing snapshot: %s", existing[0])
-    return existing[0]
-
-
 class SSTablesCollector(BaseSCTLogCollector):
     """
     Collect corrupted sstables from db node.
@@ -1446,9 +1411,13 @@ class SSTablesCollector(BaseSCTLogCollector):
                     return []
             node: CollectingNode = [node for node in self.nodes if node.name == node_name][0]
             LOGGER.info("Collecting sstables for node %s...", node.name)
-            snapshot_path = resolve_snapshot_path(node, sstable_dir, keyspace, table_name)
-            if snapshot_path is None:
+            result = node.remoter.run(f"nodetool snapshot {keyspace} -cf {table_name}")
+            try:
+                snapshot_dir = result.stdout.split("Snapshot directory: ")[1].strip()
+            except IndexError:
+                LOGGER.error("Cannot extract snapshot directory from stdout: %s", result.stdout)
                 return []
+            snapshot_path = f"{sstable_dir}/snapshots/{snapshot_dir}"
             decrypted_path = decrypt_sstables_on_node(node, snapshot_path, keyspace=keyspace, table=table_name)
             s3_link = upload_remote_files_directly_to_s3(
                 node.ssh_login_info,
