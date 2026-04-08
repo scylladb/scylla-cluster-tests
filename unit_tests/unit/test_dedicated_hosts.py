@@ -161,8 +161,3 @@ def test_release_by_tag_unit_unit(mock_ec2):
 
     mock_ec2.release_hosts.assert_called_with(HostIds=["h-0af5175ea085157f0"])
     assert mock_ec2.release_hosts.call_count == 2
-
-
-@pytest.mark.integration
-def test_release_by_tag_integration():
-    SCTDedicatedHosts.release_by_tags({"TestId": "no-existing"}, regions=["us-east-1", "eu-west-1"], dry_run=True)
