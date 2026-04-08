@@ -189,7 +189,7 @@ def test_tester_subclass(pytester, test_class, results, outcomes):
     # Which we do not want, as it is intended only to be run with pytester
     pytester.makepyfile(f"""
         from unit_tests.conftest import *
-        from unit_tests.test_tester import {test_class.__name__}
+        from unit_tests.unit.test_tester import {test_class.__name__}
         {test_class.__name__}.__test__ = True
     """)
 

@@ -378,7 +378,7 @@ class ScyllaYamlNodeAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
 # @parameterized.expand() decorators below, which run at class-definition / import
 # time — before any pytest fixture can be injected.  This is a documented exception
 # to the "no __file__ outside conftest.py" rule.
-BASE_FOLDER = os.path.join(os.path.dirname(__file__), "test_data/test_scylla_yaml_builders")
+BASE_FOLDER = os.path.join(os.path.dirname(__file__), "../test_data/test_scylla_yaml_builders")
 
 
 class FakeRemoter:

@@ -9,7 +9,7 @@ from unittest.mock import patch
 import boto3
 import pytest
 
-os.environ["MOTO_AMIS_PATH"] = str(Path(__file__).parent / "test_data" / "mocked_ami_data.json")
+os.environ["MOTO_AMIS_PATH"] = str(Path(__file__).parent.parent / "test_data" / "mocked_ami_data.json")
 from moto.server import ThreadedMotoServer
 
 from sdcm.provision.aws.emr_provisioner import (
