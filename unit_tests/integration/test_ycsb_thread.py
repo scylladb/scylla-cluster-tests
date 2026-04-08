@@ -23,7 +23,7 @@ from sdcm.utils import alternator
 from sdcm.utils.decorators import timeout
 from sdcm.utils.docker_utils import running_in_docker
 from sdcm.ycsb_thread import YcsbStressThread
-from unit_tests.dummy_remote import LocalLoaderSetDummy
+from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
 
 pytestmark = [

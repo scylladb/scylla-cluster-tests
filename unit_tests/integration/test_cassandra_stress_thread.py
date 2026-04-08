@@ -13,7 +13,7 @@
 import pytest
 
 from sdcm.stress_thread import CassandraStressThread
-from unit_tests.dummy_remote import LocalLoaderSetDummy
+from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
     pytest.mark.usefixtures("events"),

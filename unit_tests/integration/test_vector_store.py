@@ -20,7 +20,7 @@ import typing
 
 if typing.TYPE_CHECKING:
     from sdcm.utils.vector_store_client import VectorStoreClient
-    from unit_tests.dummy_remote import LocalScyllaClusterDummy
+    from unit_tests.lib.dummy_remote import LocalScyllaClusterDummy
 
 pytestmark = [
     pytest.mark.usefixtures("events"),
