@@ -13,14 +13,16 @@
 
 """Unit tests for sstable decryption helpers in sdcm.utils.sstable.sstable_utils."""
 
+import io
+import json
 import re
 from typing import Dict, Pattern
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from invoke import Result
 
-from sdcm.logcollector import CollectingNode
+from sdcm.logcollector import CollectingNode, SSTablesCollector
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.sstable.sstable_utils import (
     decrypt_sstable_files_on_node,
@@ -322,3 +324,91 @@ def test_decrypt_sstables_on_node_with_collecting_node(fake_remoter):
     node = CollectingNode(name="test-node")
     node.remoter = RemoteCmdRunnerBase.create_remoter("test-node")
     assert decrypt_sstables_on_node(node, snap, keyspace="ks", table="tbl") == f"{snap}/decrypted"
+
+
+# ---------------------------------------------------------------------------
+# SSTablesCollector.collect_logs – snapshot fallback path
+# ---------------------------------------------------------------------------
+
+CORRUPTED_SSTABLE_EVENT = json.dumps(
+    {
+        "type": "CORRUPTED_SSTABLE",
+        "severity": "CRITICAL",
+        "line": "/var/lib/scylla/data/ks/tbl-uuid/me-1-big-Data.db",
+        "node": "db-node-0",
+    }
+)
+
+SSTABLE_DIR = "/var/lib/scylla/data/ks/tbl-uuid"
+EXISTING_SNAPSHOT = f"{SSTABLE_DIR}/snapshots/sct-1234567890"
+
+
+def _make_collector(tmp_path, node):
+    """Build a minimal SSTablesCollector with a single node and a temp storage dir."""
+    collector = SSTablesCollector.__new__(SSTablesCollector)
+    collector.test_id = "test-id-abcdef"
+    collector.nodes = [node]
+    collector.params = None
+    collector.local_dir = str(tmp_path / "logs")
+    # current_run is a read-only class-level property; no setter needed
+    return collector
+
+
+def test_collect_logs_falls_back_to_existing_snapshot_when_nodetool_fails(tmp_path):
+    """When nodetool snapshot raises, collect_logs uses the most recent existing snapshot."""
+    node = CollectingNode(name="db-node-0")
+    node.ssh_login_info = {}
+
+    # nodetool snapshot raises; ls -td returns one existing snapshot
+    def fake_run(cmd, **kwargs):
+        if "nodetool snapshot" in cmd:
+            raise EOFError("SSH connection closed")
+        if cmd.startswith("ls -td"):
+            return ok(f"{EXISTING_SNAPSHOT}/\n")
+        return ok("")
+
+    node.remoter = MagicMock()
+    node.remoter.run.side_effect = fake_run
+
+    collector = _make_collector(tmp_path, node)
+
+    events_content = CORRUPTED_SSTABLE_EVENT + "\n"
+
+    with (
+        patch("builtins.open", return_value=io.StringIO(events_content)),
+        patch("sdcm.logcollector.decrypt_sstables_on_node", return_value=None) as mock_decrypt,
+        patch("sdcm.logcollector.upload_remote_files_directly_to_s3", return_value="s3://link"),
+    ):
+        collector.collect_logs()
+
+    mock_decrypt.assert_called_once_with(node, EXISTING_SNAPSHOT, keyspace="ks", table="tbl")
+
+
+def test_collect_logs_returns_empty_when_nodetool_fails_and_no_snapshots_exist(tmp_path):
+    """When nodetool snapshot raises and no existing snapshots are found, collect_logs returns []."""
+    node = CollectingNode(name="db-node-0")
+    node.ssh_login_info = {}
+
+    def fake_run(cmd, **kwargs):
+        if "nodetool snapshot" in cmd:
+            raise EOFError("SSH connection closed")
+        if cmd.startswith("ls -td"):
+            return ok("")  # empty — no snapshots on disk
+        return ok("")
+
+    node.remoter = MagicMock()
+    node.remoter.run.side_effect = fake_run
+
+    collector = _make_collector(tmp_path, node)
+
+    events_content = CORRUPTED_SSTABLE_EVENT + "\n"
+
+    with (
+        patch("builtins.open", return_value=io.StringIO(events_content)),
+        patch("sdcm.logcollector.decrypt_sstables_on_node") as mock_decrypt,
+        patch("sdcm.logcollector.upload_remote_files_directly_to_s3"),
+    ):
+        result = collector.collect_logs()
+
+    assert result == []
+    mock_decrypt.assert_not_called()
