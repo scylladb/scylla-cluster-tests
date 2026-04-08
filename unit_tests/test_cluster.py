@@ -38,7 +38,7 @@ from sdcm.nemesis.utils.indexes import get_column_names
 from sdcm.utils.version_utils import ComparableScyllaVersion
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_config import SCTConfiguration
-from unit_tests.dummy_remote import DummyRemote, LocalNode
+from unit_tests.lib.dummy_remote import DummyRemote, LocalNode
 from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, DummyScyllaCluster, NodetoolDummyNode
 
 

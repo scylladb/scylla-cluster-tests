@@ -23,7 +23,7 @@ from sdcm.stress.latte_thread import (
     get_latte_operation_type,
 )
 from sdcm.utils.decorators import timeout
-from unit_tests.dummy_remote import LocalLoaderSetDummy
+from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
     pytest.mark.usefixtures("events"),
