@@ -17,7 +17,7 @@ import requests
 
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
 from sdcm.utils.decorators import timeout
-from unit_tests.dummy_remote import LocalLoaderSetDummy
+from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 
 pytestmark = [

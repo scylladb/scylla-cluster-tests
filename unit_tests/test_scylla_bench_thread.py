@@ -14,7 +14,7 @@
 import pytest
 
 from sdcm.scylla_bench_thread import ScyllaBenchThread
-from unit_tests.dummy_remote import LocalLoaderSetDummy
+from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
     pytest.mark.usefixtures(

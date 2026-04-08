@@ -3,7 +3,7 @@ import time
 import pytest
 
 from sdcm.ndbench_thread import NdBenchStressThread
-from unit_tests.dummy_remote import LocalLoaderSetDummy
+from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
     pytest.mark.usefixtures("events"),

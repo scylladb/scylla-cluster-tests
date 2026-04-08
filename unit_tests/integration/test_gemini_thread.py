@@ -21,8 +21,8 @@ import pytest
 
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.docker_utils import running_in_docker
-from unit_tests.conftest import configure_scylla_node
-from unit_tests.dummy_remote import LocalLoaderSetDummy
+from unit_tests.integration.conftest import configure_scylla_node
+from unit_tests.lib.dummy_remote import LocalLoaderSetDummy
 from unit_tests.lib.fake_cluster import DummyDbCluster
 
 pytestmark = [
