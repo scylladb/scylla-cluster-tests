@@ -3106,6 +3106,10 @@ class SCTConfiguration(dict):
             ):
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
                 self._replace_docker_image_latest_tag()
+            elif self.get("unified_package"):
+                # unified_package is already set (either directly or resolved from relocatable:);
+                # skip image/repo lookup — the base OS image will be auto-set in section 6.0.1
+                pass
             elif not self.get("ami_id_db_scylla") and self.get("cluster_backend") == "aws":
                 ami_list = []
                 for region in region_names:
