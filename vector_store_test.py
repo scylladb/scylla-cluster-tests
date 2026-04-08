@@ -202,7 +202,7 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             stress.kill()
             self.log.info("Canceled background stress command")
         # hdr_tags parameter is used by `latency_calculator_decorator` decorator
-        @latency_calculator_decorator(cycle_name=f'{query_per_seconds} / s', row_name="select", workload_type='read')
+        @latency_calculator_decorator(cycle_name=f'{query_per_seconds} / s', row_name=f"concurrency {current_concurrency}", workload_type='read')
         def run(self, hdr_tags):
             c = stress_cmd + f' --rate={query_per_seconds} --duration {concurrency_time * 60}s'
             self.log.info(f"Starting stress thread with command: {repr(c)}")
