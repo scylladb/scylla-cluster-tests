@@ -248,10 +248,8 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         self.log.info(f"QWERTY concurrency {repr(concurrency)}")
 
-        if type(concurrency) is str:
-            concurrency = [ int(concurrency) ]
-        else:
-            concurrency = [ int(q) for q in concurrency ]
+        if type(concurrency) is int:
+            concurrency = [ concurrency ]
         self.log.info(f"QWERTY concurrency {repr(concurrency)}")
         self.run_prepare_write_cmd()
         building_time, start_time = self.create_index()

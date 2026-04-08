@@ -1619,7 +1619,7 @@ class SCTConfiguration(BaseModel):
     vs_query_per_seconds: int = SctField(
         description="Defines the target number of queries per second (QPS) for the Vector Store for a single runner (vs_concurrency = 1)."
     )
-    vs_concurrency: StringOrList = SctField(
+    vs_concurrency: int | list[int] = SctField(
         description="Number of parallel workers running queries, each worker will run `vs_query_per_seconds` queries. Either a single integer or python's list of integers."
     )
     vs_concurrency_time: int = SctField(
