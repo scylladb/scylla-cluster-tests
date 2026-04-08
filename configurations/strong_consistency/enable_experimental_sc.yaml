@@ -2,3 +2,8 @@ experimental_features:
   - strongly-consistent-tables
 
 append_scylla_args: '--blocked-reactor-notify-ms 50 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 0 --abort-on-ebadf 1'
+
+# Bind the REST API to all interfaces so that cql-stress leader-aware
+# load balancing can query Raft leader info from loader nodes.
+append_scylla_yaml:
+  api_address: "0.0.0.0"
