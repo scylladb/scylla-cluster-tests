@@ -254,13 +254,13 @@ class SnapshotData:
 
 class SnapshotOperations(ClusterTester):
     def _get_total_loaders(self) -> int:
-        """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string or list) formats."""
+        """Get total number of loaders, handling both single-DC (int) and multi-DC (list) formats."""
         n_loaders = self.params.get("n_loaders")
         if isinstance(n_loaders, int):
             return n_loaders
         if isinstance(n_loaders, list):
             return sum(n_loaders)
-        return sum(int(n) for n in n_loaders.split())
+        raise ValueError(f"Unexpected n_loaders value: {n_loaders!r}")
 
     @staticmethod
     def get_snapshot_data(snapshot_name: str) -> SnapshotData:
@@ -591,13 +591,13 @@ class DatabaseOperations(ClusterTester):
 
 class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
     def _get_total_loaders(self) -> int:
-        """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string or list) formats."""
+        """Get total number of loaders, handling both single-DC (int) and multi-DC (list) formats."""
         n_loaders = self.params.get("n_loaders")
         if isinstance(n_loaders, int):
             return n_loaders
         if isinstance(n_loaders, list):
             return sum(n_loaders)
-        return sum(int(n) for n in n_loaders.split())
+        raise ValueError(f"Unexpected n_loaders value: {n_loaders!r}")
 
     def _get_total_db_nodes(self) -> int:
         """Get total number of db nodes, handling both single-DC (int) and multi-DC (list[int]) formats."""

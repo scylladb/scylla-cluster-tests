@@ -1897,7 +1897,7 @@ If True, enable support in SCT of zero nodes (configuration, nemesis)
 
 ## **n_db_zero_token_nodes** / SCT_N_DB_ZERO_TOKEN_NODES
 
-Number of zero token nodes in cluster. Value should be set as '0 1 1' for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions
+Number of zero token nodes in cluster. Value should be set as [0, 1, 1] for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions
 
 **default:** N/A
 

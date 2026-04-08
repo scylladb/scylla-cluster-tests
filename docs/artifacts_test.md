@@ -35,7 +35,7 @@ To verify Scylla Manager package you need to provide `scylla_repo` and `scylla_m
 
 Alternatively, and even recommended, one can use the `manager_version` parameter to just choose the desired version.
 
-Optionally, you can override default cloud instance type by providing `instance_type` parameter. This parameter can be a space-separated list of instance types.
+Optionally, you can override default cloud instance type by providing `instance_type` parameter.
 
 `artifacts-*.jenkinsfile` files can be used to create Jenkins projects.
 

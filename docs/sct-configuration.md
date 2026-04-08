@@ -79,16 +79,13 @@ stress_cmd: "!get_stress_cmd()"
 **Use cases**: Commands, file paths, package lists
 
 #### IntOrList
-Accepts integer or list of integers, with space-separated string parsing:
+Accepts integer or list of integers:
 
 ```yaml
 # Single integer
 n_db_nodes: 3
 
-# Space-separated string (for multi-DC)
-n_db_nodes: "3 3"  # → [3, 3]
-
-# List of integers
+# List of integers (for multi-DC)
 n_db_nodes: [3, 3, 0]
 ```
 
@@ -101,8 +98,8 @@ Accepts boolean or list of booleans, with string conversion:
 # Single boolean
 nemesis_during_prepare: true
 
-# Space-separated string
-nemesis_during_prepare: "true false"  # → [true, false]
+# List of booleans (for multi-DC)
+nemesis_during_prepare: [true, false]
 
 # String values (yes/no/1/0)
 nemesis_during_prepare: "yes"  # → true
@@ -367,9 +364,9 @@ hydra run-test longevity_test.LongevityTest.test_custom_time \
 ### Multi-DC Configuration
 
 ```yaml
-# Use space-separated strings for multi-DC
-n_db_nodes: "3 3 0"  # 3 nodes in DC1, 3 in DC2, 0 in DC3
-n_loaders: "2 2"     # 2 loaders in each DC
+# Use YAML lists for multi-DC
+n_db_nodes: [3, 3, 0]  # 3 nodes in DC1, 3 in DC2, 0 in DC3
+n_loaders: [2, 2]      # 2 loaders in each DC
 ```
 
 ### Multitenant Configuration
