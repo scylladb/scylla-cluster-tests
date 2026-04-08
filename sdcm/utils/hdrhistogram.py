@@ -424,7 +424,6 @@ class _HdrRangeHistogramBuilder:
         #    First two ifs will handle all ycsb tags and return correct workload type.
 
         hdr_tag = hdr_tag.lower().strip()
-        LOGGER.info(f"Checking hdr_tag {hdr_tag} for workload type detection, stress_operation `{self.stress_operation}`")
         if any(w_word in hdr_tag for w_word in ("write", "insert", "update", "delete")):
             return "WRITE"
         elif any(r_word in hdr_tag for r_word in ("read", "select", "get", "count", "scan", 'fn--insert')):
