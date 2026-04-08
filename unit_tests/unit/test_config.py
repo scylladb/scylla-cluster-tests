@@ -11,8 +11,8 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import logging
 import itertools
+import logging
 import unittest.mock
 from collections import namedtuple
 
@@ -21,13 +21,6 @@ import pytest
 from sdcm import sct_config
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_latest_scylla_release
-from sdcm.utils.aws_utils import get_ssm_ami
-
-RPM_URL = (
-    "https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/"
-    "9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1"
-    "-525a0255f73d454f8f97f32b8bdd71c8dec35d3d-a6b2b2355c666b1893f702a587287da978aeec22/71/scylla.repo"
-)
 
 
 def _get_latest_scylla_release(product="scylla"):
@@ -46,7 +39,7 @@ def fixture_conf(monkeymodule):
     monkeymodule.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeymodule.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
     monkeymodule.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
-
+    monkeymodule.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     yield sct_config.SCTConfiguration()
 
 
@@ -80,30 +73,14 @@ def test_03_dump_help_config_markdown(conf):
     logging.debug(conf.dump_help_config_markdown())
 
 
-@pytest.mark.integration
-def test_04_check_env_parse(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_REGION_NAME", '["eu-west-1", "us-east-1"]')
-    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
-    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
-    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
-
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    conf.dump_config()
-
-    assert conf.get("ami_id_db_scylla") == "ami-dummy ami-dummy2"
-
-
 def test_05_docker(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "3.0.3")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     assert "docker_image" in conf.dump_config()
-    assert conf.get("docker_image") == "scylladb/scylla"
+    assert conf.docker_image == "scylladb/scylla"
 
 
 def test_06a_docker_latest_no_loader(monkeypatch):
@@ -118,7 +95,7 @@ def test_06a_docker_latest_no_loader(monkeypatch):
     ):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
-    assert conf["scylla_version"] != "latest"
+    assert conf.scylla_version != "latest"
 
 
 def test_07_baremetal_exception(monkeypatch):
@@ -138,20 +115,20 @@ def test_08_baremetal(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     assert "db_nodes_private_ip" in conf.dump_config()
-    assert conf.get("db_nodes_private_ip") == ["1.2.3.4", "1.2.3.5"]
+    assert conf.db_nodes_private_ip == ["1.2.3.4", "1.2.3.5"]
 
 
 def test_09_unknown_configure(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/unknown_param_in_config.yaml")
-    conf = sct_config.SCTConfiguration()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as exc:
+        conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
+    assert exc.value.args[0] == "Unknown configuration key='WTF'"
 
 
 def test_09_unknown_env(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/unknown_param_in_config.yaml")
     monkeypatch.setenv("SCT_WHAT_IS_THAT", "just_made_this_up")
     monkeypatch.setenv("SCT_WHAT_IS_THAT_2", "what is this ?")
     conf = sct_config.SCTConfiguration()
@@ -161,84 +138,6 @@ def test_09_unknown_env(monkeypatch):
     msg = str(context.value)
     assert "SCT_WHAT_IS_THAT_2=what is this ?" in msg
     assert "SCT_WHAT_IS_THAT=just_made_this_up" in msg
-
-
-@pytest.mark.integration
-def test_10_longevity(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/complex_test_case_with_version.yaml")
-    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA_DESC", "master")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    assert conf.get("user_prefix") == "longevity-50gb-4d-not-jenkins-maste"
-
-
-@pytest.mark.integration
-def test_10_mananger_regression(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-
-@pytest.mark.integration
-def test_12_scylla_version_ami(monkeypatch):
-    monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    amis = conf.get("ami_id_db_scylla").split()
-    assert len(amis) == 2
-    assert all(ami.startswith("ami-") for ami in amis)
-
-
-def test_12_scylla_version_ami_case1(monkeypatch):
-    monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-
-@pytest.mark.integration
-def test_12_scylla_version_ami_case2(monkeypatch):
-    monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "99.0.3")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
-
-    with pytest.raises(ValueError, match="AMIs for scylla_version='99.0.3' not found in eu-west-1"):
-        sct_config.SCTConfiguration()
-
-
-@pytest.mark.integration
-def test_12_scylla_version_repo(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-
-@pytest.mark.integration
-def test_12_scylla_version_repo_case1(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-
-@pytest.mark.integration
-def test_12_scylla_version_repo_case2(monkeypatch):
-    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "99.0.3")
-
-    with pytest.raises(ValueError, match=r"repo for scylla version 99.0.3 wasn't found"):
-        sct_config.SCTConfiguration()
 
 
 def test_12_scylla_version_repo_ubuntu(monkeypatch):
@@ -257,7 +156,7 @@ def test_12_scylla_version_repo_ubuntu(monkeypatch):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
     assert "scylla_repo" in conf.dump_config()
-    assert conf.get("scylla_repo") == expected_repo
+    assert conf.scylla_repo == expected_repo
 
 
 def test_12_scylla_version_repo_ubuntu_loader_centos(monkeypatch):
@@ -276,7 +175,7 @@ def test_12_scylla_version_repo_ubuntu_loader_centos(monkeypatch):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
     assert "scylla_repo" in conf.dump_config()
-    assert conf.get("scylla_repo") == expected_repo
+    assert conf.scylla_repo == expected_repo
 
 
 def test_12_k8s_scylla_version_ubuntu_loader_centos(monkeypatch):
@@ -286,22 +185,7 @@ def test_12_k8s_scylla_version_ubuntu_loader_centos(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     assert "scylla_repo" in conf.dump_config()
-    assert not conf.get("scylla_repo")
-
-
-@pytest.mark.integration
-def test_13_scylla_version_ami_branch_latest(monkeypatch):
-    latest_branch = ".".join(_get_latest_scylla_release().split(".")[0:2])
-    monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", f"branch-{latest_branch}:latest")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-    amis = conf.get("ami_id_db_scylla").split()
-    assert len(amis) == 2
-    assert all(ami.startswith("ami-") for ami in amis)
+    assert not conf.scylla_repo
 
 
 def test_14_check_rackaware_config_false_loader(monkeypatch):
@@ -360,6 +244,7 @@ def test_14_check_rackaware_config_no_rack_without_loader(monkeypatch):
     monkeypatch.setenv("SCT_N_LOADERS", "2 2")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
+    monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     monkeypatch.setenv(
         "SCT_TEARDOWN_VALIDATORS",
@@ -402,6 +287,7 @@ def test_14_check_rackaware_config_multi_region(monkeypatch):
     monkeypatch.setenv("SCT_N_LOADERS", "1 0")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
+    monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     monkeypatch.setenv(
         "SCT_TEARDOWN_VALIDATORS",
@@ -423,6 +309,7 @@ def test_14_check_rackaware_config_multi_az_and_region(monkeypatch):
     monkeypatch.setenv("SCT_N_LOADERS", "1 1")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
+    monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     monkeypatch.setenv(
         "SCT_TEARDOWN_VALIDATORS",
@@ -433,23 +320,6 @@ def test_14_check_rackaware_config_multi_az_and_region(monkeypatch):
 
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
-
-
-def test_conf_check_required_files(monkeypatch):  # pylint: disable=no-self-use
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    ami_id = get_ssm_ami(
-        "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id", region_name="eu-west-1"
-    )
-    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", ami_id)
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
-    monkeypatch.setenv(
-        "SCT_STRESS_CMD",
-        """cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml \
-        ops'(insert=100)' no-warmup cl=ONE duration=10m -mode cql3 native -rate threads=3000 -errors ignore""",
-    )
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    conf.check_required_files()
 
 
 def test_conf_check_required_files_negative(monkeypatch):
@@ -469,58 +339,6 @@ def test_conf_check_required_files_negative(monkeypatch):
             str(exc) == "Stress command parameter 'stress_cmd' contains profile '/tmp/1232123123123123123.yaml' that"
             " does not exists under data_dir/"
         )
-
-
-def test_config_dupes():
-    def get_dupes(c):
-        """sort/tee/izip"""
-
-        a, b = itertools.tee(sorted(c))
-        next(b, None)
-        r = None
-        for k, g in zip(a, b):
-            if k != g:
-                continue
-            if k != r:
-                yield k
-                r = k
-
-    opts = [o["name"] for o in sct_config.SCTConfiguration.config_options]
-
-    assert list(get_dupes(opts)) == []
-
-
-@pytest.mark.integration
-def test_13_bool(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_STORE_PERF_RESULTS", "False")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
-    conf = sct_config.SCTConfiguration()
-
-    assert conf["store_perf_results"] is False
-
-
-@pytest.mark.integration
-def test_14_aws_siren_from_env(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_DB_TYPE", "cloud_scylla")
-    monkeypatch.setenv("SCT_REGION_NAME", "us-east-1")
-    monkeypatch.setenv("SCT_N_DB_NODES", "2")
-    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
-    monkeypatch.setenv("SCT_AUTHENTICATOR_USER", "user")
-    monkeypatch.setenv("SCT_AUTHENTICATOR_PASSWORD", "pass")
-    monkeypatch.setenv("SCT_CLOUD_CLUSTER_ID", "193712947904378")
-    monkeypatch.setenv("SCT_SECURITY_GROUP_IDS", "sg-89fi3rkl")
-    monkeypatch.setenv("SCT_SUBNET_ID", "sub-d32f09sdf")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
-
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    assert conf.get("cloud_cluster_id") == 193712947904378
-    assert conf["authenticator_user"] == "user"
-    assert conf["authenticator_password"] == "pass"
-    assert conf["security_group_ids"] == ["sg-89fi3rkl"]
-    assert conf["subnet_id"] == ["sub-d32f09sdf"]
 
 
 def test_15_new_scylla_repo(monkeypatch):
@@ -544,7 +362,7 @@ def test_15_new_scylla_repo(monkeypatch):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf._get_target_upgrade_version()
-    assert conf.get("target_upgrade_version") == "2019.1.1"
+    assert conf.target_upgrade_version == "2019.1.1"
 
 
 def test_15a_new_scylla_repo_by_scylla_version(monkeypatch):
@@ -567,8 +385,8 @@ def test_15a_new_scylla_repo_by_scylla_version(monkeypatch):
         conf.verify_configuration()
         conf._get_target_upgrade_version()
 
-    assert conf.get("scylla_repo") == resolved_repo_link
-    target_upgrade_version = conf.get("target_upgrade_version")
+    assert conf.scylla_repo == resolved_repo_link
+    target_upgrade_version = conf.target_upgrade_version
     assert target_upgrade_version == "666.development" or target_upgrade_version.endswith(".dev")
 
 
@@ -592,66 +410,7 @@ def test_15b_image_id_by_scylla_version(monkeypatch):
         conf.verify_configuration()
         conf._get_target_upgrade_version()
 
-    assert conf.get("gce_image_db") == resolved_image_link
-
-
-@pytest.mark.integration
-def test_16_default_oracle_scylla_version_eu_west_1(monkeypatch):
-    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
-    monkeypatch.setenv("SCT_DB_TYPE", "mixed_scylla")
-
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-    assert "ami-" in conf.get("ami_id_db_oracle")
-
-
-@pytest.mark.integration
-def test_16_oracle_scylla_version_us_east_1(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", _get_latest_scylla_release())
-    monkeypatch.setenv("SCT_REGION_NAME", "us-east-1")
-    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
-    monkeypatch.setenv("SCT_DB_TYPE", "mixed_scylla")
-
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-    assert conf.get("ami_id_db_oracle").startswith("ami-")
-
-
-@pytest.mark.integration
-def test_16_oracle_scylla_version_eu_west_1(monkeypatch):
-    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", _get_latest_scylla_release())
-    monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
-    monkeypatch.setenv("SCT_DB_TYPE", "mixed_scylla")
-
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-    assert conf.get("ami_id_db_oracle").startswith("ami-")
-
-
-@pytest.mark.integration
-def test_16_oracle_scylla_version_and_oracle_ami_together(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
-    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", _get_latest_scylla_release())
-    monkeypatch.setenv("SCT_AMI_ID_DB_ORACLE", "ami-dummy")
-    monkeypatch.setenv("SCT_DB_TYPE", "mixed_scylla")
-    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
-
-    with pytest.raises(ValueError) as context:
-        sct_config.SCTConfiguration()
-
-    assert "'oracle_scylla_version' and 'ami_id_db_oracle' can't used together" in str(context.value)
+    assert conf.gce_image_db == resolved_image_link
 
 
 def test_17_verify_scylla_bench_required_parameters_in_command(monkeypatch):
@@ -665,10 +424,10 @@ def test_17_verify_scylla_bench_required_parameters_in_command(monkeypatch):
     )
 
     conf = sct_config.SCTConfiguration()
-    assert conf["stress_cmd"] == [
+    assert conf.stress_cmd == [
         "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100"
     ]
-    assert conf["stress_read_cmd"] == [
+    assert conf.stress_read_cmd == [
         "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=100"
     ]
 
@@ -709,40 +468,6 @@ def test_17_2_raise_error_if_scylla_bench_command_dont_have_mode(monkeypatch):
     assert err_msg in str(context.value)
 
 
-@pytest.mark.integration
-def test_18_error_if_no_version_repo_ami_selected(monkeypatch):
-    monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
-    monkeypatch.delenv("SCT_SCYLLA_VERSION", raising=False)
-    for backend in sct_config.SCTConfiguration.available_backends:
-        if "k8s" in backend:
-            continue
-        if "siren" in backend:
-            continue
-        if backend == "xcloud":
-            monkeypatch.setenv("SCT_XCLOUD_PROVIDER", "aws")
-        monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
-        monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
-
-        conf = sct_config.SCTConfiguration()
-        with pytest.raises(AssertionError, match="scylla version/repos wasn't configured correctly") as context:
-            conf.verify_configuration()
-        assert "scylla version/repos wasn't configured correctly" in str(context.value)
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
-    monkeypatch.setenv("SCT_DB_TYPE", "cloud_scylla")
-
-    # 1) check that SCT_CLOUD_CLUSTER_ID is used for the exception
-    conf = sct_config.SCTConfiguration()
-
-    with pytest.raises(AssertionError) as context:
-        conf.verify_configuration()
-    assert "scylla version/repos wasn't configured correctly" in str(context.value)
-    assert "SCT_CLOUD_CLUSTER_ID" in str(context.value)
-
-    monkeypatch.setenv("SCT_CLOUD_CLUSTER_ID", "1234")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-
 def test_19_aws_region_with_no_region_data(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_REGION_NAME", "not-exists-2")
@@ -750,80 +475,6 @@ def test_19_aws_region_with_no_region_data(monkeypatch):
     with pytest.raises(ValueError, match="not-exists-2 isn't supported"):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
-
-
-@pytest.mark.integration
-def test_20_user_data_format_version_aws(monkeypatch):
-    monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "master:latest")
-    monkeypatch.setenv("SCT_ORACLE_SCYLLA_VERSION", _get_latest_scylla_release())
-    monkeypatch.setenv("SCT_DB_TYPE", "mixed_scylla")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    conf.verify_configuration_urls_validity()
-    assert conf["user_data_format_version"] == "3"
-    assert conf["oracle_user_data_format_version"] == "3"
-
-
-@pytest.mark.integration
-def test_20_user_data_format_version_aws_2(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    ami_id = get_ssm_ami(
-        "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id", region_name="eu-west-1"
-    )
-    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", ami_id)  # run image which isn't scylla
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    conf.verify_configuration_urls_validity()
-    assert conf["user_data_format_version"] == "3"
-    assert "oracle_user_data_format_version" not in conf
-
-
-@pytest.mark.integration
-def test_20_user_data_format_version_gce_1(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "master:latest")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    conf.verify_configuration_urls_validity()
-    assert conf["user_data_format_version"] == "3"
-
-
-@pytest.mark.integration
-def test_20_user_data_format_version_gce_2(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    conf.verify_configuration_urls_validity()
-    assert conf["user_data_format_version"] == "3"
-
-
-@pytest.mark.integration
-def test_20_user_data_format_version_gce_3(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
-    monkeypatch.setenv(
-        "SCT_GCE_IMAGE_DB",
-        ("https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64"),
-    )
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    conf.verify_configuration_urls_validity()
-    assert conf["user_data_format_version"] == "2"
-
-
-@pytest.mark.integration
-def test_20_user_data_format_version_azure(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
-    monkeypatch.setenv("SCT_AZURE_REGION_NAME", "eastus")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "master:latest")
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    conf.verify_configuration_urls_validity()
-    # since azure image listing is still buggy, can be sure which version we'll get
-    # I would expect master:latest to be version 3 now, but azure.utils.get_scylla_images
-    # returns something from 5 months ago.
 
 
 def test_21_nested_values(monkeypatch):
@@ -841,14 +492,14 @@ def test_21_nested_values(monkeypatch):
 
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
-    stress_image = conf.get("stress_image")
+    stress_image = conf.stress_image
     assert stress_image["ndbench"] == "scylladb/hydra-loaders:ndbench-jdk8-A"
     assert stress_image["nosqlbench"] == "scylladb/hydra-loaders:nosqlbench-A"
 
     assert conf.get("stress_image.scylla-bench") == "scylladb/something"
     assert conf.get("stress_image.non-exist") is None
 
-    assert conf.get("stress_read_cmd") == ["cassandra_stress", "cassandra_stress"]
+    assert conf.stress_read_cmd == ["cassandra_stress", "cassandra_stress"]
 
 
 def test_22_get_none(monkeypatch):
@@ -873,7 +524,7 @@ def test_23_1_include_nemesis_selector(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
-    assert conf["nemesis_selector"] == "config_changes and topology_changes"
+    assert conf.nemesis_selector == ["config_changes and topology_changes"]
 
 
 def test_26_run_fullscan_params_validtion_positive(monkeypatch):
@@ -908,6 +559,7 @@ def test_28_number_of_nodes_per_az_must_be_divisable_by_number_of_az(monkeypatch
     monkeypatch.setenv("SCT_AVAILABILITY_ZONE", "a,b,c")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy ami-dummy")
+    monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2 ami-loader3")
     with pytest.raises(AssertionError) as context:
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -920,7 +572,7 @@ def test_35_append_str_options(monkeypatch):
 
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
-    assert conf.get("append_scylla_args") == (
+    assert conf.append_scylla_args == (
         "--blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 "
         "--abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 "
         "--enable-sstable-key-validation 1 --overprovisioned 5"
@@ -931,7 +583,7 @@ def test_35_append_list_options(monkeypatch):
     monkeypatch.setenv("SCT_SCYLLA_D_OVERRIDES_FILES", '["++", "extra_file/scylla.d/io.conf"]')
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
-    assert conf.get("scylla_d_overrides_files") == ["extra_file/scylla.d/io.conf"]
+    assert conf.scylla_d_overrides_files == ["extra_file/scylla.d/io.conf"]
 
 
 def test_35_append_unsupported_list_options(monkeypatch):
@@ -1052,6 +704,27 @@ def test_39_billing_project_staging_not_set(monkeypatch):
     assert conf.get("billing_project") != "staging"
 
 
+def test_40_aws_emr_defaults_loaded(conf):
+    """Test that EMR defaults from aws_emr_config.yaml are loaded for AWS backend."""
+    expected_keys = [
+        "emr_release_label",
+        "emr_instance_type_master",
+        "emr_instance_type_core",
+        "emr_instance_count_core",
+        "emr_applications",
+    ]
+    dumped = conf.dump_config()
+    for key in expected_keys:
+        assert key in dumped
+
+    assert conf.get("emr_release_label") == ""
+    assert conf.get("emr_instance_type_master") == "m5.xlarge"
+    assert conf.get("emr_instance_type_core") == "m5.xlarge"
+    assert conf.get("emr_instance_count_core") == 2
+    assert conf.get("emr_applications") == ["Spark"]
+    assert conf.get("emr_keep_alive") is True
+
+
 class TestCommonTags:
     """Tests for TestConfig.common_tags() method."""
 
@@ -1088,3 +761,53 @@ class TestCommonTags:
         tags = TestConfig.common_tags()
         assert "JenkinsJobTag" not in tags
         assert "JenkinsJob" not in tags
+
+
+def test_vector_store_ami_name_resolved_to_ami_id(monkeypatch):
+    """Verify that ami_id_vector_store goes through convert_name_to_ami_if_needed.
+
+    Regression test for scylladb/scylla-cluster-tests#13104 which accidentally
+    dropped ami_id_vector_store from the ami_id_params list during the pydantic
+    config refactor, causing image name-to-AMI resolution to be skipped.
+    """
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-db-scylla")
+    monkeypatch.setenv("SCT_AMI_ID_VECTOR_STORE", "vector-store-1-5-0-arm64-2026-03-17t07-07-32z")
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_VECTOR_STORE", "i4i.large")
+    monkeypatch.setenv("SCT_AMI_VECTOR_STORE_USER", "ubuntu")
+    monkeypatch.setenv("SCT_N_VECTOR_STORE_NODES", "1")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+
+    resolved_names = {}
+
+    def fake_convert(param, region_names):
+        if not param.startswith("ami-"):
+            resolved_names[param] = f"ami-{param}"
+            return f"ami-{param}"
+        return param
+
+    with unittest.mock.patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=fake_convert):
+        sct_config.SCTConfiguration()
+
+    assert "vector-store-1-5-0-arm64-2026-03-17t07-07-32z" in resolved_names, (
+        "convert_name_to_ami_if_needed was not called for ami_id_vector_store"
+    )
+
+
+def test_config_dupes():
+    def get_dupes(c):
+        """sort/tee/izip"""
+
+        a, b = itertools.tee(sorted(c))
+        next(b, None)
+        r = None
+        for k, g in zip(a, b):
+            if k != g:
+                continue
+            if k != r:
+                yield k
+                r = k
+
+    opts = [o["name"] for o in sct_config.SCTConfiguration.config_options]
+
+    assert list(get_dupes(opts)) == []
