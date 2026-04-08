@@ -168,10 +168,10 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.log.info("Index built successfully, took {:.2f} seconds".format(end_time - start_time))
         return end_time - start_time, start_time
 
-    def send_index_results_to_argus(self, load_size, building_time, start_time):
+    def send_index_results_to_argus(self, building_time, start_time):
         self.log.info(f'Sending index building results to Argus with load size: {load_size}, building time: {building_time}')
         table = VectorStoreIndexBuildingTimeResult(sut_timestamp=start_time)
-        table.add_result(column='building time', value=int(building_time + 0.5), row=str(load_size), status=Status.UNSET)
+        table.add_result(column='building time', value=int(building_time + 0.5), row='index', status=Status.UNSET)
         submit_results_to_argus(argus_client=self.test_config.argus_client(), result_table=table)
         self.log.info(f'Sent index building results to Argus with load size: {load_size}, building time: {building_time}')
 
@@ -183,49 +183,83 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     # 'hdr_summary': {'READ--fn--execute_read_query': {'start_time': 1772540258529.0, 'end_time': 1772540288490.0002, 'stddev': 328954.968328411, 'percentile_50': 4.22, 'percentile_90': 4.63, 'percentile_95': 4.71, 'percentile_99': 5.16, 'percentile_99_9': 5.47, 'percentile_99_99': 6.35, 'percentile_99_999': 6.35, 'throughput': 50}},
     # 'cycle_hdr_throughput': 50, 'reactor_stalls_stats': {}}
 
-    def run_workload(self, load_size):
-        stress_cmd = self.params.get("stress_cmd")
-        assert len(stress_cmd) == 1
-        stress_cmd = stress_cmd[0]
-        self.log.info(f"Running run command: {stress_cmd}")
+    def run_workload(self, query_per_seconds, current_concurrency, concurrency_time):
+        stress_cmd, background_stress_cmd = self.params.get("stress_cmd")
         
-        # hdr_tags is used by `latency_calculator_decorator` decorator
-        @latency_calculator_decorator(cycle_name=str(load_size), row_name="select", workload_type='read')
-        def run(self, hdr_tags):
-            self.log.info("Starting stress thread")
-            stress = self.run_stress_thread(
-                stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False
+        self.log.info(f"Running run command: {stress_cmd}")
+        self.log.info(f"Running background command: {background_stress_cmd}")
+        
+        def start_background_stress():
+            c = background_stress_cmd + f' --concurrency={current_concurrency}'
+            self.log.info(f"Starting background stress command with command: {repr(c)}")
+            background_stress = self.run_stress_thread(
+                stress_cmd=c, stats_aggregate_cmds=False, round_robin=False
             )
-            res = stress.parse_results()
+            self.log.info("Started background stress command")
+            return background_stress
+        def cancel_background_stress(stress):
+            self.log.info("Canceling background stress command")
+            stress.kill()
+            self.log.info("Canceled background stress command")
+        # hdr_tags parameter is used by `latency_calculator_decorator` decorator
+        @latency_calculator_decorator(cycle_name=f'{query_per_seconds} / s', row_name="select", workload_type='read')
+        def run(self, hdr_tags):
+            c = stress_cmd + f' --rate={query_per_seconds} --duration {concurrency_time * 60}s'
+            self.log.info(f"Starting stress thread with command: {repr(c)}")
+            stress = self.run_stress_thread(
+                stress_cmd=c, stats_aggregate_cmds=False, round_robin=False
+            )
+            stress.parse_results()
             self.log.info("Completed waiting for results for stress thread")
+        background_stress = start_background_stress()
         run(self, hdr_tags=['fn--execute_read_query'])
         self.log.info(f"Finished running run command: {stress_cmd}")
+        cancel_background_stress(background_stress)
 
-    def find_load_size_from_stress_cmd(self, stress_cmd):
-        load_size_match = re.search(r"--duration\s+(\S+)", stress_cmd)
-        rate_match = re.search(r"--rate\s+(\S+)", stress_cmd)
-        if load_size_match:
-            load_size_match = load_size_match.group(1)
-            if load_size_match.endswith("s"):
-                if not rate_match:
-                    raise ValueError("Rate parameter is required when duration in seconds is specified in stress command")
-                rate_match = int(rate_match.group(1))
-                return int(load_size_match[:-1]) * rate_match
-            return int(load_size_match)
-        else:
-            raise ValueError("Load size not found in stress command")
-        
+    # def find_load_size_from_stress_cmd(self, stress_cmd):
+    #     load_size_match = re.search(r"--duration\s+(\S+)", stress_cmd)
+    #     rate_match = re.search(r"--rate\s+(\S+)", stress_cmd)
+    #     if load_size_match:
+    #         load_size_match = load_size_match.group(1)
+    #         if load_size_match.endswith("s"):
+    #             if not rate_match:
+    #                 raise ValueError("Rate parameter is required when duration in seconds is specified in stress command")
+    #             rate_match = int(rate_match.group(1))
+    #             return int(load_size_match[:-1]) * rate_match
+    #         return int(load_size_match)
+    #     else:
+    #         raise ValueError("Load size not found in stress command")
+    
+    def set_service_level(self, service_level):
+        self.log.warning("Not setting service level - not implemented yet")
+
     def test_noop(self):  # noqa: PLR0914
         #self.vector_store_cluster
         self.log.info("QWERTY QWERTY QWERTY start")
-        load_size = self.find_load_size_from_stress_cmd(self.params.get("stress_cmd")[0])
-        self.log.info(f'Determined load size: {load_size}')
+        # --rate 50 --duration 300s 
+        # load_size = self.find_load_size_from_stress_cmd(self.params.get("stress_cmd")[0])
+        # self.log.info(f'Determined load size: {load_size}')
         self.download_artifacts_from_s3()
 
+        service_level = self.params.get("vs_service_level")
+        query_per_seconds = self.params.get("vs_query_per_seconds")
+        concurrency = self.params.get("vs_concurrency")
+        concurrency_time = self.params.get("vs_concurrency_time")
+
+        self.log.info(f"QWERTY concurrency {repr(concurrency)}")
+
+        if type(concurrency) is str:
+            concurrency = [ int(concurrency) ]
+        else:
+            concurrency = [ int(q) for q in concurrency ]
+        self.log.info(f"QWERTY concurrency {repr(concurrency)}")
         self.run_prepare_write_cmd()
         building_time, start_time = self.create_index()
-        self.run_workload(load_size)
-        self.send_index_results_to_argus(load_size, building_time, start_time)
+        self.set_service_level(service_level)
+        self.send_index_results_to_argus(building_time, start_time)
+
+        for current_concurrency in concurrency:
+            self.run_workload(query_per_seconds, current_concurrency, concurrency_time)
 
         self.log.info("QWERTY QWERTY QWERTY end")
 

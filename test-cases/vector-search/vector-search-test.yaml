@@ -1,4 +1,4 @@
-test_duration: 60
+time_duration: 60
 
 prepare_write_cmd:
   - >-
@@ -6,7 +6,14 @@ prepare_write_cmd:
 
 stress_cmd:
   - >-
-    latte run --function execute_read_query --connections 2 --rate 50 --duration 300s data_dir/latte/vector_search/vector_search_perf_run.rn
+    latte run --function execute_read_query --connections 2 data_dir/latte/vector_search/vector_search_perf_run.rn
+  - >-
+    latte run --function=write --tag=background-write --rate=40664
+    -P replication_factor=3 --threads=7 --concurrency=21 --consistency=QUORUM
+    -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=0
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    -P gauss_mean=325000000 -P gauss_stddev=9750000
+    data_dir/latte/latte_cs_alike.rn
 
 instance_type_loader: 'c6i.2xlarge'
 instance_type_db: 'i4i.large'
@@ -20,6 +27,10 @@ n_vector_store_nodes: 1
 n_loaders: 1
 n_db_nodes: 1
 use_hdrhistogram: true
+vs_service_level: 200
+vs_query_per_seconds: 50
+vs_concurrency: 2
+vs_concurrency_time: 5
 
 download_from_s3:
   - data_dir/latte/vector_search:
