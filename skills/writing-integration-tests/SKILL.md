@@ -11,6 +11,7 @@ description: >-
 # Writing Integration Tests for SCT
 
 Write integration tests that clearly label their external service dependencies and clean up after themselves.
+All new integration tests go in `unit_tests/integration/` (not the root `unit_tests/` directory).
 
 ## Essential Principles
 
@@ -66,7 +67,7 @@ Use `yield` fixtures with teardown blocks, context managers, or `try/finally`. L
 
 ## Quick Reference: Integration Test Fixtures
 
-### Docker Scylla Fixtures (from `conftest.py`)
+### Docker Scylla Fixtures (from `unit_tests/integration/conftest.py`)
 
 | Fixture | Scope | Purpose |
 |---------|-------|---------|
@@ -222,10 +223,10 @@ def test_k8s_operator(k8s_cluster):
 uv run sct.py integration-tests
 
 # Run a specific integration test file
-uv run sct.py integration-tests -t test_your_module.py
+uv run sct.py integration-tests -t integration/test_your_module.py
 
 # Run a specific test with verbose output (no parallel)
-uv run python -m pytest unit_tests/test_your_module.py::test_function -v -s -m integration -n0
+uv run python -m pytest unit_tests/integration/test_your_module.py::test_function -v -s -m integration -n0
 
 # Run integration tests with more parallel workers
 uv run sct.py integration-tests -n 8

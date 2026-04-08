@@ -433,10 +433,8 @@ text to reflect this.
 
 | Phase | Commit | Status |
 |-------|--------|--------|
-| Phase 1: Cleanup and directory structure | `be83737fb` | Done |
-| Phase 2: Move purely unit test files | `b6d44820e` | Done |
-| Phase 3: Move purely integration test files | `9f2c3237d` | Done |
-| Phase 4: Split conftest.py and remove hook | `d1b8d6764` | Done |
-| Phase 5: Split mixed files + docs | `a36624a70` | Done |
-| Post-rebase: move execute_nemesis/ to unit/ | `e283340c6` | Done |
-| Post-rebase: move remaining root test files + dummy_remote to lib/ | — | Done |
+| Phase 1: Cleanup and directory structure | `d66a43fcc` | Done |
+| Phase 2: Move purely unit test files | `57c9afb11` | Done |
+| Phase 3: Move purely integration test files | `efce4a531` | Done |
+| Phase 4: Split conftest.py and remove hook | `f041af52e` | Done |
+| Phase 5: Split mixed files + docs | — | Done |
