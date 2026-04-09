@@ -26,10 +26,7 @@ stress_cmd_m: [
 
 # Non-stress options
 nemesis_class_name: "FakeNemesisClassName"
-nemesis_selector: [
-    "fake__nemesis_selector__all_tenants__part1",
-    "fake__nemesis_selector__all_tenants__part2"
-]
+nemesis_selector: "fake__nemesis_selector__all_tenants__single_str"
 nemesis_interval: 5
 nemesis_sequence_sleep_between_ops: 3
 nemesis_during_prepare: False
