@@ -358,6 +358,13 @@ class ArtifactsTest(ClusterTester):
 
         backend = self.params.get("cluster_backend")
 
+        if self.params.get("run_scylla_doctor_only"):
+            with self.logged_subtest("verify node health"):
+                self.verify_node_health()
+            with self.logged_subtest("check scylla_doctor results"):
+                self.run_scylla_doctor()
+            return
+
         if backend == "aws":
             with self.logged_subtest("check ENA support"):
                 assert self.node.ena_support, "ENA support is not enabled"
