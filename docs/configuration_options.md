@@ -1868,6 +1868,15 @@ Scylla Doctor version to use for artifact tests. Set to specific version (e.g., 
 * appendable
 
 
+## **run_scylla_doctor_only** / SCT_RUN_SCYLLA_DOCTOR_ONLY
+
+When true, the artifact test runs only the Scylla Doctor validation<br>(install, collect vitals, analyze, verify) and skips all other artifact checks<br>such as stop/start, cassandra-stress, housekeeping, etc. Useful for fast SD<br>release gating. Implies run_scylla_doctor=true.
+
+**default:** N/A
+
+**type:** bool
+
+
 ## **scylla_doctor_edition** / SCT_SCYLLA_DOCTOR_EDITION
 
 Scylla Doctor edition to use. Allowed values: 'basic', 'full'.<br>'basic' fetches the free/open-source edition via HTTP.<br>'full' fetches the full/enterprise edition from a private S3 bucket.
