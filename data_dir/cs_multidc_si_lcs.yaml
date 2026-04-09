@@ -29,19 +29,19 @@ columnspec:
     population: uniform(1..10M)
 
   - name: c0
-    size: fixed(1024)
+    size: fixed(2048)
 
   - name: c1
-    size: fixed(1024)
+    size: fixed(2048)
 
   - name: c2
-    size: fixed(1024)
+    size: fixed(2048)
 
   - name: c3
-    size: fixed(1024)
+    size: fixed(2048)
 
   - name: c4
-    size: fixed(1024)
+    size: fixed(2048)
 
 insert:
   partitions: fixed(1)

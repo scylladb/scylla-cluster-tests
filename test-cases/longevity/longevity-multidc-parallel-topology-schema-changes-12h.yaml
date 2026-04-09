@@ -39,18 +39,18 @@ pre_create_keyspace: ["CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication 
                       "ATTACH SERVICE_LEVEL sl_test_3 TO stress_user3;",
                       ]
 
-prepare_write_cmd:  ["cassandra-stress write cl=LOCAL_QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native connectionsPerHost=2000 -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
+prepare_write_cmd:  ["cassandra-stress write cl=LOCAL_QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native connectionsPerHost=2000 -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(5) size=FIXED(1024)' -log interval=5",
                      "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1)' cl=LOCAL_QUORUM n=3000000 -mode cql3 native connectionsPerHost=2000 -rate threads=40 -log interval=5"
                     ]
 
-stress_cmd: ["cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  user=stress_user1 password=stress_user1  connectionsPerHost=400 -rate threads=13 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
-             "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  user=stress_user1 password=stress_user1  connectionsPerHost=400 -rate threads=13 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
+stress_cmd: ["cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  user=stress_user1 password=stress_user1  connectionsPerHost=400 -rate threads=13 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(1024)' -log interval=5",
+             "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  user=stress_user1 password=stress_user1  connectionsPerHost=400 -rate threads=13 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(1024)' -log interval=5",
              "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1,read=1,si_read1=1,si_read2=1)' cl=LOCAL_QUORUM duration=700m -mode cql3 native  user=stress_user1 password=stress_user1  connectionsPerHost=400 -rate threads=13 -log interval=5",
-             "cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  user=stress_user2 password=stress_user2  connectionsPerHost=400 -rate threads=13 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
-             "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  user=stress_user2 password=stress_user2  connectionsPerHost=400 -rate threads=13 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
+             "cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  user=stress_user2 password=stress_user2  connectionsPerHost=400 -rate threads=13 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(1024)' -log interval=5",
+             "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  user=stress_user2 password=stress_user2  connectionsPerHost=400 -rate threads=13 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(1024)' -log interval=5",
              "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1,read=1,si_read1=1,si_read2=1)' cl=LOCAL_QUORUM duration=700m -mode cql3 native  user=stress_user2 password=stress_user2  connectionsPerHost=400 -rate threads=13 -log interval=5",
-             "cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  user=stress_user3 password=stress_user3  connectionsPerHost=400 -rate threads=13 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
-             "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  user=stress_user3 password=stress_user3  connectionsPerHost=400 -rate threads=13 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
+             "cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  user=stress_user3 password=stress_user3  connectionsPerHost=400 -rate threads=13 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(1024)' -log interval=5",
+             "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  user=stress_user3 password=stress_user3  connectionsPerHost=400 -rate threads=13 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(1024)' -log interval=5",
              "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1,read=1,si_read1=1,si_read2=1)' cl=LOCAL_QUORUM duration=700m -mode cql3 native  user=stress_user3 password=stress_user3  connectionsPerHost=400 -rate threads=13 -log interval=5",
              ]
 
@@ -61,7 +61,7 @@ n_loaders: '2 2'
 region_aware_loader: true
 simulated_racks: 0
 
-instance_type_db: 'i7ie.2xlarge'
+instance_type_db: 'i7ie.xlarge'
 
 nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']
 nemesis_selector: ["topology_changes", "schema_changes and not disruptive"]
@@ -77,5 +77,3 @@ server_encrypt: true
 internode_encryption: 'dc'
 
 user_prefix: 'parallel-topology-schema-changes-multidc-12h'
-
-# auth for connections per host
