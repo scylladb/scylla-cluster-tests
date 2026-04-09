@@ -1,0 +1,16 @@
+test_duration: 300
+
+stress_cmd:
+  - >-
+    cassandra-stress write n=42000000 cl=QUORUM -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -mode cql3 native -rate threads=100 -col 'n=FIXED(10) size=FIXED(900)' -pop seq=1..42000000 -log interval=5
+
+n_db_nodes: 3
+instance_type_loader: 'c6i.2xlarge'
+instance_type_db: 'i8g.large'
+gce_instance_type_loader: 'n2-highmem-2'
+gce_instance_type_db: 'n2-highmem-2'
+n_loaders: 1
+n_vector_store_nodes: 1
+
+user_prefix: 'vector-search-xcloud-scale-out'
