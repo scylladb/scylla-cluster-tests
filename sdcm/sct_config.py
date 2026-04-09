@@ -1192,6 +1192,12 @@ class SCTConfiguration(BaseModel):
                 to hardcode the version, or leave empty to use the latest available version. For stability,
                 artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.""",
     )
+    run_scylla_doctor_only: Boolean = SctField(
+        description="""When true, the artifact test runs only the Scylla Doctor validation
+                (install, collect vitals, analyze, verify) and skips all other artifact checks
+                such as stop/start, cassandra-stress, housekeeping, etc. Useful for fast SD
+                release gating. Implies run_scylla_doctor=true.""",
+    )
     scylla_doctor_edition: Literal["basic", "full"] = SctField(
         description="""Scylla Doctor edition to use. Allowed values: 'basic', 'full'.
                 'basic' fetches the free/open-source edition via HTTP.
