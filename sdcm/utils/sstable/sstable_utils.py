@@ -12,6 +12,8 @@ from sdcm.exceptions import SstablesNotFound
 
 LOGGER = logging.getLogger(__name__)
 
+CORRUPTED_SSTABLES_STATE_FILENAME = "corrupted_sstables_snapshot.json"
+
 
 class NonDeletedTombstonesFound(Exception):
     pass

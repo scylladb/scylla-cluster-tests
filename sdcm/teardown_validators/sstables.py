@@ -1,20 +1,28 @@
 from contextlib import ExitStack, contextmanager
+import json
 import logging
 import re
 from functools import partial
+from pathlib import Path
 
 from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.exceptions import WaitForTimeoutError
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.events_device import EVENTS_LOG_DIR, RAW_EVENTS_LOG
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.teardown_validators import ValidatorEvent, ScrubValidationErrorEvent
 from sdcm.teardown_validators.base import TeardownValidator
 from sdcm.utils.common import S3Storage
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
-from sdcm.utils.sstable.sstable_utils import decrypt_sstable_files_on_node, strip_encryption_options_from_schema
+from sdcm.utils.sstable.sstable_utils import (
+    CORRUPTED_SSTABLES_STATE_FILENAME,
+    decrypt_sstables_on_node,
+    decrypt_sstable_files_on_node,
+    strip_encryption_options_from_schema,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -186,3 +194,125 @@ class SstablesValidator(TeardownValidator):
                 ValidatorEvent(
                     message=f"Error during nodetool scrub validation: {exc}", severity=Severity.ERROR
                 ).publish()
+
+
+CORRUPTED_SSTABLE_PATH_RE = re.compile(r"[./\w\-]+\.db")
+
+
+def find_corrupted_sstable_in_events(raw_events_file: Path):
+    """Scan the raw events log and return (sstable_dir, keyspace, table_name, sstable_name, node_name).
+
+    Returns a tuple of all-None values when no matching event is found.
+    """
+    with open(raw_events_file, "r", encoding="utf-8") as fh:
+        for raw_line in fh:
+            try:
+                event = json.loads(raw_line)
+            except json.JSONDecodeError:
+                continue
+            if event.get("type") == "CORRUPTED_SSTABLE" and event.get("severity") == "CRITICAL":
+                try:
+                    sstable_path = CORRUPTED_SSTABLE_PATH_RE.findall(event.get("line", ""))[0]
+                    data_path, ks, table_dir, sst_name = sstable_path.rsplit("/", 3)
+                    return (
+                        f"{data_path}/{ks}/{table_dir}",
+                        ks,
+                        table_dir.split("-")[0],
+                        sst_name,
+                        event.get("node"),
+                    )
+                except (IndexError, ValueError):
+                    LOGGER.warning("CorruptedSstablesPreparator: couldn't parse sstable path from event line")
+    return None, None, None, None, None
+
+
+def find_node_by_name(db_clusters_multitenant, node_name: str):
+    """Return the first node whose ``name`` matches *node_name*, or ``None``."""
+    for cluster in db_clusters_multitenant:
+        for node in cluster.nodes:
+            if node.name == node_name:
+                return node
+    return None
+
+
+def take_snapshot_and_decrypt(node, sstable_dir: str, keyspace: str, table_name: str):
+    """Run ``nodetool snapshot``, then decrypt the snapshot.  Return ``(snapshot_path, decrypted_path)``.
+
+    Raises on unexpected errors so the caller can catch and log.
+    """
+    result = node.remoter.run(
+        f"nodetool snapshot {keyspace} -cf {table_name}",
+        ignore_status=True,
+    )
+    if not result.ok:
+        LOGGER.warning("CorruptedSstablesPreparator: nodetool snapshot failed: %s — skipping", result.stderr)
+        return None, None
+    try:
+        snapshot_dir = result.stdout.split("Snapshot directory: ")[1].strip()
+    except IndexError:
+        LOGGER.error("CorruptedSstablesPreparator: cannot parse snapshot dir from stdout: %s", result.stdout)
+        return None, None
+    snapshot_path = f"{sstable_dir}/snapshots/{snapshot_dir}"
+    decrypted_path = decrypt_sstables_on_node(node, snapshot_path, keyspace=keyspace, table=table_name)
+    return snapshot_path, decrypted_path
+
+
+class CorruptedSstablesPreparator(TeardownValidator):
+    """Pre-snapshot and pre-decrypt corrupted sstables while the node is still alive.
+
+    Reads CORRUPTED_SSTABLE events from the raw events log, takes a ``nodetool snapshot`` of the
+    affected table on the relevant node, decrypts the sstables, and writes a JSON state file to
+    ``{logdir}/corrupted_sstables_snapshot.json``.
+
+    ``SSTablesCollector.collect_logs()`` reads that state file and only performs the upload,
+    avoiding any SSH calls after ``stop_resources()`` when the node may no longer be reachable.
+    """
+
+    validator_name = "corrupted_sstables_preparator"
+
+    def validate(self):
+        logdir = Path(self.tester.logdir)
+        state_file = logdir / CORRUPTED_SSTABLES_STATE_FILENAME
+        raw_events_file = logdir / EVENTS_LOG_DIR / RAW_EVENTS_LOG
+
+        if not raw_events_file.exists():
+            LOGGER.debug("CorruptedSstablesPreparator: raw events log not found at %s — skipping", raw_events_file)
+            return
+
+        sstable_dir, keyspace, table_name, sstable_name, node_name = find_corrupted_sstable_in_events(raw_events_file)
+        if not node_name:
+            LOGGER.info("CorruptedSstablesPreparator: no CORRUPTED_SSTABLE event found — nothing to prepare")
+            return
+
+        node = find_node_by_name(self.tester.db_clusters_multitenant, node_name)
+        if node is None:
+            LOGGER.warning("CorruptedSstablesPreparator: node %s not found in any cluster — skipping", node_name)
+            return
+
+        LOGGER.info(
+            "CorruptedSstablesPreparator: taking snapshot for %s.%s on node %s", keyspace, table_name, node_name
+        )
+        try:
+            snapshot_path, decrypted_path = take_snapshot_and_decrypt(node, sstable_dir, keyspace, table_name)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("CorruptedSstablesPreparator: unexpected error — skipping. Error: %s", exc)
+            return
+        if snapshot_path is None:
+            return
+
+        state = {
+            "snapshot_path": snapshot_path,
+            "decrypted_path": decrypted_path,
+            "keyspace": keyspace,
+            "table_name": table_name,
+            "sstable_name": sstable_name,
+            "node_name": node_name,
+            "ssh_login_info": node.ssh_login_info,
+        }
+        state_file.write_text(json.dumps(state), encoding="utf-8")
+        LOGGER.info(
+            "CorruptedSstablesPreparator: state written to %s (snapshot=%s, decrypted=%s)",
+            state_file,
+            snapshot_path,
+            decrypted_path,
+        )
