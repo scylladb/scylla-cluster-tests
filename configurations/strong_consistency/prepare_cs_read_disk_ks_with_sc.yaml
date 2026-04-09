@@ -1,0 +1,2 @@
+prepare_stress_cmd: []
+pre_create_keyspace: ["CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} and consistency = 'local' and tablets = {'enabled': true};"]
