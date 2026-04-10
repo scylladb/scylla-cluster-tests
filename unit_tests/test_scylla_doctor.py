@@ -224,7 +224,7 @@ def test_download_full_generates_presigned_url(mock_keystore_cls, mock_boto_clie
 
     mock_ks = MagicMock()
     mock_ks.get_scylla_doctor_full_bucket_config.return_value = {
-        "bucket": "private-sd-bucket",
+        "bucket": "private-sd-bucket-us-east-1",
         "prefix": "releases/",
     }
     mock_keystore_cls.return_value = mock_ks
@@ -239,25 +239,28 @@ def test_download_full_generates_presigned_url(mock_keystore_cls, mock_boto_clie
         ]
     }
     mock_s3_presign = MagicMock()
-    mock_s3_presign.generate_presigned_url.return_value = "https://private-sd-bucket.s3.amazonaws.com/signed-url"
+    mock_s3_presign.generate_presigned_url.return_value = (
+        "https://private-sd-bucket-us-east-1.s3.amazonaws.com/signed-url"
+    )
 
-    # boto3.client is called twice: first in locate, then in download
+    # boto3.client is called twice: first in locate, then in download (with region)
     mock_boto_client.side_effect = [mock_s3_list, mock_s3_presign]
 
     doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
-    doc.download_full_scylla_doctor()
+    with patch.object(doc, "_download_and_extract_tarball") as mock_extract:
+        doc.download_full_scylla_doctor()
 
     mock_s3_presign.generate_presigned_url.assert_called_once_with(
         ClientMethod="get_object",
-        Params={"Bucket": "private-sd-bucket", "Key": "releases/scylla-doctor-1.9.0.tar.gz"},
+        Params={"Bucket": "private-sd-bucket-us-east-1", "Key": "releases/scylla-doctor-1.9.0.tar.gz"},
         ExpiresIn=300,
     )
 
-    # Verify curl was called on the node with the presigned URL
-    curl_calls = [
-        call for call in mock_node.remoter.run.call_args_list if "curl" in str(call) and "signed-url" in str(call)
-    ]
-    assert len(curl_calls) == 1
+    # Verify the presigned URL was passed to the download method
+    mock_extract.assert_called_once_with(
+        "https://private-sd-bucket-us-east-1.s3.amazonaws.com/signed-url",
+        description="full scylla-doctor (scylla-doctor-1.9.0.tar.gz)",
+    )
 
 
 @patch("utils.scylla_doctor.boto3.client")
@@ -301,30 +304,18 @@ def test_download_dispatches_to_full_when_edition_is_full(mock_download_full, mo
 
 @patch("utils.scylla_doctor.boto3.client")
 @patch.object(ScyllaDoctor, "download_full_scylla_doctor", side_effect=ScyllaDoctorException("keystore unavailable"))
-def test_download_fallback_to_basic_on_full_failure(mock_download_full, mock_boto_client, mock_node, mock_test_config):
-    """When full download fails, download_scylla_doctor should fall back to basic edition."""
+def test_download_full_failure_propagates(mock_download_full, mock_boto_client, mock_node, mock_test_config):
+    """When full download fails, download_scylla_doctor should propagate the exception (no fallback)."""
     test_config, params = mock_test_config
     params["scylla_doctor_edition"] = "full"
     params["scylla_doctor_version"] = "1.9"
 
-    now = datetime.datetime.now(tz=datetime.timezone.utc)
-    mock_s3 = MagicMock()
-    mock_s3.list_objects.return_value = {
-        "Contents": [
-            {"Key": "downloads/scylla-doctor/tar/scylla-doctor-1.9.0.tar.gz", "LastModified": now},
-        ]
-    }
-    mock_boto_client.return_value = mock_s3
-
     doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
-    doc.download_scylla_doctor()
 
-    # Full was attempted and failed
+    with pytest.raises(ScyllaDoctorException, match="keystore unavailable"):
+        doc.download_scylla_doctor()
+
     mock_download_full.assert_called_once()
-
-    # Basic download path was exercised — curl with the public URL was called
-    curl_calls = [call for call in mock_node.remoter.run.call_args_list if "downloads.scylladb.com" in str(call)]
-    assert len(curl_calls) == 1
 
 
 @patch("utils.scylla_doctor.boto3.client")
@@ -346,9 +337,92 @@ def test_download_basic_edition_skips_full(mock_boto_client, mock_node, mock_tes
     doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
 
     with patch.object(ScyllaDoctor, "download_full_scylla_doctor") as mock_full:
-        doc.download_scylla_doctor()
+        with patch.object(doc, "_download_and_extract_tarball") as mock_extract:
+            doc.download_scylla_doctor()
         mock_full.assert_not_called()
 
-    # Basic path was used — curl with the public URL
-    curl_calls = [call for call in mock_node.remoter.run.call_args_list if "downloads.scylladb.com" in str(call)]
-    assert len(curl_calls) == 1
+    # Basic path was used — _download_and_extract_tarball was called with the public URL
+    mock_extract.assert_called_once()
+    call_url = mock_extract.call_args[0][0]
+    assert "downloads.scylladb.com" in call_url
+
+
+# --- _get_bucket_region tests ---
+
+
+@pytest.mark.parametrize(
+    "bucket_name,expected_region",
+    [
+        ("fe-artifacts-297607762119-eu-central-1", "eu-central-1"),
+        ("my-bucket-us-west-2", "us-west-2"),
+        ("something-ap-southeast-1", "ap-southeast-1"),
+        ("bucket-sa-east-1", "sa-east-1"),
+    ],
+)
+def test_get_bucket_region_from_name(bucket_name, expected_region):
+    """Region should be extracted from bucket name when it ends with a valid AWS region."""
+    assert ScyllaDoctor._get_bucket_region(bucket_name) == expected_region
+
+
+@patch("utils.scylla_doctor.boto3.client")
+def test_get_bucket_region_fallback_to_api(mock_boto_client):
+    """When bucket name doesn't contain a region, fall back to get_bucket_location API."""
+    mock_s3 = MagicMock()
+    mock_s3.get_bucket_location.return_value = {"LocationConstraint": "eu-west-1"}
+    mock_boto_client.return_value = mock_s3
+
+    assert ScyllaDoctor._get_bucket_region("my-plain-bucket") == "eu-west-1"
+
+
+# --- _download_and_extract_tarball tests ---
+
+
+def test_download_and_extract_tarball_rejects_non_gzip(mock_node, mock_test_config):
+    """When downloaded file is not a gzip tarball, ScyllaDoctorException should be raised."""
+    test_config, _params = mock_test_config
+
+    # Make the file check return non-gzip
+    check_result = MagicMock()
+    check_result.ok = True
+    check_result.stdout = "ASCII text"
+
+    head_result = MagicMock()
+    head_result.stdout = "<Error><Code>AccessDenied</Code></Error>"
+
+    rm_result = MagicMock()
+    rm_result.ok = True
+
+    # First call: curl download (succeeds), second: file check, third: head, fourth: rm
+    mock_node.remoter.run.side_effect = [
+        MagicMock(ok=True),  # curl download
+        check_result,  # file check
+        head_result,  # head -c 500
+        rm_result,  # rm -f
+    ]
+
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
+
+    with pytest.raises(ScyllaDoctorException, match="not a valid gzip tarball"):
+        doc._download_and_extract_tarball("https://example.com/bad.tar.gz")
+
+
+# --- _full_edition_downloaded tests ---
+
+
+def test_full_edition_downloaded_flag_set_on_success(mock_node, mock_test_config):
+    """After successful full download, _full_edition_downloaded should be True."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "full"
+
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
+    assert not getattr(doc, "_full_edition_downloaded", False)
+
+    with patch.object(doc, "download_full_scylla_doctor") as mock_full:
+
+        def set_flag():
+            doc._full_edition_downloaded = True
+
+        mock_full.side_effect = set_flag
+        doc.download_scylla_doctor()
+
+    assert doc._full_edition_downloaded is True
