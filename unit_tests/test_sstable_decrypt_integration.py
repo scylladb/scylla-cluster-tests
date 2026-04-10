@@ -73,6 +73,14 @@ SECRET_KEY_CONTENT = f"AES/ECB/PKCS5Padding:128:{AES_KEY_B64}"
 
 KEYSPACE = "test_ks_ear"
 TABLE_NODE = "test_node_enc"
+# Table created with per-table scylla_encryption_options (table-level EAR)
+TABLE_TABLE = "test_table_enc"
+TABLE_LEVEL_EAR_OPTIONS = (
+    "{'cipher_algorithm': 'AES/ECB/PKCS5Padding',"
+    " 'key_provider': 'LocalFileSystemKeyProviderFactory',"
+    " 'secret_key_file': '/etc/scylla/encrypt_conf/secret_key',"
+    " 'secret_key_strength': '128'}"
+)
 
 
 def docker_available() -> bool:
@@ -103,12 +111,17 @@ class PreparatorSCTConfig(SCTConfiguration):
 
 
 class FakeResult:
-    """Minimal Result-like object returned by DockerExecNode.run()."""
+    """Minimal Result-like object returned by DockerExecNode.run().
+
+    Mirrors the attributes of ``sdcm.remote.libssh2_client.result.Result`` that the
+    production code accesses (including ``exit_status`` used in error logging).
+    """
 
     def __init__(self, stdout: str, stderr: str, exited: int):
         self.stdout = stdout
         self.stderr = stderr
         self.exited = exited
+        self.exit_status = exited
         self.ok = exited == 0
         self.failed = exited != 0
 
@@ -263,7 +276,11 @@ def find_live_data_file(container: str, keyspace: str, table: str) -> str:
 
 
 def write_corrupted_sstable_event(logdir: Path, data_file_path: str, node_name: str) -> None:
-    """Write a synthetic CORRUPTED_SSTABLE raw event to the events log under *logdir*."""
+    """Write a synthetic CORRUPTED_SSTABLE raw event to the events log under *logdir*.
+
+    Uses the ``malformed_sstable_exception`` log format that triggers real CORRUPTED_SSTABLE
+    events in production (see ``sdcm/sct_events/database.py``).
+    """
     events_dir = logdir / EVENTS_LOG_DIR
     events_dir.mkdir(parents=True, exist_ok=True)
     event = {
@@ -271,7 +288,9 @@ def write_corrupted_sstable_event(logdir: Path, data_file_path: str, node_name: 
         "severity": "CRITICAL",
         "node": node_name,
         "line": (
-            f"INFO  2024-04-02 12:40:24,787 [shard 0:stre] sstable - Moving sstable {data_file_path} to quarantine"
+            f"[shard 0:main] seastar - Exiting on unhandled exception: "
+            f"sstables::malformed_sstable_exception (Buffer improperly sized to hold requested data. "
+            f"Got: 2. Expected: 4 in sstable {data_file_path})"
         ),
     }
     (events_dir / RAW_EVENTS_LOG).write_text(json.dumps(event) + "\n", encoding="utf-8")
@@ -324,6 +343,16 @@ def scylla_container(tmp_path_factory, request):
     cql(CONTAINER_NAME, f"CREATE TABLE IF NOT EXISTS {KEYSPACE}.{TABLE_NODE} (id int PRIMARY KEY, name text);")
     cql(CONTAINER_NAME, f"INSERT INTO {KEYSPACE}.{TABLE_NODE} (id, name) VALUES (1, 'node_enc');")
     nodetool(CONTAINER_NAME, f"flush {KEYSPACE} {TABLE_NODE}")
+
+    # Table-level EAR: create table with scylla_encryption_options, then upgradesstables
+    cql(
+        CONTAINER_NAME,
+        f"CREATE TABLE IF NOT EXISTS {KEYSPACE}.{TABLE_TABLE}"
+        f" (id int PRIMARY KEY, name text)"
+        f" WITH scylla_encryption_options = {TABLE_LEVEL_EAR_OPTIONS};",
+    )
+    cql(CONTAINER_NAME, f"INSERT INTO {KEYSPACE}.{TABLE_TABLE} (id, name) VALUES (1, 'table_enc');")
+    nodetool(CONTAINER_NAME, f"flush {KEYSPACE} {TABLE_TABLE}")
 
     yield CONTAINER_NAME
 
@@ -545,4 +574,73 @@ def test_full_pipeline_collect_logs_uses_state_file(scylla_container, scylla_nod
     )
     assert state["decrypted_path"] in upload_paths, (
         f"decrypted_path {state['decrypted_path']} not in upload paths: {upload_paths}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Table-level EAR: schema.cql contains scylla_encryption_options; strip+decrypt
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.xdist_group("ear_scylla_container")
+def test_table_level_ear_decrypt(scylla_container, scylla_node):
+    """decrypt_sstables_on_node decrypts table-level EAR sstables by stripping scylla_encryption_options.
+
+    Table-level EAR embeds an ``AND scylla_encryption_options = {...}`` clause in the table schema.
+    ``scylla sstable upgrade`` would write encrypted output if that clause is passed through unchanged.
+    This test verifies that:
+
+    1. The snapshot's ``schema.cql`` actually contains ``scylla_encryption_options`` (so the strip
+       path is exercised, not just a no-op node-level scenario).
+    2. After ``decrypt_sstables_on_node``, the decrypted directory contains no encryption metadata.
+    """
+    # Take a snapshot of the table-level encrypted table
+    snap_stdout = nodetool(scylla_container, f"snapshot -t integ-table-ear -cf {TABLE_TABLE} -- {KEYSPACE}")
+    snap_tag = snap_stdout.split("Snapshot directory: ")[1].strip()
+
+    # Locate the snapshot directory inside the container
+    find_result = subprocess.run(
+        [
+            "docker",
+            "exec",
+            scylla_container,
+            "find",
+            f"/var/lib/scylla/data/{KEYSPACE}",
+            "-type",
+            "d",
+            "-name",
+            snap_tag,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    snap_path = find_result.stdout.strip().splitlines()[0].strip()
+    assert snap_path, f"Could not locate snapshot directory for tag '{snap_tag}'"
+
+    # Verify the snapshot's schema.cql contains scylla_encryption_options
+    schema_result = subprocess.run(
+        ["docker", "exec", scylla_container, "cat", f"{snap_path}/schema.cql"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert schema_result.returncode == 0, f"schema.cql not found at {snap_path}/schema.cql"
+    assert "scylla_encryption_options" in schema_result.stdout, (
+        "schema.cql does not contain scylla_encryption_options — "
+        "table-level EAR was not applied correctly during container setup"
+    )
+    LOGGER.info("schema.cql for %s contains scylla_encryption_options (as expected)", TABLE_TABLE)
+
+    # Verify the snapshot sstables are encrypted before decryption
+    assert has_encryption_in_metadata(scylla_container, snap_path, KEYSPACE, TABLE_TABLE), (
+        f"Snapshot at {snap_path} should be encrypted (table-level EAR)"
+    )
+
+    # Decrypt — this exercises strip_encryption_options_from_schema on a non-trivial schema
+    decrypted_path = decrypt_sstables_on_node(scylla_node, snap_path, keyspace=KEYSPACE, table=TABLE_TABLE)
+
+    assert decrypted_path is not None, "decrypt_sstables_on_node returned None for table-level EAR sstables"
+    assert not has_encryption_in_metadata(scylla_container, decrypted_path, KEYSPACE, TABLE_TABLE), (
+        f"Decrypted directory {decrypted_path} should have no encryption metadata"
     )

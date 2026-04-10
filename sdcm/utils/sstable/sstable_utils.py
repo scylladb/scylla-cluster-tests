@@ -447,20 +447,46 @@ def get_sstable_data_dump_command(node, keyspace: str, table: str) -> str:
     return _generate_sstable_dump_command(node, "dump-data", keyspace, table)
 
 
-# Matches a full CQL property assignment for scylla_encryption_options, e.g.:
-#   AND scylla_encryption_options = {'cipher_algorithm': '...', ...}
-# The pattern is tolerant of multi-line values (the value part is always on one line in practice,
-# but the leading AND keyword may be preceded by spaces/newlines).
-ENCRYPTION_OPTIONS_RE = re.compile(r"\s+AND\s+scylla_encryption_options\s*=\s*\{[^}]*\}", re.IGNORECASE)
+# Pattern 1: ``WITH scylla_encryption_options = {...} AND ...`` — the property is the first
+# after WITH and is followed by at least one more property.  We strip the property *and* the
+# trailing AND, leaving ``WITH <next_property>``.
+_ENC_WITH_THEN_AND_RE = re.compile(
+    r"(\bWITH)\s+scylla_encryption_options\s*=\s*\{[^}]*\}\s+AND\b",
+    re.IGNORECASE,
+)
+
+# Pattern 2: ``... AND scylla_encryption_options = {...}`` — the property appears after another
+# property.  We strip the leading AND and the entire property clause.
+_ENC_AND_RE = re.compile(
+    r"\s+AND\s+scylla_encryption_options\s*=\s*\{[^}]*\}",
+    re.IGNORECASE,
+)
+
+# Pattern 3: ``WITH scylla_encryption_options = {...}`` as the *only* property — no AND before
+# or after.  We strip ``WITH <clause>`` entirely.  Scylla's schema.cql normally has many
+# properties so this is rare, but it can happen with minimal CREATE TABLE statements.
+_ENC_WITH_ONLY_RE = re.compile(
+    r"\s+WITH\s+scylla_encryption_options\s*=\s*\{[^}]*\}",
+    re.IGNORECASE,
+)
 
 
 def strip_encryption_options_from_schema(schema_text: str) -> str:
     """Remove ``scylla_encryption_options`` property assignments from a schema.cql string.
 
-    When sstables are encrypted at the table level, the snapshot's ``schema.cql`` contains an
-    ``AND scylla_encryption_options = {...}`` clause.  Passing such a schema to
-    ``scylla sstable upgrade`` would produce encrypted output.  This helper strips the clause so
-    that the upgrade tool writes plain (unencrypted) sstables.
+    When sstables are encrypted at the table level, the snapshot's ``schema.cql`` contains a
+    ``scylla_encryption_options = {...}`` clause (preceded by ``WITH`` or ``AND``).  Passing such
+    a schema to ``scylla sstable upgrade`` would produce encrypted output.  This helper strips
+    the clause so that the upgrade tool writes plain (unencrypted) sstables.
+
+    Handles three layouts:
+
+    1. ``WITH scylla_encryption_options = {...} AND next_prop``
+       → ``WITH next_prop``
+    2. ``WITH other_prop AND scylla_encryption_options = {...}``
+       → ``WITH other_prop``
+    3. ``WITH scylla_encryption_options = {...}`` (sole property)
+       → property + WITH keyword removed
 
     Args:
         schema_text: Raw text of a ``schema.cql`` file.
@@ -468,7 +494,14 @@ def strip_encryption_options_from_schema(schema_text: str) -> str:
     Returns:
         Schema text with all ``scylla_encryption_options`` clauses removed.
     """
-    return ENCRYPTION_OPTIONS_RE.sub("", schema_text)
+    # Order matters: try the most specific pattern first.
+    # Pattern 1: WITH <enc> AND ... → WITH ...
+    result = _ENC_WITH_THEN_AND_RE.sub(r"\1", schema_text)
+    # Pattern 2: ... AND <enc>
+    result = _ENC_AND_RE.sub("", result)
+    # Pattern 3: WITH <enc> (sole property — no AND on either side)
+    result = _ENC_WITH_ONLY_RE.sub("", result)
+    return result
 
 
 def decrypt_sstables_on_node(node, snapshot_path: str, keyspace: str, table: str) -> str | None:

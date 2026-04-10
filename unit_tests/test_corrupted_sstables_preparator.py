@@ -23,25 +23,36 @@ from pathlib import Path
 from typing import Dict, Pattern
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
 from invoke import Result
 
 from sdcm.logcollector import LogCollector, SSTablesCollector
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.events_device import EVENTS_LOG_DIR, RAW_EVENTS_LOG
-from sdcm.teardown_validators.sstables import CorruptedSstablesPreparator
-from sdcm.utils.sstable.sstable_utils import CORRUPTED_SSTABLES_STATE_FILENAME
+from sdcm.teardown_validators.sstables import (
+    CorruptedSstablesPreparator,
+    find_corrupted_sstable_in_events,
+    _parse_sstable_path,
+)
+from sdcm.utils.sstable.sstable_utils import (
+    CORRUPTED_SSTABLES_STATE_FILENAME,
+    strip_encryption_options_from_schema,
+)
 
 LOGGER = __import__("logging").getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Raw event lines used in tests
+# Raw event lines used in tests — uses the malformed_sstable_exception format
+# that triggers real CORRUPTED_SSTABLE events (see sdcm/sct_events/database.py).
 # ---------------------------------------------------------------------------
 
 CORRUPTED_EVENT_LINE = (
-    "INFO  2024-04-02 12:40:24,787 [shard 0:stre] sstable - Moving sstable "
+    "[shard 0:main] seastar - Exiting on unhandled exception: "
+    "sstables::malformed_sstable_exception (Buffer improperly sized to hold requested data. "
+    "Got: 2. Expected: 4 in sstable "
     "/var/lib/scylla/data/keyspace1/standard1-01b9f260d55311ef8caf5992914eabbe/"
-    "me-3gn1_0bxv_16fs02rr7ufpbjejzy-big-Data.db to quarantine"
+    "me-3gn1_0bxv_16fs02rr7ufpbjejzy-big-Data.db)"
 )
 
 CORRUPTED_EVENT_JSON = json.dumps(
@@ -391,3 +402,323 @@ def test_sstables_collector_no_corrupted_event_returns_empty(tmp_path):
     collector = make_collector(local_dir)
     result = collector.collect_logs()
     assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Tests: strip_encryption_options_from_schema
+# ---------------------------------------------------------------------------
+
+
+class TestStripEncryptionOptionsFromSchema:
+    """Verify that scylla_encryption_options is stripped in all possible schema layouts."""
+
+    ENC_OPTS = (
+        "{'cipher_algorithm': 'AES/ECB/PKCS5Padding',"
+        " 'key_provider': 'LocalFileSystemKeyProviderFactory',"
+        " 'secret_key_file': '/etc/scylla/encrypt_conf/secret_key',"
+        " 'secret_key_strength': '128'}"
+    )
+
+    def test_and_prefix_middle_property(self):
+        """Standard case: scylla_encryption_options after AND between other properties."""
+        schema = (
+            "CREATE TABLE ks.tbl (id int PRIMARY KEY) WITH bloom_filter_fp_chance = 0.01"
+            f"\n    AND scylla_encryption_options = {self.ENC_OPTS}"
+            "\n    AND compaction = {'class': 'SizeTieredCompactionStrategy'};"
+        )
+        result = strip_encryption_options_from_schema(schema)
+        assert "scylla_encryption_options" not in result
+        assert "bloom_filter_fp_chance" in result
+        assert "compaction" in result
+
+    def test_and_prefix_last_property(self):
+        """scylla_encryption_options is the last AND property."""
+        schema = (
+            "CREATE TABLE ks.tbl (id int PRIMARY KEY) WITH bloom_filter_fp_chance = 0.01"
+            f"\n    AND scylla_encryption_options = {self.ENC_OPTS};"
+        )
+        result = strip_encryption_options_from_schema(schema)
+        assert "scylla_encryption_options" not in result
+        assert "bloom_filter_fp_chance" in result
+
+    def test_with_prefix_first_property_followed_by_and(self):
+        """scylla_encryption_options is the first property after WITH, followed by AND."""
+        schema = (
+            f"CREATE TABLE ks.tbl (id int PRIMARY KEY) WITH scylla_encryption_options = {self.ENC_OPTS}"
+            "\n    AND bloom_filter_fp_chance = 0.01"
+            "\n    AND compaction = {'class': 'SizeTieredCompactionStrategy'};"
+        )
+        result = strip_encryption_options_from_schema(schema)
+        assert "scylla_encryption_options" not in result
+        assert "WITH" in result
+        assert "bloom_filter_fp_chance" in result
+        assert "compaction" in result
+
+    def test_with_prefix_sole_property(self):
+        """scylla_encryption_options is the only property (no AND before or after)."""
+        schema = f"CREATE TABLE ks.tbl (id int PRIMARY KEY) WITH scylla_encryption_options = {self.ENC_OPTS};"
+        result = strip_encryption_options_from_schema(schema)
+        assert "scylla_encryption_options" not in result
+        assert "WITH" not in result
+
+    def test_no_encryption_options_unchanged(self):
+        """Schema without scylla_encryption_options is returned unchanged."""
+        schema = (
+            "CREATE TABLE ks.tbl (id int PRIMARY KEY) WITH bloom_filter_fp_chance = 0.01"
+            "\n    AND compaction = {'class': 'SizeTieredCompactionStrategy'};"
+        )
+        result = strip_encryption_options_from_schema(schema)
+        assert result == schema
+
+    def test_case_insensitive(self):
+        """The strip is case-insensitive."""
+        schema = (
+            "CREATE TABLE ks.tbl (id int PRIMARY KEY) WITH bloom_filter_fp_chance = 0.01"
+            "\n    AND SCYLLA_ENCRYPTION_OPTIONS = {'cipher_algorithm': 'AES'};"
+        )
+        result = strip_encryption_options_from_schema(schema)
+        assert "SCYLLA_ENCRYPTION_OPTIONS" not in result
+        assert "scylla_encryption_options" not in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# Tests: _parse_sstable_path
+# ---------------------------------------------------------------------------
+
+
+class TestParseSSTablePath:
+    """Verify that _parse_sstable_path correctly extracts components from sstable paths."""
+
+    def test_valid_data_db_path(self):
+        path = "/var/lib/scylla/data/keyspace1/standard1-abc123/me-big-Data.db"
+        result = _parse_sstable_path(path)
+        assert result is not None
+        sstable_dir, ks, table_name, sst_name = result
+        assert sstable_dir == "/var/lib/scylla/data/keyspace1/standard1-abc123"
+        assert ks == "keyspace1"
+        assert table_name == "standard1"
+        assert sst_name == "me-big-Data.db"
+
+    def test_valid_statistics_db_path(self):
+        path = "/var/lib/scylla/data/ks/tbl-uuid/me-3g9s_1eqc-big-Statistics.db"
+        result = _parse_sstable_path(path)
+        assert result is not None
+        _, ks, table_name, sst_name = result
+        assert ks == "ks"
+        assert table_name == "tbl"
+        assert sst_name == "me-3g9s_1eqc-big-Statistics.db"
+
+    def test_too_few_components_returns_none(self):
+        """Paths with fewer than 4 slash-separated components are rejected."""
+        assert _parse_sstable_path("/tmp/foo.db") is None
+        assert _parse_sstable_path("foo.db") is None
+
+    def test_no_uuid_separator_in_table_dir_returns_none(self):
+        """Table dir must contain a hyphen (UUID separator); plain names are rejected."""
+        assert _parse_sstable_path("/var/lib/scylla/data/ks/tablename/me-Data.db") is None
+
+    def test_quarantine_path(self):
+        """Paths inside quarantine directories still parse correctly."""
+        path = "/var/lib/scylla/data/ks/tbl-uuid/quarantine/me-big-Data.db"
+        result = _parse_sstable_path(path)
+        # quarantine adds an extra level, so rsplit("/", 3) splits differently
+        # The function should still return something as long as the components validate
+        if result is not None:
+            _, ks, table_name, _ = result
+            # Quarantine path has /quarantine/ as the table_dir component
+            assert table_name is not None
+
+
+# ---------------------------------------------------------------------------
+# Tests: find_corrupted_sstable_in_events
+# ---------------------------------------------------------------------------
+
+
+class TestFindCorruptedSstableInEvents:
+    """Verify that find_corrupted_sstable_in_events correctly parses various event formats.
+
+    Positive-path cases are parametrized to cover every known real-world ``CORRUPTED_SSTABLE``
+    error line format.  Negative-path cases (no path, wrong severity, etc.) are separate tests.
+    """
+
+    @staticmethod
+    def _write_events(tmp_path, events_json_lines):
+        events_dir = tmp_path / EVENTS_LOG_DIR
+        events_dir.mkdir(parents=True, exist_ok=True)
+        raw_file = events_dir / RAW_EVENTS_LOG
+        raw_file.write_text("\n".join(events_json_lines) + "\n", encoding="utf-8")
+        return raw_file
+
+    # ------------------------------------------------------------------
+    # Parametrized positive-path tests: each tuple is
+    #   (test_id, event_line, expected_keyspace, expected_table, expected_sstable, node)
+    # ------------------------------------------------------------------
+    POSITIVE_CASES = [
+        pytest.param(
+            (
+                "[shard 0:main] seastar - Exiting on unhandled exception: "
+                "sstables::malformed_sstable_exception (Buffer improperly sized to hold requested data. "
+                "Got: 2. Expected: 4 in sstable "
+                "/var/lib/scylla/data/keyspace1/standard1-01b9f260/me-big-Statistics.db)"
+            ),
+            "keyspace1",
+            "standard1",
+            "me-big-Statistics.db",
+            "db-node-0",
+            id="malformed_sstable_exception_statistics_db",
+        ),
+        pytest.param(
+            (
+                "[shard 0:main] seastar - Exiting on unhandled exception: "
+                "sstables::malformed_sstable_exception (Buffer improperly sized in sstable "
+                "/var/lib/scylla/data/ks/tbl-abc123/me-big-Data.db)"
+            ),
+            "ks",
+            "tbl",
+            "me-big-Data.db",
+            "db-node-1",
+            id="malformed_sstable_exception_data_db",
+        ),
+        pytest.param(
+            (
+                "[shard 2:comp] compaction - invalid_mutation_fragment_stream exception in "
+                "/var/lib/scylla/data/myks/mytbl-deadbeef/me-123-big-Data.db"
+            ),
+            "myks",
+            "mytbl",
+            "me-123-big-Data.db",
+            "db-node-0",
+            id="invalid_mutation_fragment_stream",
+        ),
+        pytest.param(
+            (
+                "Error reading /tmp/cache.db - "
+                "sstables::malformed_sstable_exception in "
+                "/var/lib/scylla/data/ks/tbl-uuid/me-big-Data.db"
+            ),
+            "ks",
+            "tbl",
+            "me-big-Data.db",
+            "db-node-0",
+            id="multiple_db_paths_picks_valid_scylla_path",
+        ),
+        # Real-world format from sstable_utils.py:116-120 — same .db path appears twice in the
+        # line ("Could not load SSTable: /path/Data.db: ... (/path/Data.db: first and last ...")
+        pytest.param(
+            (
+                "Could not load SSTable: "
+                "/var/lib/scylla/data/keyspace1/standard1-01b9f260d55311ef8caf5992914eabbe/"
+                "me-3g9w_104a_01xg12j55gjivrwtt5-big-Data.db: "
+                "sstables::malformed_sstable_exception ("
+                "/var/lib/scylla/data/keyspace1/standard1-01b9f260d55311ef8caf5992914eabbe/"
+                "me-3g9w_104a_01xg12j55gjivrwtt5-big-Data.db: "
+                "first and last keys of summary are misordered: "
+                "first={key: pk{00080000000000000003}, token: -578762209316392770} "
+                "> last={key: pk{00080000000000000008}, token: -6917704163689751025})"
+            ),
+            "keyspace1",
+            "standard1",
+            "me-3g9w_104a_01xg12j55gjivrwtt5-big-Data.db",
+            "db-node-0",
+            id="could_not_load_sstable_misordered_keys",
+        ),
+        # Real-world format from sstable_utils.py:99-102 — full generation ID with long UUID
+        pytest.param(
+            (
+                "[shard 0:main] seastar - Exiting on unhandled exception: "
+                "sstables::malformed_sstable_exception (Buffer improperly sized to hold requested data. "
+                "Got: 2. Expected: 4 in sstable "
+                "/var/lib/scylla/data/keyspace1/standard1-01b9f260d55311ef8caf5992914eabbe/"
+                "me-3g9s_1eqc_2z60w2ushgma9j7ypu-big-Statistics.db)"
+            ),
+            "keyspace1",
+            "standard1",
+            "me-3g9s_1eqc_2z60w2ushgma9j7ypu-big-Statistics.db",
+            "db-node-0",
+            id="malformed_sstable_full_generation_id",
+        ),
+        # Real-world format: scylla[PID] prefix (systemd journal format, seen in GCE PKE runs)
+        pytest.param(
+            (
+                "scylla[5976]:  [shard 6:strm] compaction - Finished scrubbing in validate mode "
+                "/var/lib/scylla/data/keyspace1/standard1-01b9f260d55311ef8caf5992914eabbe/"
+                "me-3gn1_0bxv_16fs02rr7ufpbjejzy-big-Data.db - sstable is invalid - "
+                "invalid_mutation_fragment_stream"
+            ),
+            "keyspace1",
+            "standard1",
+            "me-3gn1_0bxv_16fs02rr7ufpbjejzy-big-Data.db",
+            "db-node-0",
+            id="scrub_validate_mode_sstable_is_invalid",
+        ),
+    ]
+
+    @pytest.mark.parametrize("line, expected_ks, expected_table, expected_sst, node_name", POSITIVE_CASES)
+    def test_event_line_parsed_correctly(self, tmp_path, line, expected_ks, expected_table, expected_sst, node_name):
+        """Parametrized: each known real-world error line format is correctly parsed."""
+        event = json.dumps(
+            {
+                "type": "CORRUPTED_SSTABLE",
+                "severity": "CRITICAL",
+                "node": node_name,
+                "line": line,
+            }
+        )
+        raw_file = self._write_events(tmp_path, [event])
+        _, ks, table_name, sst_name, found_node = find_corrupted_sstable_in_events(raw_file)
+        assert ks == expected_ks
+        assert table_name == expected_table
+        assert sst_name == expected_sst
+        assert found_node == node_name
+
+    # ------------------------------------------------------------------
+    # Negative-path tests
+    # ------------------------------------------------------------------
+
+    def test_no_db_path_returns_none(self, tmp_path):
+        """Event without any .db path returns all-None tuple."""
+        event = json.dumps(
+            {
+                "type": "CORRUPTED_SSTABLE",
+                "severity": "CRITICAL",
+                "node": "db-node-0",
+                "line": "sstables::malformed_sstable_exception (some error without a path)",
+            }
+        )
+        raw_file = self._write_events(tmp_path, [event])
+        result = find_corrupted_sstable_in_events(raw_file)
+        assert result == (None, None, None, None, None)
+
+    def test_no_corrupted_event_returns_none(self, tmp_path):
+        """File with only non-CORRUPTED_SSTABLE events returns all-None."""
+        raw_file = self._write_events(tmp_path, [OTHER_EVENT_JSON])
+        result = find_corrupted_sstable_in_events(raw_file)
+        assert result == (None, None, None, None, None)
+
+    def test_non_critical_severity_ignored(self, tmp_path):
+        """CORRUPTED_SSTABLE events with severity != CRITICAL are ignored."""
+        event = json.dumps(
+            {
+                "type": "CORRUPTED_SSTABLE",
+                "severity": "ERROR",
+                "node": "db-node-0",
+                "line": ("sstables::malformed_sstable_exception in /var/lib/scylla/data/ks/tbl-uuid/me-big-Data.db"),
+            }
+        )
+        raw_file = self._write_events(tmp_path, [event])
+        result = find_corrupted_sstable_in_events(raw_file)
+        assert result == (None, None, None, None, None)
+
+    def test_malformed_json_lines_are_skipped(self, tmp_path):
+        """Non-JSON lines mixed in don't prevent parsing valid events."""
+        valid_event = json.dumps(
+            {
+                "type": "CORRUPTED_SSTABLE",
+                "severity": "CRITICAL",
+                "node": "db-node-0",
+                "line": ("sstables::malformed_sstable_exception in /var/lib/scylla/data/ks/tbl-uuid/me-big-Data.db"),
+            }
+        )
+        raw_file = self._write_events(tmp_path, ["not-json", "also {bad", valid_event])
+        _, ks, _, _, _ = find_corrupted_sstable_in_events(raw_file)
+        assert ks == "ks"

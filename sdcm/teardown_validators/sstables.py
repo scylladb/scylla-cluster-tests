@@ -199,8 +199,32 @@ class SstablesValidator(TeardownValidator):
 CORRUPTED_SSTABLE_PATH_RE = re.compile(r"[./\w\-]+\.db")
 
 
+def _parse_sstable_path(sstable_path: str):
+    """Parse a ``.db`` sstable path into ``(sstable_dir, keyspace, table_name, sstable_name)``.
+
+    Returns ``None`` when the path does not have the expected Scylla data layout
+    (``/var/lib/scylla/data/<ks>/<table-dir>/<component>.db``).
+    """
+    parts = sstable_path.rsplit("/", 3)
+    if len(parts) != 4:
+        return None
+    data_path, ks, table_dir, sst_name = parts
+    # Sanity-check: ks and table_dir must be non-empty and table_dir must contain a UUID
+    # separator (e.g. "standard1-01b9f260d55311ef8caf5992914eabbe").
+    if not ks or "-" not in table_dir:
+        return None
+    return f"{data_path}/{ks}/{table_dir}", ks, table_dir.split("-")[0], sst_name
+
+
 def find_corrupted_sstable_in_events(raw_events_file: Path):
     """Scan the raw events log and return (sstable_dir, keyspace, table_name, sstable_name, node_name).
+
+    Iterates all ``.db`` path matches in the event line (last match first) so that the correct
+    Scylla data path is selected even when the line contains multiple ``.db`` references.
+
+    Only the **first** ``CORRUPTED_SSTABLE`` event is processed.  If multiple tables or nodes
+    have corrupted sstables, only the first discovered event is prepared for upload.  This matches
+    the behavior of ``SSTablesCollector`` which also handles a single corrupted-sstables state file.
 
     Returns a tuple of all-None values when no matching event is found.
     """
@@ -211,18 +235,24 @@ def find_corrupted_sstable_in_events(raw_events_file: Path):
             except json.JSONDecodeError:
                 continue
             if event.get("type") == "CORRUPTED_SSTABLE" and event.get("severity") == "CRITICAL":
-                try:
-                    sstable_path = CORRUPTED_SSTABLE_PATH_RE.findall(event.get("line", ""))[0]
-                    data_path, ks, table_dir, sst_name = sstable_path.rsplit("/", 3)
-                    return (
-                        f"{data_path}/{ks}/{table_dir}",
-                        ks,
-                        table_dir.split("-")[0],
-                        sst_name,
-                        event.get("node"),
+                matches = CORRUPTED_SSTABLE_PATH_RE.findall(event.get("line", ""))
+                # Try matches in reverse order: the actual sstable path is typically the
+                # last .db reference in the log line (after error-description text).
+                for candidate in reversed(matches):
+                    parsed = _parse_sstable_path(candidate)
+                    if parsed is not None:
+                        sstable_dir, ks, table_name, sst_name = parsed
+                        return sstable_dir, ks, table_name, sst_name, event.get("node")
+                if matches:
+                    LOGGER.warning(
+                        "CorruptedSstablesPreparator: found .db paths but none matched Scylla data layout: %s",
+                        matches,
                     )
-                except (IndexError, ValueError):
-                    LOGGER.warning("CorruptedSstablesPreparator: couldn't parse sstable path from event line")
+                else:
+                    LOGGER.warning(
+                        "CorruptedSstablesPreparator: no .db path found in event line: %s",
+                        event.get("line", "")[:200],
+                    )
     return None, None, None, None, None
 
 
