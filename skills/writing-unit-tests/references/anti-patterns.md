@@ -138,3 +138,53 @@ def test_run_does_not_crash_on_skipped_nemesis(nemesis_runner):
 ### Infrastructure exported from test files
 
 `FakeSisyphusMonkey` lives in `test_sisyphus.py` but is imported by `test_evaluate_skip.py`. Test files are not libraries. If a fake/stub/helper is needed in more than one test file, move it to `fake_cluster.py`, `unit_tests/nemesis/__init__.py`, or a `conftest.py`.
+
+## AP-6: Testing a Copy of the Code Instead of the Code Itself
+
+The most dangerous anti-pattern: the test creates a `FakeFoo` class that **re-implements** the same logic as the real `Foo`, then tests `FakeFoo`. The production code is never exercised, so any bug in `Foo` is invisible.
+
+This often happens when an AI generates tests by reading the source and mirroring it into a fake, rather than calling the real class with mocked dependencies.
+
+❌ **Bad — `FakeDockerCluster._create_nodes` is a verbatim copy of the real method:**
+```python
+class FakeDockerCluster:
+    # copied from sdcm/cluster_docker.py
+    def _create_nodes(self, count, rack=None, enable_auto_bootstrap=False):
+        new_nodes = []
+        for node_index in self._get_new_node_indexes(count):
+            node_rack = node_index % self.racks_count if rack is None else rack
+            node = self._create_node(node_index, rack=node_rack)
+            ...
+        return new_nodes
+
+def test_round_robin_rack_assignment():
+    cluster = FakeDockerCluster(racks_count=3)
+    nodes = cluster._create_nodes(6)
+    assert [n.rack for n in nodes] == [0, 1, 2, 0, 1, 2]  # tests the copy, not the real code
+```
+
+✅ **Good — construct the real object and mock only its external dependencies:**
+```python
+from unittest.mock import MagicMock, patch
+from sdcm.cluster_docker import DockerCluster
+
+@pytest.mark.parametrize("racks_count,node_count,expected_racks", [
+    pytest.param(3, 6, [0, 1, 2, 0, 1, 2], id="round-robin-3-racks"),
+    pytest.param(2, 5, [0, 1, 0, 1, 0],    id="round-robin-2-racks"),
+    pytest.param(1, 3, [0, 0, 0],           id="single-rack"),
+])
+def test_create_nodes_round_robin(racks_count, node_count, expected_racks, params):
+    params["simulated_racks"] = racks_count
+    params["n_db_nodes"] = node_count
+    cluster = DockerCluster(...)  # the REAL class
+
+    with patch.object(cluster, "_create_node", side_effect=[MagicMock() for _ in range(node_count)]):
+        cluster._create_nodes(count=node_count)
+
+    actual_racks = [call.kwargs["rack"] for call in cluster._create_node.call_args_list]
+    assert actual_racks == expected_racks
+```
+
+**How to spot it:** if you grep the test file and find the same method bodies from `sdcm/` appearing verbatim, the tests are copies. A good test constructs the real `sdcm.*` class and mocks only at the external boundary (network, file system, cloud APIs).
+
+**Correct approach:** always instantiate the real class and mock only its external I/O. Only fall back to `MagicMock(spec=RealClass)` as a last resort when the real constructor has unavoidable heavy side effects that cannot be mocked — and document why.
