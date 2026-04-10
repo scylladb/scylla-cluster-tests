@@ -82,7 +82,7 @@ def call(Map pipelineParams) {
 
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
             string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
-            string(defaultValue: "${pipelineParams.get('scylla_version', '2025.3')}",
+            string(defaultValue: "${pipelineParams.get('scylla_version', '2026.1')}",
                    description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
                    name: 'scylla_version')
             // When branching to manager version branch, set scylla_version to the latest release
