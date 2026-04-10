@@ -86,6 +86,18 @@ export SCT_REUSE_CLUSTER=$(cat ~/sct-results/latest/test_id)
 - `functional_tests/` - Kubernetes operator and other functional tests
 - `unit_tests/` - Unit and integration tests for SCT components
 
+**Unit Tests Directory Structure (`unit_tests/`):**
+- `unit_tests/unit/` - Pure unit tests (~110 files). These get `fake_remoter` and
+  `mock_cloud_services` autouse fixtures automatically via `unit_tests/unit/conftest.py`.
+  Subdirectories: `k8s/`, `nemesis/`, `provisioner/`, `rest/`, `vector_store/`.
+- `unit_tests/integration/` - Integration tests (~29 files) that require external services
+  (Docker, AWS, GCE, Azure). Docker fixtures (`docker_scylla`, etc.) are in
+  `unit_tests/integration/conftest.py`.
+- `unit_tests/lib/` - Shared test utilities: `fake_remoter.py`, `fake_events.py`,
+  `fake_provisioner.py`, `dummy_remote.py`, `s3_utils.py`, etc.
+- `unit_tests/test_data/` and `unit_tests/test_configs/` - Shared test data files
+- `unit_tests/conftest.py` - Shared fixtures (events, params, prom_address)
+
 **Key Test Categories:**
 1. **Longevity Tests** - Long-running stability tests with various nemesis operations
 2. **Performance Tests** - Throughput and latency regression tests

@@ -11,6 +11,7 @@ description: >-
 # Writing Unit Tests for SCT
 
 Write isolated, fast unit tests that never contact external services.
+All new unit tests go in `unit_tests/unit/` (not the root `unit_tests/` directory).
 
 ## Essential Principles
 
@@ -18,7 +19,7 @@ Write isolated, fast unit tests that never contact external services.
 
 **Unit tests must never make real network calls — not to AWS, GCE, Azure, Docker registries, or any external endpoint.**
 
-The `conftest.py` autouse `fake_remoter` fixture blocks SSH connections automatically. But HTTP-based services (boto3, requests, REST APIs) are NOT auto-blocked. You must mock them explicitly using `unittest.mock.patch`, `monkeypatch`, or `moto`.
+The `unit_tests/unit/conftest.py` autouse `fake_remoter` fixture blocks SSH connections automatically. But HTTP-based services (boto3, requests, REST APIs) are NOT auto-blocked. You must mock them explicitly using `unittest.mock.patch`, `monkeypatch`, or `moto`.
 
 If a test is slow or flaky, the first suspect is an unmocked network call.
 
@@ -26,9 +27,9 @@ If a test is slow or flaky, the first suspect is an unmocked network call.
 
 **All tests use pytest functions, fixtures, and `assert` — never `unittest.TestCase` or `class Test*`.**
 
-`unittest.TestCase` breaks pytest's fixture injection, `autouse` fixtures, parametrize, and parallel execution. SCT requires pytest-native style throughout `unit_tests/`. This means **no test classes at all** — use flat module-level `def test_*` functions and group related tests with comment blocks (see AP-4).
+`unittest.TestCase` breaks pytest's fixture injection, `autouse` fixtures, parametrize, and parallel execution. SCT requires pytest-native style throughout `unit_tests/unit/`. This means **no test classes at all** — use flat module-level `def test_*` functions and group related tests with comment blocks (see AP-4).
 
-**Never duplicate test infrastructure** — fake objects, base classes, runner stubs, and fixture setup code. Before adding anything new, check `fake_cluster.py`, `unit_tests/nemesis/__init__.py`, `execute_nemesis/__init__.py`, and `conftest.py`. Add concrete subclasses or attributes to existing structures; only create a new class hierarchy when the registry under test must be isolated from existing subclasses, and document the reason (see AP-5).
+**Never duplicate test infrastructure** — fake objects, base classes, runner stubs, and fixture setup code. Before adding anything new, check `fake_cluster.py`, `unit_tests/unit/nemesis/__init__.py`, `execute_nemesis/__init__.py`, and `unit_tests/unit/conftest.py`. Add concrete subclasses or attributes to existing structures; only create a new class hierarchy when the registry under test must be isolated from existing subclasses, and document the reason (see AP-5).
 
 ### Tests Must Be Isolated and Parallel-Safe
 
@@ -52,12 +53,12 @@ Inline classes (defined inside a function or fixture) are harder to read, cannot
 
 **Use `events_function_scope` fixture when tests publish or read SCT events — never manage `EventsUtilsMixin` manually.**
 
-The `events_function_scope` fixture (from `conftest.py`) creates a fully isolated events system per test — fresh temp directory, events device, and registry patcher. This prevents event leakage between tests. Access the raw events log via `events_fixture.get_raw_events_log()` and the events logger via `events_fixture.get_events_logger()`. Use `events` (module scope) only when many tests share expensive event setup and you are certain there is no cross-test interference.
+The `events_function_scope` fixture (from `unit_tests/conftest.py`) creates a fully isolated events system per test — fresh temp directory, events device, and registry patcher. This prevents event leakage between tests. Access the raw events log via `events_fixture.get_raw_events_log()` and the events logger via `events_fixture.get_events_logger()`. Use `events` (module scope) only when many tests share expensive event setup and you are certain there is no cross-test interference.
 
 ## When to Use
 
-- Creating a new test file in `unit_tests/`
-- Adding test cases to an existing unit test module
+- Creating a new test file in `unit_tests/unit/`
+- Adding test cases to an existing unit test module in `unit_tests/unit/`
 - Mocking AWS, GCE, Azure, or other cloud services in tests
 - Setting up pytest fixtures for SCT components
 - Debugging a unit test that is failing, slow, or flaky
@@ -74,7 +75,7 @@ The `events_function_scope` fixture (from `conftest.py`) creates a fully isolate
 
 ### Autouse Fixtures (Always Active)
 
-These fixtures from `unit_tests/conftest.py` run automatically for every test:
+These fixtures from `unit_tests/unit/conftest.py` run automatically for every unit test:
 
 | Fixture | Scope | Purpose |
 |---------|-------|---------|
@@ -85,7 +86,7 @@ These fixtures from `unit_tests/conftest.py` run automatically for every test:
 
 **Important:** AWS, GCE, and Azure HTTP calls are **NOT** auto-blocked. You must mock them per-test using `unittest.mock.patch`, `patch.object`, `monkeypatch`, or `moto`. Common functions to patch include `convert_name_to_ami_if_needed`, `find_scylla_repo`, `get_arch_from_instance_type`, and `KeyStore` methods. Use `patch.object(KeyStore, "method_name", ...)` for `KeyStore` since it's imported via `from sdcm.keystore import KeyStore` in 20+ modules.
 
-### On-Demand Fixtures
+### On-Demand Fixtures (from parent `unit_tests/conftest.py`)
 
 Request these by name in your test function signature:
 
@@ -218,19 +219,19 @@ def test_it_works(): ...
 uv run sct.py unit-tests
 
 # Run a specific test file
-uv run sct.py unit-tests -t test_config.py
+uv run sct.py unit-tests -t unit/test_config.py
 
 # Run a specific test function with verbose output
-uv run python -m pytest unit_tests/test_config.py::test_function_name -v -s
+uv run python -m pytest unit_tests/unit/test_config.py::test_function_name -v -s
 
 # Run with parallel execution disabled (for debugging)
-uv run python -m pytest unit_tests/test_config.py -v -s -n0
+uv run python -m pytest unit_tests/unit/test_config.py -v -s -n0
 
 # Run with coverage report
-uv run python -m pytest unit_tests/ --cov=sdcm --cov-report=term-missing
+uv run python -m pytest unit_tests/unit/ --cov=sdcm --cov-report=term-missing
 
 # Run specific file with coverage for a single module
-uv run python -m pytest unit_tests/test_config.py --cov=sdcm.sct_config --cov-report=term-missing
+uv run python -m pytest unit_tests/unit/test_config.py --cov=sdcm.sct_config --cov-report=term-missing
 ```
 
 ## Reference Index
@@ -248,7 +249,7 @@ uv run python -m pytest unit_tests/test_config.py --cov=sdcm.sct_config --cov-re
 
 A well-written SCT unit test:
 
-- [ ] Lives in `unit_tests/` with a `test_*.py` filename
+- [ ] Lives in `unit_tests/unit/` with a `test_*.py` filename
 - [ ] Uses pytest style (`assert`, fixtures, `@pytest.mark.parametrize`) — not unittest
 - [ ] Does NOT have `@pytest.mark.integration` marker
 - [ ] Makes zero real network calls (all external services mocked)

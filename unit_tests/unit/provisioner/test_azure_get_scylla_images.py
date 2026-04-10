@@ -1,0 +1,79 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2022 ScyllaDB
+
+
+import json
+import logging
+
+import pytest
+
+from sdcm.provision.azure.utils import get_scylla_images
+from sdcm.utils.azure_utils import AzureService
+from unit_tests.unit.provisioner.fake_azure_service import FakeAzureService
+
+
+@pytest.fixture
+def azure_service(test_data_dir):
+    return FakeAzureService(test_data_dir)
+
+
+def test_can_get_scylla_images_based_on_branch(azure_service):
+    images = get_scylla_images("master:latest", "eastus", azure_service=azure_service)
+    assert images[0].name == "2025.1208.222124"
+    assert len(images) == 1
+
+
+def test_can_get_scylla_images_based_on_scylla_version(azure_service):
+    images = get_scylla_images("4.6.4", "eastus", azure_service=azure_service)
+    assert images[0].name == "ScyllaDB-4.6.4-0.20220718.b60f14601-1-build-28"
+    assert len(images) == 2
+
+
+def test_can_get_scylla_images_based_on_revision_id(azure_service):
+    images = get_scylla_images("11f008e8f<ignored>", "eastus", azure_service=azure_service)
+    assert len(images) == 1
+    assert images[0].name == "ScyllaDB-4.6.4-0.20220516.11f008e8f-1-build-27"
+
+
+def test_unparsable_scylla_versions_are_logged(azure_service, caplog):
+    with caplog.at_level(logging.WARNING):
+        get_scylla_images("unparsable:latest", "eastus", azure_service=azure_service)
+    assert "Couldn't parse scylla version from images: ['ScyllaDB-5.-98ad.1.dev_0: ScyllaDB-5.']" in caplog.text
+
+
+def generate_images_json_file(test_data_dir):
+    """generates azure_images_list.json based on real Azure images for unit tests purposes."""
+    resource_group = "SCYLLA-IMAGES"
+    images = AzureService().compute.images.list_by_resource_group(
+        resource_group_name=resource_group,
+    )
+    with open(test_data_dir / resource_group / "azure_images_list.json", "w", encoding="utf-8") as images_file:
+        serialized_images = [image.serialize() | {"name": image.name} for image in images]
+        images_file.write(json.dumps(serialized_images, indent=2))
+
+
+def generate_gallery_images_json_file(test_data_dir, gallery_name="scylladb_dev", image_name="master"):
+    """generates azure_images_list.json based on real Azure images for unit tests purposes."""
+    resource_group = "SCYLLA-IMAGES"
+    images = AzureService().compute.gallery_image_versions.list_by_gallery_image(
+        resource_group_name=resource_group,
+        gallery_name=gallery_name,
+        gallery_image_name=image_name,
+    )
+    with open(
+        test_data_dir / resource_group / f"{gallery_name}_{image_name}_gallery_images_list.json",
+        "w",
+        encoding="utf-8",
+    ) as images_file:
+        serialized_images = [image.serialize() | {"name": image.name} for image in images]
+        images_file.write(json.dumps(serialized_images, indent=2))

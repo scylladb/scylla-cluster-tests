@@ -52,16 +52,6 @@
       "phases_done": 0
     },
     {
-      "id": "jenkins-reuse-cluster",
-      "title": "Jenkins Pipeline Cluster Reuse",
-      "file": "jenkins/jenkins-reuse-cluster.md",
-      "domain": "ci-cd",
-      "status": "draft",
-      "created": "2026-03-18",
-      "phases_total": 5,
-      "phases_done": 0
-    },
-    {
       "id": "jenkins-pipeline-config-linter",
       "title": "Jenkins Pipeline Config Linter",
       "file": "jenkins/jenkins-pipeline-config-linter.md",
@@ -127,6 +117,16 @@
       "status": "pending_pr",
       "pr": 14009,
       "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "unit-integration-test-separation",
+      "title": "Unit/Integration Test Separation",
+      "file": "testing/unit-integration-test-separation.md",
+      "domain": "testing",
+      "status": "draft",
+      "created": "2026-03-23",
+      "phases_total": 5,
       "phases_done": 0
     },
     {
