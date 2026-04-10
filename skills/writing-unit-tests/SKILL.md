@@ -37,11 +37,15 @@ If a test is slow or flaky, the first suspect is an unmocked network call.
 
 SCT runs tests with `pytest-xdist` (`-n2` by default) and `pytest-random-order`. Never rely on test execution order, shared mutable state, or global side effects. Use fixtures for setup/teardown, `monkeypatch` for environment variables, and `tmp_path` for file-based tests.
 
+**Special care for `Singleton` classes:** SCT has classes with `metaclass=Singleton` (e.g. `NodeLoadInfoServices`, `AdaptiveTimeoutStore` subclasses) that persist mutable state across tests on the same worker process. Add an `autouse` fixture that clears the cache in teardown (post-`yield` only — never pre-yield). See pitfall P-16 for details.
+
 ### Mock at the Boundary, Not the Logic
 
 **Mock external dependencies (network, file system, cloud APIs) — not internal SCT logic.**
 
 Mocking internal functions makes tests brittle and hides bugs. Mock at the outermost boundary: the HTTP call, the SSH command, the cloud SDK client. This tests the actual logic while isolating from infrastructure.
+
+**Never reimplement the code under test in a fake class.** If you find yourself copying a method body from `sdcm/` into a `FakeFoo` helper in your test, stop — you are testing the copy, not the real code. Always instantiate the real class and mock only its external I/O (network, file system, cloud APIs). See anti-pattern AP-6 for details.
 
 ### No Inline Classes in Fixtures or Tests
 
@@ -238,8 +242,8 @@ uv run python -m pytest unit_tests/unit/test_config.py --cov=sdcm.sct_config --c
 
 | File | Content |
 |------|---------|
-| [common-pitfalls.md](references/common-pitfalls.md) | Pitfalls P-1 through P-15 with before/after fixes |
-| [anti-patterns.md](references/anti-patterns.md) | Anti-patterns AP-1 through AP-5 with before/after fixes |
+| [common-pitfalls.md](references/common-pitfalls.md) | Pitfalls P-1 through P-16 with before/after fixes |
+| [anti-patterns.md](references/anti-patterns.md) | Anti-patterns AP-1 through AP-6 with before/after fixes |
 
 | Workflow | Purpose |
 |----------|---------|

@@ -371,3 +371,55 @@ def test_run_stops_after_skips(make_nemesis_runner, events_function_scope):
 
 
 See also: [anti-patterns.md](anti-patterns.md) for broader testing anti-patterns.
+
+---
+
+### P-16: Singleton State Leaking Between Parallel Tests
+
+SCT contains classes that use `metaclass=Singleton` (e.g. `NodeLoadInfoServices`, `AdaptiveTimeoutStore`). A `Singleton` holds shared mutable state across the entire process. When `pytest-xdist` runs tests on the same worker, a test that populates a Singleton's cache can corrupt a later test that expects a clean slate — even if the tests appear unrelated.
+
+**Symptoms:** tests pass with `-n0` (sequential) but fail with `-n2` or higher; failures are non-deterministic; errors reference stale node names, wrong cached values, or `KeyError` from a missing key that another test was supposed to populate.
+
+❌ **Bad — Singleton cache persists across tests:**
+```python
+# Test A populates the cache with a stale remoter
+def test_a(fake_node):
+    with adaptive_timeout(operation=Operations.DECOMMISSION, node=fake_node, ...) as timeout:
+        ...
+# Test B runs on the same worker; NodeLoadInfoServices still holds fake_node from test_a
+# fake_node.remoter is now invalid → KeyError / wrong cached result
+def test_b(fake_node, ...):
+    with adaptive_timeout(operation=Operations.DECOMMISSION, node=fake_node, ...) as timeout:
+        assert timeout == 7200  # fails: gets stale value from test_a's cache
+```
+
+✅ **Good — add an `autouse` fixture that clears the Singleton's mutable state after each test:**
+```python
+from sdcm.utils.adaptive_timeouts.load_info_store import NodeLoadInfoServices
+
+@pytest.fixture(autouse=True)
+def clear_node_load_info_services_singleton():
+    """Clear the NodeLoadInfoServices Singleton cache after each test to prevent cross-test pollution."""
+    yield
+    NodeLoadInfoServices()._services.clear()
+```
+
+**Rules:**
+- Only clear in teardown (post-`yield`); the previous test's teardown already ran before setup begins.
+- Place the fixture in the test module or in `conftest.py` if multiple modules share the same Singleton.
+- Prefer post-yield-only cleanup (no pre-yield clear) — redundant pre-yield clearing is a code smell that signals the teardown isn't trusted.
+
+Also beware that `MemoryAdaptiveTimeoutStore` (and any `AdaptiveTimeoutStore` subclass) inherits `Singleton` — calling `MemoryAdaptiveTimeoutStore()` inside a test body returns the **same shared instance** that the fixture populated, but it may have been cleared or written to by a parallel test. Always read results from the fixture instance, not from a fresh `SomeStore()` call:
+
+❌ **Bad — creates new Singleton reference, may see another test's data (or none):**
+```python
+metrics = MemoryAdaptiveTimeoutStore().get(operation="DECOMMISSION")
+```
+
+✅ **Good — read from the fixture instance that was passed to `adaptive_timeout`:**
+```python
+def test_decommission(fake_node, adaptive_timeout_store):
+    with adaptive_timeout(..., stats_storage=adaptive_timeout_store) as timeout:
+        ...
+    metrics = adaptive_timeout_store.get(operation="DECOMMISSION")  # same instance
+```
