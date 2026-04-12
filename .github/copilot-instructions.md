@@ -414,6 +414,39 @@ def test_multiple_cases(input, expected):
     assert function(input) == expected
 ```
 
+## Code Review: Inheritance & Override Safety
+
+**CRITICAL — SCT uses deep class hierarchies with polymorphic overrides.**
+
+When reviewing a PR that changes a method signature on a base or parent class:
+
+1. **Find ALL overrides** — search the codebase for `def <method_name>` in subclasses.
+   Key polymorphic methods with multiple overrides:
+   - `_create_instances` (5+ overrides: `cluster_aws.py`, `cluster_gce.py`, `cluster_azure.py`, `cluster_oci.py`, `cluster_k8s/eks.py`)
+   - `add_nodes` (18+ overrides across all backends, K8S, Docker, test stubs)
+   - `_create_on_demand_instances`, `_create_spot_instances` (AWS-specific)
+   - `wait_for_init`, `destroy` (all backend files)
+
+2. **Verify signature compatibility** — every override must accept the new parameter(s),
+   either explicitly or via `**kwargs`. If an override calls `super()`, the new parameter
+   must be forwarded.
+
+3. **Check callers** — if callers now pass the new parameter, every implementation in the
+   dispatch chain must handle it.
+
+4. **Check test stubs** — `unit_tests/dummy_remote.py`, `unit_tests/test_cluster.py`, and
+   `unit_tests/test_scylla_yaml_builders.py` contain stub overrides that must also match.
+
+**Why**: PR #13445 added `ami_id` to `AWSCluster._create_instances` but missed
+`MonitorSetEKS._create_instances` (an override in `cluster_k8s/eks.py`), causing
+a `TypeError` at runtime. This was not caught in multiple review rounds (PR #14113 fix).
+
+**Rule of thumb**: If you see a method signature change on any class that has the word
+`Cluster`, `Node`, `Set`, or `Monitor` in its name — assume there are overrides you
+haven't seen in the diff, and search for them.
+
+For comprehensive code review guidance, see `skills/code-review/SKILL.md`.
+
 ## Resources
 
 - [Repository README](../README.md) - Getting started guide
