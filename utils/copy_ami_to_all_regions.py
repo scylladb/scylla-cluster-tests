@@ -5,7 +5,7 @@ import boto3
 import json
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_config import AWS_SUPPORTED_REGIONS
 
 
 @click.command()
@@ -16,7 +16,7 @@ from sdcm.sct_config import SCTConfiguration
     "--target-regions",
     required=True,
     help="Space-separated list of target regions",
-    default=" ".join(SCTConfiguration.aws_supported_regions),
+    default=" ".join(AWS_SUPPORTED_REGIONS),
 )
 @click.option("--dry-run", is_flag=True, default=False, help="Show what would be done without making changes")
 @click.option(

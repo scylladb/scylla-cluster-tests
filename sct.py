@@ -54,7 +54,7 @@ from sdcm.provision import AzureProvisioner
 from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis.monkey.runners import SisyphusMonkey
-from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config, available_backends
+from sdcm.sct_config import AWS_SUPPORTED_REGIONS, SCTConfiguration, init_and_verify_sct_config, available_backends
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import (
@@ -350,7 +350,7 @@ def provision_resources(backend, test_name: str, config: str):
 def clean_aws_kms_aliases(ctx, regions, time_delta_h, dry_run):
     """Clean AWS KMS old aliases."""
     add_file_logger()
-    regions = regions or SCTConfiguration.aws_supported_regions
+    regions = regions or AWS_SUPPORTED_REGIONS
     aws_kms, kwargs = AwsKms(region_names=regions), {"dry_run": dry_run}
     if time_delta_h:
         kwargs["time_delta_h"] = time_delta_h
