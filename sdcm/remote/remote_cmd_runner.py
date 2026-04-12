@@ -144,7 +144,10 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport="fabric", default=True)
         if not suppress_errors:
             self.log.error(exc, exc_info=exc)
         self.ssh_is_up.clear()
-        if self._is_error_retryable(str(exc)):
+        # Always treat bare EOFError as retryable: paramiko raises EOFError() with no message when
+        # the SSH transport dies (see https://github.com/paramiko/paramiko/issues/1584).
+        # str(EOFError()) == "" so _is_error_retryable would return False, silently skipping retries.
+        if isinstance(exc, EOFError) or self._is_error_retryable(str(exc)):
             raise RetryableNetworkException(str(exc), original=exc)
         return True
 
