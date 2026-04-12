@@ -132,35 +132,9 @@ pipeline {
     }
     post {
         unsuccessful {
-            script {
-                def failedStages = []
-                currentBuild.rawBuild.getExecution().getCurrentHeads().each { head ->
-                    def node = head
-                    while (node != null) {
-                        if (node instanceof org.jenkinsci.plugins.workflow.graph.StepStartNode) {
-                            def stage = node.getAction(org.jenkinsci.plugins.workflow.actions.LabelAction)
-                            def result = node.getAction(org.jenkinsci.plugins.workflow.actions.WarningAction)
-                            if (stage && result) {
-                                failedStages.add(stage.displayName)
-                            }
-                        }
-                        node = node.parents ? node.parents[0] : null
-                    }
-                }
-                def stageList = failedStages.unique().join('\n  - ')
-                mail to: params.email_recipients,
-                     subject: "Cloud Cleanup FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                     body: """Cloud resource cleanup pipeline finished with status: ${currentBuild.result}
-
-Failed stages:
-  - ${stageList}
-
-Build URL: ${env.BUILD_URL}
-Console: ${env.BUILD_URL}console
-
-Action required: failed cleanup stages may leave orphaned cloud resources running and incurring costs.
-"""
-            }
+            mail to: params.email_recipients,
+                 subject: "Cloud Cleanup FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                 body: "Cloud resource cleanup pipeline finished with status: ${currentBuild.result}\n\nBuild: ${env.BUILD_URL}\nConsole: ${env.BUILD_URL}console\n\nCheck the build log to see which stages failed.\nFailed cleanup stages may leave orphaned cloud resources running and incurring costs."
         }
     }
 }
