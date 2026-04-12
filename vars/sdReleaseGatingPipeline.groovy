@@ -23,71 +23,71 @@ def call(Map pipelineParams = [:]) {
             job_path: 'artifacts/artifacts-centos9',
             backend: 'gce',
         ],
-        [
-            os_label: 'rocky9',
-            job_path: 'artifacts/artifacts-rocky9',
-            backend: 'gce',
-        ],
-        [
-            os_label: 'ubuntu2204',
-            job_path: 'artifacts/artifacts-ubuntu2204',
-            backend: 'gce',
-        ],
-        [
-            os_label: 'ubuntu2404',
-            job_path: 'artifacts/artifacts-ubuntu2404',
-            backend: 'gce',
-        ],
-        [
-            os_label: 'debian12',
-            job_path: 'artifacts/artifacts-debian12',
-            backend: 'gce',
-        ],
-        [
-            os_label: 'ami',
-            job_path: 'artifacts/artifacts-ami',
-            backend: 'aws',
-        ],
-        [
-            os_label: 'docker',
-            job_path: 'artifacts/artifacts-docker',
-            backend: 'docker',
-        ],
-        [
-            os_label: 'rhel10',
-            job_path: 'artifacts/artifacts-rhel10',
-            backend: 'aws',
-        ],
-        [
-            os_label: 'oel9',
-            job_path: 'artifacts/artifacts-oel9',
-            backend: 'aws',
-        ],
-        [
-            os_label: 'amazon2023',
-            job_path: 'artifacts/artifacts-amazon2023',
-            backend: 'aws',
-        ],
-        [
-            os_label: 'centos9-arm',
-            job_path: 'artifacts/artifacts-centos9-arm',
-            backend: 'aws',
-        ],
-        [
-            os_label: 'ubuntu2204-arm',
-            job_path: 'artifacts/artifacts-ubuntu2204-arm',
-            backend: 'aws',
-        ],
-        [
-            os_label: 'ubuntu2404-arm',
-            job_path: 'artifacts/artifacts-ubuntu2404-arm',
-            backend: 'aws',
-        ],
-        [
-            os_label: 'ami-arm',
-            job_path: 'artifacts/artifacts-ami-arm',
-            backend: 'aws',
-        ],
+//         [
+//             os_label: 'rocky9',
+//             job_path: 'artifacts/artifacts-rocky9',
+//             backend: 'gce',
+//         ],
+//         [
+//             os_label: 'ubuntu2204',
+//             job_path: 'artifacts/artifacts-ubuntu2204',
+//             backend: 'gce',
+//         ],
+//         [
+//             os_label: 'ubuntu2404',
+//             job_path: 'artifacts/artifacts-ubuntu2404',
+//             backend: 'gce',
+//         ],
+//         [
+//             os_label: 'debian12',
+//             job_path: 'artifacts/artifacts-debian12',
+//             backend: 'gce',
+//         ],
+//         [
+//             os_label: 'ami',
+//             job_path: 'artifacts/artifacts-ami',
+//             backend: 'aws',
+//         ],
+//         [
+//             os_label: 'docker',
+//             job_path: 'artifacts/artifacts-docker',
+//             backend: 'docker',
+//         ],
+//         [
+//             os_label: 'rhel10',
+//             job_path: 'artifacts/artifacts-rhel10',
+//             backend: 'aws',
+//         ],
+//         [
+//             os_label: 'oel9',
+//             job_path: 'artifacts/artifacts-oel9',
+//             backend: 'aws',
+//         ],
+//         [
+//             os_label: 'amazon2023',
+//             job_path: 'artifacts/artifacts-amazon2023',
+//             backend: 'aws',
+//         ],
+//         [
+//             os_label: 'centos9-arm',
+//             job_path: 'artifacts/artifacts-centos9-arm',
+//             backend: 'aws',
+//         ],
+//         [
+//             os_label: 'ubuntu2204-arm',
+//             job_path: 'artifacts/artifacts-ubuntu2204-arm',
+//             backend: 'aws',
+//         ],
+//         [
+//             os_label: 'ubuntu2404-arm',
+//             job_path: 'artifacts/artifacts-ubuntu2404-arm',
+//             backend: 'aws',
+//         ],
+//         [
+//             os_label: 'ami-arm',
+//             job_path: 'artifacts/artifacts-ami-arm',
+//             backend: 'aws',
+//         ],
     ]
 
     def builder = getJenkinsLabels('aws', 'eu-west-1')
