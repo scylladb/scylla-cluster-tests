@@ -5,6 +5,7 @@ import pprint
 import re
 from functools import cached_property
 from textwrap import dedent
+from urllib.parse import urlparse
 
 import boto3
 
@@ -178,6 +179,34 @@ class ScyllaDoctor:
         return package, bucket_name
 
     @staticmethod
+    def _parse_s3_url(url: str, default_bucket: str) -> tuple[str, str]:
+        """Parse an S3 reference into ``(bucket_name, object_key)``.
+
+        Supported formats:
+        - ``https://BUCKET/KEY`` — bucket name extracted from host,
+          key from the path.
+        - ``prefix/path/file.tar.gz`` (bare S3 key, no scheme) — uses
+          *default_bucket*.
+
+        Args:
+            url: The URL or key path to parse.
+            default_bucket: Bucket name to use when *url* is a bare key.
+
+        Returns:
+            Tuple of (bucket_name, object_key).
+        """
+        parsed = urlparse(url)
+
+        # No scheme → treat as a bare S3 key
+        if not parsed.scheme:
+            return default_bucket, url
+
+        # https://BUCKET/KEY
+        host = parsed.hostname or ""
+        path = parsed.path.lstrip("/")
+        return host, path
+
+    @staticmethod
     def _get_bucket_region(bucket_name: str) -> str:
         """Determine the AWS region of an S3 bucket.
 
@@ -253,11 +282,16 @@ class ScyllaDoctor:
 
         Generates a pre-signed URL on the SCT runner side (which has AWS credentials)
         and passes it to curl on the remote node, avoiding the need for AWS credentials on the node.
+
+        If ``scylla_doctor_full_tarball_url`` is configured, it is used directly
+        instead of locating the package in S3.
         """
         if self.node.remoter.run("curl --version", ignore_status=True).ok:
             LOGGER.info("curl already installed, proceeding...")
         else:
             self.node.install_package("curl")
+
+        full_tarball_url = self.test_config.tester_obj().params.get("scylla_doctor_full_tarball_url")
 
         version = self.configured_version
         if version:
@@ -271,6 +305,14 @@ class ScyllaDoctor:
             version_msg = f"version {version}" if version else "latest version"
             raise ScyllaDoctorException(f"Unable to find full scylla-doctor package for {version_msg}")
 
+        if full_tarball_url:
+            custom_bucket, custom_key = self._parse_s3_url(full_tarball_url, default_bucket=bucket_name)
+            if custom_bucket != bucket_name:
+                bucket_name = custom_bucket
+                LOGGER.info("Overriding bucket from full_tarball_url: %s", bucket_name)
+            package["Key"] = custom_key
+            LOGGER.info("Using custom full SD tarball — bucket: %s, key: %s", bucket_name, custom_key)
+
         package_key = package["Key"]
         package_filename = package_key.split("/")[-1]
         LOGGER.info("Downloading full scylla-doctor package %s from bucket %s...", package_filename, bucket_name)
@@ -283,13 +325,13 @@ class ScyllaDoctor:
         bucket_region = self._get_bucket_region(bucket_name)
         LOGGER.info("Bucket %s is in region %s", bucket_name, bucket_region)
         s3 = boto3.client("s3", region_name=bucket_region)
-        presigned_url = s3.generate_presigned_url(
+        download_url = s3.generate_presigned_url(
             ClientMethod="get_object",
             Params={"Bucket": bucket_name, "Key": package_key},
             ExpiresIn=300,
         )
 
-        self._download_and_extract_tarball(presigned_url, description=f"full scylla-doctor ({package_filename})")
+        self._download_and_extract_tarball(download_url, description=f"full scylla-doctor ({package_filename})")
         self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
         self._full_edition_downloaded = True
 
@@ -302,6 +344,14 @@ class ScyllaDoctor:
             LOGGER.info("curl already installed, proceeding...")
         else:
             self.node.install_package("curl")
+
+        tarball_url = self.test_config.tester_obj().params.get("scylla_doctor_tarball_url")
+        if tarball_url:
+            LOGGER.info("Using custom SD tarball URL: %s", tarball_url)
+            self.node.remoter.run(f"curl -JL {tarball_url} | tar -xvz")
+            self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
+            return
+
         if self.configured_version:
             LOGGER.info("Using configured scylla-doctor version: %s", self.configured_version)
             package = self.locate_scylla_doctor_package(version=self.configured_version)
