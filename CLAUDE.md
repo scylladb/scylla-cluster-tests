@@ -10,12 +10,17 @@ Scylla Cluster Tests (SCT) — test framework for ScyllaDB. See below for full r
 
 ## Skills
 
-@skills/designing-skills/SKILL.md
-@skills/fix-backport-conflicts/SKILL.md
-@skills/profiling-sct-code/SKILL.md
-@skills/writing-plans/SKILL.md
-@skills/writing-unit-tests/SKILL.md
-@skills/writing-integration-tests/SKILL.md
-@skills/commit-summary/SKILL.md
-@skills/writing-nemesis/SKILL.md
-@skills/code-review/SKILL.md
+Skills are auto-discovered via the `.claude/skills` symlink pointing to `skills/`.
+Do NOT @import skill files here — they are loaded on demand when triggered by their
+frontmatter `description`. Eagerly importing all skills wastes ~20K tokens per turn.
+
+Available skills (invoke via Skill tool or `/skill-name`):
+- `designing-skills` — Create and structure AI agent skills
+- `fix-backport-conflicts` — Resolve merge conflicts in backport PRs
+- `profiling-sct-code` — Profile Python code for performance bottlenecks
+- `writing-plans` — Write implementation plans (full 7-section or mini)
+- `writing-unit-tests` — Write pytest unit tests for SCT
+- `writing-integration-tests` — Write integration tests with external services
+- `commit-summary` — Generate weekly commit summary reports
+- `writing-nemesis` — Create new chaos engineering disruptions
+- `code-review` — Review PRs for correctness and convention compliance

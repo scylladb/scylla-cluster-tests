@@ -98,105 +98,20 @@ export SCT_REUSE_CLUSTER=$(cat ~/sct-results/latest/test_id)
 
 **Main Framework (`sdcm/`):**
 
-The `sdcm/` directory is the heart of the SCT framework. Here's a detailed breakdown of its structure:
-
-#### Core Files
-- `cluster.py` - Base classes for cluster management, node operations, and connectivity
-- `tester.py` - Base test class used by all tests, handles test setup/teardown and reporting
-- `nemesis/` - Chaos engineering module (package) — see [Nemesis Developer Guide](docs/nemesis.md) for details
-  - `__init__.py` - `NemesisBaseClass`, `NemesisRunner`, all `disrupt_*` methods, and auto-discovery mechanism
-  - `registry.py` - `NemesisRegistry` for discovering and filtering nemesis by boolean flag expressions
-  - `generator.py` - `NemesisJobGenerator` for generating Jenkins pipelines and test configs
-  - `monkey/` - Individual nemesis classes (`NemesisBaseClass` subclasses) and composite runners (`NemesisRunner` subclasses)
-  - `utils/` - Shared utilities: `NemesisNodeAllocator`, index helpers, node operations (iptables, SIGSTOP)
-- `sct_config.py` - Configuration management and parameter handling
-- `log.py` - Logging setup and utilities
-- `db_stats.py` - Database metrics collection using Prometheus
-- `loader.py` - Base classes for load generators
-- `prometheus.py` - Prometheus integration for metrics
-
-#### Specialized Clusters
-- `cluster_aws.py` - AWS-specific cluster implementations
-- `cluster_gce.py` - Google Cloud specific implementations
-- `cluster_azure.py` - Azure-specific cluster implementations
-- `cluster_docker.py` - Local Docker cluster implementation
-- `cluster_baremetal.py` - Physical hardware cluster implementation
-- `cluster_k8s/` - Kubernetes cluster implementations
-  - `eks.py` - AWS EKS implementation
-  - `gke.py` - Google Kubernetes Engine implementation
-  - `mini_k8s.py` - Local Kubernetes implementation
-
-#### Stress Test Tools
-- `stress/` - Stress tool wrappers
-  - `base.py` - Common base for stress tools
-  - Various stress tool implementations (cassandra-stress, scylla-bench, etc.)
-- `cassandra_harry_thread.py` - CassandraHarry consistency verification tool
-- `cql_stress_cassandra_stress_thread.py` - CQL stress execution
-- `stress_thread.py` - Base thread for running stress tools
-- `gemini_thread.py` - Gemini consistency verification tool
-- `scylla_bench_thread.py` - ScyllaBench stress tool wrapper
-- `ycsb_thread.py` - YCSB benchmark wrapper
-- `ndbench_thread.py` - NdBench benchmark wrapper
-
-#### Remote Execution
-- `remote/` - Command execution framework
-  - `base.py` - Base command execution classes
-  - `remote_cmd_runner.py` - SSH-based command execution
-  - `docker_cmd_runner.py` - Docker-based command execution
-  - `kubernetes_cmd_runner.py` - Kubernetes-based command execution
-  - `remote_file.py` - Remote file operations
-
-#### Monitoring & Reporting
-- `monitorstack/` - Monitoring infrastructure setup and management
-- `logcollector.py` - Log collection utilities
-- `reporting/` - Test result reporting
-  - `elastic_reporter.py` - Elasticsearch-based reporting
-  - `tooling_reporter.py` - Tools and libraries reporting
-
-#### Scylla Manager Integration
-- `mgmt/` - Scylla Manager integration
-  - `cli.py` - Manager CLI interface
-  - `operations.py` - Manager operations (backup, repair, etc.)
-  - `common.py` - Common manager utilities
-
-#### Provisioning
-- `provision/` - Infrastructure provisioning
-  - `aws/` - AWS-specific provisioning
-  - `azure/` - Azure-specific provisioning
-  - `common/` - Common provisioning utilities
-  - `scylla_yaml/` - Scylla configuration generation
-  - `network_configuration.py` - Network setup
-  - `security.py` - Security configuration
-
-#### REST APIs and Clients
-- `rest/` - REST API clients
-  - `rest_client.py` - Base REST client
-  - `storage_service_client.py` - Scylla storage service client
-  - `compaction_manager_client.py` - Compaction manager API
-  - `raft_api.py` - RAFT consensus protocol API
-
-#### Results Analysis
-- `results_analyze/` - Test result analysis
-  - `base.py` - Base analysis framework
-  - `metrics.py` - Metrics processing
-
-#### Event System
-- `sct_events/` - Event handling system
-  - Framework for event generation, filtering, and processing
-  - Events can be used for test flow control, reporting, and validation
-
-#### Utility Modules
-- `utils/` - Extensive utility library
-  - `aws_utils.py`, `gce_utils.py`, `azure_utils.py` - Cloud provider utilities
-  - `common.py` - Common utilities used throughout the framework
-  - `docker_utils.py` - Docker-specific utilities
-  - `version_utils.py` - Version comparison and management
-  - `nemesis_utils/` - Utilities for nemesis operations
-  - `replication_strategy_utils.py` - Replication strategy handling
-  - `sstable/` - SSTable utilities
-  - `k8s/` - Kubernetes utilities
-  - `ldap.py` - LDAP authentication utilities
-  - And many more specialized utilities
+| Area | Key Files | Purpose |
+|------|-----------|---------|
+| Cluster management | `cluster.py`, `cluster_aws.py`, `cluster_gce.py`, `cluster_azure.py`, `cluster_docker.py`, `cluster_k8s/` | Base classes and backend-specific implementations |
+| Test base | `tester.py` | Base test class, setup/teardown, reporting |
+| Nemesis (chaos) | `nemesis/` package — see [docs/nemesis.md](docs/nemesis.md) | `NemesisBaseClass`, `NemesisRunner`, `NemesisRegistry`, auto-discovery |
+| Configuration | `sct_config.py` | Parameter handling; precedence: CLI > env vars > config files > defaults |
+| Stress tools | `stress/`, `*_thread.py` | Wrappers for cassandra-stress, scylla-bench, YCSB, gemini, latte |
+| Remote execution | `remote/` | SSH, Docker, and K8s command runners |
+| Provisioning | `provision/` | Cloud-specific infra provisioning (AWS, Azure, GCE) |
+| Monitoring | `monitorstack/`, `prometheus.py`, `db_stats.py` | Prometheus/Grafana metrics, log collection |
+| Events | `sct_events/` | Event generation, filtering, and test flow control |
+| REST clients | `rest/` | Scylla storage service, compaction manager, RAFT API |
+| Manager | `mgmt/` | Scylla Manager CLI and operations (backup, repair) |
+| Utilities | `utils/` | Cloud utils, version utils, Docker utils, and more |
 
 **Configuration System:**
 - `test-cases/` - Test configuration YAML files
@@ -310,87 +225,10 @@ All unit tests in `unit_tests/` should follow pytest conventions:
 
 ## Documentation Standards
 
-When writing or updating documentation in this repository, follow these standards to ensure consistency and quality:
-
-### Docstrings
-
-- **Format**: Follow Google Python docstring format
-- **Include**: Description, Args, Returns, Raises sections where applicable
-- **Example**:
-  ```python
-  def check_cluster_health(self, nodes=None):
-      """Check the health of cluster nodes.
-
-      Args:
-          nodes: List of nodes to check. If None, checks all nodes.
-
-      Returns:
-          bool: True if all nodes are healthy, False otherwise.
-
-      Raises:
-          ClusterHealthError: If critical health issues are detected.
-      """
-  ```
-
-### Configuration Parameters
-
-For detailed information about the SCT configuration system, see [docs/sct-configuration.md](docs/sct-configuration.md).
-
-When documenting configuration parameters:
-- **Type**: Specify the parameter type (str, int, bool, list, dict)
-- **Default value**: Always include the default value
-- **Valid range**: Document acceptable values or ranges
-- **Usage example**: Provide a practical example
-
-**Example**:
-```python
-cluster_health_check_parallel_workers: int = SctField(
-    description="""
-        Number of parallel workers for health checks.
-
-        Default: 5
-        Valid range: 1-10 (max recommended: 10)
-        Example: cluster_health_check_parallel_workers: 10
-    """,
-)
-```
-
-For adding new configuration options, follow the guide in [docs/sct-configuration.md](docs/sct-configuration.md#adding-new-configuration-options).
-
-### Code Comments
-
-- **Purpose**: Explain "why" not "what" - focus on intent and context
-- **When to use**: For complex logic, non-obvious decisions, or important constraints
-- **Avoid**: Redundant comments that just restate the code
-
-**Good example**:
-```python
-# Skip health check if nemesis was skipped to avoid wasting 2+ hours on large clusters
-if nemesis_skipped:
-    return
-```
-
-**Bad example**:
-```python
-# Set x to 5
-x = 5
-```
-
-### User Documentation
-
-When writing user-facing documentation:
-- **Context**: Provide background and explain why something is useful
-- **Examples**: Include practical, tested examples that users can copy
-- **Common use cases**: Document typical scenarios and recommended configurations
-- **Troubleshooting**: Anticipate common issues and provide solutions
-
-### Migration Notes
-
-When documenting changes that affect existing users:
-- **Clearly mark breaking changes**: Use bold or special formatting
-- **Provide upgrade paths**: Explain how to migrate from old to new approach
-- **Include before/after examples**: Show the old way and the new way side by side
-- **Document deprecation timeline**: If applicable, specify when deprecated features will be removed
+- **Docstrings**: Google Python format (Args, Returns, Raises sections)
+- **Config parameters**: Include type, default, valid range, and example. See [docs/sct-configuration.md](docs/sct-configuration.md)
+- **Code comments**: Explain "why" not "what" — focus on intent and non-obvious constraints
+- **Breaking changes**: Bold formatting, before/after examples, migration paths
 
 ## Environment Variables
 
