@@ -1192,6 +1192,12 @@ class SCTConfiguration(BaseModel):
                 to hardcode the version, or leave empty to use the latest available version. For stability,
                 artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.""",
     )
+    scylla_doctor_tarball_url: String = SctField(
+        description="""Direct URL to a Scylla Doctor tarball in S3. When set, bypasses the
+                standard version-based S3 lookup and downloads SD directly from this URL.
+                Use for testing unofficial or pre-release SD versions.
+                Example: 'https://s3.amazonaws.com/my-bucket/scylla-doctor-1.11-rc1.tar.gz'""",
+    )
     run_scylla_doctor_only: Boolean = SctField(
         description="""When true, the artifact test runs only the Scylla Doctor validation
                 (install, collect vitals, analyze, verify) and skips all other artifact checks
