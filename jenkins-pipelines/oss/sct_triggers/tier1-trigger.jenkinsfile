@@ -1,0 +1,6 @@
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+triggerMatrixPipeline(
+    matrix_file: 'configurations/triggers/tier1.yaml',
+    // Cron spec from configurations/triggers/tier1.yaml cron_triggers section
+    cron: '00 06 * * 6 % scylla_version={branch}:latest;labels_selector=weekly;requested_by_user=scheduled'
+)
