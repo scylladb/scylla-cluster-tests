@@ -3,7 +3,7 @@ status: done
 domain: ci-cd
 created: 2026-04-06
 last_updated: 2026-04-13
-owner: null
+owner: juliayakovlev
 ---
 # Triggers for perf-simple-query Tests Run as Offline Installer After PGO Builds
 
