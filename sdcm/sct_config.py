@@ -438,6 +438,15 @@ available_backends: list[str] = [
     "oci",
 ]
 
+AWS_SUPPORTED_REGIONS: list[str] = [
+    "eu-west-1",
+    "eu-west-2",
+    "us-west-2",
+    "us-east-1",
+    "eu-north-1",
+    "eu-central-1",
+]
+
 
 class SCTConfiguration(BaseModel):
     """
@@ -2391,14 +2400,7 @@ class SCTConfiguration(BaseModel):
         "ami_id_db_oracle",
         "ami_id_vector_store",
     ]
-    aws_supported_regions: Annotated[list, IgnoredType] = [
-        "eu-west-1",
-        "eu-west-2",
-        "us-west-2",
-        "us-east-1",
-        "eu-north-1",
-        "eu-central-1",
-    ]
+    aws_supported_regions: Annotated[list, IgnoredType] = AWS_SUPPORTED_REGIONS
 
     model_config = ConfigDict(
         ignored_types=(IgnoredType,),
