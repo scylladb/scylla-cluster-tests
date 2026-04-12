@@ -95,6 +95,7 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         base_logdir: Optional[str] = None,
         ssh_login_info: Optional[dict] = None,
         node_index: int = 1,
+        after_config=None,
     ) -> None:
         super().__init__(
             name=f"{node_prefix}-{node_index}",
@@ -102,6 +103,7 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
             ssh_login_info=ssh_login_info,
             base_logdir=base_logdir,
             node_prefix=node_prefix,
+            after_config=after_config,
         )
         self.node_index = node_index
 
@@ -369,7 +371,7 @@ class DockerCluster(cluster.BaseCluster):
             os.path.dirname(__file__), "../docker/scylla-sct", self.params.get("scylla_linux_distro").split("-")[0]
         )
 
-    def _create_node(self, node_index, container=None):
+    def _create_node(self, node_index, container=None, after_config=None):
         node = DockerNode(
             parent_cluster=self,
             container=container,
@@ -377,6 +379,7 @@ class DockerCluster(cluster.BaseCluster):
             base_logdir=self.logdir,
             node_prefix=self.node_prefix,
             node_index=node_index,
+            after_config=after_config,
         )
 
         if container is None:
@@ -412,7 +415,16 @@ class DockerCluster(cluster.BaseCluster):
         return self.nodes
 
     @mark_new_nodes_as_running_nemesis
-    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+    def add_nodes(
+        self,
+        count,
+        ec2_user_data="",
+        dc_idx=0,
+        rack=0,
+        enable_auto_bootstrap=False,
+        instance_type=None,
+        after_config=None,
+    ):
         assert instance_type is None, "docker can't provision different instance types"
         return self._get_nodes() if self.test_config.REUSE_CLUSTER else self._create_nodes(count, enable_auto_bootstrap)
 
@@ -551,7 +563,7 @@ class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
                 self.log.error("Failed to reconfigure container %s: %s", node.name, e)
                 raise
 
-    def _create_node(self, node_index, container=None):
+    def _create_node(self, node_index, container=None, after_config=None):
         node = VectorStoreDockerNode(
             parent_cluster=self,
             container=container,
@@ -572,7 +584,7 @@ class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
         node.init()
         return node
 
-    def add_nodes(self, count, dc_idx=0, **kwargs):
+    def add_nodes(self, count, dc_idx=0, after_config=None, **kwargs):
         if count > 1:
             # TODO: implement once HA support is implemented for VS
             self.log.warning("Vector Store HA not implemented yet, creating only 1 node instead of %d", count)
@@ -770,7 +782,7 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
             params=params,
         )
 
-    def _create_node(self, node_index, container=None):
+    def _create_node(self, node_index, container=None, after_config=None):
         node = DockerMonitoringNode(
             parent_cluster=self,
             base_logdir=self.logdir,
@@ -781,7 +793,16 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
         node.init()
         return node
 
-    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+    def add_nodes(
+        self,
+        count,
+        ec2_user_data="",
+        dc_idx=0,
+        rack=0,
+        enable_auto_bootstrap=False,
+        instance_type=None,
+        after_config=None,
+    ):
         assert instance_type is None, "docker can provision different instance types"
         return self._create_nodes(count, enable_auto_bootstrap)
 
