@@ -64,7 +64,7 @@ dependencies = [
     "questionary==2.1.1",
     "requests==2.33.0",
     "rich==14.2.0",
-    "scylla-driver==3.29.7",
+    "scylla-driver==3.29.9",
     "sortedcontainers==2.4.0",
     "ssh2-python>=1.1.2.post1",
     "tcconfig==0.29.1",
