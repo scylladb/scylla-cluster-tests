@@ -19,7 +19,7 @@ import logging
 import time
 import uuid
 from functools import cached_property
-from typing import Any, List, Literal
+from typing import Any, List, Literal, TYPE_CHECKING
 
 from google.oauth2 import service_account
 from google.cloud import compute_v1
@@ -30,7 +30,9 @@ from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
-from sdcm.provision.provisioner import VmArch
+
+if TYPE_CHECKING:
+    from sdcm.provision.provisioner import VmArch
 
 # NOTE: we cannot use neither 'slim' nor 'alpine' versions because we need the 'beta' component be installed.
 GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:437.0.1"
@@ -59,7 +61,7 @@ def gce_instance_name(node_prefix: str, dc_idx: int, node_index: int) -> str:
     return name
 
 
-def vmarch_to_gcp(arch: VmArch) -> str:
+def vmarch_to_gcp(arch: "VmArch") -> str:
     """Convert VmArch enum to GCP architecture format.
 
     Args:
@@ -71,6 +73,10 @@ def vmarch_to_gcp(arch: VmArch) -> str:
     Raises:
         ValueError: If architecture is not supported
     """
+    # Lazy import to avoid circular dependency:
+    # gce_utils -> provision.provisioner -> provision.__init__ -> provision.gce -> gce_utils
+    from sdcm.provision.provisioner import VmArch  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+
     if arch is VmArch.X86:
         return "X86_64"
     elif arch is VmArch.ARM:

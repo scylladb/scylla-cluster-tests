@@ -27,6 +27,7 @@ import argparse
 import os
 
 import boto3
+from botocore.config import Config
 
 from sdcm.utils.aws_utils import EksClusterForCleaner
 from sdcm.utils.common import all_aws_regions
@@ -36,6 +37,8 @@ from utils.cloud_cleanup import (
     get_keep_hours_from_tags,
     DEFAULT_KEEP_HOURS,
 )
+
+BOTO3_TIMEOUT_CONFIG = Config(connect_timeout=10, read_timeout=30, retries={"max_attempts": 2})
 
 
 def get_cluster_creation_time(cluster):
@@ -70,7 +73,7 @@ def clean_eks_clusters(regions, keep_hours=DEFAULT_KEEP_HOURS, dry_run=False):
     for region in regions:
         LOGGER.info("Cleaning EKS clusters in region: %s", region)
         try:
-            eks_client = boto3.client("eks", region_name=region)
+            eks_client = boto3.client("eks", region_name=region, config=BOTO3_TIMEOUT_CONFIG)
             cluster_names = eks_client.list_clusters()["clusters"]
 
             if not cluster_names:
@@ -159,7 +162,7 @@ def clean_launch_templates(regions, keep_hours=DEFAULT_KEEP_HOURS, dry_run=False
     for region in regions:
         LOGGER.info("Cleaning launch templates in region: %s", region)
         try:
-            ec2_client = boto3.client("ec2", region_name=region)
+            ec2_client = boto3.client("ec2", region_name=region, config=BOTO3_TIMEOUT_CONFIG)
 
             # List all launch templates
             paginator = ec2_client.get_paginator("describe_launch_templates")
@@ -240,7 +243,7 @@ def clean_load_balancers(regions, keep_hours=DEFAULT_KEEP_HOURS, dry_run=False):
     for region in regions:
         LOGGER.info("Cleaning load balancers in region: %s", region)
         try:
-            elb_client = boto3.client("elb", region_name=region)
+            elb_client = boto3.client("elb", region_name=region, config=BOTO3_TIMEOUT_CONFIG)
 
             # Clean Classic Load Balancers
             try:
@@ -324,7 +327,7 @@ def clean_cloudformation_stacks(regions, keep_hours=DEFAULT_KEEP_HOURS, dry_run=
     for region in regions:
         LOGGER.info("Cleaning CloudFormation stacks in region: %s", region)
         try:
-            cf_client = boto3.client("cloudformation", region_name=region)
+            cf_client = boto3.client("cloudformation", region_name=region, config=BOTO3_TIMEOUT_CONFIG)
 
             # List all stacks (exclude deleted ones)
             paginator = cf_client.get_paginator("list_stacks")

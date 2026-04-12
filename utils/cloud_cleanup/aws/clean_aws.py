@@ -8,8 +8,11 @@ import logging
 import sys
 import boto3
 import pytz
+from botocore.config import Config
 
 from utils.cloud_cleanup import update_argus_resource_status
+
+BOTO3_TIMEOUT_CONFIG = Config(connect_timeout=10, read_timeout=30, retries={"max_attempts": 2})
 
 DRY_RUN = False
 VERBOSE = False
@@ -137,12 +140,12 @@ def regions_names():
     default_region = session.region_name
     if not default_region:
         default_region = "eu-central-1"
-    client = session.client("ec2", region_name=default_region)
+    client = session.client("ec2", region_name=default_region, config=BOTO3_TIMEOUT_CONFIG)
     return [region["RegionName"] for region in client.describe_regions()["Regions"]]
 
 
 def scan_region_instances(region_name, duration):
-    ec2 = boto3.resource("ec2", region_name=region_name)
+    ec2 = boto3.resource("ec2", region_name=region_name, config=BOTO3_TIMEOUT_CONFIG)
     instances = ec2.instances.filter(Filters=[{"Name": "instance-state-name", "Values": ["running"]}])
 
     running, keep_alive, expiring, expired = 0, 0, 0, []
@@ -235,7 +238,7 @@ def print_volume(volume, msg):
 
 def clean_volumes(region_name):
     print("cleaning region %s volumes" % region_name)
-    ec2 = boto3.resource("ec2", region_name=region_name)
+    ec2 = boto3.resource("ec2", region_name=region_name, config=BOTO3_TIMEOUT_CONFIG)
 
     volumes = ec2.volumes.all()
 
@@ -291,7 +294,7 @@ def print_adress(eip_dict, msg):
 
 def clean_ips(region_name):
     print("cleaning region %s IP's" % region_name)
-    client = boto3.client("ec2", region_name=region_name)
+    client = boto3.client("ec2", region_name=region_name, config=BOTO3_TIMEOUT_CONFIG)
     addresses_dict = client.describe_addresses()
     deleted_addresses = 0
     kept_addresses = 0
@@ -307,7 +310,7 @@ def clean_ips(region_name):
 
 def clean_capacity_reservations(region_name):
     print("Cleaning region %s capacity reservations" % region_name)
-    client = boto3.client("ec2", region_name=region_name)
+    client = boto3.client("ec2", region_name=region_name, config=BOTO3_TIMEOUT_CONFIG)
     response = client.describe_capacity_reservations(Filters=[{"Name": "state", "Values": ["active"]}])
     now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -354,7 +357,7 @@ def keep_alive_host(host: dict):
 
 def clean_dedicate_hosts(region_name):
     print("cleaning region %s dedicate_hosts" % region_name)
-    ec2 = boto3.client("ec2", region_name=region_name)
+    ec2 = boto3.client("ec2", region_name=region_name, config=BOTO3_TIMEOUT_CONFIG)
 
     def delete_host(_host: dict):
         try:
@@ -398,7 +401,7 @@ def clean_unattached_security_groups(region_name: str):
     if VERBOSE:
         print(f"Checking region: {region_name} for unattached security groups")
     session = boto3.Session()
-    ec2 = session.client("ec2", region_name=region_name)
+    ec2 = session.client("ec2", region_name=region_name, config=BOTO3_TIMEOUT_CONFIG)
 
     # Use paginators for security groups
     sg_paginator = ec2.get_paginator("describe_security_groups")
@@ -486,9 +489,12 @@ if __name__ == "__main__":
         logging.getLogger("botocore").setLevel(logging.DEBUG)
 
     for region in regions_names():
-        clean_instances(region, arguments.duration)
-        clean_volumes(region)
-        clean_ips(region)
-        clean_capacity_reservations(region)
-        clean_dedicate_hosts(region)
-        clean_unattached_security_groups(region)
+        try:
+            clean_instances(region, arguments.duration)
+            clean_volumes(region)
+            clean_ips(region)
+            clean_capacity_reservations(region)
+            clean_dedicate_hosts(region)
+            clean_unattached_security_groups(region)
+        except Exception as exc:  # noqa: BLE001
+            eprint(f"Failed to clean region {region}: {exc}")
