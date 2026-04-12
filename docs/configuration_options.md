@@ -2061,6 +2061,16 @@ Scylla Doctor version to use for artifact tests. Set to specific version (e.g., 
 **type:** str (appendable)
 
 
+## **scylla_doctor_full_tarball_url** / SCT_SCYLLA_DOCTOR_FULL_TARBALL_URL
+
+Direct URL to a full edition Scylla Doctor tarball in S3. When set, bypasses the<br>standard version-based S3 lookup and downloads SD directly from this URL.<br>Use for testing unofficial or pre-release SD versions.<br>Example: 'https://s3.amazonaws.com/my-bucket/scylla-doctor-1.11-rc1.tar.gz'
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
 ## **run_scylla_doctor_only** / SCT_RUN_SCYLLA_DOCTOR_ONLY
 
 When true, the artifact test runs only the Scylla Doctor validation<br>(install, collect vitals, analyze, verify) and skips all other artifact checks<br>such as stop/start, cassandra-stress, housekeeping, etc. Useful for fast SD<br>release gating. Implies run_scylla_doctor=true.
