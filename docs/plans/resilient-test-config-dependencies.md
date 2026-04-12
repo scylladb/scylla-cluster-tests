@@ -2,7 +2,7 @@
 status: draft
 domain: config
 created: 2026-03-11
-last_updated: 2026-03-17
+last_updated: 2026-04-12
 owner: null
 ---
 # Implementation Plan: Resilient Test Configuration Dependencies
@@ -72,6 +72,55 @@ Here, `{% include 'configurations/auth_cassandra.yaml' %}` inside the test case 
 
 **Rule:** Include in the test YAML if the dependency is present across **all** Jenkinsfiles using that test case.
 
+**Additional Hard Dependencies Discovered:**
+
+**LDAP configs → `auth_cassandra.yaml` (22/22 Jenkinsfiles = 100%)**
+
+Every LDAP config (`ldap-authorization.yaml`, `ldap-authenticator.yaml`, `ldap-authorization-and-authentication.yaml`, `ms-ad-ldap-authenticator.yaml`, `ms-ad-ldap-authorization.yaml`, `ms-ad-ldap-authorization-and-authentication.yaml`) always appears with `auth_cassandra.yaml`. The LDAP configs only set `use_ldap: true`, `ldap_server_type`, and `use_ldap_authorization/authentication` — they don't set the authenticator or credentials that LDAP requires to function.
+
+```
+features-ldap-authorization-200gb.jenkinsfile:     ["...-tls.yaml", "ldap-authorization.yaml", "auth_cassandra.yaml"]
+features-ldap-authentication-200gb.jenkinsfile:    ["...-tls.yaml", "ldap-authenticator.yaml", "auth_cassandra.yaml"]
+features-ldap-ms-ad-authorization.jenkinsfile:     ["...-tls.yaml", "ms-ad-ldap-authorization.yaml", "auth_cassandra.yaml"]
+```
+
+**`sla_config.yaml` → `auth_cassandra.yaml` (30/30 Jenkinsfiles = 100%)**
+
+Every Jenkinsfile using `sla_config.yaml` also chains `auth_cassandra.yaml`. SLA features require `PasswordAuthenticator` to create service levels and roles. This is also confirmed by the nemesis `additional_configs` declarations (see Pattern 5 below).
+
+**`rolling-upgrade-with-sla*.yaml` → `auth_cassandra.yaml` (3/3 Jenkinsfiles = 100%)**
+
+Both SLA rolling upgrade configs always pair with auth:
+
+```
+rolling-upgrade-with-sla.jenkinsfile:           ["rolling-upgrade-with-sla.yaml", "auth_cassandra.yaml", ...]
+rolling-upgrade-with-sla-no-shares.jenkinsfile: ["rolling-upgrade-with-sla-no-shares.yaml", "auth_cassandra.yaml", ...]
+```
+
+**`generic-rolling-upgrade.yaml` → `auth_cassandra.yaml` + `rolling-upgrade-artifacts.yaml` (6/6 = 100%, 3-way)**
+
+Every rolling upgrade pipeline chains all three files:
+
+```
+rolling-upgrade-*.jenkinsfile: ["generic-rolling-upgrade.yaml", "rolling-upgrade-artifacts.yaml", "auth_cassandra.yaml", ...]
+```
+
+**Alternator auth configs → `auth_cassandra.yaml` (18/18 Jenkinsfiles = 100%)**
+
+All alternator Jenkinsfiles include `auth_cassandra.yaml`. Additionally, `configurations/alternator/enforce-authorization.yaml` and `configurations/rolling-upgrade-alternator.yaml` **duplicate** auth settings inline (authenticator, user, password, authorizer) rather than relying on the chained config. These are dedup candidates via `{% include %}`.
+
+**`object_storage.yaml` + `object_storage_*_method.yaml` (10/10 Jenkinsfiles = 100%)**
+
+Every Jenkinsfile using `object_storage.yaml` also includes either `object_storage_native_method.yaml` or `object_storage_rclone_method.yaml`. The base config sets S3 endpoints; the method file selects the backup transport. However, the method choice varies per pipeline, so the method configs are orthogonal to each other (Pattern 2). The base → at-least-one-method relationship is a **pair dependency** best handled by validation (Option C) rather than include.
+
+**Performance profile pairs (100% co-occurrence)**
+
+Performance test base configs always pair with specific profile overlays:
+- `perf-regression-predefined-throughput-steps.yaml` + `latency-decorator-error-thresholds-steps-ent-vnodes.yaml` (10/10)
+- `perf-regression-predefined-throughput-steps.yaml` + `cassandra_stress_gradual_load_steps_enterprise.yaml` (8/8)
+
+These profile pairs could use `{% include %}` to self-document the dependency.
+
 #### Pattern 2: Orthogonal Feature Composition — Include Does NOT Fit
 
 The second pattern applies optional, orthogonal capabilities to a base test. Different Jenkinsfiles select different combinations:
@@ -120,17 +169,56 @@ test_config: ["perf-regression-predefined-throughput-steps.yaml",
 
 Breakdown: base test + load profile + 3 independent feature toggles. Only the load profile could be an include candidate (it always pairs with this test). The feature toggles are optional and vary by pipeline.
 
+#### Pattern 5: Nemesis `additional_configs` — Existing Code-Level Dependency Declaration
+
+The nemesis generator (`sdcm/nemesis/monkey/__init__.py`) already has a config dependency system via `additional_configs` class attributes on monkey classes. This is **prior art** that validates the concept of declaring config dependencies at the point of use:
+
+```python
+# sdcm/nemesis/monkey/__init__.py examples:
+class SlaMonkey(NemesisBaseClass):
+    additional_configs = ["sla_config.yaml", "auth_cassandra.yaml"]
+
+class LdapAuthorizationMonkey(NemesisBaseClass):
+    additional_configs = ["ldap-authorization.yaml", "auth_cassandra.yaml"]
+
+class NetworkMonkey(NemesisBaseClass):
+    additional_configs = ["two_interfaces.yaml"]
+```
+
+The generator (`sdcm/nemesis/generator.py`, line 127) loads these at runtime. The pattern confirms:
+- SLA nemeses → `sla_config.yaml` + `auth_cassandra.yaml` (6 monkey classes)
+- LDAP nemeses → `ldap-authorization.yaml` + `auth_cassandra.yaml` (2 monkey classes)
+- Network nemeses → `two_interfaces.yaml` (3 monkey classes)
+
+This is a parallel dependency mechanism that complements the config-level approach. Any solution (Option A/C/D) should be consistent with these existing declarations.
+
+#### Pattern 6: Configs That Duplicate Dependencies Inline (Dedup Opportunity)
+
+Some configs duplicate `auth_cassandra.yaml` settings inline rather than relying on Jenkinsfile chaining. These are prime candidates for `{% include %}` to eliminate duplication:
+
+- **`configurations/alternator/enforce-authorization.yaml`** — duplicates `authenticator`, `authenticator_user`, `authenticator_password`, `authorizer` inline, then adds alternator-specific settings
+- **`configurations/rolling-upgrade-alternator.yaml`** — duplicates the same auth block with a comment: _"NOTE: authenticator/authorizer settings below are just to ease the test case lint and the validation code"_
+
+After implementing Option A, these files can replace the inline auth block with `{% include 'configurations/auth_cassandra.yaml' %}`, reducing duplication and ensuring consistency.
+
 #### Classification Summary
 
 | Config Type | Example | Include? | Reason |
 |------------|---------|:--------:|--------|
 | Auth for SLA/TLS tests | `auth_cassandra.yaml` in all TLS tests | **Yes** | Always required, present in every variant |
+| LDAP configs → auth | `ldap-authorization.yaml` → `auth_cassandra.yaml` | **Yes** | 22/22 Jenkinsfiles; LDAP requires authenticator |
+| SLA config → auth | `sla_config.yaml` → `auth_cassandra.yaml` | **Yes** | 30/30 Jenkinsfiles; SLA requires PasswordAuthenticator |
+| SLA rolling upgrade → auth | `rolling-upgrade-with-sla*.yaml` → `auth_cassandra.yaml` | **Yes** | 3/3 Jenkinsfiles; always paired |
+| Rolling upgrade → auth + artifacts | `generic-rolling-upgrade.yaml` → `auth_cassandra.yaml` + `rolling-upgrade-artifacts.yaml` | **Yes** | 6/6 Jenkinsfiles; 3-way hard dependency |
+| Alternator auth (inline dup) | `alternator/enforce-authorization.yaml` duplicates auth | **Yes** | Dedup via include; 18/18 Jenkinsfiles chain auth |
+| Perf profile pairs | `perf-regression-*.yaml` + load profile | **Yes** | 8-10/8-10 per pair; always co-occur |
+| Object storage pair | `object_storage.yaml` + `*_method.yaml` | Validate | 10/10 co-occur but method varies; use Option C |
 | Feature toggles | `tablets_disabled.yaml`, `raft/enable_raft_experimental.yaml` | No | Optional, varies by pipeline |
 | OS/distro selection | `manager/debian12.yaml`, `manager/ubuntu24.yaml` | No | Mutually exclusive choice |
 | Instance/storage type | `arm_instance_types/*.yaml`, `ebs/*.yaml` | No | Infrastructure choice per pipeline |
 | Network config | `two_interfaces.yaml` | Depends | Include if always paired; Jenkinsfile if optional |
 | Load profile | `cassandra_stress_gradual_load_steps.yaml` | Depends | Include if 1:1 with base test; Jenkinsfile if shared |
-| LDAP extensions | `ldap-authorization.yaml` | No | Optional feature on top of auth |
+| KMS encryption | `kms-ear.yaml` | No | Only 2/8 Jenkinsfiles pair with auth; orthogonal |
 
 #### Merge Order Consideration
 
@@ -158,6 +246,34 @@ service_level_shares: [null, null]
 
 sla: true
 stress_cmd: [...]
+```
+
+```yaml
+# configurations/ldap-authorization.yaml
+{% include 'configurations/auth_cassandra.yaml' %}
+
+use_ldap: true
+ldap_server_type: 'openldap'
+use_ldap_authorization: true
+```
+
+```yaml
+# configurations/alternator/enforce-authorization.yaml (BEFORE — inline duplication)
+append_scylla_yaml:
+  authenticator: PasswordAuthenticator
+  authorizer: CassandraAuthorizer
+authenticator_user: cassandra
+authenticator_password: cassandra
+alternator_enforce_authorization: true
+alternator_access_key_id: alternator_access_key
+alternator_secret_access_key: alternator_secret_key
+
+# AFTER — dedup via include
+{% include 'configurations/auth_cassandra.yaml' %}
+
+alternator_enforce_authorization: true
+alternator_access_key_id: alternator_access_key
+alternator_secret_access_key: alternator_secret_key
 ```
 
 Code change (single line in `sct_config.py`):
@@ -259,12 +375,31 @@ However, this doesn't work well for SCT because:
 
 **Actions**:
 1. Audit commit `866d18e70` to classify each of the 53 affected configs as hard dependency vs. orthogonal composition (see Classification Summary above)
-2. Add `{% include 'configurations/auth_cassandra.yaml' %}` only to hard dependency configs:
-   - `configurations/rolling-upgrade-with-sla-no-shares.yaml`
-   - `configurations/rolling-upgrade-with-sla.yaml`
+2. Add `{% include 'configurations/auth_cassandra.yaml' %}` to hard dependency configs. Full list of candidates:
+
+   **SLA configs (auth always required):**
    - `configurations/nemesis/additional_configs/sla_config.yaml`
-   - `configurations/rolling-upgrade-alternator.yaml`
-   - Other configs where auth appears in **every** Jenkinsfile variant
+   - `configurations/rolling-upgrade-with-sla.yaml`
+   - `configurations/rolling-upgrade-with-sla-no-shares.yaml`
+
+   **LDAP configs (auth always required):**
+   - `configurations/ldap-authorization.yaml`
+   - `configurations/ldap-authenticator.yaml`
+   - `configurations/ldap-authorization-and-authentication.yaml`
+   - `configurations/ms-ad-ldap-authenticator.yaml`
+   - `configurations/ms-ad-ldap-authorization.yaml`
+   - `configurations/ms-ad-ldap-authorization-and-authentication.yaml`
+
+   **Rolling upgrade configs (auth always required):**
+   - `test-cases/upgrades/generic-rolling-upgrade.yaml` (also include `rolling-upgrade-artifacts.yaml`)
+
+   **Alternator configs (replace inline auth duplication with include):**
+   - `configurations/alternator/enforce-authorization.yaml` — remove duplicated auth block, add `{% include 'configurations/auth_cassandra.yaml' %}`
+   - `configurations/rolling-upgrade-alternator.yaml` — remove duplicated auth block, add include
+
+   **Performance profile pairs (include the load profile in the base test):**
+   - Performance base configs that always pair with a specific load profile (to be determined per pair)
+
 3. Verify `anyconfig` list merge behavior for double-include scenarios (auth's `scylla_network_config` is a list — confirm later Jenkinsfile configs override correctly)
 4. Verify with `sct.py lint-pipelines` that all pipelines still pass
 5. Keep `auth_cassandra.yaml` in Jenkinsfile `test_config` arrays for backward compatibility during migration
@@ -379,6 +514,7 @@ Add validation rules to SCT config that check for required settings when certain
 ```python
 # In SCTConfiguration validation
 CONFIG_REQUIREMENTS = {
+    # --- SLA / Service Level ---
     "service_level_shares": {
         "requires": {"authenticator": "PasswordAuthenticator"},
         "error": "SLA features require PasswordAuthenticator. Add configurations/auth_cassandra.yaml to your config."
@@ -387,8 +523,52 @@ CONFIG_REQUIREMENTS = {
         "requires": {"authenticator": "PasswordAuthenticator"},
         "error": "SLA features require PasswordAuthenticator."
     },
+
+    # --- LDAP ---
+    "use_ldap": {
+        "requires": {"ldap_server_type": ["openldap", "ms_ad"]},
+        "error": "LDAP requires ldap_server_type to be set ('openldap' or 'ms_ad')."
+    },
+    "use_ldap_authorization": {
+        "requires": {"use_ldap": True, "authorizer": "CassandraAuthorizer"},
+        "error": "LDAP authorization requires use_ldap=true and authorizer=CassandraAuthorizer."
+    },
+    "use_ldap_authentication": {
+        "requires": {"use_ldap": True},
+        "error": "LDAP authentication requires use_ldap=true and a compatible authenticator."
+    },
+
+    # --- Alternator ---
+    "alternator_enforce_authorization": {
+        "requires": {"authenticator": "PasswordAuthenticator", "alternator_access_key_id": "<non-empty>"},
+        "error": "Alternator authorization requires PasswordAuthenticator and alternator_access_key_id/secret."
+    },
+
+    # --- Object Storage (custom logic) ---
+    # If backup_bucket_location is set, backup_bucket_backend must also be set.
+    # Enforces that object_storage.yaml is always paired with a method config.
+
+    # --- Encryption at Rest (custom logic) ---
+    # If scylla_encryption_options contains KmsKeyProviderFactory, server_encrypt must be true.
+
+    # --- Manager Backup (custom logic, AWS-specific) ---
+    # If backup_bucket_location is set and cluster_backend=='aws',
+    # aws_instance_profile_name_db should be set for S3 access.
 }
 ```
+
+#### Existing Validations Already in Code
+
+The following dependencies are **already enforced** in `sdcm/sct_config.py` and do not need new rules:
+
+| Trigger | Requirement | Code Location |
+|---------|-------------|---------------|
+| `authenticator: PasswordAuthenticator` | `authenticator_user` + `authenticator_password` must be set | Lines 2849-2856 |
+| `alternator_enforce_authorization: true` | `authenticator` + `authorizer` must be defined | Lines 2858-2862 |
+| `k8s_enable_sni: true` | `k8s_enable_tls: true` required | Lines 2957-2958 |
+| `simulated_regions > 1` | Endpoint snitch auto-set to GossipingPropertyFileSnitch | Lines 2897-2910 |
+| `data_volume_disk_num > 0` | `data_volume_disk_type` + `data_volume_disk_size` required | `_verify_data_volume_configuration()` |
+| `perf_gradual_throttle_steps` | `perf_gradual_threads` must match | Lines 2977-3009 |
 
 ### Advantages
 
@@ -412,12 +592,18 @@ CONFIG_REQUIREMENTS = {
 
 **Actions**:
 1. Survey all known config dependencies:
-   - SLA features → `PasswordAuthenticator`
-   - LDAP features → `authenticator` + `ldap_*` settings
-   - Encryption at rest → `kms_*` settings
-   - Alternator auth → `authenticator` settings
+   - SLA features → `PasswordAuthenticator` + credentials
+   - SLA `service_level_shares` array length → must match `<sla credentials N>` count in stress commands
+   - LDAP features → `authenticator` + `ldap_server_type` + (optionally `prepare_saslauthd`)
+   - LDAP authorization → `use_ldap: true` + `authorizer: CassandraAuthorizer`
+   - LDAP authentication → `use_ldap: true` + compatible authenticator (SaslauthdAuthenticator)
+   - Alternator auth → `authenticator` + `alternator_access_key_id` + `alternator_secret_access_key`
+   - Encryption at rest (KMS) → `server_encrypt: true` when KmsKeyProviderFactory is in options
+   - Object storage → `backup_bucket_backend` must be set when `backup_bucket_location` is set
+   - Manager backup on AWS → `aws_instance_profile_name_db` should be set
 2. Define rules as a dict in `sdcm/sct_config.py`
 3. Implement `_validate_config_requirements()` method
+4. For complex dependencies (KMS, object storage, manager backup), implement custom validation methods
 
 **Exit criteria**:
 - [ ] Rules table covers known dependencies
@@ -444,7 +630,12 @@ CONFIG_REQUIREMENTS = {
 **Actions**:
 1. Test that SLA config without auth raises error
 2. Test that SLA config with auth passes
-3. Test that unrelated configs are not affected
+3. Test that LDAP config without `ldap_server_type` raises error
+4. Test that LDAP authorization without `use_ldap: true` raises error
+5. Test that alternator auth without credentials raises error
+6. Test that object storage without method config raises error
+7. Test that unrelated configs are not affected
+8. Test that all existing valid pipeline configs pass validation (regression)
 
 **Exit criteria**:
 - [ ] Tests cover all defined rules
@@ -599,6 +790,65 @@ def _auto_include_auth_if_needed(self):
 1. **Option A first** (1 day) — the code change is trivial (`ac_template=True`), the migration is mechanical (add `{% include %}` lines to configs)
 2. **Option C second** (1-2 days) — defense-in-depth for cases where includes are forgotten
 3. **Option B optionally** — if Jenkins caching remains a problem for other parameters beyond `test_config`
+
+---
+
+## Appendix: Complete Config Dependency Map
+
+This appendix catalogs all discovered config interdependencies across SCT, organized by enforcement status.
+
+### Already Enforced in Code (`sdcm/sct_config.py`)
+
+| # | Trigger | Requirement | Method |
+|---|---------|-------------|--------|
+| 1 | `authenticator: PasswordAuthenticator` | `authenticator_user` + `authenticator_password` non-empty | Direct check (L2849-2856) |
+| 2 | `alternator_enforce_authorization: true` | `authenticator` + `authorizer` defined | Direct check (L2858-2862) |
+| 3 | `k8s_enable_sni: true` | `k8s_enable_tls: true` | Direct check (L2957-2958) |
+| 4 | `simulated_regions > 1` | Snitch auto-set to GossipingPropertyFileSnitch | Auto-fix (L2897-2910) |
+| 5 | `data_volume_disk_num > 0` | `data_volume_disk_type` + `data_volume_disk_size` | `_verify_data_volume_configuration()` |
+| 6 | `perf_gradual_throttle_steps` | `perf_gradual_threads` must match keys/count | Direct check (L2977-3009) |
+| 7 | `use_mgmt: true` + docker backend | Warns/validates docker limitations | `_validate_docker_backend_parameters()` |
+
+### Implicit — Need New Validation Rules (Option C Candidates)
+
+| # | Trigger | Requirement | Evidence | Priority |
+|---|---------|-------------|----------|----------|
+| 1 | `sla: true` or `service_level_shares` set | `authenticator: PasswordAuthenticator` | 30/30 Jenkinsfiles; nemesis `additional_configs` | **High** |
+| 2 | `service_level_shares` array | Length must match `<sla credentials N>` in stress cmds | `longevity-sla-100gb-4h.yaml` | **High** |
+| 3 | `use_ldap: true` | `ldap_server_type` set to 'openldap' or 'ms_ad' | 22/22 Jenkinsfiles; `ldap-authenticator.yaml` | **High** |
+| 4 | `use_ldap_authorization: true` | `use_ldap: true` + `authorizer: CassandraAuthorizer` | `ldap-authorization.yaml` | **High** |
+| 5 | `use_ldap_authentication: true` | `use_ldap: true` + `authenticator` compatible | `ldap-authenticator.yaml` | **High** |
+| 6 | `alternator_enforce_authorization: true` | `alternator_access_key_id` + `alternator_secret_access_key` | `enforce-authorization.yaml` | **High** |
+| 7 | `backup_bucket_location` set | `backup_bucket_backend` must be set | 10/10 object_storage Jenkinsfiles | **Medium** |
+| 8 | KmsKeyProviderFactory in `scylla_encryption_options` | `server_encrypt: true` | `kms-ear.yaml` | **Medium** |
+| 9 | `backup_bucket_location` + `cluster_backend: aws` | `aws_instance_profile_name_db` should be set | Manager test-cases | **Low** |
+| 10 | Gemini/Harry stress tools | `n_test_oracle_db_nodes >= 1` | `gemini/*.yaml`, `cdc/*.yaml` | **Low** |
+
+### Hard Dependencies — Include Candidates (Option A)
+
+| # | Config File | Must Include | Jenkinsfile Evidence |
+|---|-------------|-------------|---------------------|
+| 1 | `configurations/nemesis/additional_configs/sla_config.yaml` | `auth_cassandra.yaml` | 30/30 |
+| 2 | `configurations/rolling-upgrade-with-sla.yaml` | `auth_cassandra.yaml` | 3/3 |
+| 3 | `configurations/rolling-upgrade-with-sla-no-shares.yaml` | `auth_cassandra.yaml` | 3/3 |
+| 4 | `configurations/ldap-authorization.yaml` | `auth_cassandra.yaml` | 22/22 |
+| 5 | `configurations/ldap-authenticator.yaml` | `auth_cassandra.yaml` | 22/22 |
+| 6 | `configurations/ldap-authorization-and-authentication.yaml` | `auth_cassandra.yaml` | 22/22 |
+| 7 | `configurations/ms-ad-ldap-authenticator.yaml` | `auth_cassandra.yaml` | 22/22 |
+| 8 | `configurations/ms-ad-ldap-authorization.yaml` | `auth_cassandra.yaml` | 22/22 |
+| 9 | `configurations/ms-ad-ldap-authorization-and-authentication.yaml` | `auth_cassandra.yaml` | 22/22 |
+| 10 | `configurations/alternator/enforce-authorization.yaml` | `auth_cassandra.yaml` (dedup) | 18/18 |
+| 11 | `configurations/rolling-upgrade-alternator.yaml` | `auth_cassandra.yaml` (dedup) | 18/18 |
+| 12 | `test-cases/upgrades/generic-rolling-upgrade.yaml` | `auth_cassandra.yaml` + `rolling-upgrade-artifacts.yaml` | 6/6 |
+
+### Statistics
+
+- **Total Jenkinsfiles analyzed**: 1,124
+- **Multi-config arrays found**: 316
+- **Unique config files in use**: 256
+- **Hard dependencies (100% co-occurrence)**: 12 config files → `auth_cassandra.yaml`
+- **Existing validations in code**: 7
+- **New validation rules needed**: 10
 
 ---
 
