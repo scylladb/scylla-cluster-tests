@@ -366,16 +366,16 @@ wheels = [
 
 [[package]]
 name = "azure-mgmt-keyvault"
-version = "13.0.0"
+version = "14.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "azure-mgmt-core", marker = "sys_platform != 'win32'" },
     { name = "isodate", marker = "sys_platform != 'win32'" },
     { name = "typing-extensions", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/39/44/d453a7a125cb44f6443808f11c820a4c3f88d0af2c5b8d9adaf490ed064e/azure_mgmt_keyvault-13.0.0.tar.gz", hash = "sha256:56c12904e6d9ac49f886483e50e3f635d8bf43a489eb32fa7b4832f323d396c7", size = 102260, upload-time = "2025-12-11T10:14:41.609Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/df/dd/e74f82797ee3ff7001832427a218f3079e6174b9fa8b354b84434172d89d/azure_mgmt_keyvault-14.0.1.tar.gz", hash = "sha256:d141a8084ae4c7c5bd1cafeca49a8f3fbebc58dc5bc5290f322ea73d8b307ef7", size = 105496, upload-time = "2026-03-27T08:02:15.282Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/00/e4/f11ae6caa523834be04a1d52dee11c79f8838e6752f95af3bcfd4f979713/azure_mgmt_keyvault-13.0.0-py3-none-any.whl", hash = "sha256:02c5ca1b428fa7a2c393c6891b7436ad529a7ad22d378eba0b9a26291da67a0d", size = 102054, upload-time = "2025-12-11T10:14:43.064Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/c3/29238b1ef3784c31722b900c9c187d7c23dd0d7e724e970f3a7c104ed7aa/azure_mgmt_keyvault-14.0.1-py3-none-any.whl", hash = "sha256:7710873c5b667e19d86109caf2898dddb902e5ed21013e01d7d85ebb496928d7", size = 104380, upload-time = "2026-03-27T08:02:16.726Z" },
 ]
 
 [[package]]
@@ -408,17 +408,16 @@ wheels = [
 
 [[package]]
 name = "azure-mgmt-resource"
-version = "24.0.0"
+version = "25.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "azure-common", marker = "sys_platform != 'win32'" },
     { name = "azure-mgmt-core", marker = "sys_platform != 'win32'" },
     { name = "isodate", marker = "sys_platform != 'win32'" },
     { name = "typing-extensions", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/50/4c/b27a3dfbedebbcc8e346a956a803528bd94a19fdf14b1de4bd781b03a6cc/azure_mgmt_resource-24.0.0.tar.gz", hash = "sha256:cf6b8995fcdd407ac9ff1dd474087129429a1d90dbb1ac77f97c19b96237b265", size = 3030022, upload-time = "2025-06-17T08:04:01.731Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d7/7e/b3f9d544a94782be9c5ab8123d2fa7fb20cbdf3f5a16b883f308865e1406/azure_mgmt_resource-25.0.0.tar.gz", hash = "sha256:dc123a9f6509c37299d7716c9090cff0a9d73309b228cc094ea950ce3cca3603", size = 92837, upload-time = "2026-02-06T06:00:39.699Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/14/18/f047cb553dad6fdb65c625c4fe48552e043c4e9a859416a70c5047d07475/azure_mgmt_resource-24.0.0-py3-none-any.whl", hash = "sha256:27b32cd223e2784269f5a0db3c282042886ee4072d79cedc638438ece7cd0df4", size = 3613790, upload-time = "2025-06-17T08:04:04.046Z" },
+    { url = "https://files.pythonhosted.org/packages/92/41/ce12546aa2a20c4f37d061bfa7df3bf8fa72ff01e7557ec330929c72ec7d/azure_mgmt_resource-25.0.0-py3-none-any.whl", hash = "sha256:f6f17b2305abe9bf6ec6c92a9410af21a2b0d805cc98e94d80c07220924a045b", size = 83670, upload-time = "2026-02-06T06:00:41.317Z" },
 ]
 
 [[package]]
@@ -986,14 +985,14 @@ wheels = [
 
 [[package]]
 name = "deepdiff"
-version = "8.6.2"
+version = "9.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "orderly-set", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/89/50/767448e792d41bfb6094ee317a355c1cb221dca24b2e178e2203bbea2a77/deepdiff-8.6.2.tar.gz", hash = "sha256:186dcbd181e4d76cef11ab05f802d0056c5d6083c5a6748c1473e9d7481e183e", size = 634860, upload-time = "2026-03-18T17:16:33.785Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/24/20/63dd34163ed07393968128dc8c7ab948c96e47c4ce76976ea533de64909d/deepdiff-9.0.0.tar.gz", hash = "sha256:4872005306237b5b50829803feff58a1dfd20b2b357a55de22e7ded65b2008a7", size = 151952, upload-time = "2026-03-30T05:52:23.769Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2b/5f/c52bd1255db763d0cdcb7084d2e90c42119cb229302c56bdf1d0aa78abd2/deepdiff-8.6.2-py3-none-any.whl", hash = "sha256:4d22034a866c3928303a9332c279362f714192d9305bac17c498720d095fd1b4", size = 91979, upload-time = "2026-03-18T17:16:32.171Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/c4/da7089cd7aa4ab554f56e18a7fb08dcfed8fd2ae91fa528f5b1be207a148/deepdiff-9.0.0-py3-none-any.whl", hash = "sha256:b1ae0dd86290d86a03de5fbee728fde43095c1472ae4974bdab23ab4656305bd", size = 170540, upload-time = "2026-03-30T05:52:22.008Z" },
 ]
 
 [[package]]
@@ -1745,11 +1744,11 @@ wheels = [
 
 [[package]]
 name = "invoke"
-version = "2.2.0"
+version = "3.0.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f9/42/127e6d792884ab860defc3f4d80a8f9812e48ace584ffc5a346de58cdc6c/invoke-2.2.0.tar.gz", hash = "sha256:ee6cbb101af1a859c7fe84f2a264c059020b0cb7fe3535f9424300ab568f6bd5", size = 299835, upload-time = "2023-07-12T18:05:17.998Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/33/f6/227c48c5fe47fa178ccf1fda8f047d16c97ba926567b661e9ce2045c600c/invoke-3.0.3.tar.gz", hash = "sha256:437b6a622223824380bfb4e64f612711a6b648c795f565efc8625af66fb57f0c", size = 343419, upload-time = "2026-04-07T15:17:48.307Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0a/66/7f8c48009c72d73bc6bbe6eb87ac838d6a526146f7dab14af671121eb379/invoke-2.2.0-py3-none-any.whl", hash = "sha256:6ea924cc53d4f78e3d98bc436b08069a03077e6f85ad1ddaa8a116d7dad15820", size = 160274, upload-time = "2023-07-12T18:05:16.294Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/de/bbc12563bbf979618d17625a4e753ff7a078523e28d870d3626daa97261a/invoke-3.0.3-py3-none-any.whl", hash = "sha256:f11327165e5cbb89b2ad1d88d3292b5113332c43b8553b494da435d6ec6f5053", size = 160958, upload-time = "2026-04-07T15:17:46.875Z" },
 ]
 
 [[package]]
@@ -1972,12 +1971,11 @@ wheels = [
 
 [[package]]
 name = "kubernetes"
-version = "34.1.0"
+version = "35.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi", marker = "sys_platform != 'win32'" },
     { name = "durationpy", marker = "sys_platform != 'win32'" },
-    { name = "google-auth", marker = "sys_platform != 'win32'" },
     { name = "python-dateutil", marker = "sys_platform != 'win32'" },
     { name = "pyyaml", marker = "sys_platform != 'win32'" },
     { name = "requests", marker = "sys_platform != 'win32'" },
@@ -1986,9 +1984,9 @@ dependencies = [
     { name = "urllib3", marker = "sys_platform != 'win32'" },
     { name = "websocket-client", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ef/55/3f880ef65f559cbed44a9aa20d3bdbc219a2c3a3bac4a30a513029b03ee9/kubernetes-34.1.0.tar.gz", hash = "sha256:8fe8edb0b5d290a2f3ac06596b23f87c658977d46b5f8df9d0f4ea83d0003912", size = 1083771, upload-time = "2025-09-29T20:23:49.283Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2c/8f/85bf51ad4150f64e8c665daf0d9dfe9787ae92005efb9a4d1cba592bd79d/kubernetes-35.0.0.tar.gz", hash = "sha256:3d00d344944239821458b9efd484d6df9f011da367ecb155dadf9513f05f09ee", size = 1094642, upload-time = "2026-01-16T01:05:27.76Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ca/ec/65f7d563aa4a62dd58777e8f6aa882f15db53b14eb29aba0c28a20f7eb26/kubernetes-34.1.0-py2.py3-none-any.whl", hash = "sha256:bffba2272534e224e6a7a74d582deb0b545b7c9879d2cd9e4aae9481d1f2cc2a", size = 2008380, upload-time = "2025-09-29T20:23:47.684Z" },
+    { url = "https://files.pythonhosted.org/packages/0c/70/05b685ea2dffcb2adbf3cdcea5d8865b7bc66f67249084cf845012a0ff13/kubernetes-35.0.0-py2.py3-none-any.whl", hash = "sha256:39e2b33b46e5834ef6c3985ebfe2047ab39135d41de51ce7641a7ca5b372a13d", size = 2017602, upload-time = "2026-01-16T01:05:25.991Z" },
 ]
 
 [[package]]
@@ -3874,15 +3872,15 @@ wheels = [
 
 [[package]]
 name = "rich"
-version = "14.2.0"
+version = "15.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "markdown-it-py", marker = "sys_platform != 'win32'" },
     { name = "pygments", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fb/d2/8920e102050a0de7bfabeb4c4614a49248cf8d5d7a8d01885fbb24dc767a/rich-14.2.0.tar.gz", hash = "sha256:73ff50c7c0c1c77c8243079283f4edb376f0f6442433aecb8ce7e6d0b92d1fe4", size = 219990, upload-time = "2025-10-09T14:16:53.064Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c0/8f/0722ca900cc807c13a6a0c696dacf35430f72e0ec571c4275d2371fca3e9/rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36", size = 230680, upload-time = "2026-04-12T08:24:00.75Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/25/7a/b0178788f8dc6cafce37a212c99565fa1fe7872c70c6c9c1e1a372d9d88f/rich-14.2.0-py3-none-any.whl", hash = "sha256:76bc51fe2e57d2b1be1f96c524b890b816e334ab4c1e45888799bfaab0021edd", size = 243393, upload-time = "2025-10-09T14:16:51.245Z" },
+    { url = "https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl", hash = "sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb", size = 310654, upload-time = "2026-04-12T08:24:02.83Z" },
 ]
 
 [[package]]
@@ -4188,10 +4186,10 @@ requires-dist = [
     { name = "azure-identity", specifier = "==1.16.1" },
     { name = "azure-keyvault-keys", specifier = "==4.11.0" },
     { name = "azure-mgmt-compute", specifier = "==37.0.1" },
-    { name = "azure-mgmt-keyvault", specifier = "==13.0.0" },
+    { name = "azure-mgmt-keyvault", specifier = "==14.0.1" },
     { name = "azure-mgmt-msi", specifier = "==7.0.0" },
     { name = "azure-mgmt-network", specifier = "==30.0.0" },
-    { name = "azure-mgmt-resource", specifier = "==24.0.0" },
+    { name = "azure-mgmt-resource", specifier = "==25.0.0" },
     { name = "azure-mgmt-resourcegraph", specifier = "==8.0.0" },
     { name = "azure-mgmt-subscription", specifier = "==3.1.1" },
     { name = "azure-storage-blob", specifier = "==12.16.0" },
@@ -4200,7 +4198,7 @@ requires-dist = [
     { name = "click", specifier = "==8.1.3" },
     { name = "cloud-detect", specifier = ">=0.0.13" },
     { name = "confluent-kafka", extras = ["avro"], specifier = "==2.12.1" },
-    { name = "deepdiff", specifier = "==8.6.2" },
+    { name = "deepdiff", specifier = "==9.0.0" },
     { name = "docker", specifier = "==7.1.0" },
     { name = "fabric", specifier = "==3.2.2" },
     { name = "fastavro", specifier = "==1.11.1" },
@@ -4211,10 +4209,10 @@ requires-dist = [
     { name = "google-cloud-kms", specifier = ">=3.5.1" },
     { name = "google-cloud-storage", specifier = ">=3.5.0" },
     { name = "hdrhistogram", specifier = "==0.9.2" },
-    { name = "invoke", specifier = "==2.2.0" },
+    { name = "invoke", specifier = "==3.0.3" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "jira", specifier = "~=3.10.0" },
-    { name = "kubernetes", specifier = "==34.1.0" },
+    { name = "kubernetes", specifier = "==35.0.0" },
     { name = "ldap3-bleeding-edge", specifier = "==2.10.1.1338" },
     { name = "lz4", specifier = ">3.0.0" },
     { name = "moto", extras = ["server"], specifier = "==5.1.1" },
@@ -4237,7 +4235,7 @@ requires-dist = [
     { name = "pyzmq", specifier = "==27.1.0" },
     { name = "questionary", specifier = "==2.1.1" },
     { name = "requests", specifier = "==2.33.0" },
-    { name = "rich", specifier = "==14.2.0" },
+    { name = "rich", specifier = "==15.0.0" },
     { name = "scylla-driver", specifier = "==3.29.9" },
     { name = "sortedcontainers", specifier = "==2.4.0" },
     { name = "ssh2-python", marker = "python_full_version != '3.14.*' or platform_machine != 'arm64' or sys_platform != 'darwin'", specifier = ">=1.1.2.post1" },
