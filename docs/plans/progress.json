@@ -262,6 +262,16 @@
       "pr": null,
       "phases_total": 3,
       "phases_done": 0
+    },
+    {
+      "id": "aws-capacity-az-fallback",
+      "title": "AWS Capacity Validation and Automatic AZ/Region Fallback",
+      "file": "infrastructure/aws-capacity-az-fallback.md",
+      "domain": "cluster",
+      "status": "draft",
+      "created": "2026-04-12",
+      "phases_total": 5,
+      "phases_done": 0
     }
   ]
 }

@@ -31,6 +31,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Cassandra Cluster Support | `draft` | [cassandra-cluster-support.md](infrastructure/cassandra-cluster-support.md) |
 | SSH Key Decoupling | `draft` | [ssh-key-decoupling.md](infrastructure/ssh-key-decoupling.md) |
 | Multi-Cloud Provisioning Resilience | `draft` | [multi-cloud-provisioning-resilience.md](infrastructure/multi-cloud-provisioning-resilience.md) |
+| AWS Capacity AZ Fallback | `draft` | [aws-capacity-az-fallback.md](infrastructure/aws-capacity-az-fallback.md) |
 
 ### Nemesis — Chaos engineering, disruptors
 
