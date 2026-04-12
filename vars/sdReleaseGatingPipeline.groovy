@@ -562,7 +562,7 @@ PYTHON_EOF
                                             propagate: false,
                                             parameters: [
                                                 string(name: 'scylla_version', value: scyllaVersion),
-                                                string(name: 'scylla_doctor_tarball_url', value: params.sd_tarball_url.trim()),
+                                                string(name: 'scylla_doctor_full_tarball_url', value: params.sd_tarball_url.trim()),
                                                 string(name: 'scylla_doctor_edition', value: 'full'),
                                                 booleanParam(name: 'run_scylla_doctor_only', value: true),
                                                 string(name: 'post_behavior_db_nodes', value: params.post_behavior_db_nodes),
