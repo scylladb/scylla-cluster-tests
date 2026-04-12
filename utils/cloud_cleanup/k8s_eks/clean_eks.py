@@ -362,6 +362,7 @@ def clean_cloudformation_stacks(regions, keep_hours=DEFAULT_KEEP_HOURS, dry_run=
                             tags_dict = get_tags_dict_from_aws_tags(stack_details["Stacks"][0].get("Tags", []))
                     except Exception as exc:  # noqa: BLE001
                         LOGGER.debug("Failed to get stack details for %s: %s", stack_name, exc)
+                        stack_details = {}
                         tags_dict = {}
 
                     if ("CreatedBy", "SCT") not in tags_dict.items():
@@ -388,6 +389,11 @@ def clean_cloudformation_stacks(regions, keep_hours=DEFAULT_KEEP_HOURS, dry_run=
                         kept_stacks += 1
                         continue
 
+                    # Check if TerminationProtection is enabled (eksctl enables it on addon stacks)
+                    termination_protected = False
+                    if stack_details.get("Stacks"):
+                        termination_protected = stack_details["Stacks"][0].get("EnableTerminationProtection", False)
+
                     # Delete stack
                     if not dry_run:
                         LOGGER.info(
@@ -397,6 +403,15 @@ def clean_cloudformation_stacks(regions, keep_hours=DEFAULT_KEEP_HOURS, dry_run=
                             creation_time,
                         )
                         try:
+                            if termination_protected:
+                                LOGGER.info(
+                                    "Disabling TerminationProtection on stack %s before deletion",
+                                    stack_name,
+                                )
+                                cf_client.update_termination_protection(
+                                    EnableTerminationProtection=False,
+                                    StackName=stack_name,
+                                )
                             cf_client.delete_stack(StackName=stack_name)
                             LOGGER.info("%s deletion initiated", stack_name)
                             deleted_stacks += 1
@@ -404,9 +419,10 @@ def clean_cloudformation_stacks(regions, keep_hours=DEFAULT_KEEP_HOURS, dry_run=
                             LOGGER.error("Error while deleting CloudFormation stack %s: %s", stack_name, exc)
                     else:
                         LOGGER.info(
-                            "Dry run: would delete CloudFormation stack %s, creation time: %s",
+                            "Dry run: would delete CloudFormation stack %s, creation time: %s, termination_protected: %s",
                             stack_name,
                             creation_time,
+                            termination_protected,
                         )
                         deleted_stacks += 1
 
