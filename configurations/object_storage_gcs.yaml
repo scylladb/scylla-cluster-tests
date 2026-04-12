@@ -1,0 +1,5 @@
+append_scylla_yaml:
+  auto_snapshot: false
+  object_storage_endpoints:
+    - name: https://storage.googleapis.com  # endpoint is region agnostic for GCS
+      type: gs  # Scylla uses 'gs' to identify Google Cloud Storage instead of 'gcs'
