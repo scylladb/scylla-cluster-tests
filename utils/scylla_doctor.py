@@ -300,6 +300,14 @@ class ScyllaDoctor:
             LOGGER.info("curl already installed, proceeding...")
         else:
             self.node.install_package("curl")
+
+        tarball_url = self.test_config.tester_obj().params.get("scylla_doctor_tarball_url")
+        if tarball_url:
+            LOGGER.info("Using custom SD tarball URL: %s", tarball_url)
+            self.node.remoter.run(f"curl -JL {tarball_url} | tar -xvz")
+            self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
+            return
+
         if self.configured_version:
             LOGGER.info("Using configured scylla-doctor version: %s", self.configured_version)
             package = self.locate_scylla_doctor_package(version=self.configured_version)

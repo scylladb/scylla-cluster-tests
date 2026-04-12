@@ -100,6 +100,13 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('billing_project', '')}",
                    description: 'Billing project for the test run',
                    name: 'billing_project')
+            separator(name: 'SCYLLA_DOCTOR', sectionHeader: 'Scylla Doctor Configuration')
+            string(defaultValue: "${pipelineParams.get('scylla_doctor_tarball_url', '')}",
+                   description: 'Direct URL to a Scylla Doctor tarball in S3. When set, bypasses the standard version-based S3 lookup.',
+                   name: 'scylla_doctor_tarball_url')
+            booleanParam(defaultValue: "${pipelineParams.get('run_scylla_doctor_only', false)}",
+                   description: 'When true, runs only Scylla Doctor validation and skips the full artifact test flow.',
+                   name: 'run_scylla_doctor_only')
             separator(name: 'EXTRA_ENVIRONMENTAL_VARIABLES', sectionHeader: 'Extra environment variables Configuration')
             text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
                     description: (
@@ -269,6 +276,13 @@ def call(Map pipelineParams) {
                                                     fi
                                                     if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
                                                         export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                                    fi
+
+                                                    if [[ ! -z "${params.scylla_doctor_tarball_url}" ]]; then
+                                                        export SCT_SCYLLA_DOCTOR_TARBALL_URL="${params.scylla_doctor_tarball_url}"
+                                                    fi
+                                                    if [[ "${params.run_scylla_doctor_only}" == "true" ]]; then
+                                                        export SCT_RUN_SCYLLA_DOCTOR_ONLY=true
                                                     fi
 
                                                     echo "start test ......."
