@@ -107,6 +107,9 @@ def call(Map pipelineParams) {
             booleanParam(defaultValue: "${pipelineParams.get('run_scylla_doctor_only', false)}",
                    description: 'When true, runs only Scylla Doctor validation and skips the full artifact test flow.',
                    name: 'run_scylla_doctor_only')
+            choice(choices: ["${pipelineParams.get('scylla_doctor_edition', 'basic')}", 'basic', 'full'],
+                   description: "Scylla Doctor edition: 'basic' (collectors only) or 'full' (collectors + analyzers).",
+                   name: 'scylla_doctor_edition')
             separator(name: 'EXTRA_ENVIRONMENTAL_VARIABLES', sectionHeader: 'Extra environment variables Configuration')
             text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
                     description: (
@@ -283,6 +286,9 @@ def call(Map pipelineParams) {
                                                     fi
                                                     if [[ "${params.run_scylla_doctor_only}" == "true" ]]; then
                                                         export SCT_RUN_SCYLLA_DOCTOR_ONLY=true
+                                                    fi
+                                                    if [[ ! -z "${params.scylla_doctor_edition}" ]]; then
+                                                        export SCT_SCYLLA_DOCTOR_EDITION="${params.scylla_doctor_edition}"
                                                     fi
 
                                                     echo "start test ......."
