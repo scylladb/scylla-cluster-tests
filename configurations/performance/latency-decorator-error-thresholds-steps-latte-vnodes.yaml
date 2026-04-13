@@ -1,0 +1,120 @@
+# Latency decorator error thresholds for latte gradual throughput tests with vnodes (tablets disabled)
+# These thresholds are based on latte's performance characteristics which differ from cassandra-stress
+# Null thresholds to be updated after baseline testing on i8g.4xlarge instances
+
+latency_decorator_error_thresholds:
+  write:
+    unthrottled:
+      P90 write:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      Throughput write:
+        fixed_limit: null  # To be set after baseline testing
+
+  read:
+    "300000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "600000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "900000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "1100000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    unthrottled:
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+      Throughput read:
+        fixed_limit: null  # To be set after baseline testing
+
+  read_disk_only:
+    "80000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "165000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "250000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "300000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    unthrottled:
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+      Throughput read:
+        fixed_limit: null  # To be set after baseline testing
+
+  mixed:
+    "250000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "500000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "750000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    "900000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    unthrottled:
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+      Throughput write:
+        fixed_limit: null  # To be set after baseline testing
