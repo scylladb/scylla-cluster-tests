@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import datetime
+import json
 from dataclasses import dataclass, field
 from unittest.mock import MagicMock, patch
 
@@ -334,6 +335,17 @@ def test_download_basic_edition_skips_full(mock_boto_client, mock_node, mock_tes
     }
     mock_boto_client.return_value = mock_s3
 
+    def _run_side_effect(cmd, **kwargs):
+        result = MagicMock()
+        result.ok = True
+        if "file " in cmd:
+            result.stdout = "/tmp/scylla_doctor_download.tar.gz: gzip compressed data\n"
+        else:
+            result.stdout = "/home/testuser\n"
+        return result
+
+    mock_node.remoter.run.side_effect = _run_side_effect
+
     doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
 
     with patch.object(ScyllaDoctor, "download_full_scylla_doctor") as mock_full:
@@ -426,3 +438,312 @@ def test_full_edition_downloaded_flag_set_on_success(mock_node, mock_test_config
         doc.download_scylla_doctor()
 
     assert doc._full_edition_downloaded is True
+
+
+# --- is_full_edition tests ---
+
+
+def test_is_full_edition_true(mock_node, mock_test_config):
+    """When edition is 'full' AND the full binary was downloaded, is_full_edition should return True."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "full"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc._full_edition_downloaded = True
+    assert doc.is_full_edition is True
+
+
+def test_is_full_edition_false_when_download_failed(mock_node, mock_test_config):
+    """When edition is 'full' but the download fell back to basic, is_full_edition should return False."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "full"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    # _full_edition_downloaded defaults to False
+    assert doc.is_full_edition is False
+
+
+def test_is_full_edition_false_basic(mock_node, mock_test_config):
+    """When scylla_doctor_edition is 'basic', is_full_edition should return False."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "basic"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    assert doc.is_full_edition is False
+
+
+def test_is_full_edition_false_none(mock_node, mock_test_config):
+    """When scylla_doctor_edition is not set, is_full_edition should return False."""
+    test_config, _params = mock_test_config
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    assert doc.is_full_edition is False
+
+
+# --- run_analysis_phase tests ---
+
+
+def test_run_analysis_phase_skipped_for_basic(mock_node, mock_test_config):
+    """When edition is basic, run_analysis_phase should skip without running anything."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "basic"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc.json_result_file = "test.vitals.json"
+
+    with patch.object(doc, "run") as mock_run:
+        doc.run_analysis_phase()
+        mock_run.assert_not_called()
+
+
+def test_run_analysis_phase_skipped_when_no_vitals(mock_node, mock_test_config):
+    """When no vitals file is available, run_analysis_phase should skip."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "full"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc._full_edition_downloaded = True
+    doc.json_result_file = ""
+
+    with patch.object(doc, "run") as mock_run:
+        doc.run_analysis_phase()
+        mock_run.assert_not_called()
+
+
+def test_run_analysis_phase_full_edition_success(mock_node, mock_test_config):
+    """When edition is full, run_analysis_phase should run analysis and store the report file."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "full"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc._full_edition_downloaded = True
+    doc.json_result_file = "test-node.local.vitals.json"
+    doc.scylla_doctor_exec = "/home/testuser/scylla_doctor.pyz"
+
+    # Simulate scylla-doctor human-readable output with a Data analysis section
+    human_output = (
+        "Scylla Doctor v1.10\n"
+        "+ Data collection\n"
+        "  - SomeCollector: collector desc                   PASSED    Data collected\n"
+        "+ Data analysis\n"
+        "  - ConfigAnalyzer: Config validation               PASSED    All checks passed\n"
+    )
+    sudo_result = MagicMock()
+    sudo_result.stdout = human_output
+    mock_node.remoter.sudo.return_value = sudo_result
+
+    check_result = MagicMock()
+    check_result.ok = True
+    mock_node.remoter.run.return_value = check_result
+
+    doc.run_analysis_phase()
+
+    # Verify sudo was called with tee to save raw output to .txt file
+    mock_node.remoter.sudo.assert_called_once()
+    sudo_cmd = mock_node.remoter.sudo.call_args[0][0]
+    assert "--load-vitals test-node.local.vitals.json" in sudo_cmd
+    assert "tee" in sudo_cmd
+    assert "test-node.local.analysis.txt" in sudo_cmd
+
+    # The JSON report should be saved as .json
+    assert doc.analysis_report_file == "test-node.local.analysis.json"
+
+
+def test_run_analysis_phase_report_not_created(mock_node, mock_test_config):
+    """When the analysis report file is not created, ScyllaDoctorException should be raised."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "full"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc._full_edition_downloaded = True
+    doc.json_result_file = "test-node.local.vitals.json"
+    doc.scylla_doctor_exec = "/home/testuser/scylla_doctor.pyz"
+
+    sudo_result = MagicMock()
+    sudo_result.stdout = ""
+    mock_node.remoter.sudo.return_value = sudo_result
+
+    # test -s check fails — file was not created
+    check_result = MagicMock()
+    check_result.ok = False
+    mock_node.remoter.run.return_value = check_result
+
+    with pytest.raises(ScyllaDoctorException, match="Analysis report file"):
+        doc.run_analysis_phase()
+
+
+# --- analyze_and_verify_analysis_results tests ---
+
+
+def test_verify_analysis_results_all_pass(mock_node, mock_test_config):
+    """When all analyzers pass, analyze_and_verify_analysis_results should not raise."""
+    test_config, _params = mock_test_config
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc.analysis_report_file = "test.analysis.json"
+
+    json_report = json.dumps(
+        {
+            "ConfigAnalyzer": {"status": 0, "status_text": "PASSED", "info": "All checks passed"},
+            "PerformanceAnalyzer": {"status": 0, "status_text": "PASSED", "info": "No issues found"},
+        }
+    )
+    sudo_result = MagicMock()
+    sudo_result.stdout = json_report
+    mock_node.remoter.sudo.return_value = sudo_result
+
+    doc.analyze_and_verify_analysis_results()  # Should not raise
+
+
+def test_verify_analysis_results_failed_analyzer(mock_node, mock_test_config):
+    """When an analyzer fails, analyze_and_verify_analysis_results should raise AssertionError."""
+    test_config, _params = mock_test_config
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc.analysis_report_file = "test.analysis.json"
+
+    json_report = json.dumps(
+        {
+            "ConfigAnalyzer": {"status": 0, "status_text": "PASSED", "info": "All checks passed"},
+            "PerformanceAnalyzer": {"status": 1, "status_text": "FAILED", "info": "High latency detected"},
+        }
+    )
+    sudo_result = MagicMock()
+    sudo_result.stdout = json_report
+    mock_node.remoter.sudo.return_value = sudo_result
+
+    # Need to mock version property to avoid running remote command
+    with patch.object(type(doc), "version", new_callable=lambda: property(lambda self: "1.10")):
+        with pytest.raises(AssertionError, match="Failed analyzers"):
+            doc.analyze_and_verify_analysis_results()
+
+
+def test_verify_analysis_results_skipped_analyzer(mock_node, mock_test_config):
+    """Analyzers with status 2 (skipped) should not cause a failure."""
+    test_config, _params = mock_test_config
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc.analysis_report_file = "test.analysis.json"
+
+    json_report = json.dumps(
+        {
+            "ConfigAnalyzer": {"status": 0, "status_text": "PASSED", "info": "All checks passed"},
+            "SkippedAnalyzer": {"status": 2, "status_text": "SKIPPED", "info": "Not applicable"},
+        }
+    )
+    sudo_result = MagicMock()
+    sudo_result.stdout = json_report
+    mock_node.remoter.sudo.return_value = sudo_result
+
+    doc.analyze_and_verify_analysis_results()  # Should not raise
+
+
+def test_verify_analysis_results_warning_not_failure(mock_node, mock_test_config):
+    """Analyzers with WARNING status (status 0) should not cause a failure."""
+    test_config, _params = mock_test_config
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc.analysis_report_file = "test.analysis.json"
+
+    json_report = json.dumps(
+        {
+            "ConfigAnalyzer": {"status": 0, "status_text": "WARNING", "info": "Minor issue detected"},
+            "PerformanceAnalyzer": {"status": 0, "status_text": "PASSED", "info": "No issues found"},
+        }
+    )
+    sudo_result = MagicMock()
+    sudo_result.stdout = json_report
+    mock_node.remoter.sudo.return_value = sudo_result
+
+    doc.analyze_and_verify_analysis_results()  # Should not raise
+
+
+def test_verify_analysis_no_report_file(mock_node, mock_test_config):
+    """When no analysis report file exists, the method should return early without error."""
+    test_config, _params = mock_test_config
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc.analysis_report_file = ""
+
+    doc.analyze_and_verify_analysis_results()  # Should not raise
+    mock_node.remoter.sudo.assert_not_called()
+
+
+def test_verify_analysis_results_empty_json(mock_node, mock_test_config):
+    """When the JSON report is empty, ScyllaDoctorException should be raised."""
+    test_config, _params = mock_test_config
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc.analysis_report_file = "test.analysis.json"
+
+    sudo_result = MagicMock()
+    sudo_result.stdout = ""
+    mock_node.remoter.sudo.return_value = sudo_result
+
+    with pytest.raises(ScyllaDoctorException, match="Analysis output is empty"):
+        doc.analyze_and_verify_analysis_results()
+
+
+# --- _parse_human_readable_analysis tests ---
+
+
+ANALYSIS_REPORT_HEADER = (
+    "__            _ _            ___           _\n"
+    "/ _\\ ___ _   _   __ _     /   \\___   ___ _ ___  _ __\n"
+    "+ Data collection\n"
+    "  - CPUScalingCollector: CPU scaling check          PASSED    Data collected\n"
+    "+ Data analysis\n"
+)
+
+
+def test_parse_human_readable_all_pass():
+    """Parse human-readable output where all analyzers pass."""
+    content = (
+        ANALYSIS_REPORT_HEADER
+        + "  - ConfigAnalyzer: Config validation             PASSED    All checks passed\n"
+        + "  - PerformanceAnalyzer: Performance check        PASSED    No issues found\n"
+    )
+    result = ScyllaDoctor._parse_human_readable_analysis(content)
+    assert len(result) == 2
+    assert result["ConfigAnalyzer"]["status"] == 0
+    assert result["PerformanceAnalyzer"]["status"] == 0
+
+
+def test_parse_human_readable_failed():
+    """Parse human-readable output with a failed analyzer."""
+    content = (
+        ANALYSIS_REPORT_HEADER
+        + "  - ConfigAnalyzer: Config validation             PASSED    All checks passed\n"
+        + "  - PerformanceAnalyzer: Performance check        FAILED    High latency detected\n"
+    )
+    result = ScyllaDoctor._parse_human_readable_analysis(content)
+    assert result["PerformanceAnalyzer"]["status"] == 1
+    assert result["PerformanceAnalyzer"]["status_text"] == "FAILED"
+
+
+def test_parse_human_readable_warning():
+    """WARNING should be mapped to status 0 (not a failure)."""
+    content = (
+        ANALYSIS_REPORT_HEADER + "  - ConfigAnalyzer: Config validation             WARNING   Minor issue detected\n"
+    )
+    result = ScyllaDoctor._parse_human_readable_analysis(content)
+    assert result["ConfigAnalyzer"]["status"] == 0
+    assert result["ConfigAnalyzer"]["status_text"] == "WARNING"
+
+
+def test_parse_human_readable_skipped():
+    """SKIPPED should be mapped to status 2."""
+    content = ANALYSIS_REPORT_HEADER + "  - SkippedAnalyzer: Optional check               SKIPPED   Not applicable\n"
+    result = ScyllaDoctor._parse_human_readable_analysis(content)
+    assert result["SkippedAnalyzer"]["status"] == 2
+
+
+def test_parse_human_readable_no_analysis_section():
+    """When there is no Data analysis section, return empty dict."""
+    content = (
+        "Scylla Doctor v1.10\n"
+        "+ Data collection\n"
+        "  - SomeCollector: desc                            PASSED    Data collected\n"
+    )
+    result = ScyllaDoctor._parse_human_readable_analysis(content)
+    assert result == {}
+
+
+def test_parse_human_readable_ignores_collection_section():
+    """Only items in Data analysis section should be parsed, not Data collection."""
+    content = (
+        "+ Data collection\n"
+        "  - SomeCollector: collector desc                   FAILED    Error occurred\n"
+        "+ Data analysis\n"
+        "  - ConfigAnalyzer: Config validation               PASSED    All checks passed\n"
+    )
+    result = ScyllaDoctor._parse_human_readable_analysis(content)
+    assert len(result) == 1
+    assert "ConfigAnalyzer" in result
+    assert "SomeCollector" not in result
