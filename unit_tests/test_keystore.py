@@ -34,7 +34,14 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from moto import mock_aws
 
-from sdcm.keystore import KEYSTORE_S3_BUCKET, KeyStore, SSHKey, pub_key_from_private_key_file
+from sdcm import keystore as keystore_module
+from sdcm.keystore import (
+    KEYSTORE_S3_BUCKET,
+    KeyStore,
+    SSHKey,
+    materialize_ssh_key,
+    pub_key_from_private_key_file,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +243,51 @@ class TestDownloadFile:
         ks.download_file("scylla_test_id_ed25519", dest)
         with open(dest, "rb") as fh:
             assert fh.read() == FAKE_SSH_PRIVATE_KEY
+
+
+# ---------------------------------------------------------------------------
+# materialize_ssh_key
+# ---------------------------------------------------------------------------
+
+
+class TestMaterializeSshKey:
+    def test_writes_key_bytes(self, mocked_s3):
+        with materialize_ssh_key("scylla_test_id_ed25519") as key_path:
+            assert key_path.read_bytes() == FAKE_SSH_PRIVATE_KEY
+
+    def test_sets_0600_perms(self, mocked_s3):
+        with materialize_ssh_key("scylla_test_id_ed25519") as key_path:
+            mode = key_path.stat().st_mode & 0o777
+        assert mode == 0o600, f"expected 0o600, got {oct(mode)}"
+
+    def test_removes_file_on_exit(self, mocked_s3):
+        with materialize_ssh_key("scylla_test_id_ed25519") as key_path:
+            captured = key_path
+            assert captured.exists()
+        assert not captured.exists()
+
+    def test_removes_file_on_exception(self, mocked_s3):
+        captured = None
+        with pytest.raises(RuntimeError, match="boom"):
+            with materialize_ssh_key("scylla_test_id_ed25519") as key_path:
+                captured = key_path
+                raise RuntimeError("boom")
+        assert captured is not None and not captured.exists()
+
+    def test_prefers_tmpfs_when_available(self, mocked_s3):
+        """On Linux with /dev/shm available, keys land on tmpfs."""
+        if not os.path.isdir("/dev/shm"):
+            pytest.skip("no /dev/shm on this platform")
+        with materialize_ssh_key("scylla_test_id_ed25519") as key_path:
+            assert str(key_path).startswith("/dev/shm/"), f"expected /dev/shm placement, got {key_path}"
+
+    def test_falls_back_when_tmpfs_missing(self, mocked_s3, monkeypatch):
+        """Falls back to the system temp dir when /dev/shm is not a directory."""
+        fake_tmpfs = keystore_module.Path("/nonexistent-sct-tmpfs-xyz")
+        monkeypatch.setattr(keystore_module, "_TMPFS_PATH", fake_tmpfs)
+        with materialize_ssh_key("scylla_test_id_ed25519") as key_path:
+            assert not str(key_path).startswith("/dev/shm/")
+            assert key_path.read_bytes() == FAKE_SSH_PRIVATE_KEY
 
 
 # ---------------------------------------------------------------------------

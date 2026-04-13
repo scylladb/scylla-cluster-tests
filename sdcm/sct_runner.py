@@ -14,14 +14,14 @@
 
 from __future__ import annotations
 
+import atexit
 import base64
 import datetime
 import glob
 import logging
 import random
 import string
-import tempfile
-from contextlib import suppress
+from contextlib import ExitStack, suppress
 from enum import Enum
 from functools import cached_property
 from itertools import chain
@@ -60,7 +60,7 @@ except ImportError:
         LaunchInstanceShapeConfig = None
 
 from sct_ssh import ssh_run_cmd
-from sdcm.keystore import KeyStore
+from sdcm.keystore import KeyStore, materialize_ssh_key
 from sdcm.provision.oci.constants import TAG_NAMESPACE
 from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance, provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
@@ -196,7 +196,12 @@ class SctRunner(ABC):
         self.region_name = region_name
         self.availability_zone = availability_zone
         self._instance = None
-        self._ssh_pkey_file = None
+        # Lifetime manager for the materialised SSH key file. Entered lazily
+        # in get_remoter(); closed via atexit since this class has no
+        # teardown hook. Closing unlinks the tmpfs key file.
+        self._ssh_pkey_stack = ExitStack()
+        self._ssh_pkey_path = None
+        atexit.register(self._ssh_pkey_stack.close)
         self.params = params
 
     @abstractmethod
@@ -224,11 +229,13 @@ class SctRunner(ABC):
     def key_pair(self) -> SSHKey: ...
 
     def get_remoter(self, host, connect_timeout: Optional[float] = None) -> RemoteCmdRunnerBase:
-        self._ssh_pkey_file = tempfile.NamedTemporaryFile(mode="w", delete=False)
-        self._ssh_pkey_file.write(self.key_pair.private_key.decode())
-        self._ssh_pkey_file.flush()
+        if self._ssh_pkey_path is None:
+            # Materialise once per runner instance on /dev/shm (tmpfs) with
+            # 0600 perms; unlinked when self._ssh_pkey_stack is closed at
+            # interpreter exit.
+            self._ssh_pkey_path = self._ssh_pkey_stack.enter_context(materialize_ssh_key(self.key_pair.name))
         return RemoteCmdRunnerBase.create_remoter(
-            hostname=host, user=self.LOGIN_USER, key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout
+            hostname=host, user=self.LOGIN_USER, key_file=str(self._ssh_pkey_path), connect_timeout=connect_timeout
         )
 
     def install_prereqs(self, public_ip: str, connect_timeout: Optional[int] = None) -> None:

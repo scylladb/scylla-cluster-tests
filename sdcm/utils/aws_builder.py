@@ -276,7 +276,10 @@ class AwsBuilder:
             ),
         )
         res.raise_for_status()
-        LOGGER.debug(res.text)
+        # Jenkins scriptText responds with empty body on success; log only
+        # the length to avoid leaking any accidental credential material
+        # from error responses (flagged by CodeQL as clear-text logging).
+        LOGGER.debug("jenkins scriptText response length=%d", len(res.text))
         assert not res.text
 
     def configure_auto_scaling_group(self):

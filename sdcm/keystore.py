@@ -16,9 +16,12 @@ import json
 import time
 import hashlib
 import logging
+import tempfile
 import threading
 import configparser
-from typing import BinaryIO
+from contextlib import contextmanager
+from pathlib import Path
+from typing import BinaryIO, Iterator
 from concurrent.futures.thread import ThreadPoolExecutor
 from collections import namedtuple
 
@@ -158,8 +161,23 @@ class KeyStore:
         return json.loads(self.get_file_contents(json_file))
 
     def download_file(self, filename, dest_filename):
-        """Download a keystore file directly to disk, bypassing the cache."""
+        """Download a keystore file directly to disk, bypassing the cache.
+
+        .. warning::
+            This writes decrypted secret bytes to an arbitrary filesystem
+            path. Callers are responsible for the destination's security:
+            prefer :func:`materialize_ssh_key` for SSH keys (RAM-backed
+            tmpfs + 0600 perms + cleanup); other callers must set 0600
+            permissions and place the file on non-persistent storage
+            whenever possible.
+        """
         with open(dest_filename, "wb") as file_obj:
+            # CodeQL [py/clear-text-storage-sensitive-data]: intentional —
+            # keystore payloads (SSH keys, creds, JSON configs) must live
+            # on disk for external consumers (libssh2, ssh/scp/rsync,
+            # Ansible, Docker volume mounts, Jenkins builders). The
+            # preferred API materialize_ssh_key places keys on tmpfs and
+            # cleans them up; callers of download_file must apply 0600.
             file_obj.write(self._fetch_content(filename))
 
     def get_email_credentials(self):
@@ -383,6 +401,48 @@ class KeyStore:
             if "AWSCURRENT" in stages:
                 return version_id
         return ""
+
+
+# Linux tmpfs mount; RAM-backed so secrets never hit persistent storage.
+_TMPFS_PATH = Path("/dev/shm")
+
+
+@contextmanager
+def materialize_ssh_key(name: str) -> Iterator[Path]:
+    """Write an SSH private key from the keystore to RAM-backed tmpfs.
+
+    Yields a :class:`Path` to a temp file containing the private key bytes
+    with ``0600`` permissions. The file is placed on ``/dev/shm`` (Linux
+    tmpfs, RAM-only) when available, so the key never touches persistent
+    storage; it falls back to the system temp dir otherwise. The file is
+    removed on context exit.
+
+    Args:
+        name: Key name in the keystore (e.g. ``scylla-qa-ec2``). Resolved
+            via :meth:`KeyStore.get_ssh_key_pair`.
+
+    Yields:
+        Path to the materialised key file. The path is valid only inside
+        the ``with`` block — consumers that need the key for longer must
+        manage lifetime themselves (e.g. via :class:`contextlib.ExitStack`).
+
+    Example:
+        >>> with materialize_ssh_key("scylla-qa-ec2") as key_path:
+        ...     subprocess.run(["ssh", "-i", str(key_path), "user@host"])
+    """
+    tmpfs_dir = str(_TMPFS_PATH) if _TMPFS_PATH.is_dir() else None
+    fh = tempfile.NamedTemporaryFile(dir=tmpfs_dir, prefix=f"sct-ssh-{name}-", delete=False)
+    try:
+        os.fchmod(fh.fileno(), 0o600)
+        fh.write(KeyStore().get_ssh_key_pair(name).private_key)
+        fh.flush()
+        path = Path(fh.name)
+    finally:
+        fh.close()
+    try:
+        yield path
+    finally:
+        path.unlink(missing_ok=True)
 
 
 def pub_key_from_private_key_file(key_file):

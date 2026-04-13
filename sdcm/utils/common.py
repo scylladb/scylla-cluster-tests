@@ -112,6 +112,46 @@ def deprecation(message):
     warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 
+_SECRET_REDACTED = "****"
+
+# Flags whose *next* argument is the secret value (e.g. ``-password foo`` or
+# ``--token=foo``). Anchored on whitespace/start-of-string so substrings like
+# ``--api-key-rotation`` don't match. The value extends to the next unquoted
+# whitespace.
+_SECRET_FLAG_RE = re.compile(
+    r"(?P<prefix>(?:^|\s)--?(?:pw|pass|password|auth-password|token|api-key|api_key|secret))"
+    r"(?P<sep>[=\s]+)(?P<value>\S+)",
+    re.IGNORECASE,
+)
+
+# ``KEY=VALUE`` style used by YCSB ``-p password=foo`` and env-var exports.
+_SECRET_KV_RE = re.compile(
+    r"(?P<prefix>(?:^|[\s\"'])(?:password|passwd|pwd|token|api[_-]?key|secret|auth[_-]password))"
+    r"(?P<sep>=)(?P<value>\S+)",
+    re.IGNORECASE,
+)
+
+
+def redact_cli_secrets(cmd: str) -> str:
+    """Return a copy of *cmd* with credential-bearing arguments masked.
+
+    Recognises two common shapes seen in stress-tool command lines (scylla-bench,
+    cassandra-stress, YCSB, etc.):
+
+    - flag + value: ``-password foo``, ``--token=foo``, ``--api-key abc``
+    - ``KEY=VALUE``: ``password=foo``, ``TOKEN=abc``, ``-p password=foo``
+
+    The value is replaced with ``****``; the flag/key is preserved so the log
+    still shows *what* was redacted. Intended for logging only — do not use
+    this to build commands that should still execute.
+    """
+    if not cmd:
+        return cmd
+    redacted = _SECRET_FLAG_RE.sub(lambda m: f"{m['prefix']}{m['sep']}{_SECRET_REDACTED}", cmd)
+    redacted = _SECRET_KV_RE.sub(lambda m: f"{m['prefix']}{m['sep']}{_SECRET_REDACTED}", redacted)
+    return redacted
+
+
 def _remote_get_hash(remoter, file_path):
     try:
         result = remoter.run("md5sum {}".format(file_path), verbose=True)
@@ -299,8 +339,11 @@ class S3Storage:
             self._bucket.upload_file(Filename=file_path, Key=s3_obj, Config=self.transfer_config)
             LOGGER.info("Uploaded to {0}".format(s3_url))
 
-            for user, canonical_id in KeyStore().get_acl_grantees().items():
-                LOGGER.info("Setting ACL for user %s", user)
+            for grantee_email, canonical_id in KeyStore().get_acl_grantees().items():
+                # CodeQL [py/clear-text-logging-sensitive-data]: grantee_email
+                # is the AWS account display name from bucket-users.json — a
+                # directory identifier, not a credential.
+                LOGGER.info("Setting ACL for user %s", grantee_email)
                 boto3.client("s3").put_object_acl(Bucket=self.bucket_name, Key=s3_obj, GrantRead=f"id={canonical_id}")
             if public:
                 LOGGER.info("Set public read access")
