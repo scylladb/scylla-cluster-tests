@@ -36,6 +36,11 @@ from cloud_detect import provider
 LOGGER = logging.getLogger(__name__)
 
 KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
+# Region where the keystore resources live. The S3 bucket above reports
+# LocationConstraint=null (us-east-1), and the Secrets Manager secrets
+# migrated from it live in the same region. Hard-coded to match the bucket
+# so clients don't need AWS_DEFAULT_REGION set to reach the keystore.
+KEYSTORE_REGION = "us-east-1"
 
 SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
 
@@ -105,7 +110,7 @@ class KeyStore:
     )
     def _fetch_from_secrets_manager(self, file_name):
         """Fetch a secret from AWS Secrets Manager with automatic retry."""
-        sm = boto3.client("secretsmanager")
+        sm = boto3.client("secretsmanager", region_name=KEYSTORE_REGION)
         secret_name = f"{self._sm_prefix}{file_name}"
         resp = sm.get_secret_value(SecretId=secret_name)
         if "SecretBinary" in resp:
@@ -396,7 +401,7 @@ class KeyStore:
 
     def get_sm_version_id(self, key):
         """Return the current VersionId of a Secrets Manager secret."""
-        sm = boto3.client("secretsmanager")
+        sm = boto3.client("secretsmanager", region_name=KEYSTORE_REGION)
         secret_name = f"{self._sm_prefix}{key}"
         resp = sm.describe_secret(SecretId=secret_name)
         # VersionIdsToStages maps VersionId -> [stage names]; AWSCURRENT marks the live version
