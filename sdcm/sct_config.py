@@ -1310,6 +1310,7 @@ class SCTConfiguration(BaseModel):
                 'basic' fetches the free/open-source edition via HTTP.
                 'full' fetches the full/enterprise edition from a private S3 bucket.""",
     )
+
     skip_test_stages: DictOrStr = SctField(
         description="Skip selected stages of a test scenario",
     )

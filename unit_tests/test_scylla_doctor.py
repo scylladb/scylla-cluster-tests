@@ -325,6 +325,17 @@ def test_download_basic_edition_skips_full(mock_boto_client, mock_node, mock_tes
     }
     mock_boto_client.return_value = mock_s3
 
+    def _run_side_effect(cmd, **kwargs):
+        result = MagicMock()
+        result.ok = True
+        if "file " in cmd:
+            result.stdout = "/tmp/scylla_doctor_download.tar.gz: gzip compressed data\n"
+        else:
+            result.stdout = "/home/testuser\n"
+        return result
+
+    mock_node.remoter.run.side_effect = _run_side_effect
+
     doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
 
     with patch.object(ScyllaDoctor, "download_full_scylla_doctor") as mock_full:
@@ -489,3 +500,81 @@ def test_find_scylla_bundled_python3_raises_when_not_found(doctor, is_nonroot, r
 
     with pytest.raises(ScyllaDoctorException, match="No Scylla-bundled python3"):
         doctor.find_scylla_bundled_python3("/home/user")
+
+
+# --- run_analysis_phase tests ---
+
+
+def test_run_analysis_phase_skips_when_not_full_edition(mock_node, mock_test_config):
+    """When edition is not full, run_analysis_phase should skip without error."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "basic"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc.json_result_file = "test-node.local.vitals.json"
+
+    doc.run_analysis_phase()
+
+    # No remoter calls should have been made for the analysis phase
+    mock_node.remoter.sudo.assert_not_called()
+
+
+def test_run_analysis_phase_full_edition_success(mock_node, mock_test_config):
+    """When edition is full, run_analysis_phase should run analysis and store the report file."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "full"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc._full_edition_downloaded = True
+    doc.json_result_file = "test-node.local.vitals.json"
+    doc.scylla_doctor_exec = "/home/testuser/scylla_doctor.pyz"
+
+    # First sudo call is from run() — returns the JSON analysis output
+    run_result = MagicMock()
+    run_result.stdout = '{"SomeAnalyzer": {"status": 0}}'
+    # Second sudo call is to write the file via base64
+    write_result = MagicMock()
+    write_result.stdout = ""
+    mock_node.remoter.sudo.side_effect = [run_result, write_result]
+
+    check_result = MagicMock()
+    check_result.ok = True
+    check_result.stdout = "test-node.local.analysis.json\n"
+    mock_node.remoter.run.return_value = check_result
+
+    doc.run_analysis_phase()
+
+    # Verify sudo was called with --output json to produce JSON output
+    first_sudo_cmd = mock_node.remoter.sudo.call_args_list[0][0][0]
+    assert "--load-vitals test-node.local.vitals.json" in first_sudo_cmd
+    assert "--output json" in first_sudo_cmd
+
+    assert doc.analysis_report_file == "test-node.local.analysis.json"
+
+
+def test_run_analysis_phase_report_not_created(mock_node, mock_test_config):
+    """When the analysis report file is not created, ScyllaDoctorException should be raised."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "full"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc._full_edition_downloaded = True
+    doc.json_result_file = "test-node.local.vitals.json"
+    doc.scylla_doctor_exec = "/home/testuser/scylla_doctor.pyz"
+
+    # First sudo call is from run() — returns JSON output
+    run_result = MagicMock()
+    run_result.stdout = '{"SomeAnalyzer": {"status": 0}}'
+    # Second sudo call is to write the file via base64
+    write_result = MagicMock()
+    write_result.stdout = ""
+    # Third sudo call is from self.version (accessed in exception message)
+    version_result = MagicMock()
+    version_result.stdout = "1.9.0"
+    mock_node.remoter.sudo.side_effect = [run_result, write_result, version_result]
+
+    # test -s check fails — file was not created
+    check_result = MagicMock()
+    check_result.ok = False
+    check_result.stdout = ""
+    mock_node.remoter.run.return_value = check_result
+
+    with pytest.raises(ScyllaDoctorException, match="Analysis report file"):
+        doc.run_analysis_phase()

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import base64
 import json
 import logging
 import pprint
@@ -70,6 +71,43 @@ class ScyllaDoctor:
         ; skip until https://scylladb.atlassian.net/browse/DOCTOR-19 is figured out
         run = no
     """)
+    SCYLLA_DOCTOR_ANALYZER_CONFIG = dedent("""
+        [RAMAnalyzer]
+        ; change recommended ram value for this analyzer as it is not relevant for the test and should not cause test failures
+        ram_recommended_total = 7340032
+        ram_recommended_per_lcore = 3145728
+        [SwapAnalyzer]
+        ; change Recommended RAM to swap ratio for this analyzer as it is not relevant for the test and should not cause test failures
+        ram_swap_ratio = 3.5
+        [StorageRAMRatioAnalyzer]
+        ; Maximum recommended Disk to RAM ratio
+        ratio = 120
+        [ScyllaServicesAnalyzer]
+        ; disable this analyzer
+        run = no
+        [CPUScalingAnalyzer]
+        ; @Vladislav Zolotarov request
+        run = no
+        [RsyslogAnalyzer]
+        ; do not need to configure it, SD check that /etc/rsyslog.d/scylla.conf file exists only
+        run = no
+        [ScyllaInternodeCompressionAnalyzer]
+        ; not relevant for this test
+        run = no
+        [ScyllaSnitchAnalyzer]
+        ; It's default snitch, not relevant to change for this test. Scylla issue https://github.com/scylladb/scylladb/issues/2370
+        run = no
+        [ScyllaUpdateAnalyzer]
+        ; not relevant for this test
+        run = no
+        [ScyllaClusterSystemKeyspacesReplicationAnalyzer]
+        ; in the production the NetworkTopologyStrategy has to be configured, skip for now with Switch internal distributed keyspaces from SimpleStrategy to NetworkTopologyStrategy / EverywhereStrategy / Raft Group 0  · Issue #1796 · scylladb/scylladb
+        run = no
+        [ScyllaConfigurationConsistencyAnalyzer]
+        ; skip
+        skip_source_validation_keys = abort_on_ebadf, abort_on_internal_error, abort_on_lsa_bad_alloc, enable_sstable_key_validation
+        skip_persisted_validation_keys = kms_hosts
+    """)
 
     def __init__(self, node: BaseNode, test_config: TestConfig, offline_install=False):
         self.node = node
@@ -78,7 +116,21 @@ class ScyllaDoctor:
         self.scylla_doctor_exec = "scylla-doctor"
         self.json_result_file = ""
         self.scylla_logs_file = ""
+        self.analysis_report_file = ""
         self.python3_path = ""
+        self._full_edition_downloaded = False
+
+    @property
+    def is_full_edition(self):
+        """Check whether the full (enterprise) edition of Scylla Doctor is actually installed.
+
+        Returns True only when the edition is configured as ``"full"`` AND the
+        full edition binary was successfully downloaded.  If the download failed
+        and fell back to basic, this returns False — preventing the analysis
+        phase from running with a basic edition binary that cannot produce the
+        expected JSON output.
+        """
+        return self.configured_edition == "full" and self._full_edition_downloaded
 
     def run(self, sd_command):
         if self.python3_path:
@@ -91,8 +143,11 @@ class ScyllaDoctor:
 
     @cached_property
     def current_dir(self):
-        result = self.node.remoter.run("pwd", verbose=False)
-        return result.stdout.strip()
+        # Use a dedicated writable directory instead of relying on pwd,
+        # which may point to a non-writable location in Docker containers.
+        sd_dir = "/tmp/scylla_doctor"
+        self.node.remoter.run(f"mkdir -p {sd_dir}", verbose=False)
+        return sd_dir
 
     @cached_property
     def version(self):
@@ -183,8 +238,12 @@ class ScyllaDoctor:
         """Parse an S3 reference into ``(bucket_name, object_key)``.
 
         Supported formats:
+        - ``https://s3.amazonaws.com/BUCKET/KEY`` — path-style URL.
+        - ``https://s3.REGION.amazonaws.com/BUCKET/KEY`` — path-style with region.
+        - ``https://BUCKET.s3.amazonaws.com/KEY`` — virtual-hosted style.
+        - ``https://BUCKET.s3.REGION.amazonaws.com/KEY`` — virtual-hosted with region.
         - ``https://BUCKET/KEY`` — bucket name extracted from host,
-          key from the path.
+          key from the path (legacy/simple format).
         - ``prefix/path/file.tar.gz`` (bare S3 key, no scheme) — uses
           *default_bucket*.
 
@@ -201,9 +260,25 @@ class ScyllaDoctor:
         if not parsed.scheme:
             return default_bucket, url
 
-        # https://BUCKET/KEY
         host = parsed.hostname or ""
         path = parsed.path.lstrip("/")
+
+        # Path-style: https://s3.amazonaws.com/BUCKET/KEY
+        #          or https://s3.REGION.amazonaws.com/BUCKET/KEY
+        if re.match(r"s3([.-][a-z0-9-]+)?\.amazonaws\.com$", host):
+            # First path segment is the bucket, rest is the key
+            parts = path.split("/", 1)
+            bucket = parts[0]
+            key = parts[1] if len(parts) > 1 else ""
+            return bucket, key
+
+        # Virtual-hosted style: https://BUCKET.s3.amazonaws.com/KEY
+        #                     or https://BUCKET.s3.REGION.amazonaws.com/KEY
+        match = re.match(r"(.+)\.s3([.-][a-z0-9-]+)?\.amazonaws\.com$", host)
+        if match:
+            return match.group(1), path
+
+        # Fallback: treat host as bucket name, path as key
         return host, path
 
     @staticmethod
@@ -243,6 +318,10 @@ class ScyllaDoctor:
         Downloads to a temporary file first so that HTTP errors (e.g. S3
         returning a short XML error page) are detected before ``tar`` runs.
 
+        Extraction always targets ``self.current_dir`` via ``-C`` so that
+        it works even when the remoter's working directory is not writable
+        (common in Docker containers).
+
         Args:
             url: Full URL (may be a pre-signed S3 URL).
             description: Human-readable label for log messages.
@@ -275,7 +354,20 @@ class ScyllaDoctor:
                 f"Downloaded {description} file is not a valid gzip tarball. First 500 bytes of response:\n{body_head}"
             )
         LOGGER.info("Extracting %s tarball...", description)
-        self.node.remoter.run(f"tar -xvzf {tmp_tarball} && rm -f {tmp_tarball}")
+        # --no-same-owner: avoid chown failures in Docker containers running as non-root
+        # --no-same-permissions: avoid permission restore issues in restricted environments
+        extract_result = self.node.remoter.run(
+            f"tar -xzf {tmp_tarball} -C {self.current_dir} --no-same-owner --no-same-permissions 2>&1",
+            ignore_status=True,
+        )
+        if extract_result.ok:
+            self.node.remoter.run(f"rm -f {tmp_tarball}", verbose=False, ignore_status=True)
+        else:
+            stderr_output = extract_result.stdout.strip() or extract_result.stderr.strip()
+            self.node.remoter.run(f"rm -f {tmp_tarball}", verbose=False, ignore_status=True)
+            raise ScyllaDoctorException(
+                f"Failed to extract {description} tarball (exit code {extract_result.exited}): {stderr_output}"
+            )
 
     def download_full_scylla_doctor(self):
         """Download the full scylla-doctor edition using an S3 pre-signed URL.
@@ -344,14 +436,6 @@ class ScyllaDoctor:
             LOGGER.info("curl already installed, proceeding...")
         else:
             self.node.install_package("curl")
-
-        tarball_url = self.test_config.tester_obj().params.get("scylla_doctor_tarball_url")
-        if tarball_url:
-            LOGGER.info("Using custom SD tarball URL: %s", tarball_url)
-            self.node.remoter.run(f"curl -JL {tarball_url} | tar -xvz")
-            self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
-            return
-
         if self.configured_version:
             LOGGER.info("Using configured scylla-doctor version: %s", self.configured_version)
             package = self.locate_scylla_doctor_package(version=self.configured_version)
@@ -374,15 +458,20 @@ class ScyllaDoctor:
 
     def update_scylla_doctor_config(self, prefix: str, additional_config=""):
         with remote_file(self.node.remoter, f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_CONF}") as f:
-            config = dedent(f"""
-                [DefaultPaths]
-                scylla_directory = {prefix}/scylladb
-                scylla_directory_config = {prefix}/scylladb/etc/scylla
-                scylla_directory_configs = {prefix}/scylladb/etc/scylla.d
-                scylla_directory_var = {prefix}/scylladb
+            # Only override DefaultPaths for nonroot installs where Scylla
+            # lives under $HOME/scylladb instead of system paths.
+            if self.node.is_nonroot_install:
+                default_paths = dedent(f"""
+                    [DefaultPaths]
+                    scylla_directory = {prefix}/scylladb
+                    scylla_directory_config = {prefix}/scylladb/etc/scylla
+                    scylla_directory_configs = {prefix}/scylladb/etc/scylla.d
+                    scylla_directory_var = {prefix}/scylladb
+                """)
+            else:
+                default_paths = ""
 
-                {additional_config}
-            """)
+            config = f"{default_paths}\n{additional_config}\n"
             LOGGER.info("Updating scylla-doctor-config file...\n%s", config)
 
             f.seek(0)
@@ -394,15 +483,22 @@ class ScyllaDoctor:
         if self.node.parent_cluster.cluster_backend == "docker":
             self.node.install_package("ethtool")
             self.node.install_package("tar")
+            self.node.install_package("gzip")
+            self.node.install_package("file")
 
         # Always download from S3 — package repos are not updated at the same
         # time as S3 releases, and specific versions may not be available via repo.
         self.download_scylla_doctor()
         self.python3_path = self.find_scylla_bundled_python3(self.current_dir)
+
+        additional_config = ""
         if self.node.is_nonroot_install:
-            self.update_scylla_doctor_config(
-                self.current_dir, additional_config=self.SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS
-            )
+            additional_config += self.SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS
+        if self.is_full_edition:
+            additional_config += self.SCYLLA_DOCTOR_ANALYZER_CONFIG
+
+        if additional_config:
+            self.update_scylla_doctor_config(self.current_dir, additional_config=additional_config)
 
         # TODO: optionally install via package manager (apt/yum/dnf) instead of S3
         #  download. Needs an SCT configuration toggle to enable this path.
@@ -471,7 +567,24 @@ class ScyllaDoctor:
             f"Scylla doctor requires the python3 executable bundled with the Scylla installation."
         )
 
+    def _ensure_lspci(self):
+        """Install pciutils (provides lspci) if not already present."""
+        result = self.node.remoter.sudo("which lspci", ignore_status=True, verbose=False)
+        if result.ok:
+            LOGGER.info("lspci already installed, proceeding...")
+            return
+        LOGGER.info("lspci not found, installing pciutils...")
+        self.node.install_package("pciutils")
+
+    def _ensure_iptables(self):
+        """Install and start iptables service before SD Analyzer run."""
+        self.node.install_package("iptables")
+        self.node.start_service("iptables", ignore_status=True)
+
     def run_scylla_doctor_and_collect_results(self):
+        self._ensure_lspci()
+        self._ensure_iptables()
+
         auth_options = ""
         if credentials := self.node.parent_cluster.get_db_auth():
             auth_options = "-sov CQL,user,{} -sov CQL,password,{} ".format(*credentials)
@@ -501,12 +614,166 @@ class ScyllaDoctor:
         result = self.run(sd_command=f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file} --verbose")
         LOGGER.debug(pprint.pformat(result))
 
+    def run_analysis_phase(self):
+        """Run the analysis phase of Scylla Doctor (full edition only).
+
+        Loads previously collected vitals and runs analyzers to produce
+        findings and recommendations about the cluster health.
+
+        Uses ``--output json`` to get the analysis report in JSON format
+        from stdout, then saves it to a file for later verification.
+        """
+        if not self.is_full_edition:
+            LOGGER.info("Skipping analysis phase — only available for the full edition")
+            return
+
+        if not self.json_result_file:
+            LOGGER.warning("Cannot run analysis phase: no vitals file collected")
+            return
+
+        json_report_name = f"{self.node.public_dns_name}.analysis.json"
+        LOGGER.info("Running Scylla Doctor analysis phase (full edition)...")
+
+        sd_cmd = f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file} --output json"
+        LOGGER.info("Run scylla-doctor command: %s", sd_cmd)
+        stdout_content = self.run(sd_command=sd_cmd)
+
+        # Save the JSON output from stdout to a file
+        if not stdout_content:
+            raise ScyllaDoctorException(f"Analysis phase produced no output. Scylla doctor version: {self.version}")
+        # Use base64 to safely write JSON that may contain special characters
+        encoded = base64.b64encode(stdout_content.encode()).decode()
+        self.node.remoter.sudo(f"bash -c 'echo {encoded} | base64 -d > {json_report_name}'")
+
+        # Verify the JSON report was created
+        verify_result = self.node.remoter.run(
+            f"test -s {json_report_name} && echo {json_report_name}", verbose=False, ignore_status=True
+        )
+        self.analysis_report_file = verify_result.stdout.strip() if verify_result.ok else ""
+        if not self.analysis_report_file:
+            raise ScyllaDoctorException(
+                f"Analysis report file {json_report_name} has not been created. Scylla doctor version: {self.version}"
+            )
+        LOGGER.info("Analysis JSON report saved to: %s", self.analysis_report_file)
+
+    @staticmethod
+    def _extract_json_from_output(content: str) -> dict:
+        """Extract a JSON object from content that may contain non-JSON text.
+
+        Scylla-doctor may prepend human-readable text (ASCII banner, progress
+        markers) before the actual JSON output.  This method first tries direct
+        parsing; if that fails it locates the first ``{`` and uses
+        ``raw_decode`` to parse the JSON object starting there.
+
+        Args:
+            content: Raw output that should contain a JSON object.
+
+        Returns:
+            Parsed JSON as a dict.
+
+        Raises:
+            ScyllaDoctorException: If no valid JSON object can be found.
+        """
+        content = content.strip()
+        if not content:
+            raise ScyllaDoctorException("Analysis output is empty — nothing to parse")
+
+        # Fast path: content is pure JSON
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+
+        # Slow path: look for JSON embedded in non-JSON output
+        idx = content.find("{")
+        if idx == -1:
+            raise ScyllaDoctorException(f"No JSON object found in analysis output (first 500 chars): {content[:500]}")
+
+        decoder = json.JSONDecoder()
+        try:
+            obj, _ = decoder.raw_decode(content, idx)
+            return obj
+        except json.JSONDecodeError as exc:
+            raise ScyllaDoctorException(
+                f"Failed to parse JSON from analysis output at position {idx} (first 500 chars): {content[:500]}"
+            ) from exc
+
+    def analyze_vitals_report_known_issues(self, analyzer, value):
+        known_issue = None
+        if (
+            analyzer == "DriverVersionAnalyzer"
+            and "API call error occurred to retrieve the minimum or latest driver version" in value["message"]
+        ):
+            known_issue = "https://scylladb.atlassian.net/browse/SCT-420"
+
+        elif (
+            analyzer == "NodeInstanceTypeAnalyzer"
+            and "'n2-standard-2' instance type is not listed as recommended" in value["message"]
+        ):
+            known_issue = "https://scylladb.atlassian.net/browse/SCT-415"
+
+        elif (
+            analyzer == "NICsAnalyzer"
+            and "EC2 instance class does not support enhanced networking." in value["message"]
+        ):
+            known_issue = "https://scylladb.atlassian.net/browse/SCT-422"
+
+        elif (
+            analyzer == "NodeInstanceTypeAnalyzer"
+            and "'im4gn.xlarge' instance type is not listed as recommended" in value["message"]
+        ):
+            known_issue = "https://scylladb.atlassian.net/browse/SCT-421"
+
+        elif analyzer == "ScyllaSSTablesAnalyzer" and "SSTable format is not 'me'" in value["message"]:
+            known_issue = "https://scylladb.atlassian.net/browse/SCT-455"
+
+        return known_issue
+
+    def analyze_and_verify_analysis_results(self):
+        """Parse the JSON analysis report and verify that no analyzer failed.
+
+        The analysis report is a JSON file produced by ``run_analysis_phase()``
+        (parsed from scylla-doctor's human-readable output).  Each top-level
+        key is an analyzer name mapped to a dict with at least a ``status``
+            PASSED = 0
+            SKIPPED = 1
+            WARNING = 2
+            FAILED = 3
+        """
+        if not self.analysis_report_file:
+            LOGGER.warning("No analysis report file to verify")
+            return
+
+        raw_content = self.node.remoter.sudo(f"cat {self.analysis_report_file}").stdout.strip()
+        analysis_result = self._extract_json_from_output(raw_content)
+        LOGGER.info("Loaded %d analyzer results from JSON report", len(analysis_result))
+
+        LOGGER.debug("Scylla-doctor analysis output: %s", pprint.pformat(analysis_result))
+
+        failed_analyzers = {}
+        for analyzer, value in analysis_result.items():
+            LOGGER.info("Analyzer %s status: %s (%s)", analyzer, value.get("status"), value)
+            if isinstance(value, dict) and value.get("status") not in [0, 1]:  # PASSED, SKIPPED
+                # TODO: temporary workaround. Will be fixed in SD and then this if block should be removed.
+                #  See https://scylladb.atlassian.net/browse/SCT-115
+                if known_issue := self.analyze_vitals_report_known_issues(analyzer, value):
+                    value["known issue"] = known_issue
+                failed_analyzers[analyzer] = value
+
+        LOGGER.info("Failed analyzers: %s", pprint.pformat(failed_analyzers))
+
+        assert not failed_analyzers, (
+            f"Failed analyzers: {pprint.pformat(failed_analyzers)}. Scylla doctor version: {self.version}"
+        )
+
     def filter_out_failed_collectors(self, collector):
         # FirewallRulesCollector return empty result - https://github.com/scylladb/field-engineering/issues/2248
         if collector == "FirewallRulesCollector":
             return True
 
         # https://github.com/scylladb/field-engineering/issues/2288
+        # Docker containers lack many OS-level utilities (ip, iptables, ss, dmesg, timedatectl)
+        # and don't have access to /proc/interrupts or cloud metadata endpoints.
         if self.node.parent_cluster.cluster_backend == "docker" and collector in [
             "StorageConfigurationCollector",
             "PerftuneSystemConfigurationCollector",
