@@ -132,7 +132,7 @@ class GrafanaEventPostman(BaseEventsProcess[Annotation, None], threading.Thread)
                     grafana_post_url,
                     annotation,
                 ):
-                    requests.post(grafana_post_url, json=annotation, auth=self.api_auth).raise_for_status()
+                    requests.post(grafana_post_url, json=annotation, auth=self.api_auth, timeout=30).raise_for_status()
 
     def set_grafana_url(self, grafana_base_url: str) -> None:
         if not grafana_base_url:

@@ -39,6 +39,8 @@ NM_OBJ = {}
 class _ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
     """Thread per request HTTP server."""
 
+    daemon_threads = True
+
 
 def start_http_server(port, addr="", registry=prometheus_client.REGISTRY):
     """Starts an HTTP server for prometheus metrics as a daemon thread"""
