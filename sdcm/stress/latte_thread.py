@@ -98,38 +98,28 @@ class LatteStressThread(DockerBasedStressThread):
     def set_stress_operation(self, stress_cmd):
         return get_latte_operation_type(self.stress_cmd)
 
-    def build_stress_cmd(self, cmd_runner, loader, hosts):
-        # extract the script so we know which files to mount into the docker image
-        script_name_regx = re.compile(r"([/\w-]*\.rn)")
-        script_name = script_name_regx.search(self.stress_cmd).group(0)
-        if script_name not in self.SCHEMA_CMD_CALL_COUNTER:
-            self.SCHEMA_CMD_CALL_COUNTER[script_name] = 0
+    def _build_ssl_config(self, cmd_runner, loader):
+        """Build SSL configuration flags and upload SSL files to the loader."""
+        if not self.params["client_encrypt"]:
+            return ""
 
-        for src_file in (Path(get_sct_root_path()) / script_name).parent.iterdir():
-            if src_file.is_file():
-                remote_path = str(Path(script_name).parent / src_file.name)
-                if not cmd_runner.run(f"test -f {remote_path}", ignore_status=True, verbose=False).ok:
-                    cmd_runner.send_files(str(src_file), remote_path)
+        for ssl_file in loader.ssl_conf_dir.iterdir():
+            if ssl_file.is_file():
+                cmd_runner.send_files(str(ssl_file), str(SCYLLA_SSL_CONF_DIR / ssl_file.name), verbose=True)
 
-        ssl_config = ""
-        if self.params["client_encrypt"]:
-            for ssl_file in loader.ssl_conf_dir.iterdir():
-                if ssl_file.is_file():
-                    cmd_runner.send_files(str(ssl_file), str(SCYLLA_SSL_CONF_DIR / ssl_file.name), verbose=True)
+        ssl_config = (
+            f" --ssl --ssl-ca {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT} "
+            f"--ssl-cert {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT} "
+            f"--ssl-key {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY}"
+        )
 
-            ssl_config += (
-                f" --ssl --ssl-ca {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT} "
-                f"--ssl-cert {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT} "
-                f"--ssl-key {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY}"
-            )
+        if self.params["peer_verification"]:
+            ssl_config += " --ssl-peer-verification"
 
-            if self.params["peer_verification"]:
-                ssl_config += " --ssl-peer-verification"
+        return ssl_config
 
-        auth_config = ""
-        if credentials := self.loader_set.get_db_auth():
-            auth_config = f" --user {credentials[0]} --password {credentials[1]}"
-
+    def _build_datacenter_rack_flags(self, loader):
+        """Build --datacenter and --rack flags for topology-aware routing."""
         datacenter, rack = "", ""
         if self.params.get("rack_aware_loader"):
             rack_names = self.loader_set.get_rack_names_per_datacenter_and_rack_idx(db_nodes=self.node_list)
@@ -151,6 +141,28 @@ class LatteStressThread(DockerBasedStressThread):
                 if rack:
                     # NOTE: fail fast if we cannot find proper dc value when rack-awareness is enabled
                     raise RuntimeError(f"Could not find proper dc-pair for the loader rack value: {rack}")
+        return datacenter, rack
+
+    def build_stress_cmd(self, cmd_runner, loader, hosts):
+        # extract the script so we know which files to mount into the docker image
+        script_name_regx = re.compile(r"([/\w-]*\.rn)")
+        script_name = script_name_regx.search(self.stress_cmd).group(0)
+        if script_name not in self.SCHEMA_CMD_CALL_COUNTER:
+            self.SCHEMA_CMD_CALL_COUNTER[script_name] = 0
+
+        for src_file in (Path(get_sct_root_path()) / script_name).parent.iterdir():
+            if src_file.is_file():
+                remote_path = str(Path(script_name).parent / src_file.name)
+                if not cmd_runner.run(f"test -f {remote_path}", ignore_status=True, verbose=False).ok:
+                    cmd_runner.send_files(str(src_file), remote_path)
+
+        ssl_config = self._build_ssl_config(cmd_runner, loader)
+
+        auth_config = ""
+        if credentials := self.loader_set.get_db_auth():
+            auth_config = f" --user {credentials[0]} --password {credentials[1]}"
+
+        datacenter, rack = self._build_datacenter_rack_flags(loader)
 
         custom_schema_params = ""
         if latte_schema_parameters := self.params["latte_schema_parameters"]:
@@ -188,7 +200,9 @@ class LatteStressThread(DockerBasedStressThread):
         # NOTE: set '--user' and '--password' params only if not defined explicitly
         if " --user" in self.stress_cmd and " --password" in self.stress_cmd:
             auth_config = ""
-        stress_cmd = f"{self.stress_cmd} {ssl_config}{auth_config} {datacenter}{rack}-q "
+        # NOTE: 'latte schema' doesn't support '-q', but other subcommands (e.g. 'latte run') do.
+        quiet_flag = "" if "latte schema" in self.stress_cmd else "-q "
+        stress_cmd = f"{self.stress_cmd} {ssl_config}{auth_config} {datacenter}{rack}{quiet_flag}"
         self.set_hdr_tags(self.stress_cmd)
 
         return stress_cmd
@@ -269,7 +283,7 @@ class LatteStressThread(DockerBasedStressThread):
         )
         hosts = " ".join([i.cql_address for i in self.node_list])
         stress_cmd = self.build_stress_cmd(cmd_runner, loader, hosts)
-        if self.params.get("use_hdrhistogram"):
+        if self.params.get("use_hdrhistogram") and "latte schema" not in self.stress_cmd:
             stress_cmd += f" --hdrfile={remote_hdr_file_name}"
             hdrh_logger_context = HDRHistogramFileLogger(
                 node=loader,
