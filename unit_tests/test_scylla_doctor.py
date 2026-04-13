@@ -325,6 +325,17 @@ def test_download_basic_edition_skips_full(mock_boto_client, mock_node, mock_tes
     }
     mock_boto_client.return_value = mock_s3
 
+    def _run_side_effect(cmd, **kwargs):
+        result = MagicMock()
+        result.ok = True
+        if "file " in cmd:
+            result.stdout = "/tmp/scylla_doctor_download.tar.gz: gzip compressed data\n"
+        else:
+            result.stdout = "/home/testuser\n"
+        return result
+
+    mock_node.remoter.run.side_effect = _run_side_effect
+
     doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
 
     with patch.object(ScyllaDoctor, "download_full_scylla_doctor") as mock_full:
@@ -489,3 +500,137 @@ def test_find_scylla_bundled_python3_raises_when_not_found(doctor, is_nonroot, r
 
     with pytest.raises(ScyllaDoctorException, match="No Scylla-bundled python3"):
         doctor.find_scylla_bundled_python3("/home/user")
+
+
+# --- run_analysis_phase tests ---
+
+
+def test_run_analysis_phase_skips_when_not_full_edition(mock_node, mock_test_config):
+    """When edition is not full, run_analysis_phase should skip without error."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "basic"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc.json_result_file = "test-node.local.vitals.json"
+
+    doc.run_analysis_phase()
+
+    # No remoter calls should have been made for the analysis phase
+    mock_node.remoter.sudo.assert_not_called()
+
+
+def test_run_analysis_phase_full_edition_success(mock_node, mock_test_config):
+    """When edition is full, run_analysis_phase should run analysis and store the report file."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "full"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc._full_edition_downloaded = True
+    doc.json_result_file = "test-node.local.vitals.json"
+    doc.scylla_doctor_exec = "/home/testuser/scylla_doctor.pyz"
+
+    sudo_result = MagicMock()
+    sudo_result.stdout = ""
+    mock_node.remoter.sudo.return_value = sudo_result
+
+    check_result = MagicMock()
+    check_result.ok = True
+    check_result.stdout = "test-node.local.analysis.json\n"
+    mock_node.remoter.run.return_value = check_result
+
+    doc.run_analysis_phase()
+
+    # Verify sudo was called with --save-vitals to produce JSON output
+    mock_node.remoter.sudo.assert_called_once()
+    sudo_cmd = mock_node.remoter.sudo.call_args[0][0]
+    assert "--load-vitals test-node.local.vitals.json" in sudo_cmd
+    assert "--save-vitals test-node.local.analysis.json" in sudo_cmd
+
+    assert doc.analysis_report_file == "test-node.local.analysis.json"
+
+
+def test_run_analysis_phase_report_not_created(mock_node, mock_test_config):
+    """When the analysis report file is not created, ScyllaDoctorException should be raised."""
+    test_config, params = mock_test_config
+    params["scylla_doctor_edition"] = "full"
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    doc._full_edition_downloaded = True
+    doc.json_result_file = "test-node.local.vitals.json"
+    doc.scylla_doctor_exec = "/home/testuser/scylla_doctor.pyz"
+
+    sudo_result = MagicMock()
+    sudo_result.stdout = ""
+    mock_node.remoter.sudo.return_value = sudo_result
+
+    # test -s check fails — file was not created
+    check_result = MagicMock()
+    check_result.ok = False
+    check_result.stdout = ""
+    mock_node.remoter.run.return_value = check_result
+
+    with pytest.raises(ScyllaDoctorException, match="Analysis report file"):
+        doc.run_analysis_phase()
+
+
+# --- configured_skip_analyzers and skip_analyzer_args tests ---
+
+
+@pytest.mark.parametrize(
+    "skip_param,expected",
+    [
+        pytest.param(None, [], id="not_set_returns_empty"),
+        pytest.param([], [], id="empty_list"),
+        pytest.param(["CPUScalingAnalyzer"], ["CPUScalingAnalyzer"], id="single_item"),
+        pytest.param(
+            ["CPUScalingAnalyzer", "AnotherAnalyzer"],
+            ["CPUScalingAnalyzer", "AnotherAnalyzer"],
+            id="multiple_items",
+        ),
+    ],
+)
+def test_configured_skip_analyzers(mock_node, mock_test_config, skip_param, expected):
+    """Test configured_skip_analyzers returns the correct list from params."""
+    test_config, params = mock_test_config
+    if skip_param is not None:
+        params["skip_analyzers"] = skip_param
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    assert doc.configured_skip_analyzers == expected
+
+
+@pytest.mark.parametrize(
+    "skip_analyzers,expected_args",
+    [
+        pytest.param([], "", id="empty_list"),
+        pytest.param(["CPUScalingAnalyzer"], "--skip-test CPUScalingAnalyzer", id="single"),
+        pytest.param(
+            ["CPUScalingAnalyzer", "AnotherAnalyzer"],
+            "--skip-test CPUScalingAnalyzer --skip-test AnotherAnalyzer",
+            id="multiple",
+        ),
+    ],
+)
+def test_skip_analyzer_args(mock_node, mock_test_config, skip_analyzers, expected_args):
+    """Test skip_analyzer_args builds correct CLI string."""
+    test_config, params = mock_test_config
+    params["skip_analyzers"] = skip_analyzers
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    assert doc.skip_analyzer_args == expected_args
+
+
+# --- filter_out_failed_analyzers with skip config ---
+
+
+@pytest.mark.parametrize(
+    "skip_analyzers,analyzer_name,expected",
+    [
+        pytest.param(["CPUScalingAnalyzer"], "CPUScalingAnalyzer", True, id="configured_skipped"),
+        pytest.param(["CPUScalingAnalyzer"], "OtherAnalyzer", False, id="unconfigured_not_skipped"),
+        pytest.param([], "CPUScalingAnalyzer", False, id="empty_skip_list"),
+        pytest.param(["A", "B"], "B", True, id="second_in_list_skipped"),
+        pytest.param(["A", "B"], "C", False, id="not_in_list"),
+    ],
+)
+def test_filter_out_failed_analyzers(mock_node, mock_test_config, skip_analyzers, analyzer_name, expected):
+    """Test filter_out_failed_analyzers respects configured_skip_analyzers."""
+    test_config, params = mock_test_config
+    params["skip_analyzers"] = skip_analyzers
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
+    assert doc.filter_out_failed_analyzers(analyzer_name) is expected
