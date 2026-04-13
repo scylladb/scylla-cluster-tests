@@ -363,7 +363,8 @@ class KeyStore:
                     if tag == self.calculate_s3_etag(file_obj):
                         dl_flag = False
             except FileNotFoundError:
-                pass  # Local file does not exist yet; dl_flag stays True so we download it
+                # Local cache file does not exist yet; keep dl_flag=True so we download it.
+                pass
         else:  # secretsmanager
             remote_version = self.get_sm_version_id(key)
             version_path = f"{path}.version"
@@ -373,7 +374,8 @@ class KeyStore:
                         if vf.read().strip() == remote_version:
                             dl_flag = False
                 except OSError:
-                    pass  # stale/corrupt version file; re-download
+                    # Sidecar version file is stale or unreadable; force a re-download.
+                    pass
 
         if dl_flag:
             self.download_file(filename=key, dest_filename=path)
