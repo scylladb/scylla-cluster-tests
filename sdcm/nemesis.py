@@ -851,7 +851,8 @@ class Nemesis:
 
     @target_all_nodes
     def disrupt_hard_reboot_node(self):
-        self.reboot_node(target_node=self.target_node, hard=True)
+        with ignore_raft_topology_cmd_failing():
+            self.reboot_node(target_node=self.target_node, hard=True)
         self.target_node.wait_node_fully_start()
 
     @target_all_nodes
