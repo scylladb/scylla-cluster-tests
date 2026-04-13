@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 import string
 import random
@@ -146,7 +147,7 @@ class SctRunnerInfo:
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
 
-    VERSION = "1.16"  # Version of the Image
+    VERSION = "1.17"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -204,7 +205,59 @@ class SctRunner(ABC):
 
         LOGGER.info("Installing required packages...")
         login_user = self.LOGIN_USER
-        public_key = self.key_pair.public_key.decode()
+
+        # Build the two helper files as base64 blobs so they can be written safely
+        # inside the single-quoted bash -c '...' that shell_script_cmd() produces.
+        # Heredocs (cat << 'EOF') do not work inside bash -c '...single-quoted...'
+        # because the shell sees the entire string as a literal; base64 | tee avoids that.
+        _sync_script = dedent("""\
+            #!/bin/bash
+            set -euo pipefail
+
+            LOGIN_USER="${1:-ubuntu}"
+            SOURCE="/home/${LOGIN_USER}/.ssh/authorized_keys"
+            TARGET="/home/jenkins/.ssh/authorized_keys"
+
+            # Wait for cloud provider to populate the source authorized_keys (up to 120s)
+            MAX_WAIT=120
+            WAITED=0
+            while [ ! -s "$SOURCE" ] && [ "$WAITED" -lt "$MAX_WAIT" ]; do
+                sleep 2
+                WAITED=$(( WAITED + 2 ))
+            done
+
+            if [ ! -s "$SOURCE" ]; then
+                echo "ERROR: $SOURCE not populated after ${MAX_WAIT}s" >&2
+                exit 1
+            fi
+
+            mkdir -p /home/jenkins/.ssh
+            cp "$SOURCE" "$TARGET"
+            chmod 600 "$TARGET"
+            chown jenkins:jenkins "$TARGET"
+            chown jenkins:jenkins /home/jenkins/.ssh
+
+            echo "Synced SSH keys from $SOURCE to $TARGET"
+        """)
+        _unit_file = dedent(f"""\
+            [Unit]
+            Description=Sync SSH authorized keys from {login_user} to jenkins user
+            After=cloud-init.service cloud-config.service
+            After=google-guest-agent.service google-accounts-daemon.service
+            After=walinuxagent.service
+            Wants=cloud-init.service
+
+            [Service]
+            Type=oneshot
+            RemainAfterExit=yes
+            ExecStart=/usr/local/bin/sct-sync-jenkins-ssh-keys.sh {login_user}
+
+            [Install]
+            WantedBy=multi-user.target
+        """)
+        sync_script_b64 = base64.b64encode(_sync_script.encode()).decode()
+        unit_file_b64 = base64.b64encode(_unit_file.encode()).decode()
+
         result = remoter.sudo(
             shell_script_cmd(
                 quote="'",
@@ -219,8 +272,6 @@ class SctRunner(ABC):
 
             # Configure default user account.
             sudo -u {login_user} mkdir -p /home/{login_user}/.ssh || true
-            echo "{public_key}" >> /home/{login_user}/.ssh/authorized_keys
-            chmod 600 /home/{login_user}/.ssh/authorized_keys
             mkdir -p -m 777 /home/{login_user}/sct-results
             echo "cd ~/sct-results" >> /home/{login_user}/.bashrc
             chown -R {login_user}:{login_user} /home/{login_user}/
@@ -259,10 +310,15 @@ class SctRunner(ABC):
             adduser --disabled-password --gecos "" jenkins || true
             usermod -aG docker jenkins
             mkdir -p /home/jenkins/.ssh
-            echo "{public_key}" >> /home/jenkins/.ssh/authorized_keys
-            chmod 600 /home/jenkins/.ssh/authorized_keys
             chown -R jenkins:jenkins /home/jenkins
-            echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
+            echo "jenkins ALL=(ALL) NOPASSWD: ALL" | tee /etc/sudoers.d/jenkins
+
+            printf %s {sync_script_b64} | base64 -d | tee /usr/local/bin/sct-sync-jenkins-ssh-keys.sh
+            chmod +x /usr/local/bin/sct-sync-jenkins-ssh-keys.sh
+
+            printf %s {unit_file_b64} | base64 -d | tee /etc/systemd/system/sct-jenkins-ssh-sync.service
+            systemctl daemon-reload
+            systemctl enable sct-jenkins-ssh-sync.service
 
             # Jenkins pipelines run /bin/sh for some reason.
             ln -sf /bin/bash /bin/sh
