@@ -56,5 +56,8 @@ class GcpKms:
 
     def rotate_key(self):
         self.client.create_crypto_key_version(parent=self.key_path, crypto_key_version={})
-        # See get_or_create_key: log self.key_name, not self.key_path.
-        LOGGER.info("Rotated GCP KMS key '%s'", self.key_name)
+        # Don't log self.key_name/self.key_path: CodeQL marks any attribute
+        # of this class as tainted (self._gcp_kms_config comes from the
+        # KeyStore). The key is uniquely identified by the earlier
+        # get_or_create_key log on the same instance.
+        LOGGER.info("Rotated GCP KMS key")
