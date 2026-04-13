@@ -170,14 +170,15 @@ class KeyStore:
             tmpfs + 0600 perms + cleanup); other callers must set 0600
             permissions and place the file on non-persistent storage
             whenever possible.
+
+            CodeQL flags the ``write()`` below as
+            ``py/clear-text-storage-sensitive-data``. This is intentional
+            — external consumers (libssh2, ssh/scp/rsync, Ansible, Docker
+            volume mounts, Jenkins builders) require keys on a
+            filesystem. The finding must be dismissed as a false-positive
+            in the GitHub Security tab by a maintainer.
         """
         with open(dest_filename, "wb") as file_obj:
-            # CodeQL [py/clear-text-storage-sensitive-data]: intentional —
-            # keystore payloads (SSH keys, creds, JSON configs) must live
-            # on disk for external consumers (libssh2, ssh/scp/rsync,
-            # Ansible, Docker volume mounts, Jenkins builders). The
-            # preferred API materialize_ssh_key places keys on tmpfs and
-            # cleans them up; callers of download_file must apply 0600.
             file_obj.write(self._fetch_content(filename))
 
     def get_email_credentials(self):

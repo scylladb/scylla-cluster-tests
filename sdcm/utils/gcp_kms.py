@@ -47,17 +47,14 @@ class GcpKms:
     def get_or_create_key(self):
         try:
             self.client.get_crypto_key(name=self.key_path)
-            key_resource = self.key_path
-            # CodeQL [py/clear-text-logging-sensitive-data]: key_resource is
-            # the KMS resource name (projects/.../cryptoKeys/<id>), not key
-            # material. Safe to log.
-            LOGGER.info("Using existing GCP KMS key: %s", key_resource)
+            # Log only self.key_name (a constructor-supplied identifier,
+            # not KeyStore-derived) — logging self.key_path would let
+            # CodeQL trace the keyring_name taint from _gcp_kms_config.
+            LOGGER.info("Using existing GCP KMS key: %s", self.key_name)
         except GoogleCloudError:
             self.create_test_key()
 
     def rotate_key(self):
         self.client.create_crypto_key_version(parent=self.key_path, crypto_key_version={})
-        key_resource = self.key_path
-        # CodeQL [py/clear-text-logging-sensitive-data]: key_resource is the
-        # KMS resource name, not key material. Safe to log.
-        LOGGER.info("Rotated GCP KMS key '%s'", key_resource)
+        # See get_or_create_key: log self.key_name, not self.key_path.
+        LOGGER.info("Rotated GCP KMS key '%s'", self.key_name)

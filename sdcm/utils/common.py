@@ -339,11 +339,12 @@ class S3Storage:
             self._bucket.upload_file(Filename=file_path, Key=s3_obj, Config=self.transfer_config)
             LOGGER.info("Uploaded to {0}".format(s3_url))
 
-            for grantee_email, canonical_id in KeyStore().get_acl_grantees().items():
-                # CodeQL [py/clear-text-logging-sensitive-data]: grantee_email
-                # is the AWS account display name from bucket-users.json — a
-                # directory identifier, not a credential.
-                LOGGER.info("Setting ACL for user %s", grantee_email)
+            # Grantees come from a keystore config; log only the count (not
+            # the values) so CodeQL taint analysis does not flag this as
+            # clear-text logging.
+            grantees = KeyStore().get_acl_grantees()
+            LOGGER.info("Applying ACL for %d grantees", len(grantees))
+            for _, canonical_id in grantees.items():
                 boto3.client("s3").put_object_acl(Bucket=self.bucket_name, Key=s3_obj, GrantRead=f"id={canonical_id}")
             if public:
                 LOGGER.info("Set public read access")
