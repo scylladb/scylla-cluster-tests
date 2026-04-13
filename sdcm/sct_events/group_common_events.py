@@ -626,6 +626,7 @@ def ignore_aborted_snapshot_upload_storage_io_errors():
                     regex=r".*storage_io_error \(S3 error \(seastar::abort_requested_exception \(abort requested\)\)\)",
                 )
             )
+        yield
 
 
 def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):
