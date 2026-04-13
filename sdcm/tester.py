@@ -3920,6 +3920,20 @@ class ClusterTester(unittest.TestCase):
                             node.remoter.receive_files(src=doctor.scylla_logs_file, dst=local_logs_path)
                             self.log.debug("Downloaded scylla-doctor logs from %s to %s", node.name, local_logs_path)
 
+                        if doctor.is_full_edition:
+                            self.log.info("Running scylla-doctor analysis phase (full edition) on %s...", node.name)
+                            doctor.run_analysis_phase()
+                            if doctor.analysis_report_file:
+                                local_analysis_path = os.path.join(
+                                    self.logdir, f"scylla_doctor_{node.name}_analysis.json"
+                                )
+                                node.remoter.receive_files(src=doctor.analysis_report_file, dst=local_analysis_path)
+                                self.log.debug(
+                                    "Downloaded scylla-doctor analysis from %s to %s",
+                                    node.name,
+                                    local_analysis_path,
+                                )
+
                         self.log.info("Scylla-doctor completed for node %s", node.name)
                     except (ScyllaDoctorException, UnexpectedExit, Failure, AssertionError) as exc:
                         self.log.warning("Failed to run scylla-doctor on node %s: %s", node.name, exc)

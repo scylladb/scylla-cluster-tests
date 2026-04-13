@@ -563,6 +563,9 @@ class ArtifactsTest(ClusterTester):
                 scylla_doctor.run_scylla_doctor_and_collect_results()
                 scylla_doctor.analyze_vitals()
                 scylla_doctor.analyze_and_verify_results()
+                if scylla_doctor.is_full_edition:
+                    scylla_doctor.run_analysis_phase()
+                    scylla_doctor.analyze_and_verify_analysis_results()
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
