@@ -558,7 +558,7 @@ class AwsSctRunner(SctRunner):
 
     @cached_property
     def key_pair(self) -> SSHKey:
-        return KeyStore().get_ec2_ssh_key_pair()
+        return KeyStore().get_ssh_key_pair(name="scylla_test_id_ed25519")
 
     def _image(self, image_type: ImageType = ImageType.SOURCE) -> Any:
         if image_type == ImageType.SOURCE:
@@ -925,7 +925,7 @@ class GceSctRunner(SctRunner):
 
     @cached_property
     def key_pair(self) -> SSHKey:
-        return KeyStore().get_gce_ssh_key_pair()  # scylla-test
+        return KeyStore().get_ssh_key_pair(name="scylla_test_id_ed25519")
 
     def _image(self, image_type: ImageType = ImageType.SOURCE) -> Any:
         try:
@@ -1144,7 +1144,7 @@ class AzureSctRunner(SctRunner):
 
     @cached_property
     def key_pair(self) -> SSHKey:
-        return KeyStore().get_azure_ssh_key_pair()  # scylla-test
+        return KeyStore().get_ssh_key_pair(name="scylla_test_id_ed25519")
 
     def _image(self, image_type: ImageType = ImageType.SOURCE) -> Any:
         with suppress(AzureResourceNotFoundError):
@@ -1422,7 +1422,7 @@ class OciSctRunner(SctRunner):
 
     @cached_property
     def key_pair(self) -> SSHKey:
-        return KeyStore().get_oci_ssh_key_pair()
+        return KeyStore().get_ssh_key_pair(name="scylla_test_id_ed25519")
 
     def install_prereqs(self, public_ip: str, connect_timeout: Optional[int] = None) -> None:
         super().install_prereqs(public_ip=public_ip, connect_timeout=connect_timeout)
