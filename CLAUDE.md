@@ -5,12 +5,14 @@ Project instructions for Claude Code. This file is loaded at session start.
 ## Rules
 - Do NOT @import skill files — they are loaded on demand when triggered by their frontmatter `description`. Eagerly importing all skills wastes ~20K tokens per turn.
 - Always use non-interactive flags when available: --yes, -y, --non-interactive, --no-input. Never use commands with --watch, --interactive, or prompts that wait for input.
+- Read the target section of a file before editing. Plan the complete edit before applying — do not make speculative changes you may need to revert.
+- After 2 consecutive tool failures, stop and reassess your approach before retrying. Diagnose the root cause instead of repeating the same failing command.
 
 ## Repository
 
 Scylla Cluster Tests (SCT) — test framework for ScyllaDB. See below for full repository overview, architecture, and conventions.
 
-@AGENTS.md
+For development setup, architecture, code style, and testing guidelines see [AGENTS.md](AGENTS.md).
 
 ## Skills
 
