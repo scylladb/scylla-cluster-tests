@@ -24,3 +24,6 @@ Available skills (invoke via Skill tool or `/skill-name`):
 - `commit-summary` — Generate weekly commit summary reports
 - `writing-nemesis` — Create new chaos engineering disruptions
 - `code-review` — Review PRs for correctness and convention compliance
+
+## Rules
+- Always use non-interactive flags when available: --yes, -y, --non-interactive, --no-input. Never use commands with --watch, --interactive, or prompts that wait for input.
