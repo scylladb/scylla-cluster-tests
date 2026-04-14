@@ -32,14 +32,14 @@ class TestManagerVersions:
         "version, distro, expected_url",
         [
             (
-                "3.9",
+                "3.10",
                 Distro.UBUNTU24,
-                "https://downloads.scylladb.com/deb/debian/scylladb-manager-3.9.list",
+                "https://downloads.scylladb.com/deb/debian/scylladb-manager-3.10.list",
             ),
             (
-                "3.9",
+                "3.10",
                 Distro.CENTOS9,
-                "https://downloads.scylladb.com/rpm/centos/scylladb-manager-3.9.repo",
+                "https://downloads.scylladb.com/rpm/centos/scylladb-manager-3.10.repo",
             ),
             (
                 "3.8.1",

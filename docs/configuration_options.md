@@ -384,7 +384,7 @@ Url to the repo of scylla manager agent version to install for management tests
 
 Version of Scylla Manager server and agent to install
 
-**default:** 3.9
+**default:** 3.10
 
 **type:** str
 
@@ -411,7 +411,7 @@ Version of ScyllaDB to install as Manager backend
 
 Version of Scylla Manager agent to install for management tests
 
-**default:** 3.9.0
+**default:** 3.10.0
 
 **type:** str
 
@@ -2654,7 +2654,7 @@ Number of nodes in the monitoring pool that will be used for scylla-operator's d
 
 Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'
 
-**default:** scylladb/scylla-manager:3.9.0
+**default:** scylladb/scylla-manager:3.10.0
 
 **type:** str
 * appendable
