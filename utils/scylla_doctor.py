@@ -2,6 +2,7 @@
 import json
 import logging
 import pprint
+import re
 from functools import cached_property
 from textwrap import dedent
 
@@ -188,6 +189,77 @@ class ScyllaDoctor:
 
         return package, bucket_name
 
+    @staticmethod
+    def _get_bucket_region(bucket_name: str) -> str:
+        """Determine the AWS region of an S3 bucket.
+
+        Pre-signed URLs must be signed with the bucket's actual region;
+        using the wrong region causes S3 to return a small XML error
+        (``SignatureDoesNotMatch`` / ``AccessDenied``) instead of the file.
+
+        Strategy:
+        1. Extract region from the bucket name (e.g.
+           ``fe-artifacts-297607762119-eu-central-1`` → ``eu-central-1``).
+        2. Fall back to ``get_bucket_location`` API (requires
+           ``s3:GetBucketLocation`` permission).
+        3. Fall back to ``us-east-1`` as last resort.
+        """
+        # Pattern matches standard AWS region names at the end of the bucket name
+        match = re.search(r"((?:us|eu|ap|sa|ca|me|af|il)-[a-z]+-\d+)$", bucket_name)
+        if match:
+            region = match.group(1)
+            LOGGER.info("Extracted region %s from bucket name %s", region, bucket_name)
+            return region
+
+        try:
+            s3 = boto3.client("s3")
+            location = s3.get_bucket_location(Bucket=bucket_name)
+            # get_bucket_location returns None for us-east-1
+            return location.get("LocationConstraint") or "us-east-1"
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Could not determine region for bucket %s, defaulting to us-east-1", bucket_name)
+            return "us-east-1"
+
+    def _download_and_extract_tarball(self, url: str, description: str = "scylla-doctor"):
+        """Download a tarball from *url* and extract it on the remote node.
+
+        Downloads to a temporary file first so that HTTP errors (e.g. S3
+        returning a short XML error page) are detected before ``tar`` runs.
+
+        Args:
+            url: Full URL (may be a pre-signed S3 URL).
+            description: Human-readable label for log messages.
+
+        Raises:
+            Exception: Propagated from ``remoter.run`` on download or
+                extraction failure.
+        """
+        tmp_tarball = "/tmp/scylla_doctor_download.tar.gz"
+        # -f/--fail  → exit code 22 on HTTP 4xx/5xx instead of saving the error page
+        # -S/--show-error → print error message even when -f is used
+        # -L/--location  → follow redirects
+        self.node.remoter.run(
+            f"curl -fSL -o {tmp_tarball} '{url}'",
+        )
+        # Sanity-check: a valid tarball is at least a few KB
+        check = self.node.remoter.run(
+            f"test -s {tmp_tarball} && file {tmp_tarball}",
+            verbose=False,
+            ignore_status=True,
+        )
+        if not check.ok or "gzip" not in check.stdout.lower():
+            body_head = self.node.remoter.run(
+                f"head -c 500 {tmp_tarball}",
+                verbose=False,
+                ignore_status=True,
+            ).stdout.strip()
+            self.node.remoter.run(f"rm -f {tmp_tarball}", verbose=False, ignore_status=True)
+            raise ScyllaDoctorException(
+                f"Downloaded {description} file is not a valid gzip tarball. First 500 bytes of response:\n{body_head}"
+            )
+        LOGGER.info("Extracting %s tarball...", description)
+        self.node.remoter.run(f"tar -xvzf {tmp_tarball} && rm -f {tmp_tarball}")
+
     def download_full_scylla_doctor(self):
         """Download the full scylla-doctor edition using an S3 pre-signed URL.
 
@@ -215,37 +287,41 @@ class ScyllaDoctor:
         package_filename = package_key.split("/")[-1]
         LOGGER.info("Downloading full scylla-doctor package %s from bucket %s...", package_filename, bucket_name)
 
-        # Generate a short-lived pre-signed URL (300s) so the remote node can download without AWS creds
-        s3 = boto3.client("s3")
+        # Generate a short-lived pre-signed URL (300s) so the remote node can download without AWS creds.
+        # IMPORTANT: The S3 client MUST be created with the bucket's actual region.
+        # Pre-signed URLs are signed with a specific region; if the signing region
+        # doesn't match the bucket's region, S3 returns a small XML error response
+        # (e.g. SignatureDoesNotMatch / AccessDenied) instead of the file.
+        bucket_region = self._get_bucket_region(bucket_name)
+        LOGGER.info("Bucket %s is in region %s", bucket_name, bucket_region)
+        s3 = boto3.client("s3", region_name=bucket_region)
         presigned_url = s3.generate_presigned_url(
             ClientMethod="get_object",
             Params={"Bucket": bucket_name, "Key": package_key},
             ExpiresIn=300,
         )
 
-        self.node.remoter.run(f"curl -JL '{presigned_url}' | tar -xvz")
+        self._download_and_extract_tarball(presigned_url, description=f"full scylla-doctor ({package_filename})")
         self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
         self._full_edition_downloaded = True
 
     def download_scylla_doctor(self):
-        tarball_url = self.test_config.tester_obj().params.get("scylla_doctor_tarball_url")
-        if tarball_url:
-            LOGGER.info("Using custom SD tarball URL: %s", tarball_url)
-            self.node.remoter.run(f"curl -JL {tarball_url} | tar -xvz")
-            self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
-            return
-
-        if self.configured_edition == "full":
-            try:
-                self.download_full_scylla_doctor()
-                return
-            except (ScyllaDoctorException, Exception) as exc:  # noqa: BLE001
-                LOGGER.warning("Failed to download full scylla-doctor edition, falling back to basic: %s", exc)
-
         if self.node.remoter.run("curl --version", ignore_status=True).ok:
             LOGGER.info("curl already installed, proceeding...")
         else:
             self.node.install_package("curl")
+
+        tarball_url = self.test_config.tester_obj().params.get("scylla_doctor_tarball_url")
+        if tarball_url:
+            LOGGER.info("Using custom SD tarball URL: %s", tarball_url)
+            self._download_and_extract_tarball(tarball_url, description="scylla-doctor (custom URL)")
+            self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
+            return
+
+        if self.configured_edition == "full":
+            self.download_full_scylla_doctor()
+            return
+
         if self.configured_version:
             LOGGER.info("Using configured scylla-doctor version: %s", self.configured_version)
             package = self.locate_scylla_doctor_package(version=self.configured_version)
@@ -260,7 +336,10 @@ class ScyllaDoctor:
         package_path = package["Key"]
         package_filename = package_path.split("/")[-1]
         LOGGER.info("Downloading %s...", package_filename)
-        self.node.remoter.run(f"curl -JL {self.SCYLLA_DOCTOR_OFFLINE_DOWNLOAD_URI}{package_path} | tar -xvz")
+        self._download_and_extract_tarball(
+            f"{self.SCYLLA_DOCTOR_OFFLINE_DOWNLOAD_URI}{package_path}",
+            description=f"scylla-doctor ({package_filename})",
+        )
         self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
 
     def update_scylla_doctor_config(self, prefix: str, additional_config=""):
@@ -281,10 +360,35 @@ class ScyllaDoctor:
             f.write(config)
         self.scylla_doctor_exec += f" -cf {self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_CONF} "
 
+    def _ensure_pyyaml_installed(self):
+        """Ensure PyYAML is available for the system Python on the remote node.
+
+        scylla_doctor.pyz imports ``yaml`` but does not bundle PyYAML.
+        On a minimal OS image the module may be absent, causing every
+        scylla-doctor command to fail with ``ModuleNotFoundError``.
+
+        For nonroot installs the bundled Scylla Python is used instead
+        of the system Python, so this step is skipped.
+        """
+        if self.node.is_nonroot_install:
+            return
+
+        if self.node.distro.is_rhel_like:
+            self.node.install_package("python3-pyyaml")
+        elif self.node.distro.is_sles:
+            self.node.remoter.sudo("zypper install -y python3-PyYAML", retry=3)
+        elif self.node.distro.is_debian_like:
+            self.node.install_package("python3-yaml")
+        else:
+            LOGGER.warning("Unknown distro %s — attempting pip install of PyYAML", self.node.distro)
+            self.node.remoter.sudo("python3 -m pip install pyyaml", ignore_status=True)
+
     def install_scylla_doctor(self):
         if self.node.parent_cluster.cluster_backend == "docker":
             self.node.install_package("ethtool")
             self.node.install_package("tar")
+
+        self._ensure_pyyaml_installed()
 
         # Always download from S3 — package repos are not updated at the same
         # time as S3 releases, and specific versions may not be available via repo.
