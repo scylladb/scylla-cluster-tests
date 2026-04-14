@@ -410,20 +410,27 @@ def test_decrypt_sstables_on_node_smoke(scylla_container, scylla_node):
 
 @pytest.mark.xdist_group("ear_scylla_container")
 def test_take_snapshot_and_decrypt(scylla_container, scylla_node):
-    """take_snapshot_and_decrypt() returns (snapshot_path, decrypted_path) with real sstables."""
+    """take_snapshot_and_decrypt() returns (snapshot_path, sstable_files, decrypted_path) with real sstables."""
     data_file = find_live_data_file(scylla_container, KEYSPACE, TABLE_NODE)
     # Derive sstable_dir: /var/lib/scylla/data/<ks>/<table-dir>
     sstable_dir = "/".join(data_file.split("/")[:7])
+    sstable_name = data_file.rsplit("/", 1)[-1]
 
-    snapshot_path, decrypted_path = take_snapshot_and_decrypt(
+    snapshot_path, sstable_files, decrypted_path = take_snapshot_and_decrypt(
         node=scylla_node,
         sstable_dir=sstable_dir,
         keyspace=KEYSPACE,
         table_name=TABLE_NODE,
+        sstable_name=sstable_name,
     )
 
     assert snapshot_path is not None, "take_snapshot_and_decrypt returned None snapshot_path"
+    assert sstable_files, "take_snapshot_and_decrypt returned no sstable component files"
     assert decrypted_path is not None, "take_snapshot_and_decrypt returned None decrypted_path"
+
+    # All component files should be inside the snapshot directory
+    for f in sstable_files:
+        assert f.startswith(snapshot_path), f"Component file {f} not under snapshot {snapshot_path}"
 
     assert has_encryption_in_metadata(scylla_container, snapshot_path, KEYSPACE, TABLE_NODE), (
         f"Snapshot at {snapshot_path} should still be encrypted"
@@ -569,12 +576,16 @@ def test_full_pipeline_collect_logs_uses_state_file(scylla_container, scylla_nod
     upload_paths = captured["paths"]
     LOGGER.info("Paths passed to upload: %s", upload_paths)
 
-    assert state["snapshot_path"] in upload_paths, (
-        f"snapshot_path {state['snapshot_path']} not in upload paths: {upload_paths}"
-    )
+    # upload_files contains targeted sstable component files + schema.cql (not the whole snapshot dir)
+    assert any(p.endswith("/schema.cql") for p in upload_paths), f"schema.cql not in upload paths: {upload_paths}"
+    assert any(p.endswith("-Data.db") for p in upload_paths), f"No Data.db component in upload paths: {upload_paths}"
     assert state["decrypted_path"] in upload_paths, (
         f"decrypted_path {state['decrypted_path']} not in upload paths: {upload_paths}"
     )
+    # All targeted files should be under the snapshot directory
+    for p in upload_paths:
+        if p != state["decrypted_path"]:
+            assert p.startswith(state["snapshot_path"]), f"Upload path {p} not under snapshot {state['snapshot_path']}"
 
 
 # ---------------------------------------------------------------------------

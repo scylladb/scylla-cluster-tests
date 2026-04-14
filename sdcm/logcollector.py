@@ -1394,20 +1394,26 @@ class SSTablesCollector(BaseSCTLogCollector):
     def _load_state_from_file(self, state_file: Path):
         """Load snapshot state from a pre-computed JSON file written by CorruptedSstablesPreparator.
 
-        Returns ``(snapshot_path, decrypted_path, keyspace, table_name, sstable_name,
+        Returns ``(upload_files, decrypted_path, keyspace, table_name, sstable_name,
                    ssh_login_info, node=None)`` where *node* is always ``None`` in this path
         because SSH is not available after ``stop_resources()``.
+
+        *upload_files* is a targeted list of file paths (specific sstable components + schema.cql)
+        rather than the entire snapshot directory.  Falls back to ``[snapshot_path]`` for
+        state files written by older code that did not include the ``upload_files`` key.
         """
         state = json.loads(state_file.read_text(encoding="utf-8"))
         snapshot_path = state["snapshot_path"]
+        upload_files = state.get("upload_files") or [snapshot_path]
         decrypted_path = state.get("decrypted_path")
         LOGGER.info(
-            "SSTablesCollector: using pre-computed snapshot from state file (snapshot=%s, decrypted=%s)",
+            "SSTablesCollector: using pre-computed snapshot from state file (snapshot=%s, files=%d, decrypted=%s)",
             snapshot_path,
+            len(upload_files),
             decrypted_path,
         )
         return (
-            snapshot_path,
+            upload_files,
             decrypted_path,
             state["keyspace"],
             state["table_name"],
@@ -1419,8 +1425,12 @@ class SSTablesCollector(BaseSCTLogCollector):
     def _load_state_via_ssh(self, logdir: Path):
         """Fall back to the original SSH-based snapshot path.
 
-        Returns ``(snapshot_path, decrypted_path, keyspace, table_name, sstable_name,
+        Returns ``(upload_files, decrypted_path, keyspace, table_name, sstable_name,
                    ssh_login_info, node)`` or raises/returns ``None`` sentinel values on failure.
+
+        In this path *upload_files* is ``[snapshot_path]`` (the whole directory) because the
+        per-file targeting is done in ``collect_logs``'s fallback when the full upload exceeds
+        the size limit.
         """
         raw_events_file_path = logdir / EVENTS_LOG_DIR / RAW_EVENTS_LOG
         sstable_dir = keyspace = table_name = sstable_name = node_name = None
@@ -1446,7 +1456,7 @@ class SSTablesCollector(BaseSCTLogCollector):
             LOGGER.error("Cannot extract snapshot directory from stdout: %s", result.stdout)
             return None
         snapshot_path = f"{sstable_dir}/snapshots/{snapshot_dir}"
-        return snapshot_path, None, keyspace, table_name, sstable_name, node.ssh_login_info, node
+        return [snapshot_path], None, keyspace, table_name, sstable_name, node.ssh_login_info, node
 
     def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
         try:
@@ -1462,11 +1472,11 @@ class SSTablesCollector(BaseSCTLogCollector):
                 loaded = self._load_state_via_ssh(logdir)
                 if loaded is None:
                     return []
-            snapshot_path, decrypted_path, keyspace, table_name, sstable_name, ssh_login_info, node = loaded
+            upload_files, decrypted_path, keyspace, table_name, sstable_name, ssh_login_info, node = loaded
 
             s3_link = upload_remote_files_directly_to_s3(
                 ssh_login_info,
-                [snapshot_path] + ([decrypted_path] if decrypted_path else []),
+                upload_files + ([decrypted_path] if decrypted_path else []),
                 s3_bucket=S3Storage.bucket_name,
                 s3_key=f"{self.test_id}/{self.current_run}/corrupted-sstables-{keyspace}-{table_name}.tar.gz",
                 max_size_gb=20,
@@ -1474,14 +1484,16 @@ class SSTablesCollector(BaseSCTLogCollector):
             )
             if not s3_link:
                 # upload malformed sstable along with several others and schema file
-                # node is only set in the fallback (no state file) path; the state-file path has
-                # no live SSH connection available, so we skip the per-file fallback in that case.
+                # node is only set in the fallback (no state file) path; the state-file path
+                # already has targeted files so the per-file fallback only applies to the
+                # SSH path where upload_files is [snapshot_path] (the whole directory).
                 if node is None:
                     LOGGER.warning(
-                        "SSTablesCollector: full-snapshot upload failed and no live node available — "
+                        "SSTablesCollector: upload failed and no live node available — "
                         "cannot fall back to per-file upload"
                     )
                 else:
+                    snapshot_path = upload_files[0]  # SSH path always has [snapshot_path]
                     malformed_files = node.remoter.run(
                         f"ls {snapshot_path}/{sstable_name.rsplit('-', 1)[0]}*", ignore_status=True
                     ).stdout.split()

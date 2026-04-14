@@ -265,10 +265,15 @@ def find_node_by_name(db_clusters_multitenant, node_name: str):
     return None
 
 
-def take_snapshot_and_decrypt(node, sstable_dir: str, keyspace: str, table_name: str):
-    """Run ``nodetool snapshot``, then decrypt the snapshot.  Return ``(snapshot_path, decrypted_path)``.
+def take_snapshot_and_decrypt(node, sstable_dir: str, keyspace: str, table_name: str, sstable_name: str):
+    """Take a snapshot, find the corrupted sstable within it, and decrypt.
 
-    Raises on unexpected errors so the caller can catch and log.
+    Instead of uploading the entire snapshot directory (which can be hundreds of GBs for large
+    tables), this function targets only the specific corrupted sstable's component files within
+    the snapshot — the same approach the old ``SSTablesCollector`` fallback used.
+
+    Returns ``(snapshot_path, sstable_files, decrypted_path)`` where *sstable_files* is a list
+    of absolute paths to the corrupted sstable's component files inside the snapshot.
     """
     result = node.remoter.run(
         f"nodetool snapshot {keyspace} -cf {table_name}",
@@ -276,15 +281,36 @@ def take_snapshot_and_decrypt(node, sstable_dir: str, keyspace: str, table_name:
     )
     if not result.ok:
         LOGGER.warning("CorruptedSstablesPreparator: nodetool snapshot failed: %s — skipping", result.stderr)
-        return None, None
+        return None, [], None
     try:
         snapshot_dir = result.stdout.split("Snapshot directory: ")[1].strip()
     except IndexError:
         LOGGER.error("CorruptedSstablesPreparator: cannot parse snapshot dir from stdout: %s", result.stdout)
-        return None, None
+        return None, [], None
+
     snapshot_path = f"{sstable_dir}/snapshots/{snapshot_dir}"
+
+    # Find the specific corrupted sstable's component files within the snapshot.
+    # An sstable name like "ms-3gzg_0wzh_...-big-Data.db" shares a prefix
+    # "ms-3gzg_0wzh_...-big" with all its components (Filter.db, Statistics.db, etc.).
+    prefix = sstable_name.rsplit("-", 1)[0]
+    ls_result = node.remoter.run(
+        f"ls {snapshot_path}/{prefix}-* 2>/dev/null || true",
+        ignore_status=True,
+        verbose=False,
+    )
+    sstable_files = ls_result.stdout.split() if ls_result.stdout.strip() else []
+
+    if not sstable_files:
+        LOGGER.warning(
+            "CorruptedSstablesPreparator: corrupted sstable %s not found in snapshot %s "
+            "(it may have been quarantined before the snapshot was taken)",
+            sstable_name,
+            snapshot_path,
+        )
+
     decrypted_path = decrypt_sstables_on_node(node, snapshot_path, keyspace=keyspace, table=table_name)
-    return snapshot_path, decrypted_path
+    return snapshot_path, sstable_files, decrypted_path
 
 
 class CorruptedSstablesPreparator(TeardownValidator):
@@ -323,15 +349,21 @@ class CorruptedSstablesPreparator(TeardownValidator):
             "CorruptedSstablesPreparator: taking snapshot for %s.%s on node %s", keyspace, table_name, node_name
         )
         try:
-            snapshot_path, decrypted_path = take_snapshot_and_decrypt(node, sstable_dir, keyspace, table_name)
+            snapshot_path, sstable_files, decrypted_path = take_snapshot_and_decrypt(
+                node, sstable_dir, keyspace, table_name, sstable_name
+            )
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("CorruptedSstablesPreparator: unexpected error — skipping. Error: %s", exc)
             return
         if snapshot_path is None:
             return
 
+        # Build the targeted file list for upload: schema.cql + corrupted sstable components + decrypted dir.
+        # This avoids uploading the entire snapshot directory which can be hundreds of GBs.
+        upload_files = sstable_files + [f"{snapshot_path}/schema.cql"]
         state = {
             "snapshot_path": snapshot_path,
+            "upload_files": upload_files,
             "decrypted_path": decrypted_path,
             "keyspace": keyspace,
             "table_name": table_name,
@@ -341,8 +373,9 @@ class CorruptedSstablesPreparator(TeardownValidator):
         }
         state_file.write_text(json.dumps(state), encoding="utf-8")
         LOGGER.info(
-            "CorruptedSstablesPreparator: state written to %s (snapshot=%s, decrypted=%s)",
+            "CorruptedSstablesPreparator: state written to %s (snapshot=%s, files=%d, decrypted=%s)",
             state_file,
             snapshot_path,
+            len(upload_files),
             decrypted_path,
         )

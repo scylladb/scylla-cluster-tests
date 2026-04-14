@@ -32,6 +32,7 @@ from sdcm.sct_events.events_device import EVENTS_LOG_DIR, RAW_EVENTS_LOG
 from sdcm.teardown_validators.sstables import (
     CorruptedSstablesPreparator,
     find_corrupted_sstable_in_events,
+    take_snapshot_and_decrypt,
     _parse_sstable_path,
 )
 from sdcm.utils.sstable.sstable_utils import (
@@ -230,14 +231,22 @@ def test_snapshot_stdout_missing_directory_label_skips(tmp_path):
 def test_happy_path_state_file_written(tmp_path):
     """Validator writes the expected state file when everything succeeds."""
     make_raw_events_file(tmp_path, [CORRUPTED_EVENT_JSON])
+
+    snapshot_path = "/var/lib/scylla/data/keyspace1/standard1-01b9f260d55311ef8caf5992914eabbe/snapshots/1712059224000"
+    prefix = "me-3gn1_0bxv_16fs02rr7ufpbjejzy-big"
+    sstable_components = "\n".join(
+        f"{snapshot_path}/{prefix}-{comp}" for comp in ["Data.db", "Filter.db", "Statistics.db", "TOC.txt"]
+    )
+
     node = make_fake_node(
-        {re.compile(r"nodetool snapshot.*"): ok(NODETOOL_SNAPSHOT_STDOUT)},
+        {
+            re.compile(r"nodetool snapshot.*"): ok(NODETOOL_SNAPSHOT_STDOUT),
+            re.compile(rf"ls .*/snapshots/1712059224000/{prefix}-\*.*"): ok(sstable_components),
+        },
         name="db-node-0",
     )
 
-    expected_decrypted = (
-        "/var/lib/scylla/data/keyspace1/standard1-01b9f260d55311ef8caf5992914eabbe/snapshots/1712059224000/decrypted"
-    )
+    expected_decrypted = f"{snapshot_path}/decrypted"
 
     with patch(
         "sdcm.teardown_validators.sstables.decrypt_sstables_on_node",
@@ -257,6 +266,10 @@ def test_happy_path_state_file_written(tmp_path):
     assert state["decrypted_path"] == expected_decrypted
     assert "snapshot_path" in state
     assert "ssh_login_info" in state
+    # upload_files must contain the targeted sstable components + schema.cql
+    assert "upload_files" in state
+    assert f"{snapshot_path}/schema.cql" in state["upload_files"]
+    assert any(f.endswith("-Data.db") for f in state["upload_files"])
 
     # decrypt_sstables_on_node must be called with the snapshot path
     mock_decrypt.assert_called_once()
@@ -268,7 +281,10 @@ def test_happy_path_decrypt_called_with_snapshot_path(tmp_path):
     """decrypt_sstables_on_node is called with the snapshot path derived from the event."""
     make_raw_events_file(tmp_path, [CORRUPTED_EVENT_JSON])
     node = make_fake_node(
-        {re.compile(r"nodetool snapshot.*"): ok(NODETOOL_SNAPSHOT_STDOUT)},
+        {
+            re.compile(r"nodetool snapshot.*"): ok(NODETOOL_SNAPSHOT_STDOUT),
+            re.compile(r"ls .*/snapshots/.*"): ok(""),  # no component files found in snapshot
+        },
         name="db-node-0",
     )
 
@@ -292,7 +308,10 @@ def test_state_file_has_none_decrypted_path_when_decrypt_returns_none(tmp_path):
     """State file is written with decrypted_path=None when decryption fails."""
     make_raw_events_file(tmp_path, [CORRUPTED_EVENT_JSON])
     node = make_fake_node(
-        {re.compile(r"nodetool snapshot.*"): ok(NODETOOL_SNAPSHOT_STDOUT)},
+        {
+            re.compile(r"nodetool snapshot.*"): ok(NODETOOL_SNAPSHOT_STDOUT),
+            re.compile(r"ls .*/snapshots/.*"): ok(""),  # no component files in snapshot
+        },
         name="db-node-0",
     )
 
@@ -330,8 +349,14 @@ def test_sstables_collector_state_file_path_calls_upload(tmp_path):
 
     snapshot_path = "/var/lib/scylla/data/ks/tbl-uuid/snapshots/1712059224000"
     decrypted_path = f"{snapshot_path}/decrypted"
+    upload_files = [
+        f"{snapshot_path}/me-big-Data.db",
+        f"{snapshot_path}/me-big-Filter.db",
+        f"{snapshot_path}/schema.cql",
+    ]
     state = {
         "snapshot_path": snapshot_path,
+        "upload_files": upload_files,
         "decrypted_path": decrypted_path,
         "keyspace": "ks",
         "table_name": "tbl",
@@ -354,8 +379,46 @@ def test_sstables_collector_state_file_path_calls_upload(tmp_path):
     mock_upload.assert_called_once()
     call_kwargs = mock_upload.call_args
     paths_arg = call_kwargs[0][1] if call_kwargs[0] else call_kwargs[1].get("files")
-    assert snapshot_path in paths_arg
+    # Should contain the targeted file list + decrypted path, NOT the whole snapshot dir
+    for f in upload_files:
+        assert f in paths_arg
     assert decrypted_path in paths_arg
+    assert result == [fake_s3_link]
+
+
+def test_sstables_collector_state_file_backwards_compat(tmp_path):
+    """SSTablesCollector falls back to [snapshot_path] when state file lacks upload_files."""
+    local_dir = tmp_path / "collector" / "corrupted-sstables" / "2026-01-01"
+    local_dir.mkdir(parents=True)
+
+    snapshot_path = "/var/lib/scylla/data/ks/tbl-uuid/snapshots/1712059224000"
+    # Old-format state file without upload_files key
+    state = {
+        "snapshot_path": snapshot_path,
+        "decrypted_path": None,
+        "keyspace": "ks",
+        "table_name": "tbl",
+        "sstable_name": "me-big-Data.db",
+        "node_name": "db-node-0",
+        "ssh_login_info": {"hostname": "10.0.0.1", "user": "scyllaadm"},
+    }
+    state_file = tmp_path / CORRUPTED_SSTABLES_STATE_FILENAME
+    state_file.write_text(json.dumps(state), encoding="utf-8")
+
+    collector = make_collector(local_dir)
+    fake_s3_link = "https://s3.amazonaws.com/bucket/corrupted.tar.gz"
+
+    with patch(
+        "sdcm.logcollector.upload_remote_files_directly_to_s3",
+        return_value=fake_s3_link,
+    ) as mock_upload:
+        result = collector.collect_logs()
+
+    mock_upload.assert_called_once()
+    call_kwargs = mock_upload.call_args
+    paths_arg = call_kwargs[0][1] if call_kwargs[0] else call_kwargs[1].get("files")
+    # Falls back to whole snapshot directory
+    assert snapshot_path in paths_arg
     assert result == [fake_s3_link]
 
 
@@ -402,6 +465,62 @@ def test_sstables_collector_no_corrupted_event_returns_empty(tmp_path):
     collector = make_collector(local_dir)
     result = collector.collect_logs()
     assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Tests: take_snapshot_and_decrypt — targeted file collection
+# ---------------------------------------------------------------------------
+
+
+def test_take_snapshot_targets_specific_sstable_files(tmp_path):
+    """take_snapshot_and_decrypt finds the corrupted sstable's component files within the snapshot."""
+    snapshot_path = "/var/lib/scylla/data/keyspace1/standard1-uuid/snapshots/1712059224000"
+    prefix = "me-3gn1_0bxv_16fs02rr7ufpbjejzy-big"
+    component_files = [f"{snapshot_path}/{prefix}-{comp}" for comp in ["Data.db", "Filter.db", "TOC.txt"]]
+
+    node = make_fake_node(
+        {
+            re.compile(r"nodetool snapshot.*"): ok(NODETOOL_SNAPSHOT_STDOUT),
+            re.compile(rf"ls .*/snapshots/1712059224000/{prefix}-\*.*"): ok("\n".join(component_files)),
+        },
+        name="db-node-0",
+    )
+
+    with patch("sdcm.teardown_validators.sstables.decrypt_sstables_on_node", return_value=None):
+        snap, sstable_files, decrypted = take_snapshot_and_decrypt(
+            node,
+            sstable_dir="/var/lib/scylla/data/keyspace1/standard1-uuid",
+            keyspace="keyspace1",
+            table_name="standard1",
+            sstable_name=f"{prefix}-Data.db",
+        )
+
+    assert snap == snapshot_path
+    assert sstable_files == component_files
+    assert decrypted is None
+
+
+def test_take_snapshot_empty_sstable_files_when_quarantined(tmp_path):
+    """When the corrupted sstable was quarantined, ls returns empty — sstable_files is []."""
+    node = make_fake_node(
+        {
+            re.compile(r"nodetool snapshot.*"): ok(NODETOOL_SNAPSHOT_STDOUT),
+            re.compile(r"ls .*/snapshots/.*"): ok(""),  # not found in snapshot
+        },
+        name="db-node-0",
+    )
+
+    with patch("sdcm.teardown_validators.sstables.decrypt_sstables_on_node", return_value=None):
+        snap, sstable_files, decrypted = take_snapshot_and_decrypt(
+            node,
+            sstable_dir="/var/lib/scylla/data/ks/tbl-uuid",
+            keyspace="ks",
+            table_name="tbl",
+            sstable_name="me-big-Data.db",
+        )
+
+    assert snap is not None  # snapshot was taken successfully
+    assert sstable_files == []  # but no component files found
 
 
 # ---------------------------------------------------------------------------
