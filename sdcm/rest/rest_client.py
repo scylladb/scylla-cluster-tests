@@ -18,6 +18,8 @@ from urllib.parse import urljoin
 
 import requests
 from requests import Response
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 LOGGER = logging.getLogger(__name__)
@@ -28,6 +30,21 @@ class RestClient:
         self._url_prefix = "http://"
         self._host = host
         self._endpoint = endpoint
+        self.session = self._create_session()
+
+    @staticmethod
+    def _create_session(retries: int = 5) -> requests.Session:
+        retry_strategy = Retry(
+            total=retries,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "POST"],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session = requests.Session()
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        return session
 
     def _build_url(self, path: str) -> str:
         return f"{self._base_url}/{path}" if path else self._base_url
@@ -40,12 +57,12 @@ class RestClient:
         url = self._build_url(path)
         LOGGER.info("Sending a GET request for: %s", url)
 
-        return requests.get(url=url, params=params)
+        return self.session.get(url=url, params=params)
 
     def post(self, path: str, params: Dict[str, str] = None) -> Response:
         url = self._build_url(path)
         LOGGER.info("Sending a POST request for: %s", url)
-        return requests.post(url=url, params=params)
+        return self.session.post(url=url, params=params)
 
     def _prepare_request(self, method: Literal["GET", "POST"], path: str, params: dict[str, str] | None):
         full_url = self._build_url(path)
