@@ -10,7 +10,6 @@ from sdcm.exceptions import UnsupportedNemesis
 from sdcm.nemesis.monkey.abort_decommission import AbortDecommissionMonkey
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.remote.libssh2_client.result import Result as Libssh2Result
-from unit_tests.unit.nemesis import TestRunner
 
 _MODULE = "sdcm.nemesis.monkey.abort_decommission"
 
@@ -45,36 +44,25 @@ pytestmark = pytest.mark.usefixtures("events")
 
 
 @pytest.fixture()
-def runner():
-    """TestRunner pre-configured for AbortDecommissionMonkey tests.
+def runner(base_runner):
+    """``base_runner`` extended with abort-decommission specifics.
 
-    Two data nodes are placed in ``rack1`` so the single-node-in-rack guard
-    inside ``disrupt()`` never fires by default.
+    ``base_runner`` already provides a two-node rack and deterministic random;
+    this fixture adds host_id, system-log following, monitoring_set, and the
+    ``add_new_nodes`` helper needed by AbortDecommissionMonkey.
     """
-    base = TestRunner()
-
-    # target_node details
-    base.target_node.name = "node1"
-    base.target_node.rack = "rack1"
-    base.target_node.is_seed = False
-    base.target_node.host_id = "aaaa-bbbb-cccc"
-    base.target_node.follow_system_log.return_value = iter(["matching log line"])
-
-    # A second node in the same rack so the rack has > 1 node
-    other_node = MagicMock()
-    other_node.rack = "rack1"
-
-    base.cluster.data_nodes = [base.target_node, other_node]
+    base_runner.target_node.host_id = "aaaa-bbbb-cccc"
+    base_runner.target_node.follow_system_log.return_value = iter(["matching log line"])
 
     # monitoring_set is required for reconfigure_scylla_monitoring
-    base.monitoring_set = MagicMock()
+    base_runner.monitoring_set = MagicMock()
 
     # add_new_nodes returns a fresh mock node by default
     new_node = MagicMock()
     new_node.is_seed = False
-    base.add_new_nodes = MagicMock(return_value=[new_node])
+    base_runner.add_new_nodes = MagicMock(return_value=[new_node])
 
-    return base
+    return base_runner
 
 
 @pytest.fixture(autouse=True)
