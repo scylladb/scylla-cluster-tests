@@ -79,8 +79,8 @@ class KeyStore:
     def __init__(self):
         self._cache: dict[str, bytes] = {}
         self._cache_lock = threading.Lock()
-        self._backend = os.environ.get("SCT_KEYSTORE_BACKEND", "s3")
-        self._sm_prefix = os.environ.get("SCT_KEYSTORE_SM_PREFIX", "sct/")
+        self._backend = os.environ.get("SCT_KEYSTORE_BACKEND") or "s3"
+        self._sm_prefix = os.environ.get("SCT_KEYSTORE_SM_PREFIX") or "sct/"
 
     @property
     def s3(self) -> S3ServiceResource:
