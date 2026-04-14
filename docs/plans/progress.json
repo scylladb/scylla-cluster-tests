@@ -163,10 +163,10 @@
       "title": "Cassandra Cluster Support",
       "file": "infrastructure/cassandra-cluster-support.md",
       "domain": "cluster",
-      "status": "draft",
-      "created": "2026-03-08",
-      "phases_total": null,
-      "phases_done": 0
+      "status": "in_progress",
+      "pr": 14164,
+      "phases_total": 5,
+      "phases_done": 1
     },
     {
       "id": "amazon-emr-spark-migrator",
