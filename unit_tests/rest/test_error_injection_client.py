@@ -23,34 +23,44 @@ def error_injection_client(fake_node):
 def test_list_injected_errors(error_injection_client):
     result = error_injection_client.list_injected_errors()
 
-    assert result.stdout == 'curl -v -X GET "http://localhost:10000/v2/error_injection/injection"'
+    assert result.stdout == (
+        "curl -v --retry 5 --retry-max-time 300 --connect-timeout 10"
+        ' -X GET "http://localhost:10000/v2/error_injection/injection"'
+    )
 
 
 def test_inject_error(error_injection_client):
     result = error_injection_client.inject_error(error_name="test_error")
 
-    assert (
-        result.stdout
-        == 'curl -v -X POST "http://localhost:10000/v2/error_injection/injection/test_error?one_shot=false"'
+    assert result.stdout == (
+        "curl -v --retry 5 --retry-max-time 300 --connect-timeout 10"
+        ' -X POST "http://localhost:10000/v2/error_injection/injection/test_error?one_shot=false"'
     )
 
 
 def test_inject_error_with_data_one_shot(error_injection_client):
     result = error_injection_client.inject_error(error_name="test_error", one_shot=True, data={"key": "value"})
 
-    assert (
-        result.stdout
-        == 'curl -v -X POST -H \'Content-Type: application/json\' -d \'{"key": "value"}\' "http://localhost:10000/v2/error_injection/injection/test_error?one_shot=true"'
+    assert result.stdout == (
+        "curl -v --retry 5 --retry-max-time 300 --connect-timeout 10"
+        " -X POST -H 'Content-Type: application/json' -d '{\"key\": \"value\"}'"
+        ' "http://localhost:10000/v2/error_injection/injection/test_error?one_shot=true"'
     )
 
 
 def test_remove_errors(error_injection_client):
     result = error_injection_client.remove_errors()
 
-    assert result.stdout == 'curl -v -X DELETE "http://localhost:10000/v2/error_injection/injection"'
+    assert result.stdout == (
+        "curl -v --retry 5 --retry-max-time 300 --connect-timeout 10"
+        ' -X DELETE "http://localhost:10000/v2/error_injection/injection"'
+    )
 
 
 def test_send_message_to_error(error_injection_client):
     result = error_injection_client.send_message_to_error(error_name="test_error")
 
-    assert result.stdout == 'curl -v -X POST "http://localhost:10000/v2/error_injection/injection/test_error/message"'
+    assert result.stdout == (
+        "curl -v --retry 5 --retry-max-time 300 --connect-timeout 10"
+        ' -X POST "http://localhost:10000/v2/error_injection/injection/test_error/message"'
+    )
