@@ -362,3 +362,9 @@ agent:
   tls: false
 
 c_s_driver_version: '3'
+
+# KeyStore backend for credential retrieval.
+#   s3             - Legacy: fetch from the scylla-qa-keystore S3 bucket.
+#   secretsmanager - Read from AWS Secrets Manager under the configured prefix.
+keystore_backend: 's3'
+keystore_sm_prefix: 'sct/'

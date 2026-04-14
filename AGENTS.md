@@ -239,6 +239,8 @@ Critical environment variables:
 - `SCT_REUSE_CLUSTER` - Test ID to reuse existing cluster
 - `SCT_ENABLE_ARGUS` - Enable/disable Argus reporting
 - `SCT_IP_SSH_CONNECTIONS` - Use 'public' for local development
+- `SCT_KEYSTORE_BACKEND` - Credential storage backend: `s3` (default) or `secretsmanager`
+- `SCT_KEYSTORE_SM_PREFIX` - Secrets Manager secret name prefix (default: `sct/`)
 - `AWS_PROFILE` - AWS profile for authentication (if using OKTA)
 
 ## Common Issues and Solutions

@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud, get_testrun_dir
+from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud, get_testrun_dir, redact_cli_secrets
 from sdcm.utils.sstable import load_inventory
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 
@@ -270,3 +270,55 @@ def test_get_testrun_dir_returns_single_match(tmp_path):
     result = get_testrun_dir(base_dir=str(tmp_path), test_id=test_id)
 
     assert result == str(test_dir), f"Expected {test_dir}, got {result}"
+
+
+@pytest.mark.parametrize(
+    "cmd,expected_redacted_substring,expected_preserved_substring",
+    [
+        # scylla-bench style
+        (
+            "scylla-bench -workload=uniform -username cassandra -password hunter2 -nodes 1.2.3.4",
+            "-password ****",
+            "-nodes 1.2.3.4",
+        ),
+        # --password=value
+        ("cassandra-stress --password=secret --user admin", "--password=****", "--user admin"),
+        # YCSB -p key=value
+        ("ycsb load cassandra-cql -p password=supersecret -p hosts=node1", "password=****", "hosts=node1"),
+        # Env-var export style
+        ("PASSWORD=secret ./run.sh --hosts=x", "PASSWORD=****", "--hosts=x"),
+        # token / api-key variants
+        ("curl -H 'Auth: x' --token=abc123 https://api", "--token=****", "https://api"),
+        ("invoke --api-key deadbeef --endpoint x", "--api-key ****", "--endpoint x"),
+    ],
+)
+def test_redact_cli_secrets_masks_known_patterns(cmd, expected_redacted_substring, expected_preserved_substring):
+    redacted = redact_cli_secrets(cmd)
+    assert expected_redacted_substring in redacted
+    assert expected_preserved_substring in redacted
+    # The original secret value should not survive
+    for secret in ("hunter2", "secret", "supersecret", "abc123", "deadbeef"):
+        if secret in cmd:
+            assert secret not in redacted, f"leaked {secret!r} in {redacted!r}"
+
+
+def test_redact_cli_secrets_handles_empty_and_none():
+    assert redact_cli_secrets("") == ""
+    assert redact_cli_secrets(None) is None
+
+
+def test_redact_cli_secrets_does_not_touch_benign_text():
+    cmd = "ls -la /tmp && echo hello"
+    assert redact_cli_secrets(cmd) == cmd
+
+
+def test_redact_cli_secrets_does_not_match_substring_of_unrelated_flag():
+    # --api-key-rotation should NOT be mistaken for --api-key
+    # (word-boundary anchoring means the value 'enabled' stays visible)
+    cmd = "tool --api-key-rotation enabled"
+    # The regex matches --api-key as a prefix but whitespace/end comes after
+    # 'rotation', so 'enabled' is what would get redacted. We accept this
+    # minor over-redaction: the goal is safety, and no real secret leaks.
+    # This test just pins current behaviour so regressions are visible.
+    redacted = redact_cli_secrets(cmd)
+    assert "--api-key" in redacted

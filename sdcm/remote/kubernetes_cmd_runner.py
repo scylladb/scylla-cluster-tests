@@ -35,6 +35,7 @@ from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.common import (
     deprecation,
     generate_random_string,
+    redact_cli_secrets,
 )
 from sdcm.utils.decorators import retrying
 from sdcm.utils.lock_utils import KeyBasedLock
@@ -166,10 +167,16 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
     def run(self, cmd, **kwargs):
         if hasattr(self, "dynamic_remoter") and hasattr(self, "pod_image"):
             if is_scylla_bench_command(cmd) and "scylla-bench" not in self.pod_image:
-                LOGGER.info("Running following 'scylla-bench' command in a separate dynamic loader pod: %s", cmd)
+                LOGGER.info(
+                    "Running following 'scylla-bench' command in a separate dynamic loader pod: %s",
+                    redact_cli_secrets(cmd),
+                )
                 return self.dynamic_remoter.run(cmd, **kwargs)
             elif is_ycsb_command(cmd) and "ycsb" not in self.pod_image:
-                LOGGER.info("Running following 'ycsb' command in a separate dynamic loader pod: %s", cmd)
+                LOGGER.info(
+                    "Running following 'ycsb' command in a separate dynamic loader pod: %s",
+                    redact_cli_secrets(cmd),
+                )
                 return self.dynamic_remoter.run(cmd, **kwargs)
         return super().run(cmd, **kwargs)
 

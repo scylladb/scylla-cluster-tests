@@ -4406,3 +4406,22 @@ cassandra-stress driver version to use: 3|4|random
 **default:** 3
 
 **type:** Literal['3', '4', 'random']
+
+
+## **keystore_backend** / SCT_KEYSTORE_BACKEND
+
+Credential storage backend for KeyStore: 's3' (default) or 'secretsmanager'
+
+**default:** s3
+
+**type:** Literal['s3', 'secretsmanager']
+
+
+## **keystore_sm_prefix** / SCT_KEYSTORE_SM_PREFIX
+
+AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager
+
+**default:** sct/
+
+**type:** str
+* appendable
