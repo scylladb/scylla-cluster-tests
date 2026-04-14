@@ -324,31 +324,9 @@ def upgrade_scylla_manager(
     else:
         manager_node.remoter.sudo("systemctl stop scylla-manager")
 
-<<<<<<< HEAD
     LOGGER.debug("Stopping manager agents")
     for node in db_cluster.nodes:
         node.remoter.sudo("systemctl stop scylla-manager-agent")
-||||||| parent of ed3f7131b (test(upgrade): comment out backup validation sub-tests for debugging)
-            backup_task = mgr_cluster.create_backup_task(
-                cron=create_cron_list_from_timedelta(minutes=2),
-                location_list=self.locations,
-                keyspace_list=["keyspace1"],
-                method=self.backup_method,
-            )
-            backup_task_current_details = get_task_run_details(backup_task)
-            backup_task_snapshot = backup_task.get_snapshot_tag()
-            pre_upgrade_backup_task_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
-=======
-            backup_task = mgr_cluster.create_backup_task(
-                cron=create_cron_list_from_timedelta(minutes=2),
-                location_list=self.locations,
-                keyspace_list=["keyspace1"],
-                method=self.backup_method,
-            )
-            backup_task_current_details = get_task_run_details(backup_task)
-            # backup_task_snapshot = backup_task.get_snapshot_tag()
-            # pre_upgrade_backup_task_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
->>>>>>> ed3f7131b (test(upgrade): comment out backup validation sub-tests for debugging)
 
     LOGGER.debug("Upgrading manager server")
     manager_node.upgrade_mgmt(target_upgrade_server_version, start_manager_after_upgrade=False)
@@ -374,7 +352,6 @@ def upgrade_scylla_manager(
     )
 
 
-<<<<<<< HEAD
 def _create_stopped_repair_task_with_manual_argument(mgr_cluster, arg_string):
     res = mgr_cluster.sctool.run(cmd=f"repair -c {mgr_cluster.id} {arg_string}", parse_table_res=False)
     assert not res.stderr, f"Task creation failed: {res.stderr}"
@@ -383,140 +360,3 @@ def _create_stopped_repair_task_with_manual_argument(mgr_cluster, arg_string):
     repair_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=500, step=10)
     repair_task.stop()
     return repair_task
-||||||| parent of ed3f7131b (test(upgrade): comment out backup validation sub-tests for debugging)
-        with self.subTest("Validating that Manager yaml configuration is preserved after upgrade"):
-            with self.manager_node.remote_manager_yaml() as scylla_manager_yaml:
-                post_upgrade_manager_yaml = dict(scylla_manager_yaml)
-                assert pre_upgrade_manager_yaml == post_upgrade_manager_yaml, (
-                    f"Manager yaml configuration changed after upgrade:\n"
-                    f"pre-upgrade: {pre_upgrade_manager_yaml}\n"
-                    f"post-upgrade: {post_upgrade_manager_yaml}"
-                )
-
-        with self.subTest("Checking that the details of the repair that was created before the upgrade didn't change"):
-            self.validate_pre_upgrade_task_details(task=repair_task, previous_task_details=repair_task_current_details)
-
-        with self.subTest("Checking that the details of the backup that was created before the upgrade didn't change"):
-            self.validate_pre_upgrade_task_details(task=backup_task, previous_task_details=backup_task_current_details)
-
-        with self.subTest("Continuing a older version stopped backup task with newer version Manager"):
-            stopped_backup_task.start()
-            stopped_backup_task.wait_and_get_final_status(timeout=1200, step=20)
-            assert stopped_backup_task.status == TaskStatus.DONE, (
-                f"Task {stopped_backup_task.id} failed to continue after Manager upgrade"
-            )
-
-        with self.subTest("Restoring an older version backup task with newer version of Manager"):
-            self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
-            self.run_verification_read_stress()
-
-        with self.subTest("Restoring an older version backup task with newer version of Manager, using a restore task"):
-            self.verify_backup_success(
-                mgr_cluster=mgr_cluster, backup_task=backup_task, restore_data_with_task=True, timeout=600
-            )
-            self.run_verification_read_stress()
-
-        with self.subTest(
-            "Executing the 'backup list' and 'backup files' commands on a older version backup"
-            " with newer version of Manager"
-        ):
-            current_backup_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
-            assert pre_upgrade_backup_task_files == current_backup_files, (
-                f"Backup task of the task {backup_task.id} is not identical after the Manager upgrade:"
-                f"\nbefore the upgrade:\n{pre_upgrade_backup_task_files}\nafter the upgrade:\n{current_backup_files}"
-            )
-            mgr_cluster.sctool.run(cmd=f"backup list -c {mgr_cluster.id}", is_verify_errorless_result=True)
-
-        with self.subTest("Purging a older version backup"):
-            table_ks_name = "ks1"
-            table_to_delete = "cf1"
-
-            self.log.debug("Dropping one table")
-            with self.db_cluster.cql_connection_patient(self.db_node) as session:
-                session.execute(f"DROP TABLE {table_ks_name}.{table_to_delete} ;")
-
-            for i in range(2, 4):
-                self.log.debug("Rerunning the backup task for the %s time", i)
-                rerunning_backup_task.start(continue_task=False)
-                rerunning_backup_task.wait_and_get_final_status(step=5)
-                assert rerunning_backup_task.status == TaskStatus.DONE, (
-                    f"Backup {rerunning_backup_task.id} that was rerun again from the start has failed to reach "
-                    f"status DONE within expected time limit"
-                )
-            per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(
-                snapshot_tag=rerunning_backup_task.get_snapshot_tag()
-            )
-            for node in self.db_cluster.nodes:
-                node_id = node.host_id
-                assert table_to_delete not in per_node_backup_file_paths[node_id][table_ks_name], (
-                    "The missing table is still in s3, even though it should have been purged"
-                )
-=======
-        with self.subTest("Validating that Manager yaml configuration is preserved after upgrade"):
-            with self.manager_node.remote_manager_yaml() as scylla_manager_yaml:
-                post_upgrade_manager_yaml = dict(scylla_manager_yaml)
-                assert pre_upgrade_manager_yaml == post_upgrade_manager_yaml, (
-                    f"Manager yaml configuration changed after upgrade:\n"
-                    f"pre-upgrade: {pre_upgrade_manager_yaml}\n"
-                    f"post-upgrade: {post_upgrade_manager_yaml}"
-                )
-
-        with self.subTest("Checking that the details of the repair that was created before the upgrade didn't change"):
-            self.validate_pre_upgrade_task_details(task=repair_task, previous_task_details=repair_task_current_details)
-
-        with self.subTest("Checking that the details of the backup that was created before the upgrade didn't change"):
-            self.validate_pre_upgrade_task_details(task=backup_task, previous_task_details=backup_task_current_details)
-
-        with self.subTest("Continuing a older version stopped backup task with newer version Manager"):
-            stopped_backup_task.start()
-            stopped_backup_task.wait_and_get_final_status(timeout=1200, step=20)
-            assert stopped_backup_task.status == TaskStatus.DONE, (
-                f"Task {stopped_backup_task.id} failed to continue after Manager upgrade"
-            )
-
-        with self.subTest("Restoring an older version backup task with newer version of Manager"):
-            self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
-            self.run_verification_read_stress()
-
-        with self.subTest("Restoring an older version backup task with newer version of Manager, using a restore task"):
-            self.verify_backup_success(
-                mgr_cluster=mgr_cluster, backup_task=backup_task, restore_data_with_task=True, timeout=600
-            )
-            self.run_verification_read_stress()
-
-        # with self.subTest(
-        #     "Executing the 'backup list' and 'backup files' commands on a older version backup"
-        #     " with newer version of Manager"
-        # ):
-        #     current_backup_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
-        #     assert pre_upgrade_backup_task_files == current_backup_files, (
-        #         f"Backup task of the task {backup_task.id} is not identical after the Manager upgrade:"
-        #         f"\nbefore the upgrade:\n{pre_upgrade_backup_task_files}\nafter the upgrade:\n{current_backup_files}"
-        #     )
-        #     mgr_cluster.sctool.run(cmd=f"backup list -c {mgr_cluster.id}", is_verify_errorless_result=True)
-
-        with self.subTest("Purging a older version backup"):
-            table_ks_name = "ks1"
-            table_to_delete = "cf1"
-
-            self.log.debug("Dropping one table")
-            with self.db_cluster.cql_connection_patient(self.db_node) as session:
-                session.execute(f"DROP TABLE {table_ks_name}.{table_to_delete} ;")
-
-            for i in range(2, 4):
-                self.log.debug("Rerunning the backup task for the %s time", i)
-                rerunning_backup_task.start(continue_task=False)
-                rerunning_backup_task.wait_and_get_final_status(step=5)
-                assert rerunning_backup_task.status == TaskStatus.DONE, (
-                    f"Backup {rerunning_backup_task.id} that was rerun again from the start has failed to reach "
-                    f"status DONE within expected time limit"
-                )
-            # per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(
-            #     snapshot_tag=rerunning_backup_task.get_snapshot_tag()
-            # )
-            # for node in self.db_cluster.nodes:
-            #     node_id = node.host_id
-            #     assert table_to_delete not in per_node_backup_file_paths[node_id][table_ks_name], (
-            #         "The missing table is still in s3, even though it should have been purged"
-            #     )
->>>>>>> ed3f7131b (test(upgrade): comment out backup validation sub-tests for debugging)
