@@ -125,7 +125,7 @@ sinks:
         healthcheck: false
 EOF
 
-        systemctl try-reload-or-restart vector.service
+        systemctl restart vector || echo "WARNING: vector.service restart failed, will be reconfigured later by configure_remote_logging"
     """).format(host=host, port=port)
 
 
@@ -296,7 +296,6 @@ def install_vector_service():
         fi
 
         systemctl enable vector
-        systemctl start vector
     """)
 
 
