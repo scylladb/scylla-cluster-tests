@@ -12,7 +12,6 @@ module-level utilities shared across the iptables-based nemesis classes.
 
 import contextlib
 import logging
-import random
 import time
 from typing import List, Optional
 
@@ -49,37 +48,40 @@ def install_iptables(target_node) -> None:
         target_node.install_package("iptables")
 
 
-def iptables_randomly_get_random_matching_rule():
+def iptables_randomly_get_random_matching_rule(rnd):
     """Randomly generate an iptables matching rule to match packets in a random manner.
+
+    Args:
+        rnd: A ``random.Random`` instance (e.g. ``self.runner.random``).
 
     Returns:
         A tuple of (textual_description, iptables_match_rule).
     """
-    match_type = random.choice(
+    match_type = rnd.choice(
         ["statistic", "statistic", "statistic", "limit", "limit", "limit", ""]
         #  Make no matching rule less probable
     )
 
     if match_type == "statistic":
-        mode = random.choice(["random", "nth"])
-        if match_type == "random":
-            probability = random.choice(["0.0001", "0.001", "0.01", "0.1", "0.3", "0.6", "0.8", "0.9"])
+        mode = rnd.choice(["random", "nth"])
+        if mode == "random":
+            probability = rnd.choice(["0.0001", "0.001", "0.01", "0.1", "0.3", "0.6", "0.8", "0.9"])
             return (
                 f"randomly chosen packet with {probability} probability",
                 f"-m statistic --mode {mode} --probability {probability}",
             )
-        elif match_type == "nth":
-            every = random.choice(["2", "4", "8", "16", "32", "64", "128"])
+        elif mode == "nth":
+            every = rnd.choice(["2", "4", "8", "16", "32", "64", "128"])
             return f"every {every} packet", f"-m statistic --mode {mode} --every {every} --packet 0"
     elif match_type == "limit":
-        period = random.choice(["second", "minute"])
-        pkts_per_period = random.choice({"second": [1, 5, 10], "minute": [2, 10, 40, 80]}.get(period))
+        period = rnd.choice(["second", "minute"])
+        pkts_per_period = rnd.choice({"second": [1, 5, 10], "minute": [2, 10, 40, 80]}.get(period))
         return (
             f"string of {pkts_per_period} very first packets every {period}",
             f"-m limit --limit {pkts_per_period}/{period}",
         )
     elif match_type == "connbytes":
-        bytes_from = random.choice(["100", "200", "400", "800", "1600", "3200", "6400", "12800", "1280000"])
+        bytes_from = rnd.choice(["100", "200", "400", "800", "1600", "3200", "6400", "12800", "1280000"])
         return (
             f"every packet from connection that total byte counter exceeds {bytes_from}",
             f"-m connbytes --connbytes-mode bytes --connbytes-dir both --connbytes {bytes_from}",
@@ -87,15 +89,18 @@ def iptables_randomly_get_random_matching_rule():
     return "every packet", ""
 
 
-def iptables_randomly_get_disrupting_target():
+def iptables_randomly_get_disrupting_target(rnd):
     """Randomly generate an iptables target that can cause disruption.
+
+    Args:
+        rnd: A ``random.Random`` instance (e.g. ``self.runner.random``).
 
     Returns:
         A tuple of (textual_description, iptables_target).
     """
-    target_type = random.choice(["REJECT", "DROP"])
+    target_type = rnd.choice(["REJECT", "DROP"])
     if target_type == "REJECT":
-        reject_with = random.choice(
+        reject_with = rnd.choice(
             [
                 "icmp-net-unreachable",
                 "icmp-host-unreachable",
@@ -149,12 +154,13 @@ def run_commands_wait_and_cleanup(
             )
 
 
-def get_rate_limit_for_network_disruption(monitoring_set, target_node) -> Optional[str]:
+def get_rate_limit_for_network_disruption(monitoring_set, target_node, rnd) -> Optional[str]:
     """Query Prometheus for recent network bandwidth and compute a random rate limit.
 
     Args:
         monitoring_set: The monitoring set containing Prometheus nodes.
         target_node: The target node to query metrics for.
+        rnd: A ``random.Random`` instance (e.g. ``self.runner.random``).
 
     Returns:
         A rate limit string like "42mbps" or "350kbps", or None if no monitoring nodes.
@@ -187,7 +193,7 @@ def get_rate_limit_for_network_disruption(monitoring_set, target_node) -> Option
         max_limit = int(round(avg_kbps_per_node * 0.70))
         rate_limit_suffix = "kbps"
 
-    return "{}{}".format(random.randrange(min_limit, max_limit), rate_limit_suffix)
+    return "{}{}".format(rnd.randrange(min_limit, max_limit), rate_limit_suffix)
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +234,7 @@ class RandomInterruptionNetworkMonkey(NemesisBaseClass):
             raise ValueError("The network device name is not recognized")
 
         rate_limit: Optional[str] = get_rate_limit_for_network_disruption(
-            self.runner.monitoring_set, self.runner.target_node
+            self.runner.monitoring_set, self.runner.target_node, rnd=self.runner.random
         )
         if not rate_limit:
             self.runner.log.warning(
@@ -297,7 +303,7 @@ class RandomInterruptionNetworkMonkey(NemesisBaseClass):
         """K8s variant: uses Chaos Mesh experiments for network disruption."""
         interruptions = ["delay", "loss", "corrupt"]
         rate_limit: Optional[str] = get_rate_limit_for_network_disruption(
-            self.runner.monitoring_set, self.runner.target_node
+            self.runner.monitoring_set, self.runner.target_node, rnd=self.runner.random
         )
         if not rate_limit:
             self.runner.log.warning(
@@ -305,18 +311,18 @@ class RandomInterruptionNetworkMonkey(NemesisBaseClass):
             )
         else:
             interruptions.append("rate")
-        duration = f"{random.choice(list_of_timeout_options)}s"
-        interruption = random.choice(interruptions)
+        duration = f"{self.runner.random.choice(list_of_timeout_options)}s"
+        interruption = self.runner.random.choice(interruptions)
         match interruption:
             case "delay":
-                delay_in_msecs = random.randrange(50, 300)
+                delay_in_msecs = self.runner.random.randrange(50, 300)
                 jitter = delay_in_msecs * 0.2
                 self.runner.actions_log.info(f"Interruption by network delay - delay: {delay_in_msecs} ms")
                 experiment = NetworkDelayExperiment(
                     self.runner.target_node, duration, f"{delay_in_msecs}ms", correlation=20, jitter=f"{jitter}ms"
                 )
             case "loss":
-                loss_percentage = random.randrange(1, 15)
+                loss_percentage = self.runner.random.randrange(1, 15)
                 self.runner.actions_log.info(
                     f"Interruption by dropping network packets - loss_percentage: {loss_percentage}%"
                 )
@@ -324,7 +330,7 @@ class RandomInterruptionNetworkMonkey(NemesisBaseClass):
                     self.runner.target_node, duration, loss_percentage, correlation=20
                 )
             case "corrupt":
-                corrupt_percentage = random.randrange(1, 15)
+                corrupt_percentage = self.runner.random.randrange(1, 15)
                 self.runner.actions_log.info(
                     f"Interruption by corrupting network packets - corrupt_percentage: {corrupt_percentage}%"
                 )
@@ -392,7 +398,7 @@ class BlockNetworkMonkey(NemesisBaseClass):
             context_manager = contextlib.nullcontext()
 
         selected_option = "--loss 100%"
-        wait_time = random.choice(list_of_timeout_options)
+        wait_time = self.runner.random.choice(list_of_timeout_options)
         self.runner.log.debug("BlockNetwork: [%s] for %dsec", selected_option, wait_time)
         self.runner.actions_log.info(
             f"Network block start on {self.runner.target_node.name} node, wait_time: {wait_time}"
@@ -447,8 +453,8 @@ class RejectInterNodeNetworkMonkey(NemesisBaseClass):
 
         install_iptables(self.runner.target_node)
 
-        textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule()
-        textual_pkt_action, pkt_action = iptables_randomly_get_disrupting_target()
+        textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule(rnd=self.runner.random)
+        textual_pkt_action, pkt_action = iptables_randomly_get_disrupting_target(rnd=self.runner.random)
         wait_time = self.runner.random.choice([10, 60, 120, 300, 500])
 
         InfoEvent(
@@ -487,9 +493,9 @@ class RejectNodeExporterNetworkMonkey(NemesisBaseClass):
 
         install_iptables(self.runner.target_node)
 
-        textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule()
-        textual_pkt_action, pkt_action = iptables_randomly_get_disrupting_target()
-        wait_time = random.choice([10, 60, 120, 300, 500])
+        textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule(rnd=self.runner.random)
+        textual_pkt_action, pkt_action = iptables_randomly_get_disrupting_target(rnd=self.runner.random)
+        wait_time = self.runner.random.choice([10, 60, 120, 300, 500])
 
         InfoEvent(
             f"{name} {textual_matching_rule} that belongs to "
@@ -518,8 +524,8 @@ class RejectThriftNetworkMonkey(NemesisBaseClass):
 
         install_iptables(self.runner.target_node)
 
-        textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule()
-        textual_pkt_action, pkt_action = iptables_randomly_get_disrupting_target()
+        textual_matching_rule, matching_rule = iptables_randomly_get_random_matching_rule(rnd=self.runner.random)
+        textual_pkt_action, pkt_action = iptables_randomly_get_disrupting_target(rnd=self.runner.random)
         wait_time = self.runner.random.choice([10, 60, 120, 300, 500])
 
         InfoEvent(

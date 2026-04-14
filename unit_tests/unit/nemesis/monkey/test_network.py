@@ -18,7 +18,6 @@ from sdcm.nemesis.monkey.network import (
     iptables_randomly_get_random_matching_rule,
     run_commands_wait_and_cleanup,
 )
-from unit_tests.unit.nemesis import TestRunner
 
 _MODULE = "sdcm.nemesis.monkey.network"
 
@@ -30,26 +29,16 @@ pytestmark = pytest.mark.usefixtures("events")
 
 
 @pytest.fixture()
-def rnd():
-    """Deterministic random mock: picks first element / lower bound."""
-    mock = MagicMock()
-    mock.choice.side_effect = lambda seq: seq[0]
-    mock.randrange.side_effect = lambda a, b: a
-    return mock
-
-
-@pytest.fixture()
-def runner(rnd):
-    """TestRunner pre-configured for network nemesis tests."""
-    r = TestRunner()
-    r.monitoring_set = MagicMock()
-    r.monitoring_set.nodes = []
-    r._is_it_on_kubernetes = MagicMock(return_value=False)
-    r.random = rnd
-    r.node_allocator = MagicMock()
-    r.target_node.ip_address = "10.0.0.1"
-    r.target_node.scylla_network_configuration.device = "eth0"
-    return r
+def runner(base_runner):
+    """``base_runner`` extended with network-nemesis-specific attributes."""
+    base_runner.random.randrange.side_effect = lambda a, b: a
+    base_runner.monitoring_set = MagicMock()
+    base_runner.monitoring_set.nodes = []
+    base_runner._is_it_on_kubernetes = MagicMock(return_value=False)
+    base_runner.node_allocator = MagicMock()
+    base_runner.tester.params = MagicMock(artifact_scylla_version=None)
+    with patch("sdcm.utils.issues.SkipPerIssues.get_issue_details", return_value=None):
+        yield base_runner
 
 
 @pytest.fixture()
@@ -318,10 +307,7 @@ def test_iptables_monkey_targets_correct_ports(
     expected_ports,
 ):
     """Verify each iptables-based monkey generates start commands targeting its specific ports."""
-    if monkey_class is RejectInterNodeNetworkMonkey:
-        runner.tester.params = {}
-    with patch(f"{_MODULE}.SkipPerIssues", return_value=False):
-        monkey_class(runner).disrupt()
+    monkey_class(runner).disrupt()
 
     mock_install.assert_called_once_with(runner.target_node)
     mock_rule.assert_called_once_with(rnd=runner.random)
