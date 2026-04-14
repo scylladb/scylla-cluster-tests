@@ -11,7 +11,7 @@ managerPipeline(
 
     // Upgrade from some old Manager release which is still used in production
     // Use Metabase to check it (https://scylladb.metabaseapp.com/question/1685-manager-version)
-    manager_version: '3.6',
+    manager_version: '3.7',
     target_manager_version: 'master_latest',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',

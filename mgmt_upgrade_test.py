@@ -144,8 +144,8 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
                 method=self.backup_method,
             )
             backup_task_current_details = get_task_run_details(backup_task)
-            # backup_task_snapshot = backup_task.get_snapshot_tag()
-            # pre_upgrade_backup_task_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
+            backup_task_snapshot = backup_task.get_snapshot_tag()
+            pre_upgrade_backup_task_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
 
         with self.subTest("Creating a simple backup with the intention of purging it"):
             self._create_simple_table(table_name="cf1")
@@ -223,16 +223,16 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
             )
             self.run_verification_read_stress()
 
-        # with self.subTest(
-        #     "Executing the 'backup list' and 'backup files' commands on a older version backup"
-        #     " with newer version of Manager"
-        # ):
-        #     current_backup_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
-        #     assert pre_upgrade_backup_task_files == current_backup_files, (
-        #         f"Backup task of the task {backup_task.id} is not identical after the Manager upgrade:"
-        #         f"\nbefore the upgrade:\n{pre_upgrade_backup_task_files}\nafter the upgrade:\n{current_backup_files}"
-        #     )
-        #     mgr_cluster.sctool.run(cmd=f"backup list -c {mgr_cluster.id}", is_verify_errorless_result=True)
+        with self.subTest(
+            "Executing the 'backup list' and 'backup files' commands on a older version backup"
+            " with newer version of Manager"
+        ):
+            current_backup_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
+            assert pre_upgrade_backup_task_files == current_backup_files, (
+                f"Backup task of the task {backup_task.id} is not identical after the Manager upgrade:"
+                f"\nbefore the upgrade:\n{pre_upgrade_backup_task_files}\nafter the upgrade:\n{current_backup_files}"
+            )
+            mgr_cluster.sctool.run(cmd=f"backup list -c {mgr_cluster.id}", is_verify_errorless_result=True)
 
         with self.subTest("Purging a older version backup"):
             table_ks_name = "ks1"
@@ -250,11 +250,11 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
                     f"Backup {rerunning_backup_task.id} that was rerun again from the start has failed to reach "
                     f"status DONE within expected time limit"
                 )
-            # per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(
-            #     snapshot_tag=rerunning_backup_task.get_snapshot_tag()
-            # )
-            # for node in self.db_cluster.nodes:
-            #     node_id = node.host_id
-            #     assert table_to_delete not in per_node_backup_file_paths[node_id][table_ks_name], (
-            #         "The missing table is still in s3, even though it should have been purged"
-            #     )
+            per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(
+                snapshot_tag=rerunning_backup_task.get_snapshot_tag()
+            )
+            for node in self.db_cluster.nodes:
+                node_id = node.host_id
+                assert table_to_delete not in per_node_backup_file_paths[node_id][table_ks_name], (
+                    "The missing table is still in s3, even though it should have been purged"
+                )
