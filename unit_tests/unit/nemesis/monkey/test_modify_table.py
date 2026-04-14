@@ -29,11 +29,10 @@ pytestmark = pytest.mark.usefixtures("events")
 
 
 @pytest.fixture()
-def runner():
-    """Default TestRunner for tests that don't need special configuration."""
-    runner = TestRunner(ks_cfs=["ks1.tbl1"])
-    runner.random.choice.side_effect = lambda seq: seq[0]
-    return runner
+def runner(base_runner):
+    """``base_runner`` with a single non-system table for modify-table tests."""
+    base_runner.cluster.get_non_system_ks_cf_list.return_value = ["ks1.tbl1"]
+    return base_runner
 
 
 @pytest.fixture()
