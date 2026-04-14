@@ -3,8 +3,8 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
-def sct_runner_backends = ['aws', 'gce', 'oci', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
+def target_backends = ['aws', 'gce', 'oci', 'docker', 'cassandra-docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
+def sct_runner_backends = ['aws', 'gce', 'oci', 'docker', 'cassandra-docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
 
 def createRunConfiguration(String backend) {
 	def scylla_version = params.scylla_version ?: getLatestScyllaRelease('scylla')
@@ -37,6 +37,11 @@ def createRunConfiguration(String backend) {
         configuration.scylla_version = ''
         // TODO: unset the image when 'scylla_version' gets specified
         configuration.oci_image_db = 'ocid1.image.oc1.iad.aaaaaaaawlq4rpsf5j3blmia6vxuu3d7tdv5ir5x3izs4ogxmdyibskhpoxq'
+    } else if (backend == 'cassandra-docker') {
+        configuration.backend = 'docker'
+        configuration.test_config = "test-cases/cassandra-docker-provision-test.yaml"
+        configuration.scylla_version = ''
+        configuration.availability_zone = 'a'
     } else if (backend.contains('docker')) {
         // use latest version of nightly image for docker backend, until we get rid off rebuilding docker image for SCT
         configuration.scylla_version = 'latest'
@@ -301,7 +306,7 @@ pipeline {
                 expression {
                     def labels = [
                         "test-provision",
-                        "test-provision-docker",
+                        "test-provision-docker", "test-provision-cassandra-docker",
                         "test-provision-aws", "test-provision-aws-reuse",
                         "test-provision-gce", "test-provision-gce-reuse",
                         "test-provision-azure", "test-provision-azure-reuse",

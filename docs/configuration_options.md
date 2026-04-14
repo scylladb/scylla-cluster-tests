@@ -2700,6 +2700,35 @@ Vector Store version / docker image tag
 * appendable
 
 
+## **docker_image_cassandra** / SCT_DOCKER_IMAGE_CASSANDRA
+
+Cassandra docker image repo, i.e. 'cassandra'. Used when db_type is 'cassandra'.
+
+**default:** cassandra
+
+**type:** str
+* appendable
+
+
+## **cassandra_version** / SCT_CASSANDRA_VERSION
+
+Cassandra version / docker image tag, i.e. '4.1' or '5.0'
+
+**default:** 4.1
+
+**type:** str
+* appendable
+
+
+## **cassandra_num_tokens** / SCT_CASSANDRA_NUM_TOKENS
+
+num_tokens value to configure in cassandra.yaml.
+
+**default:** 16
+
+**type:** int
+
+
 ## **s3_baremetal_config** / SCT_S3_BAREMETAL_CONFIG
 
 Configuration for S3 in baremetal setups. This includes details such as endpoint URL, access key, secret key, and bucket name.
