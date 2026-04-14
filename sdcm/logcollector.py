@@ -66,6 +66,7 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
+from sdcm.utils.sstable.sstable_utils import CORRUPTED_SSTABLES_STATE_FILENAME
 from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
 from sdcm.localhost import LocalHost
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
@@ -100,6 +101,10 @@ class CollectingNode:
             **(tags or {}),
             "Name": self.name,
         }
+
+    def add_install_prefix(self, path: str) -> str:
+        """CollectingNode always connects to a standard Scylla install — no prefix needed."""
+        return path
 
     @cached_property
     def distro(self):
@@ -1386,36 +1391,92 @@ class SSTablesCollector(BaseSCTLogCollector):
         data_path, keyspace, table_dir, sstable_name = sstable_path.rsplit("/", 3)
         return f"{data_path}/{keyspace}/{table_dir}", keyspace, table_dir.split("-")[0], sstable_name
 
+    def _load_state_from_file(self, state_file: Path):
+        """Load snapshot state from a pre-computed JSON file written by CorruptedSstablesPreparator.
+
+        Returns ``(upload_files, decrypted_path, keyspace, table_name, sstable_name,
+                   ssh_login_info, node=None)`` where *node* is always ``None`` in this path
+        because SSH is not available after ``stop_resources()``.
+
+        *upload_files* is a targeted list of file paths (specific sstable components + schema.cql)
+        rather than the entire snapshot directory.  Falls back to ``[snapshot_path]`` for
+        state files written by older code that did not include the ``upload_files`` key.
+        """
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+        snapshot_path = state["snapshot_path"]
+        upload_files = state.get("upload_files") or [snapshot_path]
+        decrypted_path = state.get("decrypted_path")
+        LOGGER.info(
+            "SSTablesCollector: using pre-computed snapshot from state file (snapshot=%s, files=%d, decrypted=%s)",
+            snapshot_path,
+            len(upload_files),
+            decrypted_path,
+        )
+        return (
+            upload_files,
+            decrypted_path,
+            state["keyspace"],
+            state["table_name"],
+            state["sstable_name"],
+            state["ssh_login_info"],
+            None,  # node — no live SSH in this path
+        )
+
+    def _load_state_via_ssh(self, logdir: Path):
+        """Fall back to the original SSH-based snapshot path.
+
+        Returns ``(upload_files, decrypted_path, keyspace, table_name, sstable_name,
+                   ssh_login_info, node)`` or raises/returns ``None`` sentinel values on failure.
+
+        In this path *upload_files* is ``[snapshot_path]`` (the whole directory) because the
+        per-file targeting is done in ``collect_logs``'s fallback when the full upload exceeds
+        the size limit.
+        """
+        raw_events_file_path = logdir / EVENTS_LOG_DIR / RAW_EVENTS_LOG
+        sstable_dir = keyspace = table_name = sstable_name = node_name = None
+        with open(raw_events_file_path, "r", encoding="utf-8") as events_file:
+            for raw_line in events_file.readlines():
+                event = json.loads(raw_line)
+                if event.get("type") == "CORRUPTED_SSTABLE" and event.get("severity") == "CRITICAL":
+                    try:
+                        sstable_dir, keyspace, table_name, sstable_name = self.get_sstable_details(event.get("line"))
+                        node_name = event.get("node")
+                        break
+                    except IndexError:
+                        LOGGER.warning("Couldn't get sstable details from event line.")
+        if not node_name:
+            LOGGER.info("CORRUPTED_SSTABLE error event not found. Skipping sstables collection.")
+            return None
+        node = [n for n in self.nodes if n.name == node_name][0]
+        LOGGER.info("Collecting sstables for node %s...", node.name)
+        result = node.remoter.run(f"nodetool snapshot {keyspace} -cf {table_name}")
+        try:
+            snapshot_dir = result.stdout.split("Snapshot directory: ")[1].strip()
+        except IndexError:
+            LOGGER.error("Cannot extract snapshot directory from stdout: %s", result.stdout)
+            return None
+        snapshot_path = f"{sstable_dir}/snapshots/{snapshot_dir}"
+        return [snapshot_path], None, keyspace, table_name, sstable_name, node.ssh_login_info, node
+
     def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
         try:
-            raw_events_file_path = Path(self.local_dir).parent.parent.parent / EVENTS_LOG_DIR / RAW_EVENTS_LOG
-            with open(raw_events_file_path, "r", encoding="utf-8") as events_file:
-                for raw_line in events_file.readlines():
-                    event = json.loads(raw_line)
-                    if event.get("type") == "CORRUPTED_SSTABLE" and event.get("severity") == "CRITICAL":
-                        try:
-                            sstable_dir, keyspace, table_name, sstable_name = self.get_sstable_details(
-                                event.get("line")
-                            )
-                            node_name = event.get("node")
-                            break
-                        except IndexError:
-                            LOGGER.warning("Couldn't get sstable details from event line.")
-                else:
-                    LOGGER.info("CORRUPTED_SSTABLE error event not found. Skipping sstables collection.")
+            # CorruptedSstablesPreparator runs before stop_resources() and writes a state file
+            # with the snapshot path and decrypted path so we can skip all SSH calls here.
+            logdir = Path(self.local_dir).parent.parent.parent
+            state_file = logdir / CORRUPTED_SSTABLES_STATE_FILENAME
+            if state_file.exists():
+                loaded = self._load_state_from_file(state_file)
+            else:
+                # Fall back to the original SSH-based path (node may still be alive, e.g. in tests
+                # where post_behavior_db_nodes != destroy, or when the validator was disabled).
+                loaded = self._load_state_via_ssh(logdir)
+                if loaded is None:
                     return []
-            node: CollectingNode = [node for node in self.nodes if node.name == node_name][0]
-            LOGGER.info("Collecting sstables for node %s...", node.name)
-            result = node.remoter.run(f"nodetool snapshot {keyspace} -cf {table_name}")
-            try:
-                snapshot_dir = result.stdout.split("Snapshot directory: ")[1].strip()
-            except IndexError:
-                LOGGER.error("Cannot extract snapshot directory from stdout: %s", result.stdout)
-                return []
-            snapshot_path = f"{sstable_dir}/snapshots/{snapshot_dir}"
+            upload_files, decrypted_path, keyspace, table_name, sstable_name, ssh_login_info, node = loaded
+
             s3_link = upload_remote_files_directly_to_s3(
-                node.ssh_login_info,
-                [snapshot_path],
+                ssh_login_info,
+                upload_files + ([decrypted_path] if decrypted_path else []),
                 s3_bucket=S3Storage.bucket_name,
                 s3_key=f"{self.test_id}/{self.current_run}/corrupted-sstables-{keyspace}-{table_name}.tar.gz",
                 max_size_gb=20,
@@ -1423,18 +1484,28 @@ class SSTablesCollector(BaseSCTLogCollector):
             )
             if not s3_link:
                 # upload malformed sstable along with several others and schema file
-                malformed_files = node.remoter.run(
-                    f"ls {snapshot_path}/{sstable_name.rsplit('-', 1)[0]}*", ignore_status=True
-                ).stdout.split()
-                recent_sstables = node.remoter.run(f"ls -t {snapshot_path}/m?-* | head -n30").stdout.split()
-                s3_link = upload_remote_files_directly_to_s3(
-                    node.ssh_login_info,
-                    malformed_files + recent_sstables + [f"{snapshot_path}/schema.cql"],
-                    s3_bucket=S3Storage.bucket_name,
-                    s3_key=f"{self.test_id}/{self.current_run}/corrupted-sstables-{keyspace}-{table_name}.tar.gz",
-                    max_size_gb=80,
-                    public_read_acl=True,
-                )
+                # node is only set in the fallback (no state file) path; the state-file path
+                # already has targeted files so the per-file fallback only applies to the
+                # SSH path where upload_files is [snapshot_path] (the whole directory).
+                if node is None:
+                    LOGGER.warning(
+                        "SSTablesCollector: upload failed and no live node available — "
+                        "cannot fall back to per-file upload"
+                    )
+                else:
+                    snapshot_path = upload_files[0]  # SSH path always has [snapshot_path]
+                    malformed_files = node.remoter.run(
+                        f"ls {snapshot_path}/{sstable_name.rsplit('-', 1)[0]}*", ignore_status=True
+                    ).stdout.split()
+                    recent_sstables = node.remoter.run(f"ls -t {snapshot_path}/m?-* | head -n30").stdout.split()
+                    s3_link = upload_remote_files_directly_to_s3(
+                        ssh_login_info,
+                        malformed_files + recent_sstables + [f"{snapshot_path}/schema.cql"],
+                        s3_bucket=S3Storage.bucket_name,
+                        s3_key=f"{self.test_id}/{self.current_run}/corrupted-sstables-{keyspace}-{table_name}.tar.gz",
+                        max_size_gb=80,
+                        public_read_acl=True,
+                    )
         except Exception as error:
             LOGGER.exception("failed collecting malformed sstables:\n%s", error, exc_info=error)
             return []

@@ -545,3 +545,56 @@ class TestRemoteFile:
         assert remoter.rf_dst.startswith("/tmp/sct")
         assert remoter.rf_dst.endswith(os.path.basename(some_file))
         assert remoter.sf_data is None
+
+
+# ---------------------------------------------------------------------------
+# RemoteCmdRunner._run_on_retryable_exception – EOFError retry behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestRemoteCmdRunnerRetryOnEOFError:
+    """EOFError must always be treated as a retryable network exception.
+
+    paramiko raises ``EOFError()`` (no message) when the SSH transport dies.
+    ``str(EOFError())`` is ``""``, which does not match any pattern in
+    ``_is_error_retryable``.  Before the fix the method returned ``True``
+    (re-raise without retry); after the fix it must raise
+    ``RetryableNetworkException`` so the ``@retrying`` decorator can reconnect.
+    """
+
+    def _make_runner(self):
+        """Build a RemoteCmdRunner with the minimum state needed by _run_on_retryable_exception."""
+        runner = RemoteCmdRunner.__new__(RemoteCmdRunner)
+        runner.ssh_is_up = threading.Event()
+        runner.ssh_is_up.set()
+        runner.log = getLogger("test")
+        return runner
+
+    def test_eoferror_raises_retryable_network_exception(self):
+        """EOFError() with no message must raise RetryableNetworkException, not return True."""
+        runner = self._make_runner()
+        with pytest.raises(RetryableNetworkException):
+            runner._run_on_retryable_exception(EOFError(), new_session=False, suppress_errors=True)
+
+    def test_eoferror_clears_ssh_is_up(self):
+        """ssh_is_up event must be cleared when EOFError is received."""
+        runner = self._make_runner()
+        assert runner.ssh_is_up.is_set()
+        with pytest.raises(RetryableNetworkException):
+            runner._run_on_retryable_exception(EOFError(), new_session=False, suppress_errors=True)
+        assert not runner.ssh_is_up.is_set()
+
+    def test_known_retryable_message_still_raises(self):
+        """Exceptions matching _is_error_retryable patterns still raise RetryableNetworkException."""
+        runner = self._make_runner()
+        exc = Exception("timed out waiting for connection")
+        with pytest.raises(RetryableNetworkException):
+            runner._run_on_retryable_exception(exc, new_session=False, suppress_errors=True)
+
+    def test_non_retryable_exception_returns_true(self):
+        """Unknown exceptions (not EOFError, no matching message) return True to re-raise."""
+        runner = self._make_runner()
+        result = runner._run_on_retryable_exception(
+            ValueError("some other error"), new_session=False, suppress_errors=True
+        )
+        assert result is True
