@@ -77,30 +77,21 @@ def doctor(mock_node, mock_test_config):
 # --- configured_edition tests ---
 
 
-def test_configured_edition_not_set_returns_none(mock_node, mock_test_config):
-    """When scylla_doctor_edition is not set in params, configured_edition returns None.
-
-    The 'basic' default is enforced by defaults/test_default.yaml, not by this property.
-    """
-    test_config, _params = mock_test_config
-    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
-    assert doc.configured_edition is None
-
-
-def test_configured_edition_full(mock_node, mock_test_config):
-    """When scylla_doctor_edition is 'full', configured_edition should return 'full'."""
+@pytest.mark.parametrize(
+    "edition_param,expected",
+    [
+        pytest.param(None, None, id="not_set_returns_none"),
+        pytest.param("full", "full", id="full"),
+        pytest.param("basic", "basic", id="basic_explicit"),
+    ],
+)
+def test_configured_edition(mock_node, mock_test_config, edition_param, expected):
+    """Test configured_edition returns the value from params, or None when not set."""
     test_config, params = mock_test_config
-    params["scylla_doctor_edition"] = "full"
+    if edition_param is not None:
+        params["scylla_doctor_edition"] = edition_param
     doc = ScyllaDoctor(node=mock_node, test_config=test_config)
-    assert doc.configured_edition == "full"
-
-
-def test_configured_edition_basic_explicit(mock_node, mock_test_config):
-    """When scylla_doctor_edition is explicitly 'basic', configured_edition should return 'basic'."""
-    test_config, params = mock_test_config
-    params["scylla_doctor_edition"] = "basic"
-    doc = ScyllaDoctor(node=mock_node, test_config=test_config)
-    assert doc.configured_edition == "basic"
+    assert doc.configured_edition == expected
 
 
 # --- locate_full_scylla_doctor_package tests ---
@@ -426,3 +417,75 @@ def test_full_edition_downloaded_flag_set_on_success(mock_node, mock_test_config
         doc.download_scylla_doctor()
 
     assert doc._full_edition_downloaded is True
+
+
+# --- find_scylla_bundled_python3 tests ---
+
+
+@pytest.mark.parametrize(
+    "is_nonroot,run_side_effects,sudo_side_effects,home_dir,expected",
+    [
+        pytest.param(
+            True,
+            [MagicMock(stdout="/home/user/scylladb/python3/bin/python3\n")],
+            [],
+            "/home/user",
+            "/home/user/scylladb/python3/bin/python3",
+            id="nonroot_direct_path",
+        ),
+        pytest.param(
+            True,
+            [MagicMock(stdout=""), MagicMock(stdout="/home/ubuntu/scylla-2026.2.0~dev/scylla-python3/bin/python3\n")],
+            [],
+            "/home/ubuntu",
+            "/home/ubuntu/scylla-2026.2.0~dev/scylla-python3/bin/python3",
+            id="nonroot_versioned_dir",
+        ),
+        pytest.param(
+            False,
+            [],
+            [MagicMock(stdout="/opt/scylladb/python3/bin/python3\n")],
+            "/home/user",
+            "/opt/scylladb/python3/bin/python3",
+            id="root_found",
+        ),
+    ],
+)
+def test_find_scylla_bundled_python3(doctor, is_nonroot, run_side_effects, sudo_side_effects, home_dir, expected):
+    """Test find_scylla_bundled_python3 for various install types and search results."""
+    doctor.node.is_nonroot_install = is_nonroot
+    if run_side_effects:
+        doctor.node.remoter.run.side_effect = run_side_effects
+    if sudo_side_effects:
+        doctor.node.remoter.sudo.side_effect = sudo_side_effects
+
+    assert doctor.find_scylla_bundled_python3(home_dir) == expected
+
+
+@pytest.mark.parametrize(
+    "is_nonroot,run_side_effects,sudo_side_effects",
+    [
+        pytest.param(
+            True,
+            [MagicMock(stdout=""), MagicMock(stdout="")],
+            [],
+            id="nonroot_not_found",
+        ),
+        pytest.param(
+            False,
+            [],
+            [MagicMock(stdout="")],
+            id="root_not_found",
+        ),
+    ],
+)
+def test_find_scylla_bundled_python3_raises_when_not_found(doctor, is_nonroot, run_side_effects, sudo_side_effects):
+    """Test find_scylla_bundled_python3 raises ScyllaDoctorException when not found."""
+    doctor.node.is_nonroot_install = is_nonroot
+    if run_side_effects:
+        doctor.node.remoter.run.side_effect = run_side_effects
+    if sudo_side_effects:
+        doctor.node.remoter.sudo.side_effect = sudo_side_effects
+
+    with pytest.raises(ScyllaDoctorException, match="No Scylla-bundled python3"):
+        doctor.find_scylla_bundled_python3("/home/user")
