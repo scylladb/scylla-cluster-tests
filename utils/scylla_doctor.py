@@ -2,6 +2,7 @@
 import json
 import logging
 import pprint
+import re
 from functools import cached_property
 from textwrap import dedent
 
@@ -80,7 +81,10 @@ class ScyllaDoctor:
 
     def run(self, sd_command):
         if not self.node.is_nonroot_install:
-            result = self.node.remoter.sudo(sd_command, verbose=False)
+            if self.python3_path:
+                result = self.node.remoter.sudo(f"{self.python3_path} {sd_command}", verbose=False)
+            else:
+                result = self.node.remoter.sudo(sd_command, verbose=False)
         else:
             result = self.node.remoter.run(f"bash -lce '{self.python3_path} {sd_command}'", verbose=False)
         return result.stdout.strip()
@@ -174,6 +178,77 @@ class ScyllaDoctor:
 
         return package, bucket_name
 
+    @staticmethod
+    def _get_bucket_region(bucket_name: str) -> str:
+        """Determine the AWS region of an S3 bucket.
+
+        Pre-signed URLs must be signed with the bucket's actual region;
+        using the wrong region causes S3 to return a small XML error
+        (``SignatureDoesNotMatch`` / ``AccessDenied``) instead of the file.
+
+        Strategy:
+        1. Extract region from the bucket name (e.g.
+           ``fe-artifacts-297607762119-eu-central-1`` → ``eu-central-1``).
+        2. Fall back to ``get_bucket_location`` API (requires
+           ``s3:GetBucketLocation`` permission).
+        3. Fall back to ``us-east-1`` as last resort.
+        """
+        # Pattern matches standard AWS region names at the end of the bucket name
+        match = re.search(r"((?:us|eu|ap|sa|ca|me|af|il)-[a-z]+-\d+)$", bucket_name)
+        if match:
+            region = match.group(1)
+            LOGGER.info("Extracted region %s from bucket name %s", region, bucket_name)
+            return region
+
+        try:
+            s3 = boto3.client("s3")
+            location = s3.get_bucket_location(Bucket=bucket_name)
+            # get_bucket_location returns None for us-east-1
+            return location.get("LocationConstraint") or "us-east-1"
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Could not determine region for bucket %s, defaulting to us-east-1", bucket_name)
+            return "us-east-1"
+
+    def _download_and_extract_tarball(self, url: str, description: str = "scylla-doctor"):
+        """Download a tarball from *url* and extract it on the remote node.
+
+        Downloads to a temporary file first so that HTTP errors (e.g. S3
+        returning a short XML error page) are detected before ``tar`` runs.
+
+        Args:
+            url: Full URL (may be a pre-signed S3 URL).
+            description: Human-readable label for log messages.
+
+        Raises:
+            Exception: Propagated from ``remoter.run`` on download or
+                extraction failure.
+        """
+        tmp_tarball = "/tmp/scylla_doctor_download.tar.gz"
+        # -f/--fail  → exit code 22 on HTTP 4xx/5xx instead of saving the error page
+        # -S/--show-error → print error message even when -f is used
+        # -L/--location  → follow redirects
+        self.node.remoter.run(
+            f"curl -fSL -o {tmp_tarball} '{url}'",
+        )
+        # Sanity-check: a valid tarball is at least a few KB
+        check = self.node.remoter.run(
+            f"test -s {tmp_tarball} && file {tmp_tarball}",
+            verbose=False,
+            ignore_status=True,
+        )
+        if not check.ok or "gzip" not in check.stdout.lower():
+            body_head = self.node.remoter.run(
+                f"head -c 500 {tmp_tarball}",
+                verbose=False,
+                ignore_status=True,
+            ).stdout.strip()
+            self.node.remoter.run(f"rm -f {tmp_tarball}", verbose=False, ignore_status=True)
+            raise ScyllaDoctorException(
+                f"Downloaded {description} file is not a valid gzip tarball. First 500 bytes of response:\n{body_head}"
+            )
+        LOGGER.info("Extracting %s tarball...", description)
+        self.node.remoter.run(f"tar -xvzf {tmp_tarball} && rm -f {tmp_tarball}")
+
     def download_full_scylla_doctor(self):
         """Download the full scylla-doctor edition using an S3 pre-signed URL.
 
@@ -201,30 +276,33 @@ class ScyllaDoctor:
         package_filename = package_key.split("/")[-1]
         LOGGER.info("Downloading full scylla-doctor package %s from bucket %s...", package_filename, bucket_name)
 
-        # Generate a short-lived pre-signed URL (300s) so the remote node can download without AWS creds
-        s3 = boto3.client("s3")
+        # Generate a short-lived pre-signed URL (300s) so the remote node can download without AWS creds.
+        # IMPORTANT: The S3 client MUST be created with the bucket's actual region.
+        # Pre-signed URLs are signed with a specific region; if the signing region
+        # doesn't match the bucket's region, S3 returns a small XML error response
+        # (e.g. SignatureDoesNotMatch / AccessDenied) instead of the file.
+        bucket_region = self._get_bucket_region(bucket_name)
+        LOGGER.info("Bucket %s is in region %s", bucket_name, bucket_region)
+        s3 = boto3.client("s3", region_name=bucket_region)
         presigned_url = s3.generate_presigned_url(
             ClientMethod="get_object",
             Params={"Bucket": bucket_name, "Key": package_key},
             ExpiresIn=300,
         )
 
-        self.node.remoter.run(f"curl -JL '{presigned_url}' | tar -xvz")
+        self._download_and_extract_tarball(presigned_url, description=f"full scylla-doctor ({package_filename})")
         self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
+        self._full_edition_downloaded = True
 
     def download_scylla_doctor(self):
         if self.configured_edition == "full":
-            try:
-                self.download_full_scylla_doctor()
-                return
-            except (ScyllaDoctorException, Exception) as exc:  # noqa: BLE001
-                LOGGER.warning("Failed to download full scylla-doctor edition, falling back to basic: %s", exc)
+            self.download_full_scylla_doctor()
+            return
 
         if self.node.remoter.run("curl --version", ignore_status=True).ok:
             LOGGER.info("curl already installed, proceeding...")
         else:
             self.node.install_package("curl")
-
         if self.configured_version:
             LOGGER.info("Using configured scylla-doctor version: %s", self.configured_version)
             package = self.locate_scylla_doctor_package(version=self.configured_version)
@@ -239,7 +317,10 @@ class ScyllaDoctor:
         package_path = package["Key"]
         package_filename = package_path.split("/")[-1]
         LOGGER.info("Downloading %s...", package_filename)
-        self.node.remoter.run(f"curl -JL {self.SCYLLA_DOCTOR_OFFLINE_DOWNLOAD_URI}{package_path} | tar -xvz")
+        self._download_and_extract_tarball(
+            f"{self.SCYLLA_DOCTOR_OFFLINE_DOWNLOAD_URI}{package_path}",
+            description=f"scylla-doctor ({package_filename})",
+        )
         self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
 
     def update_scylla_doctor_config(self, prefix: str, additional_config=""):
@@ -260,6 +341,98 @@ class ScyllaDoctor:
             f.write(config)
         self.scylla_doctor_exec += f" -cf {self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_CONF} "
 
+    def _find_suitable_python(self) -> str:
+        """Find a Python >= 3.7 interpreter on the remote node.
+
+        ``scylla_doctor.pyz`` requires Python >= 3.7 (for the ``dataclasses``
+        module).  On older distros like Rocky/RHEL 8 the default ``python3``
+        is 3.6 which lacks ``dataclasses``.
+
+        Returns:
+            Absolute path to a suitable Python interpreter, or empty string
+            if the default ``python3`` is already >= 3.7.
+        """
+        check = self.node.remoter.run(
+            "python3 -c 'import sys; print(sys.version_info >= (3, 7))'",
+            verbose=False,
+            ignore_status=True,
+        )
+        if check.ok and "True" in check.stdout:
+            return ""
+
+        LOGGER.warning("Default python3 is older than 3.7; looking for a newer interpreter for scylla-doctor")
+
+        # Check for already-installed alternative interpreters
+        for candidate in ("python3.12", "python3.11", "python3.10", "python3.9", "python3.8"):
+            result = self.node.remoter.run(f"which {candidate}", verbose=False, ignore_status=True)
+            if result.ok and result.stdout.strip():
+                python_path = result.stdout.strip()
+                LOGGER.info("Found suitable Python interpreter: %s", python_path)
+                return python_path
+
+        # Try to install Python 3.9 on RHEL-like systems (available in AppStream)
+        if self.node.distro.is_rhel_like:
+            LOGGER.info("Installing python39 for scylla-doctor compatibility (RHEL-like OS with Python < 3.7)")
+            self.node.remoter.sudo(
+                "dnf install -y python39 || yum install -y python39",
+                ignore_status=True,
+            )
+            result = self.node.remoter.run("which python3.9", verbose=False, ignore_status=True)
+            if result.ok and result.stdout.strip():
+                return result.stdout.strip()
+
+        # Last resort: install the dataclasses backport into the system Python 3.6
+        LOGGER.warning("Could not find Python >= 3.7; installing dataclasses backport via pip")
+        self.node.remoter.sudo("python3 -m pip install dataclasses", ignore_status=True)
+        return ""
+
+    def _ensure_pyyaml_installed(self):
+        """Ensure PyYAML is available for the Python used to run scylla-doctor.
+
+        scylla_doctor.pyz imports ``yaml`` but does not bundle PyYAML.
+        On a minimal OS image the module may be absent, causing every
+        scylla-doctor command to fail with ``ModuleNotFoundError``.
+
+        For nonroot installs the bundled Scylla Python is used instead
+        of the system Python, so this step is skipped.
+        """
+        if self.node.is_nonroot_install:
+            return
+
+        # When an alternative Python interpreter was chosen (e.g. python3.9 on
+        # Rocky 8), we must ensure PyYAML is importable by *that* interpreter,
+        # not only by the default python3.
+        if self.python3_path:
+            check = self.node.remoter.run(
+                f"{self.python3_path} -c 'import yaml'",
+                verbose=False,
+                ignore_status=True,
+            )
+            if check.ok:
+                return
+            LOGGER.info("Installing PyYAML for %s", self.python3_path)
+            # Try the matching OS package first (e.g. python39-pyyaml), fall
+            # back to pip if not available.
+            if self.node.distro.is_rhel_like:
+                self.node.remoter.sudo(
+                    f"{self.python3_path} -m pip install pyyaml || "
+                    "dnf install -y python39-pyyaml || yum install -y python39-pyyaml",
+                    ignore_status=True,
+                )
+            else:
+                self.node.remoter.sudo(f"{self.python3_path} -m pip install pyyaml", ignore_status=True)
+            return
+
+        if self.node.distro.is_rhel_like:
+            self.node.install_package("python3-pyyaml")
+        elif self.node.distro.is_sles:
+            self.node.remoter.sudo("zypper install -y python3-PyYAML", retry=3)
+        elif self.node.distro.is_debian_like:
+            self.node.install_package("python3-yaml")
+        else:
+            LOGGER.warning("Unknown distro %s — attempting pip install of PyYAML", self.node.distro)
+            self.node.remoter.sudo("python3 -m pip install pyyaml", ignore_status=True)
+
     def install_scylla_doctor(self):
         if self.node.parent_cluster.cluster_backend == "docker":
             self.node.install_package("ethtool")
@@ -273,6 +446,13 @@ class ScyllaDoctor:
             self.update_scylla_doctor_config(
                 self.current_dir, additional_config=self.SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS
             )
+        else:
+            # Ensure a Python >= 3.7 is available (e.g. Rocky/RHEL 8 ships Python 3.6
+            # which lacks the ``dataclasses`` module required by scylla_doctor.pyz).
+            self.python3_path = self._find_suitable_python()
+
+        # Install PyYAML for whichever Python interpreter will run scylla-doctor.
+        self._ensure_pyyaml_installed()
 
         # TODO: optionally install via package manager (apt/yum/dnf) instead of S3
         #  download. Needs an SCT configuration toggle to enable this path.
