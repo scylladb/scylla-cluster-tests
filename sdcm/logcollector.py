@@ -931,6 +931,8 @@ class LoaderLogCollector(LogCollector):
             name="test.crt",
             command="test -f /etc/scylla/ssl_conf/{0} && cat /etc/scylla/ssl_conf/{0}".format("test.crt"),
         ),
+        CommandLog(name="cloud-init-output.log", command="cat /var/log/cloud-init-output.log"),
+        CommandLog(name="cloud-init.log", command="cat /var/log/cloud-init.log"),
     ]
 
     def collect_logs(self, local_search_path=None) -> list[str]:
@@ -967,6 +969,8 @@ class MonitorLogCollector(LogCollector):
         PrometheusSnapshots(name="prometheus_data"),
         MonitoringStack(name="monitoring-stack"),
         GrafanaScreenShot(name="grafana-screenshot"),
+        CommandLog(name="cloud-init-output.log", command="cat /var/log/cloud-init-output.log"),
+        CommandLog(name="cloud-init.log", command="cat /var/log/cloud-init.log"),
     ]
     cluster_log_type = "monitor-set"
     cluster_dir_prefix = "monitor-set"
