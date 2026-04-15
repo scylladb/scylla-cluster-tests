@@ -426,3 +426,179 @@ def test_full_edition_downloaded_flag_set_on_success(mock_node, mock_test_config
         doc.download_scylla_doctor()
 
     assert doc._full_edition_downloaded is True
+
+
+# --- _check_system_python3 tests ---
+
+
+def test_check_system_python3_suitable_version():
+    """When system python3 is >= 3.10, return its path."""
+    node = FakeNode()
+    version_result = MagicMock(ok=True, stdout="3 11\n")
+    which_result = MagicMock(ok=True, stdout="/usr/bin/python3\n")
+    node.remoter.run.side_effect = [version_result, which_result]
+
+    assert ScyllaDoctor._check_system_python3(node) == "/usr/bin/python3"
+
+
+def test_check_system_python3_too_old():
+    """When system python3 is <= 3.9, return None."""
+    node = FakeNode()
+    version_result = MagicMock(ok=True, stdout="3 9\n")
+    node.remoter.run.side_effect = [version_result]
+
+    assert ScyllaDoctor._check_system_python3(node) is None
+
+
+def test_check_system_python3_not_available():
+    """When system python3 is not installed, return None."""
+    node = FakeNode()
+    version_result = MagicMock(ok=False, stdout="")
+    node.remoter.run.side_effect = [version_result]
+
+    assert ScyllaDoctor._check_system_python3(node) is None
+
+
+def test_check_system_python3_unparseable_output():
+    """When system python3 returns unexpected output, return None."""
+    node = FakeNode()
+    version_result = MagicMock(ok=True, stdout="garbage\n")
+    node.remoter.run.side_effect = [version_result]
+
+    assert ScyllaDoctor._check_system_python3(node) is None
+
+
+def test_check_system_python3_exact_38():
+    """Python 3.8 (minor <= 9) should be rejected."""
+    node = FakeNode()
+    version_result = MagicMock(ok=True, stdout="3 8\n")
+    node.remoter.run.side_effect = [version_result]
+
+    assert ScyllaDoctor._check_system_python3(node) is None
+
+
+def test_check_system_python3_exact_310():
+    """Python 3.10 (minor > 9) should be accepted."""
+    node = FakeNode()
+    version_result = MagicMock(ok=True, stdout="3 10\n")
+    which_result = MagicMock(ok=True, stdout="/usr/local/bin/python3\n")
+    node.remoter.run.side_effect = [version_result, which_result]
+
+    assert ScyllaDoctor._check_system_python3(node) == "/usr/local/bin/python3"
+
+
+# --- _find_scylla_bundled_python3 tests ---
+
+
+def test_find_scylla_bundled_python3_nonroot_direct_path(doctor):
+    """Nonroot: when the standard bundled path exists and version > 3.9, return it."""
+    doctor.node.is_nonroot_install = True
+    doctor.node.remoter.run.side_effect = [
+        MagicMock(stdout="/home/user/scylladb/python3/bin/python3\n"),  # ls check
+        MagicMock(ok=True, stdout="3 12\n"),  # version check
+    ]
+
+    assert doctor._find_scylla_bundled_python3("/home/user") == "/home/user/scylladb/python3/bin/python3"
+
+
+def test_find_scylla_bundled_python3_nonroot_versioned_dir(doctor):
+    """Nonroot: when python3 is under a versioned dir like scylla-VERSION/scylla-python3/bin/python3."""
+    doctor.node.is_nonroot_install = True
+    doctor.node.remoter.run.side_effect = [
+        MagicMock(stdout=""),  # standard path doesn't exist
+        MagicMock(stdout="/home/ubuntu/scylla-2026.2.0~dev/scylla-python3/bin/python3\n"),  # broad find
+        MagicMock(ok=True, stdout="3 14\n"),  # version check
+    ]
+
+    result = doctor._find_scylla_bundled_python3("/home/ubuntu")
+    assert result == "/home/ubuntu/scylla-2026.2.0~dev/scylla-python3/bin/python3"
+
+
+def test_find_scylla_bundled_python3_nonroot_not_found(doctor):
+    """Nonroot: when no bundled python3 is found, return None."""
+    doctor.node.is_nonroot_install = True
+    doctor.node.remoter.run.side_effect = [
+        MagicMock(stdout=""),  # standard path doesn't exist
+        MagicMock(stdout=""),  # broad find returns nothing
+    ]
+
+    assert doctor._find_scylla_bundled_python3("/home/user") is None
+
+
+def test_find_scylla_bundled_python3_root_found(doctor):
+    """Root install: find python3 via package manager and verify version."""
+    doctor.node.is_nonroot_install = False
+    doctor.node.remoter.sudo.side_effect = [
+        MagicMock(stdout="/opt/scylladb/python3/bin/python3\n"),  # rpm -ql
+        MagicMock(ok=True, stdout="3 14\n"),  # version check
+    ]
+
+    result = doctor._find_scylla_bundled_python3("/home/user")
+    assert result == "/opt/scylladb/python3/bin/python3"
+
+
+def test_find_scylla_bundled_python3_root_not_found(doctor):
+    """Root install: when package manager and find return nothing, return None."""
+    doctor.node.is_nonroot_install = False
+    doctor.node.remoter.sudo.side_effect = [
+        MagicMock(stdout=""),  # rpm -ql returns nothing
+        MagicMock(stdout=""),  # dpkg -L returns nothing
+        MagicMock(stdout=""),  # find fallback returns nothing
+    ]
+
+    assert doctor._find_scylla_bundled_python3("/home/user") is None
+
+
+# --- find_local_python3_binary (integrated) tests ---
+
+
+def test_find_local_python3_prefers_system(doctor):
+    """When system python3 is > 3.9, it should be preferred over bundled."""
+    doctor.node.is_nonroot_install = True
+    version_result = MagicMock(ok=True, stdout="3 12\n")
+    which_result = MagicMock(ok=True, stdout="/usr/bin/python3\n")
+    doctor.node.remoter.run.side_effect = [version_result, which_result]
+
+    result = doctor.find_local_python3_binary("/home/user")
+    assert result == "/usr/bin/python3"
+
+
+def test_find_local_python3_falls_back_to_bundled(doctor):
+    """When system python3 is too old, fall back to Scylla's bundled python3."""
+    doctor.node.is_nonroot_install = True
+    version_result = MagicMock(ok=True, stdout="3 6\n")
+    bundled_result = MagicMock(stdout="/home/user/scylladb/python3/bin/python3\n")
+    version_check = MagicMock(ok=True, stdout="3 12\n")
+    doctor.node.remoter.run.side_effect = [version_result, bundled_result, version_check]
+
+    result = doctor.find_local_python3_binary("/home/user")
+    assert result == "/home/user/scylladb/python3/bin/python3"
+
+
+def test_find_local_python3_falls_back_to_versioned_bundled(doctor):
+    """When system python3 is too old, find python3 in a versioned Scylla dir."""
+    doctor.node.is_nonroot_install = True
+    version_result = MagicMock(ok=True, stdout="3 6\n")
+    doctor.node.remoter.run.side_effect = [
+        version_result,  # system python3 too old
+        MagicMock(stdout=""),  # standard bundled path doesn't exist
+        MagicMock(stdout="/home/ubuntu/scylla-2026.2.0~dev/scylla-python3/bin/python3\n"),  # broad find
+        MagicMock(ok=True, stdout="3 14\n"),  # version check
+    ]
+
+    result = doctor.find_local_python3_binary("/home/ubuntu")
+    assert result == "/home/ubuntu/scylla-2026.2.0~dev/scylla-python3/bin/python3"
+
+
+def test_find_local_python3_asserts_when_none_found(doctor):
+    """When neither system nor bundled python3 is found, ScyllaDoctorException should fire."""
+    doctor.node.is_nonroot_install = True
+    version_result = MagicMock(ok=False, stdout="")
+    doctor.node.remoter.run.side_effect = [
+        version_result,  # system python3 not available
+        MagicMock(stdout=""),  # standard bundled path doesn't exist
+        MagicMock(stdout=""),  # broad find returns nothing
+    ]
+
+    with pytest.raises(ScyllaDoctorException, match="No suitable python3"):
+        doctor.find_local_python3_binary("/home/user")
