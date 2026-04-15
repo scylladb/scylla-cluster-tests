@@ -1941,6 +1941,26 @@ def create_operator_test_release_jobs(branch, username, password, sct_branch, sc
     )
 
 
+@cli.command("create-manager-test-release-jobs", help="Create pipeline jobs for a new scylla-manager branch/release")
+@click.argument("branch", type=str)
+@click.argument("username", envvar="JENKINS_USERNAME", type=str, required=False)
+@click.argument("password", envvar="JENKINS_PASSWORD", type=str, required=False)
+@click.option("--sct_branch", default="master", type=str)
+@click.option("--sct_repo", default="git@github.com:scylladb/scylla-cluster-tests.git", type=str)
+@click.option("--triggers/--no-triggers", default=False)
+def create_manager_test_release_jobs(branch, username, password, sct_branch, sct_repo, triggers):
+    add_file_logger()
+
+    server = JenkinsPipelines(
+        username=username, password=password, base_job_dir=branch, sct_branch_name=sct_branch, sct_repo=sct_repo
+    )
+    server.create_job_tree(
+        f"{server.base_sct_dir}/jenkins-pipelines/manager",
+        create_freestyle_jobs=triggers,
+        template_context={"release_version": get_latest_scylla_release(product="scylla-enterprise")},
+    )
+
+
 @cli.command("create-qa-tools-jobs", help="Create pipeline jobs for a new scylla-operator branch/release")
 @click.argument("username", envvar="JENKINS_USERNAME", type=str, required=False)
 @click.argument("password", envvar="JENKINS_PASSWORD", type=str, required=False)
