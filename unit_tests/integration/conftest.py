@@ -92,8 +92,9 @@ def mock_remote_scylla_yaml(scylla_node):
 
 
 @contextmanager
-def create_ssl_dir(test_id: str):
-    ssl_dir = (_REPO_ROOT / "data_dir" / f"ssl_conf_{test_id}").absolute()
+def create_ssl_dir(test_id: str, base_dir: Path | None = None):
+    parent = base_dir if base_dir is not None else (_REPO_ROOT / "data_dir")
+    ssl_dir = (parent / f"ssl_conf_{test_id}").absolute()
     ssl_dir.mkdir(parents=True, exist_ok=True)
 
     localhost = LocalHost(user_prefix="unit_test_fake_user", test_id="unit_test_fake_test_id")
@@ -196,11 +197,15 @@ def configure_scylla_node(docker_scylla_args: dict, params, ssl_dir: Path | None
 
 
 @pytest.fixture(name="docker_scylla", scope="function")
-def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # noqa: PLR0914
+def fixture_docker_scylla(request: pytest.FixtureRequest, params, tmp_path):  # noqa: PLR0914
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
-    ctx = create_ssl_dir(test_id=str(uuid.uuid4())[:8]) if docker_scylla_args.get("ssl") else nullcontext()
+    ctx = (
+        create_ssl_dir(test_id=str(uuid.uuid4())[:8], base_dir=tmp_path)
+        if docker_scylla_args.get("ssl")
+        else nullcontext()
+    )
     with ctx as ssl_dir:
         scylla = configure_scylla_node(docker_scylla_args, params, ssl_dir=ssl_dir)
         yield scylla
@@ -208,12 +213,16 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # noqa: PLR0
 
 
 @pytest.fixture(name="docker_scylla_2", scope="function")
-def fixture_docker_2_scylla(request: pytest.FixtureRequest, docker_scylla, params):  # noqa: PLR0914
+def fixture_docker_2_scylla(request: pytest.FixtureRequest, docker_scylla, params, tmp_path):  # noqa: PLR0914
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
     docker_scylla_args["seeds"] = docker_scylla.ip_address
-    ctx = create_ssl_dir(test_id=str(uuid.uuid4())[:8]) if docker_scylla_args.get("ssl") else nullcontext()
+    ctx = (
+        create_ssl_dir(test_id=str(uuid.uuid4())[:8], base_dir=tmp_path)
+        if docker_scylla_args.get("ssl")
+        else nullcontext()
+    )
     with ctx as ssl_dir:
         scylla = configure_scylla_node(docker_scylla_args, params, ssl_dir=ssl_dir)
         yield scylla

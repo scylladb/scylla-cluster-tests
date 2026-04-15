@@ -2,6 +2,7 @@ import contextlib
 import dataclasses
 import os
 import re
+import shutil
 import tempfile
 from functools import cached_property
 from typing import Dict, Union, Tuple, Iterable, Sequence, List
@@ -43,7 +44,7 @@ class HydraTestCaseTmpDir:
 
     def teardown(self):
         with contextlib.suppress(Exception):
-            os.unlink(self.home_dir)
+            shutil.rmtree(self.home_dir)
 
     def __enter__(self):
         self.setup()

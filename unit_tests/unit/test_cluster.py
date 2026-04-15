@@ -12,7 +12,6 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
-import shutil
 import tempfile
 import time
 import unittest.mock
@@ -259,13 +258,9 @@ class VersionDummyRemote:
 
 
 class TestBaseNodeGetScyllaVersion:
-    @classmethod
-    def setup_class(cls):
-        cls.temp_dir = tempfile.mkdtemp()
-
-    @classmethod
-    def teardown_class(cls):
-        shutil.rmtree(cls.temp_dir)
+    @pytest.fixture(autouse=True, scope="class")
+    def _class_tmp_dir(self, tmp_path_factory):
+        TestBaseNodeGetScyllaVersion.temp_dir = str(tmp_path_factory.mktemp("scylla_version"))
 
     def setup_method(self):
         self.node = DummyNode(
@@ -427,13 +422,9 @@ class TestBaseNodeGetScyllaVersion:
 
 
 class TestBaseMonitorSet:
-    @classmethod
-    def setup_class(cls):
-        cls.temp_dir = tempfile.mkdtemp()
-
-    @classmethod
-    def teardown_class(cls):
-        shutil.rmtree(cls.temp_dir)
+    @pytest.fixture(autouse=True, scope="class")
+    def _class_tmp_dir(self, tmp_path_factory):
+        TestBaseMonitorSet.temp_dir = str(tmp_path_factory.mktemp("monitor_set"))
 
     def setup_method(self):
         self.node = DummyNode(
@@ -781,11 +772,11 @@ class TestNodetoolStatus:
         ("1-7,9,17-23,25", 16),
     ),
 )
-def test_base_node_cpuset(cat_results, expected_core_number):
+def test_base_node_cpuset(cat_results, expected_core_number, tmp_path):
     dummy_node = DummyNode(
         name="dummy_node",
         parent_cluster=None,
-        base_logdir=tempfile.mkdtemp(),
+        base_logdir=str(tmp_path),
         ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
     )
     dummy_node.parent_cluster = DummyDbCluster([dummy_node])
@@ -815,11 +806,11 @@ def test_base_node_cpuset(cat_results, expected_core_number):
         '# CPUSET="--cpuset 1-7,9-15,17-23,31\' "',
     ),
 )
-def test_base_node_cpuset_not_configured(cat_results):
+def test_base_node_cpuset_not_configured(cat_results, tmp_path):
     dummy_node = DummyNode(
         name="dummy_node",
         parent_cluster=None,
-        base_logdir=tempfile.mkdtemp(),
+        base_logdir=str(tmp_path),
         ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
     )
     dummy_node.parent_cluster = DummyDbCluster([dummy_node])

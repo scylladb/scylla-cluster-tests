@@ -1,5 +1,4 @@
 import time
-import tempfile
 from abc import abstractmethod
 from pathlib import Path
 
@@ -93,6 +92,10 @@ class CoredumpExportTestBase:
     def inject_test_data_dir(self, test_data_dir):
         self.test_data_dir = test_data_dir
 
+    @pytest.fixture(autouse=True)
+    def inject_tmp_path(self, tmp_path):
+        self._tmp_path = tmp_path
+
     @abstractmethod
     def _init_target_coredump_class(self, test_name: str) -> CoredumpThreadBase:
         pass
@@ -130,7 +133,7 @@ class CoredumpExportExceptionTest(CoredumpExportTestBase):
                         self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_remoter.json")
                     )
                 ),
-                tempfile.mkdtemp(),
+                str(self._tmp_path / "logdir"),
             ),
             5,
         )
@@ -156,7 +159,7 @@ class CoredumpExportSystemdTest(CoredumpExportTestBase):
                         self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_remoter.json")
                     )
                 ),
-                tempfile.mkdtemp(),
+                str(self._tmp_path / "logdir"),
             ),
             5,
         )
@@ -186,7 +189,7 @@ class CoredumpExportFileTest(CoredumpExportTestBase):
                         self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_remoter.json")
                     )
                 ),
-                tempfile.mkdtemp(),
+                str(self._tmp_path / "logdir"),
             ),
             5,
             coredump_directories=["/var/lib/scylla/coredumps"],
