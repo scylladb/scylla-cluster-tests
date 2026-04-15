@@ -113,48 +113,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Fetch fork PR branch
-        if: |
-          steps.membership.outputs.is_member == 'true' && (
-            (github.event_name == 'issue_comment' && github.event.issue.pull_request) ||
-            github.event_name == 'pull_request_review_comment' ||
-            github.event_name == 'pull_request_review'
-          )
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          # Determine PR number based on event type
-          if [ "$EVENT_NAME" = "issue_comment" ]; then
-            PR_NUMBER="$ISSUE_NUMBER"
-          else
-            PR_NUMBER="$PULL_REQUEST_NUMBER"
-          fi
-
-          # Get the fork's clone URL and head branch name
-          PR_JSON=$(gh pr view "$PR_NUMBER" --json headRefName,headRepository,headRepositoryOwner)
-          HEAD_REF=$(echo "$PR_JSON" | jq -r '.headRefName')
-          HEAD_OWNER=$(echo "$PR_JSON" | jq -r '.headRepositoryOwner.login')
-          HEAD_REPO=$(echo "$PR_JSON" | jq -r '.headRepository.name')
-          ORIGIN_OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f1)
-
-          # If the PR is from a fork, redirect origin fetch URL to the fork
-          # so that claude-code-action's internal "git fetch origin <branch>" succeeds.
-          # Keep push URL pointing at the base repo for branch creation.
-          # NOTE: After this step, "git fetch origin" pulls from the fork. If the
-          # fork contains adversarial prompt-injection content, Claude could be
-          # manipulated to take unintended actions against the base repo (which has
-          # contents:write). This risk is mitigated by the auth check above ensuring
-          # only org members/collaborators can trigger this workflow.
-          if [ "$HEAD_OWNER" != "$ORIGIN_OWNER" ]; then
-            echo "PR #$PR_NUMBER is from fork $HEAD_OWNER/$HEAD_REPO, fetching branch $HEAD_REF"
-            ORIGIN_URL=$(git remote get-url origin)
-            git remote set-url origin "https://github.com/$HEAD_OWNER/$HEAD_REPO.git"
-            git config remote.origin.pushurl "$ORIGIN_URL"
-          fi
-
       - name: Run Claude Code
         if: steps.membership.outputs.is_member == 'true'
         id: claude
