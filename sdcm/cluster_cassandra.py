@@ -379,8 +379,11 @@ class BaseCassandraCluster:
         """Full Cassandra node setup for cloud VM backends.
 
         Installs JDK, adds the Apache Cassandra apt repository,
-        installs Cassandra, configures cassandra.yaml and heap sizes,
-        then starts the service.
+        installs Cassandra, configures cassandra.yaml and heap sizes.
+        Cassandra itself is started in node_startup() so that
+        wait_for_init_wrap serializes starts across nodes — non-seed
+        Cassandra nodes cannot safely bootstrap in parallel against a
+        seed that is still coming up.
 
         Docker backend overrides this to no-op since the image handles it.
         """
@@ -393,9 +396,6 @@ class BaseCassandraCluster:
         self._configure_cassandra_yaml(node)
         self._configure_cassandra_env(node)
         self._configure_rackdc(node)
-        self._start_cassandra_service(node)
-        if self.params.get("install_cassandra_exporter"):
-            CassandraExporterSetup.install(node=node)
 
     def check_node_db_up(self, node):
         """Check if Cassandra is up via nodetool status (runs on the node via SSH).
@@ -467,12 +467,23 @@ class BaseCassandraCluster:
         return True
 
     def node_startup(self, node, verbose=False, timeout=3600):
-        """No-op: Cassandra is already started at the end of node_setup.
+        """Start Cassandra (and optionally the Prometheus exporter).
 
-        The wait_for_init_wrap decorator calls node_startup after node_setup.
-        Restarting Cassandra here would kill the running JVM and force a full
-        restart cycle (~7 min), so we skip it.
+        wait_for_init_wrap invokes node_startup serially per node when
+        parallel_startup is False (the default for Cassandra). Starting
+        Cassandra here rather than from node_setup's parallel phase means
+        the seed finishes gossip setup before non-seeds try to bootstrap,
+        which avoids the token-collision race that strands later nodes in
+        a "not a member" state.
+
+        The cassandra_exporter systemd unit uses Requires=cassandra.service,
+        so its install (which ends with systemctl start) must run after
+        Cassandra is already started; otherwise the exporter start would
+        itself trigger a parallel cassandra.service start.
         """
+        self._start_cassandra_service(node)
+        if self.params.get("install_cassandra_exporter"):
+            CassandraExporterSetup.install(node=node)
 
     def _install_jdk(self, node):
         """Install the required JDK version and ensure it is the active alternative.
