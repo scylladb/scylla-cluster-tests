@@ -45,11 +45,37 @@ prepare_write_cmd:
     -P compaction_strategy="\"IncrementalCompactionStrategy\""
     -P sstable_compression="\"LZ4Compressor\""
     data_dir/latte/schema_scale.rn
+# NOTE: original command commented out due to severe throughput degradation.
+#       Investigation: /tmp/investigation_5k_tables_and_mv
+#       Root causes found in ScyllaDB logs during test 379e1e3a:
+#       1. table_group_size=5000 writes to all 5000 base tables + 10000 MVs simultaneously,
+#          causing 15,000 active memtables and compaction queues of 1000-2500 tasks per shard.
+#       2. connections=1 bottlenecks pipelining across a 6-node cluster.
+#       3. concurrency=64 over 1 connection amplifies backpressure during 65-97ms reactor stalls.
+#       4. No rate limit causes initial burst at ~165K ops/s which compaction can never recover from.
+# prepare_verify_cmd:
+#   - >-
+#     latte run --tag populate-data -f write
+#     --threads=14 --concurrency=64 --connections=1
+#     --warmup=0 --retries=10 --retry-interval=5s,10s --request-timeout 60 --sampling 5s
+#     -d 1000000000
+#     -P keyspace_count=1
+#     -P table_count_per_keyspace=5000
+#     -P row_count_per_table=200000
+#     -P blob_col_size=128
+#     -P text_col_size=128
+#     -P gauss_mean=0
+#     -P gauss_stddev=0
+#     -P table_group_size=5000
+#     -P table_shift_count=0
+#     -P table_shift_interval_s=0
+#     data_dir/latte/schema_scale.rn
 prepare_verify_cmd:
   - >-
     latte run --tag populate-data -f write
-    --threads=14 --concurrency=64 --connections=1
+    --threads=14 --concurrency=32 --connections=6
     --warmup=0 --retries=10 --retry-interval=5s,10s --request-timeout 60 --sampling 5s
+    --rate 80000
     -d 1000000000
     -P keyspace_count=1
     -P table_count_per_keyspace=5000
@@ -58,9 +84,9 @@ prepare_verify_cmd:
     -P text_col_size=128
     -P gauss_mean=0
     -P gauss_stddev=0
-    -P table_group_size=5000
-    -P table_shift_count=0
-    -P table_shift_interval_s=0
+    -P table_group_size=100
+    -P table_shift_count=50
+    -P table_shift_interval_s=5
     data_dir/latte/schema_scale.rn
 stress_cmd:
   - >-
