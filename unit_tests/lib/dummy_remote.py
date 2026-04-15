@@ -12,9 +12,9 @@
 # Copyright (c) 2020 ScyllaDB
 
 
-import os
 import shutil
 import logging
+import tempfile
 from pathlib import Path
 
 from sdcm.remote import LocalCmdRunner
@@ -46,12 +46,20 @@ class DummyRemote:
 
 class LocalNode(BaseNode):
     def __init__(
-        self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, node_index=1
+        self,
+        name,
+        parent_cluster,
+        ssh_login_info=None,
+        base_logdir=None,
+        node_prefix=None,
+        dc_idx=0,
+        node_index=1,
+        logdir=None,
     ):
         super().__init__(name, parent_cluster)
         self.node_index = node_index
         self.remoter = LocalCmdRunner()
-        self.logdir = os.path.dirname(__file__)
+        self.logdir = logdir or tempfile.mkdtemp(prefix="sct-localnode-")
 
     @property
     def ip_address(self):
@@ -116,12 +124,12 @@ class LocalNode(BaseNode):
 
 
 class LocalLoaderSetDummy(BaseCluster):
-    def __init__(self, nodes=None, params=None):
+    def __init__(self, nodes=None, params=None, logdir=None):
         self.name = "LocalLoaderSetDummy"
         self.params = params or {}
         self.added_password_suffix = False
         self.nodes = nodes if nodes is not None else [LocalNode("loader_node", parent_cluster=self)]
-        self.logdir = os.path.dirname(__file__)
+        self.logdir = logdir or tempfile.mkdtemp(prefix="sct-loader-")
 
     def add_nodes(self, *args, **kwargs):
         raise NotImplementedError

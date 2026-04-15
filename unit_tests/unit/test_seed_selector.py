@@ -1,6 +1,4 @@
-import tempfile
 import logging
-import shutil
 
 import pytest
 import sdcm.cluster
@@ -52,18 +50,10 @@ logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(messa
 
 
 class TestSeedSelector:
-    temp_dir = None
-    cluster = None
-
-    @classmethod
-    def setup_class(cls):
-        cls.temp_dir = tempfile.mkdtemp()
-        cls.cluster = None
-
-    @classmethod
-    def teardown_class(cls):
-        # stop_events_device()
-        shutil.rmtree(cls.temp_dir)
+    @pytest.fixture(autouse=True, scope="class")
+    def inject_temp_dir(self, tmp_path_factory):
+        TestSeedSelector.temp_dir = str(tmp_path_factory.mktemp("seed_selector"))
+        TestSeedSelector.cluster = None
 
     @pytest.fixture(autouse=True)
     def inject_test_data_dir(self, test_data_dir):
