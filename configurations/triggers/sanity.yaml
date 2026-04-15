@@ -1,0 +1,76 @@
+# Sanity trigger matrix — single source of truth for all sanity job definitions.
+#
+# Replaces:
+#   - jenkins-pipelines/oss/sct_triggers/sanity-aws-trigger.jenkinsfile
+#   - jenkins-pipelines/oss/sct_triggers/sanity-azure-trigger.jenkinsfile
+#   - jenkins-pipelines/oss/sct_triggers/sanity-gcp-trigger.jenkinsfile
+#   - jenkins-pipelines/oss/sct_triggers/additional-aws-trigger.jenkinsfile
+
+defaults:
+  provision_type: "spot"
+  post_behavior_db_nodes: "destroy"
+  post_behavior_loader_nodes: "destroy"
+  post_behavior_monitor_nodes: "destroy"
+
+jobs:
+  # --- Sanity jobs (from sanity-*-trigger.jenkinsfile) ---
+  - job_name: "longevity/longevity-100gb-4h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels: []
+    exclude_versions: []
+
+  - job_name: "longevity/longevity-10gb-3h-azure-test"
+    backend: "azure"
+    region: "eastus"
+    labels: []
+    exclude_versions: []
+
+  - job_name: "longevity/longevity-10gb-3h-gce-test"
+    backend: "gce"
+    region: "us-east1"
+    labels: []
+    exclude_versions: []
+
+  # --- Additional AWS jobs (from additional-aws-trigger.jenkinsfile) ---
+  - job_name: "longevity/longevity-10gb-3h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "additional"
+    exclude_versions: []
+
+  - job_name: "no_tablets/longevity-lwt-3h-no-tablets-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "additional"
+    exclude_versions: []
+
+  - job_name: "longevity/longevity-twcs-3h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "additional"
+    exclude_versions: []
+
+  - job_name: "alternator/longevity-alternator-3h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "additional"
+    exclude_versions: []
+
+  - job_name: "no_tablets/longevity-cdc-100gb-4h-no-tablets-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "additional"
+    exclude_versions: []
+
+  - job_name: "longevity/longevity-large-partition-asymmetric-cluster-3h-test"
+    backend: "aws"
+    region: "eu-west-1"
+    labels:
+      - "additional"
+    exclude_versions: []
