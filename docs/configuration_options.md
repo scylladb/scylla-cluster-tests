@@ -2714,7 +2714,7 @@ Cassandra docker image repo, i.e. 'cassandra'. Used when db_type is 'cassandra'.
 
 Cassandra version / docker image tag, i.e. '4.1' or '5.0'
 
-**default:** 4.1
+**default:** 5
 
 **type:** str
 * appendable

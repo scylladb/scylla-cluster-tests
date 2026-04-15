@@ -7,7 +7,7 @@ docker_image_cassandra: 'cassandra'
 cassandra_version: '5.0'
 
 # Loaders still use a Scylla image (has cassandra-stress built in)
-scylla_version: '2025.3.0'
+scylla_version: '2026.1.0'
 
 user_prefix: 'cassandra-docker-test'
 use_mgmt: false

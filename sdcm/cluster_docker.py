@@ -636,6 +636,12 @@ class CassandraYamlAttrProxy:
         except KeyError:
             return None
 
+    def __setattr__(self, name, value):
+        if name == "_data":
+            super().__setattr__(name, value)
+        else:
+            self._data[name] = value
+
     def model_dump(self, **_kwargs):
         return dict(self._data)
 
@@ -660,7 +666,7 @@ class CassandraDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
             node_key_file=node_key_file,
             cluster_prefix=cluster_prefix,
             node_prefix=node_prefix,
-            node_type="scylla-db",
+            node_type="scylla-db",  # TODO: change to "cassandra-db" once node_type is decoupled from Scylla-specific logic
             n_nodes=n_nodes,
             params=params,
         )
@@ -735,6 +741,12 @@ class CassandraDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
         pass
 
     def validate_seeds_on_all_nodes(self):
+        pass
+
+    def update_db_binary(self, node_list=None, start_service=True):
+        pass
+
+    def update_db_packages(self, node_list=None, start_service=True):
         pass
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=60, sleep_time=3, timeout=0):
