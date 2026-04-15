@@ -14,6 +14,9 @@ import jenkins.model.Jenkins
 import hudson.model.Node
 import java.util.Collections
 
+// NOTE: BaremetalCloud has no regionId field — the cloud's region is inherited
+// from the credential's regionId. See JENKINS-76436. SCT uploads a per-region
+// OCI credential from Python before running this script; we reference it here.
 config = [
     name: "$name",
     region: "$region_name",
@@ -25,6 +28,7 @@ config = [
     subnetId: "$subnet_id",
     labels: "$jenkins_labels",
     numExecutors: "$num_executors",
+    credentialsId: "$credentials_id",
 ]
 
 println("=== OCI Builder Configuration ===")
@@ -119,37 +123,40 @@ def tmpl = ctor.newInstance(
     "600",                         // startTimeoutSeconds
     "300",                         // initScriptTimeoutSeconds
     "20",                          // instanceCap
-    "2",                           // numberOfOcpus
+    "$num_ocpus",                  // numberOfOcpus (required for flex shapes)
     false,                          // autoImageUpdate
     false,                          // stopOnIdle
     tagList,                        // tags
     "oci-builder",                 // instanceNamePrefix
-    null,                           // memoryInGBs
+    "$memory_gb",                  // memoryInGBs (required for flex shapes — null breaks template save)
     false,                          // doNotDisable
     "30"                           // retryTimeoutMins
 )
 
 println("Successfully created BaremetalCloudAgentTemplate")
 
-// Create cloud instance
-def cloud = cloudClass.getDeclaredConstructor(String, String, String, String, int, List).newInstance(
+// Create cloud instance — BaremetalCloud constructor is 6-arg (no regionId field;
+// region comes from the credential — see JENKINS-76436). The cloud is stored as
+// "oci-compute-<cloudName>".
+def cloud = cloudClass.getDeclaredConstructor(
+    String,  // cloudName
+    String,  // credentialsId
+    String,  // instanceCapStr
+    String,  // maxAsyncThreads
+    int,     // nextTemplateId
+    List     // templates
+).newInstance(
     config.name,
-    "oci-sct-user", // credentialsId (set Jenkins credential ID if available)
-    "20",        // instanceCapStr
-    "10",        // maxAsyncThreads
-    0,           // nextTemplateId
+    config.credentialsId,  // per-region credential we just created
+    "20",                  // instanceCapStr
+    "10",                  // maxAsyncThreads
+    0,                     // nextTemplateId
     [tmpl]
 )
 
-println("Successfully created BaremetalCloud instance")
+println("Successfully created BaremetalCloud instance for region $${config.region}")
 
-// Try to set region if setter exists
-if (cloud.metaClass.getMetaMethod("setRegion", String)) {
-    cloud.setRegion(config.region)
-    println("Successfully set region: $${config.region}")
-}
-
-// clear old configuration
+// clear old configuration — the plugin stores the cloud as "oci-compute-<cloudName>"
 jenkins.clouds.removeAll { it.name == "oci-compute-$${config.name}" }
 
 // Add the new cloud
