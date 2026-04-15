@@ -722,6 +722,7 @@ class SCTConfiguration(dict):
             Override the default hostname address of the sct test runner,
             using ngrok server, see readme for more instructions
          """,
+<<<<<<< HEAD
         ),
         dict(
             name="backtrace_decoding",
@@ -772,6 +773,304 @@ class SCTConfiguration(dict):
             help="""
             If reuse_cluster is set it should hold test_id of the cluster that will be reused.
             `reuse_cluster: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71`
+||||||| parent of bce3e484a (refactor(nemesis): remove Class:N count syntax, enforce explicit list format)
+    )
+    seeds_selector: Literal["random", "first", "all"] = SctField(
+        description="""How to select the seeds. Expected values: random/first/all""",
+    )
+    seeds_num: int = SctField(
+        description="""Number of seeds to select""",
+    )
+    email_recipients: StringOrList = SctField(
+        description="""list of email of send the performance regression test to""",
+    )
+    email_subject_postfix: String = SctField(
+        description="""Email subject postfix""",
+    )
+    ssh_transport: Literal["libssh2", "fabric"] = SctField(
+        description="""Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'""",
+        default="libssh2",
+    )
+
+    # Scylla command line arguments options
+    experimental_features: StringOrList = SctField(
+        description="unlock specified experimental features",
+    )
+    server_encrypt: Boolean = SctField(
+        description="when enable scylla will use encryption on the server side",
+    )
+    client_encrypt: Boolean = SctField(
+        description="when enable scylla will use encryption on the client side",
+    )
+    hinted_handoff: String = SctField(
+        description="when enable or disable scylla hinted handoff (enabled/disabled)",
+    )
+    nemesis_double_load_during_grow_shrink_duration: int = SctField(
+        description="After growing (and before shrink) in GrowShrinkCluster nemesis it will double the load for provided duration.",
+    )
+    authenticator: Literal[
+        "PasswordAuthenticator", "AllowAllAuthenticator", "com.scylladb.auth.SaslauthdAuthenticator"
+    ] = SctField(
+        description="which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator",
+    )
+    authenticator_user: String = SctField(
+        description="the username if PasswordAuthenticator is used",
+    )
+    authenticator_password: String = SctField(
+        description="the password if PasswordAuthenticator is used",
+    )
+    authorizer: Literal["AllowAllAuthorizer", "CassandraAuthorizer"] = SctField(
+        description="which authorizer scylla will use AllowAllAuthorizer/CassandraAuthorizer",
+    )
+    # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
+    sla: Boolean = SctField(
+        description="run SLA nemeses if the test is SLA only",
+    )
+    service_level_shares: list = SctField(
+        description="List if service level shares - how many server levels to create and test. Uses in SLA test. list of int, like: [100, 200]",
+    )
+    alternator_port: int = SctField(
+        description="Port to configure for alternator in scylla.yaml",
+    )
+    dynamodb_primarykey_type: Literal[tuple(x.value for x in alternator.enums.YCSBSchemaTypes.__members__.values())] = (
+        SctField(
+            description="Type of dynamodb table to create with range key or not",
+        )
+    )
+    alternator_write_isolation: String = SctField(
+        description="Set the write isolation for the alternator table, see https://github.com/scylladb/scylla/blob/master/docs/alternator/alternator.md#write-isolation-policies for more details",
+    )
+    alternator_use_dns_routing: Boolean = SctField(
+        description="If true, spawn a docker with a dns server for the ycsb loader to point to",
+    )
+    alternator_loadbalancing: Boolean = SctField(
+        description="If true, enable native load balancing for alternator",
+    )
+    alternator_test_table: DictOrStr = SctField(
+        description="""Dictionary of a test alternator table features:
+                name: str - the name of the table
+                lsi_name: str - the name of the local secondary index to create with a table
+                gsi_name: str - the name of the global secondary index to create with a table
+                tags: dict - the tags to apply to the created table
+                items: int - expected number of items in the table after prepare""",
+    )
+    alternator_enforce_authorization: Boolean = SctField(
+        description="If true, enable the authorization check in dynamodb api (alternator)",
+    )
+    alternator_access_key_id: String = SctField(description="the aws_access_key_id that would be used for alternator")
+    alternator_secret_access_key: String = SctField(
+        description="the aws_secret_access_key that would be used for alternator",
+    )
+    alternator_trust_all_certificates: Boolean = SctField(
+        description="If true, trust all TLS certificates for alternator connections (for testing with self-signed certs)",
+    )
+    region_aware_loader: Boolean = SctField(
+        description="When in multi region mode, run stress on loader that is located in the same region as db node",
+    )
+    append_scylla_args: String = SctField(
+        description="More arguments to append to scylla command line",
+    )
+    append_scylla_args_oracle: String = SctField(
+        description="More arguments to append to oracle command line",
+    )
+    append_scylla_yaml: DictOrStrOrPydantic = SctField(
+        description="More configuration to append to /etc/scylla/scylla.yaml",
+    )
+    append_scylla_node_exporter_args: String = SctField(
+        description="More arguments to append to scylla-node-exporter command line",
+    )
+
+    # Nemesis config options
+    nemesis_class_name: MultitenantValue(StringOrList) = SctField(
+        description="""
+                Nemesis class to use (possible types in sdcm.nemesis).
+                Next syntax supporting:
+                - nemesis_class_name: "NemesisName"  Run one nemesis in single thread
+                - nemesis_class_name: "<NemesisName>:<num>" Run <NemesisName> in <num>
+                  parallel threads on different nodes. Ex.: "ChaosMonkey:2"
+                - nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run
+                  <NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2>
+                  parallel threads. Ex.: "DisruptiveMonkey:1 NonDisruptiveMonkey:2"
+        """,
+    )
+    nemesis_interval: MultitenantValue(IntOrList) = SctField(
+        description="""Nemesis sleep interval to use if None provided specifically in the test""",
+    )
+    nemesis_sequence_sleep_between_ops: MultitenantValue(IntOrList) = SctField(
+        description="""Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests""",
+    )
+    nemesis_during_prepare: MultitenantValue(BooleanOrList) = SctField(
+        description="""Run nemesis during prepare stage of the test""",
+    )
+    nemesis_seed: MultitenantValue(IntOrList) = SctField(
+        description="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey""",
+    )
+    nemesis_add_node_cnt: MultitenantValue(IntOrList) = SctField(
+        description="""Add/remove nodes during GrowShrinkCluster nemesis""",
+    )
+    nemesis_grow_shrink_instance_type: String = SctField(
+        description="""Instance type to use for adding/removing nodes during GrowShrinkCluster nemesis""",
+    )
+    cluster_target_size: IntOrList = SctField(
+        description="""Used for scale test: max size of the cluster""",
+    )
+    space_node_threshold: MultitenantValue(IntOrList) = SctField(
+        description="""
+             Space node threshold before starting nemesis (bytes)
+             The default value is 6GB (6x1024^3 bytes)
+             This value is supposed to reproduce
+             https://github.com/scylladb/scylla/issues/1140
+=======
+    )
+    seeds_selector: Literal["random", "first", "all"] = SctField(
+        description="""How to select the seeds. Expected values: random/first/all""",
+    )
+    seeds_num: int = SctField(
+        description="""Number of seeds to select""",
+    )
+    email_recipients: StringOrList = SctField(
+        description="""list of email of send the performance regression test to""",
+    )
+    email_subject_postfix: String = SctField(
+        description="""Email subject postfix""",
+    )
+    ssh_transport: Literal["libssh2", "fabric"] = SctField(
+        description="""Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'""",
+        default="libssh2",
+    )
+
+    # Scylla command line arguments options
+    experimental_features: StringOrList = SctField(
+        description="unlock specified experimental features",
+    )
+    server_encrypt: Boolean = SctField(
+        description="when enable scylla will use encryption on the server side",
+    )
+    client_encrypt: Boolean = SctField(
+        description="when enable scylla will use encryption on the client side",
+    )
+    hinted_handoff: String = SctField(
+        description="when enable or disable scylla hinted handoff (enabled/disabled)",
+    )
+    nemesis_double_load_during_grow_shrink_duration: int = SctField(
+        description="After growing (and before shrink) in GrowShrinkCluster nemesis it will double the load for provided duration.",
+    )
+    authenticator: Literal[
+        "PasswordAuthenticator", "AllowAllAuthenticator", "com.scylladb.auth.SaslauthdAuthenticator"
+    ] = SctField(
+        description="which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator",
+    )
+    authenticator_user: String = SctField(
+        description="the username if PasswordAuthenticator is used",
+    )
+    authenticator_password: String = SctField(
+        description="the password if PasswordAuthenticator is used",
+    )
+    authorizer: Literal["AllowAllAuthorizer", "CassandraAuthorizer"] = SctField(
+        description="which authorizer scylla will use AllowAllAuthorizer/CassandraAuthorizer",
+    )
+    # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
+    sla: Boolean = SctField(
+        description="run SLA nemeses if the test is SLA only",
+    )
+    service_level_shares: list = SctField(
+        description="List if service level shares - how many server levels to create and test. Uses in SLA test. list of int, like: [100, 200]",
+    )
+    alternator_port: int = SctField(
+        description="Port to configure for alternator in scylla.yaml",
+    )
+    dynamodb_primarykey_type: Literal[tuple(x.value for x in alternator.enums.YCSBSchemaTypes.__members__.values())] = (
+        SctField(
+            description="Type of dynamodb table to create with range key or not",
+        )
+    )
+    alternator_write_isolation: String = SctField(
+        description="Set the write isolation for the alternator table, see https://github.com/scylladb/scylla/blob/master/docs/alternator/alternator.md#write-isolation-policies for more details",
+    )
+    alternator_use_dns_routing: Boolean = SctField(
+        description="If true, spawn a docker with a dns server for the ycsb loader to point to",
+    )
+    alternator_loadbalancing: Boolean = SctField(
+        description="If true, enable native load balancing for alternator",
+    )
+    alternator_test_table: DictOrStr = SctField(
+        description="""Dictionary of a test alternator table features:
+                name: str - the name of the table
+                lsi_name: str - the name of the local secondary index to create with a table
+                gsi_name: str - the name of the global secondary index to create with a table
+                tags: dict - the tags to apply to the created table
+                items: int - expected number of items in the table after prepare""",
+    )
+    alternator_enforce_authorization: Boolean = SctField(
+        description="If true, enable the authorization check in dynamodb api (alternator)",
+    )
+    alternator_access_key_id: String = SctField(description="the aws_access_key_id that would be used for alternator")
+    alternator_secret_access_key: String = SctField(
+        description="the aws_secret_access_key that would be used for alternator",
+    )
+    alternator_trust_all_certificates: Boolean = SctField(
+        description="If true, trust all TLS certificates for alternator connections (for testing with self-signed certs)",
+    )
+    region_aware_loader: Boolean = SctField(
+        description="When in multi region mode, run stress on loader that is located in the same region as db node",
+    )
+    append_scylla_args: String = SctField(
+        description="More arguments to append to scylla command line",
+    )
+    append_scylla_args_oracle: String = SctField(
+        description="More arguments to append to oracle command line",
+    )
+    append_scylla_yaml: DictOrStrOrPydantic = SctField(
+        description="More configuration to append to /etc/scylla/scylla.yaml",
+    )
+    append_scylla_node_exporter_args: String = SctField(
+        description="More arguments to append to scylla-node-exporter command line",
+    )
+
+    # Nemesis config options
+    nemesis_class_name: MultitenantValue(StringOrList) = SctField(
+        description="""
+                Nemesis class to use (possible types in sdcm.nemesis).
+                Supported syntax:
+                - nemesis_class_name: "NemesisName"
+                  Run one nemesis in a single thread.
+                - nemesis_class_name: ["NemesisA", "NemesisB"]
+                  Run NemesisA and NemesisB each in their own thread.
+                - nemesis_class_name: ["SisyphusMonkey", "SisyphusMonkey"]
+                  Run two SisyphusMonkey threads in parallel.
+                Note: the former 'Class:N' count syntax (e.g. "ChaosMonkey:2") and
+                space-separated strings (e.g. "DisruptiveMonkey NonDisruptiveMonkey") are no
+                longer supported. Use an explicit YAML list instead.
+        """,
+    )
+    nemesis_interval: MultitenantValue(IntOrList) = SctField(
+        description="""Nemesis sleep interval to use if None provided specifically in the test""",
+    )
+    nemesis_sequence_sleep_between_ops: MultitenantValue(IntOrList) = SctField(
+        description="""Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests""",
+    )
+    nemesis_during_prepare: MultitenantValue(BooleanOrList) = SctField(
+        description="""Run nemesis during prepare stage of the test""",
+    )
+    nemesis_seed: MultitenantValue(IntOrList) = SctField(
+        description="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey""",
+    )
+    nemesis_add_node_cnt: MultitenantValue(IntOrList) = SctField(
+        description="""Add/remove nodes during GrowShrinkCluster nemesis""",
+    )
+    nemesis_grow_shrink_instance_type: String = SctField(
+        description="""Instance type to use for adding/removing nodes during GrowShrinkCluster nemesis""",
+    )
+    cluster_target_size: IntOrList = SctField(
+        description="""Used for scale test: max size of the cluster""",
+    )
+    space_node_threshold: MultitenantValue(IntOrList) = SctField(
+        description="""
+             Space node threshold before starting nemesis (bytes)
+             The default value is 6GB (6x1024^3 bytes)
+             This value is supposed to reproduce
+             https://github.com/scylladb/scylla/issues/1140
+>>>>>>> bce3e484a (refactor(nemesis): remove Class:N count syntax, enforce explicit list format)
          """,
         ),
         dict(
@@ -3940,6 +4239,8 @@ class SCTConfiguration(dict):
             self._validate_nemesis_can_run_on_non_seed()
             self._validate_number_of_db_nodes_divides_by_az_number()
 
+        self._validate_nemesis_parallel_config()
+
         if self.get("use_zero_nodes"):
             self._validate_zero_token_backend_support(backend)
 
@@ -4056,6 +4357,40 @@ class SCTConfiguration(dict):
         assert num_of_db_nodes > seeds_num, (
             "Nemesis cannot run when 'nemesis_filter_seeds' is true and seeds number is equal to nodes number"
         )
+
+    def _validate_nemesis_parallel_config(self) -> None:
+        """Validate that nemesis_selector and nemesis_seed list lengths match nemesis_class_name."""
+        class_names = self.get("nemesis_class_name")
+        if not class_names:
+            return
+        num_threads = len(class_names)
+
+        selectors = self.get("nemesis_selector")
+        if selectors and len(selectors) > 1 and len(selectors) != num_threads:
+            raise ValueError(
+                f"'nemesis_selector' has {len(selectors)} entries but 'nemesis_class_name' has "
+                f"{num_threads}. Either use a single selector (broadcast to all threads) or provide "
+                f"exactly one selector per class name.\n"
+                f"  nemesis_class_name: {class_names}\n"
+                f"  nemesis_selector:   {selectors}"
+            )
+
+        seeds = self.get("nemesis_seed")
+        if seeds is not None:
+            if isinstance(seeds, int):
+                seeds_list = [seeds]
+            elif isinstance(seeds, str):
+                seeds_list = seeds.split()
+            else:
+                seeds_list = seeds
+            if len(seeds_list) > 1 and len(seeds_list) != num_threads:
+                raise ValueError(
+                    f"'nemesis_seed' has {len(seeds_list)} entries but 'nemesis_class_name' has "
+                    f"{num_threads}. Either use a single seed (broadcast to all threads) or provide "
+                    f"exactly one seed per class name.\n"
+                    f"  nemesis_class_name: {class_names}\n"
+                    f"  nemesis_seed:       {seeds_list}"
+                )
 
     def _validate_number_of_db_nodes_divides_by_az_number(self):
         if self.get("cluster_backend").startswith("k8s"):

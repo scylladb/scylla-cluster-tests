@@ -21,8 +21,8 @@ n_loaders: 2
 
 instance_type_db: 'i4i.4xlarge'
 
-nemesis_class_name: 'SisyphusMonkey:1 SisyphusMonkey:1'
-nemesis_seed: '156'
+nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']
+nemesis_seed: 156
 instance_type_loader: 'c5n.4xlarge'
 round_robin: true
 nemesis_interval: 30
