@@ -80,10 +80,12 @@ class ScyllaDoctor:
         self.python3_path = ""
 
     def run(self, sd_command):
+        if self.python3_path:
+            sd_command = f"{self.python3_path} {sd_command}"
         if not self.node.is_nonroot_install:
             result = self.node.remoter.sudo(sd_command, verbose=False)
         else:
-            result = self.node.remoter.run(f"bash -lce '{self.python3_path} {sd_command}'", verbose=False)
+            result = self.node.remoter.run(f"bash -lce '{sd_command}'", verbose=False)
         return result.stdout.strip()
 
     @cached_property
@@ -346,8 +348,8 @@ class ScyllaDoctor:
         # Always download from S3 — package repos are not updated at the same
         # time as S3 releases, and specific versions may not be available via repo.
         self.download_scylla_doctor()
+        self.python3_path = self.find_scylla_bundled_python3(self.current_dir)
         if self.node.is_nonroot_install:
-            self.python3_path = self.find_local_python3_binary(self.current_dir)
             self.update_scylla_doctor_config(
                 self.current_dir, additional_config=self.SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS
             )
@@ -368,18 +370,56 @@ class ScyllaDoctor:
         except Exception:
             LOGGER.error("Unable to collect Scylla Doctor package version for Argus - skipping...", exc_info=True)
 
-    def find_local_python3_binary(self, user_home: str):
-        if not (
-            python3_path := self.node.remoter.run(
-                f"ls {user_home}/scylladb/python3/bin/python3", verbose=False
-            ).stdout.strip()
-        ):
+    def find_scylla_bundled_python3(self, user_home: str) -> str:
+        """Find the python3 binary bundled with the Scylla installation.
+
+        For nonroot installs the binary may live under a versioned directory,
+        e.g. ``{user_home}/scylla-2026.2.0~dev/scylla-python3/bin/python3``,
+        so we search broadly under *user_home* for any ``python3`` inside a
+        ``bin/`` directory whose path contains "scylla".
+
+        For root installs the binary is typically under ``/opt/scylladb`` and
+        may require elevated privileges to locate, so ``remoter.sudo`` is used.
+
+        Args:
+            user_home: Home directory where Scylla is installed.
+
+        Returns:
+            Path to the bundled python3 binary.
+
+        Raises:
+            ScyllaDoctorException: If Scylla-bundled python3 is not found.
+        """
+        if self.node.is_nonroot_install:
+            # Fast path: check the traditional location first
             python3_path = self.node.remoter.run(
-                "for i in `find scylladb -name python3`;do [ -f $i ] && echo $i;done"
+                f"ls {user_home}/scylladb/python3/bin/python3", verbose=False, ignore_status=True
             ).stdout.strip()
-        LOGGER.debug("Local python3 binary path: %s", python3_path)
-        assert python3_path, f"Python3 binary is not found under local Scylla installation '{user_home}/scylladb'"
-        return python3_path
+            if not python3_path:
+                # Broad search: covers versioned dirs like scylla-VERSION/scylla-python3/bin/python3
+                python3_path = self.node.remoter.run(
+                    f"find {user_home} -path '*/bin/python3' \\( -type f -o -type l \\) 2>/dev/null"
+                    " | grep -i scylla | head -1",
+                    verbose=False,
+                    ignore_status=True,
+                ).stdout.strip()
+            LOGGER.debug("Nonroot bundled python3 search result: %s", python3_path or "(not found)")
+        else:
+            # Root install: broad filesystem search under standard Scylla install locations
+            python3_path = self.node.remoter.sudo(
+                "find /opt/scylladb /usr/lib/scylladb 2>/dev/null"
+                " -path '*/bin/python3' \\( -type f -o -type l \\) | head -1",
+                verbose=False,
+                ignore_status=True,
+            ).stdout.strip()
+            LOGGER.debug("Root bundled python3 search result: %s", python3_path or "(not found)")
+        if python3_path:
+            LOGGER.info("Using Scylla-bundled python3 at %s", python3_path)
+            return python3_path
+        raise ScyllaDoctorException(
+            f"No Scylla-bundled python3 found on {self.node.name}. "
+            f"Scylla doctor requires the python3 executable bundled with the Scylla installation."
+        )
 
     def run_scylla_doctor_and_collect_results(self):
         auth_options = ""
