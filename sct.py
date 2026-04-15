@@ -1510,6 +1510,11 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
     config = SCTConfiguration()
 
+    if not test_id:
+        test_id = config.get("test_id")
+        if test_id:
+            LOGGER.info("Using test_id from SCT configuration: %s", test_id)
+
     collector = Collector(test_id=test_id, params=config, test_dir=logdir)
 
     collected_logs = collector.run()
