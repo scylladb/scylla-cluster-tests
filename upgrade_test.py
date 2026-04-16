@@ -36,7 +36,7 @@ from sdcm.utils.issues import SkipPerIssues
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import CassandraStressThread
-from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.parallel_object import ParallelObject, ParallelObjectException
 from sdcm.utils.decorators import retrying
 from sdcm.utils.sstable.sstable_utils import get_sstable_data_dump_command
 from sdcm.utils.user_profile import get_profile_content
@@ -177,7 +177,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     # would be recalculated after all the cluster finish upgrade
     expected_sstable_format_version = "mc"
 
-    system_upgrade_timeout = 10 * 60
+    system_upgrade_timeout = 30 * 60
 
     def should_do_complex_profile(self) -> bool:
         """
@@ -376,10 +376,31 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         def upgrade(node):
             node.upgrade_system()
 
-        if self.params.get("upgrade_node_system"):
-            with self.actions_log.action_scope("upgrade OS on nodes"):
-                parallel_obj = ParallelObject(objects=nodes, timeout=self.system_upgrade_timeout)
-                parallel_obj.run(upgrade)
+        def wait_for_package_manager(node):
+            if node.distro.is_rhel_like:
+                lock_file = "/var/run/yum.pid"
+            elif node.distro.is_sles:
+                lock_file = "/run/zypp.pid"
+            else:
+                lock_file = "/var/lib/dpkg/lock-frontend"
+            self.log.warning("OS upgrade timed out on %s, waiting for package manager to finish...", node.name)
+            node.remoter.run(f"while fuser {lock_file} >/dev/null 2>&1; do sleep 10; done", timeout=10 * 60)
+            self.log.info("OS upgrade on %s completed after initial timeout", node.name)
+
+        if not self.params.get("upgrade_node_system"):
+            return
+
+        with self.actions_log.action_scope("upgrade OS on nodes"):
+            try:
+                ParallelObject(objects=nodes, timeout=self.system_upgrade_timeout).run(upgrade)
+            except ParallelObjectException as exc:
+                timed_out = [r for r in exc.results if isinstance(r.exc, TimeoutError)]
+                other_failures = [r for r in exc.results if r.exc and not isinstance(r.exc, TimeoutError)]
+                if other_failures:
+                    raise
+                # package manager may still be running on remote node, wait for it to finish
+                for result in timed_out:
+                    wait_for_package_manager(result.obj)
 
     @truncate_entries
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
