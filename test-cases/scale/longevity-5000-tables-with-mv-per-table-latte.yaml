@@ -73,9 +73,8 @@ prepare_write_cmd:
 prepare_verify_cmd:
   - >-
     latte run --tag populate-data -f write
-    --threads=14 --concurrency=32 --connections=6
+    --threads=14 --concurrency=16 --connections=6
     --warmup=0 --retries=10 --retry-interval=5s,10s --request-timeout 60 --sampling 5s
-    --rate 80000
     -d 1000000000
     -P keyspace_count=1
     -P table_count_per_keyspace=5000
@@ -84,9 +83,9 @@ prepare_verify_cmd:
     -P text_col_size=128
     -P gauss_mean=0
     -P gauss_stddev=0
-    -P table_group_size=100
-    -P table_shift_count=50
-    -P table_shift_interval_s=5
+    -P table_group_size=5000
+    -P table_shift_count=0
+    -P table_shift_interval_s=0
     data_dir/latte/schema_scale.rn
 stress_cmd:
   - >-
@@ -101,7 +100,7 @@ stress_cmd:
     -P blob_col_size=128
     -P text_col_size=128
     -P gauss_mean=100000
-    -P gauss_stddev=20000
+    -P gauss_stddev=5000
     -P table_group_size=10
     -P table_shift_count=1
     -P table_shift_interval_s=10
@@ -119,7 +118,7 @@ stress_cmd:
     -P blob_col_size=128
     -P text_col_size=128
     -P gauss_mean=100000
-    -P gauss_stddev=20000
+    -P gauss_stddev=5000
     -P table_group_size=10
     -P table_shift_count=1
     -P table_shift_interval_s=10
@@ -138,7 +137,7 @@ stress_cmd:
     -P blob_col_size=128
     -P text_col_size=128
     -P gauss_mean=100000
-    -P gauss_stddev=20000
+    -P gauss_stddev=5000
     -P table_group_size=10
     -P table_shift_count=1
     -P table_shift_interval_s=10
