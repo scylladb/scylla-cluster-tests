@@ -11,15 +11,19 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import contextlib
 import os
 import re
 import logging
 import shutil
-from typing import Optional, Union, Dict
+import tempfile
+from typing import ContextManager, Optional, Union, Dict
 from functools import cached_property
 
+import yaml
 
-from sdcm import cluster
+from sdcm import cluster, wait
+from sdcm.exceptions import NodeNotReady
 from sdcm.provision.helpers.certificate import (
     CA_CERT_FILE,
     JKS_TRUSTSTORE_FILE,
@@ -29,6 +33,7 @@ from sdcm.provision.helpers.certificate import (
 )
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.docker_cmd_runner import DockerCmdRunner
+from sdcm.remote.remote_file import remote_file, dict_to_yaml_file, yaml_file_to_dict
 from sdcm.reporting.tooling_reporter import VectorStoreVersionReporter
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
@@ -36,6 +41,7 @@ from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, Contai
 from sdcm.utils.health_checker import check_nodes_status
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import get_my_public_ip
+from sdcm.utils.raft import NoRaft
 from sdcm.utils.vector_store_utils import VectorStoreClusterMixin, VectorStoreNodeMixin
 
 DEFAULT_SCYLLA_DB_IMAGE = "scylladb/scylla-nightly"
@@ -262,7 +268,11 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
 
     def install_sudo(self, user: str = "scylla", verbose=False):
         """Install and configure passwordless sudo"""
-        pkg_mgr = "microdnf" if self.distro.is_rhel_like else "apt"
+        if self.distro.is_rhel_like:
+            pkg_mgr = "microdnf"
+        else:
+            pkg_mgr = "apt"
+            self.remoter.run("apt update", verbose=verbose, ignore_status=True, user="root")
         self.remoter.run(f"{pkg_mgr} install -y sudo", verbose=verbose, ignore_status=True, user="root")
 
         self.remoter.run("mkdir -p /etc/sudoers.d", user="root", ignore_status=True, verbose=verbose)
@@ -515,6 +525,241 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
                 self.log.warning("Failed destroy vector store cluster: %s", e)
 
         super().destroy()
+
+
+DEFAULT_CASSANDRA_IMAGE = "cassandra"
+
+
+CASSANDRA_YAML_PATH = "/etc/cassandra/cassandra.yaml"
+
+
+class CassandraDockerNode(DockerNode):
+    """A Cassandra node running in a Docker container."""
+
+    @cached_property
+    def cql_address(self):
+        return self.ip_address
+
+    def _gen_nodetool_cmd(self, sub_cmd, args, options):
+        credentials = self.parent_cluster.get_db_auth()
+        if credentials:
+            options += "-u {} -pw '{}' ".format(*credentials)
+        return f"nodetool {options} {sub_cmd} {args}"
+
+    @contextlib.contextmanager
+    def remote_scylla_yaml(self) -> ContextManager[dict]:
+        """Read/write cassandra.yaml as a plain dict.
+
+        Provides the same context-manager interface as the Scylla version
+        so that callers like ``report_scylla_yaml_to_argus`` keep working.
+        Changes made to the yielded dict are written back on exit.
+        """
+        with remote_file(
+            remoter=self.remoter,
+            remote_path=CASSANDRA_YAML_PATH,
+            serializer=dict_to_yaml_file,
+            deserializer=yaml_file_to_dict,
+            sudo=True,
+        ) as cassandra_yaml:
+            yield CassandraYamlAttrProxy(cassandra_yaml)
+
+    def extract_seeds_from_scylla_yaml(self):
+        """Extract seed IPs from cassandra.yaml."""
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix="sct"), "cassandra.yaml")
+        wait.wait_for(
+            func=self.remoter.receive_files,
+            step=10,
+            text="Waiting for copying cassandra.yaml",
+            timeout=300,
+            throw_exc=True,
+            src=CASSANDRA_YAML_PATH,
+            dst=yaml_dst_path,
+        )
+        with open(yaml_dst_path, encoding="utf-8") as yaml_stream:
+            conf_dict = yaml.safe_load(yaml_stream)
+
+        try:
+            node_seeds = conf_dict["seed_provider"][0]["parameters"][0].get("seeds")
+        except (KeyError, IndexError, TypeError) as details:
+            self.log.debug("Loaded YAML data structure: %s", conf_dict)
+            raise ValueError("Exception determining seed node ips from cassandra.yaml") from details
+
+        if node_seeds:
+            return [s.strip() for s in node_seeds.split(",")]
+        return []
+
+    @property
+    def is_server_encrypt(self):
+        result = self.remoter.run(f"grep '^server_encryption_options:' {CASSANDRA_YAML_PATH}", ignore_status=True)
+        return "server_encryption_options" in result.stdout.lower()
+
+    @cached_property
+    def raft(self):
+        return NoRaft(self)
+
+    def wait_native_transport(self):
+        """Cassandra has no Scylla REST API; check CQL port instead."""
+        if not self.db_up():
+            raise NodeNotReady(f"Node {self.name} CQL port not ready")
+
+    def config_setup(self, append_scylla_args="", debug_install=False, **_):
+        pass
+
+    def node_container_run_args(self, seed_ip):
+        env_vars = self.parent_cluster.cassandra_env_vars(self, seed_ip)
+        return dict(
+            name=self.name,
+            image=self.node_container_image_tag,
+            environment=env_vars,
+            network=self.parent_cluster.params.get("docker_network"),
+            nano_cpus=10**9,
+        )
+
+    def db_up(self):
+        return self.is_port_used(port=self.CQL_PORT, service_name="cassandra")
+
+
+class CassandraYamlAttrProxy:
+    """Wraps a plain dict so attribute access works like on ScyllaYaml.
+
+    ``report_scylla_yaml_to_argus`` calls ``scylla_yml.model_dump()``
+    and accesses attributes like ``broadcast_rpc_address``.  This proxy
+    makes a raw cassandra.yaml dict behave similarly.
+    """
+
+    def __init__(self, data: dict):
+        self._data = data
+
+    def __getattr__(self, name):
+        try:
+            return self._data[name]
+        except KeyError:
+            return None
+
+    def __setattr__(self, name, value):
+        if name == "_data":
+            super().__setattr__(name, value)
+        else:
+            self._data[name] = value
+
+    def model_dump(self, **_kwargs):
+        return dict(self._data)
+
+
+class CassandraDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
+    """Cassandra cluster on Docker backend for development and CI."""
+
+    def __init__(
+        self,
+        docker_image: str = DEFAULT_CASSANDRA_IMAGE,
+        docker_image_tag: str = "",
+        node_key_file: Optional[str] = None,
+        user_prefix: Optional[str] = None,
+        n_nodes: Union[list, str] = 1,
+        params: dict = None,
+    ) -> None:
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, "cs-cluster")
+        node_prefix = cluster.prepend_user_prefix(user_prefix, "cs-node")
+        super().__init__(
+            docker_image=docker_image,
+            docker_image_tag=docker_image_tag,
+            node_key_file=node_key_file,
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            node_type="scylla-db",  # TODO: change to "cassandra-db" once node_type is decoupled from Scylla-specific logic
+            n_nodes=n_nodes,
+            params=params,
+        )
+
+        self.vector_store_cluster = None
+
+    def get_node_ips_param(self, *args, **kwargs):
+        """
+        Resolve ambiguity between BaseScyllaCluster and DockerCluster implementations.
+
+        Delegate explicitly to DockerCluster so CassandraDockerCluster uses
+        the Docker-specific behavior for node IP parameters.
+        """
+        return DockerCluster.get_node_ips_param(self, *args, **kwargs)
+
+    def _create_node(self, node_index, container=None):
+        node = CassandraDockerNode(
+            parent_cluster=self,
+            container=container,
+            ssh_login_info=dict(hostname=None, user=self.node_container_user, key_file=self.node_container_key_file),
+            base_logdir=self.logdir,
+            node_prefix=self.node_prefix,
+            node_index=node_index,
+        )
+
+        if container is None:
+            ContainerManager.run_container(
+                node, "node", seed_ip=self.nodes[0].public_ip_address if node_index else None
+            )
+            ContainerManager.wait_for_status(node, "node", status="running")
+
+        node.init()
+
+        return node
+
+    def cassandra_env_vars(self, node, seed_ip) -> dict:
+        """Compute Docker env vars for the Cassandra container.
+
+        Args:
+            node: The node being configured.
+            seed_ip: IP address of the seed node, or None for the first node.
+
+        Returns:
+            Dict of environment variables for the Cassandra Docker container.
+        """
+        seeds = seed_ip or ""
+        num_tokens = self.params.get("cassandra_num_tokens") or 16
+        return {
+            "CASSANDRA_CLUSTER_NAME": self.name,
+            "CASSANDRA_SEEDS": seeds,
+            "CASSANDRA_ENDPOINT_SNITCH": "SimpleSnitch",
+            "CASSANDRA_NUM_TOKENS": str(num_tokens),
+            # TODO: make heap settings configurable via sct_config params (like cassandra_num_tokens)
+            "MAX_HEAP_SIZE": "512M",
+            "HEAP_NEWSIZE": "64M",
+        }
+
+    @cached_property
+    def parallel_startup(self):
+        return False
+
+    def node_setup(self, node, verbose=False, timeout=3600):
+        pass
+
+    def node_startup(self, node, verbose=False, timeout=3600):
+        pass
+
+    def get_scylla_args(self):
+        return ""
+
+    def update_seed_provider(self):
+        pass
+
+    def validate_seeds_on_all_nodes(self):
+        pass
+
+    def update_db_binary(self, node_list=None, start_service=True):
+        pass
+
+    def update_db_packages(self, node_list=None, start_service=True):
+        pass
+
+    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=60, sleep_time=3, timeout=0):
+        # TODO: implement using nodetool status or move to a shared Cassandra mixin
+        # that handles the Cassandra-specific status checking (UN state).
+        # For now, wait_for_init uses wait_db_up() which checks CQL connectivity.
+        pass
+
+    @cluster.wait_for_init_wrap
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
+        node_list = node_list if node_list else self.nodes
+        for node in node_list:
+            node.wait_db_up(timeout=timeout or 300)
 
 
 class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
