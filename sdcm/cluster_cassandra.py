@@ -467,14 +467,13 @@ class BaseCassandraCluster:
         return True
 
     def node_startup(self, node, verbose=False, timeout=3600):
-        """Start Cassandra (and optionally the Prometheus exporter).
+        """Start Cassandra, wait for UN, then install the exporter.
 
         wait_for_init_wrap invokes node_startup serially per node when
-        parallel_startup is False (the default for Cassandra). Starting
-        Cassandra here rather than from node_setup's parallel phase means
-        the seed finishes gossip setup before non-seeds try to bootstrap,
-        which avoids the token-collision race that strands later nodes in
-        a "not a member" state.
+        parallel_startup is False (the default for Cassandra). We wait
+        for UN here so the seed is fully in the ring before non-seeds
+        begin bootstrap — Cassandra cannot resolve token ownership when
+        two nodes try to join an unstable ring simultaneously.
 
         The cassandra_exporter systemd unit uses Requires=cassandra.service,
         so its install (which ends with systemctl start) must run after
@@ -482,6 +481,14 @@ class BaseCassandraCluster:
         itself trigger a parallel cassandra.service start.
         """
         self._start_cassandra_service(node)
+        wait.wait_for(
+            func=self.check_node_db_up,
+            step=10,
+            text=f"{node.name}: node_startup waiting for UN",
+            timeout=timeout or 1200,
+            throw_exc=True,
+            node=node,
+        )
         if self.params.get("install_cassandra_exporter"):
             CassandraExporterSetup.install(node=node)
 
