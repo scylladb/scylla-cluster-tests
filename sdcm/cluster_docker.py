@@ -95,6 +95,7 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         base_logdir: Optional[str] = None,
         ssh_login_info: Optional[dict] = None,
         node_index: int = 1,
+        rack: int = 0,
     ) -> None:
         super().__init__(
             name=f"{node_prefix}-{node_index}",
@@ -102,6 +103,7 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
             ssh_login_info=ssh_login_info,
             base_logdir=base_logdir,
             node_prefix=node_prefix,
+            rack=rack,
         )
         self.node_index = node_index
 
@@ -302,6 +304,7 @@ class VectorStoreDockerNode(VectorStoreNodeMixin, DockerNode):
         base_logdir: Optional[str] = None,
         ssh_login_info: Optional[dict] = None,
         node_index: int = 1,
+        rack: int = 0,
     ) -> None:
         super().__init__(
             parent_cluster=parent_cluster,
@@ -310,6 +313,7 @@ class VectorStoreDockerNode(VectorStoreNodeMixin, DockerNode):
             base_logdir=base_logdir,
             ssh_login_info=ssh_login_info,
             node_index=node_index,
+            rack=rack,
         )
 
     def node_container_run_args(self, seed_ip=None):
@@ -369,7 +373,7 @@ class DockerCluster(cluster.BaseCluster):
             os.path.dirname(__file__), "../docker/scylla-sct", self.params.get("scylla_linux_distro").split("-")[0]
         )
 
-    def _create_node(self, node_index, container=None):
+    def _create_node(self, node_index, container=None, rack=0):
         node = DockerNode(
             parent_cluster=self,
             container=container,
@@ -377,6 +381,7 @@ class DockerCluster(cluster.BaseCluster):
             base_logdir=self.logdir,
             node_prefix=self.node_prefix,
             node_index=node_index,
+            rack=rack,
         )
 
         if container is None:
@@ -394,10 +399,11 @@ class DockerCluster(cluster.BaseCluster):
 
         return sorted(set(range(len(self.nodes) + count)) - set(node.node_index for node in self.nodes))
 
-    def _create_nodes(self, count, enable_auto_bootstrap=False):
+    def _create_nodes(self, count, rack=None, enable_auto_bootstrap=False):
         new_nodes = []
         for node_index in self._get_new_node_indexes(count):
-            node = self._create_node(node_index)
+            node_rack = node_index % self.racks_count if rack is None else rack
+            node = self._create_node(node_index, rack=node_rack)
             node.enable_auto_bootstrap = enable_auto_bootstrap
             self.nodes.append(node)
             new_nodes.append(node)
@@ -407,14 +413,19 @@ class DockerCluster(cluster.BaseCluster):
         containers = ContainerManager.get_containers_by_prefix(self.node_prefix)
         for node_index, container in sorted(((int(c.labels["NodeIndex"]), c) for c in containers), key=lambda x: x[0]):
             LOGGER.debug("Found container %s with name `%s' and index=%d", container, container.name, node_index)
-            node = self._create_node(node_index, container)
+            node_rack = node_index % self.racks_count
+            node = self._create_node(node_index, container, rack=node_rack)
             self.nodes.append(node)
         return self.nodes
 
     @mark_new_nodes_as_running_nemesis
     def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         assert instance_type is None, "docker can't provision different instance types"
-        return self._get_nodes() if self.test_config.REUSE_CLUSTER else self._create_nodes(count, enable_auto_bootstrap)
+        return (
+            self._get_nodes()
+            if self.test_config.REUSE_CLUSTER
+            else self._create_nodes(count, rack=rack, enable_auto_bootstrap=enable_auto_bootstrap)
+        )
 
 
 class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
@@ -452,8 +463,38 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
             self._generate_db_node_certs(node)
             install_client_certificate(node.remoter, node.ip_address, force=True)
 
+        simulated_racks = self.racks_count > 1
+        if simulated_racks:
+            # Docker containers auto-start Scylla with SimpleSnitch, which persists
+            # dc=datacenter1 and rack=rack1 in system tables. Switching to
+            # GossipingPropertyFileSnitch with different rack names (RACK0/1/2) would
+            # cause a "Saved rack name is not equal" error on restart. Write the new
+            # cassandra-rackdc.properties and wipe persisted topology data while the
+            # container is still running, then restart the container to apply changes.
+            # We write the file directly because the Docker image lacks `stat`,
+            # which remote_file/SnitchConfig.apply() requires.
+            rack_name = f"RACK{node.rack}"
+            props_path = "/etc/scylla/cassandra-rackdc.properties"
+            node.remoter.sudo(
+                f"bash -c 'printf \"dc=datacenter1\\nrack={rack_name}\\nprefer_local=true\\n\" > {props_path}'"
+            )
+
         node.config_setup(append_scylla_args=self.get_scylla_args())
-        node.restart_scylla(verify_up_before=True)
+
+        if simulated_racks:
+            # Wipe data saved during initial boot with SimpleSnitch before restarting.
+            # Scylla may crash from deleted files, but container.restart() handles this.
+            # Suppress the expected FILESYSTEM_ERROR events caused by deleting data dirs
+            # while Scylla is still running (it tries to flush memtables to deleted paths).
+            with DbEventsFilter(
+                db_event=DatabaseLogEvent.FILESYSTEM_ERROR,
+                node=node,
+                extra_time_to_expiration=30,
+            ):
+                node.clean_scylla_data()
+                node.restart_scylla(verify_up_before=False)
+        else:
+            node.restart_scylla(verify_up_before=True)
 
     def _generate_db_node_certs(self, node):
         """Generate per-node SSL certificates for a Docker DB node."""
@@ -551,13 +592,14 @@ class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
                 self.log.error("Failed to reconfigure container %s: %s", node.name, e)
                 raise
 
-    def _create_node(self, node_index, container=None):
+    def _create_node(self, node_index, container=None, rack=0):
         node = VectorStoreDockerNode(
             parent_cluster=self,
             container=container,
             node_prefix=self.node_prefix,
             base_logdir=self.logdir,
             node_index=node_index,
+            rack=rack,
         )
 
         if container is None:
@@ -683,6 +725,7 @@ class DockerMonitoringNode(cluster.BaseNode):
         base_logdir: Optional[str] = None,
         node_index: int = 1,
         ssh_login_info: Optional[dict] = None,
+        rack: int = 0,
     ) -> None:
         super().__init__(
             name=f"{node_prefix}-{node_index}",
@@ -690,6 +733,7 @@ class DockerMonitoringNode(cluster.BaseNode):
             base_logdir=base_logdir,
             node_prefix=node_prefix,
             ssh_login_info=ssh_login_info,
+            rack=rack,
         )
         self.node_index = node_index
 
@@ -770,20 +814,21 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
             params=params,
         )
 
-    def _create_node(self, node_index, container=None):
+    def _create_node(self, node_index, container=None, rack=0):
         node = DockerMonitoringNode(
             parent_cluster=self,
             base_logdir=self.logdir,
             node_prefix=self.node_prefix,
             node_index=node_index,
             ssh_login_info=None,
+            rack=rack,
         )
         node.init()
         return node
 
     def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
-        assert instance_type is None, "docker can provision different instance types"
-        return self._create_nodes(count, enable_auto_bootstrap)
+        assert instance_type is None, "docker can't provision different instance types"
+        return self._create_nodes(count, rack=rack, enable_auto_bootstrap=enable_auto_bootstrap)
 
     @staticmethod
     def install_scylla_monitoring_prereqs(node):
