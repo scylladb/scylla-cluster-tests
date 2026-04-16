@@ -2581,7 +2581,15 @@ class BaseNode(AutoSshContainerMixin):
                 )
 
         # Download unified package
-        self.remoter.run(f"curl -fL {unified_package} -o ./unified_package.tar.gz --retry 5 --retry-max-time 100")
+        self.remoter.run(
+            curl_with_retry(
+                unified_package,
+                follow_redirects=True,
+                fail_early=True,
+                output="./unified_package.tar.gz",
+                retry_max_time=100,
+            )
+        )
 
         if not nonroot:
             self.install_package(package_name="xfsprogs mdadm")
