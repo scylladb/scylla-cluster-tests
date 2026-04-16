@@ -17,5 +17,7 @@ nemesis_interval: 2
 user_prefix: 'longevity-10gb-3h'
 space_node_threshold: 64424
 
+client_encrypt: true
+
 gce_n_local_ssd_disk_db: 2
 run_db_node_benchmarks: false
