@@ -517,6 +517,7 @@ class AWSCluster(cluster.BaseCluster):
         instance_type=None,
         is_zero_node=False,
         image_id=None,
+        after_config=None,
     ):
         if not count:
             return []
@@ -561,6 +562,7 @@ class AWSCluster(cluster.BaseCluster):
                 self.logdir,
                 dc_idx=dc_idx,
                 rack=node_rack,
+                after_config=after_config,
             )
             node.enable_auto_bootstrap = enable_auto_bootstrap
             if ssh_connection_ip_type(self.params) == "ipv6" and not node.distro.is_ubuntu:
@@ -571,7 +573,9 @@ class AWSCluster(cluster.BaseCluster):
         self.write_node_private_ip_file()
         return self.nodes[-count:]
 
-    def _create_node(self, instance, ami_username, node_prefix, node_index, base_logdir, dc_idx, rack):
+    def _create_node(
+        self, instance, ami_username, node_prefix, node_index, base_logdir, dc_idx, rack, after_config=None
+    ):
         ec2_service = self._ec2_services[0 if self.params.get("simulated_regions") else dc_idx]
         credentials = self._credentials[0 if self.params.get("simulated_regions") else dc_idx]
         node = AWSNode(
@@ -585,6 +589,7 @@ class AWSCluster(cluster.BaseCluster):
             base_logdir=base_logdir,
             dc_idx=dc_idx,
             rack=rack,
+            after_config=after_config,
         )
         node.init()
         return node
@@ -611,6 +616,7 @@ class AWSNode(cluster.BaseNode):
         base_logdir=None,
         dc_idx=0,
         rack=0,
+        after_config=None,
     ):
         self.node_index = node_index
         self._instance = ec2_instance
@@ -627,6 +633,7 @@ class AWSNode(cluster.BaseNode):
             node_prefix=node_prefix,
             dc_idx=dc_idx,
             rack=rack,
+            after_config=after_config,
         )
 
     @cached_property
@@ -1147,6 +1154,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         enable_auto_bootstrap=False,
         instance_type=None,
         is_zero_node=False,
+        after_config=None,
         **kwargs,
     ):
         if not ec2_user_data:
@@ -1176,6 +1184,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             enable_auto_bootstrap=enable_auto_bootstrap,
             instance_type=instance_type,
             is_zero_node=is_zero_node,
+            after_config=after_config,
             **kwargs,
         )
         return added_nodes
@@ -1254,7 +1263,15 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                 raise ValueError("Unexpected cassandra.yaml. Contents:\n%s" % yaml_stream.read()) from exc
 
     def add_nodes(
-        self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None, **kwargs
+        self,
+        count,
+        ec2_user_data="",
+        dc_idx=0,
+        rack=0,
+        enable_auto_bootstrap=False,
+        instance_type=None,
+        after_config=None,
+        **kwargs,
     ):
         if not ec2_user_data:
             if self.nodes:
@@ -1266,7 +1283,13 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                 )
         ec2_user_data = self.update_bootstrap(ec2_user_data, enable_auto_bootstrap)
         added_nodes = super().add_nodes(
-            count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx, rack=rack, instance_type=instance_type, **kwargs
+            count=count,
+            ec2_user_data=ec2_user_data,
+            dc_idx=dc_idx,
+            rack=rack,
+            instance_type=instance_type,
+            after_config=after_config,
+            **kwargs,
         )
         return added_nodes
 

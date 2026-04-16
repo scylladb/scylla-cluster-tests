@@ -161,5 +161,6 @@ class LocalKafkaCluster(cluster.BaseCluster):
         rack=0,
         enable_auto_bootstrap=False,
         instance_type=None,
+        after_config=None,
     ):
         raise NotImplementedError

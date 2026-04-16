@@ -57,6 +57,7 @@ class OciNode(cluster.BaseNode):
         base_logdir=None,
         dc_idx=0,
         rack=0,
+        after_config=None,
     ):
         self.node_index = node_index
         self.dc_idx = dc_idx
@@ -78,6 +79,7 @@ class OciNode(cluster.BaseNode):
             node_prefix=node_prefix,
             dc_idx=dc_idx,
             rack=rack,
+            after_config=after_config,
         )
 
     def wait_for_cloud_init(self):
@@ -309,7 +311,16 @@ class OciCluster(cluster.BaseCluster):
         self.log.debug("OciCluster constructor")
 
     @mark_new_nodes_as_running_nemesis
-    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+    def add_nodes(
+        self,
+        count,
+        ec2_user_data="",
+        dc_idx=0,
+        rack=0,
+        enable_auto_bootstrap=False,
+        instance_type=None,
+        after_config=None,
+    ):
         self.log.info("Adding nodes to cluster")
         nodes = []
 
@@ -320,7 +331,7 @@ class OciCluster(cluster.BaseCluster):
         for node_index, instance in enumerate(instances, start=self._node_index + 1):
             # in case rack is not specified, spread nodes to different racks
             node_rack = node_index % self.racks_count if rack is None else rack
-            node = self._create_node(instance, node_index, dc_idx, rack=node_rack)
+            node = self._create_node(instance, node_index, dc_idx, rack=node_rack, after_config=after_config)
             nodes.append(node)
             self.nodes.append(node)
             self.log.info("Added node: %s", node.name)
@@ -330,7 +341,7 @@ class OciCluster(cluster.BaseCluster):
         self.log.info("added nodes: %s", nodes)
         return nodes
 
-    def _create_node(self, instance, node_index, dc_idx, rack):
+    def _create_node(self, instance, node_index, dc_idx, rack, after_config=None):
         try:
             node = OciNode(
                 oci_instance=instance,
@@ -341,6 +352,7 @@ class OciCluster(cluster.BaseCluster):
                 base_logdir=self.logdir,
                 dc_idx=dc_idx,
                 rack=rack,
+                after_config=after_config,
             )
             node.init()
             return node

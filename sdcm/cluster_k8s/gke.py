@@ -623,6 +623,7 @@ class GkeScyllaPodCluster(ScyllaPodCluster):
         rack: int = 0,
         enable_auto_bootstrap: bool = False,
         instance_type=None,
+        after_config=None,
     ) -> List[GkeScyllaPodContainer]:
         new_nodes = super().add_nodes(
             count=count,
@@ -631,6 +632,7 @@ class GkeScyllaPodCluster(ScyllaPodCluster):
             rack=rack,
             enable_auto_bootstrap=enable_auto_bootstrap,
             instance_type=instance_type,
+            after_config=after_config,
         )
         return new_nodes
 
