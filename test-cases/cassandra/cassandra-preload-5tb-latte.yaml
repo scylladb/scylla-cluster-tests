@@ -1,0 +1,51 @@
+test_duration: 2880
+n_db_nodes: 6
+n_loaders: 4
+instance_type_db: 'i4i.8xlarge'
+root_disk_size_db: 100
+instance_type_loader: 'c6i.4xlarge'
+
+db_type: cassandra
+cassandra_version: '4.1'
+ami_id_db_cassandra: 'resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id'
+
+user_prefix: 'cassandra-preload-5tb'
+
+enable_kms_key_rotation: false
+run_commit_log_check_thread: false
+
+# 5TB preload: 5.5B rows x ~1KB/row, RF=1, split into 4 chunks of ~1.375B
+prepare_write_cmd:
+  - >-
+    latte run --function=write --tag=latte-prepare-01 --duration=1375000000
+    -P replication_factor=1 --threads=7 --concurrency=21 --consistency=ONE
+    -P column_size=128 -P column_count=8 -P row_count=5500000000 -P offset=0
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write --tag=latte-prepare-02 --duration=1375000000
+    -P replication_factor=1 --threads=7 --concurrency=21 --consistency=ONE
+    -P column_size=128 -P column_count=8 -P row_count=5500000000 -P offset=1375000000
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write --tag=latte-prepare-03 --duration=1375000000
+    -P replication_factor=1 --threads=7 --concurrency=21 --consistency=ONE
+    -P column_size=128 -P column_count=8 -P row_count=5500000000 -P offset=2750000000
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write --tag=latte-prepare-04 --duration=1375000000
+    -P replication_factor=1 --threads=7 --concurrency=21 --consistency=ONE
+    -P column_size=128 -P column_count=8 -P row_count=5500000000 -P offset=4125000000
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd:
+  - >-
+    latte run --function=read --tag=latte-read --duration=30m
+    -P replication_factor=1 --threads=7 --concurrency=21 --consistency=ONE
+    -P column_size=128 -P column_count=8 -P row_count=5500000000 -P offset=0
+    -P gauss_mean=2750000000 -P gauss_stddev=82500000
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    data_dir/latte/latte_cs_alike.rn
