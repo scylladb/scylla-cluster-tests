@@ -269,6 +269,6 @@ class TestAzureNetworkConfigProfiles:
         # evenly with at least two nodes each: a rack of one disappears with the node a nemesis
         # removes, leaving RF=3 over fewer racks than it needs
         assert params["simulated_racks"] == 3
-        for count in (int(nodes) for nodes in str(params["n_db_nodes"]).split()):
+        for count in params["n_db_nodes"]:
             assert count % params["simulated_racks"] == 0
             assert count // params["simulated_racks"] >= 2

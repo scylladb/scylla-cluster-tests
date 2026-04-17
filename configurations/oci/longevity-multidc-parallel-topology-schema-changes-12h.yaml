@@ -1,7 +1,7 @@
 user_prefix: 'parallel-topology-schema-changes-multidc-12h-oci'
 
 availability_zone: 'a,b,c'
-n_db_nodes: '3 3'
+n_db_nodes: [3, 3]
 
 region_aware_loader: true
 simulated_racks: 0
