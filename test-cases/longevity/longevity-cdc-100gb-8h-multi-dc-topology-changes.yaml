@@ -7,7 +7,7 @@ stress_cmd: [ "cassandra-stress user no-warmup profile=/tmp/cdc_profile_multidc.
              ]
 
 n_db_nodes: [6, 6]
-n_loaders: '2 2'
+n_loaders: [2, 2]
 
 instance_type_db: 'i4i.4xlarge'
 oci_instance_type_db: "VM.DenseIO.E5.Flex:8" # <shape-name>:<ocpus>:<ram>:<nvmes>
