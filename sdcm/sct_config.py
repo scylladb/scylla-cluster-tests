@@ -122,33 +122,38 @@ ExistingFile = Annotated[str, BeforeValidator(_file)]
 
 
 def str_or_list_or_eval(value: Union[str, List[str], None]) -> List[str] | None:
-    """Convert an environment variable into a Python's list."""
+    """Convert a config value into a list of strings.
 
+    Accepts:
+    - None -> None
+    - str -> [str]  (always wrapped in a list)
+    - str containing a Python list literal of strings (e.g. "['a', 'b']") -> list[str]
+    - list[str] -> list[str]  (elements must already be strings; no coercion)
+
+    All list elements must be strings. Non-string elements raise ValueError.
+    """
     if value is None:
         return None
+
     if isinstance(value, str):
         try:
-            return ast.literal_eval(value)
-        except Exception:  # noqa: BLE001
-            pass
-        return (
-            [
-                str(value),
-            ]
-            if str(value)
-            else []
-        )
+            parsed = ast.literal_eval(value.strip())
+        except (ValueError, SyntaxError):
+            # literal_eval failed — treat the whole input as a plain string.
+            return [value] if value else []
+
+        if not isinstance(parsed, list):
+            raise ValueError(f"{value!r} parsed to {parsed!r}, expected a list of strings")
+
+        value = parsed  # fall through to list validation below
 
     if isinstance(value, list):
-        ret_values = []
-        for val in value:
-            try:
-                ret_values += [ast.literal_eval(val)]
-            except Exception:  # noqa: BLE001
-                ret_values += [str(val)]
-        return ret_values
+        for el in value:
+            if not isinstance(el, str):
+                raise ValueError(f"List element {el!r} isn't a string in {value!r}")
+        return value
 
-    raise ValueError(f"{value} isn't a string or a list")
+    raise ValueError(f"{value!r} isn't a string or a list")
 
 
 StringOrList = Annotated[
@@ -156,44 +161,66 @@ StringOrList = Annotated[
 ]
 
 
-def int_or_space_separated_ints(value: str | int | list[int]) -> int | list[int]:
+def int_or_list_or_eval(value: str | int | list[int]) -> int | list[int] | None:
+    """Coerce value to a single int or a list of ints.
+
+    Accepts:
+    - None -> None
+    - int -> int
+    - list[int] -> int (single element unwrapped) or list[int] (multiple elements)
+    - str containing a single integer (e.g. from an env var) -> int
+    - str containing a Python list literal of ints (e.g. "[2, 2]" from an env var) -> list[int]
+      Single-element list literals (e.g. "[3]") are unwrapped to int.
+
+    List elements must already be ints; string elements (e.g. ["3", "1"]) are rejected.
+    Space-separated strings (e.g. '3 3') are no longer accepted.
+    Use a YAML list instead: [3, 3].
+    """
     if value is None:
         return None
-    try:
-        value = int(value)
+
+    # bool is a subclass of int in Python, so we need to exclude bools explicitly to avoid accepting True/False as valid ints.
+    if isinstance(value, int) and not isinstance(value, bool):
         return value
-    except Exception:  # noqa: BLE001
-        pass
 
     if isinstance(value, list):
-        # Handle list of ints or list of strings that can be converted to ints
-        try:
-            return [int(v) for v in value]
-        except (ValueError, TypeError) as exc:
-            raise ValueError(f"{value} isn't a list of integers") from exc
+        for v in value:
+            if not isinstance(v, int) or isinstance(v, bool):
+                raise ValueError(f"List element {v!r} isn't an integer in {value!r}")
+        return value[0] if len(value) == 1 else value
 
     if isinstance(value, str):
+        # Try literal_eval first — handles "[2, 2]", "[3]", "3", etc.
         try:
-            values = value.split()
-            return [int(v) for v in values]
-        except Exception:  # noqa: BLE001
+            parsed = ast.literal_eval(value.strip())
+        except (ValueError, SyntaxError):
             pass
+        else:
+            if isinstance(parsed, list):
+                return int_or_list_or_eval(parsed)  # recursively validate list elements
+            if isinstance(parsed, int) and not isinstance(parsed, bool):
+                return parsed
 
-    raise ValueError("{} isn't int or list".format(value))
+    raise ValueError(f"{value!r} (type {type(value).__name__}) isn't a valid int or list[int]")
 
 
-IntOrList = Annotated[int | list[int], BeforeValidator(int_or_space_separated_ints)]
+IntOrList = Annotated[int | list[int], BeforeValidator(int_or_list_or_eval)]
 
 
-def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -> bool | list[bool] | None:  # noqa: PLR0911
-    """Convert value to a single bool or list of bools.
+def bool_or_list_or_eval(value: bool | list[bool] | str | None) -> bool | list[bool] | None:  # noqa: PLR0911
+    """Coerce value to a single bool or a list of bools.
 
     Accepts:
     - None -> None
     - bool -> bool
-    - list of bools -> list of bools
-    - list of strings (true/false/yes/no/1/0) -> list of bools
-    - space-separated string of boolean values -> list of bools
+    - list[bool | str] -> bool (single element) or list[bool] (multiple elements)
+    - str containing a single boolean value (e.g. from an env var) -> bool
+    - str containing a Python-style list literal (e.g. "[True, False]") -> list[bool]
+    - str containing a JSON/YAML-style list literal (e.g. "[true, false]") -> list[bool]
+      Single-element list literals (e.g. "[True]") are unwrapped to bool.
+
+    Space-separated strings (e.g. 'true false') are no longer accepted.
+    Use a YAML list instead: [true, false].
     """
     if value is None:
         return None
@@ -202,13 +229,6 @@ def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -
         return value
 
     if isinstance(value, list):
-        if len(value) == 1:
-            # Single item list, return just the bool
-            if isinstance(value[0], bool):
-                return value[0]
-            if isinstance(value[0], str):
-                return bool(strtobool(value[0]))
-
         # Handle list of bools or list of strings that can be converted to bools
         try:
             result = []
@@ -217,23 +237,39 @@ def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -
                     result.append(v)
                 else:
                     result.append(bool(strtobool(str(v))))
-            return result
+            return result[0] if len(result) == 1 else result
         except (ValueError, TypeError) as exc:
-            raise ValueError(f"{value} isn't a list of booleans") from exc
+            raise ValueError(f"{value!r} isn't a list of booleans") from exc
 
     if isinstance(value, str):
+        # Try literal_eval first — handles "[True, False]", "[true]", "True", etc.
+        # ast.literal_eval handles Python-style: [True, False]
+        # json.loads handles JSON/YAML-style: [true, false]
+        parsed = None
+        for loader in (ast.literal_eval, json.loads):
+            try:
+                parsed = loader(value.strip())
+                break
+            except (ValueError, SyntaxError):
+                continue
+
+        if parsed is not None:
+            if isinstance(parsed, list):
+                return bool_or_list_or_eval(parsed)
+            if isinstance(parsed, bool):
+                return parsed
+
+        # literal_eval returned a non-list, non-bool (e.g. int 1 from "1") —
+        # fall through to strtobool which handles "1", "0", "yes", "no", etc.
         try:
-            values = value.split()
-            if len(values) == 1:
-                return bool(strtobool(values[0]))
-            return [bool(strtobool(v)) for v in values]
-        except Exception:  # noqa: BLE001
-            pass
+            return bool(strtobool(value))
+        except ValueError as exc:
+            raise ValueError(f"{value!r} cannot be converted to bool") from exc
 
-    raise ValueError("{} isn't bool or list".format(value))
+    raise ValueError(f"{value!r} (type {type(value).__name__}) isn't a valid bool or list[bool]")
 
 
-BooleanOrList = Annotated[bool | list[bool], BeforeValidator(boolean_or_space_separated_booleans)]
+BooleanOrList = Annotated[bool | list[bool], BeforeValidator(bool_or_list_or_eval)]
 
 
 class MultitenantValueMarker:
@@ -1204,7 +1240,7 @@ class SCTConfiguration(BaseModel):
         description="If True, enable support in SCT of zero nodes (configuration, nemesis)",
     )
     n_db_zero_token_nodes: IntOrList = SctField(
-        description="Number of zero token nodes in cluster. Value should be set as '0 1 1' "
+        description="Number of zero token nodes in cluster. Value should be set as [0, 1, 1] "
         "for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions",
     )
     zero_token_instance_type_db: String = SctField(
@@ -3044,13 +3080,7 @@ class SCTConfiguration(BaseModel):
         use_zero_nodes = self.get("use_zero_nodes")
         zero_nodes_num: list[int] | int = self.get("n_db_zero_token_nodes")
         data_nodes_num: list[int] | int = self.get("n_db_nodes")
-        zero_nodes_num = (
-            zero_nodes_num
-            if isinstance(zero_nodes_num, list)
-            else [zero_nodes_num]
-            if isinstance(zero_nodes_num, int)
-            else [int(i) for i in str(zero_nodes_num).split()]
-        )
+        zero_nodes_num = zero_nodes_num if isinstance(zero_nodes_num, list) else [zero_nodes_num]
         data_nodes_num = data_nodes_num if isinstance(data_nodes_num, list) else [data_nodes_num]
         total_nodes = data_nodes_num[:]
         if use_zero_nodes and zero_nodes_num:
@@ -3509,8 +3539,6 @@ class SCTConfiguration(BaseModel):
         if seeds is not None:
             if isinstance(seeds, int):
                 seeds_list = [seeds]
-            elif isinstance(seeds, str):
-                seeds_list = seeds.split()
             else:
                 seeds_list = seeds
             if len(seeds_list) > 1 and len(seeds_list) != num_threads:

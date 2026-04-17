@@ -82,10 +82,10 @@ def params(monkeypatch, provisioner_dir: Path):
         SCT_TEST_ID=f"{str(uuid.uuid4())}",
         SCT_CONFIG_FILES=f'["{provisioner_dir.absolute()}/azure_default_config.yaml"]',
         SCT_AZURE_REGION_NAME="['eastus', 'easteu']",
-        SCT_N_DB_NODES="3 1",
+        SCT_N_DB_NODES="[3, 1]",
         SCT_AZURE_IMAGE_DB="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/"
         "scylla-images/providers/Microsoft.Compute/images/scylla-2024.1.9-x86_64-2024-08-30T04-49-46",
-        SCT_N_LOADERS="2 0",
+        SCT_N_LOADERS="[2, 0]",
         SCT_N_MONITOR_NODES="1",
         SCT_AVAILABILITY_ZONE="a",
         SCT_IP_SSH_CONNECTIONS="public",

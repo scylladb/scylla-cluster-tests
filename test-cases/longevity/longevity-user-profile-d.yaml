@@ -18,7 +18,7 @@ instance_type_db: 'i3en.6xlarge'
 instance_type_loader: 'c5.4xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '018'
+nemesis_seed: 18
 nemesis_interval: 15
 
 user_prefix: 'longevity-user-profile-d'

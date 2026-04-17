@@ -7,10 +7,10 @@ stress_cmd: ["cassandra-stress write cl=LOCAL_QUORUM duration=120m -schema 'repl
              "cassandra-stress read  cl=LOCAL_QUORUM duration=120m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native -rate threads=10 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(64)' -log interval=5",
              ]
 rack_aware_loader: true
-n_db_nodes: '5 5 5 5 5'
-cluster_target_size: '25 25 25 25 25'
+n_db_nodes: [5, 5, 5, 5, 5]
+cluster_target_size: [25, 25, 25, 25, 25]
 add_node_cnt: 10
-n_loaders: '1 1 1 1 1'
+n_loaders: [1, 1, 1, 1, 1]
 region_aware_loader: true
 
 instance_type_db: 'i4i.xlarge'

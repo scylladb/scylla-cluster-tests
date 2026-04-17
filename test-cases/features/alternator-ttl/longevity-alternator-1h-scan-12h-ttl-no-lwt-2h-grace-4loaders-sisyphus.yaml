@@ -42,7 +42,7 @@ instance_type_db: 'i4i.2xlarge'
 n_db_nodes: 6
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '033'
+nemesis_seed: 33
 nemesis_interval: 10
 
 user_prefix: 'alternator-ttl-4-loaders-no-lwt-sisyphus'
