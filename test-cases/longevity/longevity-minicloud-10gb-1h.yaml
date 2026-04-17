@@ -52,7 +52,7 @@ root_disk_size_runner: 160
 # rather than a Scylla finding. Widen this once those paths are covered.
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: "not disruptive"
-nemesis_seed: '111'
+nemesis_seed: 111
 nemesis_interval: 2
 
 user_prefix: 'longevity-minicloud-10gb-1h'
