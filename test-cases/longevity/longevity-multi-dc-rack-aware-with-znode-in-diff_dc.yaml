@@ -8,7 +8,7 @@ stress_cmd: ["cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'repl
              ]
 n_db_nodes: [6, 6, 0]
 n_loaders: [1, 1]
-n_db_zero_token_nodes: '0 1 1'
+n_db_zero_token_nodes: [0, 1, 1]
 availability_zone: 'a,b,c'
 
 rack_aware_loader: true
