@@ -1,5 +1,5 @@
 test_duration: 900
-n_db_nodes: '6 6'
+n_db_nodes: [6, 6]
 n_loaders: '1 1'
 simulated_regions: 2
 gce_instance_type_db: 'n2-highmem-32'
