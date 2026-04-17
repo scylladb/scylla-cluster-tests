@@ -43,8 +43,14 @@ sizing_db:
   vcpu: '>=2'
   memory: '>=16'
   local_disk_gb: '>=350'  # ~80% of i8g.large's 468GB; cluster is small (~50GB), doesn't need a bigger machine
+<<<<<<< HEAD
 >>>>>>> c0229031b (refactor(treewide): change n_db_nodes in configs from space separated to list)
 n_loaders: '2 2'
+||||||| parent of 1686784d0 (refactor(treewide): change n_loaders in configs from space separated to list)
+n_loaders: '2 2'
+=======
+n_loaders: [2, 2]
+>>>>>>> 1686784d0 (refactor(treewide): change n_loaders in configs from space separated to list)
 
 rack_aware_loader: true
 region_aware_loader: true

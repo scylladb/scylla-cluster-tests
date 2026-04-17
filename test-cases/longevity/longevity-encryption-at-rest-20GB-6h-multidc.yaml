@@ -10,7 +10,7 @@ stress_cmd: [
 ]
 round_robin: true
 n_db_nodes: [3, 3]
-n_loaders: '1 1'
+n_loaders: [1, 1]
 
 rack_aware_loader: true
 region_aware_loader: true

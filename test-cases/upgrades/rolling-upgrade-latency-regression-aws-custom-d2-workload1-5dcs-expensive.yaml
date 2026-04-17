@@ -1,7 +1,7 @@
 test_duration: 1440
 
 n_db_nodes: [3, 3, 3, 3, 3]
-n_loaders: '5 1 1 1 1'
+n_loaders: [5, 1, 1, 1, 1]
 instance_type_db: 'i4i.24xlarge'
 instance_type_loader: 'c6i.16xlarge'
 instance_type_monitor: 't3.2xlarge'

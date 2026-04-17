@@ -59,7 +59,7 @@ stress_cmd: [
 
 availability_zone: 'a,b,c'
 n_db_nodes: [6, 6]
-n_loaders: '2 2'
+n_loaders: [2, 2]
 
 region_aware_loader: true
 simulated_racks: 0
