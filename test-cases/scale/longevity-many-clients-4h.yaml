@@ -13,7 +13,7 @@ instance_type_db: 'i4i.metal'
 instance_type_loader: 'c7i.large'
 instance_type_monitor: 'm6i.2xlarge'
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '031'
+nemesis_seed: 31
 seeds_num: 3
 round_robin: true
 keyspace_num: 50
