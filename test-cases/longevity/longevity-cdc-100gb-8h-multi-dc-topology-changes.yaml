@@ -16,7 +16,7 @@ simulated_racks: 0
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'topology_changes'
-nemesis_seed: '032'
+nemesis_seed: 32
 nemesis_add_node_cnt: 2
 
 round_robin: true
