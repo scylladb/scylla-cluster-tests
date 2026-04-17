@@ -12,7 +12,7 @@ stress_cmd: >-
 
 region_name: 'us-east-1 eu-west-1'
 n_db_nodes: [6, 6]
-n_loaders: '2 2'
+n_loaders: [2, 2]
 
 rack_aware_loader: true
 region_aware_loader: true
