@@ -8,5 +8,5 @@ run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", 
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: "not disruptive"
-nemesis_seed: '24325345'
+nemesis_seed: 24325345
 user_prefix: 'longevity-200gb-48h-rf1'

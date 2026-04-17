@@ -24,7 +24,7 @@ user_prefix: 'long-5000-tables'
 cluster_health_check: true
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '404'
+nemesis_seed: 404
 # NOTE: health checks will take some time, so, don't add significant waiting in this part
 nemesis_interval: 3
 

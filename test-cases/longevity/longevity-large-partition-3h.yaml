@@ -38,7 +38,7 @@ round_robin: true
 instance_type_db: 'i4i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '013'
+nemesis_seed: 13
 nemesis_interval: 15
 nemesis_during_prepare: false
 
