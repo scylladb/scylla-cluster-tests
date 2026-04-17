@@ -7,7 +7,7 @@ instance_type_db: 'i4i.large'
 instance_type_loader: 'c6i.large'
 
 region_name: 'us-east-1'
-n_db_nodes: '3'
+n_db_nodes: 3
 n_loaders: 1
 
 client_encrypt: true
