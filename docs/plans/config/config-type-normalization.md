@@ -86,6 +86,126 @@ The SCT configuration system defines four union-type aliases — `StringOrList`,
 
 **DictOrStr consumers** (all assume dict, ~20 sites): Every consumer calls `.get()`, `.items()`, or subscript access. None handle a raw string. No isinstance guards exist — a non-dict return would crash at all sites.
 
+## Affected Config Options
+
+**85 parameters total** across 4 type aliases.
+
+### `IntOrList` — 6 bare + 6 via `MultitenantValue` = 12 params
+
+Bare `IntOrList`:
+- `n_db_nodes` (line 521)
+- `n_test_oracle_db_nodes` (line 524)
+- `n_loaders` (line 527)
+- `n_monitor_nodes` (line 530)
+- `cluster_target_size` (line 918)
+- `n_db_zero_token_nodes` (line 1206)
+
+`MultitenantValue(IntOrList)`:
+- `nemesis_interval` (line 900)
+- `nemesis_sequence_sleep_between_ops` (line 903)
+- `nemesis_seed` (line 909)
+- `nemesis_add_node_cnt` (line 912)
+- `space_node_threshold` (line 921)
+- `nemesis_multiply_factor` (line 2016)
+
+### `StringOrList` — 46 bare + 9 via `MultitenantValue` = 55 params
+
+Bare `StringOrList`:
+- `config_files` (line 477)
+- `scylla_apt_keys` (line 579)
+- `assert_linux_distro_features` (line 624)
+- `email_recipients` (line 785)
+- `experimental_features` (line 797)
+- `region_name` (line 978)
+- `backup_bucket_location` (line 1049)
+- `scylla_d_overrides_files` (line 1058)
+- `gce_datacenter` (line 1065)
+- `aws_dedicated_host_ids` (line 1125)
+- `azure_region_name` (line 1259)
+- `oci_region_name` (line 1289)
+- `eks_admin_arn` (line 1342)
+- `db_nodes_private_ip` (line 1491)
+- `db_nodes_public_ip` (line 1494)
+- `loaders_private_ip` (line 1497)
+- `loaders_public_ip` (line 1500)
+- `monitor_nodes_private_ip` (line 1503)
+- `monitor_nodes_public_ip` (line 1506)
+- `pre_create_keyspace` (line 1556)
+- `post_prepare_cql_cmds` (line 1559)
+- `stress_read_cmd` (line 1582)
+- `prepare_verify_cmd` (line 1588)
+- `stress_cmd_no_mv` (line 1660)
+- `stress_cmd_no_mv_profile` (line 1663)
+- `cs_user_profiles` (line 1666)
+- `prepare_cs_user_profiles` (line 1669)
+- `stress_cmd_mv` (line 1678)
+- `prepare_stress_cmd` (line 1681)
+- `stress_cmd_lwt_i` (line 1698)
+- `stress_cmd_lwt_d` (line 1701)
+- `stress_cmd_lwt_u` (line 1704)
+- `stress_cmd_lwt_ine` (line 1707)
+- `stress_cmd_lwt_uc` (line 1710)
+- `stress_cmd_lwt_ue` (line 1713)
+- `stress_cmd_lwt_de` (line 1717)
+- `stress_cmd_lwt_dc` (line 1720)
+- `stress_cmd_lwt_mixed` (line 1723)
+- `stress_cmd_lwt_mixed_baseline` (line 1726)
+- `stress_cmd_1` (line 1761)
+- `stress_cmd_complex_prepare` (line 1764)
+- `prepare_write_stress` (line 1767)
+- `stress_cmd_read_10m` (line 1770)
+- `stress_cmd_read_cl_one` (line 1773)
+- `stress_cmd_read_60m` (line 1776)
+- `stress_cmd_complex_verify_read` (line 1779)
+- `stress_cmd_complex_verify_more` (line 1782)
+- `write_stress_during_entire_test` (line 1785)
+- `verify_data_after_entire_test` (line 1788)
+- `stress_cmd_read_cl_quorum` (line 1791)
+- `verify_stress_after_cluster_upgrade` (line 1794)
+- `stress_cmd_complex_verify_delete` (line 1800)
+- `stress_before_upgrade` (line 1937)
+- `large_partition_stress_during_upgrade` (line 1941)
+- `stress_during_entire_upgrade` (line 1945)
+- `stress_after_cluster_upgrade` (line 1948)
+- `jepsen_test_cmd` (line 1956)
+- `max_events_severities` (line 1969)
+
+`MultitenantValue(StringOrList)`:
+- `nemesis_class_name` (line 885)
+- `stress_cmd` (line 934)
+- `stress_cmd_w` (line 1630)
+- `stress_cmd_r` (line 1633)
+- `stress_cmd_m` (line 1636)
+- `stress_cmd_read_disk` (line 1639)
+- `stress_cmd_cache_warmup` (line 1645)
+- `prepare_write_cmd` (line 1651)
+- `nemesis_selector` (line 2010)
+
+### `BooleanOrList` — 0 bare + 3 via `MultitenantValue` = 3 params
+
+`MultitenantValue(BooleanOrList)`:
+- `nemesis_during_prepare` (line 906)
+- `nemesis_filter_seeds` (line 929)
+- `round_robin` (line 1547)
+
+### `DictOrStr` / `DictOrStrOrPydantic` — 12 params
+
+`DictOrStr`:
+- `agent` (line 667)
+- `alternator_test_table` (line 850)
+- `teardown_validators` (line 1116)
+- `skip_test_stages` (line 1200)
+- `latency_decorator_error_thresholds` (line 1216)
+- `mgmt_snapshots_preparer_params` (line 1625)
+- `perf_gradual_threads` (line 1684)
+- `perf_gradual_throttle_steps` (line 1688)
+- `perf_gradual_step_duration` (line 1692)
+- `stress_image` (line 2025)
+- `latte_schema_parameters` (line 2032)
+
+`DictOrStrOrPydantic`:
+- `append_scylla_yaml` (line 877)
+
 ## Goals
 
 1. **Canonical output types**: Each `BeforeValidator` returns exactly one type — `list[T]` for `*OrList` types, `dict` for `DictOrStr` — with no scalar/collection ambiguity.
