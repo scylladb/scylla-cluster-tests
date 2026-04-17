@@ -1,7 +1,7 @@
 test_duration: 840
 stress_cmd: [
-"JVM_OPTION='-Xms8033M -Xmx8033M -Xmn400M' cassandra-stress user profile=/tmp/large_collections.yaml ops'(insert=3,read1=1,update1=1)' cl=QUORUM duration=720m -mode cql3 native -rate threads=20"
-             ]
+  "JVM_OPTION='-Xms8033M -Xmx8033M -Xmn400M' cassandra-stress user profile=/tmp/large_collections.yaml ops'(insert=3,read1=1,update1=1)' cl=QUORUM duration=720m -mode cql3 native -rate threads=20"
+]
 
 n_db_nodes: 6
 n_loaders: 1
@@ -9,7 +9,7 @@ n_loaders: 1
 instance_type_db: 'i3en.3xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '012'
+nemesis_seed: 12
 nemesis_interval: 15
 
 user_prefix: 'longevity-large-collections-12h'
