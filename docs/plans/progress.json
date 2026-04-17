@@ -216,6 +216,16 @@
       "phases_done": 0
     },
     {
+      "id": "config-type-normalization",
+      "title": "Config Type Normalization",
+      "file": "config/config-type-normalization.md",
+      "domain": "config",
+      "status": "draft",
+      "created": "2026-04-17",
+      "phases_total": 5,
+      "phases_done": 0
+    },
+    {
       "id": "sct-config-followup-refactoring",
       "title": "SCT Config Follow-up Refactoring",
       "domain": "config",
