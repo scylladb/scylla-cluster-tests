@@ -28,7 +28,7 @@ sizing_loader:
   memory: '>=4'
 
 region_name: 'us-east-1'
-n_db_nodes: '3'
+n_db_nodes: 3
 n_loaders: 1
 
 client_encrypt: true

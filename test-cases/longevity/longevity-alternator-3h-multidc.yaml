@@ -28,7 +28,7 @@ stress_cmd: [
 ]
 
 round_robin: true
-n_db_nodes: '3 3'
+n_db_nodes: [3, 3]
 sizing_db:
   vcpu: '>=2'
   memory: '>=16'
