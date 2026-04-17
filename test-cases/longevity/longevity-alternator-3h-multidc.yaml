@@ -35,7 +35,7 @@ sizing_db:
   # Lowered from >=128 to >=96 so OCI can match; other clouds still pick >=128 naturally.
   memory: '>=96'
   local_disk_gb: '>=3000'  # ~80% of i4i.4xlarge's 3750GB
-n_loaders: '2 2'
+n_loaders: [2, 2]
 
 rack_aware_loader: true
 region_aware_loader: true
