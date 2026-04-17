@@ -33,7 +33,7 @@ sizing_loader:
   memory: '>=16'
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 10}']
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '111'
+nemesis_seed: 111
 nemesis_interval: 2
 
 user_prefix: 'longevity-10gb-3h'

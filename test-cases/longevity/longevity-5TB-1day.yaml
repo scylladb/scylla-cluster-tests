@@ -48,7 +48,7 @@ sizing_loader:
   memory: '>=32'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '031'
+nemesis_seed: 31
 nemesis_interval: 30
 
 user_prefix: 'longevity-5TB'
