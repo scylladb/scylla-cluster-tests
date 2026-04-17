@@ -30,7 +30,7 @@ instance_type_loader: 'c7i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'disruptive and not (sla or limited or manager_operation or config_changes)'
-nemesis_seed: '007'
+nemesis_seed: 7
 nemesis_interval: 3
 nemesis_during_prepare: false
 

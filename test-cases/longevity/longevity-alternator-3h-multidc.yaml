@@ -37,7 +37,7 @@ region_aware_loader: true
 simulated_racks: 0
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '006'
+nemesis_seed: 6
 nemesis_during_prepare: false
 
 user_prefix: 'alternator-3h-multidc'

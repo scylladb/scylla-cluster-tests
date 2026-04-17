@@ -24,8 +24,7 @@ sizing_loader:
   memory: '>=16'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '027'
-
+nemesis_seed: 27
 user_prefix: 'longevity-tls-50gb-3d'
 
 space_node_threshold: 644245094

@@ -16,8 +16,7 @@ simulated_racks: 0
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'topology_changes'
-nemesis_seed: '023'
-
+nemesis_seed: 23
 round_robin: true
 
 user_prefix: 'longevity-cdc-100gb-3h-multidc-large-cluster'
