@@ -39,8 +39,7 @@ sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   arch: x86_64
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '032'
-
+nemesis_seed: 32
 user_prefix: 'longevity-100gb-4h'
 space_node_threshold: 64424
 
