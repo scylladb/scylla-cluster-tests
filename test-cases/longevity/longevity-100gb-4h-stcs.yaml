@@ -13,7 +13,17 @@ seeds_num: 3
 instance_type_db: 'i7i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
+<<<<<<< HEAD
 nemesis_seed: '032'
+||||||| parent of db7b8a126 (refactor(treewide): change nemesis_seed in configs from str to int)
+# the test targets SizeTieredCompactionStrategy; keep it for the whole run
+nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
+nemesis_seed: '032'
+=======
+# the test targets SizeTieredCompactionStrategy; keep it for the whole run
+nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
+nemesis_seed: 32
+>>>>>>> db7b8a126 (refactor(treewide): change nemesis_seed in configs from str to int)
 
 user_prefix: 'longevity-100gb-4h-stcs'
 space_node_threshold: 64424

@@ -38,7 +38,7 @@ instance_type_db: 'i4i.4xlarge'
 n_db_nodes: 6
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '005'
+nemesis_seed: 5
 nemesis_during_prepare: false
 
 user_prefix: 'alternator-3h'

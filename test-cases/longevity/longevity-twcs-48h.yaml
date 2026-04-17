@@ -19,7 +19,17 @@ sizing_db:
   local_disk_gb: '>=900'
 
 nemesis_class_name: 'SisyphusMonkey'
+<<<<<<< HEAD
 nemesis_seed: '025'
+||||||| parent of db7b8a126 (refactor(treewide): change nemesis_seed in configs from str to int)
+# exclude nemeses that change TWCS parameters
+nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
+nemesis_seed: '025'
+=======
+# exclude nemeses that change TWCS parameters
+nemesis_selector: 'not ModifyTableCompactionMonkey and not ModifyTableTwcsWindowSizeMonkey'
+nemesis_seed: 25
+>>>>>>> db7b8a126 (refactor(treewide): change nemesis_seed in configs from str to int)
 nemesis_interval: 15
 nemesis_during_prepare: false
 space_node_threshold: 64424
