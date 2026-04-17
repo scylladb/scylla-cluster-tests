@@ -14,7 +14,6 @@
 import contextlib
 import json
 import os
-import tempfile
 from typing import List
 from unittest.mock import patch
 
@@ -608,11 +607,12 @@ class IntegrationTests:
 
     @property
     def temp_dir(self):
-        return tempfile.mkdtemp()
+        return str(self._tmp_path)
 
     @pytest.fixture(autouse=True)
-    def fixture_env(self, monkeypatch):
+    def fixture_env(self, monkeypatch, tmp_path):
         self.monkeypatch = monkeypatch
+        self._tmp_path = tmp_path
 
     def _run_test(self, config_path: str, expected_node_config: str, region_names: str):
         with (

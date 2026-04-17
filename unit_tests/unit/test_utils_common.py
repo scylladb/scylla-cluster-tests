@@ -13,9 +13,8 @@
 
 import os
 import time
-import hashlib
-import shutil
 import logging
+import shutil
 import unittest.mock
 from pathlib import Path
 
@@ -24,8 +23,6 @@ import pytest
 from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud, get_testrun_dir
 from sdcm.utils.sstable import load_inventory
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
-
-from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, FakeSstableRemoter
 
 from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode, FakeSstableRemoter
 
@@ -51,17 +48,10 @@ class TestUtils:
 
 
 class TestDownloadDir:
-    @staticmethod
-    def clear_cloud_downloaded_path(url):
-        md5 = hashlib.md5()
-        md5.update(url.encode("utf-8"))
-        tmp_dir = os.path.join("/tmp/download_from_cloud", md5.hexdigest())
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-
-    def test_update_db_packages_s3(self):
+    def test_update_db_packages_s3(self, tmp_path):
         sct_update_db_packages = "s3://downloads.scylladb.com/rpm/centos/scylladb-nightly/scylla/7/x86_64/repodata/"
 
-        self.clear_cloud_downloaded_path(sct_update_db_packages)
+        dst_dir = str(tmp_path / "s3_download")
 
         def touch_file(client, bucket, key, local_file_path):
             Path(local_file_path).touch()
@@ -73,11 +63,11 @@ class TestDownloadDir:
             mock_s3_client.return_value.list_objects_v2.return_value = {
                 "Contents": [{"Key": "rpm/centos/scylladb-nightly/scylla/7/x86_64/repodata/repomd.xml"}]
             }
-            update_db_packages = download_dir_from_cloud(sct_update_db_packages)
+            update_db_packages = download_dir_from_cloud(sct_update_db_packages, dst_dir=dst_dir)
 
         assert os.path.exists(os.path.join(update_db_packages, "repomd.xml"))
 
-    def test_update_db_packages_gce(self):
+    def test_update_db_packages_gce(self, tmp_path):
         sct_update_db_packages = "gs://scratch.scylladb.com/sct_test/"
 
         class FakeObject:
@@ -88,7 +78,7 @@ class TestDownloadDir:
             def download_to_filename(filename, *_, **__):
                 Path(filename).touch(exist_ok=True)
 
-        self.clear_cloud_downloaded_path(sct_update_db_packages)
+        dst_dir = str(tmp_path / "gce_download")
         test_file_names = ["sct_test/", "sct_test/bentsi.txt", "sct_test/charybdis.fs"]
         fake_client = unittest.mock.MagicMock()
         fake_client.list_blobs.return_value = [FakeObject(name=fname) for fname in test_file_names]
@@ -96,7 +86,7 @@ class TestDownloadDir:
             "sdcm.utils.common.get_gce_storage_client",
             return_value=(fake_client, {}),
         ):
-            update_db_packages = download_dir_from_cloud(sct_update_db_packages)
+            update_db_packages = download_dir_from_cloud(sct_update_db_packages, dst_dir=dst_dir)
         for fname in test_file_names:
             assert (Path(update_db_packages) / os.path.basename(fname)).exists()
 
