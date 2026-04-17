@@ -33,7 +33,7 @@ sizing_db:
   vcpu: '>=2'
   memory: '>=16'
   local_disk_gb: '>=350'  # ~80% of i8g.large's 468GB; cluster is small (~50GB), doesn't need a bigger machine
-n_loaders: '2 2'
+n_loaders: [2, 2]
 
 rack_aware_loader: true
 region_aware_loader: true
