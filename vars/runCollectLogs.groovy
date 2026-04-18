@@ -7,6 +7,10 @@ def call(Map params, String region){
     if (params.gce_datacenter) {
         current_gce_datacenter = groovy.json.JsonOutput.toJson(params.gce_datacenter)
     }
+    def current_oci_region = ""
+    if (params.oci_region_name) {
+        current_oci_region = initAwsRegionParam(params.oci_region_name, region)
+    }
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
     sh """#!/bin/bash
@@ -22,6 +26,9 @@ def call(Map params, String region){
     fi
     if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
         export SCT_AZURE_REGION_NAME=${params.azure_region_name}
+    fi
+    if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
+        export SCT_OCI_REGION_NAME=${current_oci_region}
     fi
     if [[ "${params.backend}" == "xcloud" ]] ; then
         export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
