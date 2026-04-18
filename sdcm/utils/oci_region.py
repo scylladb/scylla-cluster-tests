@@ -25,7 +25,10 @@ import hashlib
 import logging
 import time
 from ipaddress import ip_network
-from functools import cached_property
+from functools import (
+    cache,
+    cached_property,
+)
 
 import oci
 from oci.core.models import (
@@ -33,7 +36,10 @@ from oci.core.models import (
     AddSecurityRuleDetails,
     CreateInternetGatewayDetails,
     CreateNatGatewayDetails,
+    CreateDrgAttachmentDetails,
+    CreateDrgDetails,
     CreateNetworkSecurityGroupDetails,
+    CreateRemotePeeringConnectionDetails,
     CreateRouteTableDetails,
     CreateSecurityListDetails,
     CreateSubnetDetails,
@@ -43,6 +49,9 @@ from oci.core.models import (
     PortRange,
     RouteRule,
     TcpOptions,
+    UpdateRouteTableDetails,
+    UpdateSecurityListDetails,
+    VcnDrgAttachmentNetworkCreateDetails,
 )
 from oci.identity.models import (
     CreateTagDetails,
@@ -356,7 +365,8 @@ class OciRegion:
             return self._create_nsg(nsg_name, suffix)
 
     def _find_nsg(self, display_name, _cache={}):  # noqa: B006
-        if existing := _cache.get(display_name):
+        cache_key = (self.region_name, display_name)
+        if existing := _cache.get(cache_key):
             return existing
         nsgs = oci.pagination.list_call_get_all_results_generator(
             self.network_client.list_network_security_groups,
@@ -367,7 +377,7 @@ class OciRegion:
         )
         while current_nsg := next(nsgs, None):
             if current_nsg.lifecycle_state == "AVAILABLE":
-                _cache[display_name] = current_nsg
+                _cache[cache_key] = current_nsg
                 return current_nsg
         return None
 
@@ -539,9 +549,10 @@ class OciRegion:
         return self.SCT_SUBNET_NAME_TMPL.format(suffix=suffix)
 
     def subnet(self, public: bool = False, _cache: dict = {}):  # noqa: B006
-        if existing := _cache.get(public):
+        cache_key = (self.region_name, public)
+        if existing := _cache.get(cache_key):
             return existing
-        with KEY_BASED_LOCKS.get_lock(f"oci-subnet--public-{public}"):
+        with KEY_BASED_LOCKS.get_lock(f"oci-subnet-{self.region_name}-public-{public}"):
             name = self.subnet_name(public=public)
             subnets = oci.pagination.list_call_get_all_results_generator(
                 self.network_client.list_subnets,
@@ -552,7 +563,7 @@ class OciRegion:
             )
             while current_subnet := next(subnets, None):
                 if current_subnet.lifecycle_state == "AVAILABLE":
-                    _cache[public] = current_subnet
+                    _cache[cache_key] = current_subnet
                     return current_subnet
         return None
 
@@ -719,6 +730,167 @@ class OciRegion:
             LOGGER.error("Failed to determine home region: %s", exc)
             raise
 
+    # ── DRG (Dynamic Routing Gateway) for cross-region peering ───────────
+
+    SCT_DRG_NAME = "SCT-2-drg"
+    SCT_RPC_NAME_TMPL = "SCT-2-rpc-{peer}"
+
+    @cached_property
+    def drg(self):
+        with KEY_BASED_LOCKS.get_lock(f"oci-drg--{self.region_name}"):
+            existing = self._find_drg()
+            if existing:
+                return existing
+            return self._create_drg()
+
+    def _find_drg(self):
+        drgs = oci.pagination.list_call_get_all_results_generator(
+            self.network_client.list_drgs,
+            yield_mode="record",
+            compartment_id=self.compartment_id,
+        )
+        while current_drg := next(drgs, None):
+            if current_drg.display_name == self.SCT_DRG_NAME and current_drg.lifecycle_state == "AVAILABLE":
+                return current_drg
+        return None
+
+    def _create_drg(self):
+        LOGGER.info("Creating DRG '%s' in %s", self.SCT_DRG_NAME, self.region_name)
+        details = CreateDrgDetails(
+            compartment_id=self.compartment_id,
+            display_name=self.SCT_DRG_NAME,
+            freeform_tags=self._base_tags(self.SCT_DRG_NAME),
+        )
+        response = self.network_client.create_drg(details)
+        return self._wait_for_state(
+            self.network_client,
+            self.network_client.get_drg,
+            response.data.id,
+            "AVAILABLE",
+        )
+
+    @cache
+    def get_or_create_drg_attachment(self):
+        with KEY_BASED_LOCKS.get_lock(f"oci-drg-att--{self.region_name}"):
+            existing = self._find_drg_attachment()
+            if existing:
+                return existing
+            return self._create_drg_attachment()
+
+    def _find_drg_attachment(self):
+        attachments = oci.pagination.list_call_get_all_results_generator(
+            self.network_client.list_drg_attachments,
+            yield_mode="record",
+            compartment_id=self.compartment_id,
+            drg_id=self.drg.id,
+        )
+        while att := next(attachments, None):
+            if att.lifecycle_state == "ATTACHED":
+                net = att.network_details
+                if net and getattr(net, "id", None) == self.vcn.id:
+                    return att
+        return None
+
+    def _create_drg_attachment(self):
+        display_name = f"{self.SCT_DRG_NAME}-att-vcn"
+        LOGGER.info("Attaching DRG to VCN in %s", self.region_name)
+        details = CreateDrgAttachmentDetails(
+            drg_id=self.drg.id,
+            display_name=display_name,
+            network_details=VcnDrgAttachmentNetworkCreateDetails(
+                type="VCN",
+                id=self.vcn.id,
+            ),
+            freeform_tags=self._base_tags(display_name),
+        )
+        response = self.network_client.create_drg_attachment(details)
+        return self._wait_for_state(
+            self.network_client,
+            self.network_client.get_drg_attachment,
+            response.data.id,
+            "ATTACHED",
+        )
+
+    def get_or_create_rpc(self, peer_region_name: str):
+        """Get or create a Remote Peering Connection for a given peer region."""
+        rpc_name = self.SCT_RPC_NAME_TMPL.format(peer=peer_region_name)
+        with KEY_BASED_LOCKS.get_lock(f"oci-rpc--{self.region_name}--{peer_region_name}"):
+            existing = self._find_rpc(rpc_name)
+            if existing:
+                return existing
+            return self._create_rpc(rpc_name)
+
+    def _find_rpc(self, display_name: str):
+        rpcs = oci.pagination.list_call_get_all_results_generator(
+            self.network_client.list_remote_peering_connections,
+            yield_mode="record",
+            compartment_id=self.compartment_id,
+            drg_id=self.drg.id,
+        )
+        while rpc := next(rpcs, None):
+            if rpc.display_name == display_name and rpc.lifecycle_state == "AVAILABLE":
+                return rpc
+        return None
+
+    def _create_rpc(self, display_name: str):
+        LOGGER.info("Creating RPC '%s' on DRG in %s", display_name, self.region_name)
+        details = CreateRemotePeeringConnectionDetails(
+            compartment_id=self.compartment_id,
+            drg_id=self.drg.id,
+            display_name=display_name,
+        )
+        response = self.network_client.create_remote_peering_connection(details)
+        return self._wait_for_state(
+            self.network_client,
+            self.network_client.get_remote_peering_connection,
+            response.data.id,
+            "AVAILABLE",
+        )
+
+    def add_drg_route_to_tables(self, peer_vcn_cidr: str):
+        """Add a route rule for the peer VCN CIDR via DRG to all VCN route tables."""
+        drg_id = self.drg.id
+        for rt_name_suffix, rt in [("public", self.public_route_table), ("private", self.private_route_table)]:
+            existing_rules = rt.route_rules or []
+            already_routed = any(
+                r.destination == str(peer_vcn_cidr) and r.network_entity_id == drg_id for r in existing_rules
+            )
+            if already_routed:
+                LOGGER.info("Route to %s via DRG already exists in %s route table", peer_vcn_cidr, rt_name_suffix)
+                continue
+            new_rule = RouteRule(
+                destination=str(peer_vcn_cidr),
+                destination_type="CIDR_BLOCK",
+                network_entity_id=drg_id,
+                description=f"Route to peer VCN {peer_vcn_cidr} via DRG",
+            )
+            updated_rules = [*existing_rules, new_rule]
+            LOGGER.info("Adding route to %s via DRG in %s route table", peer_vcn_cidr, rt_name_suffix)
+            self.network_client.update_route_table(
+                rt.id,
+                UpdateRouteTableDetails(route_rules=updated_rules),
+            )
+
+    def allow_cross_vcn_traffic(self, peer_vcn_cidr: str):
+        """Add ingress rules to the security list to allow all traffic from a peer VCN CIDR."""
+        sl = self.security_list
+        existing_ingress = sl.ingress_security_rules or []
+        already_allowed = any(r.source == str(peer_vcn_cidr) and r.protocol == "all" for r in existing_ingress)
+        if already_allowed:
+            LOGGER.info("Cross-VCN ingress from %s already allowed", peer_vcn_cidr)
+            return
+        new_rule = IngressSecurityRule(
+            protocol="all",
+            source=str(peer_vcn_cidr),
+            description=f"Allow all traffic from peer VCN {peer_vcn_cidr}",
+        )
+        updated_ingress = list(existing_ingress) + [new_rule]
+        LOGGER.info("Adding cross-VCN ingress rule for %s in %s", peer_vcn_cidr, self.region_name)
+        self.network_client.update_security_list(
+            sl.id,
+            UpdateSecurityListDetails(ingress_security_rules=updated_ingress),
+        )
+
     def configure_network(self):
         _ = self.vcn
         _ = self.security_list
@@ -767,7 +939,7 @@ class OciRegion:
         label_source = f"{self.region_name}-{visibility}"
         checksum = hashlib.sha1(label_source.encode("utf-8")).hexdigest()[:7]
         base = self._dns_label_from_name(visibility)
-        return f"{base[:7]}-{checksum}"
+        return f"{base[:7]}{checksum}"
 
     @staticmethod
     def _dns_label_from_name(name: str) -> str:

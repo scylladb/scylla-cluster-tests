@@ -355,7 +355,11 @@ class OciCluster(cluster.BaseCluster):
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
             definitions.append(
                 self._definition_builder.build_instance_definition(
-                    region=region, node_type=self.node_type, index=node_index, instance_type=instance_type
+                    region=region,
+                    node_type=self.node_type,
+                    index=node_index,
+                    dc_idx=dc_idx,
+                    instance_type=instance_type,
                 )
             )
         return provision_instances_with_fallback(
