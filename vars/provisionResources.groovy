@@ -7,6 +7,10 @@ def call(Map params, String region){
     }
 
     def current_region = initAwsRegionParam(params.region, region)
+    def current_oci_region = ""
+    if (params.oci_region_name) {
+        current_oci_region = initAwsRegionParam(params.oci_region_name, region)
+    }
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
 
@@ -45,7 +49,7 @@ def call(Map params, String region){
     fi
 
     if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
-        export SCT_OCI_REGION_NAME=${params.oci_region_name}
+        export SCT_OCI_REGION_NAME=${current_oci_region}
     fi
 
     if [[ -n "${params.new_version ? params.new_version : ''}" ]] ; then
