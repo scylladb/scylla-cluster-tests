@@ -3,6 +3,10 @@
 List<Integer> call(Map params, String region){
     // handle params which can be a json list
     def current_region = initAwsRegionParam(params.region, region)
+    def current_oci_region = ""
+    if (params.oci_region_name) {
+        current_oci_region = initAwsRegionParam(params.oci_region_name, region)
+    }
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cmd = """#!/bin/bash
     export SCT_CLUSTER_BACKEND="${params.backend}"
@@ -17,6 +21,10 @@ List<Integer> call(Map params, String region){
 
     if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
         export SCT_AZURE_REGION_NAME=${groovy.json.JsonOutput.toJson(params.azure_region_name)}
+    fi
+
+    if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
+        export SCT_OCI_REGION_NAME=${current_oci_region}
     fi
 
     if [[ "${params.backend}" == "xcloud" ]] ; then
