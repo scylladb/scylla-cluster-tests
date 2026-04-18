@@ -128,6 +128,7 @@ from sdcm.utils.gce_builder import GceBuilder
 from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.oci_builder import OciBuilder
 from sdcm.utils.aws_peering import AwsVpcPeering
+from sdcm.utils.oci_peering import OciVcnPeering
 from sdcm.utils.get_username import get_username
 from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
 from sdcm.utils.aws_utils import AwsArchType
@@ -2126,6 +2127,14 @@ def prepare_regions(cloud_provider, regions):
 def configure_aws_peering(regions):
     add_file_logger()
     peering = AwsVpcPeering(regions)
+    peering.configure()
+
+
+@cli.command("configure-oci-peering", help="Configure OCI cross-region VCN peering for multi-dc SCT runs")
+@click.option("-r", "--regions", type=CloudRegion(cloud_provider="oci"), default=[], help="OCI regions", multiple=True)
+def configure_oci_peering(regions):
+    add_file_logger()
+    peering = OciVcnPeering(regions or None)
     peering.configure()
 
 
