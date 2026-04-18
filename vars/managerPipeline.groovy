@@ -320,6 +320,10 @@ def call(Map pipelineParams) {
                                         // handle params which can be a json list
                                         def region = initAwsRegionParam(params.region, builder.region)
                                         def datacenter = groovy.json.JsonOutput.toJson(params.gce_datacenter)
+                                        def oci_region = ""
+                                        if (params.oci_region_name) {
+                                            oci_region = initAwsRegionParam(params.oci_region_name, builder.region)
+                                        }
                                         def test_config = groovy.json.JsonOutput.toJson(params.test_config)
                                         def cloud_provider = params.backend.trim().toLowerCase()
 
@@ -335,7 +339,7 @@ def call(Map pipelineParams) {
                                             export SCT_AZURE_REGION_NAME=${params.azure_region_name}
                                         fi
                                         if [[ -n "${params.oci_region_name ? params.oci_region_name : ''}" ]] ; then
-                                            export SCT_OCI_REGION_NAME=${params.oci_region_name}
+                                            export SCT_OCI_REGION_NAME=${oci_region}
                                         fi
                                         export SCT_CONFIG_FILES=${test_config}
                                         export SCT_COLLECT_LOGS=false

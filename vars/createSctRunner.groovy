@@ -27,8 +27,6 @@ def call(Map params, Integer test_duration, String region) {
 
     if ( params.backend.equals("azure") ) {
         region_zone_arg = "--region " + params.azure_region_name
-    } else if ( params.backend.equals("oci") )  {
-        region_zone_arg = "--region " + params.oci_region_name
     } else {
         region_zone_arg = "--region " + region
     }
