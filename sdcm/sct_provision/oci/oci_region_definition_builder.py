@@ -62,7 +62,17 @@ class OciDefinitionBuilder(DefinitionBuilder):
     def build_instance_definition(
         self, region: str, node_type: NodeTypeType, index: int, dc_idx: int = 0, instance_type: str = None
     ):
-        definition = super().build_instance_definition(region, node_type, index, instance_type)
+        definition = super().build_instance_definition(region, node_type, index, dc_idx, instance_type)
+
+        # Select the correct region-specific image from the space-separated list
+        if definition.image_id and " " in definition.image_id:
+            images = [img.strip() for img in definition.image_id.split()]
+            definition.image_id = images[dc_idx] if dc_idx < len(images) else images[0]
+
+        # Select the correct region-specific instance type from the space-separated list
+        if definition.type and " " in definition.type:
+            types = [t.strip() for t in definition.type.split()]
+            definition.type = types[dc_idx] if dc_idx < len(types) else types[0]
 
         # NOTE: set latest ubuntu image for loader and monitor nodes if not defined
         if not definition.image_id and "db" not in node_type:

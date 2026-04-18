@@ -4023,8 +4023,12 @@ class BaseCluster:
 
         # NOTE: following is needed in case of K8S where we init multiple DB clusters first
         #       and only then we add nodes to it calling code in parallel.
-        # round-robin racks when backend is aws and multiple az's are specified
-        azs = len(self.params.get("availability_zone").split(",")) if self.params.get("cluster_backend") == "aws" else 1
+        # round-robin racks when backend supports multiple az's
+        azs = (
+            len(self.params.get("availability_zone").split(","))
+            if self.params.get("cluster_backend") in ("aws", "oci")
+            else 1
+        )
         if add_nodes:
             if isinstance(n_nodes, list):
                 for dc_idx, num in enumerate(n_nodes):
