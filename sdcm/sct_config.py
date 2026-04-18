@@ -3601,8 +3601,8 @@ class SCTConfiguration(BaseModel):
                 case "oci":
                     if oci_region_names := self.get("oci_region_name"):
                         if not isinstance(oci_region_names, list):
-                            oci_region_names = [self.get("oci_region_name")]
-                        for region in self.get("oci_region_name"):
+                            oci_region_names = [oci_region_names]
+                        for region in oci_region_names:
                             assert oci_utils.is_shape_available(instance_type, region), (
                                 f"Instance type [{instance_type}] not supported in region [{region}]"
                             )
@@ -3731,9 +3731,11 @@ class SCTConfiguration(BaseModel):
 
         if backend == "oci":
             oci_image_db = self.get("oci_image_db").split()
-            oci_region_name = self.get("oci_region_name")[0] if self.get("oci_region_name") else ""
-            for image in oci_image_db:
-                tags = oci_utils.get_image_tags(oci_region_name, image, "scylla")
+            oci_region_names = self.get("oci_region_name") or []
+            if not isinstance(oci_region_names, list):
+                oci_region_names = [oci_region_names]
+            for image, region in zip(oci_image_db, oci_region_names):
+                tags = oci_utils.get_image_tags(region, image, "scylla")
                 if "user_data_format_version" not in tags.keys():
                     logging.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
                 self["user_data_format_version"] = tags.get("user_data_format_version", "3")
@@ -3825,8 +3827,10 @@ class SCTConfiguration(BaseModel):
             _is_enterprise = is_enterprise(scylla_version)
         elif backend == "oci":
             images = self.get("oci_image_db").split()
-            oci_region_name = self.get("oci_region_name")[0] if self.get("oci_region_name") else ""
-            tags = oci_utils.get_image_tags(oci_region_name, images[0], "scylla")
+            oci_region_names = self.get("oci_region_name") or []
+            if not isinstance(oci_region_names, list):
+                oci_region_names = [oci_region_names]
+            tags = oci_utils.get_image_tags(oci_region_names[0], images[0], "scylla")
             scylla_version = self._require_scylla_version_tag(
                 tags=tags,
                 resource_label="Oracle image",
