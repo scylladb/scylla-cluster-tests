@@ -441,6 +441,7 @@ available_backends: list[str] = [
 AWS_SUPPORTED_REGIONS: list[str] = [
     "eu-west-1",
     "eu-west-2",
+    "eu-west-3",
     "us-west-2",
     "us-east-1",
     "eu-north-1",

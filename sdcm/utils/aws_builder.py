@@ -20,9 +20,10 @@ import boto3
 import botocore
 import requests
 
-from sdcm.utils.aws_region import AwsRegion
-from sdcm.sct_runner import AwsSctRunner, AwsFipsSctRunner
 from sdcm.keystore import KeyStore
+from sdcm.sct_config import AWS_SUPPORTED_REGIONS
+from sdcm.sct_runner import AwsSctRunner, AwsFipsSctRunner
+from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.common import wait_ami_available
 
 LOGGER = logging.getLogger(__name__)
@@ -286,7 +287,7 @@ class AwsBuilder:
 
     @classmethod
     def configure_in_all_region(cls, regions=None):
-        regions = regions or ["eu-west-1", "eu-west-2", "eu-north-1", "eu-central-1", "us-east-1", "us-west-2"]
+        regions = regions or AWS_SUPPORTED_REGIONS
         for region_name in regions:
             region = cls(AwsRegion(region_name))
             region.configure_auto_scaling_group()
