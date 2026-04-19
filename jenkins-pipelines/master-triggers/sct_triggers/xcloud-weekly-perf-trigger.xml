@@ -34,7 +34,7 @@ requested_by_user=dimakr</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../scylla-master/perf-regression/scylla-cloud-perf-regression-predefined-throughput-steps-vnodes</projects>
+          <projects>../perf-regression/scylla-cloud-predefined-throughput-steps-sanity-vnodes</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
