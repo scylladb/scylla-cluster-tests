@@ -2,6 +2,8 @@ from textwrap import dedent
 
 import boto3
 
+from sdcm.sct_config import AWS_SUPPORTED_REGIONS
+
 region_names = {
     "us-east-1": "US East (N. Virginia)",
     "us-east-2": "US East (Ohio)",
@@ -28,7 +30,7 @@ region_names = {
 
 
 def main():
-    for region in ["us-east-1", "us-west-2", "eu-west-1", "eu-west-2", "eu-north-1", "eu-central-1"]:
+    for region in AWS_SUPPORTED_REGIONS:
         # Create an EC2 client
         ec2 = boto3.client("ec2", region_name=region)
 
