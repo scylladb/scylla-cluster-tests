@@ -2,7 +2,7 @@
   <actions/>
   <description>Triggers platform migration test weekly every Saturday at 02:00 UTC
 
-  Runs x86 to ARM batched per-rack migration with 50% disk utilization and tablets enabled.
+  Runs x86 to ARM batched per-rack migration with 50%% disk utilization and tablets enabled.
   </description>
   <scm class="hudson.scm.NullSCM"/>
   <disabled>false</disabled>
