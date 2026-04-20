@@ -298,7 +298,7 @@ class NemesisRunner:
         self.stats = {}
         self.nemesis_selector = nemesis_selector
         self.last_nemesis_event = None  # Track last nemesis event for this nemesis instance
-        # NOTE: 'cluster_index' is set in K8S multitenant case
+        # NOTE: 'cluster_index' is set in K8S tenant case
         if hasattr(self.tester, "cluster_index"):
             tenant_short_name = f"db{self.tester.cluster_index}"
             self.metrics_srv = nemesis_metrics_obj(metric_name_suffix=tenant_short_name)
@@ -1588,15 +1588,7 @@ class NemesisRunner:
             )
 
     def _get_neighbour_scylla_pods(self, scylla_pod):
-        if self.tester.params.get("k8s_tenants_num") < 2:
-            return []
-        matched_pods = KubernetesOps.list_pods(
-            scylla_pod.k8s_cluster,
-            namespace=None,
-            field_selector=f"spec.nodeName={scylla_pod.pod_spec.node_name}",
-            label_selector="app.kubernetes.io/name=scylla",
-        )
-        return [matched_pod for matched_pod in matched_pods if scylla_pod.name != matched_pod.metadata.name]
+        return []
 
     def disrupt_replace_scylla_node_on_kubernetes(self):
         if not self._is_it_on_kubernetes():
@@ -1771,7 +1763,7 @@ class NemesisRunner:
                 with self.action_log_scope(f"Running nodetool refresh on {node.name} node"):
                     system_log_follower = SstableLoadUtils.run_refresh(node, test_data=test_data[0])
                 # NOTE: resharding happens only if we have more than 1 core.
-                #       We may have 1 core in a K8S multitenant setup.
+                #       We may have 1 core in a K8S setup.
                 # If tablets in use, skipping resharding validation since it doesn't work the same as vnodes
                 if shards_num > 1 and not is_tablets_feature_enabled(self.cluster.data_nodes[0]):
                     self.actions_log.info(f"Validating resharding after refresh on {node.name}")

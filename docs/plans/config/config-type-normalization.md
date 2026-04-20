@@ -63,17 +63,17 @@ The SCT configuration system defines four union-type aliases — `StringOrList`,
 - `sdcm/sct_config.py`: line 4151
 - `sdcm/mgmt/operations.py`: lines 259, 261, 596, 598
 
-**`nemesis_seed`** (IntOrList via MultitenantValue) — 3 guards:
+**`nemesis_seed`** (IntOrList) — 3 guards:
 - `sdcm/utils/operations_thread.py`: line 129 — `if isinstance(nemesis_seed, list): nemesis_seed = nemesis_seed[0]`
 - `sdcm/tester.py`: lines 1546, 1548 — `if isinstance(nemesis_seeds, int):` wraps in list / `elif isinstance(nemesis_seeds, str):` splits
 
-**`stress_cmd`** (StringOrList via MultitenantValue) — 6 guards:
+**`stress_cmd`** (StringOrList) — 6 guards:
 - `sdcm/sct_config.py`: lines 3267, 3283, 4118
 - `sdcm/utils/loader_utils.py`: line 356
 - `longevity_test.py`: line 421
 - `unit_tests/unit/test_gradual_grow_throughput.py`: line 35
 
-**`prepare_write_cmd`** (StringOrList via MultitenantValue) — 4 guards:
+**`prepare_write_cmd`** (StringOrList) — 4 guards:
 - `performance_regression_test.py`: lines 225, 228
 - `longevity_test.py`: line 460
 - `performance_regression_alternator_test.py`: line 140
@@ -90,17 +90,14 @@ The SCT configuration system defines four union-type aliases — `StringOrList`,
 
 **85 parameters total** across 4 type aliases.
 
-### `IntOrList` — 6 bare + 6 via `MultitenantValue` = 12 params
+### `IntOrList` — 12 params
 
-Bare `IntOrList`:
 - `n_db_nodes` (line 521)
 - `n_test_oracle_db_nodes` (line 524)
 - `n_loaders` (line 527)
 - `n_monitor_nodes` (line 530)
 - `cluster_target_size` (line 918)
 - `n_db_zero_token_nodes` (line 1206)
-
-`MultitenantValue(IntOrList)`:
 - `nemesis_interval` (line 900)
 - `nemesis_sequence_sleep_between_ops` (line 903)
 - `nemesis_seed` (line 909)
@@ -108,9 +105,8 @@ Bare `IntOrList`:
 - `space_node_threshold` (line 921)
 - `nemesis_multiply_factor` (line 2016)
 
-### `StringOrList` — 46 bare + 9 via `MultitenantValue` = 55 params
+### `StringOrList` — 55 params
 
-Bare `StringOrList`:
 - `config_files` (line 477)
 - `scylla_apt_keys` (line 579)
 - `assert_linux_distro_features` (line 624)
@@ -169,8 +165,6 @@ Bare `StringOrList`:
 - `stress_after_cluster_upgrade` (line 1948)
 - `jepsen_test_cmd` (line 1956)
 - `max_events_severities` (line 1969)
-
-`MultitenantValue(StringOrList)`:
 - `nemesis_class_name` (line 885)
 - `stress_cmd` (line 934)
 - `stress_cmd_w` (line 1630)
@@ -181,9 +175,8 @@ Bare `StringOrList`:
 - `prepare_write_cmd` (line 1651)
 - `nemesis_selector` (line 2010)
 
-### `BooleanOrList` — 0 bare + 3 via `MultitenantValue` = 3 params
+### `BooleanOrList` — 3 params
 
-`MultitenantValue(BooleanOrList)`:
 - `nemesis_during_prepare` (line 906)
 - `nemesis_filter_seeds` (line 929)
 - `round_robin` (line 1547)
@@ -324,7 +317,7 @@ Each phase covers one type end-to-end: validator fix, type alias update, all con
 ### Phase 3: Normalize `BooleanOrList` → always `list[bool]`
 
 **Importance**: Important
-**Description**: Fix `boolean_or_space_separated_booleans` to always return `list[bool]`. Update `BooleanOrList` type alias. All `BooleanOrList` params are accessed via `MultitenantValue` which resolves to a scalar per-tenant, so no downstream consumer fixes are expected.
+**Description**: Fix `boolean_or_space_separated_booleans` to always return `list[bool]`. Update `BooleanOrList` type alias. No downstream consumer fixes are expected for `BooleanOrList` params.
 
 **Dependencies**: None (independent of Phases 1-2)
 
@@ -337,7 +330,7 @@ Each phase covers one type end-to-end: validator fix, type alias update, all con
   - Lines 227-228: Return `[bool(strtobool(values[0]))]` instead of bare bool
 - `BooleanOrList` type alias (line 236): Change `bool | list[bool]` → `list[bool]`.
 
-**Consumer verification**: All `BooleanOrList` params (`nemesis_during_prepare`, `nemesis_filter_seeds`, `round_robin`) are wrapped in `MultitenantValue`, which resolves per-tenant before access. Verify `MultitenantValue(list[bool])` = `list[bool] | dict[str, list[bool]]` works correctly.
+**Consumer verification**: All `BooleanOrList` params (`nemesis_during_prepare`, `nemesis_filter_seeds`, `round_robin`) are used directly. Verify list access patterns work correctly after the type change.
 
 **Unit tests for `boolean_or_space_separated_booleans`**:
 - `True` → `[True]`; `False` → `[False]`
@@ -350,7 +343,6 @@ Each phase covers one type end-to-end: validator fix, type alias update, all con
 **Definition of Done**:
 - [ ] `boolean_or_space_separated_booleans` always returns `list[bool] | None`
 - [ ] `BooleanOrList` declared as `list[bool]`
-- [ ] MultitenantValue-wrapped BooleanOrList params still resolve correctly per-tenant
 - [ ] Unit tests for `boolean_or_space_separated_booleans` edge cases added and passing
 - [ ] `uv run sct.py unit-tests` passes
 - [ ] `uv run sct.py pre-commit` passes
@@ -431,9 +423,9 @@ All Definition of Done items across phases are met. Additionally:
 **Mitigation**: Phase 1 covers all IntOrList changes in one PR — validator, consumers, and guards together — so nothing breaks mid-migration. Use `grep -rn` to find all accesses to each param name. Run full unit test suite to catch regressions.
 
 ### Risk: MultitenantValue Wrapping Interaction
-**Likelihood**: Low
-**Impact**: `MultitenantValue(IntOrList)` or `MultitenantValue(BooleanOrList)` might double-wrap or break tenant resolution.
-**Mitigation**: `MultitenantValue` wraps the inner type with `T | dict[str, T]`. After this change, `T` becomes `list[int]` instead of `int | list[int]`, so `MultitenantValue(list[int])` = `list[int] | dict[str, list[int]]`. This is correct — the dict branch is for per-tenant overrides. Verify with existing multitenancy tests.
+**Likelihood**: N/A — `MultitenantValue` has been removed from the codebase.
+**Impact**: None.
+**Mitigation**: No action required.
 
 ### Risk: Config File Backward Compatibility
 **Likelihood**: Low

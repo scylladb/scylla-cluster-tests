@@ -181,8 +181,6 @@ k8s_n_scylla_pods_per_cluster: 3
 
 k8s_loader_run_type: 'dynamic'
 
-k8s_tenants_num: 1
-
 # NOTE: if 'k8s_scylla_utils_docker_image' is not specified then default values from operator-1.6+ will be used
 k8s_scylla_utils_docker_image: ''
 
