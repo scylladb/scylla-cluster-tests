@@ -236,7 +236,7 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         node = self.db_cluster.nodes[0]
         self.log.info(f"Setting service level with shares={service_level}")
         user, passwd = node.get_db_auth()
-        with self.db_cluster.cql_connection_patient(node=node, user=user, password=passwd) as session:
+        with self.db_cluster.cql_connection_patient(node=node) as session:
             session.execute(f"""CREATE SERVICE_LEVEL vector_store_sl WITH shares = {service_level};""")
             session.execute(f"""ATTACH SERVICE_LEVEL vector_store_sl TO vector_store_service;""")
         # -- Create service level with 200 shares
@@ -264,6 +264,8 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         concurrency = self.params.get("vs_concurrency")
         concurrency_time = self.params.get("vs_concurrency_time")
 
+        self.set_service_level(service_level)
+
         self.log.info(f"QWERTY concurrency {repr(concurrency)}")
 
         if type(concurrency) is int:
@@ -271,7 +273,6 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.log.info(f"QWERTY concurrency {repr(concurrency)}")
         self.run_prepare_write_cmd()
         building_time, start_time = self.create_index()
-        self.set_service_level(service_level)
         self.send_index_results_to_argus(building_time, start_time)
 
         for current_concurrency in concurrency:
