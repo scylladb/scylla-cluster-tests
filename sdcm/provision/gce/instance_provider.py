@@ -20,7 +20,12 @@ from typing import List, Dict, Optional
 import google.api_core.exceptions
 from google.cloud import compute_v1
 
-from sdcm.provision.provisioner import InstanceDefinition, PricingModel, ProvisionError
+from sdcm.provision.provisioner import (
+    InstanceDefinition,
+    PricingModel,
+    ProvisionError,
+    ZoneResourcesExhaustedError,
+)
 from sdcm.provision.gce.disk_provider import DiskProvider
 from sdcm.provision.gce.network_provider import NetworkProvider
 from sdcm.provision.gce.constants import DISK_TYPE_PD_STANDARD, DISK_TYPE_LOCAL_SSD
@@ -34,6 +39,12 @@ from sdcm.utils.gce_utils import (
 from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
+
+ZONE_EXHAUSTED_MARKER = "ZONE_RESOURCE_POOL_EXHAUSTED"
+
+
+def _is_zone_exhausted(error: BaseException) -> bool:
+    return ZONE_EXHAUSTED_MARKER in str(error)
 
 
 class VirtualMachineProvider:
@@ -156,6 +167,16 @@ class VirtualMachineProvider:
             self._cache[normalized_name] = instance
             return instance
         except google.api_core.exceptions.GoogleAPIError as gce_error:
+            if _is_zone_exhausted(gce_error):
+                LOGGER.error(
+                    "Zone %s resource pool exhausted while creating %s; failing fast without retry",
+                    self.zone,
+                    normalized_name,
+                )
+                self._cleanup_failed_instance(normalized_name, str(gce_error))
+                raise ZoneResourcesExhaustedError(
+                    f"Zone {self.zone} resource pool exhausted: {gce_error}"
+                ) from gce_error
             LOGGER.warning("Instance %s creation failed: %s, will retry", normalized_name, gce_error)
             self._cleanup_failed_instance(normalized_name, str(gce_error))
             # Retry the entire creation process with retry decorator
@@ -190,6 +211,10 @@ class VirtualMachineProvider:
         except google.api_core.exceptions.GoogleAPIError as gce_error:
             LOGGER.warning("Instance %s creation failed: %s", normalized_name, gce_error)
             self._cleanup_failed_instance(normalized_name, str(gce_error))
+            if _is_zone_exhausted(gce_error):
+                raise ZoneResourcesExhaustedError(
+                    f"Zone {self.zone} resource pool exhausted: {gce_error}"
+                ) from gce_error
             raise
 
     def _build_and_insert_instance(
