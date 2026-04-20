@@ -53,7 +53,7 @@ class AbortDecommissionMonkey(NemesisBaseClass):
         # indicating that SSTable streaming has finished for at least one sstable.
         # Once the `log_follower` yields a line, we know streaming has started.
         log_follower = self.runner.target_node.follow_system_log(
-            patterns=[r"stream_blob - stream_sstables\[[0-9a-f-]+\] Finished sending sstable_nr"]
+            patterns=[r"stream_blob - stream_sstables\[[0-9a-f-]+\] Finished sending files_nr"]
         )
 
         _streaming_started = lambda: len(list(log_follower)) > 0
