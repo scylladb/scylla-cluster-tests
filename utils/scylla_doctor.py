@@ -77,7 +77,21 @@ class ScyllaDoctor:
         self.scylla_doctor_exec = "scylla-doctor"
         self.json_result_file = ""
         self.scylla_logs_file = ""
+        self.analysis_report_file = ""
         self.python3_path = ""
+        self._full_edition_downloaded = False
+
+    @property
+    def is_full_edition(self):
+        """Check whether the full (enterprise) edition of Scylla Doctor is actually installed.
+
+        Returns True only when the edition is configured as ``"full"`` AND the
+        full edition binary was successfully downloaded.  If the download failed
+        and fell back to basic, this returns False — preventing the analysis
+        phase from running with a basic edition binary that cannot produce the
+        expected JSON output.
+        """
+        return self.configured_edition == "full" and self._full_edition_downloaded
 
     def run(self, sd_command):
         if not self.node.is_nonroot_install:
@@ -292,6 +306,13 @@ class ScyllaDoctor:
         self._full_edition_downloaded = True
 
     def download_scylla_doctor(self):
+        tarball_url = self.test_config.tester_obj().params.get("scylla_doctor_tarball_url")
+        if tarball_url:
+            LOGGER.info("Using custom SD tarball URL: %s", tarball_url)
+            self.node.remoter.run(f"curl -JL {tarball_url} | tar -xvz")
+            self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
+            return
+
         if self.configured_edition == "full":
             self.download_full_scylla_doctor()
             return
@@ -410,6 +431,162 @@ class ScyllaDoctor:
         LOGGER.info("Analyze vitals")
         result = self.run(sd_command=f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file} --verbose")
         LOGGER.debug(pprint.pformat(result))
+
+    def run_analysis_phase(self):
+        """Run the analysis phase of Scylla Doctor (full edition only).
+
+        Loads previously collected vitals and runs analyzers to produce
+        findings and recommendations about the cluster health.
+
+        Results are collected directly in JSON format using ``--save-vitals``,
+        similar to ``run_scylla_doctor_and_collect_results()``.
+        """
+        if not self.is_full_edition:
+            LOGGER.info("Skipping analysis phase — only available for the full edition")
+            return
+
+        if not self.json_result_file:
+            LOGGER.warning("Cannot run analysis phase: no vitals file collected")
+            return
+
+        json_report_name = f"{self.node.public_dns_name}.analysis.json"
+        LOGGER.info("Running Scylla Doctor analysis phase (full edition)...")
+
+        sd_cmd = f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file} --save-vitals {json_report_name}"
+        self.run(sd_command=sd_cmd)
+
+        # Verify the JSON report was created
+        result = self.node.remoter.run(f"ls {json_report_name}", verbose=False)
+        self.analysis_report_file = result.stdout.strip()
+        assert self.analysis_report_file, (
+            f"Analysis result JSON file {json_report_name} has not been created. Scylla doctor version: {self.version}"
+        )
+        LOGGER.info("Analysis JSON report saved to: %s", self.analysis_report_file)
+
+    def filter_out_failed_analyzers(self, analyzer):
+        """Return True if the failed analyzer should be ignored (known issue)."""
+        # Placeholder for known analyzer issues — extend as needed
+        return False
+
+    @staticmethod
+    def _parse_human_readable_analysis(content: str) -> dict:
+        """Parse the human-readable scylla-doctor analysis output into a dict.
+
+        Scylla-doctor ``--load-vitals`` produces a tabular report with
+        two sections: ``+ Data collection`` (collectors) and ``+ Data analysis``
+        (analyzers).  Each line in a section has the format::
+
+            - <Name>: <description>   <STATUS>   <information>
+
+        where STATUS is one of PASSED, FAILED, WARNING, SKIPPED, and fields
+        are separated by two or more spaces.
+
+        This method extracts only the ``Data analysis`` section items and
+        returns a JSON-serialisable dict:
+        ``{name: {"status": int, "status_text": str, "info": str}}``.
+
+        Status mapping: PASSED/WARNING → 0, FAILED → 1, SKIPPED → 2.
+        WARNING is mapped to 0 (success) because warnings are informational
+        and should not fail the test.
+        """
+        results = {}
+        item_pattern = re.compile(r"^\s*-\s+(\w+):\s+.+?\s{2,}(PASSED|FAILED|WARNING|SKIPPED)\s{2,}(.+?)\s*$")
+        status_map = {"PASSED": 0, "FAILED": 1, "WARNING": 0, "SKIPPED": 2}
+
+        in_analysis_section = False
+        for line in content.splitlines():
+            stripped = line.strip()
+
+            if stripped.startswith("+ Data analysis"):
+                in_analysis_section = True
+                continue
+            if in_analysis_section and stripped.startswith("+ "):
+                break
+
+            if not in_analysis_section:
+                continue
+
+            match = item_pattern.match(line)
+            if match:
+                name = match.group(1)
+                status_text = match.group(2)
+                info = match.group(3).strip()
+                results[name] = {
+                    "status": status_map.get(status_text, 0),
+                    "status_text": status_text,
+                    "info": info,
+                }
+
+        return results
+
+    @staticmethod
+    def _extract_json_from_output(content: str) -> dict:
+        """Extract a JSON object from content that may contain non-JSON text.
+
+        Scylla-doctor may prepend human-readable text (ASCII banner, progress
+        markers) before the actual JSON output.  This method first tries direct
+        parsing; if that fails it locates the first ``{`` and uses
+        ``raw_decode`` to parse the JSON object starting there.
+
+        Args:
+            content: Raw output that should contain a JSON object.
+
+        Returns:
+            Parsed JSON as a dict.
+
+        Raises:
+            ScyllaDoctorException: If no valid JSON object can be found.
+        """
+        content = content.strip()
+        if not content:
+            raise ScyllaDoctorException("Analysis output is empty — nothing to parse")
+
+        # Fast path: content is pure JSON
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+
+        # Slow path: look for JSON embedded in non-JSON output
+        idx = content.find("{")
+        if idx == -1:
+            raise ScyllaDoctorException(f"No JSON object found in analysis output (first 500 chars): {content[:500]}")
+
+        decoder = json.JSONDecoder()
+        try:
+            obj, _ = decoder.raw_decode(content, idx)
+            return obj
+        except json.JSONDecodeError as exc:
+            raise ScyllaDoctorException(
+                f"Failed to parse JSON from analysis output at position {idx} (first 500 chars): {content[:500]}"
+            ) from exc
+
+    def analyze_and_verify_analysis_results(self):
+        """Parse the JSON analysis report and verify that no analyzer failed.
+
+        The analysis report is a JSON file produced by ``run_analysis_phase()``
+        (parsed from scylla-doctor's human-readable output).  Each top-level
+        key is an analyzer name mapped to a dict with at least a ``status``
+        field (0 = success, 1 = failed, 2 = skipped).
+        """
+        if not self.analysis_report_file:
+            LOGGER.warning("No analysis report file to verify")
+            return
+
+        analysis_result = json.loads(self.node.remoter.sudo(f"cat {self.analysis_report_file}").stdout.strip())
+        LOGGER.info("Loaded %d analyzer results from JSON report", len(analysis_result))
+
+        LOGGER.debug("Scylla-doctor analysis output: %s", pprint.pformat(analysis_result))
+
+        failed_analyzers = {}
+        for analyzer, value in analysis_result.items():
+            if isinstance(value, dict) and value.get("status") == 1:
+                if not self.filter_out_failed_analyzers(analyzer=analyzer):
+                    failed_analyzers[analyzer] = value
+
+        assert not failed_analyzers, (
+            f"Failed analyzers: {pprint.pformat(failed_analyzers)}. Scylla doctor version: {self.version}"
+        )
 
     def filter_out_failed_collectors(self, collector):
         # FirewallRulesCollector return empty result - https://github.com/scylladb/field-engineering/issues/2248
