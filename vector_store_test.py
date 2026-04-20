@@ -235,18 +235,20 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     def set_service_level(self, service_level):
         node = self.db_cluster.nodes[0]
         self.log.info(f"Setting service level with shares={service_level}")
-        with self.db_cluster.cql_connection_patient(node=node, user=loader_utils.DEFAULT_USER, password=loader_utils.DEFAULT_USER_PASSWORD) as session:
-            
+        user, passwd = node.get_db_auth()
+        with self.db_cluster.cql_connection_patient(node=node, user=user, password=passwd) as session:
+            session.execute(f"""CREATE SERVICE_LEVEL vector_store_sl WITH shares = {service_level};""")
+            session.execute(f"""ATTACH SERVICE_LEVEL vector_store_sl TO vector_store_service;""")
         # -- Create service level with 200 shares
         # CREATE SERVICE_LEVEL vector_store_sl WITH shares = 200;
         # -- Attach service level to vector_store_service user
         # ATTACH SERVICE_LEVEL vector_store_sl TO vector_store_service;            
-            sl = ServiceLevel(session=session, name="vector_store_sl", shares=service_level).create()
-            role = User(session=session, name="vector_store_service").create()
-            role.attach_service_level(sl)
-            self.log.info(f"Created service level {sl.name} with shares={service_level} and attached to role {role.name}")
+            # sl = ServiceLevel(session=session, name="vector_store_sl", shares=service_level).create()
+            # role = User(session=session, name="vector_store_service").create()
+            # role.attach_service_level(sl)
+            # self.log.info(f"Created service level {sl.name} with shares={service_level} and attached to role {role.name}")
 
-        SlaUtils().wait_for_service_level_propagated(cluster=self.db_cluster, service_level=sl)
+        #SlaUtils().wait_for_service_level_propagated(cluster=self.db_cluster, service_level=sl)
         # self.log.info(f"Service level {sl.name} propagated to all nodes")
 
     def test_noop(self):  # noqa: PLR0914
