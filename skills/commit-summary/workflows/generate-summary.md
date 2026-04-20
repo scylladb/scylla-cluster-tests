@@ -50,7 +50,7 @@ Step-by-step workflow for producing a curated weekly commit summary.
    - Pre-commit hook minor adjustments
 
 2. For borderline commits, lean toward including if the change affects how developers write or run tests.
-3. Group related kept commits (e.g., multiple commits in the same refactoring effort, or a tool update + its configuration change).
+3. Group related kept commits (e.g., multiple commits in the same refactoring effort, or a tool update + its configuration change). Within a group, select only the **1–3 most representative commits** to link — typically the one that introduces the change, plus the most notable follow-up fix or final shape. Do not link every commit in the group.
 
 **Exit criteria:** List of kept commits with grouping decisions noted.
 
@@ -60,7 +60,15 @@ Step-by-step workflow for producing a curated weekly commit summary.
 
 1. Keep the header exactly as generated (opening line, commit range, counts).
 2. Write one paragraph per topic (a single commit or a group of related commits).
-3. Follow these writing rules:
+3. For any kept commit that bumps a ScyllaDB-maintained tool or driver (scylla-bench, scylla-driver/python-driver, gemini, latte, cassandra-stress, argus, YCSB, scylla-manager, scylla-doctor), fetch the upstream release notes before writing the paragraph:
+
+   ```bash
+   gh release view <tag> --repo scylladb/<repo>
+   ```
+
+   Tag formats: `vX.Y.Z` for most tools, `X.Y.Z-scylla` for `python-driver`. Fall back to `gh release list --repo scylladb/<repo> --limit 10` if the tag is unclear. Pull 1–3 concrete highlights (bug fixes, new features, behavior changes that matter to SCT test authors) and describe them briefly in plain prose. **Do not embed links to other repositories** — the only link in the paragraph must be the SCT commit that performed the bump. A bare "was bumped to vX.Y.Z" paragraph is not enough — the reader needs to know *what* changed.
+
+4. Follow these writing rules:
 
    **Link placement:**
    - Embed the link on the most descriptive phrase in the paragraph

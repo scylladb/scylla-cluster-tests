@@ -27,17 +27,17 @@ The raw git log contains dozens of commits. Most are routine fixes or dependency
 
 Readers scan by link text. A link on "was updated" tells nothing; a link on "migrated from dict-based to pydantic configuration" tells the whole story. Vary link placement — don't start every paragraph with a link, because it creates a monotonous list feel.
 
-### Group Related, Separate Unrelated
+### Group Related, Pick the Notable Ones
 
-**Combine commits that touch the same area into one paragraph, but never mix unrelated changes.**
+**Combine commits that touch the same area into one paragraph, but do not cover every commit in the group — pick only the most notable ones.**
 
-Two commits updating scylla-bench belong together. A scylla-bench update and a new nemesis do not. Grouping related work reduces paragraph count and gives readers a coherent picture. Mixing unrelated changes forces readers to context-switch mid-paragraph.
+Two commits updating scylla-bench belong together. A scylla-bench update and a new nemesis do not. When a PR or refactor lands as 5–10 small commits, do not link each one. Describe the change as a whole and link 1–3 of the most representative commits (the one that introduces the feature, plus a follow-up fix or the final shape). Mixing unrelated changes forces readers to context-switch mid-paragraph; listing every commit in a group turns the paragraph into a changelog dump.
 
 ### Follow the Established Voice
 
-**Match the tone and structure of previous issues — concise, factual, third-person.**
+**Match the tone and structure of previous issues — concise, factual, third-person. Describe what changed, never who changed it.**
 
-The report has a consistent voice across 100+ issues. Breaking that voice is jarring for regular readers. Study the examples before writing. The opening and closing lines are fixed templates.
+The report has a consistent voice across 100+ issues. Do not attribute work to authors by name — write "SCT gained X" or "the Y pipeline was fixed", never "Alice landed X" or "Bob refactored Y". Author attribution is already available via the commit link; naming authors in prose creates bias and reads like a team newsletter. The opening and closing lines are fixed templates.
 
 ## When to Use
 
@@ -83,6 +83,38 @@ The script is bundled at `skills/commit-summary/sct_commits_summary.py`:
 python3 skills/commit-summary/sct_commits_summary.py <start_sha> > commit_summary_issue_<N>.md
 ```
 
+### Fetch Upstream Release Notes for ScyllaDB Tools and Drivers
+
+When a commit bumps a ScyllaDB-maintained tool or driver, a renovate commit title like `update dependency X to vY.Z` does not tell the reader what changed. Fetch the upstream release notes via `gh release view` and pull in the 1–3 most relevant items (bug fixes, new features, behavior changes) to enrich the paragraph.
+
+Repository and tag mapping:
+
+| SCT dependency | Upstream repo | Tag format |
+|----------------|---------------|------------|
+| scylla-bench | `scylladb/scylla-bench` | `vX.Y.Z` |
+| scylla-driver (Python) | `scylladb/python-driver` | `X.Y.Z-scylla` |
+| gemini | `scylladb/gemini` | `vX.Y.Z` |
+| latte | `scylladb/latte` | `vX.Y.Z` |
+| cassandra-stress | `scylladb/cassandra-stress` | branch/tag varies |
+| argus | `scylladb/argus-client` | `vX.Y.Z` |
+| YCSB | `scylladb/YCSB` | `scylla-X.Y.Z` |
+| scylla-manager | `scylladb/scylla-manager` | `vX.Y.Z` |
+| scylla-doctor | `scylladb/scylla-doctor` | `vX.Y.Z` |
+
+Command:
+
+```bash
+gh release view <tag> --repo scylladb/<repo>
+```
+
+If the exact tag is not found, list recent releases first:
+
+```bash
+gh release list --repo scylladb/<repo> --limit 10
+```
+
+Use the release notes only to enrich the prose describing what changed. **Do not embed links to other repositories** (no upstream commit, PR, or release-tag links) — the only link in the paragraph must be the SCT commit that performed the bump. Summarize the 1–3 most relevant highlights in plain prose (e.g. "a libev segfault fix on shutdown, a RecursionError fix in `execute_concurrent`, and AWS PrivateLink support").
+
 ### Output Template
 
 The final report follows this exact structure:
@@ -118,6 +150,8 @@ See you in the next issue of last week in scylla-cluster-tests.git master!
 - [ ] Every paragraph has at least one embedded GitHub commit link
 - [ ] Links are on the most descriptive phrase, not generic words
 - [ ] No paragraph starts with a bare link (varied placement)
+- [ ] ScyllaDB-maintained tool/driver bumps include a brief prose summary of upstream release-note highlights (fetched via `gh release view`) — SCT commit is the only link; no cross-repo commit/PR/release links
 - [ ] Opening and closing lines match the template exactly
-- [ ] Tone matches previous issues — concise, factual, third-person
+- [ ] Tone matches previous issues — concise, factual, third-person; no author names in prose
+- [ ] Multi-commit groups link only 1–3 representative commits, not every commit in the group
 - [ ] Dropped commits listed in a table with SHA, title, and reason for exclusion
