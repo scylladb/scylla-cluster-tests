@@ -45,6 +45,8 @@ from sdcm.utils.operations_thread import ThreadParams
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.sct_events import Severity
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
+from test_lib.sla import ServiceLevel, Role
+from sdcm.sla.libs.sla_utils import SlaUtils
 
 
 class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
@@ -231,7 +233,21 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     #         raise ValueError("Load size not found in stress command")
     
     def set_service_level(self, service_level):
-        self.log.warning("Not setting service level - not implemented yet")
+        node = self.db_cluster.nodes[0]
+        self.log.info(f"Setting service level with shares={service_level}")
+        with self.db_cluster.cql_connection_patient(node=node) as session:
+            
+        # -- Create service level with 200 shares
+        # CREATE SERVICE_LEVEL vector_store_sl WITH shares = 200;
+        # -- Attach service level to vector_store_service user
+        # ATTACH SERVICE_LEVEL vector_store_sl TO vector_store_service;            
+            sl = ServiceLevel(session=session, name="vector_store_sl", shares=service_level).create()
+            role = User(session=session, name="vector_store_service").create()
+            role.attach_service_level(sl)
+            self.log.info(f"Created service level {sl.name} with shares={service_level} and attached to role {role.name}")
+
+        SlaUtils().wait_for_service_level_propagated(cluster=self.db_cluster, service_level=sl)
+        # self.log.info(f"Service level {sl.name} propagated to all nodes")
 
     def test_noop(self):  # noqa: PLR0914
         #self.vector_store_cluster
