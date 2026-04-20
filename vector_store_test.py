@@ -45,7 +45,7 @@ from sdcm.utils.operations_thread import ThreadParams
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.sct_events import Severity
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
-from test_lib.sla import ServiceLevel, Role
+from test_lib.sla import ServiceLevel, User
 from sdcm.sla.libs.sla_utils import SlaUtils
 
 
