@@ -235,7 +235,6 @@ class VectorStoreTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     def set_service_level(self, service_level):
         node = self.db_cluster.nodes[0]
         self.log.info(f"Setting service level with shares={service_level}")
-        user, passwd = node.get_db_auth()
         with self.db_cluster.cql_connection_patient(node=node) as session:
             session.execute(f"""CREATE SERVICE_LEVEL vector_store_sl WITH shares = {service_level};""")
             session.execute(f"""ATTACH SERVICE_LEVEL vector_store_sl TO vector_store_service;""")
