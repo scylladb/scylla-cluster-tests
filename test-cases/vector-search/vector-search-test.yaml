@@ -31,6 +31,7 @@ vs_service_level: 200
 vs_query_per_seconds: 50
 vs_concurrency: [2, 20, 200]
 vs_concurrency_time: 5
+ami_vector_store_user: vector_store_service
 
 download_from_s3:
   - data_dir/latte/vector_search:
