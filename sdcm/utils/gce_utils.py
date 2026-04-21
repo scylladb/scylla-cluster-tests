@@ -88,8 +88,9 @@ def vmarch_to_gcp(arch: "VmArch") -> str:
 # The keys are the region name, the value is the available zones, which will be used for random.choice()
 SUPPORTED_REGIONS = {
     # us-east1 zones: b, c, and d. Details: https://cloud.google.com/compute/docs/regions-zones#locations
-    # Currently choose only zones c and d as zone b frequently fails allocating resources.
-    "us-east1": "cd",
+    # Zone b frequently fails allocating resources, zone d hits ZONE_RESOURCE_POOL_EXHAUSTED
+    # for z3-highmem-32-highlssd instances. Only zone c is reliable.
+    "us-east1": "c",
     "us-east4": "abc",
     "us-west1": "abc",
     "us-central1": "a",
