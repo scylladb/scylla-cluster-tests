@@ -1,8 +1,3 @@
-# Increase disk sizes for strong consistency performance tests
-root_disk_size_runner: 500
-root_disk_size_loader: 500
-instance_type_runner: 'r6i.8xlarge'
-
 # Define load ops for steps
 # # For debugging, you can set a specific thread count for each step (per load).
 ## The value of perf_gradual_threads[load] must be either:
