@@ -3162,28 +3162,40 @@ class ClusterTester(unittest.TestCase):
         :return: bool, indication whether all stress threads have completed successfully
         """
         results, errors = thread_pool.parse_results()
-        if results:
-            pass
-        else:
+        if not results:
             self.log.warning("There is no stress results, probably stress thread has failed.")
 
+        # split errors by severity so WARNING-severity errors do not trigger test failure
+        real_errors, warnings = {}, {}
+        if isinstance(errors, dict):
+            for loader_name, errs in errors.items():
+                for severity, msg in errs:
+                    target = warnings if severity == Severity.WARNING else real_errors
+                    target.setdefault(loader_name, []).append(msg)
+        else:
+            real_errors = errors
+
+        if warnings:
+            warnings_msg = "\n".join(f"{node}:\n  " + "\n  ".join(msgs[-5:]) for node, msgs in warnings.items() if msgs)
+            self.log.warning("stress warnings on nodes:\n%s", warnings_msg)
+
         if error_handler:
-            error_handler(thread_pool, errors)
-        if errors:
+            error_handler(thread_pool, real_errors)
+        if real_errors:
             # Sometimes, we might have an epic error messages list
             # that will make small machines driving the test
             # to run out of memory when writing the XML report. Since
             # the error message is merely informational, let's simply
             # use the last 5 lines for the final error message.
-            if isinstance(errors, dict):
-                filtered_errors = {k: v[-5:] for k, v in errors.items() if v}
+            if isinstance(real_errors, dict):
+                filtered_errors = {k: v[-5:] for k, v in real_errors.items() if v}
                 errors_msg = "\n".join(
                     f"{node}:\n  " + "\n  ".join(err_list) for node, err_list in filtered_errors.items()
                 )
-            elif isinstance(errors, list):
-                errors_msg = "\n  ".join(errors[-5:])  # Use last 5 entries from the list
+            elif isinstance(real_errors, list):
+                errors_msg = "\n  ".join(real_errors[-5:])  # Use last 5 entries from the list
             self.log.warning("stress errors on nodes:\n%s", errors_msg)
-        return results and not errors
+        return results and not real_errors
 
     def get_stress_results(self, queue, store_results=True) -> list[dict | None]:
         results = queue.parse_results()[0]

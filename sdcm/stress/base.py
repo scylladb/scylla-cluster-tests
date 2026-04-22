@@ -27,6 +27,8 @@ from sdcm.remote.libssh2_client.exceptions import Failure
 
 LOGGER = logging.getLogger(__name__)
 
+ParseResults = tuple[list[dict], dict[str, list[tuple[Severity, str]]]]
+
 
 class DockerBasedStressThread:
     DOCKER_IMAGE_PARAM_NAME = ""  # test yaml param that stores image
@@ -111,14 +113,15 @@ class DockerBasedStressThread:
 
         return results
 
-    def parse_results(self) -> tuple[list, dict]:
+    def parse_results(self) -> ParseResults:
         """
         Parses the raw results from the finished stress threads
 
-        :returns: tuple of (results, errors) lists, where:
+        :returns: tuple of (results, errors), where:
             - results: list of results from the stress threads that finished successfully
-            - errors: dict of errors, where the key is the loader name and the value is a list of errors
-                occurred on that loader
+            - errors: dict keyed by loader name with list of (severity, message) tuples so callers
+                can distinguish real errors from WARNING-severity failures (e.g. stress killed by
+                test teardown via SIGKILL)
         """
         results = []
         errors = {}
@@ -134,7 +137,7 @@ class DockerBasedStressThread:
                     results.append(result)
 
             if event and getattr(event, "errors", None):
-                errors.setdefault(loader.name, []).extend(event.errors)
+                errors.setdefault(loader.name, []).extend((event.severity, msg) for msg in event.errors)
 
         return results, errors
 
