@@ -1,0 +1,18 @@
+test_duration: 60
+
+cs_user_profiles:
+    - data_dir/templated-elasticity-tables.yaml
+
+pre_create_schema: true
+user_profile_table_count: 10
+batch_size: 5
+cs_duration: ''
+
+n_loaders: 1
+n_db_nodes: 1
+add_node_cnt: 0
+
+cluster_health_check: false
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_interval: 60
