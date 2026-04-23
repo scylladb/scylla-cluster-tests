@@ -319,22 +319,22 @@ def call(Map pipelineParams) {
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets',
-                                region: 'eu-west-3',
+                                region: 'eu-north-1',
                                 versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-3weeks'],
-                                job_throttle_category: 'SCT-perf-eu-west-3-i8g',
+                                job_throttle_category: 'SCT-perf-eu-north-1-i8g',
                                 arch: 'aarch64'
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets',
-                                region: 'eu-west-3',
+                                region: 'eu-north-1',
                                 ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_read_with_nemesis"', '"test_latency_mixed_with_nemesis"'],
                                 labels: [],
-                                job_throttle_category: 'SCT-perf-eu-west-3-i8g',
+                                job_throttle_category: 'SCT-perf-eu-north-1-i8g',
                                 arch: 'aarch64'
                             ],
                             [
