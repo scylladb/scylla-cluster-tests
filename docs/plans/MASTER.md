@@ -30,6 +30,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Source-Destination Clusters | `pending_pr` | [#13908](https://github.com/scylladb/scylla-cluster-tests/pull/13908) |
 | Cassandra Cluster Support | `draft` | [cassandra-cluster-support.md](infrastructure/cassandra-cluster-support.md) |
 | SSH Key Decoupling | `draft` | [ssh-key-decoupling.md](infrastructure/ssh-key-decoupling.md) |
+| Multi-Cloud Provisioning Resilience | `draft` | [multi-cloud-provisioning-resilience.md](infrastructure/multi-cloud-provisioning-resilience.md) |
 
 ### Nemesis — Chaos engineering, disruptors
 
