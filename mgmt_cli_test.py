@@ -158,16 +158,14 @@ class ManagerRestoreTests(ManagerTestFunctionsMixIn):
 
 
 class ManagerBackupTests(ManagerRestoreTests):
-    def test_basic_backup(self, ks_names: list = None):
-        self.log.info("starting test_basic_backup")
+    def test_backup_and_restore(self, restore_with_task: bool = True, ks_names: list = None):
+        self.log.info(f"starting test_backup_and_restore[restore_with_task={restore_with_task}]")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
         )
-        # Do restore with a task for multiDC clusters, otherwise the test will take a long time
-        restore_with_task = True if self.db_node.test_config.MULTI_REGION else False
         self.verify_backup_success(
             mgr_cluster=mgr_cluster,
             backup_task=backup_task,
@@ -176,7 +174,7 @@ class ManagerBackupTests(ManagerRestoreTests):
         )
         self.run_verification_read_stress(ks_names)
         mgr_cluster.delete()  # remove cluster at the end of the test
-        self.log.info("finishing test_basic_backup")
+        self.log.info(f"finishing test_backup_and_restore[restore_with_task={restore_with_task}]")
 
     def test_backup_multiple_ks_tables(self):
         self.log.info("starting test_backup_multiple_ks_tables")
@@ -985,31 +983,39 @@ class ManagerSanityTests(
     def test_manager_sanity(self, prepared_ks: bool = False, ks_names: list = None):
         """
         Test steps:
-        1) Run the repair test.
-        2) Run test_mgmt_cluster test.
-        3) test_mgmt_cluster_healthcheck
-        4) test_client_encryption
+        1) Generate load (unless keyspaces are pre-created via prepared_ks).
+        2) Backup and restore via nodetool refresh, out of Manager restore for single-DC only.
+        3) Backup and restore via Manager task.
+        4) Repair multiple keyspace types.
+        5) Manager cluster CRUD operations.
+        6) Manager cluster health check.
+        7) Health check change max timeout (multi-DC only).
+        8) Manager tasks suspend and resume.
+        9) Client encryption.
         """
+        is_multi_dc_cluster = self.db_node.test_config.MULTI_REGION
+
         if not prepared_ks:
             self.generate_load_and_wait_for_results()
-        with self.subTest("Basic Backup Test"):
-            self.test_basic_backup(ks_names=ks_names)
-        with self.subTest("Restore Backup Test"):
-            self.test_restore_backup_with_task(ks_names=ks_names)
-        with self.subTest("Repair Multiple Keyspace Types"):
+
+        if not is_multi_dc_cluster:
+            with self.subTest("Backup and restore (via nodetool refresh, out of Manager) test"):
+                self.test_backup_and_restore(restore_with_task=False, ks_names=ks_names)
+        with self.subTest("Backup and restore (via Manager task) test"):
+            self.test_backup_and_restore(restore_with_task=True, ks_names=ks_names)
+        with self.subTest("Repair multiple keyspace types test"):
             self.test_repair_multiple_keyspace_types()
-        with self.subTest("Mgmt Cluster CRUD"):
+        with self.subTest("Manager cluster CRUD operations test"):
             self.test_cluster_crud()
-        with self.subTest("Mgmt cluster Health Check"):
+        with self.subTest("Manager cluster health check test"):
             self.test_cluster_healthcheck()
-        # test_healthcheck_change_max_timeout requires a multi dc run
-        if self.db_cluster.nodes[0].test_config.MULTI_REGION:
-            with self.subTest("Basic test healthcheck change max timeout"):
+        if is_multi_dc_cluster:
+            # test_healthcheck_change_max_timeout requires a multi dc run
+            with self.subTest("Health check change max timeout test"):
                 self.test_healthcheck_change_max_timeout()
-        with self.subTest("Basic test suspend and resume"):
+        with self.subTest("Manager tasks suspend and resume test"):
             self.test_suspend_and_resume()
-        with self.subTest("Client Encryption"):
-            # Since this test activates encryption, it has to be the last test in the sanity
+        with self.subTest("Client encryption test"):
             self.test_client_encryption()
 
     def test_manager_sanity_vnodes_tablets_cluster(self):
