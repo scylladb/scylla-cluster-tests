@@ -27,6 +27,12 @@ def call(String backend, String region=null, String datacenter=null, String loca
     } catch(Exception) {
 
     }
+    try {
+        ociRegionList = new JsonSlurperClassic().parseText(oci_region)
+        oci_region = ociRegionList[0]
+    } catch(Exception) {
+
+    }
 
     def gcp_project = params.gce_project?.trim() ?: 'gcp-sct-project-1'
     gcp_project = gcp_project == 'gcp' ? 'gcp-skilled-adapter-452' : gcp_project
