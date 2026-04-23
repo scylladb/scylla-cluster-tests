@@ -277,8 +277,15 @@ def install_vector_service():
 
         # install vector
         if yum --help 2>/dev/null 1>&2 ; then
+            # Rocky Linux 8 / EL8: vector >= 0.55.0 requires GLIBC_2.29/2.30 not available on EL8 (SCT-261,
+            # https://github.com/vectordotdev/vector/issues/25253). Use --nobest so yum picks the latest
+            # version that actually resolves on this OS.
+            _yum_vector_flags=""
+            if grep -q 'ID=rocky' /etc/os-release 2>/dev/null && grep -q 'VERSION_ID="8' /etc/os-release 2>/dev/null; then
+                _yum_vector_flags="--nobest"
+            fi
             for n in 2 4 6 8 10 10 10 10; do # cloud-init is running it with set +o braceexpand
-                if yum install -y vector; then
+                if yum install -y $_yum_vector_flags vector; then
                     break
                 fi
                 sleep $(backoff $n)
