@@ -141,6 +141,15 @@ Real incident catalog in [common-issues.md](references/common-issues.md).
 - Valid types: `ci`, `docs`, `feature`, `fix`, `improvement`, `perf`, `refactor`, `revert`, `style`, `test`, `unit-test`, `build`, `chore`
 - Scope minimum 3 chars, subject 10-120 chars, body minimum 30 chars
 
+### Check 8: HTTP Resilience & Retry Patterns
+
+**Trigger**: PR touches files with `curl`, `requests.get`, `requests.post`, or `remoter.run("curl`.
+
+- All `remoter.run("curl ...")` calls use `curl_with_retry()` from `sdcm/utils/curl.py` (exception: document with `# no-retry: <reason>`)
+- All `requests.get/post/put/delete` calls go through a `requests.Session` with `HTTPAdapter(max_retries=Retry(...))` — follow `sdcm/rest/rest_client.py` pattern
+- No bare `requests.get()` / `requests.post()` without session+retry
+- Localhost/metadata calls may use `retry=0` but must still use the utility for consistent `--connect-timeout`
+
 ## Reference Index
 
 | File | Content |
@@ -164,3 +173,4 @@ A complete code review:
 - [ ] Backend impact evaluated — correct provision labels requested
 - [ ] Commit message validated — Conventional Commits format followed
 - [ ] Missing code identified — defaults, docstrings, tests, other backends
+- [ ] HTTP resilience verified — no bare curl or requests calls without retry
