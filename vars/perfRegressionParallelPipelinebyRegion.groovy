@@ -200,12 +200,94 @@ def call(Map pipelineParams) {
                                 labels: ['master-3weeks']
                             ],
                             [
+<<<<<<< HEAD
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-tablets',
                                 region: 'eu-west-3',
+||||||| parent of 857ced129 (fix(perf-regression): move i8g nemesis tablets from eu-west-3 to eu-north-1)
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets',
+                                region: 'eu-west-2',
+                                versions: ['master'],
+                                pre_release: [],
+                                sub_tests: ['"test_latency_mixed_with_upgrade"'],
+                                labels: ['master-3weeks'],
+                                rolling_upgrade_test: true,
+                                job_throttle_category: 'SCT-perf-eu-west-2-i8g',
+                                arch: 'aarch64'
+                            ],
+                            [
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets',
+                                region: 'eu-west-2',
+                                ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
+                                pre_release: [],
+                                sub_tests: ['"test_latency_mixed_with_upgrade"'],
+                                labels: [],
+                                rolling_upgrade_test: true,
+                                job_throttle_category: 'SCT-perf-eu-west-2-i8g',
+                                arch: 'aarch64'
+                            ],
+                            [
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets',
+                                region: 'eu-west-3',
+=======
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets',
+                                region: 'eu-west-2',
+                                versions: ['master'],
+                                pre_release: [],
+                                sub_tests: ['"test_latency_mixed_with_upgrade"'],
+                                labels: ['master-3weeks'],
+                                rolling_upgrade_test: true,
+                                job_throttle_category: 'SCT-perf-eu-west-2-i8g',
+                                arch: 'aarch64'
+                            ],
+                            [
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets',
+                                region: 'eu-west-2',
+                                ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
+                                pre_release: [],
+                                sub_tests: ['"test_latency_mixed_with_upgrade"'],
+                                labels: [],
+                                rolling_upgrade_test: true,
+                                job_throttle_category: 'SCT-perf-eu-west-2-i8g',
+                                arch: 'aarch64'
+                            ],
+                            [
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets',
+                                region: 'eu-north-1',
+>>>>>>> 857ced129 (fix(perf-regression): move i8g nemesis tablets from eu-west-3 to eu-north-1)
                                 versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"'],
+<<<<<<< HEAD
                                 labels: ['master-3weeks']
+||||||| parent of 857ced129 (fix(perf-regression): move i8g nemesis tablets from eu-west-3 to eu-north-1)
+                                labels: ['master-3weeks'],
+                                job_throttle_category: 'SCT-perf-eu-west-3-i8g',
+                                arch: 'aarch64'
+                            ],
+                            [
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets',
+                                region: 'eu-west-3',
+                                ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
+                                pre_release: [],
+                                sub_tests: ['"test_latency_read_with_nemesis"', '"test_latency_mixed_with_nemesis"'],
+                                labels: [],
+                                job_throttle_category: 'SCT-perf-eu-west-3-i8g',
+                                arch: 'aarch64'
+=======
+                                labels: ['master-3weeks'],
+                                job_throttle_category: 'SCT-perf-eu-north-1-i8g',
+                                arch: 'aarch64'
+                            ],
+                            [
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets',
+                                region: 'eu-north-1',
+                                ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
+                                pre_release: [],
+                                sub_tests: ['"test_latency_read_with_nemesis"', '"test_latency_mixed_with_nemesis"'],
+                                labels: [],
+                                job_throttle_category: 'SCT-perf-eu-north-1-i8g',
+                                arch: 'aarch64'
+>>>>>>> 857ced129 (fix(perf-regression): move i8g nemesis tablets from eu-west-3 to eu-north-1)
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-elasticity',
