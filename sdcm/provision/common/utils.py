@@ -249,7 +249,7 @@ def install_vector_service():
             # https://github.com/vectordotdev/vector/issues/25253). Use --nobest so yum picks the latest
             # version that actually resolves on this OS.
             _yum_vector_flags=""
-            if grep -q 'ID=rocky' /etc/os-release 2>/dev/null && grep -q 'VERSION_ID="8' /etc/os-release 2>/dev/null; then
+            if [ -f /etc/os-release ] && . /etc/os-release 2>/dev/null && [ "$ID" = "rocky" ] && echo "$VERSION_ID" | grep -q "^8"; then
                 _yum_vector_flags="--nobest"
             fi
             for n in 2 4 6 8 10 10 10 10; do # cloud-init is running it with set +o braceexpand
