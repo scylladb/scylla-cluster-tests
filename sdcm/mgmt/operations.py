@@ -755,30 +755,45 @@ class ManagerTestFunctionsMixIn(
         mgr_cluster,
         backup_task,
         ks_names: list = None,
-        tables_names: list = None,
         truncate=True,
         restore_data_with_task=False,
         timeout=None,
     ):
-        if ks_names is None:
-            ks_names = ["keyspace1"]
-        if tables_names is None:
-            tables_names = ["standard1"]
-        ks_tables_map = {keyspace: tables_names for keyspace in ks_names}
+        snapshot_tag = backup_task.get_snapshot_tag()
+        ks_tables_map: dict[str, list[str]] = {}
+
+        ks_cf_list = self.db_cluster.get_non_system_ks_cf_list(
+            db_node=self.db_cluster.nodes[0],
+            filter_out_mv=True,
+            filter_by_keyspace=ks_names,
+        )
+        for ks_cf in ks_cf_list:
+            ks, table = ks_cf.split(".", maxsplit=1)
+            ks_tables_map.setdefault(ks, []).append(table)
+        self.log.debug(f"ks_tables_map: {ks_tables_map}")
+        if not ks_tables_map:
+            raise ValueError("No non-system tables were found for backup restore verification")
+
         if truncate:
             for ks, tables in ks_tables_map.items():
                 for table_name in tables:
                     self.log.info(f"running truncate on {ks}.{table_name}")
                     self.db_cluster.nodes[0].run_cqlsh(f"TRUNCATE {ks}.{table_name}")
+
         if restore_data_with_task:
             self.restore_backup_with_task(
-                mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(), timeout=timeout, restore_data=True
+                mgr_cluster=mgr_cluster,
+                snapshot_tag=snapshot_tag,
+                timeout=timeout,
+                restore_data=True,
             )
-        else:
-            snapshot_tag = backup_task.get_snapshot_tag()
-            self.restore_backup_without_manager(
-                mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag, ks_tables_list=ks_tables_map
-            )
+            return
+
+        self.restore_backup_without_manager(
+            mgr_cluster=mgr_cluster,
+            snapshot_tag=snapshot_tag,
+            ks_tables_list=ks_tables_map,
+        )
 
     def verify_alternator_backup_success(self, mgr_cluster, backup_task, delete_tables: list = None, timeout=None):
         for table_name in delete_tables:
