@@ -1,0 +1,567 @@
+// Multi-keyspace data validation for Scylla Manager backup/restore tests.
+//
+// Creates 2 keyspaces with 2 tables each, all covering every CQL data type.
+// Keyspace names reflect their special feature:
+//   - mgmt_dv_si: has a secondary index on col_text of one table
+//   - mgmt_dv_mv: has a materialized view partitioned by col_int on one table
+//
+// Intended flow for Manager backup/restore validation:
+//   1. Create schema (latte schema)
+//   2. Populate data with 'insert' (latte run -f insert)
+//   3. Manager: backup -> truncate -> restore
+//   4. Validate with 'validate' (latte run -f validate)
+//      - SI and MV existence is verified at prepare() time: if either was not
+//        restored, statement preparation fails hard before validation starts.
+//      - Base table data is checked column-by-column for every row.
+//
+// USAGE:
+//
+// 1) Create schema (2 keyspaces, 4 tables, SI, MV):
+//    $ latte schema data_dir/latte/mgmt_data_validation.rn \
+//        -P tablets=false -P replication_factor=3 -- 172.17.0.2
+//
+// 2) Populate the cluster with some data:
+//    $ latte run data_dir/latte/mgmt_data_validation.rn -q \
+//        -P row_count_per_table=50000 \
+//        -f insert -d 200000 -- 172.17.0.2
+//
+// 3) Validate all data (column-by-column, round-robin across all tables):
+//    $ latte run data_dir/latte/mgmt_data_validation.rn -q \
+//        -P row_count_per_table=50000 \
+//        -f validate -d 200000 -- 172.17.0.2
+//
+// NOTE: for 'insert' and 'validate', set -d to row_count_per_table * total_tables
+//       (default: 50000 * 4 = 200000) to cover all rows in all tables.
+
+use latte::*;
+
+// ========================================
+// Schema parameters
+// ========================================
+const KEYSPACE_COUNT = latte::param!("keyspace_count", 2);
+const TABLE_COUNT_PER_KEYSPACE = latte::param!("table_count_per_keyspace", 2);
+const KEYSPACE_PREFIX = latte::param!("keyspace_prefix", "mgmt_dv");
+const TABLE_PREFIX = latte::param!("table_prefix", "mgmt_dv_t");
+// Secondary index: keyspace index 0 (mgmt_dv_si), table index within that keyspace
+const SI_KEYSPACE_IDX = 0;
+const SI_TABLE_IDX = latte::param!("si_table_idx", 0);
+// Materialized view: keyspace index 1 (mgmt_dv_mv), table index within that keyspace
+const MV_KEYSPACE_IDX = 1;
+const MV_TABLE_IDX = latte::param!("mv_table_idx", 1);
+const RECREATE_KEYSPACES = latte::param!("recreate_keyspaces", false);
+const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
+const TABLETS = latte::param!("tablets", true);
+const COMPACTION_STRATEGY = latte::param!("compaction_strategy", "IncrementalCompactionStrategy");
+const USE_VECTOR_TYPE = latte::param!("use_vector_type", true);
+const VECTOR_DIM = latte::param!("vector_dim", 5);
+
+// ========================================
+// Data manipulation parameters
+// ========================================
+const ROW_COUNT_PER_TABLE = latte::param!("row_count_per_table", 50_000);
+const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 1);
+const PARTITION_SIZES = latte::param!("partition_sizes", "100:1");
+
+// ========================================
+// schema(db) - called by 'latte schema'
+// ========================================
+
+/// Map keyspace index to descriptive name:
+///   0 -> mgmt_dv_si  (keyspace with secondary index)
+///   1 -> mgmt_dv_mv  (keyspace with materialized view)
+///   N -> mgmt_dv_N   (fallback for any additional keyspaces)
+fn get_ks_name(ks_i) {
+    if ks_i == 0 {
+        `${KEYSPACE_PREFIX}_si`
+    } else if ks_i == 1 {
+        `${KEYSPACE_PREFIX}_mv`
+    } else {
+        `${KEYSPACE_PREFIX}_${ks_i + 1}`
+    }
+}
+
+pub async fn schema(db) {
+    for ks_i in 0..KEYSPACE_COUNT {
+        let ks = get_ks_name(ks_i);
+        if RECREATE_KEYSPACES {
+            println!("rune-info: Dropping keyspace '{ks}'", ks=ks);
+            db.execute(`DROP KEYSPACE IF EXISTS ${ks}`).await?;
+        }
+
+        db.execute(`
+            CREATE KEYSPACE IF NOT EXISTS ${ks}
+            WITH replication = {
+              'class'              : 'NetworkTopologyStrategy',
+              'replication_factor' : ${REPLICATION_FACTOR}
+            }
+            AND tablets = {'enabled': ${TABLETS}}
+        `).await?;
+        println!("rune-info: Created keyspace '{ks}'", ks=ks);
+
+        db.execute(`CREATE TYPE IF NOT EXISTS ${ks}.udt (id bigint, text text)`).await?;
+
+        let vector_def_str = if USE_VECTOR_TYPE {
+            `col_vector vector<float, ${VECTOR_DIM}>,`
+        } else {
+            ""
+        };
+
+        for t_i in 0..TABLE_COUNT_PER_KEYSPACE {
+            let table = `${TABLE_PREFIX}${t_i + 1}`;
+
+            db.execute(`CREATE TABLE IF NOT EXISTS ${ks}.${table} (
+                pk bigint,
+                ck bigint,
+
+                col_bool boolean,
+                col_tinyint tinyint,
+                col_smallint smallint,
+                col_int int,
+                col_bigint bigint,
+                col_float float,
+                col_double double,
+                col_ascii ascii,
+                col_text text,
+                col_varchar varchar,
+                col_blob blob,
+                col_inet inet,
+                col_uuid uuid,
+                col_timeuuid timeuuid,
+                col_date date,
+                col_time time,
+                col_timestamp timestamp,
+                col_duration duration,
+                col_decimal decimal,
+                col_varint varint,
+
+                col_udt udt,
+                col_list frozen<list<frozen<udt>>>,
+                col_set frozen<set<bigint>>,
+                col_map map<text, frozen<udt>>,
+                col_tuple tuple<bigint, text>,
+
+                ${vector_def_str}
+
+                PRIMARY KEY (pk, ck)
+            ) WITH compaction = { 'class' : '${COMPACTION_STRATEGY}' }`).await?;
+            println!("rune-info: Created table '{ks}.{table}'", ks=ks, table=table);
+
+            // Create secondary index on the designated table
+            if ks_i == SI_KEYSPACE_IDX && t_i == SI_TABLE_IDX {
+                db.execute(
+                    `CREATE INDEX IF NOT EXISTS ${table}_idx_col_text ON ${ks}.${table} (col_text)`
+                ).await?;
+                println!(
+                    "rune-info: Created secondary index on '{ks}.{table}(col_text)'",
+                    ks=ks, table=table,
+                );
+            }
+
+            // Create materialized view on the designated table
+            if ks_i == MV_KEYSPACE_IDX && t_i == MV_TABLE_IDX {
+                db.execute(`
+                    CREATE MATERIALIZED VIEW IF NOT EXISTS ${ks}.${table}_by_col_int AS
+                        SELECT * FROM ${ks}.${table}
+                        WHERE col_int IS NOT NULL AND pk IS NOT NULL AND ck IS NOT NULL
+                        PRIMARY KEY (col_int, pk, ck)
+                `).await?;
+                println!(
+                    "rune-info: Created materialized view '{ks}.{table}_by_col_int'",
+                    ks=ks, table=table,
+                );
+            }
+        }
+    }
+    println!(
+        "rune-info: Schema creation complete. " +
+        "Keyspaces: {kc}, Tables per keyspace: {tc}, Total tables: {total}",
+        kc=KEYSPACE_COUNT, tc=TABLE_COUNT_PER_KEYSPACE,
+        total=KEYSPACE_COUNT * TABLE_COUNT_PER_KEYSPACE,
+    );
+}
+
+// ========================================
+// erase(db) - truncate all tables
+// ========================================
+
+pub async fn erase(db, i) {
+    // Only execute on the first iteration (truncate is idempotent but no need to repeat)
+    if i > 0 {
+        return
+    }
+    for ks_i in 0..KEYSPACE_COUNT {
+        let ks = get_ks_name(ks_i);
+        for t_i in 0..TABLE_COUNT_PER_KEYSPACE {
+            let table = `${TABLE_PREFIX}${t_i + 1}`;
+            db.execute(`TRUNCATE TABLE ${ks}.${table}`).await?;
+        }
+    }
+}
+
+// ========================================
+// prepare(db) - called by 'latte run'
+// ========================================
+
+pub async fn prepare(db) {
+    assert!(KEYSPACE_COUNT > 0, "'keyspace_count' must be >= 1");
+    assert!(TABLE_COUNT_PER_KEYSPACE > 0, "'table_count_per_keyspace' must be >= 1");
+    assert!(ROW_COUNT_PER_TABLE > 0, "'row_count_per_table' must be >= 1");
+    assert!(SI_TABLE_IDX < TABLE_COUNT_PER_KEYSPACE, "'si_table_idx' must be < table_count_per_keyspace");
+    assert!(MV_TABLE_IDX < TABLE_COUNT_PER_KEYSPACE, "'mv_table_idx' must be < table_count_per_keyspace");
+
+    db.data.total_tables = KEYSPACE_COUNT * TABLE_COUNT_PER_KEYSPACE;
+
+    // Initialize partition distribution preset (shared across all tables)
+    db.init_partition_row_distribution_preset(
+        "main", ROW_COUNT_PER_TABLE, ROWS_PER_PARTITION, PARTITION_SIZES,
+    ).await?;
+
+    // Build INSERT and GET_BY_CK column lists (vector column is optional)
+    let insert_cols = (
+        "pk, ck, " +
+        "col_bool, col_tinyint, col_smallint, col_int, col_bigint, col_float, col_double, " +
+        "col_ascii, col_text, col_varchar, col_blob, col_inet, col_uuid, col_timeuuid, " +
+        "col_date, col_time, col_timestamp, col_duration, col_decimal, col_varint, " +
+        "col_udt, col_list, col_set, col_map, col_tuple" +
+        if USE_VECTOR_TYPE { ", col_vector" } else { "" }
+    );
+    let insert_vals = (
+        ":pk, :ck, " +
+        ":col_bool, :col_tinyint, :col_smallint, :col_int, :col_bigint, :col_float, :col_double, " +
+        ":col_ascii, :col_text, :col_varchar, :col_blob, :col_inet, :col_uuid, :col_timeuuid, " +
+        ":col_date, :col_time, :col_timestamp, :col_duration, :col_decimal, :col_varint, " +
+        ":col_udt, :col_list, :col_set, :col_map, :col_tuple" +
+        if USE_VECTOR_TYPE { ", :col_vector" } else { "" }
+    );
+
+    // Prepare statements for every table
+    db.data.p_stmt = [];
+    for ks_i in 0..KEYSPACE_COUNT {
+        let tables = [];
+        let ks = get_ks_name(ks_i);
+
+        for t_i in 0..TABLE_COUNT_PER_KEYSPACE {
+            let table = `${TABLE_PREFIX}${t_i + 1}`;
+
+            let p_insert_name = `${ks}.${table}__insert`;
+            let p_insert_cql = `INSERT INTO ${ks}.${table}(${insert_cols}) VALUES (${insert_vals})`;
+            db.prepare(p_insert_name, p_insert_cql).await?;
+
+            let p_get_by_ck_name = `${ks}.${table}__get_by_ck`;
+            let p_get_by_ck_cql = `SELECT * FROM ${ks}.${table} WHERE pk = :pk AND ck = :ck`;
+            db.prepare(p_get_by_ck_name, p_get_by_ck_cql).await?;
+
+            tables.push(#{
+                "INSERT": p_insert_name,
+                "GET_BY_CK": p_get_by_ck_name,
+                "keyspace": ks,
+                "table": table,
+            });
+        }
+        db.data.p_stmt.push(tables);
+    }
+
+    // Prepare SI query — acts as an existence check for the secondary index.
+    // If the SI was not restored by Manager, this PREPARE fails hard.
+    let si_ks = get_ks_name(SI_KEYSPACE_IDX);
+    let si_table = `${TABLE_PREFIX}${SI_TABLE_IDX + 1}`;
+    db.prepare(
+        `${si_ks}.${si_table}__si_check`,
+        `SELECT pk, ck FROM ${si_ks}.${si_table} WHERE col_text = :col_text`,
+    ).await?;
+
+    // Prepare MV query — acts as an existence check for the materialized view.
+    // If the MV was not restored by Manager, this PREPARE fails hard.
+    let mv_ks = get_ks_name(MV_KEYSPACE_IDX);
+    let mv_table = `${TABLE_PREFIX}${MV_TABLE_IDX + 1}`;
+    db.prepare(
+        `${mv_ks}.${mv_table}_by_col_int__mv_check`,
+        `SELECT * FROM ${mv_ks}.${mv_table}_by_col_int WHERE col_int = :col_int`,
+    ).await?;
+
+    println!(
+        "rune-info: Prepared statements for {total} tables + SI/MV existence checks",
+        total=db.data.total_tables,
+    );
+}
+
+// ========================================
+// Utility functions
+// ========================================
+
+async fn generate_decimal(idx) {
+    let dec = if idx % 24 == 0 {
+        None
+    } else if idx % 2 == 0 {
+        let value = hash_range(idx, 4_503_599_627_370_495);
+        if idx % 4 == 0 {
+            `${value}`
+        } else {
+            value
+        }
+    } else {
+        if idx % 3 == 0 {
+            `0.0000000${hash_range(idx, 9876543)}`
+        } else {
+            `${hash_range(idx, 9876543)}.${hash_range(idx, 9876543)}`
+        }
+    };
+    dec
+}
+
+/// Generate deterministic row data for a given row index within a specific table.
+/// Uses 'seed_offset' derived from (ks_idx, t_idx) to make data unique per table.
+/// The 'idx' controls null distribution (same pattern across tables),
+/// while 'data_seed' controls actual values (unique per table).
+async fn generate_row_data(db, row_i, ks_idx, t_idx) {
+    let idx = row_i % ROW_COUNT_PER_TABLE;
+    let partition = db.get_partition_info("main", idx).await;
+
+    // Per-table seed offset ensures unique data across tables (same approach as schema_scale.rn)
+    let seed_offset = hash2(ks_idx, t_idx) / 2;
+    let data_seed = idx + seed_offset;
+
+    let pk = hash(partition.idx + seed_offset);
+    let ck = hash(data_seed);
+
+    // 'idx' controls null distribution; 'data_seed' controls generated values
+    let div3 = idx % 3;
+    let mult = if idx % 2 == 0 { -1 } else { 1 };
+
+    let col_bool = if div3 == 0 { None } else { div3 == 1 };
+    let col_tinyint = if idx % 17 == 0 { None } else { hash_range(data_seed, 127) * mult };
+    let col_smallint = if idx % 23 == 0 { None } else { hash_range(data_seed, 32_767) * mult };
+    let col_int = if idx % 29 == 0 { None } else { hash_range(data_seed, 2_147_483_647) * mult };
+    let col_bigint = if idx % 37 == 0 { None } else { hash(data_seed) * mult };
+    let col_float = if idx % 11 == 0 { None } else {
+        normal_f32(data_seed, 1234.0, if idx % 2 == 0 { 999.9 } else { 555.0 })
+    };
+    let col_double = if idx % 12 == 0 { None } else { normal(data_seed, 0.0, 1234567890.0) };
+    let col_ascii = if idx % 13 == 0 { None } else { text(data_seed, hash_range(data_seed, 64)) };
+    let col_text = if idx % 14 == 0 { None } else { text(data_seed + 200, hash_range(data_seed, 64)) };
+    let col_varchar = if idx % 15 == 0 { None } else { text(data_seed + 300, hash_range(data_seed, 64)) };
+    let col_blob = if idx % 16 == 0 { None } else { blob(data_seed + 400, hash_range(data_seed, 64)) };
+    let col_inet = if idx % 17 == 0 { None } else {(
+        `${hash_range(data_seed, 255)}` +
+        `.${hash_range(data_seed + 60, 255)}` +
+        `.${hash_range(data_seed + 120, 255)}` +
+        `.${hash_range(data_seed + 180, 255)}`
+    )};
+    let col_uuid = if idx % 18 == 0 { None } else { uuid(data_seed) };
+    let col_timeuuid = if idx % 19 == 0 { None } else {
+        `474ecf7${data_seed % 7}-4fea-11ef-${data_seed % 6}eba-${data_seed % 8}${data_seed % 9}1023456789`
+    };
+    let col_date = if idx % 20 == 0 { None } else {
+        if idx % 2 == 0 {
+            `20${idx % 5}${idx % 9}-10-2${idx % 7}`
+        } else {
+            (hash_range(data_seed, 4_294_967_295) + 1_000_000_000) % 4_294_967_295
+        }
+    };
+    let col_time = if idx % 21 == 0 { None } else {
+        if idx % 2 == 0 {
+            `1${idx % 9}:4${idx % 9}:3${idx % 9}`
+        } else {
+            hash_range(data_seed + 777, 86_399_999_999_999)
+        }
+    };
+    let col_timestamp = if idx % 22 == 0 { None } else { hash(data_seed + 888) };
+    let col_duration = if idx % 23 == 0 { "2y3mo2w6d23h59m" } else {
+        `${idx % 11}mo${idx % 9}d${idx % 23}h${idx % 59}m${idx % 31}s`
+    };
+    let col_decimal = generate_decimal(idx).await;
+    let col_varint = if idx % 24 == 0 { None } else {
+        hash_range(data_seed, 9_223_372_036_854_775_807) * mult
+    };
+
+    let col_udt = if idx % 25 == 0 { None } else {
+        #{"id": hash(data_seed), "text": if idx % 13 == 0 { None } else { text(data_seed, 16) }}
+    };
+    let col_list = if idx % 26 == 0 { None } else { [
+        #{"id": hash(data_seed + 100), "text": text(data_seed + 100, 20)},
+        #{"id": hash(data_seed + 200), "text": text(data_seed + 200, 20)},
+    ] };
+    let col_set = if idx % 27 == 0 { None } else { [hash(data_seed + 888), hash(data_seed + 999)] };
+    if !is_none(col_set) {
+        col_set.sort();
+    }
+    let col_map = if idx % 28 == 0 { None } else { [
+        (text(data_seed + 123, 10), #{"id": hash(data_seed), "text": text(data_seed, 16)}),
+        (text(data_seed + 223, 10), #{"id": hash(data_seed), "text": text(data_seed, 16)}),
+        (text(data_seed + 323, 10), #{"id": hash(data_seed), "text": text(data_seed, 16)}),
+    ] };
+    if !is_none(col_map) {
+        col_map.sort();
+    }
+    let col_tuple = if idx % 29 == 0 { None } else { if idx % 2 == 0 {
+        (hash(data_seed + 333), if idx % 12 == 0 { None } else { text(data_seed + 444, 20) })
+    } else {
+        [hash(data_seed + 333), text(data_seed + 444, 20)]
+    } };
+    let col_vector = [];
+    if USE_VECTOR_TYPE {
+        for vi in 0..VECTOR_DIM {
+            // Use hash2 to combine data_seed and dimension index, avoiding overflow
+            // that would occur with data_seed * VECTOR_DIM (data_seed includes large hash offset)
+            let seed = hash2(data_seed, vi);
+            col_vector.push(
+                normal_f32(seed, 1234.0, if idx % 2 == 0 { 999.9 } else { 555.0 })
+            );
+        }
+    }
+
+    let ret = #{
+        "pk": pk, "ck": ck, "partition": partition,
+        "col_bool": col_bool, "col_tinyint": col_tinyint, "col_smallint": col_smallint,
+        "col_int": col_int, "col_bigint": col_bigint, "col_float": col_float, "col_double": col_double,
+        "col_ascii": col_ascii, "col_text": col_text, "col_varchar": col_varchar,
+        "col_blob": col_blob, "col_inet": col_inet, "col_uuid": col_uuid, "col_timeuuid": col_timeuuid,
+        "col_date": col_date, "col_time": col_time, "col_timestamp": col_timestamp,
+        "col_duration": col_duration, "col_decimal": col_decimal, "col_varint": col_varint,
+        "col_udt": col_udt, "col_list": col_list, "col_set": col_set, "col_map": col_map, "col_tuple": col_tuple,
+        "col_names": [
+            "col_bool", "col_tinyint", "col_smallint", "col_int", "col_bigint", "col_float",
+            "col_double", "col_ascii", "col_text", "col_varchar", "col_blob", "col_inet",
+            "col_uuid", "col_timeuuid", "col_date", "col_time", "col_timestamp",
+            "col_duration", "col_decimal", "col_varint", "col_udt", "col_list",
+            "col_set", "col_map", "col_tuple",
+        ]
+    };
+    if USE_VECTOR_TYPE {
+        ret["col_vector"] = col_vector;
+        ret["col_names"].push("col_vector");
+    }
+    ret
+}
+
+/// Resolve which keyspace/table a stress cycle index maps to (round-robin across all tables).
+/// Returns (ks_idx, t_idx, row_i).
+async fn resolve_table_for_cycle(i, total_tables) {
+    let table_idx = i % total_tables;
+    let row_i = i / total_tables;
+    let ks_idx = table_idx / TABLE_COUNT_PER_KEYSPACE;
+    let t_idx = table_idx % TABLE_COUNT_PER_KEYSPACE;
+    (ks_idx, t_idx, row_i)
+}
+
+/// Validate all columns of a single row against expected data.
+/// 'row' is the CQL result row, 'd' is the expected data object.
+/// 'err_info' is a string prefix for error messages.
+/// Uses signal_failure (non-fatal) for mismatches so stress continues.
+async fn validate_row_columns(db, d, row, err_info) {
+    assert!(d.col_names.len() > 0);
+    for col_name in d.col_names {
+        let actual = row.get(col_name)?;
+        let expected = d.get(col_name)?;
+        if !is_none(expected) {
+            if col_name == "col_uuid" || col_name == "col_decimal" {
+                // Uuid: stored as Uuid object, returned as string — align.
+                // Decimal: stored as mixed types — align.
+                expected = `${expected}`;
+            } else if col_name == "col_duration" {
+                // TODO: implement proper comparison for Duration CQL type.
+                // Stored as string like "1mo1d1h1m1s", returned as
+                // {"days": N, "months": N, "nanoseconds": N}.
+                continue
+            } else if col_name == "col_date" {
+                // TODO: implement proper comparison for Date CQL type.
+                continue
+            } else if col_name == "col_time" {
+                // TODO: implement proper comparison for Time CQL type.
+                continue
+            }
+            if actual != expected {
+                db.signal_failure(
+                    `${err_info}, column '${col_name}'. ` +
+                    `Actual value is '${actual}', but expected is '${expected}'`
+                ).await?;
+            }
+        } else {
+            if !is_none(actual) {
+                db.signal_failure(
+                    `${err_info}, column '${col_name}'. ` +
+                    `Expected NULL but got '${actual}'`
+                ).await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+// ========================================
+// User functions (stress loop)
+// ========================================
+
+/// Insert rows round-robin across all tables.
+/// Set -d to row_count_per_table * total_tables to fill all tables.
+pub async fn insert(db, i) {
+    let mapping = resolve_table_for_cycle(i, db.data.total_tables).await;
+    let ks_idx = mapping.0;
+    let t_idx = mapping.1;
+    let row_i = mapping.2;
+
+    let d = generate_row_data(db, row_i, ks_idx, t_idx).await;
+    let col_data = [
+        d.pk, d.ck,
+        d.col_bool, d.col_tinyint, d.col_smallint, d.col_int, d.col_bigint, d.col_float, d.col_double,
+        d.col_ascii, d.col_text, d.col_varchar, d.col_blob, d.col_inet, d.col_uuid, d.col_timeuuid,
+        d.col_date, d.col_time, d.col_timestamp, d.col_duration, d.col_decimal, d.col_varint,
+        d.col_udt, d.col_list, d.col_set, d.col_map, d.col_tuple,
+    ];
+    if USE_VECTOR_TYPE {
+        col_data.push(d.col_vector);
+    }
+    db.execute_prepared(db.data.p_stmt[ks_idx][t_idx].INSERT, col_data).await?
+}
+
+/// Validate base table data by pk+ck lookup, column-by-column comparison.
+/// Round-robin across all tables. Set -d to row_count_per_table * total_tables.
+pub async fn get_by_ck(db, i) {
+    let mapping = resolve_table_for_cycle(i, db.data.total_tables).await;
+    let ks_idx = mapping.0;
+    let t_idx = mapping.1;
+    let row_i = mapping.2;
+
+    let d = generate_row_data(db, row_i, ks_idx, t_idx).await;
+    let rows = db.execute_prepared_with_result(
+        db.data.p_stmt[ks_idx][t_idx].GET_BY_CK, [d.pk, d.ck]
+    ).await?;
+
+    let rows_len = rows.len();
+    let err_info = `ks='${db.data.p_stmt[ks_idx][t_idx].keyspace}', ` +
+        `table='${db.data.p_stmt[ks_idx][t_idx].table}', pk='${d.pk}', ck='${d.ck}'`;
+
+    if rows_len != 1 {
+        db.signal_failure(
+            `Expected exactly 1 row but got '${rows_len}'. ${err_info}`
+        ).await?;
+        return
+    }
+    validate_row_columns(db, d, rows.0, err_info).await?;
+}
+
+/// Validate base table data (column-by-column) round-robin across all tables.
+/// SI and MV existence is verified at prepare() time — if either is missing after
+/// restore, prepare() fails hard before validation starts.
+/// Set -d to row_count_per_table * total_tables.
+pub async fn validate(db, i) {
+    let mapping = resolve_table_for_cycle(i, db.data.total_tables).await;
+    let ks_idx = mapping.0;
+    let t_idx = mapping.1;
+    let row_i = mapping.2;
+
+    let d = generate_row_data(db, row_i, ks_idx, t_idx).await;
+    let rows = db.execute_prepared_with_result(
+        db.data.p_stmt[ks_idx][t_idx].GET_BY_CK, [d.pk, d.ck]
+    ).await?;
+    let rows_len = rows.len();
+    let err_info = `ks='${db.data.p_stmt[ks_idx][t_idx].keyspace}', ` +
+        `table='${db.data.p_stmt[ks_idx][t_idx].table}', pk='${d.pk}', ck='${d.ck}'`;
+    if rows_len != 1 {
+        db.signal_failure(
+            `Expected exactly 1 row but got '${rows_len}'. ${err_info}`
+        ).await?;
+    } else {
+        validate_row_columns(db, d, rows.0, err_info).await?;
+    }
+}

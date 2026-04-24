@@ -1,0 +1,20 @@
+test_duration: 180
+
+stress_cmd:
+  - >-
+    latte run --function insert --duration 200000 data_dir/latte/mgmt_data_validation.rn
+
+stress_read_cmd:
+  - >-
+    latte run --function validate --duration 200000 data_dir/latte/mgmt_data_validation.rn
+
+instance_type_db: 'i8g.large'
+instance_type_loader: 'c6i.large'
+
+rack_aware_loader: true
+region_name: 'us-east-1 us-west-2'
+n_db_nodes: '3 3'
+n_loaders: 1
+simulated_racks: 3
+
+client_encrypt: true
