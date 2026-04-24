@@ -24,7 +24,7 @@ instance_type_db: 'i8g.large'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'supports_high_disk_utilization'
-nemesis_seed: '019'
+nemesis_seed: 19
 nemesis_during_prepare: false
 
 user_prefix: 'elasticity-test-nemesis'

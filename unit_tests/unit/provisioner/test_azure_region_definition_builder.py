@@ -45,11 +45,11 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config(monkeypatch
         SCT_TEST_ID=test_config.test_id(),
         SCT_CONFIG_FILES=f'["{provisioner_dir.absolute()}/azure_default_config.yaml"]',
         SCT_AZURE_REGION_NAME="['eastus', 'easteu']",
-        SCT_N_DB_NODES="3 1",
+        SCT_N_DB_NODES="[3, 1]",
         SCT_USER_PREFIX="unit",
         SCT_AZURE_IMAGE_DB="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/"
         "Microsoft.Compute/images/scylla-5.2.0-dev-x86_64-2022-08-22T04-18-36Z",
-        SCT_N_LOADERS="2 0",
+        SCT_N_LOADERS="[2, 0]",
         SCT_N_MONITOR_NODES="1",
     )
     for key, value in env_config._asdict().items():

@@ -8,7 +8,7 @@ user_prefix: 'gemini-with-nemesis-3h-normal'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'not enospc and not IsolateNodeWithIptableRuleNemesis and not IsolateNodeWithProcessSignalNemesis'
-nemesis_seed: '032'
+nemesis_seed: 32
 
 gemini_cmd: |
   --duration 3h

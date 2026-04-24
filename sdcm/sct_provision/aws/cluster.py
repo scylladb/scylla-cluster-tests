@@ -184,8 +184,6 @@ class ClusterBase(BaseModel):
             return [int(num) for num in node_nums]
         if isinstance(node_nums, int):
             return [node_nums]
-        if isinstance(node_nums, str):
-            return [int(num) for num in node_nums.split()]
         raise ValueError("Unexpected value of %s parameter" % (self._NODE_NUM_PARAM_NAME,))
 
     @property
@@ -296,8 +294,6 @@ class DBCluster(ClusterBase):
             return [int(num) for num in node_nums]
         elif isinstance(node_nums, int):
             return [node_nums]
-        elif isinstance(node_nums, str):
-            return [int(num) for num in node_nums.split()]
         else:
             raise ValueError("Unexpected value of %s parameter" % (self._NODE_NUM_PARAM_NAME,))
 
@@ -310,8 +306,6 @@ class DBCluster(ClusterBase):
             return [int(num) for num in zero_token_nodes_num]
         elif isinstance(zero_token_nodes_num, int):
             return [zero_token_nodes_num]
-        elif isinstance(zero_token_nodes_num, str):
-            return [int(num) for num in zero_token_nodes_num.split()]
         else:
             raise ValueError("Unexpected value of %s parameter" % (self._ZEROTOKEN_NODE_NUM_PARAM_NAME,))
 

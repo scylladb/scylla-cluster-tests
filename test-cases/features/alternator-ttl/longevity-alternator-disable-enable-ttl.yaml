@@ -32,7 +32,7 @@ instance_type_db: 'i4i.large'
 n_db_nodes: 6
 
 nemesis_class_name: 'NoOpMonkey'
-nemesis_seed: '033'
+nemesis_seed: 33
 nemesis_interval: 30
 
 user_prefix: 'alternator-disable-enable-ttl'

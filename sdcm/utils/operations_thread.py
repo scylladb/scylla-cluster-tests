@@ -128,7 +128,7 @@ class OperationThread:
         nemesis_seed = self.thread_params.db_cluster.params.get("nemesis_seed")
         if isinstance(nemesis_seed, list):
             nemesis_seed = nemesis_seed[0]
-        self.generator = random.Random(int(nemesis_seed)) if nemesis_seed is not None else random.Random()
+        self.generator = random.Random(nemesis_seed) if nemesis_seed is not None else random.Random()
         self._thread = threading.Thread(daemon=True, name=f"{self.__class__.__name__}_{thread_name}", target=self.run)
         self.termination_event = thread_params.termination_event
 

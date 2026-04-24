@@ -18,6 +18,7 @@ from collections import namedtuple
 import pytest
 
 from sdcm import sct_config
+from sdcm.sct_config import bool_or_list_or_eval, int_or_list_or_eval, str_or_list_or_eval
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_latest_scylla_release
 
@@ -239,8 +240,8 @@ def test_14_check_rackaware_config_no_rack_without_loader(monkeypatch):
     monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1 eu-west-2")
     monkeypatch.setenv("SCT_AVAILABILITY_ZONE", "a,b")
     monkeypatch.setenv("SCT_SIMULATED_RACKS", "0")
-    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
-    monkeypatch.setenv("SCT_N_LOADERS", "2 2")
+    monkeypatch.setenv("SCT_N_DB_NODES", "[2, 2]")
+    monkeypatch.setenv("SCT_N_LOADERS", "[2, 2]")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
     monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2")
@@ -282,8 +283,8 @@ def test_14_check_rackaware_config_multi_region(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_RACK_AWARE_LOADER", "true")
     monkeypatch.setenv("SCT_REGION_NAME", '["eu-west-1", "us-east-1"]')
-    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
-    monkeypatch.setenv("SCT_N_LOADERS", "1 0")
+    monkeypatch.setenv("SCT_N_DB_NODES", "[2, 2]")
+    monkeypatch.setenv("SCT_N_LOADERS", "[1, 0]")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
     monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2")
@@ -304,8 +305,8 @@ def test_14_check_rackaware_config_multi_az_and_region(monkeypatch):
     monkeypatch.setenv("SCT_RACK_AWARE_LOADER", "true")
     monkeypatch.setenv("SCT_REGION_NAME", '["eu-west-1", "us-east-1"]')
     monkeypatch.setenv("SCT_AVAILABILITY_ZONE", "a,b")
-    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
-    monkeypatch.setenv("SCT_N_LOADERS", "1 1")
+    monkeypatch.setenv("SCT_N_DB_NODES", "[2, 2]")
+    monkeypatch.setenv("SCT_N_LOADERS", "[1, 1]")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
     monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2")
@@ -553,7 +554,7 @@ def test_27_run_fullscan_params_validtion_negative(monkeypatch):
 
 
 def test_28_number_of_nodes_per_az_must_be_divisable_by_number_of_az(monkeypatch):
-    monkeypatch.setenv("SCT_N_DB_NODES", "3 3 2")
+    monkeypatch.setenv("SCT_N_DB_NODES", "[3, 3, 2]")
     monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1 eu-west-2 us-east-1")
     monkeypatch.setenv("SCT_AVAILABILITY_ZONE", "a,b,c")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -825,3 +826,189 @@ def test_docker_single_rack_no_snitch_override(monkeypatch):
     conf.verify_configuration()
 
     assert conf.get("endpoint_snitch") is None
+
+
+# ---------------------------------------------------------------------------
+# Tests for IntOrList, BooleanOrList, StringOrList coerce functions.
+#
+# Each type must work correctly for both input paths:
+#   config path — value already parsed by YAML (native int/bool/list/str/None)
+#   env path    — value is always a raw string from os.environ
+# ---------------------------------------------------------------------------
+
+
+# ── int_or_list_or_eval ─────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        # config path: YAML-native types
+        pytest.param(None, None, id="config_none"),
+        pytest.param(3, 3, id="config_int"),
+        pytest.param(0, 0, id="config_zero"),
+        pytest.param([3, 1], [3, 1], id="config_list_ints"),
+        pytest.param([253, 328], [253, 328], id="config_list_ints_long"),
+        pytest.param([3], 3, id="config_single_item_list_unwrapped"),
+        # env path: raw strings from SCT_* environment variables
+        pytest.param("3", 3, id="env_single_int"),
+        pytest.param("0", 0, id="env_zero"),
+        pytest.param("[3, 1]", [3, 1], id="env_list_literal"),
+        pytest.param("[3,1]", [3, 1], id="env_list_literal_no_spaces"),
+        pytest.param("[3, 3, 2]", [3, 3, 2], id="env_list_literal_three"),
+        pytest.param("[1, 0]", [1, 0], id="env_list_literal_with_zero"),
+        pytest.param("[3]", 3, id="env_single_item_list_unwrapped"),
+        # negative integers
+        pytest.param(-5, -5, id="config_negative_int"),
+        pytest.param("-5", -5, id="env_negative_int"),
+        pytest.param([-5, -3], [-5, -3], id="config_negative_list"),
+        pytest.param("[-5, -3]", [-5, -3], id="env_negative_list"),
+        # empty list
+        pytest.param([], [], id="config_empty_list"),
+        pytest.param("[]", [], id="env_empty_list"),
+    ],
+)
+def test_int_or_list_or_eval_valid(value, expected):
+    assert int_or_list_or_eval(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value,error_fragment",
+    [
+        # space-separated strings are no longer accepted; literal_eval fails then int() fails
+        pytest.param("3 1", "isn't a valid int or list", id="env_space_sep_two"),
+        pytest.param("3 3 3", "isn't a valid int or list", id="env_space_sep_three"),
+        pytest.param("  5 10  ", "isn't a valid int or list", id="env_space_sep_padded"),
+        # non-numeric strings
+        pytest.param("foo", "isn't a valid int or list", id="env_non_numeric"),
+        # invalid list element types
+        pytest.param(["a", "b"], "isn't an integer", id="config_list_str_elements"),
+        pytest.param(["3", "1"], "isn't an integer", id="config_list_quoted_ints_rejected"),
+        # leading 0
+        pytest.param("033", "isn't a valid int or list", id="env_leading_zero"),
+        # wrong scalar type
+        pytest.param(3.14, "isn't a valid int or list", id="config_float"),
+        pytest.param(False, "isn't a valid int or list", id="config_bool"),
+        # bool True is also rejected (symmetry with False)
+        pytest.param(True, "isn't a valid int or list", id="config_bool_true"),
+        # list element that is a bool (bool subclasses int but must be excluded)
+        pytest.param([True, 1], "isn't an integer", id="config_list_bool_element"),
+        # empty string
+        pytest.param("", "isn't a valid int or list", id="env_empty_string"),
+    ],
+)
+def test_int_or_list_or_eval_invalid(value, error_fragment):
+    with pytest.raises(ValueError, match=error_fragment):
+        int_or_list_or_eval(value)
+
+
+# ── bool_or_list_or_eval ────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        # config path: YAML-native types
+        pytest.param(None, None, id="config_none"),
+        pytest.param(True, True, id="config_true"),
+        pytest.param(False, False, id="config_false"),
+        pytest.param([True, False], [True, False], id="config_list_bools"),
+        pytest.param([True], True, id="config_single_item_list_unwrapped"),
+        pytest.param([False], False, id="config_single_false_unwrapped"),
+        pytest.param(["true", "false"], [True, False], id="config_list_str_bools"),  # YAML quoted
+        pytest.param([True, "0"], [True, False], id="config_mixed_list"),
+        # env path: raw strings from SCT_* environment variables
+        pytest.param("true", True, id="env_true"),
+        pytest.param("false", False, id="env_false"),
+        pytest.param("1", True, id="env_one"),
+        pytest.param("0", False, id="env_zero"),
+        pytest.param("yes", True, id="env_yes"),
+        pytest.param("no", False, id="env_no"),
+        pytest.param("[true, false]", [True, False], id="env_list_literal_lower"),
+        pytest.param("[True, False]", [True, False], id="env_list_literal_python"),
+        pytest.param("[true]", True, id="env_list_literal_single_unwrapped"),
+        # Python-capitalized strings (ast.literal_eval path)
+        pytest.param("True", True, id="env_capitalized_true"),
+        pytest.param("False", False, id="env_capitalized_false"),
+        # strtobool aliases
+        pytest.param("on", True, id="env_on"),
+        pytest.param("off", False, id="env_off"),
+        pytest.param("ON", True, id="env_on_upper"),
+        pytest.param("YES", True, id="env_yes_upper"),
+        pytest.param("NO", False, id="env_no_upper"),
+    ],
+)
+def test_bool_or_list_or_eval_valid(value, expected):
+    assert bool_or_list_or_eval(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value,error_fragment",
+    [
+        # space-separated strings are no longer accepted; strtobool fails on them
+        pytest.param("true false", "cannot be converted to bool", id="env_space_sep_bools"),
+        pytest.param("1 0", "cannot be converted to bool", id="env_space_sep_int_bools"),
+        pytest.param("  true false  ", "cannot be converted to bool", id="env_space_sep_padded"),
+        # unrecognized boolean string
+        pytest.param("maybe", "cannot be converted", id="env_non_bool_string"),
+        # list with unrecognized element
+        pytest.param(["yes", "maybe"], "isn't a list of booleans", id="config_list_invalid_element"),
+        # list with mixed types (both python and yaml style bools)
+        pytest.param("[True, false]", "cannot be converted to bool", id="env_list_literal_mixed_types"),
+        # int does not pass trough
+        pytest.param(1, "isn't a valid bool or list", id="config_int"),
+        # empty string is unrecognized by strtobool
+        pytest.param("", "cannot be converted to bool", id="env_empty_string"),
+        # list containing None cannot be coerced
+        pytest.param([True, None], "isn't a list of booleans", id="config_list_with_none"),
+    ],
+)
+def test_bool_or_list_or_eval_invalid(value, error_fragment):
+    with pytest.raises(ValueError, match=error_fragment):
+        bool_or_list_or_eval(value)
+
+
+# ── str_or_list_or_eval (StringOrList) ──────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        # config path: YAML-native types
+        pytest.param(None, None, id="config_none"),
+        pytest.param("eu-west-1", ["eu-west-1"], id="single_str"),
+        pytest.param(["eu-west-1", "us-east-1"], ["eu-west-1", "us-east-1"], id="config_list_strs"),
+        # env path: raw strings from SCT_* environment variables
+        pytest.param("['eu-west-1', 'us-east-1']", ["eu-west-1", "us-east-1"], id="env_py_list"),
+        # a plain string with spaces is treated as a single string (not split)
+        pytest.param(
+            "modify_table and not disruptive", ["modify_table and not disruptive"], id="env_space_str_kept_as_one"
+        ),
+        # empty inputs
+        pytest.param("", [], id="env_empty_string"),
+        pytest.param([], [], id="config_empty_list"),
+        # single-element list is NOT unwrapped (unlike int/bool)
+        pytest.param(["only"], ["only"], id="config_single_element_list_kept"),
+        # JSON double-quoted list literal (ast.literal_eval handles it)
+        pytest.param('["eu-west-1", "us-east-1"]', ["eu-west-1", "us-east-1"], id="env_json_list"),
+    ],
+)
+def test_str_or_list_or_eval_valid(value, expected):
+    assert str_or_list_or_eval(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value,error_fragment",
+    [
+        pytest.param(1, "isn't a string", id="non_string_input"),
+        pytest.param("['eu-west-1', 'us-east-1', 1]", "isn't a string", id="env_element_not_str"),
+        pytest.param("{'key': 'val'}", "parsed to", id="env_parses_to_dict"),
+        pytest.param("42", "parsed to", id="env_parses_to_int"),
+        # config path: direct list with non-string elements
+        pytest.param([True, "a"], "isn't a string", id="config_list_bool_element"),
+        pytest.param(["a", 1], "isn't a string", id="config_list_int_element"),
+    ],
+)
+def test_str_or_list_or_eval_invalid(value, error_fragment):
+    with pytest.raises(ValueError, match=error_fragment):
+        str_or_list_or_eval(value)

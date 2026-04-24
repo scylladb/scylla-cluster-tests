@@ -1543,10 +1543,9 @@ class ClusterTester(unittest.TestCase):
         nemesis_seeds = self.params.get("nemesis_seed")
 
         # Normalize seeds to a list of ints (or None).
+        # nemesis_seed is typed as int | list[int] | None — no string handling needed.
         if isinstance(nemesis_seeds, int):
             nemesis_seeds = [nemesis_seeds]
-        elif isinstance(nemesis_seeds, str):
-            nemesis_seeds = [int(seed) for seed in nemesis_seeds.split()]
 
         # Build the flat list of class names.  The old 'Class:N' count syntax and
         # space-separated strings are no longer supported — use an explicit YAML list.
@@ -4193,7 +4192,8 @@ class ClusterTester(unittest.TestCase):
         population = " -pop seq="
 
         total_keys = size_in_gb * 1024 * 1024
-        n_loaders = int(self.params.get("n_loaders"))
+        _n_loaders = self.params.get("n_loaders")
+        n_loaders = sum(_n_loaders) if isinstance(_n_loaders, list) else _n_loaders
         keys_per_node = total_keys // n_loaders
 
         write_queue = []
