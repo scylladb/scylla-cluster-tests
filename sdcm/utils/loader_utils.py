@@ -352,14 +352,7 @@ class LoaderUtilsMixin:
                     continue
 
                 for stress_cmd in stress_params:
-                    # cover multitenant test
-                    if isinstance(stress_cmd, list):
-                        cmds = []
-                        for current_cmd in stress_cmd:
-                            cmds.append(_set_credentials_to_cmd(cmd=current_cmd))
-                        stress_cmds.append(cmds)
-                    else:
-                        stress_cmds.append(_set_credentials_to_cmd(cmd=stress_cmd))
+                    stress_cmds.append(_set_credentials_to_cmd(cmd=stress_cmd))
 
                 params[stress_op] = stress_cmds
         except EnvironmentError as error_message:

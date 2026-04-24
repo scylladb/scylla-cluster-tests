@@ -359,7 +359,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
     @cached_property
     def tenants_number(self) -> int:
-        return self.params.get("k8s_tenants_num") or 1
+        return 1
 
     @property
     def allowed_labels_on_scylla_node(self):
@@ -826,7 +826,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                 self.kubectl(patch_cmd, namespace=SCYLLA_OPERATOR_NAMESPACE)
             if enable_tls == "true" and ComparableScyllaOperatorVersion(scylla_operator_version) >= "1.9.0":
                 # around 10 keys that need to be cached per cluster
-                crypto_key_buffer_size = self.params.get("k8s_tenants_num") * 10
+                crypto_key_buffer_size = 10
                 for flag in (
                     f"--crypto-key-buffer-size-min={crypto_key_buffer_size}",
                     f"--crypto-key-buffer-size-max={crypto_key_buffer_size}",
@@ -2615,7 +2615,7 @@ class PodCluster(cluster.BaseCluster):
             dc_idx=dc_idx,
             rack=rack,
         )
-        # NOTE: use lock to avoid hanging running in a multitenant setup
+        # NOTE: use lock to avoid hanging during parallel node init
         with NODE_INIT_LOCK:
             node.init()
         return node

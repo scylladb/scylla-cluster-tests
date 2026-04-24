@@ -109,7 +109,7 @@ class SstablesValidator(TeardownValidator):
             ScrubValidationErrorEvent(node.name, s3_link).publish()
 
     def validate(self):
-        for cluster in self.tester.db_clusters_multitenant:
+        for cluster in [self.tester.db_cluster]:
             keyspace = self.configuration.get("keyspace")
             table = self.configuration.get("table")
             timeout = self.configuration.get("timeout", 1200)

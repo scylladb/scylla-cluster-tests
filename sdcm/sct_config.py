@@ -236,56 +236,6 @@ def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -
 BooleanOrList = Annotated[bool | list[bool], BeforeValidator(boolean_or_space_separated_booleans)]
 
 
-class MultitenantValueMarker:
-    """Marker class to identify MultitenantValue types at runtime."""
-
-
-def is_multitenant_field(field: pydantic_fields.FieldInfo) -> bool:
-    """Check if a field uses MultitenantValue type by looking for the marker in its annotation."""
-    if not hasattr(field, "annotation") or field.annotation is None:
-        return False
-
-    # Check in field.metadata first (where Pydantic stores annotation metadata)
-    if hasattr(field, "metadata"):
-        for meta in field.metadata:
-            if isinstance(meta, MultitenantValueMarker):
-                return True
-
-    # Check in annotation args
-    def check_annotation(annotation):
-        origin = get_origin(annotation)
-        if origin is Annotated:
-            for arg in get_args(annotation):
-                if isinstance(arg, MultitenantValueMarker):
-                    return True
-                # Recursively check nested annotations
-                if check_annotation(arg):
-                    return True
-        return False
-
-    return check_annotation(field.annotation)
-
-
-def MultitenantValue(inner_type):  # noqa: N802
-    """
-    Type wrapper that adds dict[str, T] support to any type T for k8s multitenancy.
-
-    Usage: MultitenantValue[IntOrList], MultitenantValue[StringOrList], etc.
-
-    This allows configuration values to be specified as:
-    - Single value: 5
-    - List (index-based): [5, 7]
-    - Dict (key-based): {tenant1: 5, tenant2: 7}
-
-    The presence of this type automatically indicates multitenancy support,
-    eliminating the need for k8s_multitenancy_supported=True flag.
-    """
-    return Annotated[
-        inner_type | dict[str, inner_type],
-        MultitenantValueMarker(),
-    ]
-
-
 def dict_or_str(value: dict | str | None) -> dict | None:
     if value is None:
         return None
@@ -883,7 +833,7 @@ class SCTConfiguration(BaseModel):
     )
 
     # Nemesis config options
-    nemesis_class_name: MultitenantValue(StringOrList) = SctField(
+    nemesis_class_name: StringOrList = SctField(
         description="""
                 Nemesis class to use (possible types in sdcm.nemesis).
                 Supported syntax:
@@ -898,19 +848,19 @@ class SCTConfiguration(BaseModel):
                 longer supported. Use an explicit YAML list instead.
         """,
     )
-    nemesis_interval: MultitenantValue(IntOrList) = SctField(
+    nemesis_interval: IntOrList = SctField(
         description="""Nemesis sleep interval to use if None provided specifically in the test""",
     )
-    nemesis_sequence_sleep_between_ops: MultitenantValue(IntOrList) = SctField(
+    nemesis_sequence_sleep_between_ops: IntOrList = SctField(
         description="""Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests""",
     )
-    nemesis_during_prepare: MultitenantValue(BooleanOrList) = SctField(
+    nemesis_during_prepare: BooleanOrList = SctField(
         description="""Run nemesis during prepare stage of the test""",
     )
-    nemesis_seed: MultitenantValue(IntOrList) = SctField(
+    nemesis_seed: IntOrList = SctField(
         description="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey""",
     )
-    nemesis_add_node_cnt: MultitenantValue(IntOrList) = SctField(
+    nemesis_add_node_cnt: IntOrList = SctField(
         description="""Add/remove nodes during GrowShrinkCluster nemesis""",
     )
     nemesis_grow_shrink_instance_type: String = SctField(
@@ -919,7 +869,7 @@ class SCTConfiguration(BaseModel):
     cluster_target_size: IntOrList = SctField(
         description="""Used for scale test: max size of the cluster""",
     )
-    space_node_threshold: MultitenantValue(IntOrList) = SctField(
+    space_node_threshold: IntOrList = SctField(
         description="""
              Space node threshold before starting nemesis (bytes)
              The default value is 6GB (6x1024^3 bytes)
@@ -927,12 +877,12 @@ class SCTConfiguration(BaseModel):
              https://github.com/scylladb/scylla/issues/1140
          """,
     )
-    nemesis_filter_seeds: MultitenantValue(BooleanOrList) = SctField(
+    nemesis_filter_seeds: BooleanOrList = SctField(
         description="""If true runs the nemesis only on non seed nodes""",
     )
 
     # Stress Commands
-    stress_cmd: MultitenantValue(StringOrList) = SctField(
+    stress_cmd: StringOrList = SctField(
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. multiple commands can passed as a list",
     )
     gemini_schema_url: String = SctField(
@@ -1435,9 +1385,6 @@ class SCTConfiguration(BaseModel):
     k8s_log_api_calls: Boolean = SctField(
         description="Defines whether the K8S API server logging must be enabled and its logs gathered. Be aware that it may be a really huge set of data.",
     )
-    k8s_tenants_num: int = SctField(
-        description="Number of Scylla clusters to create in the K8S cluster.",
-    )
     k8s_enable_tls: Boolean = SctField(
         description="Defines whether to enable the operator serverless options.",
     )
@@ -1545,7 +1492,7 @@ class SCTConfiguration(BaseModel):
     keyspace_num: int = SctField(
         description="Number of keyspaces to use in the test",
     )
-    round_robin: MultitenantValue(BooleanOrList) = SctField(
+    round_robin: BooleanOrList = SctField(
         description="Enable or disable round robin selection of nodes for operations",
     )
     batch_size: int = SctField(
@@ -1628,28 +1575,28 @@ class SCTConfiguration(BaseModel):
     )
 
     # PerformanceRegressionTest
-    stress_cmd_w: MultitenantValue(StringOrList) = SctField(
+    stress_cmd_w: StringOrList = SctField(
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
     )
-    stress_cmd_r: MultitenantValue(StringOrList) = SctField(
+    stress_cmd_r: StringOrList = SctField(
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
     )
-    stress_cmd_m: MultitenantValue(StringOrList) = SctField(
+    stress_cmd_m: StringOrList = SctField(
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
     )
-    stress_cmd_read_disk: MultitenantValue(StringOrList) = SctField(
+    stress_cmd_read_disk: StringOrList = SctField(
         description="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure.
                 multiple commands can passed as a list""",
     )
-    stress_cmd_cache_warmup: MultitenantValue(StringOrList) = SctField(
+    stress_cmd_cache_warmup: StringOrList = SctField(
         description="""cassandra-stress commands for warm-up before read workload.
             You can specify everything but the -node parameter, which is going to
             be provided by the test suite infrastructure.
             multiple commands can passed as a list""",
     )
-    prepare_write_cmd: MultitenantValue(StringOrList) = SctField(
+    prepare_write_cmd: StringOrList = SctField(
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
     )
     stress_before_migration: String = SctField(
@@ -2008,13 +1955,13 @@ class SCTConfiguration(BaseModel):
     run_db_node_benchmarks: Boolean = SctField(
         description="Flag for running db node benchmarks before the tests",
     )
-    nemesis_selector: MultitenantValue(StringOrList) = SctField(
+    nemesis_selector: StringOrList = SctField(
         description="""nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has
         ALL the properties in that list which are set to true (the intersection of all properties).
         (In other words filters out all nemesis that doesn't ONE of these properties set to true)
         IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.""",
     )
-    nemesis_multiply_factor: MultitenantValue(IntOrList) = SctField(
+    nemesis_multiply_factor: IntOrList = SctField(
         description="Multiply the list of nemesis to execute by the specified factor",
     )
     raid_level: int = SctField(
@@ -3216,29 +3163,8 @@ class SCTConfiguration(BaseModel):
 
         param_value = self.get(field_name)
 
-        # Handle dict-based multitenancy - validate each value
-        if (
-            self.get("cluster_backend").startswith("k8s")
-            and self.get("k8s_tenants_num") > 1
-            and is_multitenant_field(field)
-            and isinstance(param_value, dict)
-            and len(param_value) > 1
-        ):
-            for tenant_key, tenant_value in param_value.items():
-                try:
-                    from_env_func(tenant_value)
-                except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
-                    raise ValueError(f"failed to validate {field_name}[{tenant_key}]") from ex
-            return
-
-        # Handle list-based multitenancy - validate each value
-        if (  # noqa: PLR0916
-            self.get("cluster_backend").startswith("k8s")
-            and self.get("k8s_tenants_num") > 1
-            and is_multitenant_field(field)
-            and isinstance(param_value, list)
-            and len(param_value) > 1
-        ) or (field_name == "nemesis_selector" and len(self.get("nemesis_class_name")) > 1):
+        # Handle list-based validation (e.g. nemesis_selector when multiple nemesis classes)
+        if field_name == "nemesis_selector" and len(self.get("nemesis_class_name")) > 1:
             for list_element in param_value:
                 try:
                     from_env_func(list_element)
@@ -3910,9 +3836,6 @@ class SCTConfiguration(BaseModel):
         Recursively resolves complex type annotations into clean, simplified
         strings.  The following annotation kinds are handled:
 
-        * **MultitenantValue** – When *field_metadata* contains a
-          ``MultitenantValueMarker``, the outer ``Union[T, dict[str, T]]``
-          wrapper is unwrapped so only ``T`` is displayed.
         * **Annotated** – The wrapper is stripped and only the underlying type
           is shown (e.g. ``Annotated[int, BeforeValidator(...)]`` → ``int``).
         * **Literal** – Rendered with the allowed values
@@ -3928,8 +3851,7 @@ class SCTConfiguration(BaseModel):
             field_type: The type annotation to convert.  Accepts simple types,
                 generics, ``Union``, ``Literal``, and ``Annotated`` forms.
             field_metadata: Optional sequence of Pydantic field metadata
-                objects.  When a ``MultitenantValueMarker`` is present the
-                outer multitenant ``Union`` is unwrapped to the inner type.
+                objects.
 
         Returns:
             A cleaned-up string representation of the annotation suitable for
@@ -3947,22 +3869,6 @@ class SCTConfiguration(BaseModel):
                 .replace("types.", "")
                 .replace("UnionType", "")
             )
-
-        # Check if this is a MultitenantValue type by checking metadata
-        # Pydantic unwraps the Annotated type and stores metadata separately
-        is_multitenant = False
-        if field_metadata:
-            for meta in field_metadata:
-                if isinstance(meta, MultitenantValueMarker):
-                    is_multitenant = True
-                    break
-
-        # If it's a multitenant field, the type is Union[T, dict[str, T]]
-        # We want to extract just T (the first arg of the Union)
-        if is_multitenant and origin is Union and args:
-            # First arg is the inner type T
-            inner_type = args[0]
-            return cls.get_annotations_as_strings(inner_type, field_metadata=None)
 
         # If it's an Annotated type, extract the first arg (the actual type)
         # This handles cases like Annotated[int | list[int], BeforeValidator(...)]
@@ -4045,12 +3951,6 @@ class SCTConfiguration(BaseModel):
             default = defaults.get(field_name, None)
             default_text = default if default else "N/A"
 
-            # Check if field supports k8s multitenancy
-            multitenant_note = ""
-            if is_multitenant_field(field):
-                multitenant_note = "\n* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)"
-
-            # Pass field metadata to correctly handle MultitenantValue types
             field_metadata = getattr(field, "metadata", None)
             ret += dedent(f"""
                 ## **{field_name}** / SCT_{field_name.upper()}
@@ -4063,8 +3963,6 @@ class SCTConfiguration(BaseModel):
                 """).strip()
             if appendable:
                 ret += appendable
-            if multitenant_note:
-                ret += multitenant_note
             ret += "\n"
         return ret
 

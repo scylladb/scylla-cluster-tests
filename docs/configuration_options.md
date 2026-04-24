@@ -1026,7 +1026,7 @@ Nemesis class to use (possible types in sdcm.nemesis).<br>Supported syntax:<br>-
 **default:** NoOpMonkey
 
 **type:** str | list[str]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
+* appendable
 
 
 ## **nemesis_interval** / SCT_NEMESIS_INTERVAL
@@ -1036,7 +1036,6 @@ Nemesis sleep interval to use if None provided specifically in the test
 **default:** 5
 
 **type:** int | list[int]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
 ## **nemesis_sequence_sleep_between_ops** / SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS
@@ -1046,7 +1045,6 @@ Sleep interval between nemesis operations for use in unique_sequence nemesis kin
 **default:** N/A
 
 **type:** int | list[int]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
 ## **nemesis_during_prepare** / SCT_NEMESIS_DURING_PREPARE
@@ -1056,7 +1054,6 @@ Run nemesis during prepare stage of the test
 **default:** True
 
 **type:** bool | list[bool]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
 ## **nemesis_seed** / SCT_NEMESIS_SEED
@@ -1066,7 +1063,6 @@ A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
 **default:** N/A
 
 **type:** int | list[int]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
 ## **nemesis_add_node_cnt** / SCT_NEMESIS_ADD_NODE_CNT
@@ -1076,7 +1072,6 @@ Add/remove nodes during GrowShrinkCluster nemesis
 **default:** 3
 
 **type:** int | list[int]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
 ## **nemesis_grow_shrink_instance_type** / SCT_NEMESIS_GROW_SHRINK_INSTANCE_TYPE
@@ -1105,7 +1100,6 @@ Space node threshold before starting nemesis (bytes)<br>The default value is 6GB
 **default:** N/A
 
 **type:** int | list[int]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
 ## **nemesis_filter_seeds** / SCT_NEMESIS_FILTER_SEEDS
@@ -1115,7 +1109,6 @@ If true runs the nemesis only on non seed nodes
 **default:** N/A
 
 **type:** bool | list[bool]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
 ## **stress_cmd** / SCT_STRESS_CMD
@@ -1125,7 +1118,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 **default:** N/A
 
 **type:** str | list[str]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
+* appendable
 
 
 ## **gemini_schema_url** / SCT_GEMINI_SCHEMA_URL
@@ -2547,15 +2540,6 @@ Defines whether the K8S API server logging must be enabled and its logs gathered
 **type:** bool
 
 
-## **k8s_tenants_num** / SCT_K8S_TENANTS_NUM
-
-Number of Scylla clusters to create in the K8S cluster.
-
-**default:** 1
-
-**type:** int
-
-
 ## **k8s_enable_tls** / SCT_K8S_ENABLE_TLS
 
 Defines whether to enable the operator serverless options.
@@ -2878,7 +2862,6 @@ Enable or disable round robin selection of nodes for operations
 **default:** N/A
 
 **type:** bool | list[bool]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
 ## **batch_size** / SCT_BATCH_SIZE
@@ -3096,7 +3079,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 **default:** N/A
 
 **type:** str | list[str]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
+* appendable
 
 
 ## **stress_cmd_r** / SCT_STRESS_CMD_R
@@ -3106,7 +3089,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 **default:** N/A
 
 **type:** str | list[str]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
+* appendable
 
 
 ## **stress_cmd_m** / SCT_STRESS_CMD_M
@@ -3116,7 +3099,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 **default:** N/A
 
 **type:** str | list[str]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
+* appendable
 
 
 ## **stress_cmd_read_disk** / SCT_STRESS_CMD_READ_DISK
@@ -3126,7 +3109,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 **default:** N/A
 
 **type:** str | list[str]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
+* appendable
 
 
 ## **stress_cmd_cache_warmup** / SCT_STRESS_CMD_CACHE_WARMUP
@@ -3136,7 +3119,7 @@ cassandra-stress commands for warm-up before read workload.<br>You can specify e
 **default:** N/A
 
 **type:** str | list[str]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
+* appendable
 
 
 ## **prepare_write_cmd** / SCT_PREPARE_WRITE_CMD
@@ -3146,7 +3129,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 **default:** N/A
 
 **type:** str | list[str]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
+* appendable
 
 
 ## **stress_before_migration** / SCT_STRESS_BEFORE_MIGRATION
@@ -4081,7 +4064,7 @@ nemesis_selector gets a list of "nemesis properties" and filters IN all the neme
 **default:** N/A
 
 **type:** str | list[str]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
+* appendable
 
 
 ## **nemesis_multiply_factor** / SCT_NEMESIS_MULTIPLY_FACTOR
@@ -4091,7 +4074,6 @@ Multiply the list of nemesis to execute by the specified factor
 **default:** 2
 
 **type:** int | list[int]
-* supports k8s multitenancy - see [multitenancy docs](k8s-multitenancy.md)
 
 
 ## **raid_level** / SCT_RAID_LEVEL

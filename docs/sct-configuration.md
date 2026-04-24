@@ -64,7 +64,7 @@ SCT uses specialized types that provide automatic conversion and validation:
 Accepts either a string or list of strings, with automatic conversion:
 
 ```yaml
-# Single string (becomes list with one element in multitenant contexts)
+# Single string
 stress_cmd: "cassandra-stress write n=1000000"
 
 # List of strings
@@ -170,32 +170,6 @@ append_scylla_yaml: "!get_scylla_yaml_config()"
 
 **Use cases**: YAML configurations, nested settings, complex data structures
 
-### Multitenant Support
-
-#### MultitenantValue[T]
-Wraps any type to add dictionary-based multitenant configuration support.
-
-**Old format** (list-based, ambiguous):
-```yaml
-# Hard to tell: is this multiple commands or multiple tenants?
-stress_cmd: [["cmd1 part1", "cmd1 part2"], ["cmd2 part1", "cmd2 part2"]]
-```
-
-**New format** (dict-based, explicit):
-```yaml
-# Clear: each tenant gets specific commands
-stress_cmd:
-  tenant1: ["cmd1 part1", "cmd1 part2"]
-  tenant2: ["cmd2 part1", "cmd2 part2"]
-```
-
-Fields using `MultitenantValue`:
-- **Nemesis**: `nemesis_class_name`, `nemesis_selector`, `nemesis_interval`, `nemesis_seed`, etc.
-- **Stress commands**: `stress_cmd`, `stress_cmd_w`, `stress_cmd_r`, `stress_cmd_m`, `prepare_write_cmd`, etc.
-- **Other**: `space_node_threshold`, `round_robin`
-
-See the full list in the [PR description](../README.md).
-
 ## Adding New Configuration Options
 
 ### Step 1: Add Field to SCTConfiguration
@@ -226,7 +200,6 @@ Select the type based on your needs:
 | `Literal["choice1", "choice2", ...]` | Fixed set of allowed string values (choices/enum) |
 | `dict` | Dictionary/mapping |
 | `DictOrStrOrPydantic` | Dict, string, or Pydantic BaseModel for nested configs |
-| `MultitenantValue[T]` | Type T but with multitenant support |
 
 ### Step 3: Add Default Value
 
@@ -307,8 +280,8 @@ class SCTConfiguration(BaseModel):
         description="Operating mode for custom feature",
     )
 
-    custom_commands: MultitenantValue(StringOrList) = SctField(
-        description="Custom commands to run (supports multitenancy)",
+    custom_commands: StringOrList = SctField(
+        description="Custom commands to run",
     )
 
     @field_validator('custom_timeout')
@@ -490,9 +463,6 @@ duration = config.get('test_duration')  # Dict-style access (backward compatible
 
 ### Issue: Environment variable not working
 **Solution**: Ensure it's prefixed with `SCT_` and the name is in uppercase (e.g., `SCT_TEST_DURATION`)
-
-### Issue: Multitenant config not working
-**Solution**: Use dict format with `tenant1`, `tenant2` keys, or ensure the field has `MultitenantValue` type
 
 ## See Also
 
