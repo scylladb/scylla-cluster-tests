@@ -97,6 +97,7 @@ from sdcm.sct_events.group_common_events import (
     ignore_take_snapshot_failing,
     ignore_ipv6_failure_to_assign,
     suppress_expected_unavailability_errors,
+    ignore_raft_topology_cmd_failing,
 )
 from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
@@ -799,12 +800,7 @@ class NemesisRunner:
             with (
                 DbNodeLogger(self.cluster.nodes, "restart node", target_node=self.target_node),
                 self.action_log_scope(f"Restart {self.target_node.name} node"),
-<<<<<<< HEAD
-||||||| parent of 669db5a0f (refactor(tests): centralize expected error filters for node restarts)
-                ignore_raft_topology_cmd_failing(),
-=======
                 suppress_expected_unavailability_errors(),
->>>>>>> 669db5a0f (refactor(tests): centralize expected error filters for node restarts)
             ):
                 self.target_node.restart()
 
