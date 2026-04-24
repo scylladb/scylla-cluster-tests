@@ -909,6 +909,7 @@ class ScyllaLogCollector(LogCollector):
         CommandLog(name="scylla_doctor.vitals.json", command="cat *.vitals.json"),
         CommandLog(name="cloud-init-output.log", command="cat /var/log/cloud-init-output.log"),
         CommandLog(name="cloud-init.log", command="cat /var/log/cloud-init.log"),
+        FileLog(name="async_profiles_*.tar.gz", search_locally=True),
     ]
 
     cmd = "test -f /etc/scylla/ssl_conf/{0} && cat /etc/scylla/ssl_conf/{0}"

@@ -53,3 +53,32 @@ class StorageServiceClient(RemoteCurlClient):
     def get_local_hostid(self):
         path = "hostid/local"
         return self.run_remoter_curl(method="GET", path=path, params=None, retry=3)
+
+    def async_profiler_start(self, sampling_interval_ms: int = 100,
+                             timeout: int = 60) -> Result:
+        return self.run_remoter_curl(
+            method="POST",
+            path="async_profiler/start",
+            params={"sampling_interval_ms": str(sampling_interval_ms)},
+            timeout=timeout,
+            retry=1,
+        )
+
+    def async_profiler_stop(self, timeout: int = 60) -> Result:
+        return self.run_remoter_curl(
+            method="POST",
+            path="async_profiler/stop",
+            params=None,
+            timeout=timeout,
+            retry=1,
+        )
+
+    def async_profiler_dump(self, filename: str,
+                            timeout: int = 300) -> Result:
+        return self.run_remoter_curl(
+            method="POST",
+            path="async_profiler/dump",
+            params={"filename": filename},
+            timeout=timeout,
+            retry=0,
+        )

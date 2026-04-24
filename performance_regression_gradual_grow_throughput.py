@@ -1,5 +1,6 @@
 import pathlib
 import time
+from contextlib import contextmanager, nullcontext
 from enum import Enum
 from collections import defaultdict, Counter
 
@@ -8,7 +9,9 @@ from dataclasses import dataclass, replace
 from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
+from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.utils.common import skip_optional_stage
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.decorators import latency_calculator_decorator
@@ -34,6 +37,7 @@ class Workload:
     prepare_schema: bool
     test_keyspace: str = ""
     test_table: str = ""
+    async_profiler: bool = False
 
     def __post_init__(self):
         if isinstance(self.num_threads, int):
@@ -164,6 +168,36 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             prepare_schema=True,
         )
         self._base_test_workflow(workload=workload, test_name="test_write_gradual_increase_load (100% writes)")
+
+    def test_write_gradual_increase_load_with_async_profiler(self):
+        """Run write workload with async coroutine profiler enabled.
+
+        Identical to test_write_gradual_increase_load but brackets each
+        throttle step with async profiler start/stop/dump calls on all DB
+        nodes. Requires a Scylla build from
+        https://github.com/Jadw1/scylla/tree/sc_perf_with_profile
+        """
+        workload_type = "write"
+        keyspace, table = self.get_test_table_name(self.params.get("stress_cmd_w"))
+        workload = Workload(
+            workload_type=workload_type,
+            cs_cmd_tmpl=self.params.get("stress_cmd_w"),
+            cs_cmd_warm_up=None,
+            num_threads=self.params["perf_gradual_threads"][workload_type],
+            throttle_steps=self.throttle_steps(workload_type),
+            preload_data=False,
+            drop_keyspace=True,
+            wait_no_compactions=False,
+            step_duration=self.step_duration(workload_type),
+            test_keyspace=keyspace,
+            test_table=table,
+            prepare_schema=True,
+            async_profiler=True,
+        )
+        self._base_test_workflow(
+            workload=workload,
+            test_name="test_write_gradual_increase_load_with_async_profiler (100% writes)",
+        )
 
     def test_read_gradual_increase_load(self):
         """
@@ -449,17 +483,22 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 num_threads,
                 current_throttle_step,
             )
-            run_step = (
-                latency_calculator_decorator(
-                    legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
+
+            with self._async_profiler_step(current_throttle_step) if workload.async_profiler else nullcontext():
+                run_step = (
+                    latency_calculator_decorator(
+                        legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
+                    )
+                )(self.run_step)
+                results, _ = run_step(
+                    stress_cmds=workload.cs_cmd_tmpl,
+                    current_throttle=self.current_throttle(
+                        throttle_step, num_loaders, stress_num, workload.cs_cmd_tmpl[0]
+                    ),
+                    num_threads=num_threads,
+                    step_duration=workload.step_duration,
                 )
-            )(self.run_step)
-            results, _ = run_step(
-                stress_cmds=workload.cs_cmd_tmpl,
-                current_throttle=self.current_throttle(throttle_step, num_loaders, stress_num, workload.cs_cmd_tmpl[0]),
-                num_threads=num_threads,
-                step_duration=workload.step_duration,
-            )
+
             self.log.debug("All c-s commands results collected and saved in Argus")
 
             calculate_result = self._calculate_average_max_latency(results)
@@ -485,6 +524,108 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 self.wait_for_no_tablets_splits()
 
         self.save_total_summary_in_file(total_summary)
+
+    @contextmanager
+    def _async_profiler_step(self, step_name: str):
+        """Bracket a single throttle step with profiler start/stop/dump/collect.
+
+        Starts the profiler on all DB nodes before yield and
+        stops, dumps, archives, downloads, and cleans up in finally,
+        so cleanup runs even on exceptions.
+        """
+        self._async_profiler_start_all_nodes()
+        try:
+            yield
+        finally:
+            self._async_profiler_stop_all_nodes()
+            self._async_profiler_dump_and_collect(step_name=step_name)
+
+    def _async_profiler_start_all_nodes(self, sampling_interval_ms: int = 10):
+        """Start async profiler on all DB nodes in parallel."""
+
+        def start_on_node(node):
+            self.log.info("Starting async profiler on %s", node.name)
+            StorageServiceClient(node).async_profiler_start(sampling_interval_ms=sampling_interval_ms)
+
+        ParallelObject(objects=self.db_cluster.nodes, timeout=120).run(start_on_node, ignore_exceptions=False)
+
+    def _async_profiler_stop_all_nodes(self):
+        """Stop async profiler on all DB nodes in parallel."""
+
+        def stop_on_node(node):
+            self.log.info("Stopping async profiler on %s", node.name)
+            StorageServiceClient(node).async_profiler_stop()
+
+        ParallelObject(objects=self.db_cluster.nodes, timeout=120).run(stop_on_node, ignore_exceptions=False)
+
+    def _async_profiler_dump_and_collect(self, step_name: str):
+        """Dump, verify, archive, download, and clean up async profiler data for one step.
+
+        For each node in parallel:
+        1. Call the REST dump endpoint to write per-shard folded-stack files.
+        2. Verify at least one dump file exists and is non-empty.
+        3. Create a tar.gz archive on the remote node.
+        4. Download the archive into node.logdir/ via receive_files.
+        5. Clean up remote files.
+        """
+
+        def dump_and_collect_on_node(node):
+            dump_dir = f"/tmp/async_profile_{step_name}_{node.name}"
+            archive_name = f"async_profiles_{step_name}_{node.name}.tar.gz"
+            remote_archive = f"/tmp/{archive_name}"
+
+            # Dump
+            node.remoter.run(f"mkdir -p {dump_dir} && chmod 777 {dump_dir}")
+            dump_filename = f"{dump_dir}/async_profile_{step_name}"
+            self.log.info("Dumping async profiler on %s to %s", node.name, dump_filename)
+            StorageServiceClient(node).async_profiler_dump(filename=dump_filename)
+
+            # Verify dumps exist
+            result = node.remoter.run(
+                f"ls {dump_dir}/async_profile_* 2>/dev/null | head -1",
+                ignore_status=True,
+            )
+            if result.failed or not result.stdout.strip():
+                raise FileNotFoundError(f"No async profiler dump files found on {node.name} under {dump_dir}/")
+
+            # Verify at least the first file is non-empty
+            first_file = result.stdout.strip()
+            size_result = node.remoter.run(f"stat -c %s {first_file}")
+            file_size = int(size_result.stdout.strip())
+            if file_size == 0:
+                raise ValueError(f"Async profiler dump file {first_file} on {node.name} is empty")
+
+            # Count total dump files
+            count_result = node.remoter.run(f"ls -1 {dump_dir}/async_profile_* | wc -l")
+            file_count = int(count_result.stdout.strip())
+            self.log.info(
+                "Found %d async profiler dump files on %s for step %s",
+                file_count,
+                node.name,
+                step_name,
+            )
+
+            # Archive
+            node.remoter.run(f"tar -czf {remote_archive} -C /tmp async_profile_{step_name}_{node.name}/")
+
+            # Download into node.logdir (where FileLog search_locally finds it)
+            node.remoter.receive_files(
+                src=remote_archive,
+                dst=node.logdir,
+            )
+            self.log.info(
+                "Downloaded %s to %s/%s",
+                archive_name,
+                node.logdir,
+                archive_name,
+            )
+
+            # Cleanup remote files
+            node.remoter.run(f"rm -rf {dump_dir} {remote_archive}")
+
+        ParallelObject(objects=self.db_cluster.nodes, timeout=600).run(
+            dump_and_collect_on_node, ignore_exceptions=False
+        )
 
     def save_total_summary_in_file(self, total_summary):
         total_summary_json = json.dumps(total_summary, indent=4, separators=(", ", ": "))
