@@ -1002,6 +1002,7 @@ class LoaderLogCollector(LogCollector):
         ),
         CommandLog(name="cloud-init-output.log", command="cat /var/log/cloud-init-output.log"),
         CommandLog(name="cloud-init.log", command="cat /var/log/cloud-init.log"),
+        FileLog(name="cdc-replicator.log", search_locally=True),
     ]
 
     def collect_logs(self, local_search_path=None) -> list[str]:
@@ -1104,6 +1105,7 @@ class BaseSCTLogCollector(LogCollector):
         FileLog(name="result_gradual_increase.log"),
         FileLog(name="partition_range_scan_diff_*.log", search_locally=True),
         FileLog(name="junit.xml", search_locally=True),
+        FileLog(name="cdc-replicator.log", search_locally=True),
     ]
     cluster_log_type = "sct-runner-events"
     cluster_dir_prefix = "sct-runner-events"
