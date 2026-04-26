@@ -868,7 +868,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         dump_cmd = get_sstable_data_dump_command(first_node, keyspace, table)
         first_node.remoter.run(
             f"for i in `sudo find /var/lib/scylla/data/{keyspace}/ -type f |grep -v manifest.json |"
-            "grep -v snapshots |head -n 1`; do echo $i; "
+            "grep -v snapshots |grep -v '\\.tmp$' |head -n 1`; do echo $i; "
             f"sudo {dump_cmd} $i 1>/tmp/sstabledump.output || "
             "exit 1; done",
             verbose=True,
