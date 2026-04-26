@@ -4,9 +4,10 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
-    backend: 'azure',
-    azure_region_name: 'eastus',
+    backend: 'aws',
+    region: 'us-east-1',
+    availability_zone: 'b',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-1TB-5days-authorization-and-tls-ssl.yaml", "configurations/auth_cassandra.yaml"]'''
+    test_config: '''["test-cases/longevity/longevity-2TB-5days-authorization-and-tls-ssl-aws.yaml", "configurations/auth_cassandra.yaml"]'''
 
 )
