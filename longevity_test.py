@@ -40,6 +40,7 @@ from sdcm.utils.operations_thread import ThreadParams
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.sct_events import Severity
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
+from sdcm.utils.tablets.common import get_nodetool_migrate_to_tablets_status, wait_no_tablets_migration_running
 
 
 class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
@@ -255,6 +256,99 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 for node in self.db_cluster.data_nodes:
                     self._run_validate_large_collections_in_system(node)
                     self._run_validate_large_collections_warning_in_logs(node)
+
+    def test_vnode_to_tablet_migration(self):
+        """
+        Test vnode to tablet migration procedure:
+
+        1. Fill the database with data via prepare_write_cmd.
+        2. Launch main stress load (stress_cmd) in the background — runs concurrently with migration.
+        3. Start migration for all user keyspaces:
+               nodetool migrate-to-tablets start <ks>  (once per keyspace)
+        4. Rolling restart - for each node in order:
+               nodetool migrate-to-tablets upgrade      (cluster-wide, run on each node)
+               drain + stop + start node
+        5. Finalize migration for all user keyspaces:
+               nodetool migrate-to-tablets finalize <ks>  (once per keyspace)
+        6. Wait for all tablet topology operations to quiesce.
+        7. Wait for main stress load to finish.
+        """
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
+
+        self.run_pre_create_keyspace()
+        self.run_pre_create_schema()
+        InfoEvent(message="Step 1 - Filling database with data before migration").publish()
+        self.run_prepare_write_cmd()
+
+        self.db_cluster.start_nemesis()
+
+        keyspace_num = self.params.get("keyspace_num")
+
+        stress_queue = []
+        stress_cmd = self.params.get("stress_cmd")
+        if stress_cmd:
+            InfoEvent(message="Step 2 - Starting main stress load concurrently with migration").publish()
+            self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
+
+        coordinator_node = self.db_cluster.data_nodes[0]
+        keyspaces = self.db_cluster.get_test_keyspaces()
+        if not keyspaces:
+            raise AssertionError(
+                "No user keyspaces found to migrate. Ensure prepare_write_cmd populates at least one keyspace."
+            )
+        self.log.info("User keyspaces to migrate to tablets: %s", keyspaces)
+
+        InfoEvent(message=f"Step 3 - Starting tablet migration for keyspaces: {keyspaces}").publish()
+        for ks in keyspaces:
+            coordinator_node.run_nodetool(f"migrate-to-tablets start {ks}")
+            status = get_nodetool_migrate_to_tablets_status(coordinator_node, ks)
+            for node in self.db_cluster.data_nodes:
+                assert status[node.host_id] == "uses vnodes", (
+                    f"[ks={ks}] Expected 'uses vnodes' for {node.host_id}, got {status.get(node.host_id)!r}"
+                )
+
+        InfoEvent(message="Step 4 - Rolling restart with migrate-to-tablets upgrade").publish()
+        for node in self.db_cluster.data_nodes:
+            self.log.info("Preparing node %s (ip=%s) for tablet migration", node.name, node.ip_address)
+            node.run_nodetool("migrate-to-tablets upgrade")
+            self.log.info("Verify that the node status changed from vnodes to migrating to tablets")
+            for ks in keyspaces:
+                status = get_nodetool_migrate_to_tablets_status(node, ks)
+                assert status[node.host_id] == "migrating to tablets", (
+                    f"[ks={ks}] Expected 'migrating to tablets' for {node.host_id}, got {status.get(node.host_id)!r}"
+                )
+            node.run_nodetool("drain")
+            self.log.info("Restarting node %s after prepare-node", node.name)
+            node.stop_scylla(verify_down=True)
+            node.start_scylla(verify_up=True)
+            self.db_cluster.wait_for_nodes_up_and_normal(nodes=[node])
+            node.wait_node_fully_start()
+            self.log.info("Node %s is back up and normal after restart", node.name)
+
+        self.log.info("Verify that all nodes status changed from migrating to tablets to uses tablets")
+        for ks in keyspaces:
+            status = get_nodetool_migrate_to_tablets_status(coordinator_node, ks)
+            for db_node in self.db_cluster.data_nodes:
+                assert status[db_node.host_id] == "uses tablets", (
+                    f"[ks={ks}] Expected 'uses tablets' for {db_node.host_id}, got {status.get(db_node.host_id)!r}"
+                )
+
+        InfoEvent(message="Step 5 - Finalizing tablet migration").publish()
+        for ks in keyspaces:
+            coordinator_node.run_nodetool(f"migrate-to-tablets finalize {ks}")
+            status = get_nodetool_migrate_to_tablets_status(coordinator_node, ks)
+            for db_node in self.db_cluster.data_nodes:
+                assert status[db_node.host_id] == "uses tablets", (
+                    f"[ks={ks}] Expected 'uses tablets' after finalize for {db_node.host_id}, got {status.get(db_node.host_id)!r}"
+                )
+
+        InfoEvent(message="Step 6 - Waiting for tablet migration to fully complete").publish()
+        for migration_node in self.db_cluster.data_nodes:
+            wait_no_tablets_migration_running(migration_node, timeout=7200)
+
+        InfoEvent(message="Step 7 - Waiting for main stress load to finish").publish()
+        for stress in stress_queue:
+            self.verify_stress_thread(stress)
 
     def test_batch_custom_time(self):
         """
