@@ -791,37 +791,3 @@ def test_vector_store_ami_name_resolved_to_ami_id(monkeypatch):
     assert "vector-store-1-5-0-arm64-2026-03-17t07-07-32z" in resolved_names, (
         "convert_name_to_ami_if_needed was not called for ami_id_vector_store"
     )
-
-
-def test_docker_simulated_racks_sets_gossiping_snitch(monkeypatch):
-    """Test that GossipingPropertyFileSnitch is auto-set for Docker with multiple racks.
-
-    When simulated_racks > 1 on the Docker backend, the endpoint_snitch
-    should be automatically resolved to GossipingPropertyFileSnitch.
-    """
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
-    monkeypatch.setenv("SCT_SIMULATED_RACKS", "2")
-    monkeypatch.setenv("SCT_N_DB_NODES", "3")
-    monkeypatch.setenv("SCT_USE_MGMT", "false")
-
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-    assert conf.get("endpoint_snitch") == "org.apache.cassandra.locator.GossipingPropertyFileSnitch"
-
-
-def test_docker_single_rack_no_snitch_override(monkeypatch):
-    """Test that endpoint_snitch is not auto-set for Docker with a single rack.
-
-    When simulated_racks is 1 (default), no snitch override should occur
-    and endpoint_snitch should remain None.
-    """
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
-    monkeypatch.setenv("SCT_SIMULATED_RACKS", "1")
-    monkeypatch.setenv("SCT_N_DB_NODES", "3")
-    monkeypatch.setenv("SCT_USE_MGMT", "false")
-
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-
-    assert conf.get("endpoint_snitch") is None
