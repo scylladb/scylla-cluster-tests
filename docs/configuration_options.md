@@ -949,7 +949,7 @@ Dictionary of a test alternator table features:<br>name: str - the name of the t
 
 If true, enable native load balancing for alternator
 
-**default:** True
+**default:** N/A
 
 **type:** boolean
 
