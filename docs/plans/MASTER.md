@@ -59,6 +59,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 
 | Plan | Status | File / PR |
 |------|--------|-----------|
+| AWS/GCE Backend Parity for Test Configurations | `draft` | [aws-gce-backend-parity.md](config/aws-gce-backend-parity.md) |
 | Resilient Test Config Dependencies | `pending_pr` | [#13982](https://github.com/scylladb/scylla-cluster-tests/pull/13982) |
 | Typed Config Access Migration | `pending_pr` | [#13878](https://github.com/scylladb/scylla-cluster-tests/pull/13878) |
 | SCT Config Validation and Lazy Images | `draft` | [sct-config-validation-and-lazy-images.md](sct-config-validation-and-lazy-images.md) |

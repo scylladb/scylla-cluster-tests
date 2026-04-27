@@ -271,6 +271,15 @@
       "pr": null,
       "phases_total": 3,
       "phases_done": 0
+    },
+    {
+      "id": "aws-gce-backend-parity",
+      "title": "AWS/GCE Backend Parity for Test Configurations",
+      "domain": "config",
+      "status": "draft",
+      "pr": null,
+      "phases_total": 4,
+      "phases_done": 0
     }
   ]
 }
