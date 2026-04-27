@@ -17,7 +17,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from sdcm.sct_config.types import Boolean, SctField, String, StringOrList
+from sdcm.sct_config.types import Boolean, GrafanaPanelScreenshot, SctField, String, StringOrList
 
 
 class MonitoringConfigMixin(BaseModel):
@@ -65,6 +65,19 @@ class MonitoringConfigMixin(BaseModel):
     )
     events_limit_in_email: int = SctField(
         description="Maximum number of events of each severity to include in the email report.",
+    )
+    grafana_screenshot_panels: list[GrafanaPanelScreenshot] = SctField(
+        default=[],
+        description="Extra single-panel Grafana screenshots to capture at log-collection time, "
+        "on top of the dashboards SCT always captures. Dashboard and panel titles are both "
+        "matched as substrings, and `resolution` defaults to (1920, 4000).<br>"
+        "YAML example:<br>"
+        "grafana_screenshot_panels:<br>"
+        '&nbsp;&nbsp;- dashboard_title: "Detailed"<br>'
+        '&nbsp;&nbsp;&nbsp;&nbsp;panel_title: "LSA total memory"<br>'
+        '&nbsp;&nbsp;- dashboard_title: "Overview"<br>'
+        '&nbsp;&nbsp;&nbsp;&nbsp;panel_title: "Total Disk Usage"<br>'
+        "&nbsp;&nbsp;&nbsp;&nbsp;resolution: [1920, 800]",
     )
     max_events_severities: StringOrList = SctField(
         default=[],

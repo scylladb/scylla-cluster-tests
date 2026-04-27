@@ -21,6 +21,7 @@ package; use absolute imports if you ever need the stdlib one here.
 import ast
 import dataclasses
 import pathlib
+import re
 from typing import List, Union
 
 import yaml
@@ -311,6 +312,33 @@ class AdaptiveTimeoutMultipliers(RootModel):
     def get_multiplier(self, operation_key: str) -> float:
         """Return multiplier for the given operation key, or 1.0 if not configured."""
         return float(self.root.get(operation_key, 1.0))
+
+
+class GrafanaPanelScreenshot(BaseModel):
+    """Capture a specific Grafana panel screenshot -- no Python code changes needed.
+
+    YAML example::
+
+        grafana_screenshot_panels:
+          - dashboard_title: "Detailed"
+            panel_title: "LSA total memory"
+          - dashboard_title: "Overview"
+            panel_title: "Total Disk Usage"
+            resolution: [1920, 800]
+    """
+
+    dashboard_title: str = Field(description="Grafana dashboard title (substring match used for search)")
+    panel_title: str = Field(description="Panel title within the dashboard (substring match)")
+    resolution: tuple[int, int] = Field(default=(1920, 4000), description="Screenshot resolution (width, height)")
+
+    @property
+    def title(self) -> str:
+        return self.dashboard_title
+
+    @property
+    def name(self) -> str:
+        slug = f"{self.dashboard_title}-{self.panel_title}".lower()
+        return re.sub(r"[^\w\-]", "_", slug)
 
 
 def dict_or_str_or_pydantic(value: dict | str | BaseModel | None) -> dict | BaseModel | None:
