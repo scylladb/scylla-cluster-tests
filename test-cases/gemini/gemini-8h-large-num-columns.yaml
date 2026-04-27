@@ -3,7 +3,7 @@ n_db_nodes: 6
 n_test_oracle_db_nodes: 1
 n_loaders: 1
 instance_type_db: 'i3en.3xlarge'
-instance_type_loader: 'c6i.4xlarge'
+instance_type_loader: 'm8g.2xlarge'
 
 user_prefix: 'gemini-8h-large-num-columns'
 
