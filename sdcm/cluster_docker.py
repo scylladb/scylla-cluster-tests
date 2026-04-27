@@ -66,6 +66,7 @@ class NodeContainerMixin:
 
 
 class DockerNode(cluster.BaseNode, NodeContainerMixin):
+<<<<<<< HEAD
     def __init__(self,
                  parent_cluster: "DockerCluster",
                  container: Optional[Container] = None,
@@ -78,6 +79,43 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
                          ssh_login_info=ssh_login_info,
                          base_logdir=base_logdir,
                          node_prefix=node_prefix)
+||||||| parent of c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
+    def __init__(
+        self,
+        parent_cluster: "DockerCluster",
+        container: Optional[Container] = None,
+        node_prefix: str = "node",
+        base_logdir: Optional[str] = None,
+        ssh_login_info: Optional[dict] = None,
+        node_index: int = 1,
+        rack: int = 0,
+    ) -> None:
+        super().__init__(
+            name=f"{node_prefix}-{node_index}",
+            parent_cluster=parent_cluster,
+            ssh_login_info=ssh_login_info,
+            base_logdir=base_logdir,
+            node_prefix=node_prefix,
+            rack=rack,
+        )
+=======
+    def __init__(
+        self,
+        parent_cluster: "DockerCluster",
+        container: Optional[Container] = None,
+        node_prefix: str = "node",
+        base_logdir: Optional[str] = None,
+        ssh_login_info: Optional[dict] = None,
+        node_index: int = 1,
+    ) -> None:
+        super().__init__(
+            name=f"{node_prefix}-{node_index}",
+            parent_cluster=parent_cluster,
+            ssh_login_info=ssh_login_info,
+            base_logdir=base_logdir,
+            node_prefix=node_prefix,
+        )
+>>>>>>> c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
         self.node_index = node_index
 
         if container is not None:
@@ -211,6 +249,172 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
     def region(self):
         return "docker"
 
+<<<<<<< HEAD
+||||||| parent of c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
+    def do_default_installations(self):
+        self.install_sudo()
+        self.install_package("tar")
+        procps_package = "procps" if self.distro.is_debian_like else "procps-ng"
+        self.install_package(procps_package)
+        super().do_default_installations()
+
+    def install_sudo(self, user: str = "scylla", verbose=False):
+        """Install and configure passwordless sudo"""
+        pkg_mgr = "microdnf" if self.distro.is_rhel_like else "apt"
+        self.remoter.run(f"{pkg_mgr} install -y sudo", verbose=verbose, ignore_status=True, user="root")
+
+        self.remoter.run("mkdir -p /etc/sudoers.d", user="root", ignore_status=True, verbose=verbose)
+        sudoers_file = f"/etc/sudoers.d/{user}-nopasswd"
+        sudoers_content = f"{user} ALL=(ALL) NOPASSWD: ALL"
+        self.remoter.run(f"echo '{sudoers_content}' > {sudoers_file}", user="root", verbose=verbose, ignore_status=True)
+        self.remoter.run(f"chmod 440 {sudoers_file}", user="root", verbose=verbose, ignore_status=True)
+
+        verify_result = self.remoter.run("sudo -n true", ignore_status=True, verbose=verbose)
+        if verify_result.ok:
+            self.log.debug("Passwordless sudo configured successfully for user %s", user)
+        else:
+            self.log.warning("Passwordless sudo verification failed: %s", verify_result.stderr)
+
+    def reload_config(self):
+        """
+        Docker-specific implementation of config reload.
+        Attempts to send SIGHUP to Scylla process, falls back to container restart if signal fails.
+        """
+        try:
+            result = self.remoter.run("ps -C scylla -o pid --no-headers", ignore_status=True, user="root")
+            if result.ok and (pid := result.stdout.strip()):
+                self.remoter.run(f"kill -s HUP {pid}", ignore_status=True, user="root")
+        except Exception:  # noqa: BLE001
+            self.restart_scylla_server(verify_up_before=True, verify_up_after=True)
+        self.log.info("Scylla configuration have been reloaded")
+
+
+class VectorStoreDockerNode(VectorStoreNodeMixin, DockerNode):
+    """Docker node running Vector Store service"""
+
+    def __init__(
+        self,
+        parent_cluster: "VectorStoreSetDocker",
+        container: Optional[Container] = None,
+        node_prefix: str = "vector",
+        base_logdir: Optional[str] = None,
+        ssh_login_info: Optional[dict] = None,
+        node_index: int = 1,
+        rack: int = 0,
+    ) -> None:
+        super().__init__(
+            parent_cluster=parent_cluster,
+            container=container,
+            node_prefix=node_prefix,
+            base_logdir=base_logdir,
+            ssh_login_info=ssh_login_info,
+            node_index=node_index,
+            rack=rack,
+        )
+
+    def node_container_run_args(self, seed_ip=None):
+        return self.vector_container_run_args(seed_ip)
+
+    def vector_container_run_args(self, seed_ip=None):
+        environment = {
+            "VECTOR_STORE_URI": f"0.0.0.0:{self.parent_cluster.params.get('vector_store_port')}",
+            "VECTOR_STORE_SCYLLADB_URI": self.scylla_uri,
+        }
+
+        if (threads := self.parent_cluster.params.get("vector_store_threads")) > 0:
+            environment["VECTOR_STORE_THREADS"] = str(threads)
+        ports = {f"{self.parent_cluster.params.get('vector_store_port')}/tcp": None}
+
+        return dict(
+            name=self.name,
+            image=self.node_container_image_tag,
+            environment=environment,
+            ports=ports,
+            network=self.parent_cluster.params.get("docker_network"),
+        )
+
+=======
+    def do_default_installations(self):
+        self.install_sudo()
+        self.install_package("tar")
+        procps_package = "procps" if self.distro.is_debian_like else "procps-ng"
+        self.install_package(procps_package)
+        super().do_default_installations()
+
+    def install_sudo(self, user: str = "scylla", verbose=False):
+        """Install and configure passwordless sudo"""
+        pkg_mgr = "microdnf" if self.distro.is_rhel_like else "apt"
+        self.remoter.run(f"{pkg_mgr} install -y sudo", verbose=verbose, ignore_status=True, user="root")
+
+        self.remoter.run("mkdir -p /etc/sudoers.d", user="root", ignore_status=True, verbose=verbose)
+        sudoers_file = f"/etc/sudoers.d/{user}-nopasswd"
+        sudoers_content = f"{user} ALL=(ALL) NOPASSWD: ALL"
+        self.remoter.run(f"echo '{sudoers_content}' > {sudoers_file}", user="root", verbose=verbose, ignore_status=True)
+        self.remoter.run(f"chmod 440 {sudoers_file}", user="root", verbose=verbose, ignore_status=True)
+
+        verify_result = self.remoter.run("sudo -n true", ignore_status=True, verbose=verbose)
+        if verify_result.ok:
+            self.log.debug("Passwordless sudo configured successfully for user %s", user)
+        else:
+            self.log.warning("Passwordless sudo verification failed: %s", verify_result.stderr)
+
+    def reload_config(self):
+        """
+        Docker-specific implementation of config reload.
+        Attempts to send SIGHUP to Scylla process, falls back to container restart if signal fails.
+        """
+        try:
+            result = self.remoter.run("ps -C scylla -o pid --no-headers", ignore_status=True, user="root")
+            if result.ok and (pid := result.stdout.strip()):
+                self.remoter.run(f"kill -s HUP {pid}", ignore_status=True, user="root")
+        except Exception:  # noqa: BLE001
+            self.restart_scylla_server(verify_up_before=True, verify_up_after=True)
+        self.log.info("Scylla configuration have been reloaded")
+
+
+class VectorStoreDockerNode(VectorStoreNodeMixin, DockerNode):
+    """Docker node running Vector Store service"""
+
+    def __init__(
+        self,
+        parent_cluster: "VectorStoreSetDocker",
+        container: Optional[Container] = None,
+        node_prefix: str = "vector",
+        base_logdir: Optional[str] = None,
+        ssh_login_info: Optional[dict] = None,
+        node_index: int = 1,
+    ) -> None:
+        super().__init__(
+            parent_cluster=parent_cluster,
+            container=container,
+            node_prefix=node_prefix,
+            base_logdir=base_logdir,
+            ssh_login_info=ssh_login_info,
+            node_index=node_index,
+        )
+
+    def node_container_run_args(self, seed_ip=None):
+        return self.vector_container_run_args(seed_ip)
+
+    def vector_container_run_args(self, seed_ip=None):
+        environment = {
+            "VECTOR_STORE_URI": f"0.0.0.0:{self.parent_cluster.params.get('vector_store_port')}",
+            "VECTOR_STORE_SCYLLADB_URI": self.scylla_uri,
+        }
+
+        if (threads := self.parent_cluster.params.get("vector_store_threads")) > 0:
+            environment["VECTOR_STORE_THREADS"] = str(threads)
+        ports = {f"{self.parent_cluster.params.get('vector_store_port')}/tcp": None}
+
+        return dict(
+            name=self.name,
+            image=self.node_container_image_tag,
+            environment=environment,
+            ports=ports,
+            network=self.parent_cluster.params.get("docker_network"),
+        )
+
+>>>>>>> c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
 
 class DockerCluster(cluster.BaseCluster):
     node_container_user = "scylla-test"
@@ -241,6 +445,7 @@ class DockerCluster(cluster.BaseCluster):
         return os.path.join(os.path.dirname(__file__), '../docker/scylla-sct',
                             self.params.get("scylla_linux_distro").split('-')[0])
 
+<<<<<<< HEAD
     def _create_node(self, node_index, container=None):
         node = DockerNode(parent_cluster=self,
                           container=container,
@@ -250,6 +455,28 @@ class DockerCluster(cluster.BaseCluster):
                           base_logdir=self.logdir,
                           node_prefix=self.node_prefix,
                           node_index=node_index)
+||||||| parent of c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
+    def _create_node(self, node_index, container=None, rack=0):
+        node = DockerNode(
+            parent_cluster=self,
+            container=container,
+            ssh_login_info=dict(hostname=None, user=self.node_container_user, key_file=self.node_container_key_file),
+            base_logdir=self.logdir,
+            node_prefix=self.node_prefix,
+            node_index=node_index,
+            rack=rack,
+        )
+=======
+    def _create_node(self, node_index, container=None):
+        node = DockerNode(
+            parent_cluster=self,
+            container=container,
+            ssh_login_info=dict(hostname=None, user=self.node_container_user, key_file=self.node_container_key_file),
+            base_logdir=self.logdir,
+            node_prefix=self.node_prefix,
+            node_index=node_index,
+        )
+>>>>>>> c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
 
         if container is None:
             ContainerManager.build_container_image(node, "node")
@@ -309,8 +536,25 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
                          params=params)
 
     def node_setup(self, node, verbose=False, timeout=3600):
+<<<<<<< HEAD
         node.wait_ssh_up(verbose=verbose)
 
+||||||| parent of c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
+        if self.test_config.REUSE_CLUSTER:
+            self._reuse_cluster_setup(node)
+            if (
+                any([self.params.get("server_encrypt"), self.params.get("client_encrypt")])
+                and not (node.ssl_conf_dir / TLSAssets.DB_CERT).exists()
+            ):
+                self._generate_db_node_certs(node)
+                install_client_certificate(node.remoter, node.ip_address, force=True)
+            # warm up raft cached_property per node to avoid rapid TLS session cycling
+            # during validate_raft_on_nodes (python-driver#614 workaround)
+            _ = node.raft
+            return
+
+=======
+>>>>>>> c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
         node.is_scylla_installed(raise_if_not_installed=True)
 
         self.check_aio_max_nr(node)
@@ -318,10 +562,86 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
         if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
 
+<<<<<<< HEAD
+||||||| parent of c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
+        if any([self.params.get("server_encrypt"), self.params.get("client_encrypt")]):
+            self._generate_db_node_certs(node)
+            install_client_certificate(node.remoter, node.ip_address, force=True)
+
+        simulated_racks = (self.params.get("simulated_racks") or 0) > 1
+        if simulated_racks:
+            # Docker containers auto-start Scylla with SimpleSnitch, which persists
+            # dc=datacenter1 and rack=rack1 in system tables. Switching to
+            # GossipingPropertyFileSnitch with different rack names (RACK0/1/2) would
+            # cause a "Saved rack name is not equal" error on restart. Write the new
+            # cassandra-rackdc.properties and wipe persisted topology data while the
+            # container is still running, then restart the container to apply changes.
+            # We write the file directly because the Docker image lacks `stat`,
+            # which remote_file/SnitchConfig.apply() requires.
+            rack_name = f"RACK{node.rack}"
+            props_path = "/etc/scylla/cassandra-rackdc.properties"
+            node.remoter.sudo(
+                f"bash -c 'printf \"dc=datacenter1\\nrack={rack_name}\\nprefer_local=true\\n\" > {props_path}'"
+            )
+
+=======
+        if any([self.params.get("server_encrypt"), self.params.get("client_encrypt")]):
+            self._generate_db_node_certs(node)
+            install_client_certificate(node.remoter, node.ip_address, force=True)
+
+>>>>>>> c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
         node.config_setup(append_scylla_args=self.get_scylla_args())
+<<<<<<< HEAD
 
         node.stop_scylla_server(verify_down=False)
         node.remoter.sudo('rm -Rf /var/lib/scylla/data/*')  # Clear data folder to drop wrong cluster name data.
+||||||| parent of c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
+
+        if simulated_racks:
+            # Wipe data saved during initial boot with SimpleSnitch before restarting.
+            # Scylla may crash from deleted files, but container.restart() handles this.
+            # Suppress the expected FILESYSTEM_ERROR events caused by deleting data dirs
+            # while Scylla is still running (it tries to flush memtables to deleted paths).
+            with DbEventsFilter(
+                db_event=DatabaseLogEvent.FILESYSTEM_ERROR,
+                node=node,
+                extra_time_to_expiration=30,
+            ):
+                node.clean_scylla_data()
+                node.restart_scylla(verify_up_before=False)
+        else:
+            node.restart_scylla(verify_up_before=True)
+
+    def _generate_db_node_certs(self, node):
+        """Generate per-node SSL certificates for a Docker DB node."""
+        node.create_node_certificate(
+            cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
+            cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
+            csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR,
+        )
+        node.create_node_certificate(
+            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT,
+            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY,
+        )
+        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+            shutil.copy(src, node.ssl_conf_dir)
+=======
+        node.restart_scylla(verify_up_before=True)
+
+    def _generate_db_node_certs(self, node):
+        """Generate per-node SSL certificates for a Docker DB node."""
+        node.create_node_certificate(
+            cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
+            cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
+            csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR,
+        )
+        node.create_node_certificate(
+            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT,
+            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY,
+        )
+        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+            shutil.copy(src, node.ssl_conf_dir)
+>>>>>>> c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
 
     def node_startup(self, node, verbose=False, timeout=3600):
         node.start_scylla_server(verify_up=False)
@@ -352,9 +672,164 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
 
     def get_scylla_args(self):
 
+<<<<<<< HEAD
         append_scylla_args = self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else \
             self.params.get('append_scylla_args')
         return re.sub(r'--blocked-reactor-notify-ms[ ]+[0-9]+', '', append_scylla_args)
+||||||| parent of c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
+    def destroy(self):
+        if self.vector_store_cluster:
+            self.log.info("Destroying vector store cluster...")
+            try:
+                self.vector_store_cluster.destroy()
+            except Exception as e:  # noqa: BLE001
+                self.log.warning("Failed destroy vector store cluster: %s", e)
+
+        super().destroy()
+
+
+class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
+    """Set of Vector Store nodes"""
+
+    def __init__(self, params, vs_docker_image, vs_docker_image_tag, **kwargs):
+        self.scylla_cluster = None
+
+        kwargs["cluster_prefix"] = cluster.prepend_user_prefix(kwargs.get("cluster_prefix"), "vs-set")
+        kwargs.setdefault("node_prefix", "vs-node")
+        kwargs.setdefault("node_type", "vector-store")
+
+        if not vs_docker_image_tag:
+            vs_docker_image_tag = "latest"
+
+        super().__init__(docker_image=vs_docker_image, docker_image_tag=vs_docker_image_tag, params=params, **kwargs)
+
+    def _reconfigure_vector_store_nodes(self):
+        """Update Vector Store nodes with Scylla info"""
+        if not self.nodes:
+            return
+
+        self.log.info("Reconfiguring Vector Store with Scylla node information")
+        for node in self.nodes:
+            try:
+                if ContainerManager.is_running(node, "node"):
+                    self.log.debug("Stopping container %s for reconfiguration", node.name)
+                    ContainerManager.get_container(node, "node").stop()
+                ContainerManager.destroy_container(node, "node")
+                ContainerManager.run_container(node, "node")
+                ContainerManager.wait_for_status(node, "node", status="running")
+                self.log.debug("Successfully reconfigured container %s", node.name)
+            except Exception as e:  # noqa: BLE001
+                self.log.error("Failed to reconfigure container %s: %s", node.name, e)
+                raise
+
+    def _create_node(self, node_index, container=None, rack=0):
+        node = VectorStoreDockerNode(
+            parent_cluster=self,
+            container=container,
+            node_prefix=self.node_prefix,
+            base_logdir=self.logdir,
+            node_index=node_index,
+            rack=rack,
+        )
+
+        if container is None:
+            ContainerManager.run_container(node, "node")
+            ContainerManager.wait_for_status(node, "node", status="running")
+        try:
+            VectorStoreVersionReporter(
+                node.remoter, "docker exec node /opt/vector-store/vector-store", self.test_config.argus_client()
+            ).report()
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Error submitting vector store version, VS package won't show in Argus.", exc_info=True)
+        node.init()
+        return node
+
+    def add_nodes(self, count, dc_idx=0, **kwargs):
+        if count > 1:
+            # TODO: implement once HA support is implemented for VS
+            self.log.warning("Vector Store HA not implemented yet, creating only 1 node instead of %d", count)
+            count = 1
+
+        reuse_cluster = getattr(self.test_config, "REUSE_CLUSTER", "UNDEFINED")
+        result = self._get_nodes() if reuse_cluster else self._create_nodes(count)
+        return result
+=======
+    def destroy(self):
+        if self.vector_store_cluster:
+            self.log.info("Destroying vector store cluster...")
+            try:
+                self.vector_store_cluster.destroy()
+            except Exception as e:  # noqa: BLE001
+                self.log.warning("Failed destroy vector store cluster: %s", e)
+
+        super().destroy()
+
+
+class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
+    """Set of Vector Store nodes"""
+
+    def __init__(self, params, vs_docker_image, vs_docker_image_tag, **kwargs):
+        self.scylla_cluster = None
+
+        kwargs["cluster_prefix"] = cluster.prepend_user_prefix(kwargs.get("cluster_prefix"), "vs-set")
+        kwargs.setdefault("node_prefix", "vs-node")
+        kwargs.setdefault("node_type", "vector-store")
+
+        if not vs_docker_image_tag:
+            vs_docker_image_tag = "latest"
+
+        super().__init__(docker_image=vs_docker_image, docker_image_tag=vs_docker_image_tag, params=params, **kwargs)
+
+    def _reconfigure_vector_store_nodes(self):
+        """Update Vector Store nodes with Scylla info"""
+        if not self.nodes:
+            return
+
+        self.log.info("Reconfiguring Vector Store with Scylla node information")
+        for node in self.nodes:
+            try:
+                if ContainerManager.is_running(node, "node"):
+                    self.log.debug("Stopping container %s for reconfiguration", node.name)
+                    ContainerManager.get_container(node, "node").stop()
+                ContainerManager.destroy_container(node, "node")
+                ContainerManager.run_container(node, "node")
+                ContainerManager.wait_for_status(node, "node", status="running")
+                self.log.debug("Successfully reconfigured container %s", node.name)
+            except Exception as e:  # noqa: BLE001
+                self.log.error("Failed to reconfigure container %s: %s", node.name, e)
+                raise
+
+    def _create_node(self, node_index, container=None):
+        node = VectorStoreDockerNode(
+            parent_cluster=self,
+            container=container,
+            node_prefix=self.node_prefix,
+            base_logdir=self.logdir,
+            node_index=node_index,
+        )
+
+        if container is None:
+            ContainerManager.run_container(node, "node")
+            ContainerManager.wait_for_status(node, "node", status="running")
+        try:
+            VectorStoreVersionReporter(
+                node.remoter, "docker exec node /opt/vector-store/vector-store", self.test_config.argus_client()
+            ).report()
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Error submitting vector store version, VS package won't show in Argus.", exc_info=True)
+        node.init()
+        return node
+
+    def add_nodes(self, count, dc_idx=0, **kwargs):
+        if count > 1:
+            # TODO: implement once HA support is implemented for VS
+            self.log.warning("Vector Store HA not implemented yet, creating only 1 node instead of %d", count)
+            count = 1
+
+        reuse_cluster = getattr(self.test_config, "REUSE_CLUSTER", "UNDEFINED")
+        result = self._get_nodes() if reuse_cluster else self._create_nodes(count)
+        return result
+>>>>>>> c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
 
 
 class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
@@ -394,6 +869,7 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
 class DockerMonitoringNode(cluster.BaseNode):
     log = LOGGER
 
+<<<<<<< HEAD
     def __init__(self,
                  parent_cluster: "MonitorSetDocker",
                  node_prefix: str = "monitor-node",
@@ -405,6 +881,41 @@ class DockerMonitoringNode(cluster.BaseNode):
                          base_logdir=base_logdir,
                          node_prefix=node_prefix,
                          ssh_login_info=ssh_login_info)
+||||||| parent of c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
+    def __init__(
+        self,
+        parent_cluster: "MonitorSetDocker",
+        node_prefix: str = "monitor-node",
+        base_logdir: Optional[str] = None,
+        node_index: int = 1,
+        ssh_login_info: Optional[dict] = None,
+        rack: int = 0,
+    ) -> None:
+        super().__init__(
+            name=f"{node_prefix}-{node_index}",
+            parent_cluster=parent_cluster,
+            base_logdir=base_logdir,
+            node_prefix=node_prefix,
+            ssh_login_info=ssh_login_info,
+            rack=rack,
+        )
+=======
+    def __init__(
+        self,
+        parent_cluster: "MonitorSetDocker",
+        node_prefix: str = "monitor-node",
+        base_logdir: Optional[str] = None,
+        node_index: int = 1,
+        ssh_login_info: Optional[dict] = None,
+    ) -> None:
+        super().__init__(
+            name=f"{node_prefix}-{node_index}",
+            parent_cluster=parent_cluster,
+            base_logdir=base_logdir,
+            node_prefix=node_prefix,
+            ssh_login_info=ssh_login_info,
+        )
+>>>>>>> c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
         self.node_index = node_index
 
     def wait_for_cloud_init(self):
@@ -470,6 +981,7 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
                                n_nodes=n_nodes,
                                params=params)
 
+<<<<<<< HEAD
     def _create_node(self, node_index, container=None):
         node = DockerMonitoringNode(parent_cluster=self,
                                     base_logdir=self.logdir,
@@ -479,6 +991,26 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
                                                         user=self.node_container_user,
                                                         key_file=self.node_container_key_file)
                                     )
+||||||| parent of c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
+    def _create_node(self, node_index, container=None, rack=0):
+        node = DockerMonitoringNode(
+            parent_cluster=self,
+            base_logdir=self.logdir,
+            node_prefix=self.node_prefix,
+            node_index=node_index,
+            ssh_login_info=None,
+            rack=rack,
+        )
+=======
+    def _create_node(self, node_index, container=None):
+        node = DockerMonitoringNode(
+            parent_cluster=self,
+            base_logdir=self.logdir,
+            node_prefix=self.node_prefix,
+            node_index=node_index,
+            ssh_login_info=None,
+        )
+>>>>>>> c9413da63 (Revert "feat(docker): enable simulated_racks support for Docker backend")
         node.init()
         return node
 
