@@ -36,41 +36,41 @@ class ScaleOutFailedException(Exception):
     pass
 
 
-class _LoadThread(threading.Thread):
+class LoadThread(threading.Thread):
     """Background thread that loads the cluster to trigger auto-scaling."""
 
-    def __init__(self, test: "ScyllaCloudVectorSearchXCloudTest"):
+    def __init__(self, test: "XCloudVectorSearchTest"):
         super().__init__()
-        self._test = test
+        self.test = test
 
     def run(self):
         stress_queue = []
-        self._test.assemble_and_run_all_stress_cmd(
+        self.test.assemble_and_run_all_stress_cmd(
             stress_queue=stress_queue,
-            stress_cmd=self._test.params.get("stress_cmd"),
+            stress_cmd=self.test.params.get("stress_cmd"),
             keyspace_num=1,
         )
         for queue in stress_queue:
-            self._test.verify_stress_thread(queue)
+            self.test.verify_stress_thread(queue)
 
-        self._test.log.info("Write stress completed, starting background read stress")
-        stress_read_cmd = self._test.params.get("stress_read_cmd")
+        self.test.log.info("Write stress completed, starting background read stress")
+        stress_read_cmd = self.test.params.get("stress_read_cmd")
         if stress_read_cmd:
             # Fire-and-forget: keep read load running in the background to stress the cluster.
             # We don't verify results here - any failures will surface as CassandraStressEvent
-            self._test.assemble_and_run_all_stress_cmd(
+            self.test.assemble_and_run_all_stress_cmd(
                 stress_queue=[],
                 stress_cmd=stress_read_cmd,
                 keyspace_num=1,
             )
 
 
-class _VectorSearchThread(threading.Thread):
+class VectorSearchThread(threading.Thread):
     """Background thread that continuously inserts vectors and validates index updates."""
 
-    def __init__(self, test: "ScyllaCloudVectorSearchXCloudTest"):
+    def __init__(self, test: "XCloudVectorSearchTest"):
         super().__init__()
-        self._test = test
+        self.test = test
         self._stop_event = threading.Event()
         self._validation_failures = 0
 
@@ -81,10 +81,10 @@ class _VectorSearchThread(threading.Thread):
     @cached_property
     def _vs_remote_curl_client(self) -> RemoteCurlClient:
         """Get RemoteCurlClient that runs curl on the first VS node against its local VS API."""
-        vs_cluster = self._test.db_cluster.vector_store_cluster
+        vs_cluster = self.test.db_cluster.vector_store_cluster
         assert vs_cluster and vs_cluster.nodes, "Vector Store cluster has no nodes"
         vs_node = vs_cluster.nodes[0]
-        port = self._test.params.get("vector_store_port")
+        port = self.test.params.get("vector_store_port")
         return RemoteCurlClient(host=f"localhost:{port}", endpoint="", node=vs_node)
 
     def _log_index_status(self) -> None:
@@ -92,17 +92,17 @@ class _VectorSearchThread(threading.Thread):
         try:
             result = self._vs_remote_curl_client.run_remoter_curl(
                 method="GET",
-                path=f"api/v1/indexes/{self._test.KEYSPACE_NAME}/{self._test.INDEX_NAME}/status",
+                path=f"api/v1/indexes/{self.test.KEYSPACE_NAME}/{self.test.INDEX_NAME}/status",
                 params=None,
             )
-            self._test.log.info(
+            self.test.log.info(
                 "Vector index status for %s.%s: %s",
-                self._test.KEYSPACE_NAME,
-                self._test.INDEX_NAME,
+                self.test.KEYSPACE_NAME,
+                self.test.INDEX_NAME,
                 result.stdout.strip(),
             )
         except Exception as exc:  # noqa: BLE001
-            self._test.log.warning("Failed to get vector index status: %s", exc)
+            self.test.log.warning("Failed to get vector index status: %s", exc)
 
     @retrying(n=10, sleep_time=10, allowed_exceptions=(Retry,))
     def _validate_index_update(self, vector_id: uuid.UUID, test_vector: list[float], session: "Session") -> None:
@@ -111,49 +111,49 @@ class _VectorSearchThread(threading.Thread):
         Retries up to 10 times with 10s delay to allow for index propagation.
         Raises Retry if the vector is not yet found.
         """
-        self._test.log.debug("Checking the recently inserted vector made it into the index...")
+        self.test.log.debug("Checking the recently inserted vector made it into the index...")
         self._log_index_status()
         query_cql = f"""
-            SELECT id, commenter FROM {self._test.KEYSPACE_NAME}.{self._test.TABLE_NAME}
+            SELECT id, commenter FROM {self.test.KEYSPACE_NAME}.{self.test.TABLE_NAME}
             ORDER BY comment_vector ANN OF {test_vector} LIMIT 20
         """
         rows = session.execute(query_cql)
         found = any(str(row.id) == str(vector_id) for row in rows)
         if found:
-            self._test.log.debug("Successfully found vector %s in ANN query results", vector_id)
+            self.test.log.debug("Successfully found vector %s in ANN query results", vector_id)
             return
-        self._test.log.warning("Vector %s not found in ANN query results", vector_id)
+        self.test.log.warning("Vector %s not found in ANN query results", vector_id)
         raise Retry(f"Vector {vector_id} not found in ANN query results")
 
     def stop_and_join(self, timeout: int = 300) -> None:
         """Signal the thread to stop and wait for it to finish."""
         if not self.is_alive():
             return
-        self._test.log.info("Waiting for vector validation thread to complete...")
+        self.test.log.info("Waiting for vector validation thread to complete...")
         self._stop_event.set()
         self.join(timeout=timeout)
         if self.is_alive():
-            self._test.log.warning("Vector validation thread did not complete within timeout")
+            self.test.log.warning("Vector validation thread did not complete within timeout")
 
     def run(self):
         operation_number = 0
 
-        with self._test.db_cluster.cql_connection_patient(self._test.db_cluster.nodes[0]) as session:
+        with self.test.db_cluster.cql_connection_patient(self.test.db_cluster.nodes[0]) as session:
             insert_prepared = session.prepare(f"""
-                INSERT INTO {self._test.KEYSPACE_NAME}.{self._test.TABLE_NAME}
+                INSERT INTO {self.test.KEYSPACE_NAME}.{self.test.TABLE_NAME}
                     (id, commenter, comment_vector, created_at)
                 VALUES (?, ?, ?, toTimestamp(now()))
             """)
 
             while not self._stop_event.is_set():
                 operation_number += 1
-                self._test.log.info("Vector search operation #%d", operation_number)
+                self.test.log.info("Vector search operation #%d", operation_number)
 
                 batch = BatchStatement()
                 vectors = []
-                for i in range(self._test.VECTORS_PER_BATCH):
+                for i in range(self.test.VECTORS_PER_BATCH):
                     vector_id = uuid.uuid4()
-                    test_vector = [round(random.uniform(0.01, 0.99), 2) for _ in range(self._test.VECTOR_DIMENSION)]
+                    test_vector = [round(random.uniform(0.01, 0.99), 2) for _ in range(self.test.VECTOR_DIMENSION)]
                     commenter = f"test_user_{operation_number}_{i}"
                     batch.add(insert_prepared, (vector_id, commenter, test_vector))
                     vectors.append((vector_id, test_vector))
@@ -161,9 +161,9 @@ class _VectorSearchThread(threading.Thread):
                 sample_vector_id, sample_test_vector = random.choice(vectors)
                 try:
                     session.execute(batch)
-                    self._test.log.info("Inserted batch of %d vectors", self._test.VECTORS_PER_BATCH)
+                    self.test.log.info("Inserted batch of %d vectors", self.test.VECTORS_PER_BATCH)
 
-                    self._test.log.info("Validating randomly selected vector %s", sample_vector_id)
+                    self.test.log.info("Validating randomly selected vector %s", sample_vector_id)
                     self._validate_index_update(
                         vector_id=sample_vector_id,
                         test_vector=sample_test_vector,
@@ -171,10 +171,10 @@ class _VectorSearchThread(threading.Thread):
                     )
 
                 except Exception as exc:  # noqa: BLE001
-                    self._test.log.error("Error during vector operation #%d: %s", operation_number, exc)
+                    self.test.log.error("Error during vector operation #%d: %s", operation_number, exc)
                     self._validation_failures += 1
 
-        self._test.log.info("Vector search operations stopped after %d operations", operation_number)
+        self.test.log.info("Vector search operations stopped after %d operations", operation_number)
 
 
 class ScyllaCloudTestBase(ClusterTester, LoaderUtilsMixin):
@@ -204,7 +204,7 @@ class ScyllaCloudTestBase(ClusterTester, LoaderUtilsMixin):
         return email_data
 
 
-class ScyllaCloudVectorSearchXCloudTest(ScyllaCloudTestBase):
+class XCloudVectorSearchTest(ScyllaCloudTestBase):
     """Verify that vector search operations remain functional during XCloud cluster auto-scaling."""
 
     KEYSPACE_NAME = "vector_search_ks"
@@ -309,14 +309,14 @@ class ScyllaCloudVectorSearchXCloudTest(ScyllaCloudTestBase):
         self.prepare_vs_keyspace()
 
         self.log.info("Start loading cluster to scaling threshold in background")
-        self.load_thread = _LoadThread(self)
+        self.load_thread = LoadThread(self)
         self.load_thread.start()
 
         self.log.info("Wait for 70% of disk utilization to be reached before starting VS operation")
         self.wait_for_cluster_disk_utilization(target_utilization=70)
 
         self.log.info("Start running Vector Search operations in background while cluster is scaling")
-        self.vector_thread = _VectorSearchThread(self)
+        self.vector_thread = VectorSearchThread(self)
         self.vector_thread.start()
 
         self.log.info("Wait for cluster to scale out")
