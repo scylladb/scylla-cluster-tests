@@ -6,6 +6,7 @@ class Dashboard:
     path: str
     title: str
     resolution: tuple[int]
+    panel_title: str | None = None
 
 
 class OverviewDashboard(Dashboard):

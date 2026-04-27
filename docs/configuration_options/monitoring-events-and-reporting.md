@@ -4,7 +4,7 @@
 
 The monitoring stack, event severities, Argus reporting and email reports.
 
-**17 options.**
+**18 options.**
 
 
 <a id="argus_email_report_template"></a>
@@ -129,6 +129,17 @@ Maximum number of events of each severity to include in the email report.
 **default:** 10
 
 **type:** int
+
+
+<a id="grafana_screenshot_panels"></a>
+
+## **grafana_screenshot_panels** / SCT_GRAFANA_SCREENSHOT_PANELS
+
+Extra single-panel Grafana screenshots to capture at log-collection time, on top of the dashboards SCT always captures. Dashboard and panel titles are both matched as substrings, and `resolution` defaults to (1920, 4000).<br>YAML example:<br>[`grafana_screenshot_panels`](#grafana_screenshot_panels):<br>&nbsp;&nbsp;- dashboard_title: "Detailed"<br>&nbsp;&nbsp;&nbsp;&nbsp;panel_title: "LSA total memory"<br>&nbsp;&nbsp;- dashboard_title: "Overview"<br>&nbsp;&nbsp;&nbsp;&nbsp;panel_title: "Total Disk Usage"<br>&nbsp;&nbsp;&nbsp;&nbsp;resolution: [1920, 800]
+
+**default:** []
+
+**type:** list[sdcm.sct_config.GrafanaPanelScreenshot]
 
 
 <a id="max_events_severities"></a>
