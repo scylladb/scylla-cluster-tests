@@ -21,6 +21,7 @@ import logging
 import random
 import string
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import suppress
 from enum import Enum
 from functools import cached_property
@@ -2067,6 +2068,72 @@ def _manage_runner_keep_tag_value(
         return sct_runner_info
 
 
+def _process_sct_runner(
+    sct_runner_info: SctRunnerInfo,
+    test_status: str,
+    test_runner_ip: str,
+    dry_run: bool,
+    force: bool,
+) -> bool:
+    """SSH-check, tag-manage, and optionally terminate a single SCT runner.
+
+    Returns True if the runner was terminated, False otherwise.
+    """
+    LOGGER.info("Managing SCT runner: %s in region: %s", sct_runner_info.instance_name, sct_runner_info.region_az)
+    cmd = 'cat /home/ubuntu/sct-results/latest/events_log/critical.log | grep "TestTimeoutEvent"'
+
+    if sct_runner_info.cloud_provider == "aws":
+        sct_runner_name = sct_runner_info.instance_name.split(" ")[0]
+    else:
+        sct_runner_name = sct_runner_info.instance_name
+
+    timeout_flag = False
+    # ssh_run_cmd currently only works on AWS, no point of wasting time
+    # trying to lookup on AWS instance from GCP/Azure
+    if sct_runner_info.public_ips and sct_runner_info.cloud_provider == "aws":
+        ssh_run_cmd_result = ssh_run_cmd(
+            command=cmd, test_id=sct_runner_info.test_id, node_name=sct_runner_name, force_use_public_ip=True
+        )
+        timeout_flag = bool(ssh_run_cmd_result.stdout) if ssh_run_cmd_result else False
+
+    utc_now = datetime.datetime.now(tz=datetime.timezone.utc)
+    LOGGER.info("UTC now: %s", utc_now)
+
+    if not dry_run and test_runner_ip:
+        _manage_runner_keep_tag_value(
+            test_status=test_status,
+            utc_now=utc_now,
+            timeout_flag=timeout_flag,
+            sct_runner_info=sct_runner_info,
+            dry_run=dry_run,
+        )
+
+    if not force and sct_runner_info.keep:
+        if sct_runner_info.keep_action != "terminate":
+            LOGGER.info("Skip %s because keep_action `keep_action' != `terminate'", sct_runner_info)
+            return False
+        if sct_runner_info.launch_time is None:
+            LOGGER.info("Skip %s because `launch_time' is not set", sct_runner_info)
+            return False
+        try:
+            if (utc_now - sct_runner_info.launch_time).total_seconds() < int(sct_runner_info.keep) * 3600:
+                LOGGER.info("Skip %s, too early to terminate", sct_runner_info)
+                return False
+        except ValueError as exc:
+            LOGGER.warning("Value of `keep' tag is invalid: %s", exc)
+
+    if dry_run:
+        LOGGER.info("Skip %s because of dry-run", sct_runner_info)
+        return False
+
+    try:
+        sct_runner_info.terminate()
+        return True
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Exception raised during termination of %s: %s", sct_runner_info, exc)
+        return False
+
+
 def clean_sct_runners(
     test_status: str,
     test_runner_ip: str = None,
@@ -2077,9 +2144,6 @@ def clean_sct_runners(
     force: bool = False,
 ) -> None:
     sct_runners_list = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip, user=user, test_id=test_id)
-    timeout_flag = False
-    runners_terminated = 0
-    end_message = ""
 
     if not dry_run and test_runner_ip and force:
         sct_runner_info = sct_runners_list[0]
@@ -2087,62 +2151,24 @@ def clean_sct_runners(
         LOGGER.info("Forcibly terminated runner: %s", sct_runner_info)
         return
 
-    for sct_runner_info in sct_runners_list:
-        LOGGER.info("Managing SCT runner: %s in region: %s", sct_runner_info.instance_name, sct_runner_info.region_az)
-        cmd = 'cat /home/ubuntu/sct-results/latest/events_log/critical.log | grep "TestTimeoutEvent"'
-
-        if sct_runner_info.cloud_provider == "aws":
-            sct_runner_name = sct_runner_info.instance_name.split(" ")[0]
-        else:
-            sct_runner_name = sct_runner_info.instance_name
-
-        # ssh_run_cmd currently only works on AWS, no point of wasting time
-        # trying to lookup on AWS instance from GCP/Azure
-        if sct_runner_info.public_ips and sct_runner_info.cloud_provider == "aws":
-            ssh_run_cmd_result = ssh_run_cmd(
-                command=cmd, test_id=sct_runner_info.test_id, node_name=sct_runner_name, force_use_public_ip=True
-            )
-
-            timeout_flag = bool(ssh_run_cmd_result.stdout) if ssh_run_cmd_result else False
-
-        utc_now = datetime.datetime.now(tz=datetime.timezone.utc)
-        LOGGER.info("UTC now: %s", utc_now)
-
-        if not dry_run and test_runner_ip:
-            _manage_runner_keep_tag_value(
-                test_status=test_status,
-                utc_now=utc_now,
-                timeout_flag=timeout_flag,
+    with ThreadPoolExecutor(max_workers=min(len(sct_runners_list), 32) or 1) as executor:
+        futures = [
+            executor.submit(
+                _process_sct_runner,
                 sct_runner_info=sct_runner_info,
+                test_status=test_status,
+                test_runner_ip=test_runner_ip,
                 dry_run=dry_run,
+                force=force,
             )
+            for sct_runner_info in sct_runners_list
+        ]
+        runners_terminated = sum(f.result() for f in as_completed(futures))
 
-        if not force and sct_runner_info.keep:
-            if sct_runner_info.keep_action != "terminate":
-                LOGGER.info("Skip %s because keep_action `keep_action' != `terminate'", sct_runner_info)
-                continue
-            if sct_runner_info.launch_time is None:
-                LOGGER.info("Skip %s because `launch_time' is not set", sct_runner_info)
-                continue
-            try:
-                if (utc_now - sct_runner_info.launch_time).total_seconds() < int(sct_runner_info.keep) * 3600:
-                    LOGGER.info("Skip %s, too early to terminate", sct_runner_info)
-                    continue
-            except ValueError as exc:
-                LOGGER.warning("Value of `keep' tag is invalid: %s", exc)
-
-        if dry_run:
-            LOGGER.info("Skip %s because of dry-run", sct_runner_info)
-            continue
-        try:
-            sct_runner_info.terminate()
-            runners_terminated += 1
-            end_message = f"Number of cleaned runners: {runners_terminated}"
-        except Exception as exc:  # noqa: BLE001
-            LOGGER.warning("Exception raised during termination of %s: %s", sct_runner_info, exc)
-            end_message = "No runners have been terminated"
-
-    LOGGER.info(end_message)
+    if runners_terminated:
+        LOGGER.info("Number of cleaned runners: %d", runners_terminated)
+    else:
+        LOGGER.info("No runners have been terminated")
 
 
 class AwsFipsSctRunner(AwsSctRunner):
