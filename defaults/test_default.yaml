@@ -113,6 +113,7 @@ internode_encryption: 'all'
 
 use_mgmt: true
 n_monitor_nodes: 1
+grafana_screenshot_panels: []
 manager_prometheus_port: 5090
 scylla_mgmt_pkg: ''
 

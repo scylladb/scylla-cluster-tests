@@ -4120,6 +4120,15 @@ The size of the swap file for the monitors. Its size in bytes calculated by x * 
 **type:** int
 
 
+## **grafana_screenshot_panels** / SCT_GRAFANA_SCREENSHOT_PANELS
+
+List of Grafana panels to capture at log-collection time.<br>Each entry specifies a dashboard title and panel title (both substring-matched).<br>Example: grafana_screenshot_panels:<br>- dashboard_title: "Detailed"<br>panel_title: "LSA total memory"<br>- dashboard_title: "Overview"<br>panel_title: "Total Disk Usage"<br>resolution: [1920, 800]
+
+**default:** N/A
+
+**type:** list[sdcm.sct_config.GrafanaPanelScreenshot]
+
+
 ## **append_scylla_setup_args** / SCT_APPEND_SCYLLA_SETUP_ARGS
 
 More arguments to append to scylla_setup command line
