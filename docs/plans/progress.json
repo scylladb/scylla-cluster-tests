@@ -264,6 +264,17 @@
       "phases_done": 0
     },
     {
+      "id": "cluster-layout-topology",
+      "title": "Cluster Layout Topology",
+      "file": "infrastructure/cluster-layout-topology.md",
+      "domain": "cluster",
+      "status": "pending_pr",
+      "pr": 13427,
+      "created": "2026-02-01",
+      "phases_total": 7,
+      "phases_done": 0
+    },
+    {
       "id": "ssh-key-decoupling",
       "title": "SSH Key Decoupling",
       "domain": "cluster",
