@@ -197,7 +197,7 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     script {
                         checkoutQaInternal(params)
-                        sh ''' ./docker/env/hydra.sh bash ./utils/lint_test_cases.sh '''
+                        sh ''' ./docker/env/hydra.sh lint-pipelines --junit-xml lint-pipelines-junit.xml '''
                     }
                 }
             }
@@ -468,7 +468,7 @@ pipeline {
             script {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     postTestSummaryComment(
-                        junitXmlPaths: ['unit-tests-junit.xml', 'scylla-cluster-tests/integration-tests-junit.xml'],
+                        junitXmlPaths: ['unit-tests-junit.xml', 'scylla-cluster-tests/integration-tests-junit.xml', 'lint-pipelines-junit.xml'],
                         precommitLog: 'precommit-output.log',
                         stageName: 'Test Summary',
                     )

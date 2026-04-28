@@ -111,14 +111,16 @@ def _str(value: str | None) -> str | None:
 String = Annotated[str | None, BeforeValidator(_str), Field(json_schema_extra={"appendable": True})]
 
 
-def _file(value: str) -> str:
+def _check_file_exists(value: str) -> None:
+    """Validate that a file path points to an existing file.
+
+    This is called at verification time (check_required_files), not during
+    config construction, so that YAML defaults can be loaded without the
+    referenced files needing to exist on disk yet.
+    """
     file_path = pathlib.Path(value).expanduser()
-    if file_path.is_file() and file_path.exists():
-        return value
-    raise ValueError(f"{value} isn't an existing file")
-
-
-ExistingFile = Annotated[str, BeforeValidator(_file)]
+    if not file_path.is_file():
+        raise ValueError(f"{value} isn't an existing file")
 
 
 def str_or_list_or_eval(value: Union[str, List[str], None]) -> List[str] | None:
@@ -448,6 +450,36 @@ AWS_SUPPORTED_REGIONS: list[str] = [
     "eu-central-1",
 ]
 
+# Maps each cloud backend to the SCT config field that holds its machine image.
+# Used by the pipeline linter to generate placeholder values for validation.
+BACKEND_IMAGE_FIELD: dict[str, str] = {
+    "aws": "ami_id_db_scylla",
+    "gce": "gce_image_db",
+    "azure": "azure_image_db",
+    "docker": "docker_image",
+    "oci": "oci_image_db",
+}
+
+
+def count_regions(region_string: str) -> int:
+    """Count the number of regions in a region string.
+
+    Handles JSON arrays ('["us-east-1","eu-west-1"]'), space-separated
+    strings ('us-east-1 eu-west-1'), and single region strings.
+    """
+    if not region_string:
+        return 1
+    try:
+        regions = json.loads(region_string.replace("'", '"'))
+        if isinstance(regions, list):
+            return len(regions)
+    except (json.JSONDecodeError, ValueError):
+        # Not a JSON array — fall through to treat as a plain string
+        pass
+    if " " in region_string:
+        return len(region_string.split())
+    return 1
+
 
 class SCTConfiguration(BaseModel):
     """
@@ -543,7 +575,7 @@ class SCTConfiguration(BaseModel):
             'GoogleCloudSnitch'
          """,
     )
-    user_credentials_path: ExistingFile = SctField(
+    user_credentials_path: str = SctField(
         description="""Path to your user credentials. qa key are downloaded automatically from S3 bucket""",
     )
     cloud_credentials_path: String = SctField(
@@ -1603,7 +1635,7 @@ class SCTConfiguration(BaseModel):
     scylla_mgmt_upgrade_to_repo: String = SctField(
         description="Url to the repo of scylla manager version to upgrade to for management tests",
     )
-    mgmt_agent_backup_config: AgentBackupParameters | None = SctField(
+    mgmt_agent_backup_config: Annotated[AgentBackupParameters | None, BeforeValidator(dict_or_str)] = SctField(
         description="Manager agent backup general configuration: checkers, transfers, low_level_retries. For example, {'checkers': 100, 'transfers': 2, 'low_level_retries': 20}",
     )
     mgmt_restore_extra_params: String = SctField(
@@ -3274,6 +3306,9 @@ class SCTConfiguration(BaseModel):
         return stress_tools
 
     def check_required_files(self):
+        if user_creds := self.get("user_credentials_path"):
+            _check_file_exists(user_creds)
+
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
             if not stress_cmds:
@@ -3537,7 +3572,14 @@ class SCTConfiguration(BaseModel):
     def _validate_placement_group_required_values(self):
         if self.get("use_placement_group"):
             az_count = len(self.get("availability_zone").split(",")) if self.get("availability_zone") else 1
-            regions_count = len(self.region_names)
+            backend = self.get("cluster_backend")
+            if backend == "azure":
+                azure_regions = self.get("azure_region_name")
+                regions_count = len(azure_regions) if isinstance(azure_regions, list) else 1
+            elif backend == "gce":
+                regions_count = len(self.gce_datacenters)
+            else:
+                regions_count = len(self.region_names)
             assert az_count == 1 and regions_count == 1, (
                 f"Number of Regions({regions_count}) and AZ({az_count}) should be 1 "
                 f"when param use_placement_group is used"

@@ -29,6 +29,7 @@ import time
 import subprocess
 import traceback
 import pprint
+import xml.etree.ElementTree as ET
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial, reduce
@@ -69,12 +70,14 @@ from sdcm.sct_runner import (
 )
 
 from sdcm.utils.ci_tools import get_job_name, get_job_url
-from sdcm.utils.git import get_git_commit_id, get_git_status_info
+from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
 from sdcm.utils.argus import argus_offline_collect_events, create_proxy_argus_s3_url, get_argus_client
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
+from sdcm.utils.lint.env_builder import build_env
+from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile, discover_pipeline_files
 from sdcm.utils.oci_utils import list_instances_oci
 from sdcm.utils.common import (
     S3Storage,
@@ -1355,11 +1358,17 @@ def _run_yaml_test(backend, full_path, env):
     return error, output
 
 
-@cli.command(help="Test yaml in test-cases directory")
+@cli.command(help="[DEPRECATED] Test yaml in test-cases directory. Use 'lint-pipelines' instead.")
 @click.option("-b", "--backend", type=click.Choice(available_backends), default="aws")
 @click.option("-i", "--include", type=str, default="")
 @click.option("-e", "--exclude", type=str, default="")
 def lint_yamls(backend, exclude: str, include: str):
+    click.secho(
+        "WARNING: 'lint-yamls' is deprecated. Use 'lint-pipelines' instead.\n"
+        "  For single-file validation: sct.py lint-pipelines --pipeline-file <path>\n"
+        "  For full validation: sct.py lint-pipelines\n",
+        fg="yellow",
+    )
     if not include:
         raise ValueError("You did not provide include filters")
 
@@ -1404,6 +1413,136 @@ def lint_yamls(backend, exclude: str, include: str):
             click.secho("\n".join(pp_output), fg="green")
     print()
     sys.exit(1 if failed else 0)
+
+
+def _validate_single_pipeline(pipeline_path, env):
+    """Worker function for lint-pipelines ProcessPoolExecutor."""
+    # Deferred import: runs in worker process to avoid importing heavy deps in main process
+    from sdcm.utils.lint.validator import validate_pipeline  # noqa: PLC0415
+
+    return str(pipeline_path), validate_pipeline(Path(pipeline_path), env)
+
+
+def _discover_and_parse_pipelines(pipeline_dir, pipeline_file, include_filter, exclude_filter):
+    """Discover pipeline files, parse them, and build validation environments."""
+    original_env = {**os.environ}
+
+    include_re = re.compile(include_filter) if include_filter else None
+    exclude_re = re.compile(exclude_filter) if exclude_filter else None
+
+    if pipeline_file:
+        pipeline_files = [Path(pipeline_file)]
+    else:
+        pipeline_files = discover_pipeline_files(Path(pipeline_dir))
+
+    if include_re:
+        pipeline_files = [f for f in pipeline_files if include_re.search(str(f))]
+    if exclude_re:
+        pipeline_files = [f for f in pipeline_files if not exclude_re.search(str(f))]
+
+    tasks = []
+    skipped = 0
+    for path in pipeline_files:
+        config = parse_jenkinsfile(path)
+        if config is None:
+            skipped += 1
+            continue
+        env = build_env(config)
+        merged_env = {**original_env, **env}
+        tasks.append((str(path), merged_env))
+
+    return tasks, skipped
+
+
+def _write_junit_xml(junit_xml_path, tasks, failures, total, failed_count, skipped):
+    """Write lint-pipelines results as JUnit XML report."""
+    testsuite = ET.Element(
+        "testsuite", name="lint-pipelines", tests=str(total), failures=str(failed_count), skipped=str(skipped)
+    )
+    for path_str, _ in tasks:
+        testcase = ET.SubElement(testsuite, "testcase", name=path_str, classname="lint-pipelines")
+        if path_str in failures:
+            failure = ET.SubElement(testcase, "failure", message="Validation failed")
+            failure.text = failures[path_str]
+    tree = ET.ElementTree(testsuite)
+    ET.indent(tree)
+    tree.write(junit_xml_path, xml_declaration=True, encoding="unicode")
+    click.echo(f"JUnit XML report written to {junit_xml_path}")
+
+
+@cli.command("lint-pipelines", help="Validate configurations from Jenkins pipeline files")
+@click.option("--pipeline-dir", default="jenkins-pipelines", help="Root directory of pipeline files")
+@click.option("--pipeline-file", default=None, help="Validate a single pipeline file (ad-hoc mode)")
+@click.option("--workers", default=None, type=int, help="Number of parallel workers (default: CPU count)")
+@click.option("-i", "--include", "include_filter", default="", help="Regex filter to include specific pipeline files")
+@click.option("-e", "--exclude", "exclude_filter", default="", help="Regex filter to exclude specific pipeline files")
+@click.option(
+    "--junit-xml", "junit_xml_path", default=None, type=click.Path(), help="Write JUnit XML report to this path"
+)
+def lint_pipelines(pipeline_dir, pipeline_file, workers, include_filter, exclude_filter, junit_xml_path):
+    scylla_qa_internal_path = Path(__file__).resolve().parent / "scylla-qa-internal"
+    if not scylla_qa_internal_path.exists():
+        click.echo("scylla-qa-internal not found, trying to clone...")
+        try:
+            clone_repo(
+                remoter=LOCALRUNNER,
+                repo_url="git@github.com:scylladb/scylla-qa-internal.git",
+                destination_dir_name=str(scylla_qa_internal_path),
+                clone_as_root=False,
+                branch="master",
+            )
+            click.echo("Successfully cloned scylla-qa-internal")
+        except Exception as exc:  # noqa: BLE001
+            click.echo(
+                f"Warning: Could not clone scylla-qa-internal: {exc}. "
+                "Pipelines referencing its configs may fail validation."
+            )
+
+    tasks, skipped = _discover_and_parse_pipelines(
+        pipeline_dir,
+        pipeline_file,
+        include_filter,
+        exclude_filter,
+    )
+
+    if not tasks:
+        click.echo("No pipeline files to validate.")
+        sys.exit(0)
+
+    worker_count = workers or os.cpu_count() or 4
+
+    failed_count = 0
+    passed_count = 0
+    failures = {}
+    with ProcessPoolExecutor(max_workers=worker_count) as process_pool:
+        futures = [process_pool.submit(_validate_single_pipeline, path, env) for path, env in tasks]
+
+        for future in futures:
+            path, (is_error, error_msg) = future.result()
+            if is_error:
+                failed_count += 1
+                failures[path] = error_msg
+                click.secho(f"FAIL: {path}", fg="red", bold=True)
+                lines = error_msg.strip().splitlines()
+                for line in lines:
+                    click.secho(f"  {line}", fg="red")
+                click.echo()
+            else:
+                passed_count += 1
+
+    total = passed_count + failed_count
+    click.echo("---")
+    summary = f"{passed_count}/{total} pipelines passed"
+    if skipped:
+        summary += f" ({skipped} skipped)"
+    if failed_count:
+        summary += f" ({failed_count} failed)"
+    click.secho(summary, fg="green" if failed_count == 0 else "red")
+
+    if junit_xml_path:
+        _write_junit_xml(junit_xml_path, tasks, failures, total, failed_count, skipped)
+
+    sys.exit(1 if failed_count else 0)
 
 
 @cli.command(help="Check test configuration file")

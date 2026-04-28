@@ -1,8 +1,8 @@
 ---
-status: draft
+status: in-progress
 domain: ci-cd
 created: 2026-03-09
-last_updated: 2026-03-15
+last_updated: 2026-04-28
 owner: fruch
 ---
 
@@ -211,30 +211,30 @@ export SCT_REGION_NAME=${current_region}
 - Discovery function: `discover_pipeline_files(root: Path) -> list[Path]`
   - Recursively finds all `.jenkinsfile` files under `jenkins-pipelines/`
 
-**Parsing approach**: Use [`python-groovy-parser`](https://github.com/inab/python-groovy-parser) (`groovy-parser` on PyPI) — a Python library that implements a full Groovy 3.0.X parser using Pygments + Lark + the official Groovy grammar. This provides a proper parse tree instead of fragile regex matching, significantly reducing the risk of edge-case failures.
+**Parsing approach**: Regex-based extraction using two compiled patterns at module level:
+- `_PIPELINE_CALL_RE`: Matches the pipeline function call (e.g., `longevityPipeline(...)`) and captures its argument block.
+- `_NAMED_PARAM_RE`: Extracts individual named parameters from the argument block using named regex groups (`triple_single`, `triple_double`, `single`, `double`, `list_map`, `boolean`, `number`) to handle all value formats.
 
-The library produces a JSON-serializable parse tree from which named parameters can be extracted by walking the tree nodes. It also supports caching parsed results for faster subsequent runs.
-
-**Fallback**: If `python-groovy-parser` proves too slow for ~995 files or has compatibility issues with our Jenkinsfile patterns, a regex-based fallback can be implemented. The pipeline files follow a consistent pattern (single function call with named arguments), so regex extraction is viable but less robust. The regex would need to handle:
+The pipeline files follow a highly consistent pattern (single function call with named arguments), making regex extraction reliable across all ~995 files. The regex handles:
 - Single-quoted strings: `backend: 'aws'`
 - Double-quoted strings: `backend: "aws"`
-- Triple-quoted strings: `test_config: '''["a.yaml", "b.yaml"]'''`
-- Groovy list literals: `sub_tests: ["test_write", "test_read"]`
-- Map literals: `timeout: [time: 530, unit: 'MINUTES']`
+- Triple-quoted strings: `test_config: '''["a.yaml", "b.yaml"]'''` and `"""..."""`
+- Groovy list/map literals: `sub_tests: ["test_write", "test_read"]`, `timeout: [time: 530, unit: 'MINUTES']`
+- Booleans and numbers: `true`, `false`, `42`
 
-**Evaluation criteria for Phase 1**: Test `python-groovy-parser` against a representative sample of pipeline files early. If it correctly parses all patterns and completes ~995 files within acceptable time (with caching), use it. If not, fall back to regex.
+A full Groovy parser (e.g., `python-groovy-parser`) was considered but rejected — it adds a heavy dependency for a problem that regex solves cleanly given the consistent file format. No external parsing dependency is needed.
 
 **`pipelineParams` vs `params`**: `runSctTest.groovy` receives two arguments: `params` (Jenkins job parameters) and `pipelineParams` (a map passed from individual pipeline functions like `longevityPipeline.groovy`). Some k8s parameters (`k8s_enable_performance_tuning`, `k8s_log_api_calls`, `k8s_deploy_monitoring`, `k8s_scylla_utils_docker_image`) come via `pipelineParams`. However, these also appear as named parameters in `.jenkinsfile` files, so the parser extracts them normally — the distinction is an implementation detail of `runSctTest.groovy`, not of the parser.
 
 **Pipelines to skip** (no `test_config`): `byoLongevityPipeline()`, `createTestJobPipeline()`, raw `pipeline { }` blocks without a wrapper function call (e.g., `qa/hydra-show-jepsen-results.jenkinsfile`).
 
 **Definition of Done**:
-- [ ] Parser correctly extracts parameters from all ~995 pipeline files
-- [ ] Unit tests cover all `test_config` formats, all backends, multi-region, edge cases
-- [ ] `discover_pipeline_files()` finds all `.jenkinsfile` files
-- [ ] Pipelines without `test_config` return `None` (skipped gracefully)
+- [x] Parser correctly extracts parameters from all ~995 pipeline files
+- [x] Unit tests cover all `test_config` formats, all backends, multi-region, edge cases
+- [x] `discover_pipeline_files()` finds all `.jenkinsfile` files
+- [x] Pipelines without `test_config` return `None` (skipped gracefully)
 
-**Dependencies**: Add `groovy-parser` to `pyproject.toml` dependencies. No SCT config involvement — pure parsing.
+**Dependencies**: No external parsing dependencies. Pure Python regex + stdlib.
 
 ---
 
@@ -327,10 +327,10 @@ Parameters found in pipeline calls that don't appear in the mapping table should
 - Generate matching region name list: `SCT_REGION_NAME="eu-west-1 us-west-2 us-east-1"`
 
 **Definition of Done**:
-- [ ] All observed pipeline parameter → env var mappings are implemented
-- [ ] Multi-region configs produce correctly sized placeholder lists
-- [ ] Unit tests cover every backend type and multi-region variants
-- [ ] Placeholder image values are used only as a fallback (documented as temporary until PR #13877 Phase 2)
+- [x] All observed pipeline parameter → env var mappings are implemented
+- [x] Multi-region configs produce correctly sized placeholder lists
+- [x] Unit tests cover every backend type and multi-region variants
+- [x] Placeholder image values are used only as a fallback (documented as temporary until PR #13877 Phase 2)
 
 **Dependencies**: Phase 1 (parser).
 
@@ -380,14 +380,14 @@ FAIL: jenkins-pipelines/manager/ubuntu24-manager-install.jenkinsfile
 ```
 
 **Definition of Done**:
-- [ ] `sct.py lint-pipelines` discovers and validates all pipeline files
-- [ ] Parallel execution with configurable worker count
-- [ ] Only failures are printed (no output for passing pipelines)
-- [ ] Summary line with pass/fail/skip counts
-- [ ] Exit code 1 on any failure
-- [ ] `--include` / `--exclude` regex filters work for targeted validation
-- [ ] `--pipeline-file` validates a single pipeline file (ad-hoc mode)
-- [ ] Unit tests for the CLI command integration
+- [x] `sct.py lint-pipelines` discovers and validates all pipeline files
+- [x] Parallel execution with configurable worker count
+- [x] Only failures are printed (no output for passing pipelines)
+- [x] Summary line with pass/fail/skip counts
+- [x] Exit code 1 on any failure
+- [x] `--include` / `--exclude` regex filters work for targeted validation
+- [x] `--pipeline-file` validates a single pipeline file (ad-hoc mode)
+- [x] Unit tests for the CLI command integration
 
 **Dependencies**: Phase 1 (parser), Phase 2 (env builder). Soft dependency on PR #13877 Phase 2 for speed — works without it but slower and requires placeholder image values.
 
@@ -412,10 +412,10 @@ FAIL: jenkins-pipelines/manager/ubuntu24-manager-install.jenkinsfile
 **Rollback strategy**: Keep `utils/lint_test_cases.sh` for one release cycle after `lint-pipelines` proves stable in CI (mark it deprecated with a comment, don't delete immediately). The Jenkinsfile change is a one-line revert if the new linter produces false positives at scale.
 
 **Definition of Done**:
-- [ ] Jenkinsfile updated to use `lint-pipelines`
-- [ ] `utils/lint_test_cases.sh` marked deprecated (deleted in follow-up after one stable release cycle)
+- [x] Jenkinsfile updated to use `lint-pipelines`
+- [x] `utils/lint_test_cases.sh` marked deprecated (deleted in follow-up after one stable release cycle)
 - [ ] CI pipeline passes with the new linting command
-- [ ] `lint-yamls` emits deprecation warning directing to `lint-pipelines --pipeline-file`
+- [x] `lint-yamls` emits deprecation warning directing to `lint-pipelines --pipeline-file`
 
 **Dependencies**: Phase 3 (CLI command).
 
@@ -482,7 +482,7 @@ FAIL: jenkins-pipelines/manager/ubuntu24-manager-install.jenkinsfile
 ## Risk Mitigation
 
 ### Risk: Groovy parsing edge cases
-- **Mitigation**: Use [`python-groovy-parser`](https://github.com/inab/python-groovy-parser) for proper Groovy AST parsing instead of regex. This library implements the full Groovy 3.0.X grammar (derived from Apache Groovy's ANTLR grammar) and produces a parse tree, eliminating regex edge cases entirely. It supports caching parsed results for performance. If the library has issues with our specific Jenkinsfile patterns, a regex-based fallback targets the known consistent pattern across all ~995 files. Files that don't match (raw `pipeline {}` blocks) are skipped gracefully. A `--verbose` flag logs skipped files for debugging.
+- **Mitigation**: Regex with named groups (`_PIPELINE_CALL_RE` and `_NAMED_PARAM_RE`) covers all observed patterns across ~995 pipeline files. The consistent format of Jenkinsfiles (single function call with named arguments) makes regex reliable. Files that don't match (raw `pipeline {}` blocks) are skipped gracefully. A `--verbose` flag logs skipped files for debugging. No external parser dependency is needed.
 
 ### Risk: `SCTConfiguration` side effects in parallel processes
 - **Mitigation**: The existing `_run_yaml_test()` already runs in `ProcessPoolExecutor` workers and resets `os.environ` per process. The same isolation model is reused.
