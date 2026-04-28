@@ -1,14 +1,11 @@
 name: Claude Code Review
 
 on:
-  # NOTE: pull_request (not pull_request_target) is required here because
-  # the OIDC token exchange with Anthropic's API fails for
-  # pull_request_target events — the OIDC token carries
-  # event_name=pull_request_target which is not accepted.
-  # Trade-off: fork PRs won't get auto-reviews (no access to secrets),
-  # but they can still request reviews via @claude comments.
-  pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+  # Disabled: automatic PR review is not needed for now.
+  # To re-enable, restore the pull_request trigger below.
+  # pull_request:
+  #   types: [opened, synchronize, ready_for_review, reopened]
+  workflow_dispatch:
 
 jobs:
   claude-review:
