@@ -1,2 +1,8 @@
 ycsb:
+<<<<<<< HEAD
   image: docker.io/scylladb/ycsb:0.2.0
+||||||| parent of acdd6bed5 (fix(alternator-dns): use json.loads to parse /localnodes response)
+  image: docker.io/scylladb/ycsb:1.3.0
+=======
+  image: docker.io/scylladb/ycsb:1.3.2
+>>>>>>> acdd6bed5 (fix(alternator-dns): use json.loads to parse /localnodes response)
