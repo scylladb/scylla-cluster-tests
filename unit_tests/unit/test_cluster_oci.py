@@ -21,7 +21,15 @@ def _mock_cloud_instance(private_ip_address="10.0.4.4"):
 
 
 def _base_node_init(
-    self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0
+    self,
+    name,
+    parent_cluster,
+    ssh_login_info=None,
+    base_logdir=None,
+    node_prefix=None,
+    dc_idx=0,
+    rack=0,
+    after_config=None,
 ):
     self.name = name
     self.test_config = Mock(IP_SSH_CONNECTIONS="private", INTRA_NODE_COMM_PUBLIC=False)
