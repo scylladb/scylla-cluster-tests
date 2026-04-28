@@ -2,7 +2,7 @@ test_duration: 300
 n_db_nodes: 3
 n_loaders: 1
 instance_type_db: 'i7i.2xlarge'
-instance_type_loader: 'c7i.large'
+instance_type_loader: 'm7i.large'
 
 user_prefix: 'gemini-cdc-postimage-write'
 
