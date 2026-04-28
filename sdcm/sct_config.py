@@ -3055,12 +3055,16 @@ class SCTConfiguration(BaseModel):
             # if number of zero nodes is set for cluster setup, check correctness of settings
             if zero_nodes_num:
                 zero_nodes_num = (
-                    [zero_nodes_num]
+                    zero_nodes_num
+                    if isinstance(zero_nodes_num, list)
+                    else [zero_nodes_num]
                     if isinstance(zero_nodes_num, int)
                     else [int(i) for i in str(zero_nodes_num).split()]
                 )
                 data_nodes_num = (
-                    [data_nodes_num]
+                    data_nodes_num
+                    if isinstance(data_nodes_num, list)
+                    else [data_nodes_num]
                     if isinstance(data_nodes_num, int)
                     else [int(i) for i in str(data_nodes_num).split()]
                 )
