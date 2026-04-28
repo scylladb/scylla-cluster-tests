@@ -17,6 +17,8 @@ class ArgusSCTClient(ArgusClient):
     class Routes(ArgusClient.Routes):
         SUBMIT_PACKAGES = "/sct/$id/packages/submit"
         SUBMIT_SCREENSHOTS = "/sct/$id/screenshots/submit"
+        GET_RESOURCES = "/sct/$id/resource/all"
+        GET_RESOURCE = "/sct/$id/resource/$name/get"
         CREATE_RESOURCE = "/sct/$id/resource/create"
         TERMINATE_RESOURCE = "/sct/$id/resource/$name/terminate"
         UPDATE_RESOURCE = "/sct/$id/resource/$name/update"
@@ -26,6 +28,7 @@ class ArgusSCTClient(ArgusClient):
         SUBMIT_GEMINI_RESULTS = "/sct/$id/gemini/submit"
         SUBMIT_PERFORMANCE_RESULTS = "/sct/$id/performance/submit"
         FINALIZE_NEMESIS = "/sct/$id/nemesis/finalize"
+        GET_NEMESIS = "/sct/$id/nemesis/get"
         SUBMIT_EVENTS = "/sct/$id/events/submit"
         SUBMIT_EVENT = "/sct/$id/event/submit"
         SUBMIT_JUNIT_REPORT = "/sct/$id/junit/submit"
@@ -34,9 +37,9 @@ class ArgusSCTClient(ArgusClient):
         SUBMIT_CONFIG = "/$id/config/submit"
 
     def __init__(self, run_id: UUID, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None,
-                 timeout: int = 60, max_retries: int = 3) -> None:
+                 timeout: int = 60, max_retries: int = 3, use_tunnel: bool | None = None) -> None:
         super().__init__(auth_token, base_url, api_version, extra_headers=extra_headers,
-                         timeout=timeout, max_retries=max_retries)
+                         timeout=timeout, max_retries=max_retries, use_tunnel=use_tunnel)
         self.run_id = run_id
 
     def submit_sct_run(self, job_name: str, job_url: str, started_by: str, commit_id: str,
@@ -61,8 +64,31 @@ class ArgusSCTClient(ArgusClient):
         """
             Sets an SCT run's status.
         """
-        response = super().set_status(run_type=self.test_type, run_id=self.run_id, new_status=new_status)
+        response = super().set_status(run_type=self.test_type,
+                                      run_id=self.run_id, new_status=new_status)
         self.check_response(response)
+
+    def get_resources(self) -> dict[str, Any]:
+        """
+            Get resources allocated for the run.
+        """
+        response = self.get(
+            endpoint=self.Routes.GET_RESOURCES,
+            location_params={"id": str(self.run_id)},
+        )
+        self.check_response(response)
+        return response.json()["response"]
+
+    def get_resource(self, name: str) -> dict[str, Any]:
+        """
+            Get a specific resource by name.
+        """
+        response = self.get(
+            endpoint=self.Routes.GET_RESOURCE,
+            location_params={"id": str(self.run_id),  "name": name},
+        )
+        self.check_response(response)
+        return response.json()["response"]
 
     def set_sct_runner(self, public_ip: str, private_ip: str, region: str, backend: str, name: str = None) -> None:
         """
@@ -86,7 +112,8 @@ class ArgusSCTClient(ArgusClient):
         """
             Updates scylla server version used for filtering test results by version.
         """
-        response = super().update_product_version(run_type=self.test_type, run_id=self.run_id, product_version=version)
+        response = super().update_product_version(run_type=self.test_type,
+                                                  run_id=self.run_id, product_version=version)
         self.check_response(response)
 
     def submit_event(self, event_data: RawEventPayload | list[RawEventPayload]):
@@ -278,6 +305,17 @@ class ArgusSCTClient(ArgusClient):
             }
         )
         self.check_response(response)
+
+    def get_nemeses(self):
+        """
+            Get a list of all nemeses already submitted to argus
+        """
+        response = self.get(
+            endpoint=self.Routes.GET_NEMESIS,
+            location_params={"id": str(self.run_id)},
+        )
+        self.check_response(response)
+        return response.json()["response"]
 
     def submit_nemesis(self, name: str, class_name: str, start_time: int,
                        target_name: str, target_ip: str, target_shards: int,

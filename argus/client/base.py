@@ -5,10 +5,9 @@ from typing import Any, Type
 from uuid import UUID
 
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from argus.common.enums import TestStatus
+from argus.client.session import create_session
 from argus.client.generic_result import GenericResultTable
 from argus.client.sct.types import LogLink
 
@@ -36,31 +35,29 @@ class ArgusClient:
         FINALIZE = "/testrun/$type/$id/finalize"
 
     def __init__(self, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None,
-                 timeout: int = 60, max_retries: int = 3) -> None:
+                 timeout: int = 60, max_retries: int = 3, use_tunnel: bool | None = None) -> None:
         self._auth_token = auth_token
         self._base_url = base_url
         self._api_ver = api_version
         self._timeout = timeout
-        self.session = requests.Session()
-
-        # Configure retry strategy
-        retry_strategy = Retry(
-            total=max_retries,
-            connect=max_retries,
-            read=max_retries,
-            status=0,
-            backoff_factor=1,
-            status_forcelist=(),
-            allowed_methods=["GET", "POST"],
+        self.session = create_session(
+            auth_token=auth_token,
+            base_url=base_url,
+            use_tunnel=use_tunnel,
+            max_retries=max_retries,
         )
-
-        # Mount adapter with retry strategy for both http and https
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
 
         if extra_headers:
             self.session.headers.update(extra_headers)
+
+    def close(self) -> None:
+        self.session.close()
+
+    def __enter__(self) -> "ArgusClient":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
 
     @property
     def auth_token(self) -> str:

@@ -66,13 +66,17 @@ def is_uuid(uuid) -> bool:
         return False
 
 
-def get_argus_client(run_id: UUID | str, init_global=True) -> ArgusSCTClient:
+def get_argus_client(run_id: UUID | str, init_global=True, use_tunnel: bool = False) -> ArgusSCTClient:
     if not is_uuid(run_id):
         raise ArgusError("Malformed UUID provided")
 
     creds = KeyStore().get_argus_rest_credentials_per_provider()
     argus_client = ArgusSCTClient(
-        run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers")
+        run_id=run_id,
+        auth_token=creds["token"],
+        base_url=creds["baseUrl"],
+        extra_headers=creds.get("extra_headers"),
+        use_tunnel=use_tunnel,
     )
 
     if init_global:
