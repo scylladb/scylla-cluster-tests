@@ -1963,6 +1963,33 @@ class BaseNode(AutoSshContainerMixin):
         self._decoding_backtraces_thread.daemon = True
         self._decoding_backtraces_thread.start()
 
+    def _decode_via_external_service(self, build_id: str, raw_backtrace: str) -> str:
+        """Decode backtrace using the external backtraces.scylladb.com service.
+
+        Avoids loading 1+ GB DWARF debug info on the monitor node (prevents OOM).
+
+        Args:
+            build_id: hex build ID of the scylla binary
+            raw_backtrace: raw backtrace string (newline-separated addresses)
+
+        Returns:
+            decoded backtrace string (stdout from the service)
+
+        Raises:
+            requests.RequestException: on network/HTTP error
+            ValueError: if the service returns success=false
+        """
+        response = requests.post(
+            "https://api.backtrace.scylladb.com/api/backtrace",
+            json={"build_id": build_id, "input": "Backtrace:\n" + raw_backtrace},
+            timeout=120,
+        )
+        response.raise_for_status()
+        result = response.json()
+        if not result.get("success"):
+            raise ValueError(f"External backtrace service failed: {result.get('stderr', 'unknown error')}")
+        return result["stdout"]
+
     def decode_backtrace(self):
         while True:
             event = None
@@ -1972,9 +1999,22 @@ class BaseNode(AutoSshContainerMixin):
                     break
                 event = obj["event"]
                 self.log.debug("Event origin severity: %s", event.severity)
-                scylla_debug_file = self.copy_scylla_debug_info(obj["node"], obj["build_id"])
-                output = self.decode_raw_backtrace(scylla_debug_file, " ".join(event.raw_backtrace.split("\n")))
-                event.backtrace = output.stdout
+                build_id = obj["build_id"]
+                raw_backtrace_oneline = " ".join(event.raw_backtrace.split("\n"))
+
+                decoded = None
+                if build_id:
+                    try:
+                        decoded = self._decode_via_external_service(build_id, event.raw_backtrace)
+                        self.log.debug("Decoded backtrace via external service for build_id=%s", build_id)
+                    except Exception as exc:  # noqa: BLE001
+                        self.log.warning("External backtrace service failed (%s), falling back to local addr2line", exc)
+
+                if decoded is None:
+                    scylla_debug_file = self.copy_scylla_debug_info(obj["node"], build_id)
+                    decoded = self.decode_raw_backtrace(scylla_debug_file, raw_backtrace_oneline).stdout
+
+                event.backtrace = decoded
                 the_map = FindIssuePerBacktrace()
                 if issue_url := the_map.find_issue(backtrace_type=event.type, decoded_backtrace=event.backtrace):
                     event.known_issue = issue_url
