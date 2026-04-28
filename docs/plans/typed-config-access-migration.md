@@ -2,8 +2,8 @@
 status: draft
 domain: config
 created: 2026-03-04
-last_updated: 2026-03-17
-owner: null
+last_updated: 2026-04-28
+owner: fruch
 ---
 # Typed Configuration Access Migration Plan
 
