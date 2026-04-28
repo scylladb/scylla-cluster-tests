@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
-from sdcm.rest.storage_service_client import StorageServiceClient
+from sdcm.rest.task_profiler_client import TaskProfilerClient
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events import Severity
@@ -37,7 +37,7 @@ class Workload:
     prepare_schema: bool
     test_keyspace: str = ""
     test_table: str = ""
-    async_profiler: bool = False
+    task_profiler: bool = False
 
     def __post_init__(self):
         if isinstance(self.num_threads, int):
@@ -238,12 +238,13 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         )
         self._base_test_workflow(workload=workload, test_name="test_write_gradual_increase_load (100% writes)")
 
-    def test_write_gradual_increase_load_with_async_profiler(self):
-        """Run write workload with async coroutine profiler enabled.
+    def test_write_gradual_increase_load_with_task_profiler(self):
+        """Run write workload with task profiler enabled.
 
         Identical to test_write_gradual_increase_load but brackets each
-        throttle step with async profiler start/stop/dump calls on all DB
-        nodes. Requires a Scylla build from
+        throttle step with task profiler start/stop calls on all DB
+        nodes. The stop call also dumps per-shard profiling data.
+        Requires a Scylla build from
         https://github.com/Jadw1/scylla/tree/sc_perf_with_profile
         """
         workload_type = "write"
@@ -261,11 +262,11 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             test_keyspace=keyspace,
             test_table=table,
             prepare_schema=True,
-            async_profiler=True,
+            task_profiler=True,
         )
         self._base_test_workflow(
             workload=workload,
-            test_name="test_write_gradual_increase_load_with_async_profiler (100% writes)",
+            test_name="test_write_gradual_increase_load_with_task_profiler (100% writes)",
         )
 
     def test_read_gradual_increase_load(self):
@@ -606,7 +607,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 current_throttle_step,
             )
 
-            with self._async_profiler_step(current_throttle_step) if workload.async_profiler else nullcontext():
+            with self._task_profiler_step(current_throttle_step) if workload.task_profiler else nullcontext():
                 run_step = (
                     latency_calculator_decorator(
                         legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
@@ -648,59 +649,63 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         self.save_total_summary_in_file(total_summary)
 
     @contextmanager
-    def _async_profiler_step(self, step_name: str):
-        """Bracket a single throttle step with profiler start/stop/dump/collect.
+    def _task_profiler_step(self, step_name: str):
+        """Bracket a single throttle step with task profiler start/stop+collect.
 
         Starts the profiler on all DB nodes before yield and
         stops, dumps, archives, downloads, and cleans up in finally,
         so cleanup runs even on exceptions.
         """
-        self._async_profiler_start_all_nodes()
+        self._task_profiler_start_all_nodes()
         try:
             yield
         finally:
-            self._async_profiler_stop_all_nodes()
-            self._async_profiler_dump_and_collect(step_name=step_name)
+            self._task_profiler_stop_and_collect(step_name=step_name)
 
-    def _async_profiler_start_all_nodes(self, sampling_interval_ms: int = 10):
-        """Start async profiler on all DB nodes in parallel."""
+    def _task_profiler_start_all_nodes(self, sampling_interval_ms: int = 10):
+        """Start task profiler on all DB nodes in parallel."""
 
         def start_on_node(node):
-            self.log.info("Starting async profiler on %s", node.name)
-            StorageServiceClient(node).async_profiler_start(sampling_interval_ms=sampling_interval_ms)
+            self.log.info("Starting task profiler on %s", node.name)
+            TaskProfilerClient(node).start(sampling_interval_ms=sampling_interval_ms)
 
         ParallelObject(objects=self.db_cluster.nodes, timeout=120).run(start_on_node, ignore_exceptions=False)
 
-    def _async_profiler_stop_all_nodes(self):
-        """Stop async profiler on all DB nodes in parallel."""
-
-        def stop_on_node(node):
-            self.log.info("Stopping async profiler on %s", node.name)
-            StorageServiceClient(node).async_profiler_stop()
-
-        ParallelObject(objects=self.db_cluster.nodes, timeout=120).run(stop_on_node, ignore_exceptions=False)
-
-    def _async_profiler_dump_and_collect(self, step_name: str):
-        """Dump, verify, archive, download, and clean up async profiler data for one step.
+    def _task_profiler_stop_and_collect(self, step_name: str):
+        """Stop profiler, write dump files, verify, archive, download, and clean up for one step.
 
         For each node in parallel:
-        1. Call the REST dump endpoint to write per-shard folded-stack files.
-        2. Verify at least one dump file exists and is non-empty.
-        3. Create a tar.gz archive on the remote node.
-        4. Download the archive into node.logdir/ via receive_files.
-        5. Clean up remote files.
+        1. Create the dump directory on the remote node.
+        2. Call the REST stop endpoint which stops profiling AND writes per-shard
+           folded-stack files to the given path.
+        3. Verify at least one dump file exists and is non-empty.
+        4. Create a tar.gz archive on the remote node.
+        5. Download the archive into node.logdir/ via receive_files.
+        6. Clean up remote files.
         """
 
-        def dump_and_collect_on_node(node):
+        def stop_and_collect_on_node(node):
             dump_dir = f"/tmp/async_profile_{step_name}_{node.name}"
+            dump_filename = f"{dump_dir}/async_profile_{step_name}"
             archive_name = f"async_profiles_{step_name}_{node.name}.tar.gz"
             remote_archive = f"/tmp/{archive_name}"
 
-            # Dump
-            node.remoter.run(f"mkdir -p {dump_dir} && chmod 777 {dump_dir}")
-            dump_filename = f"{dump_dir}/async_profile_{step_name}"
-            self.log.info("Dumping async profiler on %s to %s", node.name, dump_filename)
-            StorageServiceClient(node).async_profiler_dump(filename=dump_filename)
+            # mkdir must happen first (stop writes files into this dir).
+            # If mkdir fails, stop profiler with a fallback path so it
+            # doesn't keep running and skew subsequent steps.
+            try:
+                node.remoter.run(f"mkdir -p {dump_dir} && chmod 777 {dump_dir}")
+            except Exception:
+                self.log.warning("mkdir failed on %s, stopping profiler with fallback path", node.name)
+                try:
+                    TaskProfilerClient(node).stop(filename=f"/tmp/async_profile_fallback_{step_name}")
+                except Exception:  # noqa: BLE001
+                    self.log.error("Fallback stop also failed on %s, profiler may still be running", node.name)
+                raise
+
+            # Stop profiler + write dump files into the prepared directory
+            self.log.info("Stopping task profiler on %s, dumping to %s", node.name, dump_filename)
+            TaskProfilerClient(node).stop(filename=dump_filename)
 
             # Verify dumps exist
             result = node.remoter.run(
@@ -708,20 +713,20 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 ignore_status=True,
             )
             if result.failed or not result.stdout.strip():
-                raise FileNotFoundError(f"No async profiler dump files found on {node.name} under {dump_dir}/")
+                raise FileNotFoundError(f"No task profiler dump files found on {node.name} under {dump_dir}/")
 
             # Verify at least the first file is non-empty
             first_file = result.stdout.strip()
             size_result = node.remoter.run(f"stat -c %s {first_file}")
             file_size = int(size_result.stdout.strip())
             if file_size == 0:
-                raise ValueError(f"Async profiler dump file {first_file} on {node.name} is empty")
+                raise ValueError(f"Task profiler dump file {first_file} on {node.name} is empty")
 
             # Count total dump files
             count_result = node.remoter.run(f"ls -1 {dump_dir}/async_profile_* | wc -l")
             file_count = int(count_result.stdout.strip())
             self.log.info(
-                "Found %d async profiler dump files on %s for step %s",
+                "Found %d task profiler dump files on %s for step %s",
                 file_count,
                 node.name,
                 step_name,
@@ -746,7 +751,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             node.remoter.run(f"rm -rf {dump_dir} {remote_archive}")
 
         ParallelObject(objects=self.db_cluster.nodes, timeout=600).run(
-            dump_and_collect_on_node, ignore_exceptions=False
+            stop_and_collect_on_node, ignore_exceptions=False
         )
 
     def save_total_summary_in_file(self, total_summary):
