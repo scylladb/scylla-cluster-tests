@@ -237,6 +237,7 @@ def cli(ctx):
         "create-nemesis-yaml",
         "pre-commit",
         "unit-tests",
+        "lint-pipelines",
     ):
         try_auth_with_okta()
 
@@ -1510,25 +1511,36 @@ def lint_pipelines(pipeline_dir, pipeline_file, workers, include_filter, exclude
         sys.exit(0)
 
     worker_count = workers or os.cpu_count() or 4
+    show_progress = sys.stderr.isatty()
 
     failed_count = 0
     passed_count = 0
     failures = {}
+    chunksize = max(1, len(tasks) // (worker_count * 4))
+    paths, envs = zip(*tasks) if tasks else ([], [])
     with ProcessPoolExecutor(max_workers=worker_count) as process_pool:
-        futures = [process_pool.submit(_validate_single_pipeline, path, env) for path, env in tasks]
+        results = process_pool.map(_validate_single_pipeline, paths, envs, chunksize=chunksize)
 
-        for future in futures:
-            path, (is_error, error_msg) = future.result()
+        for path, (is_error, error_msg) in results:
             if is_error:
                 failed_count += 1
                 failures[path] = error_msg
                 click.secho(f"FAIL: {path}", fg="red", bold=True)
-                lines = error_msg.strip().splitlines()
-                for line in lines:
+                for line in error_msg.strip().splitlines():
                     click.secho(f"  {line}", fg="red")
                 click.echo()
             else:
                 passed_count += 1
+            if show_progress:
+                print(
+                    f"\r  [{passed_count + failed_count}/{len(tasks)}] validated...",
+                    end="",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+    if show_progress:
+        print(file=sys.stderr)
 
     total = passed_count + failed_count
     click.echo("---")

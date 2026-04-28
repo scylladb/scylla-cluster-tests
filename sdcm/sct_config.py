@@ -29,7 +29,7 @@ from textwrap import dedent
 import yaml
 import copy
 from typing import List, Union, Set, Literal, get_origin, get_args, ClassVar
-from functools import cached_property
+from functools import cached_property, lru_cache
 
 from distutils.util import strtobool
 import anyconfig
@@ -479,6 +479,25 @@ def count_regions(region_string: str) -> int:
     if " " in region_string:
         return len(region_string.split())
     return 1
+
+
+@lru_cache(maxsize=1)
+def _load_docker_images_defaults_cached():
+    """Load and cache docker image defaults from YAML files.
+
+    Cached at module level so repeated SCTConfiguration() instantiations
+    (e.g. in lint-pipelines workers) don't re-read and re-parse the same
+    YAML files from disk each time.
+    """
+    docker_images_dir = pathlib.Path(sct_abs_path("defaults/docker_images"))
+    if docker_images_dir.is_dir():
+        yaml_files = []
+        for root, _, files in os.walk(docker_images_dir):
+            yaml_files.extend([os.path.join(root, f) for f in files if f.endswith(".yaml")])
+        if yaml_files:
+            docker_images_defaults = anyconfig.load(yaml_files)
+            return {key: value.get("image") for key, value in docker_images_defaults.items()}
+    return None
 
 
 class SCTConfiguration(BaseModel):
@@ -3058,15 +3077,9 @@ class SCTConfiguration(BaseModel):
             self.log.debug("Using random cassandra-stress driver version: %s", self["c_s_driver_version"])
 
     def load_docker_images_defaults(self):
-        docker_images_dir = pathlib.Path(sct_abs_path("defaults/docker_images"))
-        if docker_images_dir.is_dir():
-            yaml_files = []
-            for root, _, files in os.walk(docker_images_dir):
-                yaml_files.extend([os.path.join(root, f) for f in files if f.endswith(".yaml")])
-            if yaml_files:
-                docker_images_defaults = anyconfig.load(yaml_files)
-                stress_image = {key: value.get("image") for key, value in docker_images_defaults.items()}
-                anyconfig.merge(self, dict(stress_image=stress_image))
+        stress_image = _load_docker_images_defaults_cached()
+        if stress_image:
+            anyconfig.merge(self, dict(stress_image=stress_image))
 
     def log_config(self):
         self.log.info(self.dump_config())
