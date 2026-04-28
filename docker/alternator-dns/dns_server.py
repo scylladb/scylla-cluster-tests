@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import json
 import sys
 import dnslib.server
 import dnslib
@@ -30,7 +31,7 @@ def livenodes_update():
         print("updating livenodes from {}".format(url))
         try:
             nodes = urllib.request.urlopen(url, None, 1.0).read().decode("ascii")
-            a = [x.strip('"').rstrip('"') for x in nodes.strip("[").rstrip("]").split(",")]
+            a = json.loads(nodes)
             # If we're successful, replace livenodes by the new list
             livenodes = a
             print(livenodes)
@@ -58,7 +59,11 @@ class Resolver:
 
         if qname == "alternator":
             ip = random.choice(livenodes)
-            reply.add_answer(*dnslib.RR.fromZone("{} 4 A {}".format(qname, ip)))
+            try:
+                reply.add_answer(*dnslib.RR.fromZone("{} 4 A {}".format(qname, ip)))
+            except Exception:  # noqa: BLE001
+                print("Invalid IP in livenodes, skipping: {!r}".format(ip))
+                reply.header.rcode = getattr(RCODE, "SERVFAIL")
 
         # Otherwise proxy
         if not reply.rr:
