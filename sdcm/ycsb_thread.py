@@ -246,6 +246,8 @@ class YcsbStressThread(DockerBasedStressThread):
                     dynamodb.alternator.trustAllCertificates = {trustAllCerts}
                     dynamodb.awsAccessKey = {access_key}
                     dynamodb.awsSecretKey = {secret_key}
+                    aws.accessKeyId = {access_key}
+                    aws.secretKey = {secret_key}
                 """)
                 )
                 # Only write datacenter/rack when non-empty. Java's Properties.getProperty()
