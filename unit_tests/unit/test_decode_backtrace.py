@@ -11,9 +11,13 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import queue
+import threading
 from multiprocessing import Queue
+from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from sdcm.cluster import TestConfig
 from sdcm.db_log_reader import DbLogReader
@@ -219,3 +223,74 @@ def test_backtrace_decoding_configuration(
             assert event.get("backtrace") is None, (
                 f"Event of type {event.get('type')} should not have decoded backtrace"
             )
+
+
+def _run_decode_with_queue_item(monitor_node, build_id, raw_backtrace):
+    """Helper: enqueue one fake event, run decode_backtrace(), return the event mock."""
+    config = TestConfig()
+    config.DECODING_QUEUE = queue.Queue()
+
+    event = MagicMock()
+    event.raw_backtrace = raw_backtrace
+    event.backtrace = None
+    event.severity = MagicMock()
+    event.severity.value = 0
+    event.type = "REACTOR_STALLED"
+    event.event_id = "test-event-id"
+
+    config.DECODING_QUEUE.put({"event": event, "node": "test_node", "build_id": build_id})
+    config.DECODING_QUEUE.put(None)
+
+    monitor_node.test_config = config
+
+    t = threading.Thread(target=monitor_node.decode_backtrace)
+    t.start()
+    t.join(timeout=10)
+    return event
+
+
+def test_external_service_success_skips_local_addr2line(monitor_node):
+    """When external service succeeds, copy_scylla_debug_info and local addr2line are NOT called."""
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"success": True, "stdout": "decoded-by-external", "stderr": ""}
+    mock_response.raise_for_status.return_value = None
+
+    with (
+        patch("sdcm.cluster.requests.post", return_value=mock_response) as mock_post,
+        patch.object(monitor_node, "copy_scylla_debug_info") as mock_copy,
+    ):
+        event = _run_decode_with_queue_item(monitor_node, "abc123", "0x1234\n0x5678")
+
+    assert event.backtrace == "decoded-by-external"
+    mock_copy.assert_not_called()
+    mock_post.assert_called_once()
+
+
+def test_external_service_404_falls_back_to_local(monitor_node):
+    """When external service returns 404, fall back to local addr2line."""
+    http_error = requests.HTTPError(response=MagicMock(status_code=404))
+
+    with patch("sdcm.cluster.requests.post", side_effect=http_error):
+        event = _run_decode_with_queue_item(monitor_node, "abc123", "0x1234\n0x5678")
+
+    assert event.backtrace is not None
+    assert "addr2line" in event.backtrace
+
+
+def test_external_service_timeout_falls_back_to_local(monitor_node):
+    """When external service times out, fall back to local addr2line."""
+    with patch("sdcm.cluster.requests.post", side_effect=requests.Timeout("timed out")):
+        event = _run_decode_with_queue_item(monitor_node, "abc123", "0x1234\n0x5678")
+
+    assert event.backtrace is not None
+    assert "addr2line" in event.backtrace
+
+
+def test_no_build_id_skips_external_service(monitor_node):
+    """When build_id is None, external service is never called."""
+    with patch("sdcm.cluster.requests.post") as mock_post:
+        event = _run_decode_with_queue_item(monitor_node, None, "0x1234\n0x5678")
+
+    mock_post.assert_not_called()
+    assert event.backtrace is not None
+    assert "addr2line" in event.backtrace
