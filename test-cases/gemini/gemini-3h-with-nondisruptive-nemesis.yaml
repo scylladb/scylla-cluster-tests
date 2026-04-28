@@ -3,7 +3,7 @@ n_db_nodes: 3
 n_test_oracle_db_nodes: 1
 n_loaders: 1
 instance_type_db: 'i7i.xlarge'
-instance_type_loader: 'c7i.xlarge'
+instance_type_loader: 'm7i.xlarge'
 
 user_prefix: 'gemini-basic-3h'
 
