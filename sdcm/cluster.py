@@ -1842,6 +1842,7 @@ class BaseNode(AutoSshContainerMixin):
         self._decoding_backtraces_thread.daemon = True
         self._decoding_backtraces_thread.start()
 
+    @lru_cache(maxsize=None)
     def _decode_via_external_service(self, build_id: str, raw_backtrace: str) -> str:
         """Decode backtrace using the external backtraces.scylladb.com service.
 
@@ -1982,6 +1983,7 @@ class BaseNode(AutoSshContainerMixin):
 
         raise Exception("Couldn't find scylla debug information")
 
+    @lru_cache(maxsize=None)
     def decode_raw_backtrace(self, scylla_debug_file, raw_backtrace):
         """run decode backtrace on monitor node
 

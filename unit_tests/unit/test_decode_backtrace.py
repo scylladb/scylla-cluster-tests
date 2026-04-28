@@ -12,7 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import queue
-import threading
+
 from multiprocessing import Queue
 from unittest.mock import MagicMock, patch
 
@@ -243,9 +243,7 @@ def _run_decode_with_queue_item(monitor_node, build_id, raw_backtrace):
 
     monitor_node.test_config = config
 
-    t = threading.Thread(target=monitor_node.decode_backtrace)
-    t.start()
-    t.join(timeout=10)
+    monitor_node.decode_backtrace()
     return event
 
 
@@ -266,23 +264,36 @@ def test_external_service_success_skips_local_addr2line(monitor_node):
     mock_post.assert_called_once()
 
 
-def test_external_service_404_falls_back_to_local(monitor_node):
-    """When external service returns 404, fall back to local addr2line."""
-    http_error = requests.HTTPError(response=MagicMock(status_code=404))
+def test_external_service_post_request_payload(monitor_node):
+    """Verify the POST request sends correct URL, build_id and input format."""
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"success": True, "stdout": "decoded", "stderr": ""}
+    mock_response.raise_for_status.return_value = None
 
-    with patch("sdcm.cluster.requests.post", side_effect=http_error):
+    with patch("sdcm.cluster.requests.post", return_value=mock_response) as mock_post:
+        _run_decode_with_queue_item(monitor_node, "abc123def", "0x1234\n0x5678")
+
+    mock_post.assert_called_once_with(
+        "https://api.backtrace.scylladb.com/api/backtrace",
+        json={"build_id": "abc123def", "input": "Backtrace:\n0x1234\n0x5678"},
+        timeout=120,
+    )
+
+
+@pytest.mark.parametrize(
+    "side_effect,description",
+    [
+        (requests.HTTPError(response=MagicMock(status_code=404)), "HTTP 404"),
+        (requests.Timeout("timed out"), "timeout"),
+        (requests.ConnectionError("connection refused"), "connection error"),
+    ],
+)
+def test_external_service_failure_falls_back_to_local(monitor_node, side_effect, description):
+    """When external service fails (%s), fall back to local addr2line."""
+    with patch("sdcm.cluster.requests.post", side_effect=side_effect):
         event = _run_decode_with_queue_item(monitor_node, "abc123", "0x1234\n0x5678")
 
-    assert event.backtrace is not None
-    assert "addr2line" in event.backtrace
-
-
-def test_external_service_timeout_falls_back_to_local(monitor_node):
-    """When external service times out, fall back to local addr2line."""
-    with patch("sdcm.cluster.requests.post", side_effect=requests.Timeout("timed out")):
-        event = _run_decode_with_queue_item(monitor_node, "abc123", "0x1234\n0x5678")
-
-    assert event.backtrace is not None
+    assert event.backtrace is not None, f"Should fall back to local for {description}"
     assert "addr2line" in event.backtrace
 
 
