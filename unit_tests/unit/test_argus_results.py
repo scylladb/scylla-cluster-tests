@@ -16,7 +16,13 @@ from unittest.mock import MagicMock, call
 
 from argus.client.generic_result import Cell, Status
 
-from sdcm.argus_results import ReactorStallStatsResult, send_result_to_argus, LatencyCalculatorMixedResult
+from sdcm.argus_results import (
+    LATENCY_ERROR_THRESHOLDS,
+    LatencyCalculatorMixedResult,
+    ReactorStallStatsResult,
+    send_result_to_argus,
+)
+from sdcm.utils.latency import analyze_hdr_percentiles
 
 
 def test_send_latency_decorator_result_to_argus(test_data_dir):
@@ -42,6 +48,7 @@ def test_send_latency_decorator_result_to_argus(test_data_dir):
                 sut_timestamp=0,
                 results=[
                     Cell(column="P90 write", row=row_name, value=2.15, status=Status.UNSET),
+                    Cell(column="P95 write", row=row_name, value=2.36, status=Status.UNSET),
                     Cell(column="P99 write", row=row_name, value=3.62, status=Status.UNSET),
                     Cell(column="duration", row=row_name, value=2654, status=Status.UNSET),
                     Cell(column="start time", row=row_name, value="12:14:23", status=Status.UNSET),
@@ -61,6 +68,7 @@ def test_send_latency_decorator_result_to_argus(test_data_dir):
                         status=Status.UNSET,
                     ),
                     Cell(column="P90 read", row=row_name, value=2.86, status=Status.UNSET),
+                    Cell(column="P95 read", row=row_name, value=3.53, status=Status.UNSET),
                     Cell(column="P99 read", row=row_name, value=5.36, status=Status.UNSET),
                 ],
             )
@@ -78,3 +86,50 @@ def test_send_latency_decorator_result_to_argus(test_data_dir):
         ),
     ]
     argus_mock.submit_results.assert_has_calls(expected_calls, any_order=True)
+
+
+def test_analyze_hdr_percentiles_p95_threshold_colors():
+    """P95 latencies must be colored 'red' above the threshold and '' at/below it.
+
+    Covers both the ``hdr_summary`` (per-cycle) and interval ``hdr`` values on each
+    side of the P95 threshold so incorrect or missing color assignments are detected.
+    """
+    p95_threshold = LATENCY_ERROR_THRESHOLDS["default"]["percentile_95"]
+    below_p95 = p95_threshold - 1
+    above_p95 = p95_threshold + 1
+
+    def _percentiles(percentile_95):
+        # Keep P90/P99 below their thresholds so only P95 color varies.
+        return {"percentile_90": 1, "percentile_95": percentile_95, "percentile_99": 1}
+
+    result_stats = {
+        "unknown_operation": {  # falls back to the "default" thresholds
+            "cycles": [
+                {
+                    "hdr_summary": {
+                        "WRITE": _percentiles(below_p95),
+                        "READ": _percentiles(above_p95),
+                    },
+                    "hdr": [
+                        {
+                            "WRITE": _percentiles(below_p95),
+                            "READ": _percentiles(above_p95),
+                        },
+                    ],
+                },
+            ],
+        },
+    }
+
+    analyzed = analyze_hdr_percentiles(result_stats)
+
+    cycle = analyzed["unknown_operation"]["cycles"][0]
+
+    # hdr_summary colors
+    assert cycle["hdr_summary"]["WRITE"]["color"]["percentile_95"] == ""
+    assert cycle["hdr_summary"]["READ"]["color"]["percentile_95"] == "red"
+
+    # interval hdr colors
+    interval = cycle["hdr"][0]
+    assert interval["WRITE"]["color"]["percentile_95"] == ""
+    assert interval["READ"]["color"]["percentile_95"] == "red"
