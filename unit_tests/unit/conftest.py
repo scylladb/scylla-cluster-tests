@@ -99,7 +99,6 @@ def mock_cloud_services(tmp_path_factory):
         patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda param, region_names: param),
         patch("sdcm.utils.version_utils.find_scylla_repo", side_effect=fake_find_scylla_repo),
         patch("sdcm.sct_config.find_scylla_repo", side_effect=fake_find_scylla_repo),
-        patch("sdcm.mgmt.common.find_scylla_repo", side_effect=fake_find_scylla_repo),
         patch("sdcm.utils.version_utils.get_s3_scylla_repos_mapping", return_value={}),
         patch("sdcm.utils.aws_utils.get_arch_from_instance_type", return_value="x86_64"),
         patch("sdcm.sct_config.get_arch_from_instance_type", return_value="x86_64"),
