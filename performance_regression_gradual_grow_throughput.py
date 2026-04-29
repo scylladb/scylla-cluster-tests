@@ -615,10 +615,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 )(self.run_step)
                 results, _ = run_step(
                     stress_cmds=workload.cs_cmd_tmpl,
-                    current_throttle=self.current_throttle(
-                        throttle_step, num_loaders, stress_num, workload.cs_cmd_tmpl[0]
-                    ),
-                    num_threads=num_threads,
+                    step_params=step_params,
                     step_duration=workload.step_duration,
                 )
 
