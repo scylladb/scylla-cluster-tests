@@ -42,10 +42,10 @@ repos:
     -   id: detect-private-key
         language: system  # Override the language
         exclude: >
-             (?x)^(
-                  unit_tests/test_oci_utils.py|
-                  data_dir/ssl_conf/.*
-             )$
+              (?x)^(
+                   unit_tests/unit/test_oci_utils.py|
+                   data_dir/ssl_conf/.*
+              )$
 
 -   repo: local
     hooks:
