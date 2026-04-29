@@ -40,8 +40,8 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 LATENCY_ERROR_THRESHOLDS = {
-    "replace_node": {"percentile_90": 5, "percentile_99": 10},
-    "default": {"percentile_90": 5, "percentile_99": 10},
+    "replace_node": {"percentile_90": 5, "percentile_95": 7, "percentile_99": 10},
+    "default": {"percentile_90": 5, "percentile_95": 7, "percentile_99": 10},
 }
 
 
@@ -52,6 +52,8 @@ class LatencyCalculatorMixedResult(StaticGenericResultTable):
         Columns = [
             ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P95 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P95 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="Throughput write", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
@@ -70,6 +72,7 @@ class LatencyCalculatorWriteResult(StaticGenericResultTable):
         description = ""
         Columns = [
             ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P95 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="Throughput write", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
             ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
@@ -86,6 +89,7 @@ class LatencyCalculatorReadResult(StaticGenericResultTable):
         description = ""
         Columns = [
             ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P95 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
             ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
@@ -102,6 +106,7 @@ class LatencyCalculatorReadDiskOnlyResult(StaticGenericResultTable):
         description = ""
         Columns = [
             ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P95 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
             ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
@@ -338,7 +343,7 @@ def send_result_to_argus(  # noqa: PLR0914
     for i, (workload_type_and_hdr_tag, hdr_data) in enumerate(hdr_summary.items()):
         (workload_type, hdr_tag) = workload_type_and_hdr_tag.split("--", maxsplit=1)
         row_name = f"{cycle}" + "" if skip_hdr_tag else f" (HDR tag: {hdr_tag})"
-        for percentile in ("90", "99"):
+        for percentile in ("90", "95", "99"):
             if (workload_type, percentile) not in summary_worst_lat:
                 summary_worst_lat[(workload_type, percentile)] = 0.0
             column_name = f"P{percentile} {workload_type.lower()}"
