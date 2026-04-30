@@ -11,7 +11,6 @@ jenkinsfiles:
 #   - jenkins-pipelines/oss/sct_triggers/tier1-aws-aarch64-custom-time-trigger.xml
 #
 # Related PRs that move tier1 jobs between backends (must align after merge):
-#   - #14629: move longevity-150gb-asymmetric to GCE (12x n2-highmem-4)
 #   - #14594: replace Azure 1TB 5-day test with AWS i8g alternative
 #
 # Biweekly alternation (SCT-716)
@@ -113,14 +112,6 @@ jobs:
       - "week-a"
     include_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
-  - job_name: "tier1/longevity-150gb-asymmetric-cluster-12h-test"
-    backend: "aws"
-    params:
-      region: "us-east-1"
-    labels:
-      - "weekly"
-      - "week-b"
-
   - job_name: "tier1/elasticity-90-percent-with-nemesis-test"
     backend: "aws"
     params:
@@ -172,6 +163,15 @@ jobs:
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   # ==================== GCE ====================
+
+  - job_name: "tier1/longevity-asymmetric-cluster-12h-test"
+    backend: "gce"
+    params:
+      region: "us-east1"
+      availability_zone: ""
+    labels:
+      - "weekly"
+      - "week-b"
 
   - job_name: "tier1/longevity-large-partition-200k-pks-4days-gce-test"
     backend: "gce"
