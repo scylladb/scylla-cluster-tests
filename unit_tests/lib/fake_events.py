@@ -95,7 +95,7 @@ class FakeEventsDevice:
 
         # Snapshot the event state NOW, before the caller mutates it further.
         snap = EventSnapshot(
-            formatted=event.format_event(),
+            formatted=str(event),
             attrs=json.loads(event.to_json()),
             severity=Severity(event.severity),
             save_to_files=event.save_to_files,
