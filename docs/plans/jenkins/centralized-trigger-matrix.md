@@ -50,7 +50,7 @@ The trigger just needs to pass `scylla_version` (a full version string) and let 
 - `gemini-1tb-10h.jenkinsfile`
 - `longevity-1tb-5days-azure.jenkinsfile`
 - `longevity-50gb-3days.jenkinsfile`
-- `longevity-150gb-asymmetric-cluster-12h.jenkinsfile`
+- `longevity-asymmetric-cluster-12h.jenkinsfile`
 - `longevity-large-partition-200k-pks-4days-gce.jenkinsfile`
 - `longevity-multidc-schema-topology-changes-12h.jenkinsfile`
 - `longevity-mv-si-4days-streaming.jenkinsfile`
