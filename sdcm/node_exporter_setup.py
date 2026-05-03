@@ -18,6 +18,10 @@ class NodeExporterSetup:
             curl -L --retry 5 --retry-max-time 300 -O https://github.com/prometheus/node_exporter/releases/download/v{NODE_EXPORTER_VERSION}/node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
             tar -xzvf node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
             mv node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin
+            # Restore SELinux context so the binary can be executed as a service on RHEL-based systems
+            if command -v restorecon > /dev/null 2>&1; then
+                restorecon -v /usr/local/bin/node_exporter
+            fi
 
             if [ -e /etc/systemd/system/node_exporter.service ]; then
                 rm /etc/systemd/system/node_exporter.service
