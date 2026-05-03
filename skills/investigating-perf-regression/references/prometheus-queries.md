@@ -156,6 +156,52 @@ Counter of coordinator-level read timeouts. Should be 0 for healthy runs.
 sum(scylla_storage_proxy_coordinator_read_timeouts) by (instance)
 ```
 
+## Admission Control & Memory Metrics
+
+### 12. Active Reads
+
+Current number of reads being actively processed (not queued). When this hits the internal limit (~100/shard), additional reads are queued.
+
+```
+max(scylla_database_active_reads) by (instance)
+```
+
+**Interpretation:** Compare offending nodes (hitting 93-94) vs healthy nodes (3-22). If a node is consistently at the limit, it's saturated.
+
+### 13. Transport Requests Blocked by Memory
+
+Counter of CQL requests that were blocked due to transport memory pressure. Zero means the bottleneck is NOT at the CQL connection layer.
+
+```
+max(scylla_transport_requests_blocked_memory) by (instance)
+```
+
+### 14. Memory Allocated vs Total (per shard)
+
+Shows memory headroom. If allocated/total > 99%, the node has no buffer for load spikes.
+
+```
+scylla_memory_allocated_memory{shard="0"}
+scylla_memory_total_memory{shard="0"}
+```
+
+### 15. Transport Connections Blocked/Shed
+
+Indicates if connections are being rejected or throttled at the CQL layer.
+
+```
+max(scylla_transport_connections_blocked) by (instance)
+max(scylla_transport_connections_shed) by (instance)
+```
+
+### 16. Compaction Manager Active Compactions
+
+Number of active compactions during the step. Non-zero during a performance step can steal IO/CPU.
+
+```
+sum(scylla_compaction_manager_compactions) by (instance)
+```
+
 ## Metric Discovery
 
 If a metric name doesn't return data, list all available metric names:

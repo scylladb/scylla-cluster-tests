@@ -75,6 +75,7 @@ The full step-by-step process is in [workflows/investigate-perf-regression.md](w
 4. **Correlate with HDR histograms** -- Map Prometheus spikes to cassandra-stress intervals
 5. **Download and analyze logs** -- Use Argus to get system.log, check for stalls, errors
 6. **Write root cause analysis** -- Document findings in structured markdown
+7. **Root cause deep dive** -- Determine the exact bottleneck layer (admission control, memory, IO, transport)
 
 ## Key Metrics Priority Order
 
@@ -84,11 +85,14 @@ Query these metrics in order. Each level explains a different layer of the probl
 |----------|--------|-----------------|
 | 1 | `rlatencyp99` (per instance) | Server-side tail latency -- is Scylla itself slow? |
 | 2 | `scylla_database_queued_reads` | Read admission control -- are reads being throttled? |
-| 3 | `scylla_cache_row_evictions` | Memory pressure -- is the cache being evicted? |
-| 4 | `scylla_reactor_utilization` | CPU saturation -- is the reactor overloaded? |
-| 5 | `scylla_lsa_memory_compacted` | LSA pressure -- is memory compaction active? |
-| 6 | `scylla_io_queue_total_delay_sec` | I/O delays -- is disk I/O the bottleneck? |
-| 7 | `node_netstat_Tcp_RetransSegs` | Network issues -- are packets being retransmitted? |
+| 3 | `scylla_database_active_reads` | Admission saturation -- is the concurrency limit hit? |
+| 4 | `scylla_cache_row_evictions` | Memory pressure -- is the cache being evicted? |
+| 5 | `scylla_memory_allocated_memory` | Memory headroom -- is the node at 99%+ usage? |
+| 6 | `scylla_reactor_utilization` | CPU saturation -- is the reactor overloaded? |
+| 7 | `scylla_transport_requests_blocked_memory` | Transport layer -- is CQL backpressure the bottleneck? |
+| 8 | `scylla_lsa_memory_compacted` | LSA pressure -- is memory compaction active? |
+| 9 | `scylla_io_queue_total_delay_sec` | I/O delays -- is disk I/O the bottleneck? |
+| 10 | `node_netstat_Tcp_RetransSegs` | Network issues -- are packets being retransmitted? |
 
 See [references/prometheus-queries.md](references/prometheus-queries.md) for exact query syntax.
 
@@ -136,6 +140,46 @@ The SCT log contains HDR histogram data split into 10-minute intervals. Key fiel
 
 When the first interval shows extreme latency but later intervals are normal, the cause is typically startup transient (compaction catch-up, cache warming).
 
+## Common Root Cause Patterns
+
+### Pattern 1: Read Admission Control Saturation
+
+**Symptoms:** Client P99 >> Scylla P99 (e.g., 23s vs 12ms), queued reads in hundreds/thousands, active reads at limit (~93-94).
+
+**Mechanism:** Memory is at 99% capacity → cache evictions occur under load → some reads hold admission slots longer due to memory allocation pressure → queue builds up → new requests wait 10-20+ seconds in the admission queue before being processed (in 12ms).
+
+**Key insight:** Scylla's coordinator latency metric only measures processing time, NOT queue wait time. The gap between server and client P99 IS the queue wait time.
+
+**Distinguishing evidence:**
+- `scylla_transport_requests_blocked_memory` = 0 (transport is fine)
+- `scylla_database_active_reads` at limit on affected nodes
+- `scylla_memory_allocated_memory / scylla_memory_total_memory` > 99%
+- Cache hit rate = 100% (not a cold cache problem)
+
+### Pattern 2: Uneven Node Load
+
+**Symptoms:** 1-2 nodes show massive queued reads while others are near zero. All nodes have similar reactor utilization.
+
+**Cause:** Uneven tablet distribution, token-aware routing concentrating load, or specific EC2 instance with degraded performance (noisy neighbor).
+
+**Evidence:** Compare queued reads per node — healthy cluster shows uniform distribution.
+
+### Pattern 3: Compaction Interference
+
+**Symptoms:** Periodic latency spikes, reactor stalls in `compaction` scheduling group, elevated IO queue delays.
+
+**Cause:** Background compaction consuming IO bandwidth or CPU, competing with read path.
+
+**Evidence:** `scylla_compaction_manager_compactions > 0` during the step, reactor stalls timestamped during spikes.
+
+### Pattern 4: Disk IO Bottleneck
+
+**Symptoms:** Low cache hit rate, high IO queue delays, high disk queue length.
+
+**Cause:** Working set doesn't fit in memory, reads go to disk, NVMe performance degraded.
+
+**Evidence:** `scylla_cache_row_hits / (hits + misses) < 1.0`, `scylla_io_queue_total_delay_sec` rate > 0.
+
 ## Output Format
 
 The final analysis should be a markdown document with:
@@ -159,7 +203,7 @@ The final analysis should be a markdown document with:
 
 | Workflow | Purpose |
 |----------|---------|
-| [workflows/investigate-perf-regression.md](workflows/investigate-perf-regression.md) | 6-phase investigation process from run IDs to root cause analysis |
+| [workflows/investigate-perf-regression.md](workflows/investigate-perf-regression.md) | 7-phase investigation process from run IDs to root cause analysis |
 
 ## Trigger Eval Queries
 

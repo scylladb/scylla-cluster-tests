@@ -1,6 +1,6 @@
 # Investigating a Performance Regression Failure
 
-A 6-phase process for comparing a failed and passed SCT performance regression test run to identify the root cause of a latency regression.
+A 7-phase process for comparing a failed and passed SCT performance regression test run to identify the root cause of a latency regression.
 
 ---
 
@@ -213,3 +213,62 @@ See [references/prometheus-queries.md](../references/prometheus-queries.md) for 
 7. **Save as markdown.** Use the output format defined in SKILL.md. Include all data sources (Prometheus URLs, Argus commands used).
 
 **Exit:** Root cause analysis document written and saved. All evidence referenced. Recommendations are actionable.
+
+---
+
+## Phase 7: Root Cause Deep Dive — Determine the Bottleneck Layer
+
+**Entry:** Phase 6 complete. You have the symptoms documented but need to determine exactly *where* in the stack the latency originates (client vs server, which Scylla subsystem).
+
+**Actions:**
+
+1. **Compare Scylla-reported latency vs client-reported latency.** The `latency_results` in the SCT log contain both:
+   - `Scylla P99_read - node-X` (from `rlatencyp99` Prometheus metric, coordinator processing time only)
+   - `c-s P99` (from cassandra-stress HDR histograms, end-to-end including queue wait time)
+
+   A large gap (e.g., Scylla reports 12ms but client sees 23,000ms) means the time is spent **waiting in a queue**, not in actual request processing.
+
+2. **Check read admission control saturation.** Query active reads to see if the concurrency limit is hit:
+   ```bash
+   # query: max(scylla_database_active_reads) by (instance)
+   ```
+   If active reads hit the internal limit (typically ~100 per shard), all additional reads queue. Compare the offending node (hitting 93-94) vs healthy nodes (3-22).
+
+3. **Check transport layer blocking.** Rule out CQL connection-level backpressure:
+   ```bash
+   # query: max(scylla_transport_requests_blocked_memory) by (instance)
+   ```
+   Zero means the transport layer is NOT the bottleneck — requests are accepted but queued internally.
+
+4. **Check memory headroom.** Compare allocated vs total memory per shard:
+   ```bash
+   # query: scylla_memory_allocated_memory{shard="0"}
+   # query: scylla_memory_total_memory{shard="0"}
+   ```
+   If allocated/total > 99%, there is no memory headroom. This contributes to admission control being more aggressive and evictions triggering under load.
+
+5. **Check cache hit rate.** If hit rate is 100% but evictions are occurring, the working set fits in cache but memory churn from evict-and-recache holds read slots longer:
+   ```bash
+   # query: sum(rate(scylla_cache_row_hits[1m])) by (instance) / (sum(rate(scylla_cache_row_hits[1m])) by (instance) + sum(rate(scylla_cache_row_misses[1m])) by (instance))
+   ```
+
+6. **Check for uneven load distribution.** If only some nodes are saturated while others are idle, this indicates uneven tablet ownership or topology-aware routing sending disproportionate traffic to specific nodes. Compare queued reads and active reads across all nodes — healthy nodes should have similar values.
+
+7. **Build the bottleneck layer table.** Summarize findings:
+
+   | Layer | Problem? | Evidence |
+   |-------|----------|----------|
+   | Client (cassandra-stress) | No/Yes | Reports latency correctly / thread contention |
+   | Network | No/Yes | No transport blocking / TCP retransmissions |
+   | Scylla transport/CQL layer | No/Yes | 0 requests blocked / connection shedding |
+   | **Scylla read admission control** | No/Yes | Queued reads count, active reads at limit |
+   | Scylla cache/memory | No/Yes | Memory %, eviction rate, hit rate |
+   | Disk IO | No/Yes | Cache hit rate, IO queue delays |
+
+8. **Classify the root cause.** Common patterns:
+   - **Admission control saturation + 99% memory + cache evictions + 100% hit rate:** Memory pressure causes reads to hold admission slots longer → cascading queue buildup. Server-side issue, transient if caused by specific instance/placement.
+   - **Low active reads + high IO delays + low cache hit rate:** Disk IO bottleneck from cold cache or data larger than memory.
+   - **Transport blocking + high connections:** Client overloading the CQL connection pool.
+   - **Uneven queued reads (1-2 nodes high, others zero):** Tablet/token distribution imbalance or noisy-neighbor on specific EC2 instance.
+
+**Exit:** Bottleneck layer identified and documented. The analysis explains not just *what* happened but *why* and at which layer the time was spent.
