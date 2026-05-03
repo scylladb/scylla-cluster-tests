@@ -7,7 +7,4 @@ def call(String status, String context, String description){
 			description: description,
 			targetUrl: "${env.BUILD_URL}pipeline-overview")
 	}
-	if (status == 'failure') {
-		currentBuild.result = 'FAILURE'
-	}
 }
