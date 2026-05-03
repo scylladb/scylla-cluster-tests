@@ -616,6 +616,17 @@ def get_by_owner_ami(parameter: str, region_name) -> str:
         ],
     )
     images = sorted(images, key=lambda x: x.creation_date, reverse=True)
+    if not images:
+        # List available images from the owner to help debug naming issues
+        all_images = ec2_resource.images.filter(
+            Owners=[owner],
+            Filters=[{"Name": "architecture", "Values": [arch]}],
+        )
+        available_names = sorted([img.name for img in all_images], reverse=True)[:10]
+        raise ValueError(
+            f"No AMI found for owner={owner}, architecture={arch}, name_filter={name_filter} "
+            f"in region {region_name}. Available image names (top 10): {available_names}"
+        )
     LOGGER.debug(f'found image "{images[0].name}" - {images[0].id}')
     return images[0].id
 

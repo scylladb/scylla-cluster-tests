@@ -219,6 +219,9 @@ def call(Map pipelineParams = [:]) {
     // Artifact test job definitions: each entry maps a human-readable OS label to the
     // Jenkins job path (relative to the current folder) and backend-specific settings.
     // The job paths use '..' prefix to reference sibling folders in the Jenkins job tree.
+
+    // Workaround for staging where artifact test jobs are temporarily located in the same folder as the gating job, without the 'artifacts/' subfolder prefix in their paths. This allows us to reference them directly without needing to adjust the paths in the job definitions.
+    // TODO: Once the feature will be merged, we can remove this workaround and revert to the original job paths.
     def ARTIFACT_TEST_JOBS = [
         [
             os_label: 'centos9',
@@ -260,11 +263,12 @@ def call(Map pipelineParams = [:]) {
             job_path: 'artifacts-rhel10',
             backend: 'aws',
         ],
-        [
-            os_label: 'oel9',
-            job_path: 'artifacts-oel9-test',
-            backend: 'aws',
-        ],
+        // AMI is not found for OEL9, so we are skipping it for now. We can re-enable it later when the AMI will be available.
+//         [
+//             os_label: 'oel9',
+//             job_path: 'artifacts-oel9-test',
+//             backend: 'aws',
+//         ],
         [
             os_label: 'amazon2023',
             job_path: 'artifacts-amazon2023',
@@ -290,7 +294,15 @@ def call(Map pipelineParams = [:]) {
             job_path: 'artifacts-ami-arm',
             backend: 'aws',
         ],
+        [
+            os_label: 'docker',
+            job_path: 'artifacts-docker-test',
+            backend: 'docker',
+        ],
     ]
+
+ // TODO: Once the feateure will be merged, we can remove the comments form the official artifact tests list.
+
 //     def ARTIFACT_TEST_JOBS = [
 //         [
 //             os_label: 'centos9',
@@ -551,7 +563,11 @@ PYTHON_EOF
                                     try {
                                         // Resolve job path relative to current folder
                                         def currentJobDir = JOB_NAME.substring(0, JOB_NAME.lastIndexOf('/'))
+                                        // Workaround for staging where artifact test jobs are temporarily located in the same folder as the gating job, without the 'artifacts/' subfolder prefix in their paths. This allows us to reference them directly without needing to adjust the paths in the job definitions.
+                                        // TODO: Once the feature will be merged, we can remove next line
                                         def fullJobPath = "${currentJobDir}/${jobPath}"
+
+                                        // TODO: Once the feature will be merged, we can remove comment from next line
 //                                         def fullJobPath = "${currentJobDir}/../${jobPath}"
 
                                         println("Triggering ${stageKey}: job=${fullJobPath}, version=${scyllaVersion}")
