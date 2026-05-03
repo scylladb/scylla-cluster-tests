@@ -56,7 +56,6 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Centralized Trigger Matrix | `draft` | [centralized-trigger-matrix.md](jenkins/centralized-trigger-matrix.md) |
 | i8g Performance Jobs Migration | `draft` | [i8g-performance-jobs-migration.md](i8g-performance-jobs-migration.md) |
 | Perf-Simple-Query Offline Installer Trigger | `draft` | [perf-simple-query-offline-installer-trigger.md](jenkins/perf-simple-query-offline-installer-trigger.md) |
-| curl Retry/Timeout Linting | `pending_pr` | [#13509](https://github.com/scylladb/scylla-cluster-tests/pull/13509) |
 
 ### Config — Configuration system
 
