@@ -1211,7 +1211,7 @@ AWS image type of the db node
 
 AWS image type of the oracle node
 
-**default:** i8g.2xlarge
+**default:** N/A
 
 **type:** str
 * appendable
@@ -1221,7 +1221,7 @@ AWS image type of the oracle node
 
 Abstract instance size for oracle DB nodes (e.g. '2xlarge', 'large'). Resolves to cloud-specific instance type based on active backend. Cloud-specific overrides (instance_type_db_oracle, gce_instance_type_db_oracle, etc.) take precedence when explicitly set by user.
 
-**default:** N/A
+**default:** 2xlarge
 
 **type:** str
 * appendable
@@ -1251,7 +1251,7 @@ Abstract instance size for DB nodes (e.g. '2xlarge', 'large'). Resolves to cloud
 
 Abstract instance size for loader nodes (e.g. '2xlarge', 'large'). Resolves to cloud-specific instance type based on active backend. Cloud-specific overrides take precedence when explicitly set by user.
 
-**default:** N/A
+**default:** small
 
 **type:** str
 * appendable
@@ -1261,7 +1261,7 @@ Abstract instance size for loader nodes (e.g. '2xlarge', 'large'). Resolves to c
 
 Abstract instance size for monitor nodes (e.g. '2xlarge', 'large'). Resolves to cloud-specific instance type based on active backend. Cloud-specific overrides take precedence when explicitly set by user.
 
-**default:** N/A
+**default:** small
 
 **type:** str
 * appendable
@@ -1941,7 +1941,7 @@ Number of zero token nodes in cluster. Value should be set as '0 1 1' for multid
 
 Instance type for zero token node
 
-**default:** i4i.large
+**default:** N/A
 
 **type:** str
 * appendable
@@ -1951,7 +1951,7 @@ Instance type for zero token node
 
 Abstract instance size for zero-token DB nodes (e.g. 'large'). Resolves to cloud-specific instance type based on active backend. Cloud-specific overrides (zero_token_instance_type_db, gce_zero_token_instance_type_db, etc.) take precedence when explicitly set by user.
 
-**default:** N/A
+**default:** large
 
 **type:** str
 * appendable
