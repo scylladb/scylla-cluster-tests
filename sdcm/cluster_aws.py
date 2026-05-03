@@ -732,6 +732,7 @@ class AWSNode(cluster.BaseNode):
                 self._is_zero_token_node = True
 
     def wait_for_cloud_init(self):
+        self.remoter.is_up(timeout=300)
         if self.remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:
             wait_cloud_init_completes(self.remoter, self)
 
