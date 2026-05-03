@@ -527,9 +527,13 @@ def test_run_analysis_phase_full_edition_success(mock_node, mock_test_config):
     doc.json_result_file = "test-node.local.vitals.json"
     doc.scylla_doctor_exec = "/home/testuser/scylla_doctor.pyz"
 
-    sudo_result = MagicMock()
-    sudo_result.stdout = ""
-    mock_node.remoter.sudo.return_value = sudo_result
+    # First sudo call is from run() — returns the JSON analysis output
+    run_result = MagicMock()
+    run_result.stdout = '{"SomeAnalyzer": {"status": 0}}'
+    # Second sudo call is to write the file via base64
+    write_result = MagicMock()
+    write_result.stdout = ""
+    mock_node.remoter.sudo.side_effect = [run_result, write_result]
 
     check_result = MagicMock()
     check_result.ok = True
@@ -538,11 +542,10 @@ def test_run_analysis_phase_full_edition_success(mock_node, mock_test_config):
 
     doc.run_analysis_phase()
 
-    # Verify sudo was called with --save-vitals to produce JSON output
-    mock_node.remoter.sudo.assert_called_once()
-    sudo_cmd = mock_node.remoter.sudo.call_args[0][0]
-    assert "--load-vitals test-node.local.vitals.json" in sudo_cmd
-    assert "--save-vitals test-node.local.analysis.json" in sudo_cmd
+    # Verify sudo was called with --output json to produce JSON output
+    first_sudo_cmd = mock_node.remoter.sudo.call_args_list[0][0][0]
+    assert "--load-vitals test-node.local.vitals.json" in first_sudo_cmd
+    assert "--output json" in first_sudo_cmd
 
     assert doc.analysis_report_file == "test-node.local.analysis.json"
 
@@ -556,9 +559,16 @@ def test_run_analysis_phase_report_not_created(mock_node, mock_test_config):
     doc.json_result_file = "test-node.local.vitals.json"
     doc.scylla_doctor_exec = "/home/testuser/scylla_doctor.pyz"
 
-    sudo_result = MagicMock()
-    sudo_result.stdout = ""
-    mock_node.remoter.sudo.return_value = sudo_result
+    # First sudo call is from run() — returns JSON output
+    run_result = MagicMock()
+    run_result.stdout = '{"SomeAnalyzer": {"status": 0}}'
+    # Second sudo call is to write the file via base64
+    write_result = MagicMock()
+    write_result.stdout = ""
+    # Third sudo call is from self.version (accessed in exception message)
+    version_result = MagicMock()
+    version_result.stdout = "1.9.0"
+    mock_node.remoter.sudo.side_effect = [run_result, write_result, version_result]
 
     # test -s check fails — file was not created
     check_result = MagicMock()

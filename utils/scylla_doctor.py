@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import base64
 import json
 import logging
 import pprint
@@ -537,8 +538,7 @@ class ScyllaDoctor:
             auth_options = "-sov CQL,user,{} -sov CQL,password,{} ".format(*credentials)
 
         json_name = f"{self.node.public_dns_name}.vitals.json"
-        skip_args = f" {self.skip_analyzer_args}" if self.skip_analyzer_args else ""
-        self.run(sd_command=f"{self.scylla_doctor_exec} {auth_options} --save-vitals {json_name}{skip_args}")
+        self.run(sd_command=f"{self.scylla_doctor_exec} {auth_options} --save-vitals {json_name}")
 
         # Search for json file
         result = self.node.remoter.run(f"ls {json_name}", verbose=False)
@@ -559,10 +559,7 @@ class ScyllaDoctor:
 
     def analyze_vitals(self):
         LOGGER.info("Analyze vitals")
-        sd_cmd = f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file} --verbose"
-        if self.skip_analyzer_args:
-            sd_cmd += f" {self.skip_analyzer_args}"
-        result = self.run(sd_command=sd_cmd)
+        result = self.run(sd_command=f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file} --verbose")
         LOGGER.debug(pprint.pformat(result))
 
     def run_analysis_phase(self):
@@ -571,8 +568,8 @@ class ScyllaDoctor:
         Loads previously collected vitals and runs analyzers to produce
         findings and recommendations about the cluster health.
 
-        Results are collected directly in JSON format using ``--save-vitals``,
-        similar to ``run_scylla_doctor_and_collect_results()``.
+        Uses ``--output json`` to get the analysis report in JSON format
+        from stdout, then saves it to a file for later verification.
         """
         if not self.is_full_edition:
             LOGGER.info("Skipping analysis phase — only available for the full edition")
@@ -585,16 +582,25 @@ class ScyllaDoctor:
         json_report_name = f"{self.node.public_dns_name}.analysis.json"
         LOGGER.info("Running Scylla Doctor analysis phase (full edition)...")
 
-        sd_cmd = f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file} --save-vitals {json_report_name}"
-        if self.skip_analyzer_args:
-            sd_cmd += f" {self.skip_analyzer_args}"
-        self.run(sd_command=sd_cmd)
+        skip_args = f" {self.skip_analyzer_args}" if self.skip_analyzer_args else ""
+        sd_cmd = f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file}{skip_args} --output json"
+        LOGGER.info("Run scylla-doctor command: %s", sd_cmd)
+        # if self.skip_analyzer_args:
+        #     sd_cmd += f" {self.skip_analyzer_args}"
+        stdout_content = self.run(sd_command=sd_cmd)
+
+        # Save the JSON output from stdout to a file
+        if not stdout_content:
+            raise ScyllaDoctorException(f"Analysis phase produced no output. Scylla doctor version: {self.version}")
+        # Use base64 to safely write JSON that may contain special characters
+        encoded = base64.b64encode(stdout_content.encode()).decode()
+        self.node.remoter.sudo(f"bash -c 'echo {encoded} | base64 -d > {json_report_name}'")
 
         # Verify the JSON report was created
-        result = self.node.remoter.run(
+        verify_result = self.node.remoter.run(
             f"test -s {json_report_name} && echo {json_report_name}", verbose=False, ignore_status=True
         )
-        self.analysis_report_file = result.stdout.strip() if result.ok else ""
+        self.analysis_report_file = verify_result.stdout.strip() if verify_result.ok else ""
         if not self.analysis_report_file:
             raise ScyllaDoctorException(
                 f"Analysis report file {json_report_name} has not been created. Scylla doctor version: {self.version}"
@@ -607,57 +613,6 @@ class ScyllaDoctor:
             LOGGER.info("Skipping failed analyzer %s (configured in scylla_doctor_skip_analyzers)", analyzer)
             return True
         return False
-
-    @staticmethod
-    def _parse_human_readable_analysis(content: str) -> dict:
-        """Parse the human-readable scylla-doctor analysis output into a dict.
-
-        Scylla-doctor ``--load-vitals`` produces a tabular report with
-        two sections: ``+ Data collection`` (collectors) and ``+ Data analysis``
-        (analyzers).  Each line in a section has the format::
-
-            - <Name>: <description>   <STATUS>   <information>
-
-        where STATUS is one of PASSED, FAILED, WARNING, SKIPPED, and fields
-        are separated by two or more spaces.
-
-        This method extracts only the ``Data analysis`` section items and
-        returns a JSON-serialisable dict:
-        ``{name: {"status": int, "status_text": str, "info": str}}``.
-
-        Status mapping: PASSED/WARNING → 0, FAILED → 1, SKIPPED → 2.
-        WARNING is mapped to 0 (success) because warnings are informational
-        and should not fail the test.
-        """
-        results = {}
-        item_pattern = re.compile(r"^\s*-\s+(\w+):\s+.+?\s{2,}(PASSED|FAILED|WARNING|SKIPPED)\s{2,}(.+?)\s*$")
-        status_map = {"PASSED": 0, "FAILED": 1, "WARNING": 0, "SKIPPED": 2}
-
-        in_analysis_section = False
-        for line in content.splitlines():
-            stripped = line.strip()
-
-            if stripped.startswith("+ Data analysis"):
-                in_analysis_section = True
-                continue
-            if in_analysis_section and stripped.startswith("+ "):
-                break
-
-            if not in_analysis_section:
-                continue
-
-            match = item_pattern.match(line)
-            if match:
-                name = match.group(1)
-                status_text = match.group(2)
-                info = match.group(3).strip()
-                results[name] = {
-                    "status": status_map.get(status_text, 0),
-                    "status_text": status_text,
-                    "info": info,
-                }
-
-        return results
 
     @staticmethod
     def _extract_json_from_output(content: str) -> dict:
@@ -707,7 +662,10 @@ class ScyllaDoctor:
         The analysis report is a JSON file produced by ``run_analysis_phase()``
         (parsed from scylla-doctor's human-readable output).  Each top-level
         key is an analyzer name mapped to a dict with at least a ``status``
-        field (0 = success, 1 = failed, 2 = skipped).
+            PASSED = 0
+            SKIPPED = 1
+            WARNING = 2
+            FAILED = 3
         """
         if not self.analysis_report_file:
             LOGGER.warning("No analysis report file to verify")
@@ -721,25 +679,24 @@ class ScyllaDoctor:
 
         failed_analyzers = {}
         for analyzer, value in analysis_result.items():
-            if isinstance(value, dict) and value.get("status") == 1:
-                if not self.filter_out_failed_analyzers(analyzer=analyzer):
-                    failed_analyzers[analyzer] = value
+            (LOGGER.info("Analyzer %s status: %s (%s)", analyzer, value.get("status"), value),)
+            if isinstance(value, dict) and value.get("status") not in [0, 1, 2]:  # PASSED, SKIPPED, WARNING
+                # if not self.filter_out_failed_analyzers(analyzer=analyzer):
+                failed_analyzers[analyzer] = value
+
+        LOGGER.info("Failed analyzers: %s", pprint.pformat(failed_analyzers))
 
         assert not failed_analyzers, (
             f"Failed analyzers: {pprint.pformat(failed_analyzers)}. Scylla doctor version: {self.version}"
         )
 
     def filter_out_failed_collectors(self, collector):
-        # FirewallRulesCollector return empty result - https://github.com/scylladb/field-engineering/issues/2248
-        if collector == "FirewallRulesCollector":
-            return True
-
-        # https://github.com/scylladb/field-engineering/issues/2288
-        if self.node.parent_cluster.cluster_backend == "docker" and collector in [
-            "StorageConfigurationCollector",
-            "PerftuneSystemConfigurationCollector",
-        ]:
-            return True
+        # # https://github.com/scylladb/field-engineering/issues/2288
+        # if self.node.parent_cluster.cluster_backend == "docker" and collector in [
+        #     "StorageConfigurationCollector",
+        #     "PerftuneSystemConfigurationCollector",
+        # ]:
+        #     return True
 
         if (
             self.node.distro.is_debian
