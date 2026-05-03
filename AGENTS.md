@@ -255,6 +255,12 @@ Nemesis are chaos operations that test database resilience. Common types:
 Separate each group with a blank line.
 Within each group, sort imports alphabetically.
 
+**HTTP/Curl Conventions:**
+- All `remoter.run("curl ...")` calls must use `curl_with_retry()` from `sdcm/utils/curl.py`
+- All `requests` calls must go through a session with retry adapter (pattern: `sdcm/rest/rest_client.py`)
+- Localhost calls may use `retry=0` but must still use the utility for consistent `--connect-timeout`
+- Document any exceptions with `# no-retry: <reason>` comments
+
 ### Unit Testing Guidelines
 
 **IMPORTANT: Use pytest style, NOT unittest.TestCase**
