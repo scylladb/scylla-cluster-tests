@@ -63,6 +63,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | SCT Config Validation and Lazy Images | `draft` | [sct-config-validation-and-lazy-images.md](sct-config-validation-and-lazy-images.md) |
 | SCT Config Follow-up Refactoring | `pending_pr` | [#13845](https://github.com/scylladb/scylla-cluster-tests/pull/13845) |
 | Config Type Normalization | `draft` | [config-type-normalization.md](config/config-type-normalization.md) |
+| Cross-Cloud Instance Sizing | `draft` | [cross-cloud-sizing.md](config/cross-cloud-sizing.md) |
 
 ### K8s — Kubernetes operator, K8s backends
 

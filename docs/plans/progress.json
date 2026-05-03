@@ -262,6 +262,16 @@
       "pr": null,
       "phases_total": 3,
       "phases_done": 0
+    },
+    {
+      "id": "cross-cloud-sizing",
+      "title": "Cross-Cloud Instance Sizing",
+      "file": "config/cross-cloud-sizing.md",
+      "domain": "config",
+      "status": "draft",
+      "created": "2026-05-03",
+      "phases_total": 5,
+      "phases_done": 0
     }
   ]
 }
