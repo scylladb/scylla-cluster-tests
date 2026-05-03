@@ -30,6 +30,8 @@ from dataclasses import dataclass
 import requests
 from invoke.exceptions import UnexpectedExit, Failure as InvokeFailure
 from botocore.exceptions import ClientError
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 import sdcm.monitorstack.ui as monitoring_ui
 from sdcm.paths import (
@@ -73,6 +75,20 @@ from sdcm.utils.aws_ssm_runner import SSMCommandRunner
 from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2_Failure
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _create_retry_session(retries: int = 3) -> requests.Session:
+    retry_strategy = Retry(
+        total=retries,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "POST"],
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session = requests.Session()
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
 
 
 class CollectingNode:
@@ -483,7 +499,8 @@ class MonitoringStack(BaseMonitoringEntity):
 
     def get_grafana_annotations(self, grafana_ip: str) -> str:
         try:
-            res = requests.get(f"http://{grafana_ip}:{self.grafana_port}/api/annotations")
+            session = _create_retry_session()
+            res = session.get(f"http://{grafana_ip}:{self.grafana_port}/api/annotations")
             if res.ok:
                 return res.text
         except Exception as details:  # noqa: BLE001
@@ -494,7 +511,8 @@ class MonitoringStack(BaseMonitoringEntity):
     @retrying(n=3, sleep_time=3, message="Search dashboard...", raise_on_exceeded=False)
     def search_dashboard(grafana_ip: str, port: int, query: str) -> list:
         search_api_url = f"http://{grafana_ip}:{port}/api/search?query={query}"
-        resp = requests.get(search_api_url)
+        session = _create_retry_session()
+        resp = session.get(search_api_url)
         if not resp.ok:
             LOGGER.error("Search dashboards by query '%s' failed: %s %s", query, resp.status_code, resp.content)
             return []
@@ -602,7 +620,8 @@ class GrafanaScreenShot(GrafanaEntity):
                     # deliberately specifying params as string to be able to use kiosk mode
                     # since requests can put a param without value, if using dict
                     # https://github.com/psf/requests/issues/2651
-                    with requests.get(
+                    session = _create_retry_session()
+                    with session.get(
                         grafana_url, stream=True, params=f"width={dashboard.resolution[0]}&height=-1&kiosk"
                     ) as response:
                         response.raise_for_status()
