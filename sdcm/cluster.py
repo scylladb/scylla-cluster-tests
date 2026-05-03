@@ -2559,11 +2559,15 @@ class BaseNode(AutoSshContainerMixin):
             self.remoter.run("sudo yum remove -y abrt")  # https://docs.scylladb.com/operating-scylla/admin/#core-dumps
             version = f"-{scylla_version}*" if scylla_version else ""
             self.remoter.run("sudo yum install -y {}{}".format(self.scylla_pkg(), version))
+            # scylla-node-exporter is now independently versioned and may not be pulled
+            # as a dependency of the scylla meta-package, so install it explicitly.
+            self.remoter.run("sudo yum install -y scylla-node-exporter", ignore_status=True)
         elif self.distro.is_sles15:
             self.remoter.sudo("SUSEConnect --product sle-module-legacy/15.3/x86_64")
             self.remoter.sudo("SUSEConnect --product sle-module-python2/15.3/x86_64")
             version = f"-{scylla_version}" if scylla_version else ""
             self.remoter.sudo("zypper install -y {}{}".format(self.scylla_pkg(), version))
+            self.remoter.sudo("zypper install -y scylla-node-exporter", ignore_status=True)
         else:
             if self.distro.is_debian11 or self.distro.is_debian12:
                 self.install_package(package_name="software-properties-common")
@@ -2572,6 +2576,7 @@ class BaseNode(AutoSshContainerMixin):
             elif self.distro.is_debian12:
                 self.install_package(package_name="apt-transport-https gnupg1-curl dirmngr openjdk-17-jre")
             self.install_package(self.scylla_pkg(), package_version=scylla_version)
+            self.install_package(package_name="scylla-node-exporter", ignore_status=True)
 
     def offline_install_scylla(self, unified_package, nonroot):
         """
@@ -6095,6 +6100,21 @@ class BaseScyllaCluster:
         node.remoter.sudo(
             "sudo rm /etc/systemd/system/scylla-server.service.requires/scylla-image-*", ignore_status=True
         )
+        # Ensure node-exporter is running after any install method.
+        # The unified package may not include scylla-node-exporter, so install standalone node_exporter
+        # as a fallback when the scylla-node-exporter service doesn't exist or cannot be started.
+        node.remoter.sudo("systemctl daemon-reload", ignore_status=True)
+        node_exporter_setup = NodeExporterSetup()
+        node_exporter_service_exists = node.is_service_exists("scylla-node-exporter")
+        node_exporter_enable_result = None
+        if node_exporter_service_exists:
+            node_exporter_enable_result = node.remoter.sudo(
+                "systemctl enable --now scylla-node-exporter", ignore_status=True
+            )
+        if not node_exporter_service_exists or (
+            node_exporter_enable_result is not None and node_exporter_enable_result.failed
+        ):
+            node_exporter_setup.install(node)
 
     def _allow_logging_port_in_selinux(self, node: BaseNode) -> None:
         """Allow syslog-ng to use the remote log destination port under the syslogd_port_t SELinux context."""
