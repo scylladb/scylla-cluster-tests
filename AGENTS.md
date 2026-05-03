@@ -130,6 +130,11 @@ export SCT_REUSE_CLUSTER=$(cat ~/sct-results/latest/test_id)
 - `configurations/` - Reusable configuration fragments
 - `defaults/` - Default configuration values
 - Configuration precedence: CLI args > Environment vars > Config files > Defaults
+- **Cross-Cloud Instance Sizing:**
+  - Abstract T-shirt sizes (e.g., `db_instance_type: '2xlarge'`) resolve to cloud-specific instance types
+  - See `docs/cross-cloud-sizing.md` for the full mapping table and usage guide
+  - Implementation: `sdcm/utils/cloud_sizes.py`, `sdcm/sct_config.py` (`_resolve_instance_sizes()`)
+  - CLI: `sct.py show-sizes`, `sct.py translate-size`
 
 **Backends Supported:**
 - `aws` - Amazon Web Services (primary backend)
