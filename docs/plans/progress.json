@@ -255,15 +255,6 @@
       "phases_done": 0
     },
     {
-      "id": "curl-retry-timeout-linting",
-      "title": "curl Retry/Timeout Linting",
-      "domain": "ci-cd",
-      "status": "pending_pr",
-      "pr": 13509,
-      "phases_total": null,
-      "phases_done": 0
-    },
-    {
       "id": "ssh-key-decoupling",
       "title": "SSH Key Decoupling",
       "domain": "cluster",
