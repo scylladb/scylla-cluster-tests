@@ -28,3 +28,4 @@ Available skills (invoke via Skill tool or `/skill-name`):
 - `commit-summary` — Generate weekly commit summary reports
 - `writing-nemesis` — Create new chaos engineering disruptions
 - `code-review` — Review PRs for correctness and convention compliance
+- `investigating-perf-regression` — Investigate performance regression test failures by comparing runs
