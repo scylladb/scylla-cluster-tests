@@ -125,3 +125,24 @@ A PR modifies backend-specific code (e.g., `cluster_aws.py`) but doesn't request
 
 - **During review**: Check which `cluster_*.py` or `provision/` files are in the diff, and verify the matching labels are applied
 - **File-to-label mapping**: See [review-checklist.md](review-checklist.md) Check 6
+
+---
+
+## Issue 5: Bare curl in shell_script_cmd() Blocks
+
+**Severity**: MEDIUM
+**Incident**: Argus run c607f0ef — `artifacts-rocky9-nonroot-test` build #847
+
+### What Happens
+
+A `curl -fL` call embedded inside a `shell_script_cmd(f"""...""")` multi-line bash string has no `--retry` flags. A transient CDN connection reset (`curl: (56) Recv failure`) fails the entire test during setUp before any Scylla nodes are provisioned. The specific call site was `sct_config.py:get_version_based_on_conf()` downloading the unified relocatable package.
+
+### Why It Was Missed
+
+PR #13509's initial migration grepped for `remoter.run("curl ...")` patterns but missed curl calls embedded inside `shell_script_cmd()` f-strings, which generate bash scripts run via `LOCALRUNNER.run()`.
+
+### Prevention
+
+- **During review**: Search for `curl` inside `shell_script_cmd()` blocks — these won't match simple `remoter.run("curl` patterns
+- **Grep pattern**: `grep -rn "curl" sdcm/ --include="*.py" | grep -v curl_with_retry | grep -v "# no-retry"`
+- **Fix pattern**: Interpolate `curl_with_retry()` into the f-string: `f"{curl_with_retry(url, output='file', follow_redirects=True)}"`
