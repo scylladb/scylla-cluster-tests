@@ -2824,7 +2824,13 @@ def show_sizes(role, cloud):
     default=None,
     help="Backend to expand for (config mode only; default: all)",
 )
-def translate_size(instance_type, config_file, backend):
+@click.option(
+    "--keep-abstract",
+    is_flag=True,
+    default=False,
+    help="Keep abstract size params alongside expanded cloud-specific params",
+)
+def translate_size(instance_type, config_file, backend, keep_abstract):
     if config_file:
         with open(config_file) as f:
             config = yaml.safe_load(f) or {}
@@ -2856,7 +2862,8 @@ def translate_size(instance_type, config_file, backend):
 
                 cloud_params = get_cloud_params(role, spec, cloud)
                 expanded.update(cloud_params)
-                expanded.pop(abstract_param, None)
+                if not keep_abstract:
+                    expanded.pop(abstract_param, None)
 
             click.echo(yaml.dump(expanded, default_flow_style=False, sort_keys=True), nl=False)
         return

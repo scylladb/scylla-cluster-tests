@@ -10,6 +10,7 @@ SCT uses a **Pydantic-based configuration system** that provides:
 - **Self-documenting**: Type hints and descriptions make the config clear
 - **Flexible input formats**: Support for multiple input types (strings, lists, dicts)
 - **Multiple sources**: Merge configurations from YAML files, environment variables, and defaults
+- **Cross-cloud instance sizing**: Abstract T-shirt sizes that resolve to cloud-specific instance types — see [Cross-Cloud Sizing](cross-cloud-sizing.md)
 
 ## Configuration Architecture
 
