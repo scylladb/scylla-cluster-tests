@@ -791,3 +791,41 @@ def test_vector_store_ami_name_resolved_to_ami_id(monkeypatch):
     assert "vector-store-1-5-0-arm64-2026-03-17t07-07-32z" in resolved_names, (
         "convert_name_to_ami_if_needed was not called for ami_id_vector_store"
     )
+
+
+def test_resolve_instance_sizes_aws(tmp_path, monkeypatch):
+    config_file = tmp_path / "test.yaml"
+    config_file.write_text("db_instance_type: '2xlarge'\n")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_CONFIG_FILES", str(config_file))
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "")
+    # Clear any module-scoped env leak (e.g. from fixture_conf which sets SCT_INSTANCE_TYPE_DB)
+    monkeypatch.delenv("SCT_INSTANCE_TYPE_DB", raising=False)
+    params = sct_config.SCTConfiguration()
+    assert params.get("instance_type_db") == "i8g.2xlarge"
+
+
+def test_resolve_instance_sizes_explicit_override(tmp_path, monkeypatch):
+    config_file = tmp_path / "test.yaml"
+    config_file.write_text("db_instance_type: '2xlarge'\ninstance_type_db: 'i4i.4xlarge'\n")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_CONFIG_FILES", str(config_file))
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "")
+    monkeypatch.delenv("SCT_INSTANCE_TYPE_DB", raising=False)
+    params = sct_config.SCTConfiguration()
+    assert params.get("instance_type_db") == "i4i.4xlarge"
+
+
+def test_resolve_instance_sizes_gce_disk_params(tmp_path, monkeypatch):
+    config_file = tmp_path / "test.yaml"
+    config_file.write_text("db_instance_type: '2xlarge'\n")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    monkeypatch.setenv("SCT_CONFIG_FILES", str(config_file))
+    monkeypatch.setenv("SCT_GCE_IMAGE_DB", "https://dummy-gce-image")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "")
+    monkeypatch.delenv("SCT_INSTANCE_TYPE_DB", raising=False)
+    params = sct_config.SCTConfiguration()
+    assert params.get("gce_instance_type_db") == "z3-highmem-16"
+    assert params.get("gce_n_local_ssd_disk_db") == 4

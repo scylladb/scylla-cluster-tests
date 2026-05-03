@@ -84,6 +84,7 @@ from sdcm.utils.azure_utils import (
     azure_check_instance_type_available,
 )
 from sdcm.utils.cloud_api_utils import MIN_SCYLLA_VERSION_FOR_VS
+from sdcm.utils.cloud_sizes import get_cloud_params, resolve_size
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.utils.curl import curl_with_retry
 from sdcm.test_config import TestConfig
@@ -973,6 +974,22 @@ class SCTConfiguration(BaseModel):
     )
     instance_type_db_target: String = SctField(
         description="Target AWS instance type for platform migration (e.g., i8g.2xlarge for ARM)",
+    )
+    db_instance_type: String = SctField(
+        description="Abstract instance size for DB nodes (e.g. '2xlarge', 'large'). "
+        "Resolves to cloud-specific instance type based on active backend. "
+        "Cloud-specific overrides (instance_type_db, gce_instance_type_db, etc.) "
+        "take precedence when explicitly set by user.",
+    )
+    loader_instance_type: String = SctField(
+        description="Abstract instance size for loader nodes (e.g. '2xlarge', 'large'). "
+        "Resolves to cloud-specific instance type based on active backend. "
+        "Cloud-specific overrides take precedence when explicitly set by user.",
+    )
+    monitor_instance_type: String = SctField(
+        description="Abstract instance size for monitor nodes (e.g. '2xlarge', 'large'). "
+        "Resolves to cloud-specific instance type based on active backend. "
+        "Cloud-specific overrides take precedence when explicitly set by user.",
     )
     target_db_image_ids: Annotated[list[str], IgnoredType] = Field(default=[], exclude=True)
     instance_type_runner: String = SctField(
@@ -2482,6 +2499,8 @@ class SCTConfiguration(BaseModel):
         """
         super().__init__(**data)
 
+        object.__setattr__(self, "_user_provided_keys", set())
+
         env = self._load_environment_variables()
         config_files = env.get("config_files", [])
         config_files = [sct_abs_path(f) for f in config_files]
@@ -2509,6 +2528,7 @@ class SCTConfiguration(BaseModel):
                 if not os.path.exists(conf_file):
                     raise FileNotFoundError(f"Couldn't find config file: {conf_file}")
             files = anyconfig.load(list(config_files))
+            self._user_provided_keys.update(files.keys())
             merge_dicts_append_strings(self, files)
 
         regions_data = self.get("regions_data") or {}
@@ -2539,6 +2559,7 @@ class SCTConfiguration(BaseModel):
                         raise ValueError(f"{region} isn't supported, use: {self.aws_supported_regions}")
 
         # 3) overwrite with environment variables
+        self._user_provided_keys.update(env.keys())
         merge_dicts_append_strings(self, env)
 
         if not self.get("billing_project"):
@@ -2565,6 +2586,8 @@ class SCTConfiguration(BaseModel):
 
         if not self.get("billing_project"):
             self["billing_project"] = "no_billing_project"
+
+        self._resolve_instance_sizes()
 
         # 4) update events max severities
         add_severity_limit_rules(self.get("max_events_severities"))
@@ -3025,6 +3048,50 @@ class SCTConfiguration(BaseModel):
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
             self.log.debug("Using random cassandra-stress driver version: %s", self["c_s_driver_version"])
+
+    def _resolve_instance_sizes(self) -> None:
+        backend = self.get("cluster_backend") or ""
+        cloud_map = {
+            "aws": "aws",
+            "k8s-eks": "aws",
+            "gce": "gce",
+            "k8s-gke": "gce",
+            "azure": "azure",
+            "oci": "oci",
+        }
+        cloud = cloud_map.get(backend)
+        if not cloud:
+            return
+
+        primary_param_template = {
+            "aws": "instance_type_{role}",
+            "gce": "gce_instance_type_{role}",
+            "azure": "azure_instance_type_{role}",
+            "oci": "oci_instance_type_{role}",
+        }
+
+        for role, abstract_param in (
+            ("db", "db_instance_type"),
+            ("loader", "loader_instance_type"),
+            ("monitor", "monitor_instance_type"),
+        ):
+            abstract_size = self.get(abstract_param)
+            if not abstract_size:
+                continue
+
+            primary_param = primary_param_template[cloud].format(role=role)
+            if primary_param in self._user_provided_keys:
+                continue
+
+            try:
+                spec = resolve_size(role, abstract_size, cloud)
+            except (KeyError, ValueError):
+                continue
+
+            cloud_params = get_cloud_params(role, spec, cloud)
+            for param_name, param_value in cloud_params.items():
+                if param_name not in self._user_provided_keys:
+                    self[param_name] = param_value
 
     def load_docker_images_defaults(self):
         stress_image = _load_docker_images_defaults_cached()

@@ -1227,6 +1227,36 @@ Target AWS instance type for platform migration (e.g., i8g.2xlarge for ARM)
 * appendable
 
 
+## **db_instance_type** / SCT_DB_INSTANCE_TYPE
+
+Abstract instance size for DB nodes (e.g. '2xlarge', 'large'). Resolves to cloud-specific instance type based on active backend. Cloud-specific overrides (instance_type_db, gce_instance_type_db, etc.) take precedence when explicitly set by user.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **loader_instance_type** / SCT_LOADER_INSTANCE_TYPE
+
+Abstract instance size for loader nodes (e.g. '2xlarge', 'large'). Resolves to cloud-specific instance type based on active backend. Cloud-specific overrides take precedence when explicitly set by user.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **monitor_instance_type** / SCT_MONITOR_INSTANCE_TYPE
+
+Abstract instance size for monitor nodes (e.g. '2xlarge', 'large'). Resolves to cloud-specific instance type based on active backend. Cloud-specific overrides take precedence when explicitly set by user.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
 ## **instance_type_runner** / SCT_INSTANCE_TYPE_RUNNER
 
 instance type of the sct-runner node
