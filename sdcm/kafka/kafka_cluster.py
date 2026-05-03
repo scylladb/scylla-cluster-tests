@@ -21,6 +21,7 @@ from sdcm.remote import LOCALRUNNER
 from sdcm.utils.git import clone_repo
 from sdcm.utils.common import get_sct_root_path
 from sdcm.utils.remote_logger import DockerComposeLogger
+from sdcm.utils.session import create_retry_session
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
 
 # TODO: write/think more about the consumers
@@ -34,7 +35,12 @@ class LocalKafkaCluster(cluster.BaseCluster):
         self.remoter = remoter
         self.docker_compose_path = Path(get_sct_root_path()) / "kafka-stack-docker-compose"
         self._journal_thread: DockerComposeLogger | None = None
+        self._session = self._create_session()
         self.init_repository()
+
+    @staticmethod
+    def _create_session(retries: int = 3) -> requests.Session:
+        return create_retry_session(retries=retries)
 
     def init_repository(self):
         # TODO: make the url configurable
@@ -128,7 +134,7 @@ class LocalKafkaCluster(cluster.BaseCluster):
         self.install_connector(connector_config.source)
 
         def kafka_connect_api_available():
-            res = requests.head(url=self.kafka_connect_url)
+            res = self._session.head(url=self.kafka_connect_url)
             res.raise_for_status()
             return True
 
@@ -140,7 +146,7 @@ class LocalKafkaCluster(cluster.BaseCluster):
             throw_exc=True,
         )
         LOGGER.debug(connector_data)
-        res = requests.post(url=f"{self.kafka_connect_url}/connectors", json=connector_data)
+        res = self._session.post(url=f"{self.kafka_connect_url}/connectors", json=connector_data)
         LOGGER.debug(res)
         LOGGER.debug(res.text)
         res.raise_for_status()
