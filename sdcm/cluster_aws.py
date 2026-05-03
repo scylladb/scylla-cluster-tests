@@ -732,8 +732,7 @@ class AWSNode(cluster.BaseNode):
                 self._is_zero_token_node = True
 
     def wait_for_cloud_init(self):
-        if self.remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:
-            wait_cloud_init_completes(self.remoter, self)
+        wait_cloud_init_completes(self.remoter, self)
 
     @property
     def short_hostname(self):
