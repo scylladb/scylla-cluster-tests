@@ -16,6 +16,19 @@
 Provides canonical size names (e.g. "db/2xlarge") that map to equivalent
 instance types across AWS, GCE, Azure, and OCI, enabling cloud-agnostic
 test configuration and cross-cloud comparisons.
+
+Roles
+-----
+- ``db``          — main ScyllaDB data nodes
+- ``db_oracle``   — oracle (reference) DB nodes; reuse the "db" sizing table
+- ``zero_token``  — zero-token DB nodes; reuse the "db" sizing table
+- ``loader``      — stress-tool loader nodes
+- ``monitor``     — monitoring-stack nodes
+
+The ``db_oracle`` and ``zero_token`` roles are *aliases* for the ``db``
+sizing table: they resolve to the same instance families but produce
+different SCT config parameter names (see ``_ROLE_SIZING_ALIAS`` and
+``_PARAM_NAME_OVERRIDES``).
 """
 
 from __future__ import annotations
@@ -113,6 +126,10 @@ SIZING: dict[str, dict[str, SizeMapping]] = {
             azure=InstanceSpec("Standard_L32s_v4", 32, 256.0),
             oci=InstanceSpec("DenseIO.E5.Flex:16:256", 16, 256.0),
         ),
+        # NOTE: Azure Standard_L*s_v4 family lacks a 32-vCPU variant.
+        # 8xlarge maps to Standard_L64s_v4 (64 vCPU) — the next available size above
+        # Standard_L32s_v4 (used for 4xlarge). This gives 2× the compute of AWS 8xlarge
+        # on Azure. Similarly, 16xlarge maps to Standard_L80s_v4 (80 vCPU) vs AWS 64 vCPU.
         "8xlarge": SizeMapping(
             aws_arm=InstanceSpec("i8g.8xlarge", 32, 256.0),
             aws_x86=InstanceSpec("i4i.8xlarge", 32, 256.0),
@@ -155,12 +172,19 @@ SIZING: dict[str, dict[str, SizeMapping]] = {
             azure=InstanceSpec("Standard_F16s_v2", 16, 32.0),
             oci=InstanceSpec("VM.Standard3.Flex:16:128", 16, 128.0),
         ),
+        "2xlarge": SizeMapping(
+            aws_arm=InstanceSpec("c6i.8xlarge", 32, 64.0),
+            aws_x86=InstanceSpec("c6i.8xlarge", 32, 64.0),
+            gce=InstanceSpec("e2-standard-32", 32, 128.0),
+            azure=InstanceSpec("Standard_F32s_v2", 32, 64.0),
+            oci=InstanceSpec("VM.Standard3.Flex:32:256", 32, 256.0),
+        ),
         "xlarge": SizeMapping(
             aws_arm=InstanceSpec("c6i.16xlarge", 64, 128.0),
             aws_x86=InstanceSpec("c6i.16xlarge", 64, 128.0),
             gce=InstanceSpec("e2-highcpu-32", 32, 32.0),
-            azure=InstanceSpec("Standard_F32s_v2", 32, 64.0),
-            oci=InstanceSpec("VM.Standard3.Flex:32:256", 32, 256.0),
+            azure=InstanceSpec("Standard_F48s_v2", 48, 96.0),
+            oci=InstanceSpec("VM.Standard3.Flex:64:512", 64, 512.0),
         ),
     },
     # ------------------------------------------------------------------
@@ -196,12 +220,33 @@ SIZING: dict[str, dict[str, SizeMapping]] = {
 _VALID_CLOUDS = frozenset({"aws", "gce", "azure", "oci"})
 _VALID_ARCH = frozenset({"arm", "x86"})
 
+# Roles that alias to the "db" sizing table but produce different param names.
+_ROLE_SIZING_ALIAS: dict[str, str] = {
+    "db_oracle": "db",
+    "zero_token": "db",
+}
+
+# Roles whose GCE disk params (n_local_ssd / root_disk_type) should be emitted.
+# Only the main "db" role has dedicated disk params in sct_config.py.
+_GCE_DISK_ROLES = frozenset({"db"})
+
+# Custom param name overrides where naming doesn't follow the standard pattern.
+# Standard pattern: aws → "instance_type_{role}", gce → "gce_instance_type_{role}", etc.
+# Exceptions are listed here as (role, cloud) → param_name.
+_PARAM_NAME_OVERRIDES: dict[tuple[str, str], str] = {
+    ("zero_token", "aws"): "zero_token_instance_type_db",
+    ("zero_token", "gce"): "gce_zero_token_instance_type_db",
+    ("zero_token", "azure"): "azure_zero_token_instance_type_db",
+    ("zero_token", "oci"): "oci_zero_token_instance_type_db",
+}
+
 
 def resolve_size(role: str, size: str, cloud: str, arch: str = "arm") -> InstanceSpec:
     """Resolve a canonical size name to an InstanceSpec for the given cloud.
 
     Args:
-        role: Node role — one of "db", "loader", "monitor".
+        role: Node role — one of "db", "db_oracle", "zero_token", "loader", "monitor".
+              "db_oracle" and "zero_token" resolve through the "db" sizing table.
         size: Canonical size name, e.g. "2xlarge", "medium".
         cloud: Cloud provider — one of "aws", "gce", "azure", "oci".
         arch: CPU architecture for AWS — "arm" (Graviton) or "x86" (default "arm").
@@ -218,10 +263,13 @@ def resolve_size(role: str, size: str, cloud: str, arch: str = "arm") -> Instanc
         >>> spec.instance_type
         'i8g.2xlarge'
     """
-    if role not in SIZING:
-        raise ValueError(f"Unknown role: {role!r}. Valid roles: {sorted(SIZING)}")
+    sizing_role = _ROLE_SIZING_ALIAS.get(role, role)
+    if sizing_role not in SIZING:
+        raise ValueError(
+            f"Unknown role: {role!r}. Valid roles: {sorted(SIZING)} and aliases {sorted(_ROLE_SIZING_ALIAS)}"
+        )
 
-    role_sizes = SIZING[role]
+    role_sizes = SIZING[sizing_role]
     if size not in role_sizes:
         raise ValueError(f"Unknown size {size!r} for role {role!r}. Valid sizes: {sorted(role_sizes)}")
 
@@ -255,12 +303,18 @@ def identify_size(cloud: str, instance_type: str) -> tuple[str, str] | None:
         A ``(role, size)`` tuple if found, or ``None`` if the instance type
         is not registered in any mapping.
 
+    Raises:
+        ValueError: If cloud is not recognised.
+
     Example:
         >>> identify_size("gce", "z3-highmem-16")
         ('db', '2xlarge')
         >>> identify_size("aws", "x99.nonexistent")
         # returns None
     """
+    if cloud not in _VALID_CLOUDS:
+        raise ValueError(f"Unknown cloud: {cloud!r}. Valid clouds: {sorted(_VALID_CLOUDS)}")
+
     for role, sizes in SIZING.items():
         for size, mapping in sizes.items():
             if cloud == "aws":
@@ -271,8 +325,6 @@ def identify_size(cloud: str, instance_type: str) -> tuple[str, str] | None:
                 candidates = {mapping.azure.instance_type}
             elif cloud == "oci":
                 candidates = {mapping.oci.instance_type}
-            else:
-                return None
 
             if instance_type in candidates:
                 return (role, size)
@@ -287,13 +339,13 @@ def get_cloud_params(role: str, spec: InstanceSpec, cloud: str) -> dict[str, str
     the matching backend.
 
     Args:
-        role: Node role — one of "db", "loader", "monitor".
+        role: Node role — one of "db", "db_oracle", "zero_token", "loader", "monitor".
         spec: InstanceSpec to translate into SCT params.
         cloud: Cloud provider — one of "aws", "gce", "azure", "oci".
 
     Returns:
         Dict of SCT config param names → values.
-        For GCE, extra disk params are included when non-zero / non-empty.
+        For GCE db role, extra disk params are included when non-zero / non-empty.
 
     Raises:
         ValueError: If cloud is not recognised.
@@ -306,22 +358,22 @@ def get_cloud_params(role: str, spec: InstanceSpec, cloud: str) -> dict[str, str
     """
     params: dict[str, str | int] = {}
 
-    if cloud == "aws":
+    override_key = (role, cloud)
+    if override_key in _PARAM_NAME_OVERRIDES:
+        params[_PARAM_NAME_OVERRIDES[override_key]] = spec.instance_type
+    elif cloud == "aws":
         params[f"instance_type_{role}"] = spec.instance_type
-
     elif cloud == "gce":
         params[f"gce_instance_type_{role}"] = spec.instance_type
-        if spec.local_ssd_count:
-            params[f"gce_n_local_ssd_disk_{role}"] = spec.local_ssd_count
-        if spec.root_disk_type:
-            params[f"gce_root_disk_type_{role}"] = spec.root_disk_type
-
+        if role in _GCE_DISK_ROLES:
+            if spec.local_ssd_count:
+                params[f"gce_n_local_ssd_disk_{role}"] = spec.local_ssd_count
+            if spec.root_disk_type:
+                params[f"gce_root_disk_type_{role}"] = spec.root_disk_type
     elif cloud == "azure":
         params[f"azure_instance_type_{role}"] = spec.instance_type
-
     elif cloud == "oci":
         params[f"oci_instance_type_{role}"] = spec.instance_type
-
     else:
         raise ValueError(f"Unknown cloud: {cloud!r}. Valid clouds: {sorted(_VALID_CLOUDS)}")
 

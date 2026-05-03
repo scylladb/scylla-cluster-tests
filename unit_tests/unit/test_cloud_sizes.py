@@ -116,6 +116,7 @@ def test_resolve_size_db_oci(size, expected_type):
         pytest.param("small", "c6i.xlarge", id="small"),
         pytest.param("medium", "c6i.2xlarge", id="medium"),
         pytest.param("large", "c6i.4xlarge", id="large"),
+        pytest.param("2xlarge", "c6i.8xlarge", id="2xlarge"),
         pytest.param("xlarge", "c6i.16xlarge", id="xlarge"),
     ],
 )
@@ -130,6 +131,7 @@ def test_resolve_size_loader_aws_arm(size, expected_type):
         pytest.param("small", "c6i.xlarge", id="small"),
         pytest.param("medium", "c6i.2xlarge", id="medium"),
         pytest.param("large", "c6i.4xlarge", id="large"),
+        pytest.param("2xlarge", "c6i.8xlarge", id="2xlarge"),
         pytest.param("xlarge", "c6i.16xlarge", id="xlarge"),
     ],
 )
@@ -144,6 +146,7 @@ def test_resolve_size_loader_aws_x86(size, expected_type):
         pytest.param("small", "e2-standard-4", id="small"),
         pytest.param("medium", "e2-standard-8", id="medium"),
         pytest.param("large", "e2-standard-16", id="large"),
+        pytest.param("2xlarge", "e2-standard-32", id="2xlarge"),
         pytest.param("xlarge", "e2-highcpu-32", id="xlarge"),
     ],
 )
@@ -160,7 +163,8 @@ def test_resolve_size_loader_gce(size, expected_type):
         pytest.param("small", "Standard_F4s_v2", id="small"),
         pytest.param("medium", "Standard_F8s_v2", id="medium"),
         pytest.param("large", "Standard_F16s_v2", id="large"),
-        pytest.param("xlarge", "Standard_F32s_v2", id="xlarge"),
+        pytest.param("2xlarge", "Standard_F32s_v2", id="2xlarge"),
+        pytest.param("xlarge", "Standard_F48s_v2", id="xlarge"),
     ],
 )
 def test_resolve_size_loader_azure(size, expected_type):
@@ -174,7 +178,8 @@ def test_resolve_size_loader_azure(size, expected_type):
         pytest.param("small", "VM.Standard3.Flex:4:32", id="small"),
         pytest.param("medium", "VM.Standard3.Flex:8:64", id="medium"),
         pytest.param("large", "VM.Standard3.Flex:16:128", id="large"),
-        pytest.param("xlarge", "VM.Standard3.Flex:32:256", id="xlarge"),
+        pytest.param("2xlarge", "VM.Standard3.Flex:32:256", id="2xlarge"),
+        pytest.param("xlarge", "VM.Standard3.Flex:64:512", id="xlarge"),
     ],
 )
 def test_resolve_size_loader_oci(size, expected_type):
@@ -279,6 +284,7 @@ def test_resolve_size_unknown_arch_raises():
         pytest.param("azure", "Standard_L16s_v4", ("db", "2xlarge"), id="azure-db-2xlarge"),
         pytest.param("oci", "DenseIO.E5.Flex:8:128", ("db", "2xlarge"), id="oci-db-2xlarge"),
         pytest.param("aws", "c6i.xlarge", ("loader", "small"), id="aws-loader-small"),
+        pytest.param("aws", "c6i.8xlarge", ("loader", "2xlarge"), id="aws-loader-2xlarge"),
         pytest.param("aws", "c6i.16xlarge", ("loader", "xlarge"), id="aws-loader-xlarge"),
         pytest.param("gce", "e2-standard-8", ("loader", "medium"), id="gce-loader-medium"),
         pytest.param("gce", "e2-highcpu-32", ("loader", "xlarge"), id="gce-loader-xlarge"),
@@ -308,8 +314,9 @@ def test_identify_size_unknown_returns_none(cloud, instance_type):
     assert identify_size(cloud, instance_type) is None
 
 
-def test_identify_size_unknown_cloud_returns_none():
-    assert identify_size("openstack", "m1.xlarge") is None
+def test_identify_size_unknown_cloud_raises():
+    with pytest.raises(ValueError, match="Unknown cloud"):
+        identify_size("openstack", "m1.xlarge")
 
 
 # ---------------------------------------------------------------------------
@@ -457,7 +464,7 @@ def test_sizing_has_all_db_sizes():
 
 def test_sizing_has_all_loader_sizes():
     loader_sizes = set(SIZING["loader"])
-    assert loader_sizes == {"small", "medium", "large", "xlarge"}
+    assert loader_sizes == {"small", "medium", "large", "2xlarge", "xlarge"}
 
 
 def test_sizing_has_all_monitor_sizes():
@@ -478,3 +485,160 @@ def test_sizing_all_specs_have_non_empty_instance_type():
                 spec = getattr(mapping, attr)
                 assert spec.instance_type, f"SIZING[{role!r}][{size!r}].{attr}.instance_type is empty"
                 assert isinstance(spec, InstanceSpec), f"SIZING[{role!r}][{size!r}].{attr} is not an InstanceSpec"
+
+
+# ---------------------------------------------------------------------------
+# db_oracle role — resolves through the "db" sizing table
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "size,cloud,arch,expected_type",
+    [
+        pytest.param("2xlarge", "aws", "arm", "i8g.2xlarge", id="aws-arm-2xlarge"),
+        pytest.param("2xlarge", "aws", "x86", "i4i.2xlarge", id="aws-x86-2xlarge"),
+        pytest.param("2xlarge", "gce", "arm", "z3-highmem-16", id="gce-2xlarge"),
+        pytest.param("2xlarge", "azure", "arm", "Standard_L16s_v4", id="azure-2xlarge"),
+        pytest.param("2xlarge", "oci", "arm", "DenseIO.E5.Flex:8:128", id="oci-2xlarge"),
+        pytest.param("large", "aws", "arm", "i8g.large", id="aws-arm-large"),
+    ],
+)
+def test_resolve_size_db_oracle(size, cloud, arch, expected_type):
+    spec = resolve_size("db_oracle", size, cloud, arch)
+    assert spec.instance_type == expected_type
+
+
+# ---------------------------------------------------------------------------
+# zero_token role — resolves through the "db" sizing table
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "size,cloud,arch,expected_type",
+    [
+        pytest.param("large", "aws", "arm", "i8g.large", id="aws-arm-large"),
+        pytest.param("large", "aws", "x86", "i4i.large", id="aws-x86-large"),
+        pytest.param("large", "gce", "arm", "z3-highmem-4", id="gce-large"),
+        pytest.param("large", "azure", "arm", "Standard_L4s_v4", id="azure-large"),
+        pytest.param("large", "oci", "arm", "DenseIO.E5.Flex:2:32", id="oci-large"),
+        pytest.param("2xlarge", "aws", "arm", "i8g.2xlarge", id="aws-arm-2xlarge"),
+    ],
+)
+def test_resolve_size_zero_token(size, cloud, arch, expected_type):
+    spec = resolve_size("zero_token", size, cloud, arch)
+    assert spec.instance_type == expected_type
+
+
+def test_resolve_size_alias_unknown_role_raises():
+    with pytest.raises(ValueError, match="Unknown role"):
+        resolve_size("not_a_role", "large", "aws")
+
+
+# ---------------------------------------------------------------------------
+# get_cloud_params — db_oracle and zero_token param name generation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "role,size,cloud,arch,expected",
+    [
+        pytest.param(
+            "db_oracle",
+            "2xlarge",
+            "aws",
+            "arm",
+            {"instance_type_db_oracle": "i8g.2xlarge"},
+            id="aws-arm-db_oracle",
+        ),
+        pytest.param(
+            "db_oracle",
+            "2xlarge",
+            "aws",
+            "x86",
+            {"instance_type_db_oracle": "i4i.2xlarge"},
+            id="aws-x86-db_oracle",
+        ),
+        pytest.param(
+            "db_oracle",
+            "2xlarge",
+            "gce",
+            "arm",
+            {"gce_instance_type_db_oracle": "z3-highmem-16"},
+            id="gce-db_oracle-no-disk-params",
+        ),
+        pytest.param(
+            "db_oracle",
+            "2xlarge",
+            "azure",
+            "arm",
+            {"azure_instance_type_db_oracle": "Standard_L16s_v4"},
+            id="azure-db_oracle",
+        ),
+        pytest.param(
+            "db_oracle",
+            "2xlarge",
+            "oci",
+            "arm",
+            {"oci_instance_type_db_oracle": "DenseIO.E5.Flex:8:128"},
+            id="oci-db_oracle",
+        ),
+        pytest.param(
+            "zero_token",
+            "large",
+            "aws",
+            "arm",
+            {"zero_token_instance_type_db": "i8g.large"},
+            id="aws-arm-zero_token",
+        ),
+        pytest.param(
+            "zero_token",
+            "large",
+            "aws",
+            "x86",
+            {"zero_token_instance_type_db": "i4i.large"},
+            id="aws-x86-zero_token",
+        ),
+        pytest.param(
+            "zero_token",
+            "large",
+            "gce",
+            "arm",
+            {"gce_zero_token_instance_type_db": "z3-highmem-4"},
+            id="gce-zero_token-no-disk-params",
+        ),
+        pytest.param(
+            "zero_token",
+            "large",
+            "azure",
+            "arm",
+            {"azure_zero_token_instance_type_db": "Standard_L4s_v4"},
+            id="azure-zero_token",
+        ),
+        pytest.param(
+            "zero_token",
+            "large",
+            "oci",
+            "arm",
+            {"oci_zero_token_instance_type_db": "DenseIO.E5.Flex:2:32"},
+            id="oci-zero_token",
+        ),
+    ],
+)
+def test_get_cloud_params_oracle_and_zero_token(role, size, cloud, arch, expected):
+    spec = resolve_size(role, size, cloud, arch)
+    params = get_cloud_params(role, spec, cloud)
+    assert params == expected
+
+
+def test_get_cloud_params_gce_oracle_no_disk_params():
+    spec = resolve_size("db_oracle", "2xlarge", "gce")
+    params = get_cloud_params("db_oracle", spec, "gce")
+    assert "gce_n_local_ssd_disk_db_oracle" not in params
+    assert "gce_root_disk_type_db_oracle" not in params
+
+
+def test_get_cloud_params_gce_zero_token_no_disk_params():
+    spec = resolve_size("zero_token", "large", "gce")
+    params = get_cloud_params("zero_token", spec, "gce")
+    assert "gce_n_local_ssd_disk_zero_token" not in params
+    assert "gce_root_disk_type_zero_token" not in params

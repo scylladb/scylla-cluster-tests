@@ -1217,6 +1217,16 @@ AWS image type of the oracle node
 * appendable
 
 
+## **oracle_instance_type** / SCT_ORACLE_INSTANCE_TYPE
+
+Abstract instance size for oracle DB nodes (e.g. '2xlarge', 'large'). Resolves to cloud-specific instance type based on active backend. Cloud-specific overrides (instance_type_db_oracle, gce_instance_type_db_oracle, etc.) take precedence when explicitly set by user.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
 ## **instance_type_db_target** / SCT_INSTANCE_TYPE_DB_TARGET
 
 Target AWS instance type for platform migration (e.g., i8g.2xlarge for ARM)
@@ -1937,6 +1947,16 @@ Instance type for zero token node
 * appendable
 
 
+## **zero_token_instance_type** / SCT_ZERO_TOKEN_INSTANCE_TYPE
+
+Abstract instance size for zero-token DB nodes (e.g. 'large'). Resolves to cloud-specific instance type based on active backend. Cloud-specific overrides (zero_token_instance_type_db, gce_zero_token_instance_type_db, etc.) take precedence when explicitly set by user.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
 ## **sct_aws_account_id** / SCT_SCT_AWS_ACCOUNT_ID
 
 AWS account id on behalf of which the test is run
@@ -1987,6 +2007,26 @@ Number of local SSD disks for monitor nodes in Google Compute Engine
 ## **gce_instance_type_db** / SCT_GCE_INSTANCE_TYPE_DB
 
 Instance type for database nodes in Google Compute Engine
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **gce_instance_type_db_oracle** / SCT_GCE_INSTANCE_TYPE_DB_ORACLE
+
+GCE instance type for oracle DB nodes.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **gce_zero_token_instance_type_db** / SCT_GCE_ZERO_TOKEN_INSTANCE_TYPE_DB
+
+GCE instance type for zero-token DB nodes.
 
 **default:** N/A
 
@@ -2107,6 +2147,16 @@ The Azure virtual machine size to be used for Oracle database nodes.
 * appendable
 
 
+## **azure_zero_token_instance_type_db** / SCT_AZURE_ZERO_TOKEN_INSTANCE_TYPE_DB
+
+Azure instance type for zero-token DB nodes.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
 ## **azure_image_db** / SCT_AZURE_IMAGE_DB
 
 The Azure image to be used for database nodes.
@@ -2189,6 +2239,16 @@ Oracle Cloud instance shape to use for DB node(s). Usage of flex shapes allows s
 ## **oci_instance_type_db_oracle** / SCT_OCI_INSTANCE_TYPE_DB_ORACLE
 
 Oracle Cloud instance shape to use for 'oracle' (2nd ref cluster) ScylladbDB cluster
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **oci_zero_token_instance_type_db** / SCT_OCI_ZERO_TOKEN_INSTANCE_TYPE_DB
+
+OCI instance type for zero-token DB nodes.
 
 **default:** N/A
 

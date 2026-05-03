@@ -972,6 +972,12 @@ class SCTConfiguration(BaseModel):
     instance_type_db_oracle: String = SctField(
         description="AWS image type of the oracle node",
     )
+    oracle_instance_type: String = SctField(
+        description="Abstract instance size for oracle DB nodes (e.g. '2xlarge', 'large'). "
+        "Resolves to cloud-specific instance type based on active backend. "
+        "Cloud-specific overrides (instance_type_db_oracle, gce_instance_type_db_oracle, etc.) "
+        "take precedence when explicitly set by user.",
+    )
     instance_type_db_target: String = SctField(
         description="Target AWS instance type for platform migration (e.g., i8g.2xlarge for ARM)",
     )
@@ -1230,6 +1236,12 @@ class SCTConfiguration(BaseModel):
     zero_token_instance_type_db: String = SctField(
         description="Instance type for zero token node",
     )
+    zero_token_instance_type: String = SctField(
+        description="Abstract instance size for zero-token DB nodes (e.g. 'large'). "
+        "Resolves to cloud-specific instance type based on active backend. "
+        "Cloud-specific overrides (zero_token_instance_type_db, gce_zero_token_instance_type_db, etc.) "
+        "take precedence when explicitly set by user.",
+    )
     sct_aws_account_id: String = SctField(
         description="AWS account id on behalf of which the test is run",
     )
@@ -1252,6 +1264,12 @@ class SCTConfiguration(BaseModel):
     )
     gce_instance_type_db: String = SctField(
         description="Instance type for database nodes in Google Compute Engine",
+    )
+    gce_instance_type_db_oracle: String = SctField(
+        description="GCE instance type for oracle DB nodes.",
+    )
+    gce_zero_token_instance_type_db: String = SctField(
+        description="GCE instance type for zero-token DB nodes.",
     )
     gce_root_disk_type_db: String = SctField(
         description="Root disk type for database nodes in Google Compute Engine",
@@ -1291,6 +1309,9 @@ class SCTConfiguration(BaseModel):
     )
     azure_instance_type_db_oracle: String = SctField(
         description="The Azure virtual machine size to be used for Oracle database nodes.",
+    )
+    azure_zero_token_instance_type_db: String = SctField(
+        description="Azure instance type for zero-token DB nodes.",
     )
     azure_image_db: String = SctField(
         description="The Azure image to be used for database nodes.",
@@ -1335,6 +1356,9 @@ class SCTConfiguration(BaseModel):
     )
     oci_instance_type_db_oracle: String = SctField(
         description="Oracle Cloud instance shape to use for 'oracle' (2nd ref cluster) ScylladbDB cluster",
+    )
+    oci_zero_token_instance_type_db: String = SctField(
+        description="OCI instance type for zero-token DB nodes.",
     )
     oci_image_db: String = SctField(
         description="Oracle Cloud image to use for DB node(s)",
@@ -3070,8 +3094,23 @@ class SCTConfiguration(BaseModel):
             "oci": "oci_instance_type_{role}",
         }
 
+        # Roles whose primary cloud param doesn't follow the standard template.
+        _primary_param_overrides: dict[str, dict[str, str]] = {
+            "zero_token": {
+                "aws": "zero_token_instance_type_db",
+                "gce": "gce_zero_token_instance_type_db",
+                "azure": "azure_zero_token_instance_type_db",
+                "oci": "oci_zero_token_instance_type_db",
+            },
+        }
+
+        # Roles that should apply the same arch detection as "db".
+        _db_arch_roles = frozenset({"db", "db_oracle", "zero_token"})
+
         for role, abstract_param in (
             ("db", "db_instance_type"),
+            ("db_oracle", "oracle_instance_type"),
+            ("zero_token", "zero_token_instance_type"),
             ("loader", "loader_instance_type"),
             ("monitor", "monitor_instance_type"),
         ):
@@ -3079,14 +3118,28 @@ class SCTConfiguration(BaseModel):
             if not abstract_size:
                 continue
 
-            primary_param = primary_param_template[cloud].format(role=role)
+            primary_param = _primary_param_overrides.get(role, {}).get(cloud) or primary_param_template[cloud].format(
+                role=role
+            )
             if primary_param in self._user_provided_keys:
                 continue
 
+            arch = "arm"
+            if cloud == "aws" and role in _db_arch_roles:
+                existing_instance_type = self.get(primary_param)
+                if existing_instance_type:
+                    region_name_raw = self.get("region_name") or ""
+                    region_name = region_name_raw.split()[0] if region_name_raw else ""
+                    if region_name:
+                        normalized = self._get_normalized_arch(existing_instance_type, region_name)
+                        arch = "x86" if normalized == "x86_64" else "arm"
+
             try:
-                spec = resolve_size(role, abstract_size, cloud)
-            except (KeyError, ValueError):
-                continue
+                spec = resolve_size(role, abstract_size, cloud, arch=arch)
+            except (KeyError, ValueError) as exc:
+                raise ValueError(
+                    f"Invalid abstract size {abstract_size!r} for role {role!r} on cloud {cloud!r}: {exc}"
+                ) from exc
 
             cloud_params = get_cloud_params(role, spec, cloud)
             for param_name, param_value in cloud_params.items():

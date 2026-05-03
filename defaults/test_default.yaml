@@ -366,3 +366,7 @@ agent:
   tls: false
 
 c_s_driver_version: '3'
+
+db_instance_type: ''
+loader_instance_type: ''
+monitor_instance_type: ''

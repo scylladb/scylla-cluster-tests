@@ -818,6 +818,26 @@ def test_resolve_instance_sizes_explicit_override(tmp_path, monkeypatch):
     assert params.get("instance_type_db") == "i4i.4xlarge"
 
 
+def test_resolve_instance_sizes_aws_x86(tmp_path, monkeypatch):
+    config_file = tmp_path / "test.yaml"
+    config_file.write_text("db_instance_type: '2xlarge'\n")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_CONFIG_FILES", str(config_file))
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "")
+    monkeypatch.setenv("SCT_REGION_NAME", "us-east-1")
+    monkeypatch.delenv("SCT_INSTANCE_TYPE_DB", raising=False)
+
+    params = sct_config.SCTConfiguration()
+    params["instance_type_db"] = "i4i.large"
+    assert "instance_type_db" not in params._user_provided_keys
+
+    with unittest.mock.patch("sdcm.sct_config.get_arch_from_instance_type", return_value="x86_64"):
+        params._resolve_instance_sizes()
+
+    assert params.get("instance_type_db") == "i4i.2xlarge"
+
+
 def test_resolve_instance_sizes_gce_disk_params(tmp_path, monkeypatch):
     config_file = tmp_path / "test.yaml"
     config_file.write_text("db_instance_type: '2xlarge'\n")
@@ -829,3 +849,29 @@ def test_resolve_instance_sizes_gce_disk_params(tmp_path, monkeypatch):
     params = sct_config.SCTConfiguration()
     assert params.get("gce_instance_type_db") == "z3-highmem-16"
     assert params.get("gce_n_local_ssd_disk_db") == 4
+
+
+def test_resolve_instance_sizes_oracle_aws(tmp_path, monkeypatch):
+    config_file = tmp_path / "test.yaml"
+    config_file.write_text("oracle_instance_type: '2xlarge'\n")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_CONFIG_FILES", str(config_file))
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "")
+    monkeypatch.delenv("SCT_INSTANCE_TYPE_DB", raising=False)
+    monkeypatch.delenv("SCT_INSTANCE_TYPE_DB_ORACLE", raising=False)
+    params = sct_config.SCTConfiguration()
+    assert params.get("instance_type_db_oracle") == "i8g.2xlarge"
+
+
+def test_resolve_instance_sizes_zero_token_aws(tmp_path, monkeypatch):
+    config_file = tmp_path / "test.yaml"
+    config_file.write_text("zero_token_instance_type: 'large'\n")
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_CONFIG_FILES", str(config_file))
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "")
+    monkeypatch.delenv("SCT_INSTANCE_TYPE_DB", raising=False)
+    monkeypatch.delenv("SCT_ZERO_TOKEN_INSTANCE_TYPE_DB", raising=False)
+    params = sct_config.SCTConfiguration()
+    assert params.get("zero_token_instance_type_db") == "i8g.large"
