@@ -121,6 +121,7 @@ from sdcm.utils.common import (
     get_sct_root_path,
 )
 from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.database_query_utils import is_system_keyspace
 from sdcm.utils.distro import Distro
 from sdcm.utils.features import get_enabled_features, is_tablets_feature_enabled
@@ -2375,7 +2376,15 @@ class BaseNode(AutoSshContainerMixin):
         Offline install scylla by unified package.
         """
         # Download unified package
-        self.remoter.run(f"curl {unified_package} -o ./unified_package.tar.gz")
+        self.remoter.run(
+            curl_with_retry(
+                unified_package,
+                follow_redirects=True,
+                fail_early=True,
+                output="./unified_package.tar.gz",
+                retry_max_time=100,
+            )
+        )
 
         if not nonroot:
             self.install_package(package_name="xfsprogs mdadm")
@@ -2447,7 +2456,9 @@ class BaseNode(AutoSshContainerMixin):
         https://github.com/scylladb/scylla-web-install
         """
         version = assume_version(self.parent_cluster.params, scylla_version)
-        self.remoter.run(f"curl -sSf get.scylladb.com/server | sudo bash -s -- --scylla-version {version}")
+        self.remoter.run(
+            f"{curl_with_retry('https://get.scylladb.com/server', silent=True, fail_early=True)} | sudo bash -s -- --scylla-version {version}"
+        )
 
     def install_scylla_debuginfo(self) -> None:
         if ComparableScyllaVersion(self.scylla_version) > "2025.1.0~dev":
@@ -3583,7 +3594,7 @@ class BaseNode(AutoSshContainerMixin):
         if self._metadata_token["token"]:
             curl_headers += f' -H "{token_header}: {self._metadata_token["token"]}"'
 
-        return self.remoter.run(f'curl -s {curl_headers} "{url}"').stdout.strip()
+        return self.remoter.run(curl_with_retry(url, silent=True, extra_flags=curl_headers)).stdout.strip()
 
     @cached_property
     def systemd_version(self) -> int:

@@ -19,6 +19,8 @@ from urllib.parse import urljoin
 import requests
 from requests import Response
 
+from sdcm.utils.session import create_retry_session
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,6 +30,11 @@ class RestClient:
         self._url_prefix = "http://"
         self._host = host
         self._endpoint = endpoint
+        self.session = self._create_session()
+
+    @staticmethod
+    def _create_session(retries: int = 5) -> requests.Session:
+        return create_retry_session(retries=retries)
 
     @cached_property
     def _base_url(self) -> str:
@@ -37,12 +44,12 @@ class RestClient:
         url = f"{self._base_url}/{path}"
         LOGGER.info("Sending a GET request for: %s", url)
 
-        return requests.get(url=url, params=params)
+        return self.session.get(url=url, params=params)
 
     def post(self, path: str, params: Dict[str, str] = None) -> Response:
         url = f"{self._base_url}/{path}"
         LOGGER.info("Sending a POST request for: %s", url)
-        return requests.post(url=url, params=params)
+        return self.session.post(url=url, params=params)
 
     def _prepare_request(self, method: Literal["GET", "POST"], path: str, params: dict[str, str] | None):
         full_url = f"{self._base_url}/{path}"
