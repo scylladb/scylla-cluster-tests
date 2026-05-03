@@ -6,7 +6,8 @@ stress_read_cmd: "scylla-bench -workload=uniform -mode=counter_read   -replicati
 n_db_nodes: 6
 n_loaders:  1
 
-instance_type_db: 'i4i.large'
+# db_instance_type: large resolves to i8g.large (AWS ARM), z3-highmem-4 (GCE), Standard_L4s_v4 (Azure)
+db_instance_type: 'large'
 
 user_prefix: longevity-counters-3h
 

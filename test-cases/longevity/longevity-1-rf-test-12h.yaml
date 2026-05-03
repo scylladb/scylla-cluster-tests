@@ -22,8 +22,10 @@ n_db_nodes: 3
 n_loaders: 2
 round_robin: true
 
-instance_type_db: 'i4i.xlarge'
-instance_type_loader: 'c6i.4xlarge'
+# db_instance_type: xlarge resolves to i8g.xlarge (AWS ARM), z3-highmem-8 (GCE), Standard_L8s_v4 (Azure)
+db_instance_type: 'xlarge'
+# loader_instance_type: large resolves to c6i.4xlarge (AWS), e2-standard-16 (GCE), Standard_F16s_v2 (Azure)
+loader_instance_type: 'large'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: "not disruptive"

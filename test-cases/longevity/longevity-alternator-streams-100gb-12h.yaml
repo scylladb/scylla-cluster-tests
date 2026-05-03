@@ -37,8 +37,10 @@ round_robin: true
 n_loaders: 3
 n_db_nodes: 6
 
-instance_type_db: 'i4i.4xlarge'
-instance_type_loader: 'c6i.4xlarge'
+# db_instance_type: 4xlarge resolves to i8g.4xlarge (AWS ARM), z3-highmem-32 (GCE), Standard_L32s_v4 (Azure)
+db_instance_type: '4xlarge'
+# loader_instance_type: large resolves to c6i.4xlarge (AWS), e2-standard-16 (GCE), Standard_F16s_v2 (Azure)
+loader_instance_type: 'large'
 
 nemesis_class_name: 'NoOpMonkey'
 

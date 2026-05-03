@@ -4,7 +4,8 @@ stress_cmd: ["cassandra-harry -run-time 2 -run-time-unit HOURS"]
 n_db_nodes: 6
 n_loaders: 1
 
-instance_type_db: 'i4i.large'
+# db_instance_type: large resolves to i8g.large (AWS ARM), z3-highmem-4 (GCE), Standard_L4s_v4 (Azure)
+db_instance_type: 'large'
 
 root_disk_size_loader: 80 # enlarge loader disk, cause of cassandra-harry operation.log that can't be disabled
 
