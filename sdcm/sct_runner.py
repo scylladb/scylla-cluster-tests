@@ -192,6 +192,14 @@ class SctRunner(ABC):
     IMAGE_BUILDER_INSTANCE_TYPE: str
     REGULAR_TEST_INSTANCE_TYPE: str
     LONGTERM_TEST_INSTANCE_TYPE: str
+    PREREQS_APT_PACKAGES: list[str] = [
+        "python3-pip",
+        "htop",
+        "screen",
+        "tree",
+        "systemd-coredump",
+        "rng-tools",
+    ]
 
     def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration):
         self.region_name = region_name
@@ -231,6 +239,10 @@ class SctRunner(ABC):
         return RemoteCmdRunnerBase.create_remoter(
             hostname=host, user=self.LOGIN_USER, key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout
         )
+
+    def _prereqs_apt_install_cmd(self) -> str:
+        packages = " ".join(self.PREREQS_APT_PACKAGES)
+        return f"apt-get -qq install --no-install-recommends {packages}"
 
     def install_prereqs(self, public_ip: str, connect_timeout: Optional[int] = None) -> None:
         LOGGER.info("Connecting instance...")
@@ -339,7 +351,7 @@ class SctRunner(ABC):
 
             apt-get -qq clean
             apt-get -qq update
-            apt-get -qq install --no-install-recommends python3-pip htop screen tree systemd-coredump rng-tools
+            {self._prereqs_apt_install_cmd()}
             pip3 install awscli
 
             # disable unattended-upgrades
@@ -757,7 +769,7 @@ class AwsSctRunner(SctRunner):
         self.instance = instance
 
         # If the SCT runner instance is used as a Docker backend for tests
-        if self.params.get("cluster_backend") == "docker":
+        if self.params and self.params.get("cluster_backend") == "docker":
             LOGGER.info("Configure unused disks to use as a persistent storage for Docker.")
             LOGGER.debug("Connecting to instance...")
             remoter = self.get_remoter(host=instance.public_ip_address, connect_timeout=120)
@@ -2174,3 +2186,13 @@ def clean_sct_runners(
 class AwsFipsSctRunner(AwsSctRunner):
     VERSION = f"{SctRunner.VERSION}-v1-fips"
     BASE_IMAGE = "resolve:ssm:/aws/service/marketplace/prod-k6fgbnayirmrc/latest"
+    SOURCE_IMAGE_REGION = "us-east-1"  # FIPS marketplace AMI is only available in us-east-1
+
+    def _prereqs_apt_install_cmd(self) -> str:
+        lines = []
+        for pkg in self.PREREQS_APT_PACKAGES:
+            lines.append(
+                f"apt-get -qq install --no-install-recommends {pkg}"
+                f' || echo "WARNING: {pkg} install failed (may conflict with FIPS-held packages), skipping"'
+            )
+        return "\n            ".join(lines)
