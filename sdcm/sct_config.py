@@ -85,6 +85,7 @@ from sdcm.utils.azure_utils import (
 )
 from sdcm.utils.cloud_api_utils import MIN_SCYLLA_VERSION_FOR_VS
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
+from sdcm.utils.curl import curl_with_retry
 from sdcm.test_config import TestConfig
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
 from sdcm.mgmt.common import AgentBackupParameters
@@ -3951,7 +3952,7 @@ class SCTConfiguration(BaseModel):
                 LOCALRUNNER.run(
                     shell_script_cmd(f"""
                     cd {tmpdirname}
-                    curl -fL {unified_package} -o ./unified_package.tar.gz
+                    {curl_with_retry(unified_package, output="./unified_package.tar.gz", follow_redirects=True, fail_early=True)}
                     tar xvfz ./unified_package.tar.gz
                     """),
                     verbose=False,

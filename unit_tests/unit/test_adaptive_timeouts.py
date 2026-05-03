@@ -114,8 +114,8 @@ Token                  : (invoke with -T/--tokens to see all 256 tokens)
 """
     fake_remoter.result_map = {
         r"cat /etc/scylla.d/io_properties.yaml": Result(stdout=io_properties, stderr="", exited=0),
-        r"curl -s localhost:9180/metrics": Result(stdout=scylla_metrics, exited=0),
-        r"curl -s localhost:9100/metrics": Result(stdout=node_exporter_metrics, exited=0),
+        r"curl -s --connect-timeout 10 http://localhost:9180/metrics": Result(stdout=scylla_metrics, exited=0),
+        r"curl -s --connect-timeout 10 http://localhost:9100/metrics": Result(stdout=node_exporter_metrics, exited=0),
         r"nodetool info": Result(stdout=nodetool_info, exited=0),
         r"uptime": Result(stdout=" 10:00:00 up 1 day,  1:00,  1 user,  load average: 1.20, 2.30, 1.60", exited=0),
         r"cat /etc/scylla/scylla.yaml": Result(stdout="", exited=0),

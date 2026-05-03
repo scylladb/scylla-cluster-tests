@@ -76,6 +76,7 @@ from sdcm.utils.aws_utils import (
     DEFAULT_AWS_REGION,
 )
 from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.decorators import retrying
 from sdcm import wait
 from sdcm.utils.ldap import DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, LdapServerType
@@ -122,9 +123,8 @@ def _remote_get_hash(remoter, file_path):
 
 
 def _remote_get_file(remoter, src, dst, user_agent=None):
-    cmd = "curl -L {} -o {}".format(src, dst)
-    if user_agent:
-        cmd += " --user-agent %s" % user_agent
+    extra_flags = f"--user-agent {user_agent}" if user_agent else ""
+    cmd = curl_with_retry(src, output=dst, follow_redirects=True, extra_flags=extra_flags)
     cmd += f" && chmod 644 {dst}"
     return remoter.run(cmd, ignore_status=True)
 

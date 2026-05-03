@@ -26,6 +26,7 @@ import requests
 
 from sdcm.utils.common import normalize_ipv6_url
 from sdcm.utils.decorators import retrying
+from sdcm.utils.session import create_retry_session
 
 LOGGER = logging.getLogger(__name__)
 
@@ -199,8 +200,13 @@ class PrometheusDBStats:
         self.port = port
         self.protocol = protocol
         self.range_query_url = "{}://{}:{}/api/v1/query_range?query=".format(protocol, normalize_ipv6_url(host), port)
+        self._session = self._create_session()
         self.config = self.get_configuration()
         self.alternator = alternator
+
+    @staticmethod
+    def _create_session(retries: int = 3) -> requests.Session:
+        return create_retry_session(retries=retries)
 
     @property
     def scylla_scrape_interval(self):
@@ -212,9 +218,9 @@ class PrometheusDBStats:
         if self.protocol == "https":
             kwargs["verify"] = False
         if post:
-            response = requests.post(url, **kwargs)
+            response = self._session.post(url, **kwargs)
         else:
-            response = requests.get(url, **kwargs)
+            response = self._session.get(url, **kwargs)
         response.raise_for_status()
 
         result = json.loads(response.content)

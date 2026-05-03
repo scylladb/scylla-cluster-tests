@@ -21,4 +21,7 @@ def test_compaction_manager_stop_compaction(fake_node):
     client = CompactionManagerClient(fake_node)
     result = partial(client.stop_compaction, compaction_type="reshape")()
 
-    assert result.stdout == 'curl -v -X POST "http://localhost:10000/compaction_manager/stop_compaction?type=RESHAPE"'
+    assert result.stdout == (
+        "curl -v --retry 5 --retry-max-time 300 --connect-timeout 10"
+        ' -X POST "http://localhost:10000/compaction_manager/stop_compaction?type=RESHAPE"'
+    )

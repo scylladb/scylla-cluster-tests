@@ -41,7 +41,10 @@ class RemoteCurlClient(RestClient):
         prepared_request = self._prepare_request(method=method, path=path, params=params)
         data_arg = f" -H 'Content-Type: application/json' -d '{json.dumps(data)}'" if data is not None else ""
         result = self._remoter.run(
-            f'curl -v -X {prepared_request.method}{data_arg} "{prepared_request.url}"', timeout=timeout, retry=retry
+            f"curl -v --retry 5 --retry-max-time 300 --connect-timeout 10"
+            f' -X {prepared_request.method}{data_arg} "{prepared_request.url}"',
+            timeout=timeout,
+            retry=retry,
         )
         if result.failed:
             raise ScyllaApiException(

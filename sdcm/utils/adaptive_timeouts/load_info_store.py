@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.remote import RemoteCmdRunner
 from sdcm.test_config import TestConfig
+from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.decorators import retrying
 from sdcm.utils.metaclasses import Singleton
 from sdcm.argus_results import submit_results_to_argus
@@ -113,7 +114,9 @@ class NodeLoadInfoService:
 
     @retrying(n=5, sleep_time=1, allowed_exceptions=(ValueError,))
     def _get_metrics(self, port):
-        metrics = self.remoter.run(f"curl -s localhost:{port}/metrics", verbose=False).stdout
+        metrics = self.remoter.run(
+            curl_with_retry(f"http://localhost:{port}/metrics", retry=0, silent=True), verbose=False
+        ).stdout
         metrics_dict = {}
         for line in metrics.splitlines():
             if line and not line.startswith("#"):

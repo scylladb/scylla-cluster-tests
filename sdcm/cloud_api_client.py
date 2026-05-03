@@ -22,8 +22,8 @@ from typing import Any, Literal
 
 import yaml
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+
+from sdcm.utils.session import create_retry_session
 
 
 LOGGER = logging.getLogger(__name__)
@@ -72,20 +72,7 @@ class ScyllaCloudAPIClient:
 
     @staticmethod
     def _create_session(retries: int = 5) -> requests.Session:
-        """Create a requests session with retry configuration"""
-        retry_strategy = Retry(
-            total=retries,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE"],
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-
-        session = requests.Session()
-        session.mount("http://", adapter)
-        session.mount("https://", adapter)
-
-        return session
+        return create_retry_session(retries=retries)
 
     def request(self, method: str, endpoint: str, /, params=None, **body) -> dict | None:
         """

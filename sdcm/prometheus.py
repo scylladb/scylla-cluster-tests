@@ -19,13 +19,14 @@ from typing import Optional
 from http.server import HTTPServer
 from socketserver import ThreadingMixIn
 
-import requests
 import prometheus_client
+import requests
 
 from sdcm.sct_events.base import EventPeriod
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 from sdcm.utils.decorators import retrying, log_run_info
+from sdcm.utils.session import create_retry_session
 from sdcm.utils.net import get_my_ip
 
 START = "start"
@@ -138,11 +139,18 @@ class PrometheusAlertManagerListener(threading.Thread):
         self._interval = interval
         self._timeout = 600
         self.event_registry = ContinuousEventsRegistry()
+        self._session = self._create_session()
+
+    @staticmethod
+    def _create_session(retries: int = 3) -> requests.Session:
+        return create_retry_session(retries=retries)
 
     @property
     def is_alert_manager_up(self):
         try:
-            return requests.get(f"{self._alert_manager_url}/status", timeout=3).json()["cluster"]["status"] == "ready"
+            return (
+                self._session.get(f"{self._alert_manager_url}/status", timeout=3).json()["cluster"]["status"] == "ready"
+            )
         except Exception:  # noqa: BLE001
             return False
 
@@ -167,9 +175,9 @@ class PrometheusAlertManagerListener(threading.Thread):
     @retrying(n=10)
     def _get_alerts(self, active=False):
         if active:
-            response = requests.get(f"{self._alert_manager_url}/alerts?active={int(active)}", timeout=3)
+            response = self._session.get(f"{self._alert_manager_url}/alerts?active={int(active)}", timeout=3)
         else:
-            response = requests.get(f"{self._alert_manager_url}/alerts", timeout=3)
+            response = self._session.get(f"{self._alert_manager_url}/alerts", timeout=3)
         if response.status_code == 200:
             return response.json()
         return None
@@ -266,7 +274,7 @@ class PrometheusAlertManagerListener(threading.Thread):
             "comment": "Silence by SCT code",
             "status": {"state": "active"},
         }
-        res = requests.post(f"{self._alert_manager_url}/silences", timeout=3, json=silence_data)
+        res = self._session.post(f"{self._alert_manager_url}/silences", timeout=3, json=silence_data)
         res.raise_for_status()
         return res.json()["silenceID"]
 
@@ -277,7 +285,7 @@ class PrometheusAlertManagerListener(threading.Thread):
         :param silence_id: silence id returned from `silence()` api call
         :return:
         """
-        res = requests.delete(f"{self._alert_manager_url}/silence/{silence_id}", timeout=3)
+        res = self._session.delete(f"{self._alert_manager_url}/silence/{silence_id}", timeout=3)
         res.raise_for_status()
 
 

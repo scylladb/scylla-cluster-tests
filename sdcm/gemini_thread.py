@@ -24,6 +24,7 @@ from sdcm.cluster import BaseCluster, BaseScyllaCluster
 from sdcm.sct_events import Severity
 from sdcm.utils.argus import report_stress_command
 from sdcm.utils.common import FileFollowerThread
+from sdcm.utils.curl import curl_with_retry
 from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
@@ -181,7 +182,13 @@ class GeminiStressThread(DockerBasedStressThread):
             if schema_url.startswith(("http://", "https://")):
                 LOGGER.info("gemini_schema_url %r is a remote URL; downloading to loader.", schema_url)
                 loader.remoter.run(
-                    f"curl -sSfL {schema_url!r} -o $HOME/{self.gemini_schema_file}",
+                    curl_with_retry(
+                        schema_url,
+                        output=f"$HOME/{self.gemini_schema_file}",
+                        silent=True,
+                        follow_redirects=True,
+                        fail_early=True,
+                    ),
                     verbose=False,
                 )
             else:
