@@ -125,7 +125,7 @@ from sdcm.monitorstack import (
 )
 from sdcm.utils.log import setup_stdout_logger, disable_loggers_during_startup
 from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder
+from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder, AwsFipsCiBuilder
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.gce_builder import GceBuilder
 from sdcm.utils.oci_region import OciRegion
@@ -2476,6 +2476,7 @@ def configure_jenkins_builders(cloud_provider, regions):
     match cloud_provider:
         case "aws":
             AwsCiBuilder(AwsRegion("eu-west-1")).configure_auto_scaling_group()
+            AwsFipsCiBuilder(AwsRegion("us-east-1")).configure_auto_scaling_group()
             AwsBuilder.configure_in_all_region(regions=regions)
         case "gce":
             GceBuilder.configure_in_all_region(regions=regions)
