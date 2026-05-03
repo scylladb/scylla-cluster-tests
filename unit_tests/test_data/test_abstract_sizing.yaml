@@ -1,0 +1,7 @@
+# Test fixture for abstract sizing CLI
+db_instance_type: '2xlarge'
+loader_instance_type: 'xlarge'
+monitor_instance_type: 'large'
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1

@@ -76,6 +76,7 @@ from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
+from sdcm.utils.cloud_sizes import SIZING, get_cloud_params, identify_size, resolve_size
 from sdcm.utils.lint.env_builder import build_env
 from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile, discover_pipeline_files
 from sdcm.utils.oci_utils import list_instances_oci
@@ -2768,6 +2769,131 @@ def hdr_investigate(
         f"\nFound P99 spikes higher than {error_threshold_ms} ms for tags {hdr_tags} with interval {hdr_summary_interval_sec} seconds\n"
     )
     click.echo(rich_table_to_string(hdr_table, title="HDR Latency Spikes"))
+
+
+@cli.command("show-sizes", help="Show cross-cloud instance size mapping table")
+@click.option("--role", type=click.Choice(["db", "loader", "monitor"]), default=None, help="Filter by role")
+@click.option("--cloud", type=click.Choice(["aws", "gce", "azure", "oci"]), default=None, help="Filter by cloud")
+def show_sizes(role, cloud):
+    if cloud:
+        click.echo(f"{'Role':<10} {'Size':<12} {'Instance'}")
+        click.echo("-" * 60)
+    else:
+        click.echo(
+            f"{'Role':<10} {'Size':<12} {'AWS (ARM)':<20} {'AWS (x86)':<20} {'GCE':<25} {'Azure':<25} {'OCI':<30}"
+        )
+        click.echo("-" * 140)
+
+    roles = [role] if role else ["db", "loader", "monitor"]
+
+    for r in roles:
+        mappings = SIZING.get(r, {})
+        for size, m in mappings.items():
+            if cloud == "aws":
+                val = f"ARM:{m.aws_arm.instance_type}  x86:{m.aws_x86.instance_type}"
+                click.echo(f"{r:<10} {size:<12} {val}")
+            elif cloud == "gce":
+                click.echo(f"{r:<10} {size:<12} {m.gce.instance_type}")
+            elif cloud == "azure":
+                click.echo(f"{r:<10} {size:<12} {m.azure.instance_type}")
+            elif cloud == "oci":
+                click.echo(f"{r:<10} {size:<12} {m.oci.instance_type}")
+            else:
+                click.echo(
+                    f"{r:<10} {size:<12} {m.aws_arm.instance_type:<20} {m.aws_x86.instance_type:<20}"
+                    f" {m.gce.instance_type:<25} {m.azure.instance_type:<25} {m.oci.instance_type:<30}"
+                )
+
+
+@cli.command(
+    "translate-size",
+    help="Translate a cloud instance type to abstract size and cross-cloud equivalents, "
+    "or expand abstract sizes in a test config YAML",
+)
+@click.argument("instance_type", required=False)
+@click.option(
+    "--config",
+    "config_file",
+    type=click.Path(exists=True),
+    default=None,
+    help="Test config YAML to expand abstract sizes in",
+)
+@click.option(
+    "--backend",
+    type=click.Choice(["aws", "gce", "azure", "oci"]),
+    default=None,
+    help="Backend to expand for (config mode only; default: all)",
+)
+def translate_size(instance_type, config_file, backend):
+    if config_file:
+        with open(config_file) as f:
+            config = yaml.safe_load(f) or {}
+
+        clouds = [backend] if backend else ["aws", "gce", "azure", "oci"]
+
+        role_map = [
+            ("db", "db_instance_type"),
+            ("loader", "loader_instance_type"),
+            ("monitor", "monitor_instance_type"),
+        ]
+
+        for cloud in clouds:
+            click.echo(f"\n# === {cloud.upper()} ===")
+            expanded = dict(config)
+
+            for role, abstract_param in role_map:
+                abstract_size = config.get(abstract_param)
+                if not abstract_size:
+                    continue
+
+                try:
+                    spec = resolve_size(role, abstract_size, cloud)
+                except (KeyError, ValueError) as exc:
+                    click.echo(
+                        f"# Warning: cannot resolve {abstract_param}={abstract_size!r} for {cloud}: {exc}", err=True
+                    )
+                    continue
+
+                cloud_params = get_cloud_params(role, spec, cloud)
+                expanded.update(cloud_params)
+                expanded.pop(abstract_param, None)
+
+            click.echo(yaml.dump(expanded, default_flow_style=False, sort_keys=True), nl=False)
+        return
+
+    if not instance_type:
+        raise click.UsageError("Provide an instance type or --config <yaml>")
+
+    found = []
+    for cloud in ("aws", "gce", "azure", "oci"):
+        result = identify_size(cloud, instance_type)
+        if result is not None:
+            role, size = result
+            mapping = SIZING[role][size]
+            found.append((role, size, cloud, mapping))
+
+    if not found:
+        raise click.ClickException(f"Unknown instance type: {instance_type!r}")
+
+    seen: set[tuple[str, str]] = set()
+    for role, size, cloud, mapping in found:
+        key = (role, size)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        arch_note = ""
+        if cloud == "aws":
+            if mapping.aws_arm.instance_type == instance_type:
+                arch_note = " (ARM)"
+            elif mapping.aws_x86.instance_type == instance_type:
+                arch_note = " (x86)"
+        click.echo(f"{instance_type}{arch_note} = {role} {size}")
+        click.echo(f"  AWS (ARM):  {mapping.aws_arm.instance_type}")
+        click.echo(f"  AWS (x86):  {mapping.aws_x86.instance_type}")
+        click.echo(f"  GCE:        {mapping.gce.instance_type}")
+        click.echo(f"  Azure:      {mapping.azure.instance_type}")
+        click.echo(f"  OCI:        {mapping.oci.instance_type}")
 
 
 cli.add_command(sct_ssh.ssh)
