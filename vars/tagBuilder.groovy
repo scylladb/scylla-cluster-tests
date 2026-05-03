@@ -62,13 +62,23 @@ private String GetBillingProjectTag() {
 }
 
 def getRunningUserId () {
-    def buildCause = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')
     String runningUserID = "jenkins"
-    echo "Build cause: |${buildCause.toString()}|"
 
-    if (buildCause != null && !buildCause.isEmpty()) {
-        runningUserID = buildCause[0].userId
+    try {
+        if (params.requested_by_user) {
+            runningUserID = params.requested_by_user
+        }
+    } catch (ignored) {
     }
+
+    if (runningUserID == "jenkins") {
+        def buildCause = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')
+        echo "Build cause: |${buildCause.toString()}|"
+        if (buildCause != null && !buildCause.isEmpty()) {
+            runningUserID = buildCause[0].userId
+        }
+    }
+
     if (runningUserID?.contains('@')) {
         runningUserID = runningUserID.split('@')[0]
     }
