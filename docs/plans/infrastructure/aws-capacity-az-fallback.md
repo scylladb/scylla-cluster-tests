@@ -2,7 +2,7 @@
 status: draft
 domain: cluster
 created: 2026-04-12
-last_updated: 2026-04-12
+last_updated: 2026-05-04
 owner: fruch
 ---
 # AWS Capacity Validation and Automatic AZ/Region Fallback
@@ -25,6 +25,7 @@ Availability Zone you requested (eu-west-1a).
 3. **AZ fallback only for artifact tests**: The existing `aws_fallback_to_next_availability_zone` feature only works in the legacy provisioning path and only wraps DB cluster creation -- loaders and monitors are not covered
 4. **No cross-AZ fallback in modern path**: The modern provisioning path (`sdcm/sct_provision/`) has zero AZ fallback logic -- any capacity error is a hard failure
 5. **Multi-node tests cannot use AZ fallback**: The existing fallback is effectively limited to single-node artifact tests
+6. **Dynamically-added instance types not considered upfront**: `instance_type_db_target` (platform-migration) and `nemesis_grow_shrink_instance_type` are not part of the upfront AZ filter or capacity-reservation builder, so the chosen AZ may end up being one that does not offer the type the test will try to launch later. Mid-test recovery via cross-AZ retry is unsafe (rack/AZ alignment, tablet placement) and often futile (region-wide pressure), so mitigation is prevention-side only: extend upfront filter, extend capacity reservation, optional pre-flight probe. When prevention fails, the test aborts as today
 
 ### Relationship to PR #13317
 
@@ -78,12 +79,13 @@ AWS has no "check real-time capacity" API. `describe_instance_type_offerings` on
 
 ## Goals
 
-1. Eliminate provisioning attempts in AZs that do not offer the required instance types (upfront filtering)
+1. Eliminate provisioning attempts in AZs that do not offer the required instance types (upfront filtering), including types added dynamically mid-test
 2. Automatically retry in the next available AZ when provisioning fails with capacity errors, for all test types including multi-node
 3. Cover both provisioning code paths (legacy and modern) with the same fallback behavior
 4. Enable AZ fallback by default for all AWS tests
 5. Prepare backend-agnostic config naming for future multi-cloud support (GCE, Azure, OCI via PR #13317)
 6. Optionally support region fallback for single-node artifact tests when all AZs are exhausted
+7. Ensure `SCTCapacityReservation` reserves capacity for every instance type the test will use, including dynamically-added ones
 
 ---
 
@@ -126,7 +128,15 @@ Before provisioning begins, filter configured AZs to only those that support all
 **New file:**
 - `sdcm/provision/aws/az_resolver.py` -- `AZResolver` class:
   - Accepts `SCTConfiguration` params
-  - Extracts ALL instance types needed across all cluster roles (`instance_type_db`, `instance_type_loader`, `instance_type_monitor`, `zero_token_instance_type_db`, `instance_type_db_oracle`)
+  - Extracts ALL instance types needed across all cluster roles, including types added mid-test:
+    - `instance_type_db`
+    - `instance_type_loader`
+    - `instance_type_monitor`
+    - `zero_token_instance_type_db`
+    - `instance_type_db_oracle`
+    - `instance_type_db_target` -- used by platform-migration tests, dynamically added mid-test
+    - `nemesis_grow_shrink_instance_type` -- used by grow-shrink nemesis, dynamically added mid-test
+  - Skips empty / unset values; only types actually present in params participate in the intersection
   - Per region, calls `AwsRegion.get_common_availability_zones()` from Phase 1
   - Returns validated AZ list, logging warnings for filtered-out AZs
   - For multi-AZ configs (e.g., "a,b,c"), validates each AZ individually and replaces invalid ones with alternatives
@@ -142,6 +152,7 @@ Before provisioning begins, filter configured AZs to only those that support all
 - [ ] If NO valid AZ exists in the region, clear error raised before provisioning
 - [ ] Feature disabled when `pre_filter_unavailable_availability_zones: false`
 - [ ] Unit tests: mock AWS responses, verify filtering logic, verify replacement logic
+- [ ] Unit test where `instance_type_db_target` differs from `instance_type_db` (e.g. ARM target on x86 source) and only some AZs offer the target -- AZResolver returns intersection only
 - [ ] Existing tests unaffected (AZs that support all types pass through unchanged)
 
 ---
@@ -251,15 +262,70 @@ When all AZs in a region are exhausted, try a different region. Scoped to single
 
 ---
 
+### Phase 6: Extend `SCTCapacityReservation` Request Builder
+
+**Importance: Important** | **Scope: ~30 LOC, 1 PR** | **Dependencies: Phase 1**
+
+The same instance-type omission pattern applies to `_get_cr_request_based_on_sct_config`. Today it reserves only `instance_type_db`, `nemesis_grow_shrink_instance_type` (already covered), `zero_token_instance_type_db`, `instance_type_loader`. Missing: `instance_type_db_target`, `instance_type_db_oracle`. Tests that opt into CR but use these types still hit `InsufficientInstanceCapacity` mid-test. Reserving these types upfront prevents the failure rather than reacting to it.
+
+**Files to modify:**
+- `sdcm/provision/aws/capacity_reservation.py` -- Extend `_get_cr_request_based_on_sct_config` (line ~39) to include:
+  - `instance_type_db_target` x peak concurrent target-node count. For platform-migration this is the count of target-arch nodes that coexist with source nodes at peak. Reserve `n_db_nodes` (matches the source count, since migration replaces source 1:1 at peak overlap) -- NOT `cluster_target_size or n_db_nodes`, which would double-book against the existing `instance_type_db` reservation. If `cluster_target_size` differs from `n_db_nodes` for a specific test, that test should set its own override; default to `n_db_nodes`.
+  - `instance_type_db_oracle` x `n_test_oracle_db_nodes`, when set
+  - Existing types unchanged
+- Confirm `SCTCapacityReservation._create()` is called for every type in the request dict (already true).
+
+**Needs Investigation -- migration-overlap assumption:** This phase assumes platform-migration runs source and target nodes concurrently during the migration window (each target replaces one source 1:1 before the source is decommissioned). Confirm with the platform-migration test author before merging. If migration drains source before adding target (no overlap), `instance_type_db_target` reservation can be smaller (batch_size, not full cluster); document the chosen overlap semantics in `_get_cr_request_based_on_sct_config` docstring.
+
+**Notes:**
+- Pure enabler -- does nothing for tests that do not set `use_capacity_reservation: true`.
+- Does NOT change which tests opt into CR. Platform-migration test should NOT opt in by default (functional test, not a perf test); CR pins single AZ and costs money for unused reserved capacity.
+
+**Definition of Done:**
+- [ ] Unit test passing config with both source and target types -- both reserved
+- [ ] Unit test passing config with oracle node count > 0 -- oracle type reserved
+- [ ] Existing CR tests unchanged
+- [ ] No regression: tests that do not set the new types are unaffected
+
+---
+
+### Phase 7: Pre-flight Capacity Probe for Dynamically-Added Types
+
+**Importance: Important** | **Scope: ~50 LOC, 1 PR** | **Dependencies: Phase 2**
+
+For tests with long stress phases that grow the cluster mid-run (platform-migration, upgrade tests, grow-shrink-driven longevities) -- fail-fast at setup time if a dynamically-added type is unavailable region-wide. Avoids wasting hours of stress only to fail at the migration / grow step. With mid-test reactive fallback ruled out (rack/AZ alignment, tablet placement), pre-flight probing becomes the primary proactive defense for dynamic-add types beyond what `describe_instance_type_offerings` (offered != available) and capacity reservation (only when opted in) cover.
+
+**Approach:**
+- After AZResolver runs at setup, for each dynamically-added type (`instance_type_db_target`, `nemesis_grow_shrink_instance_type` when set), attempt one short on-demand spin-then-terminate of a single instance in the chosen AZ. If `InsufficientInstanceCapacity`, trigger AZ fallback (initial-provisioning fallback from Phases 3-4) before the stress phase begins.
+- AWS `DryRun=True` only validates IAM/params; it does NOT probe live capacity. A real spin-then-terminate is the only way to detect actual availability. Cost: ~1 minute of one instance per probed type.
+- Gated behind config parameter `pre_flight_capacity_probe: Boolean` (default `false`). Enable in long-running test classes (platform-migration, upgrade-with-grow) only.
+
+**Files to modify:**
+- `sdcm/sct_config.py` -- Add `pre_flight_capacity_probe: Boolean`, default `false`
+- `sdcm/provision/aws/az_resolver.py` -- Add `probe_capacity_for_types(types: list[str], az: str) -> dict[str, bool]`
+- Integrate into `SCTProvisionAWSLayout.provision()` setup-time hook and `tester.py` get_cluster_aws() equivalent
+
+**Definition of Done:**
+- [ ] Probe runs at setup when enabled
+- [ ] Probe failure triggers AZ fallback before stress phase begins
+- [ ] Probe results logged
+- [ ] Unit tests with mocked spin-then-terminate succeeding/failing
+- [ ] Disabled by default; opt-in documented in `docs/configuration_options.md`
+
+---
+
 ## Testing Requirements
 
 ### Unit Tests (all phases)
 - Mock `describe_instance_type_offerings` responses for AZ filtering
 - Mock boto3 `create_instances` to raise `ClientError` with `InsufficientInstanceCapacity`
 - Verify fallback candidate generation for single-AZ and multi-AZ configs
-- Verify partial cleanup on failure
+- Verify partial cleanup on failure during initial provisioning
 - Verify non-capacity errors propagate without fallback
 - Verify backward compatibility with old `aws_fallback_to_next_availability_zone` param
+- Verify `instance_type_db_target` and `nemesis_grow_shrink_instance_type` participate in upfront AZ filter when set
+- Verify `SCTCapacityReservation` reserves `instance_type_db_target` and `instance_type_db_oracle` when configured
+- Verify pre-flight probe spin-then-terminate succeeds and fails as expected when enabled
 
 ### Integration Tests
 - Use `moto` to simulate AWS EC2 with capacity errors in specific AZs
@@ -269,6 +335,8 @@ When all AZs in a region are exhausted, try a different region. Scoped to single
 - Run an artifact test with `availability_zone: a` where `a` is known to have capacity issues for the instance type
 - Verify it automatically falls back to another AZ
 - Verify logging clearly shows the AZ transition
+- Run a platform-migration test (`x86-to-arm-batched.yaml`) with `pre_flight_capacity_probe: true` in an AZ known to be tight on the target instance type
+- Verify the probe detects the shortage at setup and AZ fallback selects a different AZ before the stress phase begins
 
 ---
 
@@ -277,9 +345,11 @@ When all AZs in a region are exhausted, try a different region. Scoped to single
 1. Tests that previously failed with `InsufficientInstanceCapacity` automatically recover by trying alternative AZs
 2. AZ fallback works for both single-node and multi-node tests
 3. Both legacy and modern provisioning paths have consistent fallback behavior
-4. Upfront filtering eliminates AZs that do not offer the required instance types before any provisioning attempt
-5. No orphaned instances left behind when fallback triggers mid-provisioning
+4. Upfront filtering eliminates AZs that do not offer the required instance types before any provisioning attempt -- including types added dynamically mid-test
+5. No orphaned instances left behind when initial-provisioning fallback triggers
 6. All existing tests continue to work without configuration changes
+7. `SCTCapacityReservation` reserves capacity for every instance type the test will use, including `instance_type_db_target` and `instance_type_db_oracle`
+8. Pre-flight capacity probe (when enabled) detects region-wide shortage of dynamically-added types at setup, before stress phases consume hours
 
 ---
 
@@ -293,3 +363,5 @@ When all AZs in a region are exhausted, try a different region. Scoped to single
 | Capacity reservation double-fallback -- both CR and general fallback try AZ iteration | Medium | Low | When `use_capacity_reservation` is enabled, skip general AZ fallback |
 | Subnet missing in fallback AZ -- `prepare-aws-region` did not create subnets for all AZs | Low | High | Validate subnet existence in `AZResolver` before returning AZ as candidate |
 | Backward compatibility -- tests using old `aws_fallback_to_next_availability_zone` param | Low | Low | Keep old param as deprecated alias mapping to new param |
+| Mid-test capacity error wastes hours of stress before failing | Medium | High (time) | Prevent via Phase 2 (extended type list) + Phase 6 (CR for all types) + Phase 7 (pre-flight probe). Mid-test recovery via cross-AZ retry rejected: rack/AZ misalignment risks tablet/topology drift, and region-wide pressure makes alternate AZ likely to fail too. Test aborts as today when prevention fails |
+| Region-wide exhaustion cannot be mitigated by AZ fallback | Low (transient) / Medium (peak hours) | High | Phase 5 region fallback for single-node; multi-node tests must accept rerun; Phase 7 pre-flight probe surfaces the failure at setup rather than mid-test |
