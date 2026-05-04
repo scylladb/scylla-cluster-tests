@@ -2182,6 +2182,8 @@ def get_post_behavior_actions(config):
             action_per_type["db_nodes"]["node_types"].append("cs-db")
         case "mixed_scylla":
             action_per_type["db_nodes"]["node_types"].append("oracle-db")
+        case "mixed_cassandra":
+            action_per_type["db_nodes"]["node_types"].append("oracle-db")
 
     return action_per_type
 

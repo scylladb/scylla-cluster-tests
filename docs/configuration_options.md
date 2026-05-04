@@ -1842,6 +1842,93 @@ Whether EMR cluster stays alive after job completion (default: true for reuse du
 **type:** bool
 
 
+## **migrator_source_hosts** / SCT_MIGRATOR_SOURCE_HOSTS
+
+CQL contact-point IPs for the source Cassandra/Scylla cluster. Mutually exclusive with migrator_source_test_id.
+
+**default:** N/A
+
+**type:** str | list[str]
+* appendable
+
+
+## **migrator_source_keyspace** / SCT_MIGRATOR_SOURCE_KEYSPACE
+
+Keyspace to migrate from on the source cluster
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **migrator_source_table** / SCT_MIGRATOR_SOURCE_TABLE
+
+Table to migrate from on the source cluster
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **migrator_source_test_id** / SCT_MIGRATOR_SOURCE_TEST_ID
+
+SCT test_id of a running source cluster. When set, source host IPs are auto-discovered via EC2 tags (NodeType=cs-db). Mutually exclusive with migrator_source_hosts.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **migrator_target_keyspace** / SCT_MIGRATOR_TARGET_KEYSPACE
+
+Keyspace to migrate into on the target Scylla cluster. Defaults to migrator_source_keyspace.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **migrator_target_table** / SCT_MIGRATOR_TARGET_TABLE
+
+Table to migrate into on the target Scylla cluster. Defaults to migrator_source_table.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **migrator_run_validator** / SCT_MIGRATOR_RUN_VALIDATOR
+
+Run the spark-migrator validator after migration to do a row-by-row comparison
+
+**default:** N/A
+
+**type:** bool
+
+
+## **migrator_step_timeout_minutes** / SCT_MIGRATOR_STEP_TIMEOUT_MINUTES
+
+Time in minutes to wait for the spark-migrator migration EMR step. Default 360.
+
+**default:** N/A
+
+**type:** int
+
+
+## **validator_step_timeout_minutes** / SCT_VALIDATOR_STEP_TIMEOUT_MINUTES
+
+Time in minutes to wait for the spark-migrator validator EMR step. Default 60.
+
+**default:** N/A
+
+**type:** int
+
+
 ## **run_scylla_doctor** / SCT_RUN_SCYLLA_DOCTOR
 
 Flag to run Scylla Doctor tool
@@ -2723,21 +2810,20 @@ Cassandra version for the oracle cluster, i.e. '4.1' or '5.0'
 * appendable
 
 
-## **ami_id_db_cassandra_oracle** / SCT_AMI_ID_DB_CASSANDRA_ORACLE
-
-AMI ID for Cassandra oracle cluster nodes on AWS. Defaults to empty string, which causes fallback to the loader AMI (a standard Ubuntu image).
-
-**default:** N/A
-
-**type:** str
-* appendable
-
-
 ## **install_cassandra_exporter** / SCT_INSTALL_CASSANDRA_EXPORTER
 
 Install Criteo cassandra_exporter on Cassandra nodes for Prometheus metrics collection. The exporter connects to JMX (port 7199) and exposes metrics on port 8080.
 
 **default:** True
+
+**type:** bool
+
+
+## **cassandra_broadcast_rpc_public** / SCT_CASSANDRA_BROADCAST_RPC_PUBLIC
+
+When True, set broadcast_rpc_address to the public IP of the node in cassandra.yaml, so clients outside the VPC (e.g. sct-runner driver connection that reads system.peers) can reach the nodes. Defaults to False (private IP, matches intra-VPC behavior).
+
+**default:** N/A
 
 **type:** bool
 

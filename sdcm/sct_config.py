@@ -1186,6 +1186,36 @@ class SCTConfiguration(BaseModel):
     emr_keep_alive: Boolean = SctField(
         description="Whether EMR cluster stays alive after job completion (default: true for reuse during testing)",
     )
+    # spark-migrator external-source options (for Cassandra-to-Scylla migration)
+    migrator_source_hosts: StringOrList = SctField(
+        description="CQL contact-point IPs for the source Cassandra/Scylla cluster. "
+        "Mutually exclusive with migrator_source_test_id.",
+    )
+    migrator_source_keyspace: String = SctField(
+        description="Keyspace to migrate from on the source cluster",
+    )
+    migrator_source_table: String = SctField(
+        description="Table to migrate from on the source cluster",
+    )
+    migrator_source_test_id: String = SctField(
+        description="SCT test_id of a running source cluster. When set, source host IPs are auto-discovered "
+        "via EC2 tags (NodeType=cs-db). Mutually exclusive with migrator_source_hosts.",
+    )
+    migrator_target_keyspace: String = SctField(
+        description="Keyspace to migrate into on the target Scylla cluster. Defaults to migrator_source_keyspace.",
+    )
+    migrator_target_table: String = SctField(
+        description="Table to migrate into on the target Scylla cluster. Defaults to migrator_source_table.",
+    )
+    migrator_run_validator: Boolean = SctField(
+        description="Run the spark-migrator validator after migration to do a row-by-row comparison",
+    )
+    migrator_step_timeout_minutes: int = SctField(
+        description="Time in minutes to wait for the spark-migrator migration EMR step. Default 360.",
+    )
+    validator_step_timeout_minutes: int = SctField(
+        description="Time in minutes to wait for the spark-migrator validator EMR step. Default 60.",
+    )
 
     run_scylla_doctor: Boolean = SctField(
         description="Flag to run Scylla Doctor tool",
@@ -1496,13 +1526,14 @@ class SCTConfiguration(BaseModel):
     cassandra_oracle_version: String = SctField(
         description="Cassandra version for the oracle cluster, i.e. '4.1' or '5.0'",
     )
-    ami_id_db_cassandra_oracle: String = SctField(
-        description="AMI ID for Cassandra oracle cluster nodes on AWS. "
-        "Defaults to empty string, which causes fallback to the loader AMI (a standard Ubuntu image).",
-    )
     install_cassandra_exporter: Boolean = SctField(
         description="Install Criteo cassandra_exporter on Cassandra nodes for Prometheus metrics collection. "
         "The exporter connects to JMX (port 7199) and exposes metrics on port 8080.",
+    )
+    cassandra_broadcast_rpc_public: Boolean = SctField(
+        description="When True, set broadcast_rpc_address to the public IP of the node in cassandra.yaml, "
+        "so clients outside the VPC (e.g. sct-runner driver connection that reads system.peers) "
+        "can reach the nodes. Defaults to False (private IP, matches intra-VPC behavior).",
     )
     # baremetal config options
     s3_baremetal_config: String = SctField(
@@ -3348,6 +3379,8 @@ class SCTConfiguration(BaseModel):
 
         self._validate_perf_gradual_throttle_steps()
 
+        self._verify_migrator_source_params()
+
     def _get_normalized_arch(self, instance_type: str, region_name: str, default: str = "x86_64") -> str:
         """Detect architecture from AWS instance type and normalize to Scylla package naming.
 
@@ -4178,6 +4211,10 @@ class SCTConfiguration(BaseModel):
             ret += "{help_text}{name}: {default}\n\n".format(help_text=help_text, default=default, name=field_name)
 
         return ret
+
+    def _verify_migrator_source_params(self):
+        if self.get("migrator_source_hosts") and self.get("migrator_source_test_id"):
+            raise ValueError("migrator_source_hosts and migrator_source_test_id are mutually exclusive — set only one")
 
     def _verify_data_volume_configuration(self, backend):
         dev_num = self.get("data_volume_disk_num")

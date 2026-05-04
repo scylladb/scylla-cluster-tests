@@ -26,3 +26,7 @@ scylla_network_config:
   public: true
   use_dns: false
   nic: 0  #  If ipv4 and public is True it has to be primary network interface (device index is 0)
+
+# publish public IP in cassandra.yaml broadcast_rpc_address so drivers from an
+# sct-runner outside the VPC can reach the CS nodes (mixed_cassandra only).
+cassandra_broadcast_rpc_public: true
