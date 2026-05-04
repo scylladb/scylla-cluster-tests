@@ -19,7 +19,7 @@ jobs:
             gh pr list --state all --json number,state,labels,title --limit 30000 --template '{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}}|{{end}},{{.title}}{{println ""}}{{end}}' --repo scylladb/$repo > issues/pull-requests/scylladb_$repo.csv
           done
         env:
-          GH_TOKEN: ${{ secrets.ISSUE_ASSIGNMENT_TO_PROJECT_TOKEN }}
+          GH_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
       - name: Upload folder to bucket
         uses: a-sync/s3-uploader@2.0.1
         with:
