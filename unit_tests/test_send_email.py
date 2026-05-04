@@ -4,6 +4,10 @@ import tempfile
 import shutil
 import zipfile
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 from sdcm.send_email import LongevityEmailReporter, read_email_data_from_file
 
 

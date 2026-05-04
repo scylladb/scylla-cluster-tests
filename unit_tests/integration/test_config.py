@@ -56,7 +56,7 @@ def test_04_check_env_parse(monkeypatch):
     conf.verify_configuration()
     conf.dump_config()
 
-    assert conf.ami_id_db_scylla == "ami-dummy ami-dummy2"
+    assert conf["ami_id_db_scylla"] == "ami-dummy ami-dummy2"
 
 
 @pytest.mark.integration
@@ -66,7 +66,7 @@ def test_10_longevity(monkeypatch):
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA_DESC", "master")
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
-    assert conf.user_prefix == "longevity-50gb-4d-not-jenkins-maste"
+    assert conf["user_prefix"] == "longevity-50gb-4d-not-jenkins-maste"
 
 
 @pytest.mark.integration
@@ -86,7 +86,7 @@ def test_12_scylla_version_ami(monkeypatch):
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
-    amis = conf.ami_id_db_scylla.split()
+    amis = conf["ami_id_db_scylla"].split()
     assert len(amis) == 2
     assert all(ami.startswith("ami-") for ami in amis)
 
@@ -148,7 +148,7 @@ def test_13_scylla_version_ami_branch_latest(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
-    amis = conf.ami_id_db_scylla.split()
+    amis = conf["ami_id_db_scylla"].split()
     assert len(amis) == 2
     assert all(ami.startswith("ami-") for ami in amis)
 
@@ -178,7 +178,7 @@ def test_13_bool(monkeypatch):
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
     conf = sct_config.SCTConfiguration()
 
-    assert conf.use_preinstalled_scylla is False
+    assert conf["use_preinstalled_scylla"] is False
 
 
 @pytest.mark.integration
@@ -196,9 +196,9 @@ def test_14_aws_siren_from_env(monkeypatch):
 
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
-    assert conf.cloud_cluster_id == 193712947904378
-    assert conf.authenticator_user == "user"
-    assert conf.authenticator_password == "pass"
+    assert conf["cloud_cluster_id"] == 193712947904378
+    assert conf["authenticator_user"] == "user"
+    assert conf["authenticator_password"] == "pass"
 
 
 @pytest.mark.integration
@@ -212,7 +212,7 @@ def test_16_default_oracle_scylla_version_eu_west_1(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
-    assert "ami-" in conf.ami_id_db_oracle
+    assert "ami-" in conf["ami_id_db_oracle"]
 
 
 @pytest.mark.integration
@@ -227,7 +227,7 @@ def test_16_oracle_scylla_version_us_east_1(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
-    assert conf.ami_id_db_oracle.startswith("ami-")
+    assert conf["ami_id_db_oracle"].startswith("ami-")
 
 
 @pytest.mark.integration
@@ -242,7 +242,7 @@ def test_16_oracle_scylla_version_eu_west_1(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
-    assert conf.ami_id_db_oracle.startswith("ami-")
+    assert conf["ami_id_db_oracle"].startswith("ami-")
 
 
 @pytest.mark.integration
@@ -304,8 +304,8 @@ def test_20_user_data_format_version_aws(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     conf.verify_configuration_urls_validity()
-    assert conf.user_data_format_version == "3"
-    assert conf.oracle_user_data_format_version == "3"
+    assert conf["user_data_format_version"] == "3"
+    assert conf["oracle_user_data_format_version"] == "3"
 
 
 @pytest.mark.integration
@@ -318,7 +318,7 @@ def test_20_user_data_format_version_aws_2(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     conf.verify_configuration_urls_validity()
-    assert conf.user_data_format_version == "3"
+    assert conf["user_data_format_version"] == "3"
     assert getattr(conf, "oracle_user_data_format_version", None) is None
 
 
@@ -329,7 +329,7 @@ def test_20_user_data_format_version_gce_1(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     conf.verify_configuration_urls_validity()
-    assert conf.user_data_format_version == "3"
+    assert conf["user_data_format_version"] == "3"
 
 
 @pytest.mark.integration
@@ -339,7 +339,7 @@ def test_20_user_data_format_version_gce_2(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     conf.verify_configuration_urls_validity()
-    assert conf.user_data_format_version == "3"
+    assert conf["user_data_format_version"] == "3"
 
 
 @pytest.mark.integration
@@ -352,7 +352,7 @@ def test_20_user_data_format_version_gce_3(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     conf.verify_configuration_urls_validity()
-    assert conf.user_data_format_version == "2"
+    assert conf["user_data_format_version"] == "2"
 
 
 @pytest.mark.integration

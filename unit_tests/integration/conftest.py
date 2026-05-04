@@ -30,6 +30,16 @@ from types import SimpleNamespace
 
 import pytest
 
+# Auto-mark every test collected under integration/ so that
+# `pytest -m "not integration"` (the unit-tests stage) skips them.
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if "/integration/" in str(item.fspath):
+            item.add_marker(pytest.mark.integration)
+
+
 from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.cluster_docker import VectorStoreSetDocker

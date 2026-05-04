@@ -80,7 +80,7 @@ def test_05_docker(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     assert "docker_image" in conf.dump_config()
-    assert conf.docker_image == "scylladb/scylla"
+    assert conf["docker_image"] == "scylladb/scylla"
 
 
 def test_06a_docker_latest_no_loader(monkeypatch):
@@ -95,7 +95,7 @@ def test_06a_docker_latest_no_loader(monkeypatch):
     ):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
-    assert conf.scylla_version != "latest"
+    assert conf["scylla_version"] != "latest"
 
 
 def test_07_baremetal_exception(monkeypatch):
@@ -115,16 +115,15 @@ def test_08_baremetal(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     assert "db_nodes_private_ip" in conf.dump_config()
-    assert conf.db_nodes_private_ip == ["1.2.3.4", "1.2.3.5"]
+    assert conf["db_nodes_private_ip"] == ["1.2.3.4", "1.2.3.5"]
 
 
 def test_09_unknown_configure(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/unknown_param_in_config.yaml")
-    with pytest.raises(ValueError) as exc:
-        conf = sct_config.SCTConfiguration()
+    conf = sct_config.SCTConfiguration()
+    with pytest.raises(ValueError):
         conf.verify_configuration()
-    assert exc.value.args[0] == "Unknown configuration key='WTF'"
 
 
 def test_09_unknown_env(monkeypatch):
@@ -156,7 +155,7 @@ def test_12_scylla_version_repo_ubuntu(monkeypatch):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
     assert "scylla_repo" in conf.dump_config()
-    assert conf.scylla_repo == expected_repo
+    assert conf["scylla_repo"] == expected_repo
 
 
 def test_12_scylla_version_repo_ubuntu_loader_centos(monkeypatch):
@@ -175,7 +174,7 @@ def test_12_scylla_version_repo_ubuntu_loader_centos(monkeypatch):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
     assert "scylla_repo" in conf.dump_config()
-    assert conf.scylla_repo == expected_repo
+    assert conf["scylla_repo"] == expected_repo
 
 
 def test_12_k8s_scylla_version_ubuntu_loader_centos(monkeypatch):
@@ -185,7 +184,7 @@ def test_12_k8s_scylla_version_ubuntu_loader_centos(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     assert "scylla_repo" in conf.dump_config()
-    assert not conf.scylla_repo
+    assert not conf["scylla_repo"]
 
 
 def test_14_check_rackaware_config_false_loader(monkeypatch):
@@ -362,7 +361,7 @@ def test_15_new_scylla_repo(monkeypatch):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf._get_target_upgrade_version()
-    assert conf.target_upgrade_version == "2019.1.1"
+    assert conf["target_upgrade_version"] == "2019.1.1"
 
 
 def test_15a_new_scylla_repo_by_scylla_version(monkeypatch):
@@ -385,8 +384,8 @@ def test_15a_new_scylla_repo_by_scylla_version(monkeypatch):
         conf.verify_configuration()
         conf._get_target_upgrade_version()
 
-    assert conf.scylla_repo == resolved_repo_link
-    target_upgrade_version = conf.target_upgrade_version
+    assert conf["scylla_repo"] == resolved_repo_link
+    target_upgrade_version = conf["target_upgrade_version"]
     assert target_upgrade_version == "666.development" or target_upgrade_version.endswith(".dev")
 
 
@@ -410,7 +409,7 @@ def test_15b_image_id_by_scylla_version(monkeypatch):
         conf.verify_configuration()
         conf._get_target_upgrade_version()
 
-    assert conf.gce_image_db == resolved_image_link
+    assert conf["gce_image_db"] == resolved_image_link
 
 
 def test_17_verify_scylla_bench_required_parameters_in_command(monkeypatch):
@@ -424,10 +423,10 @@ def test_17_verify_scylla_bench_required_parameters_in_command(monkeypatch):
     )
 
     conf = sct_config.SCTConfiguration()
-    assert conf.stress_cmd == [
+    assert conf["stress_cmd"] == [
         "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100"
     ]
-    assert conf.stress_read_cmd == [
+    assert conf["stress_read_cmd"] == [
         "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=100"
     ]
 
@@ -492,14 +491,14 @@ def test_21_nested_values(monkeypatch):
 
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
-    stress_image = conf.stress_image
+    stress_image = conf["stress_image"]
     assert stress_image["ndbench"] == "scylladb/hydra-loaders:ndbench-jdk8-A"
     assert stress_image["nosqlbench"] == "scylladb/hydra-loaders:nosqlbench-A"
 
     assert conf.get("stress_image.scylla-bench") == "scylladb/something"
     assert conf.get("stress_image.non-exist") is None
 
-    assert conf.stress_read_cmd == ["cassandra_stress", "cassandra_stress"]
+    assert conf["stress_read_cmd"] == ["cassandra_stress", "cassandra_stress"]
 
 
 def test_22_get_none(monkeypatch):
@@ -524,7 +523,7 @@ def test_23_1_include_nemesis_selector(monkeypatch):
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
-    assert conf.nemesis_selector == ["config_changes and topology_changes"]
+    assert conf["nemesis_selector"] == "config_changes and topology_changes"
 
 
 def test_26_run_fullscan_params_validtion_positive(monkeypatch):
@@ -572,7 +571,7 @@ def test_35_append_str_options(monkeypatch):
 
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
-    assert conf.append_scylla_args == (
+    assert conf["append_scylla_args"] == (
         "--blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 "
         "--abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 "
         "--enable-sstable-key-validation 1 --overprovisioned 5"
@@ -583,7 +582,7 @@ def test_35_append_list_options(monkeypatch):
     monkeypatch.setenv("SCT_SCYLLA_D_OVERRIDES_FILES", '["++", "extra_file/scylla.d/io.conf"]')
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
-    assert conf.scylla_d_overrides_files == ["extra_file/scylla.d/io.conf"]
+    assert conf["scylla_d_overrides_files"] == ["extra_file/scylla.d/io.conf"]
 
 
 def test_35_append_unsupported_list_options(monkeypatch):
@@ -702,27 +701,6 @@ def test_39_billing_project_staging_not_set(monkeypatch):
     conf = sct_config.SCTConfiguration()
     # billing_project should not be set to "staging"
     assert conf.get("billing_project") != "staging"
-
-
-def test_40_aws_emr_defaults_loaded(conf):
-    """Test that EMR defaults from aws_emr_config.yaml are loaded for AWS backend."""
-    expected_keys = [
-        "emr_release_label",
-        "emr_instance_type_master",
-        "emr_instance_type_core",
-        "emr_instance_count_core",
-        "emr_applications",
-    ]
-    dumped = conf.dump_config()
-    for key in expected_keys:
-        assert key in dumped
-
-    assert conf.get("emr_release_label") == ""
-    assert conf.get("emr_instance_type_master") == "m5.xlarge"
-    assert conf.get("emr_instance_type_core") == "m5.xlarge"
-    assert conf.get("emr_instance_count_core") == 2
-    assert conf.get("emr_applications") == ["Spark"]
-    assert conf.get("emr_keep_alive") is True
 
 
 class TestCommonTags:

@@ -3,6 +3,10 @@ import unittest
 import os.path
 import subprocess
 import logging
+
+import pytest
+
+pytestmark = pytest.mark.integration
 import pickle
 import tempfile
 import json
