@@ -241,3 +241,4 @@ For guidelines on creating new plans, see [docs/plans/INSTRUCTIONS.md](docs/plan
 ### [K8S Functional Tests](./docs/k8s-functional-test.md)
 ### [Microbenchmarking Tests](./docs/microbenchmarking.md)
 ### [Performance Tests](./docs/performance-tests.md)
+### [Cassandra -> Scylla Migration Tests](./docs/cs-to-scylla-migration.md)
