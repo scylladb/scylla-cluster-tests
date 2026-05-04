@@ -27,6 +27,23 @@ from sdcm.sct_events.stress_events import BaseStressEvent, StressEvent, StressEv
 LOGGER = logging.getLogger(__name__)
 
 
+class LoaderNodeDownEvent(SctEvent):
+    """Published when a loader node stops responding to SSH health checks.
+
+    Severity is CRITICAL so that EventsAnalyzer immediately kills the test,
+    preventing it from hanging silently for the rest of the stress duration.
+    """
+
+    def __init__(self, node: Any, message: str, severity: Severity = Severity.CRITICAL):
+        super().__init__(severity=severity)
+        self.node = str(node)
+        self.message = message
+
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": node={0.node} message={0.message}"
+
+
 class GeminiStressEvent(BaseStressEvent):
     def __init__(
         self,

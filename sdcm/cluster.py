@@ -171,6 +171,7 @@ from sdcm.sct_events.database import (
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
+from sdcm.sct_events.loaders import LoaderNodeDownEvent
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.monitorstack.ui import AlternatorDashboard, GeminiDashboard
 from sdcm.logcollector import (
@@ -6494,12 +6495,19 @@ class BaseScyllaCluster:
         raise NotImplementedError("The method should come from siren-tests sct_plugin module")
 
 
+LOADER_HEALTH_CHECK_INTERVAL = 300  # seconds between SSH health checks per loader node
+LOADER_HEALTH_CHECK_TIMEOUT = 300  # seconds to wait for an SSH health-check command
+LOADER_HEALTH_CHECK_RETRIES = 3  # consecutive failures before declaring a loader dead
+
+
 class BaseLoaderSet:
     def __init__(self, params):
         self._loader_cycle = None
         self.params = params
         self._gemini_version = None
         self.sb_write_timeseries_ts = None
+        self._loader_health_check_stop_event = threading.Event()
+        self._loader_health_check_thread: Optional[threading.Thread] = None
 
     @property
     def gemini_version(self):
@@ -6594,6 +6602,104 @@ class BaseLoaderSet:
         if not self._loader_cycle:
             self._loader_cycle = itertools.cycle(self.nodes)
         return next(self._loader_cycle)
+
+    def _loader_health_check_loop(self):
+        """Background thread: periodically SSH-ping every loader node.
+
+        After LOADER_HEALTH_CHECK_RETRIES consecutive failures for a node a
+        LoaderNodeDownEvent with CRITICAL severity is published, which causes
+        EventsAnalyzer to kill the test immediately via SIGUSR2.
+        """
+        LOGGER.debug("Loader health check thread started")
+        consecutive_failures: dict[str, int] = {}
+        reported_down: set[str] = set()
+
+        while not self._loader_health_check_stop_event.wait(timeout=LOADER_HEALTH_CHECK_INTERVAL):
+            for node in list(self.nodes):
+                # Re-check on every node so that stop() takes effect mid-sweep
+                # rather than waiting for the rest of the node list to be scanned.
+                if self._loader_health_check_stop_event.is_set():
+                    break
+                if node.name in reported_down:
+                    continue
+                try:
+                    node.remoter.run(
+                        "true",
+                        timeout=LOADER_HEALTH_CHECK_TIMEOUT,
+                        ignore_status=False,
+                        verbose=False,
+                        retry=0,
+                    )
+                    # Successful ping — reset the failure counter
+                    consecutive_failures.pop(node.name, None)
+                except Exception as exc:  # noqa: BLE001
+                    count = consecutive_failures.get(node.name, 0) + 1
+                    consecutive_failures[node.name] = count
+                    LOGGER.warning(
+                        "Loader node %s failed SSH health check (%d/%d): %s",
+                        node.name,
+                        count,
+                        LOADER_HEALTH_CHECK_RETRIES,
+                        exc,
+                    )
+                    if count >= LOADER_HEALTH_CHECK_RETRIES:
+                        reported_down.add(node.name)
+                        LoaderNodeDownEvent(
+                            node=node.name,
+                            message=(
+                                f"Loader node {node.name} is unreachable after "
+                                f"{count} consecutive SSH health-check failures. "
+                                f"Last error: {exc}"
+                            ),
+                        ).publish()
+
+        LOGGER.debug("Loader health check thread stopped")
+
+    def start_loader_health_check(self):
+        """Start the background loader SSH health-check thread.
+
+        Safe to call multiple times — subsequent calls are no-ops if the thread
+        is already running.
+        """
+        if self._loader_health_check_thread and self._loader_health_check_thread.is_alive():
+            return
+        self._loader_health_check_stop_event.clear()
+        self._loader_health_check_thread = threading.Thread(
+            target=self._loader_health_check_loop,
+            name="LoaderHealthCheck",
+            daemon=True,
+        )
+        self._loader_health_check_thread.start()
+        LOGGER.info(
+            "Loader health check started (interval=%ds, retries=%d)",
+            LOADER_HEALTH_CHECK_INTERVAL,
+            LOADER_HEALTH_CHECK_RETRIES,
+        )
+
+    def stop_loader_health_check(self):
+        """Signal the health-check thread to stop and wait for it to exit.
+
+        The join timeout is based on LOADER_HEALTH_CHECK_TIMEOUT (the SSH
+        command timeout) rather than the interval, because a blocked remoter
+        call can hold the thread for up to that long.  If the thread is still
+        alive after the join we warn but keep the reference intact — clearing
+        it would allow a second thread to be spawned while the first is still
+        running.
+        """
+        self._loader_health_check_stop_event.set()
+        thread = self._loader_health_check_thread
+        if thread and thread.is_alive():
+            thread.join(timeout=LOADER_HEALTH_CHECK_TIMEOUT + 5)
+            if thread.is_alive():
+                LOGGER.warning(
+                    "Loader health check thread '%s' did not exit within %ds; "
+                    "it may still be blocked on a remoter call.",
+                    thread.name,
+                    LOADER_HEALTH_CHECK_TIMEOUT + 5,
+                )
+                return
+        self._loader_health_check_thread = None
+        LOGGER.info("Loader health check stopped")
 
     def kill_stress_thread(self):
         if self.nodes and self.nodes[0].is_kubernetes():
@@ -6798,7 +6904,7 @@ class BaseMonitorSet:
         self.configure_overview_template(node)
         try:
             self.start_scylla_monitoring(node)
-        except (Failure, UnexpectedExit):
+        except Failure, UnexpectedExit:
             self.restart_scylla_monitoring()
         # The time will be used in url of Grafana monitor,
         # the data from this point to the end of test will
@@ -7029,7 +7135,7 @@ class BaseMonitorSet:
                 variable["current"]["value"] = "instance"
                 by_instance_option = next(opt for opt in variable["options"] if opt["text"] == "Instance")
                 by_instance_option["selected"] = True
-            except (StopIteration, KeyError):
+            except StopIteration, KeyError:
                 LOGGER.warning("Unable to change defaults for the template", exc_info=True)
 
             template["dashboard"]["annotations"] = sct_addon_template["annotations"]

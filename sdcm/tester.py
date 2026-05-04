@@ -1419,6 +1419,11 @@ class ClusterTester(unittest.TestCase):
             for future in as_completed(futures):
                 future.result()
 
+            # Start loader health monitoring only after all setup work is done
+            # so that a setup failure does not leak a background thread.
+            if self.loaders:
+                self.loaders.start_loader_health_check()
+
         # cancel reuse cluster - for new nodes added during the test
         self.test_config.reuse_cluster(False)
         if self.monitors and self.monitors.nodes:
@@ -3725,6 +3730,11 @@ class ClusterTester(unittest.TestCase):
             self.get_backtraces(self.db_cluster)
 
         if self.loaders:
+            # Stop the health-check thread first so that loader remoter
+            # teardown (stop_tasks_threads, kill_stress_thread) does not
+            # produce false LoaderNodeDownEvent CRITICAL events.
+            with silence(parent=self, name="Stop loader health check"):
+                self.loaders.stop_loader_health_check()
             self.get_backtraces(self.loaders)
             self.stop_resources_stop_tasks_threads(self.loaders)
 
