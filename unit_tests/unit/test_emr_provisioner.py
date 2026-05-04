@@ -164,6 +164,21 @@ def test_get_emr_cluster_description(provisioner):
     assert "Status" in desc
 
 
+def test_create_emr_cluster_default_log_uri_falls_back_to_shared_bucket(provisioner):
+    """Empty/unset emr_log_uri defaults to s3://sct-emr-spark-migrator-<region>/emr-logs/
+    so EMR step stdout/stderr are uploaded and SparkMigratorRunner.get_step_stdout works."""
+    provisioner.create_emr_cluster(test_id="test-default-loguri", user="test_user")
+    desc = provisioner.get_emr_cluster_description()
+    assert desc.get("LogUri") == f"s3://sct-emr-spark-migrator-{AWS_REGION}/emr-logs/"
+
+
+def test_create_emr_cluster_explicit_log_uri_overrides_default():
+    """Explicit emr_log_uri param wins over the default."""
+    prov = EmrClusterProvisioner(region_name=AWS_REGION, params=MockParams(emr_log_uri="s3://my-custom-emr-logs/path/"))
+    prov.create_emr_cluster(test_id="test-explicit-loguri", user="test_user")
+    assert prov.get_emr_cluster_description().get("LogUri") == "s3://my-custom-emr-logs/path/"
+
+
 def test_terminate_emr_cluster(provisioner):
     """Test terminating an EMR cluster."""
     provisioner.create_emr_cluster(

@@ -1,0 +1,41 @@
+test_duration: 120
+
+db_type: mixed_cassandra
+
+# Scylla target cluster params
+n_db_nodes: 1
+instance_type_db: 'i4i.large'
+
+# Cassandra source cluster params
+n_test_oracle_db_nodes: 1
+instance_type_db_oracle: 'i4i.large'
+cassandra_oracle_version: '4.1'
+ami_id_db_cassandra: 'resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id'
+
+# test preloads 100K rows via CQL directly
+n_loaders: 0
+
+n_monitor_nodes: 1
+instance_type_monitor: 't3.large'
+
+# EMR cluster (single core node is enough for a 100K-row migration)
+emr_release_label: 'emr-7.12.0'
+emr_instance_type_master: 'm5.xlarge'
+emr_instance_type_core: 'm5.xlarge'
+emr_instance_count_core: 1
+emr_instance_count_task: 0
+emr_applications:
+  - 'Spark'
+emr_keep_alive: true
+
+emr_spark_migrator_release: 'v2.0.1'
+
+migrator_source_keyspace: 'migrator_test'
+migrator_source_table: 'source_table'
+migrator_target_keyspace: 'migrator_test'
+migrator_target_table: 'source_table'
+migrator_run_validator: false
+
+user_prefix: 'cs-to-sc-small'
+
+run_commit_log_check_thread: false

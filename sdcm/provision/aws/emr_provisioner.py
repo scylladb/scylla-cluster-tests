@@ -14,6 +14,7 @@
 """EMR cluster lifecycle management for spark-migrator testing."""
 
 import logging
+import time
 
 import boto3
 import botocore
@@ -98,8 +99,9 @@ class EmrClusterProvisioner:
         if bootstrap_actions:
             cluster_config["BootstrapActions"] = bootstrap_actions
 
-        if log_uri := self.params.get("emr_log_uri"):
-            cluster_config["LogUri"] = log_uri
+        cluster_config["LogUri"] = (
+            self.params.get("emr_log_uri") or f"s3://sct-emr-spark-migrator-{self.region_name}/emr-logs/"
+        )
 
         LOGGER.info(
             "Creating EMR cluster with release %s in %s...", self.params.get("emr_release_label"), self.region_name
@@ -280,33 +282,23 @@ class EmrClusterProvisioner:
         )
         return response["Step"]["Status"]
 
-    @retrying(n=120, sleep_time=30, message="Waiting for EMR step to complete...")
-    def wait_for_step_completion(self, cluster_id, step_id):
-        """Wait for an EMR step to complete.
-
-        Args:
-            cluster_id: EMR cluster ID.
-            step_id: Step ID.
-
-        Returns:
-            dict: Step status.
-
-        Raises:
-            AssertionError: If step fails or is cancelled.
-        """
+    def wait_for_step_completion(self, cluster_id, step_id, timeout_minutes=60, poll_interval_seconds=30):
+        """Poll EMR step until COMPLETED; raise on failure or timeout."""
         cluster_id = cluster_id or self.cluster_id
-        status = self.get_step_status(cluster_id, step_id)
-        state = status["State"]
-
-        if state == "COMPLETED":
-            LOGGER.info("EMR step %s completed successfully", step_id)
-            return status
-
-        assert state not in ("FAILED", "CANCELLED", "INTERRUPTED"), (
-            f"EMR step {step_id} failed with state: {state}. "
-            f"Reason: {status.get('FailureDetails', {}).get('Message', 'unknown')}"
-        )
-        raise RuntimeError(f"EMR step {step_id} still running (state: {state})")
+        deadline = time.monotonic() + timeout_minutes * 60
+        state = "UNKNOWN"
+        while time.monotonic() < deadline:
+            status = self.get_step_status(cluster_id, step_id)
+            state = status["State"]
+            if state == "COMPLETED":
+                LOGGER.info("EMR step %s completed successfully", step_id)
+                return status
+            if state in ("FAILED", "CANCELLED", "INTERRUPTED"):
+                reason = status.get("FailureDetails", {}).get("Message", "unknown")
+                raise AssertionError(f"EMR step {step_id} failed with state: {state}. Reason: {reason}")
+            LOGGER.debug("EMR step %s state=%s, sleeping %ds", step_id, state, poll_interval_seconds)
+            time.sleep(poll_interval_seconds)
+        raise TimeoutError(f"EMR step {step_id} did not finish within {timeout_minutes} min (last state: {state})")
 
 
 def list_emr_clusters(tags_dict, region_name):
