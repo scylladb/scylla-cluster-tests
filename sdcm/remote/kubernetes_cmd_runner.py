@@ -166,10 +166,10 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
     def run(self, cmd, **kwargs):
         if hasattr(self, "dynamic_remoter") and hasattr(self, "pod_image"):
             if is_scylla_bench_command(cmd) and "scylla-bench" not in self.pod_image:
-                LOGGER.info("Running following 'scylla-bench' command in a separate dynamic loader pod: %s", cmd)
+                LOGGER.info("Routing scylla-bench command to dynamic loader pod")
                 return self.dynamic_remoter.run(cmd, **kwargs)
             elif is_ycsb_command(cmd) and "ycsb" not in self.pod_image:
-                LOGGER.info("Running following 'ycsb' command in a separate dynamic loader pod: %s", cmd)
+                LOGGER.info("Routing ycsb command to dynamic loader pod")
                 return self.dynamic_remoter.run(cmd, **kwargs)
         return super().run(cmd, **kwargs)
 

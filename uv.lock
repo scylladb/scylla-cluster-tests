@@ -2275,7 +2275,7 @@ wheels = [
 
 [[package]]
 name = "moto"
-version = "5.1.1"
+version = "5.1.22"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3", marker = "sys_platform != 'win32'" },
@@ -2288,14 +2288,19 @@ dependencies = [
     { name = "werkzeug", marker = "sys_platform != 'win32'" },
     { name = "xmltodict", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ee/ee/88b514190cb4ece02b377ea61ff26b596fa967609c82aa2f2856bfae2f3e/moto-5.1.1.tar.gz", hash = "sha256:5b25dbc62cccd9f36ef062c870db49d976b241129024fab049e2d3d1296e2a57", size = 6647375, upload-time = "2025-03-02T19:48:06.408Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b2/3d/1765accbf753dc1ae52f26a2e2ed2881d78c2eb9322c178e45312472e4a0/moto-5.1.22.tar.gz", hash = "sha256:e5b2c378296e4da50ce5a3c355a1743c8d6d396ea41122f5bb2a40f9b9a8cc0e", size = 8547792, upload-time = "2026-03-08T21:06:43.731Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e9/36/e3d70d25064a03dfa13555bf26ca934bb2167df221065938278e1e1961eb/moto-5.1.1-py3-none-any.whl", hash = "sha256:615904d6210431950a59a2bdec365d60e791eacbe3dd07a3a5d742c88ef847dd", size = 4788429, upload-time = "2025-03-02T19:48:03.308Z" },
+    { url = "https://files.pythonhosted.org/packages/46/4f/8812a01e3e0bd6be3e13b90432fb5c696af9a720af3f00e6eba5ad748345/moto-5.1.22-py3-none-any.whl", hash = "sha256:d9f20ae3cf29c44f93c1f8f06c8f48d5560e5dc027816ef1d0d2059741ffcfbe", size = 6617400, upload-time = "2026-03-08T21:06:41.093Z" },
 ]
 
 [package.optional-dependencies]
+s3 = [
+    { name = "py-partiql-parser", marker = "sys_platform != 'win32'" },
+    { name = "pyyaml", marker = "sys_platform != 'win32'" },
+]
 server = [
     { name = "antlr4-python3-runtime", marker = "sys_platform != 'win32'" },
+    { name = "aws-sam-translator", marker = "sys_platform != 'win32'" },
     { name = "aws-xray-sdk", marker = "sys_platform != 'win32'" },
     { name = "cfn-lint", marker = "sys_platform != 'win32'" },
     { name = "docker", marker = "sys_platform != 'win32'" },
@@ -2306,6 +2311,7 @@ server = [
     { name = "jsonpath-ng", marker = "sys_platform != 'win32'" },
     { name = "openapi-spec-validator", marker = "sys_platform != 'win32'" },
     { name = "py-partiql-parser", marker = "sys_platform != 'win32'" },
+    { name = "pydantic", marker = "sys_platform != 'win32'" },
     { name = "pyparsing", marker = "sys_platform != 'win32'" },
     { name = "pyyaml", marker = "sys_platform != 'win32'" },
     { name = "setuptools", marker = "sys_platform != 'win32'" },
@@ -3119,11 +3125,11 @@ wheels = [
 
 [[package]]
 name = "py-partiql-parser"
-version = "0.6.1"
+version = "0.6.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/58/a1/0a2867e48b232b4f82c4929ef7135f2a5d72c3886b957dccf63c70aa2fcb/py_partiql_parser-0.6.1.tar.gz", hash = "sha256:8583ff2a0e15560ef3bc3df109a7714d17f87d81d33e8c38b7fed4e58a63215d", size = 17120, upload-time = "2024-12-25T22:06:41.327Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/56/7a/a0f6bda783eb4df8e3dfd55973a1ac6d368a89178c300e1b5b91cd181e5e/py_partiql_parser-0.6.3.tar.gz", hash = "sha256:09cecf916ce6e3da2c050f0cb6106166de42c33d34a078ec2eb19377ea70389a", size = 17456, upload-time = "2025-10-18T13:56:13.441Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/97/84/0e410c20bbe9a504fc56e97908f13261c2b313d16cbb3b738556166f044a/py_partiql_parser-0.6.1-py2.py3-none-any.whl", hash = "sha256:ff6a48067bff23c37e9044021bf1d949c83e195490c17e020715e927fe5b2456", size = 23520, upload-time = "2024-12-25T22:06:39.106Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/33/a7cbfccc39056a5cf8126b7aab4c8bafbedd4f0ca68ae40ecb627a2d2cd3/py_partiql_parser-0.6.3-py2.py3-none-any.whl", hash = "sha256:deb0769c3346179d2f590dcbde556f708cdb929059fb654bad75f4cf6e07f582", size = 23752, upload-time = "2025-10-18T13:56:12.256Z" },
 ]
 
 [[package]]
@@ -4133,7 +4139,7 @@ dependencies = [
     { name = "kubernetes", marker = "sys_platform != 'win32'" },
     { name = "ldap3-bleeding-edge", marker = "sys_platform != 'win32'" },
     { name = "lz4", marker = "sys_platform != 'win32'" },
-    { name = "moto", extra = ["server"], marker = "sys_platform != 'win32'" },
+    { name = "moto", extra = ["s3", "server"], marker = "sys_platform != 'win32'" },
     { name = "mysql-connector-python", marker = "sys_platform != 'win32'" },
     { name = "oci", marker = "sys_platform != 'win32'" },
     { name = "packaging", marker = "sys_platform != 'win32'" },
@@ -4215,7 +4221,7 @@ requires-dist = [
     { name = "kubernetes", specifier = "==35.0.0" },
     { name = "ldap3-bleeding-edge", specifier = "==2.10.1.1338" },
     { name = "lz4", specifier = ">3.0.0" },
-    { name = "moto", extras = ["server"], specifier = "==5.1.1" },
+    { name = "moto", extras = ["s3", "secretsmanager", "server"], specifier = ">=5.1.22" },
     { name = "mysql-connector-python", specifier = "==9.1.0" },
     { name = "oci", specifier = "==2.164.2" },
     { name = "packaging", specifier = ">=24" },

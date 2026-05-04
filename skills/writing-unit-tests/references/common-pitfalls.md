@@ -370,6 +370,64 @@ def test_run_stops_after_skips(make_nemesis_runner, events_function_scope):
 
 
 
+---
+
+### P-17: moto `mock_aws()` Silently Bypassed by Custom AWS Endpoint
+
+`mock_aws()` intercepts by matching request URLs against `*.amazonaws.com` patterns. If
+`AWS_ENDPOINT_URL` (or another endpoint override) is set in the environment, boto3 sends
+requests to that address instead — moto never sees them and real AWS (or whatever is listening
+on that endpoint) handles the call. A 403 or other non-mock error in tests that "use moto" is
+the typical symptom.
+
+**This can silently corrupt production AWS resources** if the endpoint URL is absent and the
+test bucket/secret name happens to match a real resource in the account.
+
+Every fixture that uses `mock_aws()` **must** apply three safeguards via `monkeypatch`:
+
+1. **Clear `AWS_ENDPOINT_URL`** — so moto sees the standard `*.amazonaws.com` URLs it patterns-matches on.
+2. **Use a test-specific resource name** — a bucket/secret name that does not exist in real AWS,
+   so a moto bypass fails loudly (NoSuchBucket / AccessDenied) rather than silently corrupting prod data.
+3. **Patch the module constant** that the code under test reads — so even internal boto3 calls target
+   the test resource name, not the real one.
+
+Fake credentials (item 4) are optional belt-and-suspenders but recommended.
+
+❌ **Bad — moto bypass silently hits real S3:**
+```python
+KEYSTORE_S3_BUCKET = "scylla-qa-keystore"   # real prod bucket
+
+@pytest.fixture
+def mocked_s3():
+    with mock_aws():                         # bypassed if AWS_ENDPOINT_URL is set
+        s3 = boto3.resource("s3", region_name="us-east-1")
+        s3.create_bucket(Bucket=KEYSTORE_S3_BUCKET)  # creates/populates REAL bucket!
+        s3.Object(KEYSTORE_S3_BUCKET, "secret.json").put(Body=b'{"password": "fake"}')
+        yield s3
+```
+
+✅ **Good — three-layer defence:**
+```python
+# At module level — a name that cannot exist in real AWS:
+TEST_BUCKET = "test-moto-bucket-do-not-create"
+
+@pytest.fixture
+def mocked_s3(monkeypatch):
+    monkeypatch.setattr(keystore_module, "KEYSTORE_S3_BUCKET", TEST_BUCKET)  # (3)
+    monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False)                     # (1)
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")                        # (4, optional)
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")                    # (4, optional)
+    with mock_aws():
+        s3 = boto3.resource("s3", region_name="us-east-1")
+        s3.create_bucket(Bucket=TEST_BUCKET)                                  # (2)
+        s3.Object(TEST_BUCKET, "secret.json").put(Body=b'{"password": "fake"}')
+        yield s3
+```
+
+The same pattern applies to Secrets Manager and any other AWS service mocked with moto.
+
+---
+
 See also: [anti-patterns.md](anti-patterns.md) for broader testing anti-patterns.
 
 ---

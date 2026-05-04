@@ -256,3 +256,53 @@ T7 — Missing Tests
 [ ] Data transformation logic has tests for edge cases (empty, single, multi)
 [ ] Tests live in unit_tests/ and follow test_*.py naming
 ```
+
+---
+
+## T8: moto Safety — Preventing Real AWS Leakage
+
+Every fixture that calls `mock_aws()` **must** include all three of the following safeguards.
+Missing any one of them can cause tests to silently hit real AWS — corrupting prod credentials,
+buckets, or secrets — when `AWS_ENDPOINT_URL` is set in the environment (as it often is in SCT
+developer environments running LocalStack or a local moto server).
+
+```
+moto fixture checklist
+[ ] monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False) — clears endpoint override so
+    moto's URL-pattern matching sees *.amazonaws.com addresses
+[ ] TEST_* constant used as bucket/secret name instead of the real prod name — a name that
+    does not exist in real AWS so a moto bypass fails loudly (AccessDenied / NoSuchBucket)
+    rather than silently writing to prod
+[ ] monkeypatch.setattr(module, "BUCKET_CONSTANT", TEST_BUCKET) — patches the module-level
+    constant so the code under test also targets the safe test name, not the prod resource
+[ ] (recommended) monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing") and
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing") — fake creds as final backstop
+```
+
+**Reference implementation** (from `unit_tests/test_keystore.py`):
+
+```python
+TEST_KEYSTORE_BUCKET = "test-keystore-moto-bucket-do-not-create"
+
+@pytest.fixture
+def mocked_s3(monkeypatch):
+    monkeypatch.setattr(keystore_module, "KEYSTORE_S3_BUCKET", TEST_KEYSTORE_BUCKET)
+    monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False)
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    with mock_aws():
+        s3 = boto3.resource("s3", region_name="us-east-1")
+        s3.create_bucket(Bucket=TEST_KEYSTORE_BUCKET)
+        ...
+        yield s3
+```
+
+**Root cause to understand**: moto 5.x intercepts via a `before-send` botocore event registered
+on the standard `*.amazonaws.com` URL patterns. If `AWS_ENDPOINT_URL` redirects boto3 to
+`http://localhost:5000` (LocalStack, moto server, etc.), the event still fires but moto's
+URL-pattern match fails and the call passes through to whatever is at that address. If that
+address is absent, the OS-level connection fails (not moto's fake response). If real credentials
+exist, the call may reach a real AWS endpoint.
+
+See [common-pitfalls.md P-17](../../writing-unit-tests/references/common-pitfalls.md#p-17-moto-mock_aws-silently-bypassed-by-custom-aws-endpoint) for the full write-up with before/after examples.
