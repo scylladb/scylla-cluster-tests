@@ -2024,7 +2024,7 @@ class BaseNode(AutoSshContainerMixin):
 
                 if decoded is None:
                     scylla_debug_file = self.copy_scylla_debug_info(obj["node"], build_id)
-                    decoded = self.decode_raw_backtrace(scylla_debug_file, raw_backtrace_oneline).stdout
+                    decoded = self.decode_backtrace_local(scylla_debug_file, raw_backtrace_oneline).stdout
 
                 event.backtrace = decoded
                 the_map = FindIssuePerBacktrace()
@@ -2116,7 +2116,7 @@ class BaseNode(AutoSshContainerMixin):
         raise Exception("Couldn't find scylla debug information")
 
     @lru_cache(maxsize=None)
-    def decode_raw_backtrace(self, scylla_debug_file, raw_backtrace):
+    def decode_backtrace_local(self, scylla_debug_file, raw_backtrace):
         """run decode backtrace on monitor node
 
         Decode backtrace on monitor node
