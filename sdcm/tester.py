@@ -1976,7 +1976,7 @@ class ClusterTester(unittest.TestCase):
                 )
             elif db_type == "mixed_cassandra":
                 self.test_config.mixed_cluster(True)
-                ami_id = self.params.get("ami_id_db_cassandra_oracle") or self.params.get("ami_id_loader")
+                ami_id = self.params.get("ami_id_db_cassandra") or self.params.get("ami_id_loader")
                 return CassandraAWSCluster(
                     ec2_ami_id=ami_id.split(),
                     ec2_ami_username="ubuntu",
@@ -2281,7 +2281,7 @@ class ClusterTester(unittest.TestCase):
 
         self.emr_cluster.create_emr_cluster(
             test_id=self.test_config.test_id(),
-            user=self.params.get("email_recipients")[0] if self.params.get("email_recipients") else "unknown",
+            user=get_username(),
             vpc_subnet_id=subnet_id,
             test_name=self.params.get("user_prefix"),
             version=self.params.get("scylla_version"),
@@ -2775,6 +2775,7 @@ class ClusterTester(unittest.TestCase):
         compaction_strategy="",
         use_single_loader=False,
         stop_test_on_failure=True,
+        node_list=None,
     ):
         params = dict(
             stress_cmd=stress_cmd,
@@ -2787,6 +2788,7 @@ class ClusterTester(unittest.TestCase):
             round_robin=round_robin,
             stats_aggregate_cmds=stats_aggregate_cmds,
             use_single_loader=use_single_loader,
+            node_list=node_list,
         )
         if "cql-stress-cassandra-stress" in stress_cmd:
             params["stop_test_on_failure"] = stop_test_on_failure
@@ -2835,6 +2837,7 @@ class ClusterTester(unittest.TestCase):
         compaction_strategy="",
         stop_test_on_failure=True,
         params=None,
+        node_list=None,
         **_,
     ):
         if duration:
@@ -2856,7 +2859,7 @@ class ClusterTester(unittest.TestCase):
             keyspace_num=keyspace_num,
             compaction_strategy=compaction_strategy,
             profile=profile,
-            node_list=self.db_cluster.nodes,
+            node_list=node_list or self.db_cluster.nodes,
             round_robin=round_robin,
             client_encrypt=self.params.get("client_encrypt"),
             keyspace_name=keyspace_name,
@@ -2983,6 +2986,7 @@ class ClusterTester(unittest.TestCase):
         round_robin=False,
         stats_aggregate_cmds=True,
         stop_test_on_failure=True,
+        node_list=None,
         **_,
     ):
         if duration:
@@ -3001,7 +3005,7 @@ class ClusterTester(unittest.TestCase):
             stress_cmd=stress_cmd,
             timeout=timeout,
             stress_num=stress_num,
-            node_list=self.db_cluster.nodes,
+            node_list=node_list or self.db_cluster.nodes,
             round_robin=round_robin,
             stop_test_on_failure=stop_test_on_failure,
             params=self.params,

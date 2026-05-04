@@ -256,7 +256,7 @@ class DBCluster(ClusterBase):
 
     @cached_property
     def _is_cassandra(self) -> bool:
-        return self.params.get("db_type") in ("cassandra", "mixed_cassandra")
+        return self.params.get("db_type") == "cassandra"
 
     @cached_property
     def _INSTANCE_PARAMS_BUILDER(self):

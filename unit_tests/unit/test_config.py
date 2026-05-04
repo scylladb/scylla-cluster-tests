@@ -791,3 +791,20 @@ def test_vector_store_ami_name_resolved_to_ami_id(monkeypatch):
     assert "vector-store-1-5-0-arm64-2026-03-17t07-07-32z" in resolved_names, (
         "convert_name_to_ami_if_needed was not called for ami_id_vector_store"
     )
+
+
+def test_migrator_source_hosts_param(monkeypatch):
+    """migrator_source_hosts is accepted and returned as a list."""
+    monkeypatch.setenv("SCT_MIGRATOR_SOURCE_HOSTS", '["10.0.0.1", "10.0.0.2"]')
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("migrator_source_hosts") == ["10.0.0.1", "10.0.0.2"]
+
+
+def test_migrator_source_hosts_and_test_id_mutually_exclusive(monkeypatch):
+    """Setting both migrator_source_hosts and migrator_source_test_id raises ValueError."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_MIGRATOR_SOURCE_HOSTS", "10.0.0.1")
+    monkeypatch.setenv("SCT_MIGRATOR_SOURCE_TEST_ID", "aaaa-bbbb-cccc")
+    conf = sct_config.SCTConfiguration()
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        conf.verify_configuration()

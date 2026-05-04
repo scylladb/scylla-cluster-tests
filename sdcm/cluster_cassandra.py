@@ -14,6 +14,7 @@
 import contextlib
 import logging
 import os
+import re
 import tempfile
 import threading
 import time
@@ -38,6 +39,17 @@ CASSANDRA_YAML_PATH = "/etc/cassandra/cassandra.yaml"
 CASSANDRA_SERVICE_NAME = "cassandra"
 CASSANDRA_ENV_SH_PATH = "/etc/cassandra/cassandra-env.sh"
 CASSANDRA_RACKDC_PATH = "/etc/cassandra/cassandra-rackdc.properties"
+
+# options emitted by Cassandra DESCRIBE that Scylla CQL rejects (InvalidRequest)
+# or mis-parses
+_CASSANDRA_ONLY_TABLE_OPTIONS = (
+    "additional_write_policy",
+    "read_repair",
+    "memtable",
+    "extensions",
+    "cdc",
+    "speculative_retry",
+)
 
 
 def compute_jvm_heap_mb(total_ram_mb: int) -> tuple[int, int]:
@@ -140,7 +152,7 @@ class CassandraNodeMixin:
 
     @cached_property
     def cql_address(self):
-        return self.ip_address
+        return self.external_address if self.test_config.IP_SSH_CONNECTIONS == "public" else self.ip_address
 
     def wait_native_transport(self):
         """Cassandra has no Scylla REST API; check CQL port instead."""
@@ -387,6 +399,8 @@ class BaseCassandraCluster:
         Docker backend overrides this to no-op since the image handles it.
         """
         node.wait_ssh_up(verbose=verbose)
+        if self.test_config.REUSE_CLUSTER:
+            return
         self._setup_data_device(node)
         NodeExporterSetup.install(node=node)
         self._install_jdk(node)
@@ -458,12 +472,12 @@ class BaseCassandraCluster:
         # the bundled Cassandra driver (cassandra-driver-internal-only-3.25.0.zip)
         # crashes on Python 3.12 (Ubuntu 24.04), making cqlsh unusable as a check.
         cql_check = node.remoter.run(
-            f"python3 -c \"import socket; socket.create_connection(('{node.ip_address}', 9042), 5).close()\"",
+            f"python3 -c \"import socket; socket.create_connection(('{node.ip_address}', {node.CQL_PORT}), 5).close()\"",
             ignore_status=True,
             verbose=False,
         )
         if not cql_check.ok:
-            self.log.debug("CQL port 9042 not ready on %s: %s", node.name, cql_check.stderr[:200])
+            self.log.debug("CQL port %d not ready on %s: %s", node.CQL_PORT, node.name, cql_check.stderr[:200])
             return False
         self.log.info("Node %s is UN and CQL is ready", node.name)
         return True
@@ -565,6 +579,9 @@ class BaseCassandraCluster:
         """Render and upload cassandra.yaml for the given node."""
         seeds = ",".join(n.ip_address for n in self.nodes if n.is_seed) or node.ip_address
         num_tokens = self.params.get("cassandra_num_tokens") or 16
+        broadcast_rpc_address = (
+            node.external_address if self.params.get("cassandra_broadcast_rpc_public") else node.ip_address
+        )
 
         yaml_updates = {
             "cluster_name": self.name,
@@ -577,7 +594,7 @@ class BaseCassandraCluster:
             ],
             "listen_address": node.ip_address,
             "rpc_address": "0.0.0.0",
-            "broadcast_rpc_address": node.ip_address,
+            "broadcast_rpc_address": broadcast_rpc_address,
             "endpoint_snitch": "GossipingPropertyFileSnitch",
         }
 
@@ -677,6 +694,58 @@ class BaseCassandraCluster:
         if self.test_config.MIXED_CLUSTER:
             return "oracle_db_nodes_public_ip" if public_ip else "oracle_db_nodes_private_ip"
         return "db_nodes_public_ip" if public_ip else "db_nodes_private_ip"
+
+    def dump_schema(self, keyspace: str, include_keyspace_stmt: bool = False) -> str:
+        """Return CQL DDL for all objects in *keyspace* via DESCRIBE KEYSPACE.
+
+        By default the leading ``CREATE KEYSPACE ... ;`` block is stripped so the
+        result can be applied to a target cluster that already has the keyspace.
+        Pass ``include_keyspace_stmt=True`` to return the raw output verbatim.
+
+        Cassandra-only table options listed in ``_CASSANDRA_ONLY_TABLE_OPTIONS`` are stripped
+        automatically so the DDL can be applied to Scylla. Rich schemas with UDTs, materialized views,
+        or secondary indexes may still need extra normalization.
+        """
+        node = self.nodes[0]
+        cmd = f'cqlsh {node.ip_address} -e "DESCRIBE KEYSPACE \\"{keyspace}\\""'
+        result = node.remoter.run(cmd, ignore_status=True)
+        if result.exited != 0:
+            raise RuntimeError(
+                f"cqlsh DESCRIBE KEYSPACE '{keyspace}' failed (exit {result.exited}): {result.stderr.strip()}"
+            )
+        output = result.stdout
+        if not include_keyspace_stmt:
+            match = re.search(r"^CREATE KEYSPACE\b[^;]*;", output, re.MULTILINE | re.IGNORECASE)
+            if match:
+                output = output[match.end() :].lstrip("\n")
+
+        _opts_pat = "|".join(_CASSANDRA_ONLY_TABLE_OPTIONS)
+
+        # strip cassandra-only AND/WITH option lines
+        output = re.sub(rf"^\s+AND\s+(?:{_opts_pat})\s*=[^\n]*$", "", output, flags=re.MULTILINE | re.IGNORECASE)
+        output = re.sub(rf"\bWITH\s+(?:{_opts_pat})\s*=[^\n]*$", "WITH", output, flags=re.MULTILINE | re.IGNORECASE)
+
+        # if stripping left 'WITH' with no value, collapse the following AND onto the same line
+        output = re.sub(r"WITH\s*\n+\s*AND\b", "WITH", output, flags=re.IGNORECASE)
+
+        # Cassandra emits `compression = {'class': 'LZ4Compressor', ...}` but Scylla rejects it
+        # with "Missing sub-option 'sstable_compression'". Scylla expects the `sstable_compression` key name
+        # inside the compression dict.
+        # Also handle Cassandra 4.x `compression = {'enabled': 'false'}` (no 'class' key) which means
+        # "no compression" — Scylla expresses the same as `{'sstable_compression': ''}`.
+        def _fix_compression(m):
+            body = m.group(0)
+            if "'class'" in body:
+                return body.replace("'class'", "'sstable_compression'")
+            if re.search(r"'enabled'\s*:\s*'?false'?", body, flags=re.IGNORECASE):
+                return "compression = {'sstable_compression': ''}"
+            return body
+
+        output = re.sub(r"compression\s*=\s*\{[^}]*\}", _fix_compression, output, flags=re.IGNORECASE)
+
+        output = re.sub(r"\n{3,}", "\n\n", output)
+
+        return output
 
     @property
     def data_nodes(self):
