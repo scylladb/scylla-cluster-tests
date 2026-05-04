@@ -455,7 +455,7 @@ Use a standard Ubuntu 22.04 Azure VM image. Install Cassandra during `node_setup
 | Backend | Image Source | Config Parameter | Install Method |
 |---------|------------|-----------------|----------------|
 | Docker | `cassandra:4.1` or `cassandra:5.0` (Docker Hub) | `docker_image_cassandra_oracle` | Pull and run (no install needed) |
-| AWS | Ubuntu 22.04 base AMI | `ami_id_db_cassandra_oracle` (or reuse loader AMI) | apt install during `node_setup()` |
+| AWS | Ubuntu 22.04 base AMI | `ami_id_db_cassandra` (or reuse loader AMI) | apt install during `node_setup()` |
 | GCE | Ubuntu/Debian base GCE image | `gce_image_db_cassandra_oracle` (or reuse loader image) | apt install during `node_setup()` |
 | Azure | Ubuntu 22.04 Azure VM image | `azure_image_db_cassandra_oracle` (or reuse loader image) | apt install during `node_setup()` |
 
@@ -820,7 +820,7 @@ def _install_jdk(self, node):
 elif db_type == "mixed_cassandra":
     self.test_config.mixed_cluster(True)
     return CassandraAWSCluster(
-        ec2_ami_id=self.params.get("ami_id_db_cassandra_oracle").split()
+        ec2_ami_id=self.params.get("ami_id_db_cassandra").split()
                    or self.params.get("ami_id_loader").split(),
         ec2_ami_username="ubuntu",
         ec2_instance_type=self.params.get("instance_type_db_oracle"),
@@ -835,21 +835,21 @@ elif db_type == "mixed_cassandra":
 **Step 3: New config parameters in `sdcm/sct_config.py`:**
 
 ```python
-ami_id_db_cassandra_oracle: str = SctField(
+ami_id_db_cassandra: str = SctField(
     description="""
         AMI ID for Cassandra oracle cluster nodes on AWS.
         Defaults to empty string, which causes CassandraAWSCluster to fall back
         to the loader AMI (ami_id_loader) — a standard Ubuntu image.
         Specify an explicit AMI only if a custom image with pre-installed
         Cassandra is desired for faster node_setup().
-        Example: ami_id_db_cassandra_oracle: 'ami-0abcd1234ef567890'
+        Example: ami_id_db_cassandra: 'ami-0abcd1234ef567890'
     """,
 )
 ```
 
 Add to `defaults/test_default.yaml`:
 ```yaml
-ami_id_db_cassandra_oracle: ''
+ami_id_db_cassandra: ''
 ```
 
 Note: `instance_type_db_oracle` is reused. Existing defaults (e.g., `i4i.8xlarge`) are NVMe-optimized, which is Scylla-centric. For Cassandra as oracle, a memory-optimized instance like `r6i.2xlarge` (64 GB RAM, 8 vCPU) is more appropriate. Gemini test configs for `mixed_cassandra` should override `instance_type_db_oracle` to a memory-optimized type.
@@ -882,7 +882,7 @@ n_db_nodes: 3
 n_test_oracle_db_nodes: 1
 cassandra_oracle_version: '4.1'
 instance_type_db_oracle: 'r6i.2xlarge'  # memory-optimized; Cassandra is JVM-based
-ami_id_db_cassandra_oracle: ''           # use loader AMI fallback
+ami_id_db_cassandra: ''           # use loader AMI fallback
 ```
 
 **Definition of Done:**
@@ -1274,7 +1274,7 @@ Update SCT documentation: `docs/gemini.md` (if it exists) to document `db_type: 
 - `CassandraDockerCluster._cassandra_env_vars()`: test that all required env vars are present and correctly derived from node IPs and cluster config
 
 **Config parameter validation:**
-- New SCT config params (`docker_image_cassandra_oracle`, `cassandra_oracle_version`, `ami_id_db_cassandra_oracle`, etc.) have correct types and defaults
+- New SCT config params (`docker_image_cassandra_oracle`, `cassandra_oracle_version`, `ami_id_db_cassandra`, etc.) have correct types and defaults
 - `GeminiStressThread` generates a valid `--oracle-cluster` flag when `oracle_cluster` is a `CassandraDockerCluster` instance
 
 ### Integration Tests
