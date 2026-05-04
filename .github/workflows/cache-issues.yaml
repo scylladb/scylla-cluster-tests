@@ -1,4 +1,8 @@
 name: Cache issues status
+# Local testing (requires gh CLI authenticated):
+#   export GH_TOKEN="$(gh auth token)"
+#   Then copy the shell script from the 'run' step below and execute locally.
+#   Use a subset of repos (e.g. scylla-cluster-tests) for faster validation.
 permissions: {}
 on:
   schedule:
@@ -12,14 +16,46 @@ jobs:
     if: github.repository == 'scylladb/scylla-cluster-tests'
     steps:
       - run: |
+          set -euo pipefail
+
+          BATCH_SIZE=5000
+          MAX_RETRIES=3
+          TEMPLATE='{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}}|{{end}},{{.title}}{{println ""}}{{end}}'
+
+          fetch_with_retry() {
+            local cmd="$1"
+            local output_file="$2"
+            local attempt=1
+            while [ $attempt -le $MAX_RETRIES ]; do
+              if eval "$cmd" >> "$output_file"; then
+                return 0
+              fi
+              echo "Attempt $attempt/$MAX_RETRIES failed, retrying in 10s..."
+              sleep 10
+              attempt=$((attempt + 1))
+            done
+            echo "ERROR: Failed after $MAX_RETRIES attempts: $cmd"
+            return 1
+          }
+
           mkdir -p issues
           mkdir -p issues/pull-requests
+
           for repo in scylladb scylla-enterprise scylla-manager scylla-operator scylla-cluster-tests scylla-dtest qa-tasks scylla-tools-java siren scylla-drivers python-driver ; do
-            gh issue list --state all --json number,state,labels,title --limit 30000 --template '{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}}|{{end}},{{.title}}{{println ""}}{{end}}' --repo scylladb/$repo > issues/scylladb_$repo.csv
-            gh pr list --state all --json number,state,labels,title --limit 30000 --template '{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}}|{{end}},{{.title}}{{println ""}}{{end}}' --repo scylladb/$repo > issues/pull-requests/scylladb_$repo.csv
+            echo "Fetching issues for scylladb/$repo..."
+            > issues/scylladb_$repo.csv
+            for state in open closed; do
+              fetch_with_retry "gh issue list --state $state --json number,state,labels,title --limit $BATCH_SIZE --template '$TEMPLATE' --repo scylladb/$repo" "issues/scylladb_$repo.csv"
+            done
+
+            echo "Fetching PRs for scylladb/$repo..."
+            > issues/pull-requests/scylladb_$repo.csv
+            for state in open closed merged; do
+              fetch_with_retry "gh pr list --state $state --json number,state,labels,title --limit $BATCH_SIZE --template '$TEMPLATE' --repo scylladb/$repo" "issues/pull-requests/scylladb_$repo.csv"
+            done
           done
         env:
-          GH_TOKEN: ${{ secrets.ISSUE_ASSIGNMENT_TO_PROJECT_TOKEN }}
+          GH_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
       - name: Upload folder to bucket
         uses: a-sync/s3-uploader@2.0.1
         with:
