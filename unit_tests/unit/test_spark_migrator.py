@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import gzip
+import logging
 from unittest.mock import MagicMock, patch
 
 import boto3
+import pytest
 from moto import mock_aws
 
 from sdcm.spark_migrator import (
@@ -13,9 +16,11 @@ from sdcm.spark_migrator import (
     MigratorConfig,
     SparkMigratorRunner,
     build_spark4_bootstrap_actions,
+    discover_cs_source_hosts,
     get_migrator_download_url,
     upload_migrator_jar_to_s3,
 )
+import spark_migrator_test
 
 
 def test_migrator_config_defaults():
@@ -32,7 +37,7 @@ def test_migrator_config_defaults():
 def test_migrator_config_custom():
     """Test MigratorConfig with custom values."""
     config = MigratorConfig(
-        source_host="10.0.0.1",
+        source_hosts=["10.0.0.1"],
         source_keyspace="ks1",
         source_table="table1",
         target_host="10.0.0.2",
@@ -41,7 +46,7 @@ def test_migrator_config_custom():
         spark_executor_memory="8g",
         spark_executor_cores=4,
     )
-    assert config.source_host == "10.0.0.1"
+    assert config.source_hosts == ["10.0.0.1"]
     assert config.target_host == "10.0.0.2"
     assert config.spark_executor_memory == "8g"
     assert config.spark_executor_cores == 4
@@ -50,7 +55,7 @@ def test_migrator_config_custom():
 def test_generate_migrator_config_basic():
     """Test generated config has correct source/target structure."""
     config = MigratorConfig(
-        source_host="10.0.0.1",
+        source_hosts=["10.0.0.1"],
         source_port=9042,
         source_keyspace="ks_source",
         source_table="tbl_source",
@@ -74,7 +79,7 @@ def test_generate_migrator_config_basic():
 
 def test_generate_migrator_config_defaults():
     """Test generated config has sensible default values."""
-    config = MigratorConfig(source_host="10.0.0.1", target_host="10.0.0.2")
+    config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
     result = SparkMigratorRunner.generate_migrator_config(config)
 
     source, target, savepoints = result["source"], result["target"], result["savepoints"]
@@ -97,7 +102,7 @@ def test_generate_migrator_config_defaults():
 def test_generate_migrator_config_has_strip_trailing_zeros():
     """Test generated config includes stripTrailingZerosForDecimals in source and target."""
     result = SparkMigratorRunner.generate_migrator_config(
-        MigratorConfig(source_host="10.0.0.1", target_host="10.0.0.2")
+        MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
     )
 
     assert result["source"]["stripTrailingZerosForDecimals"] is False
@@ -229,3 +234,345 @@ def test_upload_runner_script():
     assert "--deploy-mode cluster" in body
     assert "s3://bucket/jars/v2.0.0/migrator.jar" in body
     assert "s3://bucket/configs/test-id/config.yaml" in body
+
+
+@mock_aws
+def test_upload_runner_script_cds_to_tmp_so_client_mode_finds_relative_config():
+    """In client deploy mode the driver JVM inherits the wrapper script's CWD;
+    spark.scylla.config is a relative path, so the script must cd into /tmp
+    (where it just downloaded migrator-config.yaml) before invoking spark-submit.
+    Without cd, validator main fails with FileNotFoundException: migrator-config.yaml."""
+    boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="sct-emr-spark-migrator-us-east-1")
+
+    runner = SparkMigratorRunner(MagicMock(region_name="us-east-1"))
+    runner._upload_runner_script(
+        "s3://bucket/jars/v2.0.0/migrator.jar",
+        "s3://bucket/configs/test-id/config.yaml",
+    )
+
+    body = (
+        boto3.client("s3", region_name="us-east-1")
+        .get_object(Bucket="sct-emr-spark-migrator-us-east-1", Key="scripts/run-migrator.sh")["Body"]
+        .read()
+        .decode("utf-8")
+    )
+    cd_pos = body.find("cd /tmp")
+    submit_pos = body.find("spark-submit")
+    assert cd_pos != -1, "wrapper script must cd into /tmp before spark-submit"
+    assert submit_pos != -1
+    assert cd_pos < submit_pos, "cd /tmp must precede spark-submit so driver CWD has the config"
+
+
+@pytest.mark.parametrize("source_type", ["cassandra", "scylla"])
+def test_generate_migrator_config_source_and_target_types(source_type):
+    """Test that source.type reflects the configured source_type; target.type is always 'scylla'."""
+    config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2", source_type=source_type)
+    result = SparkMigratorRunner.generate_migrator_config(config)
+    assert result["source"]["type"] == source_type
+    assert result["target"]["type"] == "scylla"
+
+
+def test_generate_migrator_config_picks_single_source_host():
+    """Test that only the first source host is used; the driver discovers the rest via gossip."""
+    config = MigratorConfig(source_hosts=["10.0.0.1", "10.0.0.2", "10.0.0.3"], target_host="10.0.0.4")
+    assert SparkMigratorRunner.generate_migrator_config(config)["source"]["host"] == "10.0.0.1"
+
+
+def _make_discover_mock(instances):
+    """Mock EC2 client returning the given instance list."""
+    mock_client = MagicMock()
+    mock_client.describe_instances.return_value = {"Reservations": [{"Instances": instances}]}
+    return mock_client
+
+
+def test_discover_cs_source_hosts_returns_public_ips():
+    """Test that discover_cs_source_hosts returns public IPs from the EC2 response."""
+    test_id = "aaaa-bbbb-cccc"
+    instances = [
+        {"PublicIpAddress": "54.1.2.3", "InstanceId": "i-001"},
+        {"PublicIpAddress": "54.4.5.6", "InstanceId": "i-002"},
+    ]
+    mock_client = _make_discover_mock(instances)
+
+    with patch("sdcm.spark_migrator.boto3") as mock_boto3:
+        mock_boto3.client.return_value = mock_client
+        hosts = discover_cs_source_hosts(test_id, "eu-west-1")
+
+    assert hosts == ["54.1.2.3", "54.4.5.6"]
+    mock_client.describe_instances.assert_called_once()
+    filters = {f["Name"]: f["Values"] for f in mock_client.describe_instances.call_args[1]["Filters"]}
+    assert filters["tag:TestId"] == [test_id]
+    assert filters["tag:NodeType"] == ["cs-db"]
+    assert filters["instance-state-name"] == ["running"]
+
+
+def test_discover_cs_source_hosts_falls_back_to_private_ip():
+    """Test that discover_cs_source_hosts prefers public IPs but falls back to private when absent."""
+    instances = [
+        {"PublicIpAddress": "54.1.2.3", "PrivateIpAddress": "10.0.0.1", "InstanceId": "i-001"},
+        {"PrivateIpAddress": "10.0.0.2", "InstanceId": "i-002"},  # private-only
+    ]
+    mock_client = _make_discover_mock(instances)
+
+    with patch("sdcm.spark_migrator.boto3") as mock_boto3:
+        mock_boto3.client.return_value = mock_client
+        hosts = discover_cs_source_hosts("aaaa-bbbb-cccc", "eu-west-1")
+
+    assert hosts == ["54.1.2.3", "10.0.0.2"]
+
+
+def _make_tester():
+    """Instantiate SparkMigratorTest without triggering ClusterTester.__init__."""
+    tester = spark_migrator_test.SparkMigratorTest.__new__(spark_migrator_test.SparkMigratorTest)
+    tester.log = logging.getLogger("test")
+    tester.params = MagicMock()
+    tester.params.get.return_value = None
+    return tester
+
+
+def test_build_cs_to_scylla_migrator_config_source_target_selection():
+    """_build_cs_to_scylla_migrator_config uses cs_db_cluster for source and db_cluster for target."""
+    tester = _make_tester()
+
+    src_node = MagicMock(private_ip_address="10.0.0.1")
+    tester.cs_db_cluster = MagicMock(nodes=[src_node])
+
+    tgt_node = MagicMock(private_ip_address="10.0.0.2")
+    tester.db_cluster = MagicMock(nodes=[tgt_node])
+
+    config = tester._build_cs_to_scylla_migrator_config("ks_src", "tbl_src", "ks_tgt", "tbl_tgt")
+
+    assert config.source_type == "cassandra"
+    assert config.source_hosts == ["10.0.0.1"]
+    assert config.target_host == "10.0.0.2"
+    assert config.source_keyspace == "ks_src"
+    assert config.source_table == "tbl_src"
+    assert config.target_keyspace == "ks_tgt"
+    assert config.target_table == "tbl_tgt"
+    assert config.source_port == 9042
+    assert config.target_port == 9042
+
+
+@pytest.mark.parametrize(
+    "stmt,expected",
+    [
+        (
+            "CREATE TABLE ks.t (id int PRIMARY KEY)",
+            "CREATE TABLE IF NOT EXISTS ks.t (id int PRIMARY KEY)",
+        ),
+        (
+            "CREATE TYPE ks.addr (street text)",
+            "CREATE TYPE IF NOT EXISTS ks.addr (street text)",
+        ),
+        (
+            "CREATE INDEX idx_data ON ks.t (data)",
+            "CREATE INDEX IF NOT EXISTS idx_data ON ks.t (data)",
+        ),
+    ],
+)
+def test_make_create_idempotent_inserts_if_not_exists(stmt, expected):
+    """CREATE TABLE/TYPE/INDEX all get IF NOT EXISTS inserted after the keyword."""
+    assert spark_migrator_test.SparkMigratorTest._make_create_idempotent(stmt) == expected
+
+
+def test_make_create_idempotent_keyspace_unchanged():
+    """CREATE KEYSPACE is not rewritten — keyspace pre-creation is handled separately."""
+    stmt = "CREATE KEYSPACE ks WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}"
+    assert spark_migrator_test.SparkMigratorTest._make_create_idempotent(stmt) == stmt
+
+
+def test_assert_region_coherence_raises_on_mismatch():
+    """Test that error is raised when EMR is in a different region than the rest of the test setup."""
+    tester = _make_tester()
+    tester.emr_cluster = MagicMock(region_name="us-east-1")
+    tester.params = MagicMock(region_names=["eu-west-1"])
+    with pytest.raises(RuntimeError, match="EMR cluster region 'us-east-1' != test region 'eu-west-1'"):
+        tester._assert_region_coherence()
+
+
+@mock_aws
+def test_submit_validator_job_uploads_validator_script_with_validator_main_class():
+    """Test that submit_validator_job uploads a separate wrapper script invoking Validator main class."""
+    s3_client = boto3.client("s3", region_name="us-east-1")
+    s3_client.create_bucket(Bucket="sct-emr-spark-migrator-us-east-1")
+
+    mock_provisioner = MagicMock(region_name="us-east-1")
+    mock_provisioner.add_step.return_value = "s-VALIDATOR123"
+
+    config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
+    config.config_path = "s3://bucket/configs/test-id/config.yaml"
+
+    runner = SparkMigratorRunner(mock_provisioner)
+    step_id = runner.submit_validator_job(
+        cluster_id="j-CLUSTER",
+        jar_s3_path="s3://bucket/jars/v2.0.1/scylla-migrator-assembly.jar",
+        migrator_config=config,
+    )
+
+    assert step_id == "s-VALIDATOR123"
+
+    body = (
+        s3_client.get_object(Bucket="sct-emr-spark-migrator-us-east-1", Key="scripts/run-validator.sh")["Body"]
+        .read()
+        .decode("utf-8")
+    )
+    assert "com.scylladb.migrator.Validator" in body
+    assert "com.scylladb.migrator.Migrator" not in body  # regression guard
+    assert "spark-submit" in body
+    assert "s3://bucket/jars/v2.0.1/scylla-migrator-assembly.jar" in body
+
+
+@mock_aws
+def test_submit_validator_job_uses_distinct_step_name_and_script_runner():
+    """Test that submit_validator_job names the EMR step distinctly + uses script-runner.jar."""
+    boto3.client("s3", region_name="eu-west-1").create_bucket(
+        Bucket="sct-emr-spark-migrator-eu-west-1",
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+
+    mock_provisioner = MagicMock(region_name="eu-west-1")
+    mock_provisioner.add_step.return_value = "s-VAL"
+
+    config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
+    config.config_path = "s3://bucket/configs/test-id/config.yaml"
+
+    SparkMigratorRunner(mock_provisioner).submit_validator_job("j-CLUSTER", "s3://bucket/jars/x/migrator.jar", config)
+
+    add_step_kwargs = mock_provisioner.add_step.call_args[1]
+    assert add_step_kwargs["step_name"] == "spark-migrator-validator"
+    assert "script-runner.jar" in add_step_kwargs["jar"]
+    assert "eu-west-1.elasticmapreduce" in add_step_kwargs["jar"]
+    assert add_step_kwargs["args"][0].endswith("/scripts/run-validator.sh")
+
+
+@mock_aws
+def test_submit_migration_job_still_uses_cluster_deploy_mode():
+    """Migration job remains in cluster deploy mode (default); deploy_mode refactor must not regress it."""
+    s3_client = boto3.client("s3", region_name="us-east-1")
+    s3_client.create_bucket(Bucket="sct-emr-spark-migrator-us-east-1")
+
+    mock_provisioner = MagicMock(region_name="us-east-1", **{"add_step.return_value": "s-MIG"})
+
+    config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
+    config.config_path = "s3://bucket/configs/test-id/config.yaml"
+
+    SparkMigratorRunner(mock_provisioner).submit_migration_job("j-CLUSTER", "s3://bucket/jars/x/migrator.jar", config)
+
+    body = (
+        s3_client.get_object(Bucket="sct-emr-spark-migrator-us-east-1", Key="scripts/run-migrator.sh")["Body"]
+        .read()
+        .decode("utf-8")
+    )
+    assert "--deploy-mode cluster" in body
+
+
+@mock_aws
+def test_get_step_stdout_concatenates_stdout_and_stderr():
+    """stdout.gz + stderr.gz are downloaded, gunzipped, decoded, and concatenated."""
+    s3_client = boto3.client("s3", region_name="us-east-1")
+    s3_client.create_bucket(Bucket="emr-logs")
+
+    key_prefix = "logs/j-CLUSTER/steps/s-STEP"
+    s3_client.put_object(Bucket="emr-logs", Key=f"{key_prefix}/stdout.gz", Body=gzip.compress(b"out-line\n"))
+    s3_client.put_object(Bucket="emr-logs", Key=f"{key_prefix}/stderr.gz", Body=gzip.compress(b"err-line\n"))
+
+    mock_provisioner = MagicMock()
+    mock_provisioner.region_name = "us-east-1"
+    mock_provisioner.emr_client.describe_cluster.return_value = {"Cluster": {"LogUri": "s3://emr-logs/logs/"}}
+
+    text = SparkMigratorRunner(mock_provisioner).get_step_stdout("j-CLUSTER", "s-STEP")
+
+    assert "out-line" in text
+    assert "err-line" in text
+
+
+@mock_aws
+def test_get_step_stdout_accepts_s3n_log_uri_scheme():
+    """EMR rewrites s3:// LogUri to s3n:// (legacy Hadoop S3 protocol); accept both."""
+    cluster_id, step_id = "j-CLUSTER", "s-STEP"
+
+    s3_client = boto3.client("s3", region_name="us-east-1")
+    s3_client.create_bucket(Bucket="emr-logs")
+    s3_client.put_object(
+        Bucket="emr-logs",
+        Key=f"emr-logs/{cluster_id}/steps/{step_id}/stderr.gz",
+        Body=gzip.compress(b"validator-line\n"),
+    )
+
+    mock_provisioner = MagicMock(region_name="us-east-1")
+    mock_provisioner.emr_client.describe_cluster.return_value = {"Cluster": {"LogUri": "s3n://emr-logs/emr-logs/"}}
+
+    assert "validator-line" in SparkMigratorRunner(mock_provisioner).get_step_stdout(cluster_id, step_id)
+
+
+@mock_aws
+def test_get_step_stdout_skips_missing_log_files():
+    """NoSuchKey on either stdout.gz or stderr.gz is silently skipped."""
+    s3_client = boto3.client("s3", region_name="us-east-1")
+    s3_client.create_bucket(Bucket="emr-logs")
+    s3_client.put_object(
+        Bucket="emr-logs",
+        Key="logs/j-CLUSTER/steps/s-STEP/stderr.gz",  # only stderr present
+        Body=gzip.compress(b"err-only\n"),
+    )
+
+    mock_provisioner = MagicMock()
+    mock_provisioner.region_name = "us-east-1"
+    mock_provisioner.emr_client.describe_cluster.return_value = {"Cluster": {"LogUri": "s3://emr-logs/logs/"}}
+
+    assert "err-only" in SparkMigratorRunner(mock_provisioner).get_step_stdout("j-CLUSTER", "s-STEP")
+
+
+def test_run_validator_passes_on_completed_step():
+    """COMPLETED EMR step → _run_validator returns silently, no log fetch."""
+    tester = _make_tester()
+    tester.emr_cluster = MagicMock(cluster_id="j-CLUSTER")
+
+    runner = MagicMock()
+    runner.submit_validator_job.return_value = "s-VAL"
+
+    config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
+    config.config_path = "s3://bucket/cfg.yaml"
+
+    tester._run_validator(runner, "s3://bucket/jar", config)
+
+    runner.submit_validator_job.assert_called_once_with(
+        cluster_id="j-CLUSTER", jar_s3_path="s3://bucket/jar", migrator_config=config
+    )
+    runner.wait_for_migration.assert_called_once_with("j-CLUSTER", "s-VAL", timeout_minutes=60)
+    runner.get_step_stdout.assert_not_called()
+
+
+def test_run_validator_raises_when_step_failed():
+    """FAILED EMR step (validator System.exit(1)) → fetch stdout, dump, raise."""
+    tester = _make_tester()
+    tester.emr_cluster = MagicMock(cluster_id="j-CLUSTER")
+
+    runner = MagicMock()
+    runner.submit_validator_job.return_value = "s-VAL"
+    runner.wait_for_migration.side_effect = AssertionError("EMR step s-VAL failed with state: FAILED. Reason: unknown")
+    runner.get_step_stdout.return_value = (
+        "ERROR Migrator: Found the following comparison failures:\nRowComparisonFailure: Row(id=42) value differs\n"
+    )
+
+    config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
+
+    with pytest.raises(AssertionError, match="validator step FAILED"):
+        tester._run_validator(runner, "s3://bucket/jar", config)
+    runner.get_step_stdout.assert_called_once_with("j-CLUSTER", "s-VAL")
+
+
+def test_run_validator_raises_when_step_failed_and_log_fetch_raises():
+    """Log-fetch failure on a FAILED step still raises with the FAILED message."""
+    tester = _make_tester()
+    tester.emr_cluster = MagicMock(cluster_id="j-CLUSTER")
+
+    runner = MagicMock()
+    runner.submit_validator_job.return_value = "s-VAL"
+    runner.wait_for_migration.side_effect = AssertionError("EMR step s-VAL failed")
+    runner.get_step_stdout.side_effect = RuntimeError("S3 access denied")
+
+    with pytest.raises(AssertionError, match="validator step FAILED"):
+        tester._run_validator(
+            runner, "s3://bucket/jar", MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
+        )

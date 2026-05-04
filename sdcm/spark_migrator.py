@@ -13,6 +13,7 @@
 
 """Spark migrator job submission and monitoring for EMR clusters."""
 
+import gzip
 import logging
 import os
 import tempfile
@@ -41,6 +42,9 @@ _BOOTSTRAP_SCRIPT_S3_KEY = "scripts/bootstrap-spark4.sh"
 _SPARK4_PACKAGE = f"spark-{SPARK4_VERSION}-bin-hadoop3"
 _SPARK4_URL = f"https://downloads.apache.org/spark/spark-{SPARK4_VERSION}/{_SPARK4_PACKAGE}.tgz"
 _RUNNER_SCRIPT_S3_KEY = "scripts/run-migrator.sh"
+_VALIDATOR_SCRIPT_S3_KEY = "scripts/run-validator.sh"
+_MIGRATOR_MAIN_CLASS = "com.scylladb.migrator.Migrator"
+_VALIDATOR_MAIN_CLASS = "com.scylladb.migrator.Validator"
 
 _BOOTSTRAP_SCRIPT_CONTENT = f"""#!/bin/bash
 set -ex
@@ -149,12 +153,46 @@ def upload_migrator_jar_to_s3(release_tag, s3_bucket, region_name, s3_prefix="ja
     return s3_uri
 
 
+def discover_cs_source_hosts(test_id: str, region_name: str) -> list[str]:
+    """Return reachable IPs of running Cassandra source nodes tagged with test_id.
+
+    Public IP is preferred (works cross-VPC). Falls back to private IP when no
+    public IP is assigned (same-VPC / VPC-peered topology).
+
+    Args:
+        test_id: SCT cluster test_id for which cs-db EC2 instances should be discovered.
+        region_name: AWS region to search in.
+
+    Returns:
+        List of IP addresses (public preferred, private fallback) for running cs-db instances.
+    """
+    ec2 = boto3.client("ec2", region_name=region_name)
+    response = ec2.describe_instances(
+        Filters=[
+            {"Name": "tag:TestId", "Values": [test_id]},
+            {"Name": "tag:NodeType", "Values": ["cs-db"]},
+            {"Name": "instance-state-name", "Values": ["running"]},
+        ]
+    )
+    hosts = [
+        ip
+        for reservation in response["Reservations"]
+        for inst in reservation["Instances"]
+        if (ip := inst.get("PublicIpAddress") or inst.get("PrivateIpAddress"))
+    ]
+    if not hosts:
+        raise RuntimeError(f"no running cs-db instances found for test_id={test_id} in {region_name}")
+    LOGGER.info("Discovered %d cs-db host(s) for test_id=%s in %s: %s", len(hosts), test_id, region_name, hosts)
+    return hosts
+
+
 @dataclass
 class MigratorConfig:
     """Configuration for a spark-migrator job.
 
     Args:
-        source_host: Source database host (Scylla/Cassandra endpoint).
+        source_type: Source database type for scylla-migrator ('cassandra' or 'scylla').
+        source_hosts: Source database hosts (one or more contact points).
         source_port: Source database CQL port.
         source_keyspace: Source keyspace name.
         source_table: Source table name.
@@ -169,7 +207,8 @@ class MigratorConfig:
         extra_spark_args: Additional spark-submit arguments.
     """
 
-    source_host: str = ""
+    source_type: str = "cassandra"
+    source_hosts: list[str] = field(default_factory=list)
     source_port: int = 9042
     source_keyspace: str = ""
     source_table: str = ""
@@ -199,8 +238,27 @@ class SparkMigratorRunner:
     def s3_bucket(self):
         return f"sct-emr-spark-migrator-{self.emr_provisioner.region_name}"
 
-    def _upload_runner_script(self, jar_s3_path, config_s3_path):
-        """Generate and upload a wrapper script that invokes standalone Spark 4.x."""
+    def _upload_runner_script(
+        self,
+        jar_s3_path,
+        config_s3_path,
+        main_class=_MIGRATOR_MAIN_CLASS,
+        script_key=_RUNNER_SCRIPT_S3_KEY,
+        deploy_mode="cluster",
+    ):
+        """Generate and upload a wrapper script that invokes standalone Spark 4.x.
+
+        Args:
+            jar_s3_path: S3 path to the spark-migrator JAR.
+            config_s3_path: S3 path to the migrator config YAML.
+            main_class: Spark application main class (Migrator or Validator).
+            script_key: S3 key for the uploaded wrapper script (distinct keys
+                avoid migrator/validator scripts overwriting each other).
+            deploy_mode: Spark deploy mode — "cluster" (default, driver on a
+                YARN executor) or "client" (driver on the master). Validator
+                uses "client" so its log4j output lands in the EMR step's
+                stderr.gz on S3 instead of YARN aggregated container logs.
+        """
         script_content = f"""#!/bin/bash
 set -ex
 
@@ -214,11 +272,12 @@ export SPARK_HOME={SPARK4_INSTALL_DIR}
 export HADOOP_CONF_DIR=/etc/hadoop/conf
 export YARN_CONF_DIR=/etc/hadoop/conf
 
-# run on YARN in cluster mode so the driver runs on a cluster node
+cd /tmp
+
 {SPARK4_INSTALL_DIR}/bin/spark-submit \\
-  --deploy-mode cluster \\
+  --deploy-mode {deploy_mode} \\
   --master yarn \\
-  --class com.scylladb.migrator.Migrator \\
+  --class {main_class} \\
   --conf "spark.scylla.config=migrator-config.yaml" \\
   --files /tmp/migrator-config.yaml \\
   /tmp/scylla-migrator-assembly.jar
@@ -228,10 +287,10 @@ export YARN_CONF_DIR=/etc/hadoop/conf
         _ensure_s3_bucket(s3_client, self.s3_bucket, region_name)
         s3_client.put_object(
             Bucket=self.s3_bucket,
-            Key=_RUNNER_SCRIPT_S3_KEY,
+            Key=script_key,
             Body=script_content.encode("utf-8"),
         )
-        s3_uri = f"s3://{self.s3_bucket}/{_RUNNER_SCRIPT_S3_KEY}"
+        s3_uri = f"s3://{self.s3_bucket}/{script_key}"
         LOGGER.info("Runner script uploaded to %s", s3_uri)
         return s3_uri
 
@@ -265,32 +324,110 @@ export YARN_CONF_DIR=/etc/hadoop/conf
         LOGGER.info("Spark migrator job submitted as step %s on cluster %s", step_id, cluster_id)
         return step_id
 
-    def wait_for_migration(self, cluster_id, step_id):
-        """Wait for a migration job to complete.
+    # TODO: Spark 4.x workaround
+    def submit_validator_job(self, cluster_id, jar_s3_path, migrator_config):
+        """Submit a scylla-migrator validator job as an EMR step.
+
+        Reuses the script-runner.jar wrapper pattern from submit_migration_job but invokes
+        com.scylladb.migrator.Validator instead. Validator reads the same migrator config
+        YAML - no separate config upload needed.
+
+        Args:
+            cluster_id: EMR cluster ID.
+            jar_s3_path: S3 path to the spark-migrator JAR (same as migration).
+            migrator_config: MigratorConfig with config_path set to S3 URI.
+
+        Returns:
+            str: Step ID of the submitted validator job.
+        """
+        runner_script_uri = self._upload_runner_script(
+            jar_s3_path,
+            migrator_config.config_path,
+            main_class=_VALIDATOR_MAIN_CLASS,
+            script_key=_VALIDATOR_SCRIPT_S3_KEY,
+            deploy_mode="client",
+        )
+        script_runner_jar = (
+            f"s3://{self.emr_provisioner.region_name}.elasticmapreduce/libs/script-runner/script-runner.jar"
+        )
+        step_id = self.emr_provisioner.add_step(
+            cluster_id=cluster_id,
+            step_name="spark-migrator-validator",
+            jar=script_runner_jar,
+            args=[runner_script_uri],
+        )
+        LOGGER.info("Spark migrator validator job submitted as step %s on cluster %s", step_id, cluster_id)
+        return step_id
+
+    def get_step_stdout(self, cluster_id, step_id):
+        """Fetch step stdout + stderr from the EMR cluster's S3 log directory.
+
+        EMR uploads each step's stdout.gz and stderr.gz under ``<LogUri>/<cluster_id>/steps/<step_id>/``
+        after the step completes. Both streams are downloaded, gunzipped, decoded and concatenated
+        so the validator parser can scan them as a single text blob (the validator emits its diff
+        summary to stderr via log4j; stdout is generally empty).
+
+        Args:
+            cluster_id: EMR cluster ID.
+            step_id: Step ID whose logs to fetch.
+
+        Returns:
+            str: Concatenated decoded text from stdout.gz + stderr.gz. Missing
+            log files are skipped silently (returns "" if neither exists).
+        """
+        cluster_info = self.emr_provisioner.emr_client.describe_cluster(ClusterId=cluster_id)
+        log_uri = cluster_info["Cluster"].get("LogUri", "").rstrip("/")
+        # EMR normalises s3:// to s3n:// (legacy Hadoop S3 protocol); accept both
+        # (plus s3a:// for completeness) so the prefix split works regardless of variant
+        scheme_prefix = next((p for p in ("s3://", "s3n://", "s3a://") if log_uri.startswith(p)), None)
+        if not scheme_prefix:
+            raise RuntimeError(f"cluster {cluster_id} has no S3 LogUri configured — cannot fetch step logs")
+
+        bucket, _, prefix = log_uri[len(scheme_prefix) :].partition("/")
+        key_prefix = f"{prefix.rstrip('/')}/{cluster_id}/steps/{step_id}"
+        s3_client = boto3.client("s3", region_name=self.emr_provisioner.region_name)
+
+        text_parts = []
+        for log_name in ("stdout.gz", "stderr.gz"):
+            try:
+                obj = s3_client.get_object(Bucket=bucket, Key=f"{key_prefix}/{log_name}")
+                text_parts.append(gzip.decompress(obj["Body"].read()).decode("utf-8", errors="replace"))
+            except ClientError as exc:
+                if exc.response["Error"]["Code"] in ("NoSuchKey", "404"):
+                    continue
+                raise
+        return "\n".join(text_parts)
+
+    def wait_for_migration(self, cluster_id, step_id, timeout_minutes=360):
+        """Wait for a migration/validator job to complete.
 
         Args:
             cluster_id: EMR cluster ID.
             step_id: Step ID of the migration job.
+            timeout_minutes: Max wall-clock minutes. Default 360 (6h) covers
+                multi-100GB Cassandra→Scylla migrations. Validator callers
+                should pass a smaller value (~60).
 
         Returns:
             dict: Step status after completion.
         """
-        return self.emr_provisioner.wait_for_step_completion(cluster_id, step_id)
+        return self.emr_provisioner.wait_for_step_completion(cluster_id, step_id, timeout_minutes=timeout_minutes)
 
-    def run_migration(self, cluster_id, jar_s3_path, migrator_config):
+    def run_migration(self, cluster_id, jar_s3_path, migrator_config, timeout_minutes=360):
         """Submit and wait for a migration job to complete.
 
         Args:
             cluster_id: EMR cluster ID.
             jar_s3_path: S3 path to the spark-migrator JAR.
             migrator_config: MigratorConfig with config_path set to S3 URI.
+            timeout_minutes: Max wall-clock minutes for the migration step.
 
         Returns:
             dict: Migration result with step_id, status, and duration.
         """
         start_time = time.time()
         step_id = self.submit_migration_job(cluster_id, jar_s3_path, migrator_config)
-        status = self.wait_for_migration(cluster_id, step_id)
+        status = self.wait_for_migration(cluster_id, step_id, timeout_minutes=timeout_minutes)
         duration = time.time() - start_time
 
         LOGGER.info("Migration completed in %.1f seconds", duration)
@@ -324,8 +461,8 @@ export YARN_CONF_DIR=/etc/hadoop/conf
         """
         return {
             "source": {
-                "type": "cassandra",
-                "host": migrator_config.source_host,
+                "type": migrator_config.source_type,
+                "host": migrator_config.source_hosts[0],
                 "port": migrator_config.source_port,
                 "keyspace": migrator_config.source_keyspace,
                 "table": migrator_config.source_table,
@@ -349,6 +486,17 @@ export YARN_CONF_DIR=/etc/hadoop/conf
             "savepoints": {
                 "path": "/tmp/savepoints",
                 "intervalSeconds": 300,
+            },
+            # required by com.scylladb.migrator.Validator (main class fails fast with
+            # "Missing required property 'validation' in the configuration file" when
+            # absent).
+            "validation": {
+                "compareTimestamps": False,
+                "ttlToleranceMillis": 0,
+                "writetimeToleranceMillis": 0,
+                "failuresToFetch": 100,
+                "floatingPointTolerance": 0.0,
+                "timestampMsTolerance": 0,
             },
         }
 
