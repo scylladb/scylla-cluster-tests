@@ -15,6 +15,7 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_GCE_PROJECT = "${params.gce_project}"
+            SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
             // Cloud Provider Configuration
