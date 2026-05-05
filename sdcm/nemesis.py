@@ -2898,7 +2898,7 @@ class Nemesis:
         algo = random.choice(algos)
         prop_val = {"sstable_compression": algo}
         if algo:
-            prop_val["chunk_length_kb"] = random.choice(["4K", "64KB", "128KB"])
+            prop_val["chunk_length_kb"] = random.choice(["4K", "16KB", "64KB"])
             prop_val["crc_check_chance"] = random.random()
         self._modify_table_property(name="compression", val=str(prop_val))
 
