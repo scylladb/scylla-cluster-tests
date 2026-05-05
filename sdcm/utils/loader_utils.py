@@ -306,7 +306,12 @@ class LoaderUtilsMixin:
             prepare_verify_cmd = self.params.get("prepare_verify_cmd")
             if prepare_verify_cmd:
                 self._run_all_stress_cmds(
-                    verify_queue, params={"stress_cmd": prepare_verify_cmd, "keyspace_num": keyspace_num}
+                    verify_queue,
+                    params={
+                        "stress_cmd": prepare_verify_cmd,
+                        "keyspace_num": keyspace_num,
+                        "duration": self.params.get("prepare_stress_duration"),
+                    },
                 )
 
                 for stress in verify_queue:
