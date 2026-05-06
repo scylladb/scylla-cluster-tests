@@ -40,10 +40,10 @@ class SCTCapacityReservation:
     def _get_cr_request_based_on_sct_config(params) -> Tuple[dict[str, int], int]:
         instance_counts = defaultdict(int)
         nemesis_node_count = params.get("nemesis_add_node_cnt") or 0
-        cluster_max_size = params.get("cluster_target_size") or params.get("n_db_nodes")
+        cluster_max_size = sum(params.get("cluster_target_size") or params.get("n_db_nodes"))
 
         if params.get("use_zero_nodes"):
-            zero_token_nodes = params.get("n_db_zero_token_nodes")
+            zero_token_nodes = sum(params.get("n_db_zero_token_nodes"))
             if zero_token_instance_type := params.get("zero_token_instance_type_db"):
                 instance_counts[zero_token_instance_type] += zero_token_nodes
             else:
@@ -60,7 +60,6 @@ class SCTCapacityReservation:
             return int(value or 0)
 
         instance_counts[params.get("instance_type_db")] += cluster_max_size
-
         if instance_type_db_target := params.get("instance_type_db_target"):
             instance_counts[instance_type_db_target] += _to_int_sum(params.get("n_db_nodes"))
         if (instance_type_db_oracle := params.get("instance_type_db_oracle")) and params.get("db_type") in (
@@ -68,7 +67,7 @@ class SCTCapacityReservation:
             "mixed_cassandra",
         ):
             instance_counts[instance_type_db_oracle] += _to_int_sum(params.get("n_test_oracle_db_nodes"))
-        instance_counts[params.get("instance_type_loader")] += params.get("n_loaders")
+        instance_counts[params.get("instance_type_loader")] += sum(params.get("n_loaders"))
         # don't reserve capacity for monitor - as usually it's not a problem to spin it
         duration = params.get("test_duration")
         instance_counts = {k: v for k, v in instance_counts.items() if v > 0}  # remove 0 values
@@ -119,7 +118,8 @@ class SCTCapacityReservation:
     @staticmethod
     def is_capacity_reservation_enabled(params: dict) -> bool:
         """Returns True if capacity reservation is enabled."""
-        is_single_dc = str(params.get("n_db_nodes")).isdigit() or params.get("simulated_regions") > 0
+        n_db_nodes = params.get("n_db_nodes")
+        is_single_dc = (n_db_nodes is not None and len(n_db_nodes) == 1) or params.get("simulated_regions") > 0
         return (
             params.get("cluster_backend") == "aws"
             and params.get("test_id")

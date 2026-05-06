@@ -548,8 +548,8 @@ class LocalKindCluster(LocalMinimalClusterBase):
         """
         for node_pool_type, node_num in (
             (self.AUXILIARY_POOL_NAME, self.params.get("k8s_n_auxiliary_nodes") or 2),
-            (self.SCYLLA_POOL_NAME, self.params.get("n_db_nodes")),
-            (self.LOADER_POOL_NAME, self.params.get("n_loaders")),
+            (self.SCYLLA_POOL_NAME, sum(self.params.get("n_db_nodes"))),
+            (self.LOADER_POOL_NAME, sum(self.params.get("n_loaders"))),
             (self.MONITORING_POOL_NAME, self.params.get("k8s_n_monitor_nodes")),
         ):
             for _ in range(node_num):

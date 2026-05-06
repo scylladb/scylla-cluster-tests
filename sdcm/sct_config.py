@@ -189,12 +189,11 @@ StringOrList = Annotated[
 ]
 
 
-def int_or_space_separated_ints(value: str | int | list[int]) -> int | list[int]:
+def int_or_space_separated_ints(value: str | int | list[int]) -> list[int] | None:
     if value is None:
         return None
     try:
-        value = int(value)
-        return value
+        return [int(value)]
     except Exception:  # noqa: BLE001
         pass
 
@@ -215,8 +214,9 @@ def int_or_space_separated_ints(value: str | int | list[int]) -> int | list[int]
     raise ValueError(f"{value} isn't int or list")
 
 
+#: Config type that always returns list[int]. Accepts int, list[int], or space-separated string of ints.
 IntOrList = Annotated[
-    int | list[int],
+    list[int],
     BeforeValidator(int_or_space_separated_ints),
     InputType("int | list[int] | space-separated ints"),
 ]
@@ -3253,20 +3253,6 @@ class SCTConfiguration(BaseModel):
         use_zero_nodes = self.get("use_zero_nodes")
         zero_nodes_num = self.get("n_db_zero_token_nodes")
         data_nodes_num = self.get("n_db_nodes")
-        zero_nodes_num = (
-            zero_nodes_num
-            if isinstance(zero_nodes_num, list)
-            else [zero_nodes_num]
-            if isinstance(zero_nodes_num, int)
-            else [int(i) for i in str(zero_nodes_num).split()]
-        )
-        data_nodes_num = (
-            data_nodes_num
-            if isinstance(data_nodes_num, list)
-            else [data_nodes_num]
-            if isinstance(data_nodes_num, int)
-            else [int(i) for i in str(data_nodes_num).split()]
-        )
         total_nodes = data_nodes_num[:]
         if use_zero_nodes and zero_nodes_num:
             total_nodes = [n1 + n2 for n1, n2 in zip(data_nodes_num, zero_nodes_num)]
@@ -3954,9 +3940,7 @@ class SCTConfiguration(BaseModel):
         if self.get("nemesis_filter_seeds") is False or self.get("nemesis_class_name") == ["NoOpMonkey"]:
             return
         seeds_num = self.get("seeds_num")
-        num_of_db_nodes = sum(
-            self.get("n_db_nodes") if isinstance(self.get("n_db_nodes"), list) else [self.get("n_db_nodes")]
-        ) + int(self.get("add_node_cnt"))
+        num_of_db_nodes = sum(self.get("n_db_nodes")) + self.get("add_node_cnt")
         assert num_of_db_nodes > seeds_num, (
             "Nemesis cannot run when 'nemesis_filter_seeds' is true and seeds number is equal to nodes number"
         )
@@ -3980,19 +3964,13 @@ class SCTConfiguration(BaseModel):
 
         seeds = self.get("nemesis_seed")
         if seeds is not None:
-            if isinstance(seeds, int):
-                seeds_list = [seeds]
-            elif isinstance(seeds, str):
-                seeds_list = seeds.split()
-            else:
-                seeds_list = seeds
-            if len(seeds_list) > 1 and len(seeds_list) != num_threads:
+            if len(seeds) > 1 and len(seeds) != num_threads:
                 raise ValueError(
-                    f"'nemesis_seed' has {len(seeds_list)} entries but 'nemesis_class_name' has "
+                    f"'nemesis_seed' has {len(seeds)} entries but 'nemesis_class_name' has "
                     f"{num_threads}. Either use a single seed (broadcast to all threads) or provide "
                     f"exactly one seed per class name.\n"
                     f"  nemesis_class_name: {class_names}\n"
-                    f"  nemesis_seed:       {seeds_list}"
+                    f"  nemesis_seed:       {seeds}"
                 )
 
     def _validate_number_of_db_nodes_divides_by_az_number(self):
@@ -4592,7 +4570,7 @@ class SCTConfiguration(BaseModel):
 
                 **default:** {default_text}
 
-                **type:** {cls.get_annotations_as_strings(field.annotation, field_metadata=field_metadata)}{appendable}
+                **type:** {type_str}{appendable}
                 """).strip()
             if backend_overrides:
                 ret += f"\n\n**backend overrides:**\n{backend_overrides}"

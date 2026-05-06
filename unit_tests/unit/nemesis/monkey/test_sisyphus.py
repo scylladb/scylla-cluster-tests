@@ -185,7 +185,7 @@ def test_direct_instantiation_selector_precedence(
         pytest.param(["SisyphusMonkey", "SisyphusMonkey"], None, [None, None], id="no_seeds"),
         pytest.param(
             ["SisyphusMonkey", "SisyphusMonkey", "SisyphusMonkey"],
-            17,
+            [17],
             [17, 17, 17],
             id="single_seed_broadcast",
         ),

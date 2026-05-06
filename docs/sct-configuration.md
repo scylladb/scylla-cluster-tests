@@ -61,51 +61,48 @@ SCT uses specialized types that provide automatic conversion and validation:
 ### Core Types
 
 #### StringOrList
-Accepts either a string or list of strings, with automatic conversion:
+Always returns a `list[str]`. Accepts a string, list of strings, or evaluable expression — all normalized to a list:
 
 ```yaml
-# Single string
+# Single string → ["cassandra-stress write n=1000000"]
 stress_cmd: "cassandra-stress write n=1000000"
 
-# List of strings
+# List of strings → ["cassandra-stress write n=1000000", "cassandra-stress read n=1000000"]
 stress_cmd:
   - "cassandra-stress write n=1000000"
   - "cassandra-stress read n=1000000"
-
-# Evaluable expression (starting with !)
-stress_cmd: "!get_stress_cmd()"
 ```
 
 **Use cases**: Commands, file paths, package lists
 
 #### IntOrList
-Accepts integer or list of integers, with space-separated string parsing:
+Always returns a `list[int]`. Accepts integer, list of integers, or space-separated string — all normalized to a list:
 
 ```yaml
-# Single integer
+# Single integer → [3]
 n_db_nodes: 3
 
-# Space-separated string (for multi-DC)
-n_db_nodes: "3 3"  # → [3, 3]
+# Space-separated string (for multi-DC) → [3, 3]
+n_db_nodes: "3 3"
 
-# List of integers
+# List of integers → [3, 3, 0]
 n_db_nodes: [3, 3, 0]
 ```
 
 **Use cases**: Node counts, timeouts, thresholds
 
 #### BooleanOrList
-Accepts boolean or list of booleans, with string conversion:
+Always returns a `list[bool]`. Accepts boolean, list of booleans, or space-separated string — all normalized to a list:
 
 ```yaml
-# Single boolean
+# Single boolean → [true]
 nemesis_during_prepare: true
 
-# Space-separated string
-nemesis_during_prepare: "true false"  # → [true, false]
+# Space-separated string → [true, false]
+nemesis_during_prepare: "true false"
 
-# String values (yes/no/1/0)
-nemesis_during_prepare: "yes"  # → true
+# String values (yes/no/1/0) → [true]
+nemesis_during_prepare: "yes"
 ```
 
 **Use cases**: Feature flags, per-tenant boolean settings
@@ -194,9 +191,9 @@ Select the type based on your needs:
 | `str` | Single string value |
 | `int` | Single integer value |
 | `bool` | Single boolean value |
-| `StringOrList` | String or list of strings |
-| `IntOrList` | Integer or list of integers |
-| `BooleanOrList` | Boolean or list of booleans |
+| `StringOrList` | Multi-value strings (always `list[str]`) |
+| `IntOrList` | Multi-value integers (always `list[int]`) |
+| `BooleanOrList` | Multi-value booleans (always `list[bool]`) |
 | `Literal["choice1", "choice2", ...]` | Fixed set of allowed string values (choices/enum) |
 | `dict` | Dictionary/mapping |
 | `DictOrStrOrPydantic` | Dict, string, or Pydantic BaseModel for nested configs |

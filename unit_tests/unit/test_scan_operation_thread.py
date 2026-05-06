@@ -44,7 +44,7 @@ class DBCluster(DummyDbCluster):
     def __init__(self, connection_mock, nodes, params):
         super().__init__(nodes, params=params)
         self.connection_mock = connection_mock
-        self.params = {"nemesis_seed": 1}
+        self.params = {"nemesis_seed": [1]}
 
     def get_non_system_ks_cf_list(*args, **kwargs):
         return ["test", "a.b"]

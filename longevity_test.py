@@ -168,11 +168,6 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             def is_target_reached(current: list[int], target: list[int]) -> bool:
                 return all([x >= y for x, y in zip(current, target)])
 
-            cluster_target_size = (
-                list(map(int, cluster_target_size.split()))
-                if isinstance(cluster_target_size, str)
-                else [cluster_target_size]
-            )
             add_node_cnt = self.params.get("add_node_cnt")
             nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
             current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]

@@ -941,7 +941,7 @@ class ClusterTester(unittest.TestCase):
         :return:
         """
         n_db_nodes = self.params.get("n_db_nodes")
-        min_nodes_dc = min(n_db_nodes if isinstance(n_db_nodes, list) else [n_db_nodes])
+        min_nodes_dc = min(n_db_nodes)
 
         # In case tablets are enabled, it's better to set RF smaller than dc-nodes-number, so decommission is allowed.
         rf_candidate = (
@@ -1554,12 +1554,6 @@ class ClusterTester(unittest.TestCase):
         nemesis_selectors = self.params.get("nemesis_selector")
         nemesis_seeds = self.params.get("nemesis_seed")
 
-        # Normalize seeds to a list of ints (or None).
-        if isinstance(nemesis_seeds, int):
-            nemesis_seeds = [nemesis_seeds]
-        elif isinstance(nemesis_seeds, str):
-            nemesis_seeds = [int(seed) for seed in nemesis_seeds.split()]
-
         # Build the flat list of class names.  The old 'Class:N' count syntax and
         # space-separated strings are no longer supported — use an explicit YAML list.
         nemesis_class_names = []
@@ -1636,13 +1630,7 @@ class ClusterTester(unittest.TestCase):
                 )
             )
         if db_info["n_nodes"] is None:
-            n_db_nodes = self.params.get("n_db_nodes")
-            if isinstance(n_db_nodes, int):  # legacy type
-                db_info["n_nodes"] = [n_db_nodes]
-            elif isinstance(n_db_nodes, list):  # latest type to support multiple datacenters
-                db_info["n_nodes"] = n_db_nodes
-            else:
-                self.fail(f"Unsupported parameter type: {type(n_db_nodes)}")
+            db_info["n_nodes"] = self.params.get("n_db_nodes")
         cpu = self.params.get("gce_instance_type_cpu_db")
         # unit is GB
         mem = self.params.get("gce_instance_type_mem_db")
@@ -1651,13 +1639,7 @@ class ClusterTester(unittest.TestCase):
         if db_info["type"] is None:
             db_info["type"] = self.params.get("gce_instance_type_db")
         if loader_info["n_nodes"] is None:
-            n_loader_nodes = self.params.get("n_loaders")
-            if isinstance(n_loader_nodes, int):  # legacy type
-                loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):
-                loader_info["n_nodes"] = n_loader_nodes
-            else:
-                self.fail(f"Unsupported parameter type: {type(n_loader_nodes)}")
+            loader_info["n_nodes"] = self.params.get("n_loaders")
         gce_image = self.params.get("gce_image_db").strip()
         user_prefix = self.params.get("user_prefix")
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get("user_credentials_path")))
@@ -1750,22 +1732,10 @@ class ClusterTester(unittest.TestCase):
                 )
             )
         if db_info["n_nodes"] is None:
-            n_db_nodes = self.params.get("n_db_nodes")
-            if isinstance(n_db_nodes, int):  # legacy type
-                db_info["n_nodes"] = [n_db_nodes]
-            elif isinstance(n_db_nodes, list):  # latest type to support multiple datacenters
-                db_info["n_nodes"] = n_db_nodes
-            else:
-                self.fail(f"Unsupported parameter type: {type(n_db_nodes)}")
+            db_info["n_nodes"] = self.params.get("n_db_nodes")
         db_info["type"] = self.params.get("azure_instance_type_db")
         if loader_info["n_nodes"] is None:
-            n_loader_nodes = self.params.get("n_loaders")
-            if isinstance(n_loader_nodes, int):  # legacy type
-                loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):  # latest type to support multiple datacenters
-                loader_info["n_nodes"] = n_loader_nodes
-            else:
-                self.fail(f"Unsupported parameter type: {type(n_loader_nodes)}")
+            loader_info["n_nodes"] = self.params.get("n_loaders")
         azure_image = self.params.get("azure_image_db").strip()
         user_prefix = self.params.get("user_prefix")
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get("user_credentials_path")))
@@ -1829,22 +1799,10 @@ class ClusterTester(unittest.TestCase):
                 )
             )
         if db_info["n_nodes"] is None:
-            n_db_nodes = self.params.get("n_db_nodes")
-            if isinstance(n_db_nodes, int):  # legacy type
-                db_info["n_nodes"] = [n_db_nodes]
-            elif isinstance(n_db_nodes, list):  # latest type to support multiple datacenters
-                db_info["n_nodes"] = n_db_nodes
-            else:
-                self.fail(f"Unsupported parameter type: {type(n_db_nodes)}")
+            db_info["n_nodes"] = self.params.get("n_db_nodes")
         db_info["type"] = self.params.get("oci_instance_type_db")
         if loader_info["n_nodes"] is None:
-            n_loader_nodes = self.params.get("n_loaders")
-            if isinstance(n_loader_nodes, int):  # legacy type
-                loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):  # latest type to support multiple datacenters
-                loader_info["n_nodes"] = n_loader_nodes
-            else:
-                self.fail(f"Unsupported parameter type: {type(n_loader_nodes)}")
+            loader_info["n_nodes"] = self.params.get("n_loaders")
         oci_image = self.params.get("oci_image_db").strip()
         user_prefix = self.params.get("user_prefix")
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get("user_credentials_path")))
@@ -1922,13 +1880,7 @@ class ClusterTester(unittest.TestCase):
         regions = self.params.get("region_name").split()
 
         if loader_info["n_nodes"] is None:
-            n_loader_nodes = self.params.get("n_loaders")
-            if isinstance(n_loader_nodes, int):  # legacy type
-                loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):
-                loader_info["n_nodes"] = n_loader_nodes
-            else:
-                self.fail(f"Unsupported parameter type: {type(n_loader_nodes)}")
+            loader_info["n_nodes"] = self.params.get("n_loaders")
         if loader_info["type"] is None:
             loader_info["type"] = self.params.get("instance_type_loader")
         if loader_info["disk_size"] is None:
@@ -2055,7 +2007,7 @@ class ClusterTester(unittest.TestCase):
                     ec2_ami_username="ubuntu",
                     ec2_instance_type=self.params.get("instance_type_db_oracle"),
                     ec2_block_device_mappings=db_info["device_mappings"],
-                    n_nodes=[self.params.get("n_test_oracle_db_nodes")],
+                    n_nodes=self.params.get("n_test_oracle_db_nodes"),
                     node_type="oracle-db",
                     **(common_params | {"user_prefix": user_prefix + "-cassandra-oracle"}),
                 )
@@ -2066,7 +2018,7 @@ class ClusterTester(unittest.TestCase):
                     ec2_ami_username=self.params.get("ami_db_scylla_user"),
                     ec2_instance_type=self.params.get("instance_type_db_oracle"),
                     ec2_block_device_mappings=db_info["device_mappings"],
-                    n_nodes=[self.params.get("n_test_oracle_db_nodes")],
+                    n_nodes=self.params.get("n_test_oracle_db_nodes"),
                     node_type="oracle-db",
                     **(common_params | {"user_prefix": user_prefix + "-oracle"}),
                 )
@@ -2149,14 +2101,12 @@ class ClusterTester(unittest.TestCase):
                 docker_image=self.params.get("docker_image_cassandra"),
                 docker_image_tag=self.params.get("cassandra_version"),
                 node_key_file=self.credentials[0].key_file,
-                n_nodes=[self.params.get("n_db_nodes")],
+                n_nodes=self.params.get("n_db_nodes"),
                 **common_params,
             )
         else:
             self.db_cluster = cluster_docker.ScyllaDockerCluster(
-                n_nodes=[
-                    self.params.get("n_db_nodes"),
-                ],
+                n_nodes=self.params.get("n_db_nodes"),
                 **container_node_params,
                 **common_params,
             )
@@ -2238,7 +2188,7 @@ class ClusterTester(unittest.TestCase):
             loader_pool = mini_k8s.MinimalK8SNodePool(
                 k8s_cluster=k8s_cluster,
                 name=k8s_cluster.LOADER_POOL_NAME,
-                num_nodes=self.params.get("n_loaders"),
+                num_nodes=sum(self.params.get("n_loaders")),
                 image_type="fake-image-type",
                 instance_type="fake-instance-type",
             )
@@ -2247,7 +2197,7 @@ class ClusterTester(unittest.TestCase):
         scylla_pool = mini_k8s.MinimalK8SNodePool(
             k8s_cluster=k8s_cluster,
             name=k8s_cluster.SCYLLA_POOL_NAME,
-            num_nodes=self.params.get("n_db_nodes"),
+            num_nodes=sum(self.params.get("n_db_nodes")),
             image_type="fake-image-type",
             instance_type="fake-instance-type",
         )
@@ -2306,7 +2256,7 @@ class ClusterTester(unittest.TestCase):
             k8s_cluster.register_sct_grafana_dashboard(cluster_name=cluster_name, namespace=namespace)
 
         # Deploy main VM-based monitoring
-        if self.params.get("n_monitor_nodes") > 0:
+        if sum(self.params.get("n_monitor_nodes")) > 0:
             self.monitors = cluster_docker.MonitorSetDocker(
                 n_nodes=self.params.get("n_monitor_nodes"),
                 targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
@@ -2364,11 +2314,11 @@ class ClusterTester(unittest.TestCase):
     def _add_and_wait_for_cluster_nodes_in_parallel(clusters):
         def _add_and_wait_for_cluster_nodes(cluster):
             if cluster.node_type == "loader":
-                count = cluster.params.get("k8s_n_loader_pods_per_cluster") or cluster.params.get("n_loaders")
+                count = cluster.params.get("k8s_n_loader_pods_per_cluster") or sum(cluster.params.get("n_loaders"))
             elif cluster.node_type == "monitor":
                 count = 1
             else:
-                count = cluster.params.get("k8s_n_scylla_pods_per_cluster") or cluster.params.get("n_db_nodes")
+                count = cluster.params.get("k8s_n_scylla_pods_per_cluster") or sum(cluster.params.get("n_db_nodes"))
             cluster.add_nodes(count=count, enable_auto_bootstrap=cluster.auto_bootstrap)
 
         add_nodes_in_parallel = ParallelObject(
@@ -2431,7 +2381,7 @@ class ClusterTester(unittest.TestCase):
                 k8s_cluster.register_sct_grafana_dashboard(cluster_name=cluster_name, namespace=namespace)
 
         # Deploy main VM-based monitoring
-        if self.params.get("n_monitor_nodes") > 0:
+        if sum(self.params.get("n_monitor_nodes")) > 0:
             test_id = str(self.test_config.test_id())
             provisioners: List[GceProvisioner] = []
             for datacenter in gce_datacenters:
@@ -2590,22 +2540,10 @@ class ClusterTester(unittest.TestCase):
         user_prefix = self.params.get("user_prefix")
 
         if db_info["n_nodes"] is None:
-            n_db_nodes = self.params.get("n_db_nodes")
-            if isinstance(n_db_nodes, int):
-                db_info["n_nodes"] = [n_db_nodes]
-            elif isinstance(n_db_nodes, list):
-                db_info["n_nodes"] = n_db_nodes
-            else:
-                self.fail(f"Unsupported parameter type: {type(n_db_nodes)}")
+            db_info["n_nodes"] = self.params.get("n_db_nodes")
 
         if loader_info["n_nodes"] is None:
-            n_loader_nodes = self.params.get("n_loaders")
-            if isinstance(n_loader_nodes, int):
-                loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, list):  # latest type to support multiple datacenters
-                loader_info["n_nodes"] = n_loader_nodes
-            else:
-                self.fail(f"Unsupported parameter type: {type(n_loader_nodes)}")
+            loader_info["n_nodes"] = self.params.get("n_loaders")
 
         # create loaders first as their IPs should be allowed in Scylla Cloud cluster
         cloud_provider = self.params.get("xcloud_provider").lower()
@@ -4294,7 +4232,7 @@ class ClusterTester(unittest.TestCase):
         population = " -pop seq="
 
         total_keys = size_in_gb * 1024 * 1024
-        n_loaders = int(self.params.get("n_loaders"))
+        n_loaders = sum(self.params.get("n_loaders"))
         keys_per_node = total_keys // n_loaders
 
         write_queue = []

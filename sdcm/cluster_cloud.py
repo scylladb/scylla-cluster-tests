@@ -1231,7 +1231,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         db_nodes = self._api_client.get_cluster_nodes(
             account_id=self._account_id, cluster_id=self._cluster_id, enriched=True
         )
-        if len(db_nodes) != self.params.get("n_db_nodes"):
+        if len(db_nodes) != sum(self.params.get("n_db_nodes")):
             raise ScyllaCloudError(
                 "DB node count mismatch. Update 'n_db_nodes' in test config or provision a new cluster."
             )

@@ -80,7 +80,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
     def setUp(self):
         super().setUp()
-        self.CLUSTER_SIZE = self.params.get("n_db_nodes")
+        self.CLUSTER_SIZE = sum(self.params.get("n_db_nodes"))
         self.REPLICATION_FACTOR = 3
 
     def throttle_steps(self, workload_type):

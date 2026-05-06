@@ -130,7 +130,7 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
     # TODO: add support for different DB nodes amount in different K8S clusters
     scylla_pool = EksNodePool(
         name=k8s_cluster.SCYLLA_POOL_NAME,
-        num_nodes=params.get("n_db_nodes"),
+        num_nodes=sum(params.get("n_db_nodes")),
         instance_type=params.get("instance_type_db"),
         role_arn=params.get("eks_nodegroup_role_arn"),
         disk_size=params.get("root_disk_size_db"),
@@ -144,7 +144,7 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
             wait_till_ready=False,
             pool=EksNodePool(
                 name=k8s_cluster.LOADER_POOL_NAME,
-                num_nodes=params.get("n_loaders"),
+                num_nodes=sum(params.get("n_loaders")),
                 instance_type=params.get("instance_type_loader"),
                 role_arn=params.get("eks_nodegroup_role_arn"),
                 disk_size=params.get("root_disk_size_monitor"),
@@ -158,7 +158,7 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
             wait_till_ready=False,
             pool=EksNodePool(
                 name=k8s_cluster.MONITORING_POOL_NAME,
-                num_nodes=params.get("k8s_n_monitor_nodes") or params.get("n_monitor_nodes"),
+                num_nodes=params.get("k8s_n_monitor_nodes") or sum(params.get("n_monitor_nodes")),
                 instance_type=params.get("k8s_instance_type_monitor") or params.get("instance_type_monitor"),
                 role_arn=params.get("eks_nodegroup_role_arn"),
                 disk_size=params.get("root_disk_size_monitor"),
@@ -738,7 +738,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                     #       So, wait timeout will be different for different number of DB nodes
                     #       Set it bigger than the expected value to avoid possible fluctuations
                     "Delay": 30,
-                    "MaxAttempts": self.params.get("n_db_nodes") * 30,
+                    "MaxAttempts": sum(self.params.get("n_db_nodes")) * 30,
                 },
             )
 
@@ -747,7 +747,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
             new_scylla_pool_name = f"{self.SCYLLA_POOL_NAME}-new"
             new_scylla_pool = EksNodePool(
                 name=new_scylla_pool_name,
-                num_nodes=self.params.get("n_db_nodes"),
+                num_nodes=sum(self.params.get("n_db_nodes")),
                 instance_type=self.params.get("instance_type_db"),
                 role_arn=self.params.get("eks_nodegroup_role_arn"),
                 disk_size=self.params.get("root_disk_size_db"),

@@ -285,13 +285,8 @@ class SnapshotOperations(ClusterTester):
     BACKUP_FILE_PREFIXES = ("backup/sst", "backup/meta", "backup/schema")
 
     def _get_total_loaders(self) -> int:
-        """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string or list) formats."""
-        n_loaders = self.params.get("n_loaders")
-        if isinstance(n_loaders, int):
-            return n_loaders
-        if isinstance(n_loaders, list):
-            return sum(n_loaders)
-        return sum(int(n) for n in n_loaders.split())
+        """Get total number of loaders."""
+        return sum(self.params.get("n_loaders"))
 
     @staticmethod
     def get_snapshot_data(snapshot_name: str) -> SnapshotData:
@@ -597,7 +592,7 @@ class DatabaseOperations(ClusterTester):
         As a result, each node that was shut down will have missing rows and will require repair.
         """
         n_db_nodes = self.params.get("n_db_nodes")
-        num_of_nodes = sum(n_db_nodes) if isinstance(n_db_nodes, list) else n_db_nodes
+        num_of_nodes = sum(n_db_nodes)
         num_of_rows_per_insertion = int(total_num_of_rows / (num_of_nodes - 1))
         stress_command_template = (
             "cassandra-stress write cl=QUORUM n={} -schema 'keyspace={}"
@@ -674,20 +669,12 @@ class DatabaseOperations(ClusterTester):
 
 class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
     def _get_total_loaders(self) -> int:
-        """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string or list) formats."""
-        n_loaders = self.params.get("n_loaders")
-        if isinstance(n_loaders, int):
-            return n_loaders
-        if isinstance(n_loaders, list):
-            return sum(n_loaders)
-        return sum(int(n) for n in n_loaders.split())
+        """Get total number of loaders."""
+        return sum(self.params.get("n_loaders"))
 
     def _get_total_db_nodes(self) -> int:
-        """Get total number of db nodes, handling both single-DC (int) and multi-DC (list[int]) formats."""
-        n_db_nodes = self.params.get("n_db_nodes")
-        if isinstance(n_db_nodes, list):
-            return sum(n_db_nodes)
-        return n_db_nodes
+        """Get total number of db nodes."""
+        return sum(self.params.get("n_db_nodes"))
 
     def _generate_load(self, keyspace_name: str = None):
         self.log.info("Starting c-s write workload")
