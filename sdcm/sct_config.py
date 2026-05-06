@@ -19,12 +19,12 @@ import os
 import random
 import re
 import ast
+import dataclasses
 import json
 import logging
 import getpass
 import pathlib
 import tempfile
-import dataclasses
 from textwrap import dedent
 
 import yaml
@@ -151,22 +151,20 @@ def _check_file_exists(value: str) -> None:
 
 
 def str_or_list_or_eval(value: Union[str, List[str], None]) -> List[str] | None:
-    """Convert an environment variable into a Python's list."""
+    """Convert an environment variable into a Python's list.
+
+    Always returns list[str] | None. Single strings are wrapped in a list.
+    """
 
     if value is None:
         return None
     if isinstance(value, str):
         try:
-            return ast.literal_eval(value)
+            result = ast.literal_eval(value)
+            return result if isinstance(result, list) else [result]
         except Exception:  # noqa: BLE001
             pass
-        return (
-            [
-                str(value),
-            ]
-            if str(value)
-            else []
-        )
+        return [str(value)] if str(value) else []
 
     if isinstance(value, list):
         ret_values = []
@@ -180,9 +178,9 @@ def str_or_list_or_eval(value: Union[str, List[str], None]) -> List[str] | None:
     raise ValueError(f"{value} isn't a string or a list")
 
 
-#: Config type that accepts str or list[str]. Accepts str, list[str], or evaluable expressions.
+#: Config type that always returns list[str]. Accepts str, list[str], or evaluable expressions.
 StringOrList = Annotated[
-    str | list[str],
+    list[str],
     BeforeValidator(str_or_list_or_eval),
     InputType("str | list[str]"),
     Field(json_schema_extra={"appendable": True}),
@@ -3603,22 +3601,31 @@ class SCTConfiguration(BaseModel):
         # Regular single-value validation
         from_env_func(param_value)
 
+    @staticmethod
+    def _as_list(value) -> list:
+        """Normalise a stress-cmd param value to a list.
+
+        Most stress-cmd params are ``list[str]`` after Phase-2 normalisation,
+        but ``gemini_cmd`` is a plain ``String`` scalar.  Wrapping it here
+        prevents the iteration loops below from consuming it character-by-character.
+        """
+        if value is None:
+            return []
+        return value if isinstance(value, list) else [value]
+
     @property
     def list_of_stress_tools(self) -> Set[str]:
         stress_tools = set()
         for param_name in self.stress_cmd_params:
-            stress_cmds = self.get(param_name)
+            stress_cmds = self._as_list(self.get(param_name))
             if not stress_cmds:
                 continue
 
             for stress_cmd in stress_cmds:
                 if not stress_cmd:
                     continue
-                if not isinstance(stress_cmd, list):
-                    stress_cmd = [stress_cmd]  # noqa: PLW2901
-                for cmd in stress_cmd:
-                    if stress_tool := cmd.split(maxsplit=2)[0]:
-                        stress_tools.add(stress_tool)
+                if stress_tool := stress_cmd.split(maxsplit=2)[0]:
+                    stress_tools.add(stress_tool)
 
         return stress_tools
 
@@ -3627,47 +3634,44 @@ class SCTConfiguration(BaseModel):
             _check_file_exists(user_creds)
 
         for param_name in self.stress_cmd_params:
-            stress_cmds = self.get(param_name)
+            stress_cmds = self._as_list(self.get(param_name))
             if not stress_cmds:
                 continue
             for stress_cmd in stress_cmds:
                 if not stress_cmd:
                     continue
-                if not isinstance(stress_cmd, list):
-                    stress_cmd = [stress_cmd]  # noqa: PLW2901
-                for cmd in stress_cmd:
-                    cmd = cmd.strip(" ")  # noqa: PLW2901
-                    if cmd.startswith("latte"):
-                        script_name_regx = re.compile(r"([/\w-]*\.rn)")
-                        script_name = script_name_regx.search(cmd).group(1)
-                        if script_name.startswith("scylla-qa-internal"):
-                            continue
-                        full_path = pathlib.Path(get_sct_root_path()) / script_name
-                        assert full_path.exists(), f"{full_path} doesn't exists, please check your configuration"
-
-                    if not cmd.startswith("cassandra-stress"):
+                cmd = stress_cmd.strip(" ")
+                if cmd.startswith("latte"):
+                    script_name_regx = re.compile(r"([/\w-]*\.rn)")
+                    script_name = script_name_regx.search(cmd).group(1)
+                    if script_name.startswith("scylla-qa-internal"):
                         continue
-                    for option in cmd.split():
-                        if option.startswith("profile="):
-                            option = option.split("=", 1)  # noqa: PLW2901
-                            if len(option) < 2:
-                                continue
-                            profile_path = option[1]
-                            if "scylla-qa-internal" in profile_path:
-                                continue
-                            if not profile_path.startswith("/tmp"):
-                                raise ValueError(
-                                    f"Stress command parameter '{param_name}' contains wrong path "
-                                    f"'{profile_path}' to profile, it should be formed in following "
-                                    "manner '/tmp/{file_name_from_data_dir}'"
-                                )
-                            profile_name = profile_path[5:]
-                            if pathlib.Path(sct_abs_path(os.path.join("data_dir", profile_name))).exists():
-                                break  # We are ok here and skipping whole command if file is there
+                    full_path = pathlib.Path(get_sct_root_path()) / script_name
+                    assert full_path.exists(), f"{full_path} doesn't exists, please check your configuration"
+
+                if not cmd.startswith("cassandra-stress"):
+                    continue
+                for option in cmd.split():
+                    if option.startswith("profile="):
+                        option = option.split("=", 1)  # noqa: PLW2901
+                        if len(option) < 2:
+                            continue
+                        profile_path = option[1]
+                        if "scylla-qa-internal" in profile_path:
+                            continue
+                        if not profile_path.startswith("/tmp"):
                             raise ValueError(
-                                f"Stress command parameter '{param_name}' contains profile "
-                                f"'{profile_path}' that does not exists under data_dir/"
+                                f"Stress command parameter '{param_name}' contains wrong path "
+                                f"'{profile_path}' to profile, it should be formed in following "
+                                "manner '/tmp/{file_name_from_data_dir}'"
                             )
+                        profile_name = profile_path[5:]
+                        if pathlib.Path(sct_abs_path(os.path.join("data_dir", profile_name))).exists():
+                            break  # We are ok here and skipping whole command if file is there
+                        raise ValueError(
+                            f"Stress command parameter '{param_name}' contains profile "
+                            f"'{profile_path}' that does not exists under data_dir/"
+                        )
         self._validate_scylla_d_overrides_files_exists()
 
     def verify_configuration(self):
@@ -4620,22 +4624,19 @@ class SCTConfiguration(BaseModel):
 
     def _verify_scylla_bench_mode_and_workload_parameters(self):
         for param_name in self.stress_cmd_params:
-            stress_cmds = self.get(param_name)
+            stress_cmds = self._as_list(self.get(param_name))
             if not stress_cmds:
                 continue
             for stress_cmd in stress_cmds:
                 if not stress_cmd:
                     continue
-                if not isinstance(stress_cmd, list):
-                    stress_cmd = [stress_cmd]  # noqa: PLW2901
-                for cmd in stress_cmd:
-                    cmd = cmd.strip(" ")  # noqa: PLW2901
-                    if not cmd.startswith("scylla-bench"):
-                        continue
-                    if "-mode=" not in cmd:
-                        raise ValueError(f"Scylla-bench command {cmd} doesn't have parameter -mode")
-                    if "-workload=" not in cmd:
-                        raise ValueError(f"Scylla-bench command {cmd} doesn't have parameter -workload")
+                cmd = stress_cmd.strip(" ")
+                if not cmd.startswith("scylla-bench"):
+                    continue
+                if "-mode=" not in cmd:
+                    raise ValueError(f"Scylla-bench command {cmd} doesn't have parameter -mode")
+                if "-workload=" not in cmd:
+                    raise ValueError(f"Scylla-bench command {cmd} doesn't have parameter -workload")
 
     def _validate_docker_backend_parameters(self):
         if self.get("use_mgmt"):

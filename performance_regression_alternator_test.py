@@ -136,22 +136,36 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             stress_queue = []
             params = {"prefix": "preload-"}
             for stress_type in ["dynamodb", "scylla"]:
-                if self.params.get("round_robin"):
-                    self.log.debug("Populating data using round_robin")
-                    params.update({"stress_num": 1, "round_robin": True})
+                if len(prepare_write_cmd) > 1:
+                    # Check if it should be round_robin across loaders
+                    if self.params.get("round_robin"):
+                        self.log.debug("Populating data using round_robin")
+                        params.update({"stress_num": 1, "round_robin": True})
 
-                for stress_cmd in prepare_write_cmd:
-                    params.update(
-                        {
-                            "stress_cmd": stress_cmd.replace("dynamodb", stress_type),
-                            "duration": self.params.get("prepare_stress_duration"),
-                        }
+                    for stress_cmd in prepare_write_cmd:
+                        params.update(
+                            {
+                                "stress_cmd": stress_cmd.replace("dynamodb", stress_type),
+                                "duration": self.params.get("prepare_stress_duration"),
+                            }
+                        )
+
+                        # Run all stress commands
+                        params.update(dict(stats_aggregate_cmds=False))
+                        self.log.debug("RUNNING stress cmd: {}".format(stress_cmd.replace("dynamodb", stress_type)))
+                        stress_queue.append(self.run_stress_thread(**params))
+
+                # One stress cmd command
+                else:
+                    stress_queue.append(
+                        self.run_stress_thread(
+                            stress_cmd=prepare_write_cmd[0].replace("dynamodb", stress_type),
+                            duration=self.params.get("prepare_stress_duration"),
+                            stress_num=1,
+                            prefix="preload-",
+                            stats_aggregate_cmds=False,
+                        )
                     )
-
-                    # Run all stress commands
-                    params.update(dict(stats_aggregate_cmds=False))
-                    self.log.debug("RUNNING stress cmd: {}".format(stress_cmd.replace("dynamodb", stress_type)))
-                    stress_queue.append(self.run_stress_thread(**params))
 
             self.log.debug("Waiting for loaders...")
             for stress in stress_queue:

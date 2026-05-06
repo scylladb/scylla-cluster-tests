@@ -4883,9 +4883,6 @@ class NemesisRunner:
         if not write_cmds:
             return None
 
-        if not isinstance(write_cmds, list):
-            write_cmds = [write_cmds]
-
         stress_cmds = [cmd for cmd in write_cmds if " profile=" not in cmd and " n=" in cmd]
         if not stress_cmds:
             return None

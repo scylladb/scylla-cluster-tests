@@ -16,8 +16,6 @@
 import time
 from textwrap import dedent
 
-import six
-
 from sdcm.tester import ClusterTester
 from sdcm.utils.decorators import measure_time, retrying, optional_stage
 from test_lib.scylla_bench_tools import create_scylla_bench_table_query
@@ -76,7 +74,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             stress_queue = []
             params = {"prefix": "preload-"}
             # Check if the prepare_cmd is a list of commands
-            if not isinstance(prepare_write_cmd, six.string_types) and len(prepare_write_cmd) > 1:
+            if len(prepare_write_cmd) > 1:
                 # Check if it should be round_robin across loaders
                 if self.params.get("round_robin"):
                     self.log.debug("Populating data using round_robin")
@@ -102,10 +100,10 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             # One stress cmd command
             else:
                 stress_cmd = (
-                    prepare_write_cmd
+                    prepare_write_cmd[0]
                     if not consistency_level
                     else self._update_cl_in_stress_cmd(
-                        str_stress_cmd=prepare_write_cmd, consistency_level=consistency_level
+                        str_stress_cmd=prepare_write_cmd[0], consistency_level=consistency_level
                     )
                 )
                 stress_queue.append(

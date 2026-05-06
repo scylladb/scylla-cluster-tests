@@ -64,9 +64,9 @@ def is_latte_command(stress_cmd: Union[str, list]) -> bool:
     Returns:
         True if any command contains 'latte ' and ' run ', False otherwise
     """
-    if not isinstance(stress_cmd, list):
+    if isinstance(stress_cmd, str):
         stress_cmd = [stress_cmd]
-    return any("latte " in cmd and " run " in cmd for cmd in stress_cmd if isinstance(cmd, str))
+    return any("latte " in cmd and " run " in cmd for cmd in stress_cmd)
 
 
 class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
@@ -159,7 +159,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         For latte commands the values are first looked up in ``perf_stress_keyspace`` /
         ``perf_stress_table``, then in ``latte_schema_parameters`` (``keyspace`` / ``table`` keys).
         """
-        stress_cmd = stress_cmds[0] if isinstance(stress_cmds, list) else stress_cmds
+        stress_cmd = stress_cmds[0]
         stress_tool = stress_cmd.split(" ")[0]
 
         keyspace = self.params.get("perf_stress_keyspace") or ""
@@ -310,21 +310,20 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
     def run_post_prepare_cql(self, workload):
         if post_prepare_cql_cmds := self.params.get("post_prepare_cql_cmds"):
-            post_prepare_cql_cmds = (
-                [post_prepare_cql_cmds] if isinstance(post_prepare_cql_cmds, str) else post_prepare_cql_cmds
-            )
             test_table = f"{workload.test_keyspace}.{workload.test_table}"
-            for post_prepare_cql_cmd in post_prepare_cql_cmds:
-                if test_table not in post_prepare_cql_cmd.lower():
+            matching_cmds = []
+            for cmd in post_prepare_cql_cmds:
+                if test_table not in cmd.lower():
                     self.log.error(
                         "Post prepare cql command '%s' does not match test table '%s', skipping it.",
-                        post_prepare_cql_cmd.lower(),
+                        cmd.lower(),
                         test_table,
                     )
-                    continue
-
-                self.log.debug("Execute post prepare queries: %s", post_prepare_cql_cmd)
-                self._run_cql_commands(post_prepare_cql_cmd)
+                else:
+                    matching_cmds.append(cmd)
+            if matching_cmds:
+                self.log.debug("Execute post prepare queries: %s", matching_cmds)
+                self._run_cql_commands(matching_cmds)
 
     def preload_data(self, compaction_strategy=None):
         population_commands: list = self.params.get("prepare_write_cmd")

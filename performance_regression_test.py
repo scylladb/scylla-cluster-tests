@@ -222,11 +222,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             # allow to correctly save results for future compare
             stress_queue = []
             params = {"prefix": "preload-"}
-            # Check if the prepare_cmd is a list of commands
-            if isinstance(prepare_write_cmd, list):
-                if len(prepare_write_cmd) == 1:
-                    prepare_write_cmd = prepare_write_cmd[0]
-            if isinstance(prepare_write_cmd, list):
+            if len(prepare_write_cmd) > 1:
                 # Check if it should be round_robin across loaders
                 if self.params.get("round_robin"):
                     self.log.debug("Populating data using round_robin")
@@ -250,7 +246,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             else:
                 stress_queue.append(
                     self.run_stress_thread(
-                        stress_cmd=prepare_write_cmd,
+                        stress_cmd=prepare_write_cmd[0],
                         duration=self.params.get("prepare_stress_duration"),
                         stress_num=1,
                         prefix="preload-",
@@ -269,9 +265,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     def _run_cql_commands(self, cmds, node=None):
         node = node if node else self.db_cluster.nodes[0]
-
-        if not isinstance(cmds, list):
-            cmds = [cmds]
 
         for cmd in cmds:
             with self.db_cluster.cql_connection_patient(node) as session:

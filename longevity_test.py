@@ -413,8 +413,6 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         for batch in range(num_of_batches):
             for i in range(1 + batch * batch_size, (batch + 1) * batch_size + 1):
                 keyspace_name = self._get_keyspace_name(i)
-                if not isinstance(stress_cmd, list):
-                    stress_cmd = [stress_cmd]
                 stress_cmds_with_all_ips = [cmd + self.all_node_ips_for_stress_command for cmd in stress_cmd]
                 self._run_all_stress_cmds(
                     stress_queue,
@@ -452,8 +450,6 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         prepare_write_cmd = self.params.get("prepare_write_cmd")
         if not prepare_write_cmd:
             return None
-        if isinstance(prepare_write_cmd, str):
-            prepare_write_cmd = [prepare_write_cmd]
         return max([self._get_columns_num_of_single_stress(single_stress_cmd=stress) for stress in prepare_write_cmd])
 
     def _pre_create_schema(self, keyspace_num=1, scylla_encryption_options=None):

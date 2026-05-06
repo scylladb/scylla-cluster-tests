@@ -32,12 +32,12 @@ import pytest
 
 
 def _is_latte_command(stress_cmd):
-    cmd = stress_cmd[0] if isinstance(stress_cmd, list) else stress_cmd
+    cmd = stress_cmd[0]
     return "latte " in cmd and " run " in cmd
 
 
 def _get_test_table_name(params, stress_cmds):
-    stress_cmd = stress_cmds[0] if isinstance(stress_cmds, list) else stress_cmds
+    stress_cmd = stress_cmds[0]
     stress_tool = stress_cmd.split(" ")[0]
 
     keyspace = params.get("perf_stress_keyspace") or ""
