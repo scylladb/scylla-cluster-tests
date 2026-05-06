@@ -3,6 +3,7 @@
 import pytest
 
 from sdcm.sct_config import (
+    SCTConfiguration,
     boolean_or_space_separated_booleans,
     dict_or_str,
     int_or_space_separated_ints,
@@ -144,3 +145,52 @@ def test_dict_or_str_valid(input_val, expected):
 def test_dict_or_str_invalid(input_val):
     with pytest.raises(ValueError):
         dict_or_str(input_val)
+
+
+# ---------------------------------------------------------------------------
+# SCTConfiguration._as_list  (stress-cmd loop normalisation helper)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "input_val,expected",
+    [
+        (None, []),
+        ([], []),
+        (["cassandra-stress write"], ["cassandra-stress write"]),
+        (["cmd1", "cmd2"], ["cmd1", "cmd2"]),
+        # scalar string (e.g. gemini_cmd) must become a one-element list
+        ("gemini --duration 10m", ["gemini --duration 10m"]),
+    ],
+)
+def test_as_list(input_val, expected):
+    assert SCTConfiguration._as_list(input_val) == expected
+
+
+def test_list_of_stress_tools_with_scalar_gemini_cmd(monkeypatch):
+    """list_of_stress_tools must not iterate gemini_cmd char-by-char."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_GEMINI_CMD", "gemini --duration 10m")
+
+    conf = SCTConfiguration()
+    tools = conf.list_of_stress_tools
+    # "gemini" (the binary name) should appear — not individual characters
+    assert "gemini" in tools
+    assert "g" not in tools
+    assert "e" not in tools
+
+
+def test_list_of_stress_tools_with_list_stress_cmd(monkeypatch):
+    """list_of_stress_tools works correctly with list[str] stress_cmd values."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_STRESS_CMD", "cassandra-stress write n=1000000")
+
+    conf = SCTConfiguration()
+    tools = conf.list_of_stress_tools
+    assert "cassandra-stress" in tools

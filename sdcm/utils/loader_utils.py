@@ -220,9 +220,6 @@ class LoaderUtilsMixin:
     def _run_cql_commands(self, cmds, node=None):
         node = node if node else self.db_cluster.nodes[0]
 
-        if not isinstance(cmds, list):
-            cmds = [cmds]
-
         for cmd in cmds:
             with self.db_cluster.cql_connection_patient(node) as session:
                 session.execute(cmd)

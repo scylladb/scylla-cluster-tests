@@ -39,7 +39,7 @@ a list of config files that would be used
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str]
+**type:** str | list[str] → list[str]
 
 
 ## **cluster_backend** / SCT_CLUSTER_BACKEND
@@ -259,7 +259,7 @@ APT keys for ScyllaDB repos
 
 **default:** ['17723034C56D4B19', '5E08FBD8B5D6EC9C', 'D0A112E067426AB2', '491C93B9DE7496A7', 'A43E06657BAC99E3', 'C503C686B007F39E']
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **unified_package** / SCT_UNIFIED_PACKAGE
@@ -355,7 +355,7 @@ List of distro features relevant to SCT test. Example: 'fips'.<br>This is used t
 
 **default:** []
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **scylla_repo_m** / SCT_SCYLLA_REPO_M
@@ -766,7 +766,7 @@ list of email of send the performance regression test to
 
 **default:** ['qa@scylladb.com']
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **email_subject_postfix** / SCT_EMAIL_SUBJECT_POSTFIX
@@ -793,7 +793,7 @@ unlock specified experimental features
 
 **default:** []
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **server_encrypt** / SCT_SERVER_ENCRYPT
@@ -1030,7 +1030,7 @@ Nemesis class to use (possible types in sdcm.nemesis).<br>Supported syntax:<br>-
 
 **default:** NoOpMonkey
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **nemesis_interval** / SCT_NEMESIS_INTERVAL
@@ -1120,7 +1120,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **gemini_schema_url** / SCT_GEMINI_SCHEMA_URL
@@ -1280,7 +1280,7 @@ AWS regions to use
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str]
+**type:** str | list[str] → list[str]
 
 **backend overrides:**
 - `['eu-west-1']`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
@@ -1533,7 +1533,7 @@ the bucket name to be used for backup (e.g., 'manager-backup-tests')
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 **backend overrides:**
 - `manager-backup-tests-{region}`: aws, aws-siren, k8s-eks
@@ -1566,7 +1566,7 @@ list of files that should upload to /etc/scylla.d/ directory to override scylla 
 
 **default:** []
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **gce_project** / SCT_GCE_PROJECT
@@ -1584,7 +1584,7 @@ Supported regions: us-east1, us-east4, us-west1, us-central1. Specifying just th
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str]
+**type:** str | list[str] → list[str]
 
 **backend overrides:**
 - `us-east1`: gce, gce-siren, k8s-gke
@@ -1773,7 +1773,7 @@ List of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 **backend overrides:**
 - `[]`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
@@ -1962,7 +1962,7 @@ CQL contact-point IPs for the source Cassandra/Scylla cluster. Mutually exclusiv
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **migrator_source_keyspace** / SCT_MIGRATOR_SOURCE_KEYSPACE
@@ -2280,7 +2280,7 @@ Azure region(s) where the resources will be deployed. Supports single or multipl
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str]
+**type:** str | list[str] → list[str]
 
 **backend overrides:**
 - `['eastus']`: azure
@@ -2397,7 +2397,7 @@ OCI region where the resources will be deployed
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str]
+**type:** str | list[str] → list[str]
 
 **backend overrides:**
 - `['us-ashburn-1']`: oci
@@ -2520,7 +2520,7 @@ ARN(s) of the IAM user or role to be granted cluster admin access
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 **backend overrides:**
 - `['arn:aws:iam::797456418907:role/DeveloperAccessRole', 'arn:aws:iam::797456418907:role/DevOpsAccessRole']`: k8s-eks
@@ -3064,7 +3064,7 @@ Private IP addresses of DB nodes. Can be a single IP, a list of IPs, or an expre
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **db_nodes_public_ip** / SCT_DB_NODES_PUBLIC_IP
@@ -3073,7 +3073,7 @@ Public IP addresses of DB nodes. Can be a single IP, a list of IPs, or an expres
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **loaders_private_ip** / SCT_LOADERS_PRIVATE_IP
@@ -3082,7 +3082,7 @@ Private IP addresses of loader nodes. Loaders are used for running stress tests 
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **loaders_public_ip** / SCT_LOADERS_PUBLIC_IP
@@ -3091,7 +3091,7 @@ Public IP addresses of loader nodes. These IPs are used for accessing the loader
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **monitor_nodes_private_ip** / SCT_MONITOR_NODES_PRIVATE_IP
@@ -3100,7 +3100,7 @@ Private IP addresses of monitor nodes. Monitoring nodes host monitoring tools li
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **monitor_nodes_public_ip** / SCT_MONITOR_NODES_PUBLIC_IP
@@ -3109,7 +3109,7 @@ Public IP addresses of monitor nodes. These IPs are used for accessing the monit
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **cassandra_stress_population_size** / SCT_CASSANDRA_STRESS_POPULATION_SIZE
@@ -3244,7 +3244,7 @@ Command to create keyspace to be pre-created before running workload
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **post_prepare_cql_cmds** / SCT_POST_PREPARE_CQL_CMDS
@@ -3253,7 +3253,7 @@ CQL Commands to run after prepare stage finished (relevant only to longevity_tes
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **prepare_wait_no_compactions_timeout** / SCT_PREPARE_WAIT_NO_COMPACTIONS_TIMEOUT
@@ -3316,7 +3316,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **prepare_verify_cmd** / SCT_PREPARE_VERIFY_CMD
@@ -3325,7 +3325,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **user_profile_table_count** / SCT_USER_PROFILE_TABLE_COUNT
@@ -3424,7 +3424,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_r** / SCT_STRESS_CMD_R
@@ -3433,7 +3433,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_m** / SCT_STRESS_CMD_M
@@ -3442,7 +3442,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_read_disk** / SCT_STRESS_CMD_READ_DISK
@@ -3451,7 +3451,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_cache_warmup** / SCT_STRESS_CMD_CACHE_WARMUP
@@ -3460,7 +3460,7 @@ cassandra-stress commands for warm-up before read workload.<br>You can specify e
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **prepare_write_cmd** / SCT_PREPARE_WRITE_CMD
@@ -3469,7 +3469,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_before_migration** / SCT_STRESS_BEFORE_MIGRATION
@@ -3496,7 +3496,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_no_mv_profile** / SCT_STRESS_CMD_NO_MV_PROFILE
@@ -3505,7 +3505,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **cs_user_profiles** / SCT_CS_USER_PROFILES
@@ -3514,7 +3514,7 @@ cassandra-stress user-profiles list. Executed in test step
 
 **default:** []
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **prepare_cs_user_profiles** / SCT_PREPARE_CS_USER_PROFILES
@@ -3523,7 +3523,7 @@ cassandra-stress user-profiles list. Executed in prepare step
 
 **default:** []
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **cs_duration** / SCT_CS_DURATION
@@ -3559,7 +3559,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **prepare_stress_cmd** / SCT_PREPARE_STRESS_CMD
@@ -3568,7 +3568,7 @@ cassandra-stress commands. You can specify everything but the -node parameter, w
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **perf_gradual_threads** / SCT_PERF_GRADUAL_THREADS
@@ -3604,7 +3604,7 @@ Stress command for LWT performance test for INSERT baseline
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_lwt_d** / SCT_STRESS_CMD_LWT_D
@@ -3613,7 +3613,7 @@ Stress command for LWT performance test for DELETE baseline
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_lwt_u** / SCT_STRESS_CMD_LWT_U
@@ -3622,7 +3622,7 @@ Stress command for LWT performance test for UPDATE baseline
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_lwt_ine** / SCT_STRESS_CMD_LWT_INE
@@ -3631,7 +3631,7 @@ Stress command for LWT performance test for INSERT with IF NOT EXISTS
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_lwt_uc** / SCT_STRESS_CMD_LWT_UC
@@ -3640,7 +3640,7 @@ Stress command for LWT performance test for UPDATE with IF <condition>
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_lwt_ue** / SCT_STRESS_CMD_LWT_UE
@@ -3649,7 +3649,7 @@ Stress command for LWT performance test for UPDATE with IF EXISTS
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_lwt_de** / SCT_STRESS_CMD_LWT_DE
@@ -3658,7 +3658,7 @@ Stress command for LWT performance test for DELETE with IF EXISTS
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_lwt_dc** / SCT_STRESS_CMD_LWT_DC
@@ -3667,7 +3667,7 @@ Stress command for LWT performance test for DELETE with IF <condition>
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_lwt_mixed** / SCT_STRESS_CMD_LWT_MIXED
@@ -3676,7 +3676,7 @@ Stress command for LWT performance test for mixed lwt load
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_lwt_mixed_baseline** / SCT_STRESS_CMD_LWT_MIXED_BASELINE
@@ -3685,7 +3685,7 @@ Stress command for LWT performance test for mixed lwt load baseline
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **skip_download** / SCT_SKIP_DOWNLOAD
@@ -3820,7 +3820,7 @@ Primary stress command to be executed.
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_complex_prepare** / SCT_STRESS_CMD_COMPLEX_PREPARE
@@ -3829,7 +3829,7 @@ Stress command for complex preparation steps.
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **prepare_write_stress** / SCT_PREPARE_WRITE_STRESS
@@ -3838,7 +3838,7 @@ Stress command to prepare write operations.
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_read_10m** / SCT_STRESS_CMD_READ_10M
@@ -3847,7 +3847,7 @@ Stress command to perform read operations for 10 minutes.
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_read_cl_one** / SCT_STRESS_CMD_READ_CL_ONE
@@ -3856,7 +3856,7 @@ Stress command to perform read operations with consistency level ONE.
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_read_60m** / SCT_STRESS_CMD_READ_60M
@@ -3865,7 +3865,7 @@ Stress command to perform read operations for 60 minutes.
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_complex_verify_read** / SCT_STRESS_CMD_COMPLEX_VERIFY_READ
@@ -3874,7 +3874,7 @@ Stress command to verify complex read operations.
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_complex_verify_more** / SCT_STRESS_CMD_COMPLEX_VERIFY_MORE
@@ -3883,7 +3883,7 @@ Additional stress command to verify complex operations.
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **write_stress_during_entire_test** / SCT_WRITE_STRESS_DURING_ENTIRE_TEST
@@ -3892,7 +3892,7 @@ Stress command to perform write operations throughout the entire test.
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **verify_data_after_entire_test** / SCT_VERIFY_DATA_AFTER_ENTIRE_TEST
@@ -3901,7 +3901,7 @@ Stress command to verify data integrity after the entire test.
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_read_cl_quorum** / SCT_STRESS_CMD_READ_CL_QUORUM
@@ -3910,7 +3910,7 @@ Stress command to perform read operations with consistency level QUORUM.
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **verify_stress_after_cluster_upgrade** / SCT_VERIFY_STRESS_AFTER_CLUSTER_UPGRADE
@@ -3919,7 +3919,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_cmd_complex_verify_delete** / SCT_STRESS_CMD_COMPLEX_VERIFY_DELETE
@@ -3928,7 +3928,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **scylla_encryption_options** / SCT_SCYLLA_ENCRYPTION_OPTIONS
@@ -4260,7 +4260,7 @@ Stress command to be run before upgrade starts (preload/validation stage). This 
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **large_partition_stress_during_upgrade** / SCT_LARGE_PARTITION_STRESS_DURING_UPGRADE
@@ -4269,7 +4269,7 @@ Stress command to be run during rolling upgrade while nodes are being upgraded. 
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_during_entire_upgrade** / SCT_STRESS_DURING_ENTIRE_UPGRADE
@@ -4278,7 +4278,7 @@ Stress command to be run during the upgrade - user should take care for suitable
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **stress_after_cluster_upgrade** / SCT_STRESS_AFTER_CLUSTER_UPGRADE
@@ -4287,7 +4287,7 @@ Stress command to be run after full upgrade - usually used to read the dataset f
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **jepsen_scylla_repo** / SCT_JEPSEN_SCYLLA_REPO
@@ -4305,7 +4305,7 @@ Jepsen test command (e.g., 'test-all')
 
 **default:** ['test-all -w cas-register --concurrency 10n', 'test-all -w counter --concurrency 10n', 'test-all -w cmap --concurrency 10n', 'test-all -w cset --concurrency 10n', 'test-all -w write-isolation --concurrency 10n', 'test-all -w list-append --concurrency 10n', 'test-all -w wr-register --concurrency 10n']
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **jepsen_test_count** / SCT_JEPSEN_TEST_COUNT
@@ -4332,7 +4332,7 @@ Limit severity level for event types
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **scylla_rsyslog_setup** / SCT_SCYLLA_RSYSLOG_SETUP
@@ -4414,7 +4414,7 @@ nemesis_selector gets a list of "nemesis properties" and filters IN all the neme
 
 **default:** N/A
 
-**type:** str | list[str] → str | list[str] (appendable)
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **nemesis_multiply_factor** / SCT_NEMESIS_MULTIPLY_FACTOR
