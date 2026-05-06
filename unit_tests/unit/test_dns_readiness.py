@@ -87,7 +87,7 @@ def setup_command_runner(existing_node):
                 if attempts["scylla_setup"] == 1 and first_error is not None:
                     raise _make_unexpected_exit(stderr=first_error)
                 return _fake_result()
-            if "sudo apt-get update" in cmd:
+            if "apt-get" in cmd and "update" in cmd:
                 attempts["apt_get"] += 1
                 return _fake_result()
             if "sudo yum makecache" in cmd:
@@ -237,7 +237,7 @@ def test_scylla_setup_raises_after_dns_retries_are_exhausted(mock_sleep, existin
             return _fake_result(stdout="--swap-directory")
         if "scylla_setup --nic" in cmd:
             raise _make_unexpected_exit(stderr="Temporary failure resolving 'archive.ubuntu.com'")
-        if "sudo apt-get update" in cmd:
+        if "apt-get" in cmd and "update" in cmd:
             return _fake_result()
         return _fake_result()
 

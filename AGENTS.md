@@ -311,6 +311,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | writing-integration-tests | Guides writing integration tests that interact with real external services. Use when creating tests requiring Docker, AWS, GCE, Azure, OCI, or Kubernetes backends. | `skills/writing-integration-tests/SKILL.md` |
 | commit-summary | Generate weekly commit summary reports for the SCT repository | `skills/commit-summary/SKILL.md` |
 | writing-nemesis | Guides writing new nemesis (chaos disruptions). Use when creating NemesisBaseClass subclasses or implementing disruption logic. | `skills/writing-nemesis/SKILL.md` |
+| package-installation | Guides writing remote package installation commands (apt-get, yum, dnf, zypper) in SCT. Use when adding install/update calls via remoter to ensure timeouts, retries, and non-interactive flags. | `skills/package-installation/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 
