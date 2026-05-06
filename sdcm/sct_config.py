@@ -3958,7 +3958,11 @@ class SCTConfiguration(BaseModel):
             _is_enterprise = is_enterprise(scylla_version)
         self.artifact_scylla_version = scylla_version
         self.is_enterprise = _is_enterprise
-        self.update_argus_with_version(scylla_version, "scylla-server-target")
+        # For Argus, normalize the GCE dot-separated format back to '~' for pre-release
+        # identifiers so it matches what the running node reports via package version.
+        # GCE tags use '-' (converted to '.') because '~' is not allowed in GCE labels.
+        argus_version = re.sub(r"\.(?=rc\d|dev|alpha|beta)", "~", scylla_version)
+        self.update_argus_with_version(argus_version, "scylla-server-target")
 
         return scylla_version, _is_enterprise
 
