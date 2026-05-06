@@ -53,6 +53,7 @@ class UpgradeBaseVersion:
         linux_distro: str,
         scylla_version: str = None,
         base_version_all_sts_versions: bool = False,
+        official_supported_versions: bool = False,
     ):
         if len(linux_distro.split("-")) > 1:
             self.dist_type, *_, self.dist_version = linux_distro.split("-")
@@ -63,7 +64,10 @@ class UpgradeBaseVersion:
         self.linux_distro = linux_distro
         self.scylla_version = self.get_version(scylla_version)
         self.repo_maps = get_s3_scylla_repos_mapping(self.dist_type, self.dist_version)
+        self.official_supported_versions = official_supported_versions
         self.base_version_all_sts_versions = base_version_all_sts_versions
+        # Official supported versions are 2 LTS, and 2 latests released.
+        self.num_base_versions = 1 if not official_supported_versions else 2
 
     def get_version(self, scylla_version: str = None) -> str:
         """
@@ -104,126 +108,147 @@ class UpgradeBaseVersion:
             self.ent_start_support_version,
         )
 
-    def get_supported_scylla_base_versions(self, supported_versions: list[str]) -> list:  # noqa: PLR0912
-        """
-        We have special base versions list for each release, and we don't support to upgraded from enterprise
-        to opensource. This function is used to get the base versions list which will be used in the upgrade test.
+    def _find_previous_lts_indices(self, release_list: list[str], idx: int) -> list[int]:
+        """Find indices of LTS versions before the given index (up to num_base_versions)."""
+        lts_pattern = re.compile(r"\d{4}\.1")
+        lts_indices = []
+        for i in range(idx - 1, -1, -1):
+            if lts_pattern.search(release_list[i]):
+                lts_indices.append(i)
+                if len(lts_indices) >= self.num_base_versions:
+                    break
+        return lts_indices
 
-        :param supported_versions: all scylla release versions, the base versions will be filtered out from the supported_version
+    def _collect_sts_versions_from_range(self, sts_range: list[str], sts_pattern: re.Pattern) -> list[str]:
+        """Collect STS versions from a range, respecting base_version_all_sts_versions and num_base_versions."""
+        if self.base_version_all_sts_versions:
+            return [v for v in sts_range if sts_pattern.search(v)]
+        # Return up to num_base_versions from the end (most recent first)
+        result = []
+        for v in reversed(sts_range):
+            if sts_pattern.search(v):
+                result.append(v)
+                if len(result) >= self.num_base_versions:
+                    break
+        return result
+
+    def _get_base_versions_for_release(self, release_list: list[str], idx: int) -> list[str]:
+        """Get base versions when current version is a known release (LTS or STS)."""
+        lts_pattern = re.compile(r"\d{4}\.1")
+        sts_pattern = re.compile(r"\d{4}\.[2345]")
+        version = release_list[idx]
+        result = []
+
+        is_sts = sts_pattern.search(version) or ComparableScyllaVersion(version) < "2023.1"
+        is_lts = lts_pattern.search(version)
+
+        if not is_sts and not is_lts:
+            LOGGER.warning("version format not the default - %s", version)
+            result.append(version)
+            return result
+
+        lts_indices = self._find_previous_lts_indices(release_list, idx)
+        last_lts_idx = lts_indices[0] if lts_indices else None
+
+        if last_lts_idx is not None:
+            sts_range = release_list[last_lts_idx + 1 : idx]
+            result.extend(self._collect_sts_versions_from_range(sts_range, sts_pattern))
+            # Add LTS versions
+            for lts_idx in lts_indices:
+                result.append(release_list[lts_idx])
+        elif idx > 0:
+            prev_version = release_list[idx - 1]
+            if sts_pattern.search(prev_version) or lts_pattern.search(prev_version):
+                result.append(prev_version)
+        else:
+            LOGGER.warning("This is the first supported version, no upgrade source available.")
+
+        result.append(version)
+        return result
+
+    def _get_base_versions_for_master(self, release_list: list[str]) -> list[str]:
+        """Get base versions when target is the master branch."""
+        lts_pattern = re.compile(r"\d{4}\.1")
+        sts_pattern = re.compile(r"\d{4}\.[2345]")
+        lts_found = []
+        sts_found = []
+
+        for v in reversed(release_list):
+            try:
+                if (
+                    len(lts_found) < self.num_base_versions
+                    and lts_pattern.search(v)
+                    and self.filter_rc_only_version([v])
+                ):
+                    lts_found.append(v)
+                if (
+                    len(sts_found) < self.num_base_versions
+                    and sts_pattern.search(v)
+                    and self.filter_rc_only_version([v])
+                ):
+                    sts_found.append(v)
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning("Skipping version %s — failed to check rc status: %s", v, exc)
+                continue
+            if len(lts_found) >= self.num_base_versions and len(sts_found) >= self.num_base_versions:
+                break
+
+        result = list(lts_found)
+
+        if self.base_version_all_sts_versions:
+            latest_lts = lts_found[0] if lts_found else None
+            has_sts_after_latest_lts = latest_lts and any(
+                ComparableScyllaVersion(s) > ComparableScyllaVersion(latest_lts) for s in sts_found
+            )
+            if has_sts_after_latest_lts:
+                for v in sts_found:
+                    if v not in result:
+                        result.append(v)
+            elif sts_found:
+                if sts_found[0] not in result:
+                    result.append(sts_found[0])
+
+        return result
+
+    def _get_base_versions_for_unreleased(self, release_list: list[str], version: str) -> list[str]:
+        """Get base versions for an unreleased numeric version (not in supported list, not master)."""
+        relevant_versions = [v for v in release_list if ComparableScyllaVersion(v) < version]
+        if relevant_versions:
+            return [relevant_versions[-1]]
+        return []
+
+    def get_supported_scylla_base_versions(self, supported_versions: list[str]) -> list:
+        """
+        Get the base versions list which will be used in the upgrade test.
+
+        We have special base versions list for each release, and we don't support upgrading
+        from enterprise to opensource.
+
+        :param supported_versions: all scylla release versions, the base versions will be filtered from this list
         """
         LOGGER.info("Getting supported scylla base versions...")
-        source_available_base_version = []
 
         source_available_release_list = [v for v in supported_versions if is_enterprise(v)]
-
-        # The major version of unstable scylla, eg: 4.6.dev, 4.5, 2021.2.dev, 2021.1
         version = self.scylla_version
 
-        # Add the extra supported versions, which don't follow the default upgrade support matrix
-        source_available_base_version += extra_supported_versions.get(version, [])
+        # Start with extra supported versions that don't follow the default upgrade support matrix
+        base_versions = list(extra_supported_versions.get(version, []))
 
         if version in supported_versions:
             idx = source_available_release_list.index(version)
-            lts_version = re.compile(r"\d{4}\.1")  # lts = long term support
-            sts_version = re.compile(r"\d{4}\.[2345]")  # sts = short term support
-
-            # Find last LTS version before current version
-            last_lts_idx = None
-            for i in range(idx - 1, -1, -1):
-                if lts_version.search(source_available_release_list[i]):
-                    last_lts_idx = i
-                    break
-
-            if sts_version.search(version) or ComparableScyllaVersion(version) < "2023.1":
-                # For STS version, support upgrade from STS versions since last LTS and the last LTS version
-                # Current STS version should not be counted as a base version candidate
-                if last_lts_idx is not None:
-                    sts_range = source_available_release_list[last_lts_idx + 1 : idx]  # exclude current STS (idx)
-                    if self.base_version_all_sts_versions:
-                        # Add all preceding STS versions between last LTS (exclusive) and current STS (exclusive)
-                        for v in sts_range:
-                            if sts_version.search(v):
-                                source_available_base_version.append(v)
-                    else:
-                        # Add only the latest preceding STS version (if any)
-                        for v in reversed(sts_range):
-                            if sts_version.search(v):
-                                source_available_base_version.append(v)
-                                break
-                    # Always add the last LTS version itself
-                    source_available_base_version.append(source_available_release_list[last_lts_idx])
-                # If no previous LTS, fallback to previous logic (previous version only if exists)
-                elif idx > 0:
-                    # previous version could be STS or LTS; treat as single baseline
-                    prev_version = source_available_release_list[idx - 1]
-                    if sts_version.search(prev_version) or lts_version.search(prev_version):
-                        source_available_base_version.append(prev_version)
-                else:
-                    LOGGER.warning("This is the first supported version, no upgrade source available.")
-
-            elif lts_version.search(version):
-                # For LTS version, support upgrade from STS versions since last LTS and the last LTS version
-                if last_lts_idx is not None:
-                    sts_range = source_available_release_list[last_lts_idx + 1 : idx]
-                    if self.base_version_all_sts_versions:
-                        # Add all STS versions between last LTS (exclusive) and current LTS (exclusive)
-                        for v in sts_range:
-                            if sts_version.search(v):
-                                source_available_base_version.append(v)
-                    else:
-                        # Add only the latest STS version (if any) between last LTS and current LTS
-                        for v in reversed(sts_range):
-                            if sts_version.search(v):
-                                source_available_base_version.append(v)
-                                break
-                    # Add the previous LTS version itself
-                    source_available_base_version.append(source_available_release_list[last_lts_idx])
-                elif idx > 0:
-                    # If no previous LTS was found (shouldn't happen for pattern), fallback to previous version
-                    source_available_base_version.append(source_available_release_list[idx - 1])
-                else:
-                    LOGGER.warning("This is the first supported version, no upgrade source available.")
-            else:
-                LOGGER.warning("version format not the default - %s", version)
-
-            source_available_base_version.append(version)
+            base_versions.extend(self._get_base_versions_for_release(source_available_release_list, idx))
         elif version == "master":
-            # For master branch:
-            # - Default: upgrade only from last LTS version
-            # - If base_version_all_sts_versions flag is set: include last LTS and latest STS version as sources
-            lts_pattern = re.compile(r"\d{4}\.1")
-            sts_pattern = re.compile(r"\d{4}\.[2345]")
-            last_lts = None
-            last_sts = None
-            for v in reversed(source_available_release_list):
-                if last_lts is None and lts_pattern.search(v) and self.filter_rc_only_version([v]):
-                    last_lts = v
-                if last_sts is None and sts_pattern.search(v) and self.filter_rc_only_version([v]):
-                    last_sts = v
-                if last_lts and last_sts:
-                    break
-            if self.base_version_all_sts_versions:
-                # Prefer to return both if they are different; if they are the same (unlikely), deduplicate later
-                if last_lts:
-                    source_available_base_version.append(last_lts)
-                if last_sts and last_sts != last_lts:
-                    source_available_base_version.append(last_sts)
-            elif last_lts:
-                source_available_base_version.append(last_lts)
+            base_versions.extend(self._get_base_versions_for_master(source_available_release_list))
         elif re.match(r"\d+.\d+", version):
-            relevant_versions = [v for v in source_available_release_list if ComparableScyllaVersion(v) < version]
-            # If dest version is smaller than the first supported release,
-            # it might be an invalid dest version
-            if relevant_versions:
-                source_available_base_version.append(relevant_versions[-1])
+            base_versions.extend(self._get_base_versions_for_unreleased(source_available_release_list, version))
 
-        # Filter out unsupported version, or Nones
-        source_available_base_version = [v for v in source_available_base_version if v in supported_versions]
+        # Filter out unsupported versions
+        base_versions = [v for v in base_versions if v in supported_versions]
 
-        # if there's only release candidates in those repos, skip this version
-        source_available_base_version = self.filter_rc_only_version(source_available_base_version)
-        LOGGER.info("Supported scylla base versions for: source_available=%s", source_available_base_version)
-        return list(set(source_available_base_version))
+        # Filter out versions that only have release candidates
+        base_versions = self.filter_rc_only_version(base_versions)
+        LOGGER.info("Supported scylla base versions for: source_available=%s", base_versions)
+        return list(set(base_versions))
 
     def filter_rc_only_version(self, base_version_list: list[str]) -> list[str]:
         """
@@ -236,14 +261,14 @@ class UpgradeBaseVersion:
         """
         LOGGER.info("Filtering rc versions from base version list...")
         base_version_list = sorted(list(set(base_version_list)), key=ComparableScyllaVersion)
-        filter_rc = [v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if "rc" not in v]
+        try:
+            filter_rc = [v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if "rc" not in v]
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Failed to fetch versions for %s: %s — keeping it in the list", base_version_list[-1], exc)
+            filter_rc = True  # assume non-rc versions exist
         if not filter_rc:
             # if the release only has rc versions, we don't want to test it as a base version
             base_version_list = base_version_list[:-1]
-        if self.scylla_version in ("master",) and not self.base_version_all_sts_versions:
-            # for master branch, we only want the latest version
-            # we don't test all the options, just the latest one
-            base_version_list = base_version_list[-1:]
 
         return base_version_list
 

@@ -1283,7 +1283,12 @@ def list_repos(dist_type, dist_version):
     help="Whether to include all supported STS versions as base versions",
 )
 def get_scylla_base_versions(
-    scylla_version, scylla_repo, linux_distro, only_print_versions, backend, base_version_all_sts_versions
+    scylla_version,
+    scylla_repo,
+    linux_distro,
+    only_print_versions,
+    backend,
+    base_version_all_sts_versions,
 ):
     """
     Upgrade test try to upgrade from multiple supported base versions, this command is used to
@@ -1306,6 +1311,43 @@ def get_scylla_base_versions(
 
     # We can't detect the support versions for this distro, which shares the repo with others, eg: centos8
     # so we need to assign the start support versions for it.
+    version_detector.set_start_support_version(backend)
+
+    supported_versions, version_list = version_detector.get_version_list()
+    click.echo(f"Supported Versions: {supported_versions}")
+
+    if only_print_versions:
+        click.echo(f"Base Versions: {' '.join(version_list)}")
+        return
+
+    tbl = Table("Version Family", "Repo Url", show_lines=False)
+    for version in version_list:
+        tbl.add_row(version, version_detector.repo_maps[version])
+    click.echo(rich_table_to_string(tbl, title="Base Versions"))
+    return
+
+
+@cli.command("get-official-supported-versions", help="Get officially supported Scylla versions from master repo")
+@click.option("-o", "--only-print-versions", type=bool, default=False, required=False, help="")
+def get_official_supported_versions(only_print_versions):
+    """
+    Get officially supported Scylla versions using the master repo.
+    Uses hardcoded master repo URL, centos distro, and aws backend.
+    """
+    add_file_logger()
+
+    scylla_repo = "https://downloads.scylladb.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list"
+    linux_distro = "centos"
+    backend = "aws"
+    base_version_all_sts_versions = True
+
+    version_detector = UpgradeBaseVersion(
+        scylla_repo=scylla_repo,
+        linux_distro=linux_distro,
+        base_version_all_sts_versions=base_version_all_sts_versions,
+        official_supported_versions=True,
+    )
+
     version_detector.set_start_support_version(backend)
 
     supported_versions, version_list = version_detector.get_version_list()
