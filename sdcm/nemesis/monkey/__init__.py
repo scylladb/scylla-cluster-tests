@@ -38,15 +38,6 @@ class ToggleLdapConfiguration(NemesisBaseClass):
         self.runner.disrupt_disable_enable_ldap_authorization()
 
 
-class AddRemoveDcNemesis(NemesisBaseClass):
-    disruptive = True
-    limited = True
-    topology_changes = True
-
-    def disrupt(self):
-        self.runner.disrupt_add_remove_dc()
-
-
 @target_data_nodes
 class GrowShrinkClusterNemesis(NemesisBaseClass):
     disruptive = True
