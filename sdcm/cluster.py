@@ -96,6 +96,7 @@ from sdcm.remote.remote_long_running import run_long_running_cmd
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
 from sdcm import wait, mgmt
 from sdcm.sct_config import SCTConfiguration
+from sdcm.utils.apt import apt_cmd
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_events.system import AwsKmsEvent
 from sdcm.snitch_configuration import SnitchConfig
@@ -2360,7 +2361,7 @@ class BaseNode(AutoSshContainerMixin):
 
         if self.distro.is_debian_like:
             self.fetch_apt_keys()
-            self.remoter.sudo("apt-get update", ignore_status=True)
+            self.remoter.sudo(apt_cmd("update"), ignore_status=True)
 
     def fetch_apt_keys(self):
         """
@@ -2453,10 +2454,7 @@ class BaseNode(AutoSshContainerMixin):
             pkg_cmd = "zypper"
             package_name = f"{package_name}-{package_version}" if package_version else package_name
         else:
-            pkg_cmd = (
-                "DEBIAN_FRONTEND=noninteractive apt-get "
-                '-o DPkg::Lock::Timeout=120 -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef"'
-            )
+            pkg_cmd = apt_cmd()
             version_prefix = f"={package_version}*" if package_version else ""
             if version_prefix:
                 # get versioned dependencies as apt always get's the latest version which are not compatible
@@ -2536,12 +2534,8 @@ class BaseNode(AutoSshContainerMixin):
         elif self.distro.is_sles:
             self.remoter.sudo("zypper update scylla-manager-agent -y")
         else:
-            self.remoter.sudo("apt-get update", ignore_status=True)
-            self.remoter.sudo(
-                "DEBIAN_FRONTEND=noninteractive apt-get install -o Dpkg::Lock::Timeout=300 "
-                "-o Dpkg::Options::='--force-confold' -o Dpkg::Options::='--force-confdef' "
-                "-y scylla-manager-agent"
-            )
+            self.remoter.sudo(apt_cmd("update"), ignore_status=True)
+            self.remoter.sudo(apt_cmd("install -y scylla-manager-agent", options={"DPkg::Lock::Timeout": "300"}))
         self.remoter.sudo("scyllamgr_agent_setup -y")
         if start_agent_after_upgrade:
             if self.is_docker():
@@ -2595,7 +2589,7 @@ class BaseNode(AutoSshContainerMixin):
             else:
                 self.remoter.sudo("apt-get clean all")
                 self.remoter.sudo("rm -rf /var/cache/apt/")
-                self.remoter.sudo("apt-get update", retry=3)
+                self.remoter.sudo(apt_cmd("update"), retry=3)
         except Exception as ex:  # noqa: BLE001
             self.log.error("Failed to update repo cache: %s", ex)
 
@@ -2940,7 +2934,7 @@ class BaseNode(AutoSshContainerMixin):
         if self.distro.is_rhel_like:
             remoter.run("sudo yum makecache", ignore_status=True)
             return
-        remoter.run("sudo apt-get update", ignore_status=True)
+        remoter.run(f"sudo {apt_cmd('update')}", ignore_status=True)
 
     @retrying(n=3, sleep_time=10, allowed_exceptions=(_ScyllaSetupDnsRetryError,))
     def _run_scylla_setup_with_dns_retry(self, setup_cmd):
@@ -3013,13 +3007,8 @@ class BaseNode(AutoSshContainerMixin):
         elif self.distro.is_sles:
             self.remoter.sudo("zypper update scylla-manager-server scylla-manager-client -y")
         else:
-            self.remoter.sudo("apt-get update", ignore_status=True)
-            self.remoter.sudo(
-                "DEBIAN_FRONTEND=noninteractive apt-get install "
-                '-o Dpkg::Options::="--force-confold" '
-                '-o Dpkg::Options::="--force-confdef" '
-                "scylla-manager-server scylla-manager-client -y "
-            )
+            self.remoter.sudo(apt_cmd("update"), ignore_status=True)
+            self.remoter.sudo(apt_cmd("install -y scylla-manager-server scylla-manager-client"))
         time.sleep(3)
         if start_manager_after_upgrade:
             if self.is_docker():
@@ -7012,8 +7001,8 @@ class BaseMonitorSet:
             prereqs_script = dedent(f"""
                 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
                 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-                sudo apt-get update
-                sudo apt-get install -y docker.io
+                sudo {apt_cmd("update")}
+                sudo {apt_cmd("install -y docker.io")}
                 python3 -m pip install pyyaml {pip_break_system_packages}
                 python3 -m pip install -I -U psutil {pip_break_system_packages}
                 systemctl start docker
