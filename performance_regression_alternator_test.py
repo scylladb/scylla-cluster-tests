@@ -218,7 +218,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         run_mixed = mode in ("full", "basic", "basic-mixed")
         run_read_throughput = mode in ("full", "basic", "basic-throoughput", "basic-throughput-read")
         run_write_throughput = mode in ("full", "basic", "basic-throoughput", "basic-throughput-write")
-        loaders = self.params.get("n_loaders")
+        loaders = sum(self.params.get("n_loaders"))
 
         def run_read_cql():
             self._prepare_and_execute_workload_with_latency_calculator_decorator(

@@ -278,11 +278,7 @@ class PlatformMigrationTest(LongevityTest):
                     f"Node {node.name} has instance type {node._instance_type}, expected {self.target_instance_type}"
                 )
 
-        n_db_nodes: list[int] | int = self.params.get("n_db_nodes")
-        if isinstance(n_db_nodes, list):
-            expected_count = sum(n_db_nodes)
-        else:
-            expected_count = int(n_db_nodes)
+        expected_count = sum(self.params.get("n_db_nodes"))
 
         actual_count = len(self.db_cluster.nodes)
         if actual_count != expected_count:

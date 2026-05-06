@@ -106,7 +106,7 @@ def deploy_k8s_gke_cluster(k8s_cluster) -> None:
         loader_pool = GkeNodePool(
             name=k8s_cluster.LOADER_POOL_NAME,
             instance_type=params.get("gce_instance_type_loader"),
-            num_nodes=params.get("n_loaders"),
+            num_nodes=sum(params.get("n_loaders")),
             k8s_cluster=k8s_cluster,
         )
         k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
@@ -118,7 +118,7 @@ def deploy_k8s_gke_cluster(k8s_cluster) -> None:
             disk_size=params.get("root_disk_size_monitor"),
             disk_type=params.get("gce_root_disk_type_monitor"),
             instance_type=params.get("k8s_instance_type_monitor") or params.get("gce_instance_type_monitor"),
-            num_nodes=params.get("k8s_n_monitor_nodes") or params.get("n_monitor_nodes"),
+            num_nodes=params.get("k8s_n_monitor_nodes") or sum(params.get("n_monitor_nodes")),
             k8s_cluster=k8s_cluster,
         )
         k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=False)
@@ -130,7 +130,7 @@ def deploy_k8s_gke_cluster(k8s_cluster) -> None:
         disk_size=params.get("root_disk_size_db"),
         disk_type=params.get("gce_root_disk_type_db"),
         instance_type=params.get("gce_instance_type_db"),
-        num_nodes=params.get("n_db_nodes"),
+        num_nodes=sum(params.get("n_db_nodes")),
         taints=["role=scylla-clusters:NoSchedule"],
         k8s_cluster=k8s_cluster,
     )
@@ -495,7 +495,7 @@ class GkeCluster(KubernetesCluster):
                 disk_size=self.params.get("root_disk_size_db"),
                 disk_type=self.params.get("gce_root_disk_type_db"),
                 instance_type=self.params.get("gce_instance_type_db"),
-                num_nodes=self.params.get("n_db_nodes"),
+                num_nodes=sum(self.params.get("n_db_nodes")),
                 k8s_cluster=self,
             )
             self.deploy_node_pool(new_scylla_pool, wait_till_ready=True)

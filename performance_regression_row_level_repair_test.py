@@ -269,7 +269,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
     def _populate_scylla_bench_data_in_parallel(
         self, base_cmd, partition_count, clustering_row_count, consistency_level="all"
     ):
-        n_loaders = int(self.params.get("n_loaders"))
+        n_loaders = sum(self.params.get("n_loaders"))
         partitions_per_loader = partition_count // n_loaders
         str_additional_args = f"-partition-count={partitions_per_loader} -clustering-row-count={clustering_row_count} -consistency-level={consistency_level}"
         write_queue = []
