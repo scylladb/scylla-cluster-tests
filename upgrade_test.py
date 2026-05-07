@@ -51,6 +51,7 @@ from sdcm.sct_events.database import (
 )
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import (
+    critical_host_maintenance_migration,
     decorate_with_context,
     ignore_abort_requested_errors,
     ignore_topology_change_coordinator_errors,
@@ -810,6 +811,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         with ignore_upgrade_schema_errors():
             step = "Step5 - Upgrade rest of the Nodes "
             self.actions_log.info(step)
+<<<<<<< HEAD
             for i in indexes[1:]:
                 self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
                 InfoEvent(message="Upgrade Node %s begin" % self.db_cluster.node_to_upgrade.name).publish()
@@ -818,6 +820,22 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 self.db_cluster.node_to_upgrade.check_node_health()
                 self.fill_and_verify_db_data("after upgraded %s" % self.db_cluster.node_to_upgrade.name)
                 self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade, step=step)
+||||||| parent of 306978561 (improvement(events): raise GCE host migration to critical in upgrade)
+            for i in indexes[1:]:
+                self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
+                self.upgrade_node(self.db_cluster.node_to_upgrade)
+                self.db_cluster.node_to_upgrade.check_node_health()
+                self.fill_and_verify_db_data("after upgraded %s" % self.db_cluster.node_to_upgrade.name)
+                self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade, step=step)
+=======
+            with critical_host_maintenance_migration():
+                for i in indexes[1:]:
+                    self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
+                    self.upgrade_node(self.db_cluster.node_to_upgrade)
+                    self.db_cluster.node_to_upgrade.check_node_health()
+                    self.fill_and_verify_db_data("after upgraded %s" % self.db_cluster.node_to_upgrade.name)
+                    self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade, step=step)
+>>>>>>> 306978561 (improvement(events): raise GCE host migration to critical in upgrade)
         self.actions_log.info("Step5.1 - run raft topology upgrade procedure")
         self.run_raft_topology_upgrade_procedure()
 
@@ -1063,8 +1081,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         # Upgrade all nodes
         self.actions_log.info("Upgrade nodes")
-        for node_to_upgrade in nodes_to_upgrade:
-            self._start_and_wait_for_node_upgrade(node_to_upgrade, step=next(step))
+        with critical_host_maintenance_migration():
+            for node_to_upgrade in nodes_to_upgrade:
+                self._start_and_wait_for_node_upgrade(node_to_upgrade, step=next(step))
         self.actions_log.info("All nodes were upgraded successfully")
 
         self.actions_log.info("Run raft topology upgrade procedure")
