@@ -188,6 +188,20 @@ PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-poli
 VERSION_CODENAME=jammy
 UBUNTU_CODENAME=jammy
     """,
+    "Ubuntu 26.04": """\
+NAME="Ubuntu"
+VERSION="26.04 LTS (Resolute Raccoon)"
+ID=ubuntu
+ID_LIKE=debian
+PRETTY_NAME="Ubuntu 26.04 LTS"
+VERSION_ID="26.04"
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+VERSION_CODENAME=resolute
+UBUNTU_CODENAME=resolute
+""",
     "Amazon Linux 2": """\
 NAME="Amazon Linux"
 VERSION="2"
@@ -332,6 +346,13 @@ class TestDistro:
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 22.04"])
         assert distro.is_ubuntu22
         assert distro.is_ubuntu
+
+    def test_ubuntu26(self):
+        assert Distro.UBUNTU26.is_ubuntu26
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 26.04"])
+        assert distro.is_ubuntu26
+        assert distro.is_ubuntu
+        assert distro.is_debian_like
 
     def test_amazon2023(self):
         assert Distro.AMAZON2023.is_amazon2023
