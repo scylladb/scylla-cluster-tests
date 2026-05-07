@@ -1,0 +1,7 @@
+2026-04-15T10:22:33.456+00:00 rolling-upgrade-ubuntu-db-node-edf1b37c-eastus-5  ! ERROR | scylla[1234]:  [shard 3] seastar_memory - oversized allocation: 167936 bytes, please report:
+ at 0x194b7ff 0x3526010 0x1d3b798 0x3661f77 0x1b7e4c3 0x18ddb68
+    0x1da7f14 0x1de7b52 0x1df17ce 0x1f5ef84 0x1f5e2ba 0x1f62d76
+    0x1f62888 0x18f4ffc 0x18f3418 0x6b463fe 0x6b030ca
+    /opt/scylladb/libreloc/libc.so.6+0x72463
+    /opt/scylladb/libreloc/libc.so.6+0xf55eb
+2026-04-15T10:22:34.000+00:00 rolling-upgrade-ubuntu-db-node-edf1b37c-eastus-5  ! INFO | scylla[1234]:  [shard 3] some other log line

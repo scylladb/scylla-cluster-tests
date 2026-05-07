@@ -53,6 +53,7 @@ class DbLogReader(Process):
     ]
 
     BUILD_ID_REGEX = re.compile(r"build-id\s(.*?)\sstarting\s\.\.\.")
+    MULTI_ADDR_CONTINUATION_RE = re.compile(r"^\s+(at\s+)?0x[0-9a-f]", re.IGNORECASE)
 
     def __init__(
         self,
@@ -112,6 +113,10 @@ class DbLogReader(Process):
 
         return False
 
+    @staticmethod
+    def _is_multiaddress_continuation(line: str) -> bool:
+        return bool(DbLogReader.MULTI_ADDR_CONTINUATION_RE.match(line))
+
     def _read_and_publish_events(self) -> None:  # noqa: PLR0912
         """Search for all known patterns listed in `sdcm.sct_events.database.SYSTEM_ERROR_EVENTS'."""
 
@@ -170,6 +175,16 @@ class DbLogReader(Process):
                         for trace_line in splitted_line[1].split():
                             if trace_line.startswith("0x") or "scylladb/lib" in trace_line:
                                 one_line_backtrace.append(trace_line)
+
+                    elif self._is_multiaddress_continuation(line) and backtraces:
+                        # Handle multi-line backtraces where addresses are on continuation lines.
+                        # Example (OVERSIZED_ALLOCATION):
+                        #   seastar_memory - oversized allocation: 167936 bytes, please report:
+                        #    at 0x194b7ff 0x3526010 0x1d3b798 0x3661f77
+                        #       0x1da7f14 0x1de7b52 /opt/scylladb/libreloc/libc.so.6+0x72463
+                        for trace_line in line.split():
+                            if trace_line.startswith("0x") or "scylladb/lib" in trace_line:
+                                backtraces[-1]["backtrace"].append(trace_line)
 
                     elif (match := BACKTRACE_RE.search(line)) and backtraces:
                         data = match.groupdict()

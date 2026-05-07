@@ -197,6 +197,20 @@ class TestBaseNode:
 
         print(events[-1])
 
+    def test_search_multiline_oversized_allocation_backtrace(self):
+        self.node.system_log = str(self.test_data_dir / "system_multiline_oversized_allocation.log")
+
+        self._read_and_publish_events()
+
+        events = self._events.published_events
+
+        oversized_events = [event for event in events if event["type"] == "OVERSIZED_ALLOCATION"]
+        assert len(oversized_events) == 1
+        assert oversized_events[0]["raw_backtrace"]
+        assert "0x194b7ff" in oversized_events[0]["raw_backtrace"]
+        assert "0x6b030ca" in oversized_events[0]["raw_backtrace"]
+        assert "libc.so.6+0x72463" in oversized_events[0]["raw_backtrace"]
+
     def test_gate_closed_ignored_exception_is_catched(self):
         self.node.system_log = str(self.test_data_dir / "gate_closed_ignored_exception.log")
 
