@@ -291,6 +291,16 @@
       "created": "2026-04-12",
       "phases_total": 5,
       "phases_done": 0
+    },
+    {
+      "id": "gce-capacity-zone-fallback",
+      "title": "GCE Capacity Zone Fallback",
+      "file": "infrastructure/gce-capacity-zone-fallback.md",
+      "domain": "cluster",
+      "status": "draft",
+      "created": "2026-05-07",
+      "phases_total": 5,
+      "phases_done": 0
     }
   ]
 }
