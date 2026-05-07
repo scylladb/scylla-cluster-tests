@@ -58,6 +58,7 @@ class ConfigParamsMap:
     root_disk_size: str
     local_ssd_count: str | None = None  # Maps to gce_n_local_ssd_disk_* parameters
     root_disk_type: str | None = None  # Maps to gce_root_disk_type_* parameters
+    pd_standard_disk_size: str | None = None  # Maps to gce_pd_standard_disk_size_* parameters
 
 
 class DefinitionBuilder(abc.ABC):
@@ -125,9 +126,12 @@ class DefinitionBuilder(abc.ABC):
         mapper = self.SCT_PARAM_MAPPER[node_type]
         use_public_ip = ssh_connection_ip_type(self.params) == "public" or node_type == "monitor"
         local_ssd_count = self.params.get(mapper.local_ssd_count) if mapper.local_ssd_count else 0
+        pd_standard_disk_size = self.params.get(mapper.pd_standard_disk_size) if mapper.pd_standard_disk_size else 0
         data_disks = []
         if local_ssd_count:
             data_disks.append(DataDisk(type="local-ssd", size=375, count=local_ssd_count))
+        if pd_standard_disk_size:
+            data_disks.append(DataDisk(type="pd-standard", size=pd_standard_disk_size, count=1))
         return InstanceDefinition(
             name=name,
             image_id=self.params.get(mapper.image_id),
