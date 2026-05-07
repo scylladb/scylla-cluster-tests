@@ -208,6 +208,7 @@ from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
 if TYPE_CHECKING:
     from sdcm.audit import AuditStore
     from sdcm.mgmt.cli import BackupTask
+    from sdcm.tester import ClusterTester
 
 LOGGER = logging.getLogger(__name__)
 DISRUPT_POOL_PROPERTY_NAME = "target_pool"
@@ -276,7 +277,7 @@ class NemesisRunner:
         self, tester_obj, termination_event, *args, nemesis_selector: Optional[str] = None, nemesis_seed=None, **kwargs
     ):
         # *args -  compatible with CategoricalMonkey
-        self.tester = tester_obj  # ClusterTester object
+        self.tester: "ClusterTester" = tester_obj
         self.nemesis_registry = NemesisRegistry(base_class=NemesisBaseClass, flag_class=NemesisFlags)
         self.cluster: Union[BaseCluster, BaseScyllaCluster] = tester_obj.db_cluster
         self.loaders = tester_obj.loaders
