@@ -1785,7 +1785,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             n_db_nodes = self.params.get("n_db_nodes")
             if isinstance(n_db_nodes, int):  # legacy type
                 db_info["n_nodes"] = [n_db_nodes]
-            elif isinstance(n_db_nodes, list):  # latest type to support multiple datacenters
+            elif isinstance(n_db_nodes, str):
+                db_info["n_nodes"] = [int(n) for n in n_db_nodes.split()]
+            elif isinstance(n_db_nodes, list):
                 db_info["n_nodes"] = n_db_nodes
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_db_nodes)))

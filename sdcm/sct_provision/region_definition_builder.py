@@ -78,7 +78,7 @@ class DefinitionBuilder(abc.ABC):
         return self.params.get(self.REGION_MAP)
 
     def build_instance_definition(
-        self, region: str, node_type: NodeTypeType, index: int, instance_type: str = None
+        self, region: str, node_type: NodeTypeType, index: int, dc_idx: int = 0, instance_type: str = None
     ) -> InstanceDefinition:
         """Builds one instance definition of given type and index for given region"""
         user_prefix = self.params.get("user_prefix")
@@ -108,16 +108,28 @@ class DefinitionBuilder(abc.ABC):
         )
 
     def build_region_definition(
-        self, region: str, availability_zone: str, n_db_nodes: int, n_loader_nodes: int, n_monitor_nodes: int
+        self,
+        region: str,
+        availability_zone: str,
+        n_db_nodes: int,
+        n_loader_nodes: int,
+        n_monitor_nodes: int,
+        dc_idx: int = 0,
     ) -> RegionDefinition:
         """Builds instances definitions for given region"""
         definitions = []
         for idx in range(n_db_nodes):
-            definitions.append(self.build_instance_definition(region=region, node_type="scylla-db", index=idx + 1))
+            definitions.append(
+                self.build_instance_definition(region=region, node_type="scylla-db", index=idx + 1, dc_idx=dc_idx)
+            )
         for idx in range(n_loader_nodes):
-            definitions.append(self.build_instance_definition(region=region, node_type="loader", index=idx + 1))
+            definitions.append(
+                self.build_instance_definition(region=region, node_type="loader", index=idx + 1, dc_idx=dc_idx)
+            )
         for idx in range(n_monitor_nodes):
-            definitions.append(self.build_instance_definition(region=region, node_type="monitor", index=idx + 1))
+            definitions.append(
+                self.build_instance_definition(region=region, node_type="monitor", index=idx + 1, dc_idx=dc_idx)
+            )
         return RegionDefinition(
             backend=self.BACKEND,
             test_id=self.test_id,
@@ -138,8 +150,8 @@ class DefinitionBuilder(abc.ABC):
         if self.params.get("cluster_backend") == "xcloud" or self.params.get("xcloud_provisioning_mode"):
             n_db_nodes = [0] * len(self.regions)
 
-        for region, db_nodes, loader_nodes, monitor_nodes in zip(
-            self.regions, n_db_nodes, n_loader_nodes, n_monitor_nodes
+        for dc_idx, (region, db_nodes, loader_nodes, monitor_nodes) in enumerate(
+            zip(self.regions, n_db_nodes, n_loader_nodes, n_monitor_nodes)
         ):
             region_definitions.append(
                 self.build_region_definition(
@@ -148,6 +160,7 @@ class DefinitionBuilder(abc.ABC):
                     n_db_nodes=db_nodes,
                     n_loader_nodes=loader_nodes,
                     n_monitor_nodes=monitor_nodes,
+                    dc_idx=dc_idx,
                 )
             )
         return region_definitions

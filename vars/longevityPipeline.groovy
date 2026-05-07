@@ -341,7 +341,7 @@ def call(Map pipelineParams) {
                                     if (params.backend == 'xcloud') {
                                         echo "Scylla Cloud backend selected: provisioning loader nodes only on ${params.xcloud_provider} cloud provider"
                                     }
-                                    if (params.backend == 'xcloud' || params.backend == 'aws' || params.backend == 'azure') {
+                                    if (params.backend == 'xcloud' || params.backend == 'aws' || params.backend == 'azure' || params.backend == 'oci') {
                                         provisionResources(params, builder.region)
                                     } else if (params.backend.contains('docker')) {
                                         sh """
