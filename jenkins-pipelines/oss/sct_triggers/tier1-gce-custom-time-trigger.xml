@@ -38,7 +38,6 @@
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>gce_image_db=$gce_image_db
 scylla_version=$scylla_version
-availability_zone=a
 provision_type=on_demand
 post_behavior_db_nodes=destroy
 post_behavior_monitor_nodes=destroy
