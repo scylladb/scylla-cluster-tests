@@ -97,7 +97,6 @@ from sdcm.sct_events.group_common_events import (
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
-from sdcm.snitch_configuration import SnitchConfig
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
