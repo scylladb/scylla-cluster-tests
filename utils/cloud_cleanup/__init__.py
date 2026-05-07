@@ -49,8 +49,11 @@ def should_keep(creation_time: datetime, keep_hours: int) -> bool:
     if keep_hours <= 0:
         return True
     try:
+        # Ensure creation_time is timezone-aware (assume UTC if naive)
+        if creation_time.tzinfo is None:
+            creation_time = creation_time.replace(tzinfo=timezone.utc)
         keep_date = creation_time + timedelta(hours=keep_hours)
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(timezone.utc)
         return now < keep_date
     except (TypeError, ValueError) as exc:
         LOGGER.info("error while defining if should keep: %s. Keeping.", exc)
