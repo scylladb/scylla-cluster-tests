@@ -15,8 +15,10 @@ import re
 import pickle
 
 from sdcm.sct_events import Severity
+from sdcm.sct_events.base import max_severity
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.gce_events import GceInstanceEvent
 
 
 def test_db_events_filter_just_type():
@@ -151,3 +153,38 @@ def test_events_severity_changer_filter():
     assert event.severity == Severity.ERROR
     db_events_filter.eval_filter(event)
     assert event.severity == Severity.NORMAL
+
+
+def _make_gce_instance_event(method: str, severity: Severity = Severity.WARNING) -> GceInstanceEvent:
+    log_entry = {
+        "timestamp": "2026-05-04T12:34:56.000Z",
+        "protoPayload": {
+            "resourceName": "projects/proj/zones/us-east1-b/instances/test-node",
+            "methodName": f"compute.instances.{method}",
+            "status": {"message": f"synthetic {method} event"},
+        },
+    }
+    return GceInstanceEvent(log_entry, severity=severity)
+
+
+def test_critical_host_maintenance_migration_escalates_migrate_on_host_maintenance():
+    severity_filter = EventsSeverityChangerFilter(
+        new_severity=Severity.CRITICAL,
+        event_class=GceInstanceEvent,
+        regex=r".*migrateOnHostMaintenance.*",
+    )
+    event = _make_gce_instance_event(method="migrateOnHostMaintenance", severity=Severity.WARNING)
+    severity_filter.eval_filter(event)
+    assert event.severity == Severity.CRITICAL
+
+
+def test_critical_host_maintenance_migration_outside_context_keeps_warning():
+    event = _make_gce_instance_event(method="migrateOnHostMaintenance", severity=Severity.WARNING)
+    assert event.severity == Severity.WARNING
+
+
+def test_gce_instance_event_severity_cap_per_method():
+    migrate_event = _make_gce_instance_event(method="migrateOnHostMaintenance", severity=Severity.WARNING)
+    restart_event = _make_gce_instance_event(method="automaticRestart", severity=Severity.ERROR)
+    assert max_severity(migrate_event) == Severity.CRITICAL
+    assert max_severity(restart_event) == Severity.ERROR
