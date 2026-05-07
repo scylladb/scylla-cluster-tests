@@ -47,6 +47,7 @@ import packaging.version
 
 import yaml
 import requests
+from cassandra.io.asyncioreactor import AsyncioConnection
 from paramiko import SSHException
 from tenacity import RetryError
 from invoke.exceptions import UnexpectedExit, Failure
@@ -4582,6 +4583,7 @@ class BaseCluster:
         kwargs = dict(contact_points=node_ips, port=port, ssl_context=ssl_context)
         cluster_driver = ClusterDriver(
             auth_provider=auth_provider,
+            connection_class=AsyncioConnection,
             compression=compression,
             protocol_version=protocol_version,
             load_balancing_policy=load_balancing_policy,
