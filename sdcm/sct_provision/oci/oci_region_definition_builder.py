@@ -50,8 +50,10 @@ class OciDefinitionBuilder(DefinitionBuilder):
     SCT_PARAM_MAPPER = mapper
     REGION_MAP = "oci_region_name"
 
-    def build_instance_definition(self, region: str, node_type: NodeTypeType, index: int, instance_type: str = None):
-        definition = super().build_instance_definition(region, node_type, index, instance_type)
+    def build_instance_definition(
+        self, region: str, node_type: NodeTypeType, index: int, dc_idx: int = 0, instance_type: str = None
+    ):
+        definition = super().build_instance_definition(region, node_type, index, dc_idx, instance_type)
 
         # NOTE: set latest ubuntu image for loader and monitor nodes if not defined
         if not definition.image_id and "db" not in node_type:
