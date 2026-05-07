@@ -31,7 +31,7 @@ import json
 import itertools
 from contextlib import ExitStack
 from datetime import timedelta
-from typing import Any, List, Optional, Tuple, Callable, Dict, Set, Union, Iterable
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial, cached_property
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
@@ -208,6 +208,8 @@ from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
 
+if TYPE_CHECKING:
+    from sdcm.tester import ClusterTester
 
 LOGGER = logging.getLogger(__name__)
 # NOTE: following lock is needed in the K8S multitenant case
@@ -269,7 +271,7 @@ class Nemesis(NemesisFlags):
 
     def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
         # *args -  compatible with CategoricalMonkey
-        self.tester = tester_obj  # ClusterTester object
+        self.tester: "ClusterTester" = tester_obj
         self.nemesis_registry = NemesisRegistry(
             base_class=Nemesis, flag_class=NemesisFlags, excluded_list=COMPLEX_NEMESIS
         )
