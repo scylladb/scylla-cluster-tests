@@ -314,7 +314,7 @@ class OciCluster(cluster.BaseCluster):
         nodes = []
 
         instance_dc = 0 if self.params.get("simulated_regions") else dc_idx
-        instances = self._create_instances(count, instance_dc, instance_type=instance_type)
+        instances = self._create_instances(count, instance_dc, instance_type=instance_type, rack=rack)
 
         self.log.debug("instances: %s", instances)
         for node_index, instance in enumerate(instances, start=self._node_index + 1):
@@ -347,21 +347,22 @@ class OciCluster(cluster.BaseCluster):
         except Exception as ex:  # noqa: BLE001
             raise CreateOciNodeError("Failed to create node: %s" % ex) from ex
 
-    def _create_instances(self, count, dc_idx=0, instance_type=None) -> List[VmInstance]:
+    def _create_instances(self, count, dc_idx=0, instance_type=None, rack=None) -> List[VmInstance]:
         region = self._definition_builder.regions[dc_idx]
         assert region, "no region provided, please add `oci_region_name` param"
         pricing_model = PricingModel.SPOT if "spot" in self.instance_provision else PricingModel.ON_DEMAND
         definitions = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
-            definitions.append(
-                self._definition_builder.build_instance_definition(
-                    region=region,
-                    node_type=self.node_type,
-                    index=node_index,
-                    dc_idx=dc_idx,
-                    instance_type=instance_type,
-                )
+            definition = self._definition_builder.build_instance_definition(
+                region=region,
+                node_type=self.node_type,
+                index=node_index,
+                dc_idx=dc_idx,
+                instance_type=instance_type,
             )
+            if rack is not None:
+                definition.rack_index = rack
+            definitions.append(definition)
         return provision_instances_with_fallback(
             self.provisioners[dc_idx],
             definitions=definitions,
