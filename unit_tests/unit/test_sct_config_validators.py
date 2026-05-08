@@ -6,48 +6,80 @@ from sdcm.sct_config import (
     SCTConfiguration,
     boolean_or_space_separated_booleans,
     dict_or_str,
-    int_or_space_separated_ints,
+    int_or_list_or_eval,
     str_or_list_or_eval,
 )
 
 
 # ---------------------------------------------------------------------------
-# int_or_space_separated_ints
+# int_or_list_or_eval
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
-    "input_val,expected",
+    "value,expected",
     [
-        (None, None),
-        (1, [1]),
-        (0, [0]),
-        (-5, [-5]),
-        ("3", [3]),
-        ("10", [10]),
-        ([1, 2, 3], [1, 2, 3]),
-        ([1], [1]),
-        (["1", "2", "3"], [1, 2, 3]),
-        ("1 2 3", [1, 2, 3]),
-        ("  4  5  6  ", [4, 5, 6]),
-        ("42", [42]),
+        # config path: YAML-native types
+        pytest.param(None, None, id="config_none"),
+        # bare scalar int — the real YAML path when a config has `n_db_nodes: 3`
+        pytest.param(3, [3], id="config_bare_int"),
+        pytest.param(0, [0], id="config_bare_zero"),
+        pytest.param(-5, [-5], id="config_bare_negative_int"),
+        pytest.param([3], [3], id="config_int"),
+        pytest.param([0], [0], id="config_zero"),
+        pytest.param([3, 1], [3, 1], id="config_list_ints"),
+        pytest.param([253, 328], [253, 328], id="config_list_ints_long"),
+        # env path: raw strings from SCT_* environment variables
+        pytest.param("3", [3], id="env_single_int"),
+        pytest.param("0", [0], id="env_zero"),
+        pytest.param("[3, 1]", [3, 1], id="env_list_literal"),
+        pytest.param("[3,1]", [3, 1], id="env_list_literal_no_spaces"),
+        pytest.param("[3, 3, 2]", [3, 3, 2], id="env_list_literal_three"),
+        pytest.param("[1, 0]", [1, 0], id="env_list_literal_with_zero"),
+        # negative integers
+        pytest.param([-5], [-5], id="config_negative_int"),
+        pytest.param("[-5]", [-5], id="env_negative_int"),
+        pytest.param([-5, -3], [-5, -3], id="config_negative_list"),
+        pytest.param("[-5, -3]", [-5, -3], id="env_negative_list"),
+        # empty list
+        pytest.param([], [], id="config_empty_list"),
+        pytest.param("[]", [], id="env_empty_list"),
     ],
 )
-def test_int_or_space_separated_ints_valid(input_val, expected):
-    assert int_or_space_separated_ints(input_val) == expected
+def test_int_or_list_or_eval_valid(value, expected):
+    """int_or_list_or_eval accepts valid int scalars and homogeneous int lists."""
+    assert int_or_list_or_eval(value) == expected
 
 
 @pytest.mark.parametrize(
-    "input_val",
+    "value,error_fragment",
     [
-        "not_a_number",
-        "1 2 abc",
-        [1, "abc"],
+        # space-separated strings are no longer accepted; literal_eval fails then int() fails
+        pytest.param("3 1", "isn't a valid int or list", id="env_space_sep_two"),
+        pytest.param("3 3 3", "isn't a valid int or list", id="env_space_sep_three"),
+        pytest.param("  5 10  ", "isn't a valid int or list", id="env_space_sep_padded"),
+        # non-numeric strings
+        pytest.param("foo", "isn't a valid int or list", id="env_non_numeric"),
+        # invalid list element types
+        pytest.param(["a", "b"], "isn't an integer", id="config_list_str_elements"),
+        pytest.param(["3", "1"], "isn't an integer", id="config_list_quoted_ints_rejected"),
+        # leading 0
+        pytest.param("033", "isn't a valid int or list", id="env_leading_zero"),
+        # wrong scalar type
+        pytest.param(3.14, "isn't a valid int or list", id="config_float"),
+        pytest.param(False, "isn't a valid int or list", id="config_bool"),
+        # bool True is also rejected (symmetry with False)
+        pytest.param(True, "isn't a valid int or list", id="config_bool_true"),
+        # list element that is a bool (bool subclasses int but must be excluded)
+        pytest.param([True, 1], "isn't an integer", id="config_list_bool_element"),
+        # empty string
+        pytest.param("", "isn't a valid int or list", id="env_empty_string"),
     ],
 )
-def test_int_or_space_separated_ints_invalid(input_val):
-    with pytest.raises((ValueError, TypeError)):
-        int_or_space_separated_ints(input_val)
+def test_int_or_list_or_eval_invalid(value, error_fragment):
+    """int_or_list_or_eval raises ValueError for non-int types, bools, and malformed strings."""
+    with pytest.raises(ValueError, match=error_fragment):
+        int_or_list_or_eval(value)
 
 
 # ---------------------------------------------------------------------------

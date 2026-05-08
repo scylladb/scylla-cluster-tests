@@ -175,7 +175,7 @@ def str_or_list_or_eval(value: Union[str, List[str], None]) -> List[str] | None:
                 ret_values += [str(val)]
         return ret_values
 
-    raise ValueError(f"{value} isn't a string or a list")
+    raise ValueError(f"{value!r} isn't a string or a list")
 
 
 #: Config type that always returns list[str]. Accepts str, list[str], or evaluable expressions.
@@ -187,37 +187,49 @@ StringOrList = Annotated[
 ]
 
 
-def int_or_space_separated_ints(value: str | int | list[int]) -> list[int] | None:
+def int_or_list_or_eval(value: str | int | list[int]) -> list[int] | None:
+    """Coerce value to a single int or a list of ints.
+
+    Accepts:
+    - None -> None
+    - int -> list[int]
+    - list[int] ->  list[int]
+    - str containing a single integer (e.g. from an env var) -> list[int]
+    - str containing a Python list literal of ints (e.g. "[2, 2]" from an env var) -> list[int]
+
+    List elements must already be ints; string elements (e.g. ["3", "1"]) are rejected.
+    Space-separated strings (e.g. '3 3') are no longer accepted.
+    Use a YAML list instead: [3, 3].
+    """
     if value is None:
         return None
-    try:
-        return [int(value)]
-    except Exception:  # noqa: BLE001
-        pass
+
+    # bool is a subclass of int in Python, so we need to exclude bools explicitly to avoid accepting True/False as valid ints.
+    if isinstance(value, int) and not isinstance(value, bool):
+        return [value]
 
     if isinstance(value, list):
-        # Handle list of ints or list of strings that can be converted to ints
-        try:
-            return [int(v) for v in value]
-        except (ValueError, TypeError) as exc:
-            raise ValueError(f"{value} isn't a list of integers") from exc
+        for v in value:
+            if not isinstance(v, int) or isinstance(v, bool):
+                raise ValueError(f"List element {v} isn't an integer in {value}")
+        return value
 
     if isinstance(value, str):
+        # Try literal_eval first — handles "[2, 2]", "[3]", "3", etc.
         try:
-            values = value.split()
-            return [int(v) for v in values]
-        except Exception:  # noqa: BLE001
+            parsed = ast.literal_eval(value.strip())
+        except (ValueError, SyntaxError):
             pass
+        else:
+            if isinstance(parsed, list):
+                return int_or_list_or_eval(parsed)  # recursively validate list elements
+            if isinstance(parsed, int) and not isinstance(parsed, bool):
+                return [parsed]
 
-    raise ValueError(f"{value} isn't int or list")
+    raise ValueError(f"{value} (type {type(value).__name__}) isn't a valid int or list[int]")
 
 
-#: Config type that always returns list[int]. Accepts int, list[int], or space-separated string of ints.
-IntOrList = Annotated[
-    list[int],
-    BeforeValidator(int_or_space_separated_ints),
-    InputType("int | list[int] | space-separated ints"),
-]
+IntOrList = Annotated[list[int], BeforeValidator(int_or_list_or_eval), InputType("int | list[int]")]
 
 
 def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -> list[bool] | None:  # noqa: PLR0911
@@ -1352,7 +1364,7 @@ class SCTConfiguration(BaseModel):
         description="If True, enable support in SCT of zero nodes (configuration, nemesis)",
     )
     n_db_zero_token_nodes: IntOrList = SctField(
-        description="Number of zero token nodes in cluster. Value should be set as '0 1 1' "
+        description="Number of zero token nodes in cluster. Value should be set as [0, 1, 1] "
         "for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions",
     )
     zero_token_instance_type_db: String = SctField(
@@ -3919,9 +3931,7 @@ class SCTConfiguration(BaseModel):
         seeds_num = self.get("seeds_num")
         assert seeds_num > 0, "Seed number should be at least one"
 
-        num_of_db_nodes = sum(
-            self.get("n_db_nodes") if isinstance(self.get("n_db_nodes"), list) else [self.get("n_db_nodes")]
-        )
+        num_of_db_nodes = sum(self.get("n_db_nodes"))
         assert not num_of_db_nodes or seeds_num <= num_of_db_nodes, (
             f"Seeds number ({seeds_num}) should be not more then nodes number ({num_of_db_nodes})"
         )
@@ -3967,9 +3977,7 @@ class SCTConfiguration(BaseModel):
         if self.get("cluster_backend").startswith("k8s"):
             return
         az_count = len(self.get("availability_zone").split(",")) if self.get("availability_zone") else 1
-        for nodes_num in (
-            self.get("n_db_nodes") if isinstance(self.get("n_db_nodes"), list) else [self.get("n_db_nodes")]
-        ):
+        for nodes_num in self.get("n_db_nodes"):
             assert nodes_num % az_count == 0, (
                 f"Number of db nodes ({nodes_num}) should be divisible by number of availability zones ({az_count})"
             )
