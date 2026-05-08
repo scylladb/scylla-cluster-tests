@@ -199,7 +199,7 @@ def test_cross_reference_td009_multidc_missing_feature(tmp_path):
         tmp_path,
         "test.yaml",
         {
-            "n_db_nodes": "6 6 6",
+            "n_db_nodes": [6, 6, 6],
             "test_metadata": {
                 "description": "A valid description that is long enough to pass.",
                 "features": [],

@@ -103,7 +103,7 @@ A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
 
 **default:** N/A
 
-**type:** int | list[int] | space-separated ints → list[int]
+**type:** int | list[int] → list[int]
 
 
 <a id="nemesis_selector"></a>

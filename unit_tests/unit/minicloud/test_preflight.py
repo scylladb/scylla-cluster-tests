@@ -94,7 +94,7 @@ def test_parse_memory_gib_rejects_garbage(value):
 
 @pytest.mark.parametrize(
     ("value", "expected"),
-    [(3, 3), ("3 3", 6), ([3, 3], 6), (None, 0), ("", 0), ([], 0)],
+    [(3, 3), ([3, 3], 6), (None, 0), ([], 0)],
 )
 def test_sum_node_counts(value, expected):
     assert MinicloudManager._sum_node_counts(value) == expected
@@ -103,7 +103,7 @@ def test_sum_node_counts(value, expected):
 def test_check_host_memory_fails_when_guests_exceed_available(tmp_path):
     # 6 db + 1 loader + 1 monitor = 8 guests x 4GiB + 2GiB headroom = 34GiB needed, 16GiB available
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
-    params = {"n_db_nodes": "3 3", "n_loaders": 1, "n_monitor_nodes": 1}
+    params = {"n_db_nodes": [3, 3], "n_loaders": 1, "n_monitor_nodes": 1}
     with _meminfo_path_patch(16 * 1024 * 1024):
         with pytest.raises(MinicloudError, match="8 guest.*34.0GiB needed.*16.0GiB"):
             manager._check_host_memory(params)
@@ -113,7 +113,7 @@ def test_check_host_memory_kill_switch(tmp_path):
     """minicloud_skip_memory_check disables the gate — dev machines know their own limits."""
     config = MinicloudConfig(state_dir=str(tmp_path), lightweight=True, skip_memory_check=True)
     manager = MinicloudManager(config=config)
-    params = {"n_db_nodes": "3 3", "n_loaders": 1, "n_monitor_nodes": 1}
+    params = {"n_db_nodes": [3, 3], "n_loaders": 1, "n_monitor_nodes": 1}
     with _meminfo_path_patch(16 * 1024 * 1024):
         manager._check_host_memory(params)  # must not raise
 
@@ -268,7 +268,7 @@ def test_container_mem_in_use_gib_is_zero_without_a_container():
 
 def test_preflight_check_runs_memory_check_when_params_given(tmp_path):
     manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path), lightweight=True))
-    params = {"n_db_nodes": "3 3", "n_loaders": 1, "n_monitor_nodes": 1}
+    params = {"n_db_nodes": [3, 3], "n_loaders": 1, "n_monitor_nodes": 1}
 
     # /dev/kvm gate lives in manager, /proc/meminfo read lives in preflight — patch both
     with _kvm_path_patch(kvm_exists=True):

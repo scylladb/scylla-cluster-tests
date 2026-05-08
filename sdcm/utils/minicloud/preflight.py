@@ -29,13 +29,11 @@ ORACLE_GUEST_DB_TYPES = ("mixed_scylla", "mixed_cassandra")
 
 
 def sum_node_counts(value) -> int:
-    """Sum an IntOrList param value: an int, a list, or a '3 3' multi-DC string."""
+    """Sum an IntOrList param value: an int or a list."""
     if not value:
         return 0
     if isinstance(value, int):
         return value
-    if isinstance(value, str):
-        return sum(int(part) for part in value.split())
     return sum(int(part) for part in value)
 
 

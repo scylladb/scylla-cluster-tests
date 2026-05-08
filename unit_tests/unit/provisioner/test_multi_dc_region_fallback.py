@@ -66,7 +66,7 @@ def _make_multi_dc_layout_params(**overrides):
             "fallback_to_next_region": True,
             "use_capacity_reservation": False,
             "use_dedicated_host": False,
-            "n_db_nodes": "3 3",
+            "n_db_nodes": [3, 3],
             **overrides,
         }
     )
@@ -111,7 +111,7 @@ def _db_cluster(**param_overrides) -> DBCluster:
     params = _StubParams(
         {
             "region_name": "us-east-1 eu-west-1 us-west-2",
-            "n_db_nodes": "3 0 3",
+            "n_db_nodes": [3, 0, 3],
             "availability_zone": "a",
             "user_prefix": "test",
             "use_zero_nodes": False,
@@ -132,14 +132,14 @@ def _patch_cluster_internals():
 
 
 def test_nodes_map_to_absolute_region_ids_when_a_middle_dc_has_zero_nodes():
-    """A zero-node middle DC must not shift later DCs: n_db_nodes='3 0 3' -> regions 0 and 2, not 0 and 1."""
-    cluster = _db_cluster(n_db_nodes="3 0 3")
+    """A zero-node middle DC must not shift later DCs: n_db_nodes=[3, 0, 3] -> regions 0 and 2, not 0 and 1."""
+    cluster = _db_cluster(n_db_nodes=[3, 0, 3])
     assert [node.region_id for node in cluster.nodes] == [0, 0, 0, 2, 2, 2]
 
 
 def test_db_cluster_provision_skips_given_region_ids():
     """skip_region_ids lets the multi-DC loop re-provision only a relocated DC, not the healthy ones."""
-    cluster = _db_cluster(n_db_nodes="3 3 3")
+    cluster = _db_cluster(n_db_nodes=[3, 3, 3])
     plan = MagicMock()
     plan.provision_instances.return_value = [object()]
 
@@ -181,7 +181,7 @@ def _plan_factory(fail_region_id: int, *, raise_client_error: bool):
 )
 def test_provision_tags_capacity_error_with_failing_region(raise_client_error, expected_exc):
     """The exhausted DC's region must be recoverable from the propagated capacity error, for both shapes."""
-    cluster = _db_cluster(n_db_nodes="3 0 3")
+    cluster = _db_cluster(n_db_nodes=[3, 0, 3])
 
     with ExitStack() as stack:
         stack.enter_context(

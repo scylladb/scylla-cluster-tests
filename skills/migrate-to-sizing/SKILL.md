@@ -176,9 +176,7 @@ Is the original instance from a dense storage family (i8ge, i7ie, i4i, i3en, BM.
 
 ## Handling Multi-DC Configs
 
-Multi-DC configs use space-separated node counts like `n_db_nodes: '4 4'`. The sizing preview command currently errors on these. When migrating multi-DC configs:
-1. The migration itself is the same (replace instance_type with sizing constraints)
-2. Preview validation must be skipped or the preview tool must be fixed to handle multi-DC
+Multi-DC configs use per-DC node count lists like `n_db_nodes: [4, 4]`. The migration is the same (replace instance_type with sizing constraints); preview sums the node counts across DCs.
 
 ## Verification
 
