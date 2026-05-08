@@ -1926,6 +1926,10 @@ class SCTConfiguration(BaseModel):
     aws_fallback_to_next_availability_zone: Boolean = SctField(
         description="Try all availability zones one by one in order to maximize the chances of getting the requested instance capacity.",
     )
+    pre_filter_unavailable_availability_zones: Boolean = SctField(
+        description="Filter availability zones upfront to only those that support all required instance types. "
+        "Replaces invalid AZs with valid alternatives in the same region before any provisioning attempt. AWS only.",
+    )
     num_nodes_to_rollback: int = SctField(
         description="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade",
     )
