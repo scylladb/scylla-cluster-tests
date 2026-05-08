@@ -284,6 +284,7 @@ function run_in_docker () {
         --env TERM \
         --net=host \
         --ulimit core=-1 \
+        --ulimit nofile=65536:65536 \
         -v /var/lib/systemd/coredump:/var/lib/systemd/coredump \
         --name="${SCT_TEST_ID}_$(date +%s)" \
         ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION} \
