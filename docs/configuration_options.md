@@ -4023,6 +4023,15 @@ Try all availability zones one by one in order to maximize the chances of gettin
 **type:** bool
 
 
+## **pre_filter_unavailable_availability_zones** / SCT_PRE_FILTER_UNAVAILABLE_AVAILABILITY_ZONES
+
+Filter availability zones upfront to only those that support all required instance types. Replaces invalid AZs with valid alternatives in the same region before any provisioning attempt. AWS only.
+
+**default:** True
+
+**type:** bool
+
+
 ## **num_nodes_to_rollback** / SCT_NUM_NODES_TO_ROLLBACK
 
 Number of nodes to upgrade and rollback in test_generic_cluster_upgrade
