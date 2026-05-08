@@ -2349,6 +2349,13 @@ class SCTConfiguration(dict):
                    the requested instance capacity.""",
         ),
         dict(
+            name="pre_filter_unavailable_availability_zones",
+            env="SCT_PRE_FILTER_UNAVAILABLE_AVAILABILITY_ZONES",
+            type=boolean,
+            help="Filter availability zones upfront to only those that support all required instance types. "
+            "Replaces invalid AZs with valid alternatives in the same region before any provisioning attempt. AWS only.",
+        ),
+        dict(
             name="num_nodes_to_rollback",
             env="SCT_NUM_NODES_TO_ROLLBACK",
             type=str,

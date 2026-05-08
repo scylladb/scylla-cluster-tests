@@ -13,6 +13,7 @@
 
 from functools import cached_property
 
+from sdcm.provision.aws.az_resolver import AZResolver
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.sct_provision.aws.cluster import OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup
@@ -29,6 +30,8 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
         use_scylla_cloud = self._params.get("cluster_backend") == "xcloud" or self._params.get(
             "xcloud_provisioning_mode"
         )
+
+        AZResolver(self._params).resolve()
 
         if self.placement_group:
             self.placement_group.provision()
