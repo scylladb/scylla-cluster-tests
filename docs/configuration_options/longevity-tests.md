@@ -15,7 +15,7 @@ Used for scale test: max size of the cluster
 
 **default:** N/A
 
-**type:** int | list[int] | space-separated ints → list[int]
+**type:** int | list[int] → list[int]
 
 
 <a id="compaction_strategy"></a>

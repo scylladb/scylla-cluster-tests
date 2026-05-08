@@ -21,7 +21,7 @@
 //
 // Exact RAM sizing is deliberately NOT here - it belongs in Python, where SCTConfiguration knows
 // n_db_nodes + n_loaders + n_monitor_nodes after the yaml+env merge and can parse IntOrList
-// ("3 3" for multi-DC). See MinicloudManager._check_host_memory().
+// ([3, 3] for multi-DC). See MinicloudManager._check_host_memory().
 //
 // Nested virtualization is not checked: these agents are bare metal, so KVM is native.
 

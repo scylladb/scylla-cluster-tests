@@ -241,10 +241,8 @@ def test_resolve_with_unset_availability_zone_discovers_valid_zone(mock_discover
         ([], False),
         ([0, 0], False),
         ([2, 0], True),
-        ("", False),
-        ("0", False),
-        ("3", True),
-        ("3 4", True),
+        ("3", False),
+        ("3 4", False),
         ({"a": 1}, False),
     ],
 )

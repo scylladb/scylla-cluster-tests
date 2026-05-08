@@ -96,7 +96,7 @@ happened to export the variable would trip it. Reproducing the runs below means 
       ```bash
       export SCT_IP_SSH_CONNECTIONS=public
       export SCT_SCYLLA_VERSION=master:latest
-      export SCT_N_DB_NODES='3 3'
+      export SCT_N_DB_NODES='[3, 3]'
       export SCT_TEST_ID=$(uuidgen)
       export SCT_GCE_DATACENTER="us-east1 us-west1"
       export BUILD_SIMULATE_GCE_EXHAUSTION="us-west1"

@@ -222,7 +222,7 @@ class CommonConfigMixin(BaseModel):
         description="Number list of database nodes in multiple data centers.",
     )
     n_db_zero_token_nodes: IntOrList = SctField(
-        description="Number of zero token nodes in cluster. Value should be set as '0 1 1' "
+        description="Number of zero token nodes in cluster. Value should be set as [0, 1, 1] "
         "for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions",
     )
     n_loaders: IntOrList = SctField(

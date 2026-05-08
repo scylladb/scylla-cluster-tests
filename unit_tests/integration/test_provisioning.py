@@ -240,9 +240,9 @@ XCLOUD_GCE_BASE = COMMON | {
             GCE_BASE
             | {
                 "SCT_GCE_DATACENTER": "us-east1 us-west1",
-                "SCT_N_DB_NODES": "3 3",
-                "SCT_N_LOADERS": "1 1",
-                "SCT_N_MONITOR_NODES": "1 0",
+                "SCT_N_DB_NODES": "[3, 3]",
+                "SCT_N_LOADERS": "[1, 1]",
+                "SCT_N_MONITOR_NODES": "[1, 0]",
             },
             "mock_gce_backend",
             id="gce-multi-dc",
@@ -252,9 +252,9 @@ XCLOUD_GCE_BASE = COMMON | {
             AZURE_BASE
             | {
                 "SCT_AZURE_REGION_NAME": "eastus westus",
-                "SCT_N_DB_NODES": "3 3",
-                "SCT_N_LOADERS": "1 1",
-                "SCT_N_MONITOR_NODES": "1 0",
+                "SCT_N_DB_NODES": "[3, 3]",
+                "SCT_N_LOADERS": "[1, 1]",
+                "SCT_N_MONITOR_NODES": "[1, 0]",
             },
             "mock_azure_backend",
             id="azure-multi-dc",
@@ -265,9 +265,9 @@ XCLOUD_GCE_BASE = COMMON | {
             AWS_BASE
             | {
                 "SCT_REGION_NAME": '["eu-west-1", "us-east-1"]',
-                "SCT_N_DB_NODES": "3 3",
-                "SCT_N_LOADERS": "1 1",
-                "SCT_N_MONITOR_NODES": "1 0",
+                "SCT_N_DB_NODES": "[3, 3]",
+                "SCT_N_LOADERS": "[1, 1]",
+                "SCT_N_MONITOR_NODES": "[1, 0]",
                 "SCT_AMI_ID_DB_SCYLLA": "ami-fake00001 ami-fake00011",
                 "SCT_AMI_ID_LOADER": "ami-fake00002 ami-fake00012",
             },

@@ -40,7 +40,7 @@ def _config(**values) -> SCTConfiguration:
     """A real SCTConfiguration holding exactly these values, shaped as a resolved run's would be.
 
     `model_construct` skips loading the config files, which is slow and irrelevant here, but
-    every value still goes through its own field's validator - so "3 3" becomes [3, 3] - and
+    every value still goes through its own field's validator - so 3 becomes [3] - and
     the backend's multi-region params are set, so `get()` space-joins regions as it does in a
     real run.
     """
@@ -197,7 +197,7 @@ def test_estimate_sums_nodes_times_rate_times_duration():
 
 
 def test_multi_dc_node_counts_are_summed():
-    est = estimate_run_cost(_aws_params(n_db_nodes="3 3"))
+    est = estimate_run_cost(_aws_params(n_db_nodes=[3, 3]))
     assert next(r for r in est.roles if r.role == "db").node_count == 6
 
 

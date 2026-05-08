@@ -10,7 +10,7 @@ automatic `SCT_*` environment form (the code reads no bare `MINICLOUD_*` variabl
 
 | Param | Cost | Notes |
 |---|---|---|
-| `n_db_nodes` | 1 guest each | Multi-DC list form `"3 3"` is summed. Floor of 3 for RF=3 quorum |
+| `n_db_nodes` | 1 guest each | Multi-DC list form `[3, 3]` is summed. Floor of 3 for RF=3 quorum |
 | `n_loaders` | 1 guest each | Floor of 1; a second loader buys throughput a 1-vCPU db cannot use |
 | `n_monitor_nodes` | 1 guest each | 0 only when the test never reads Prometheus |
 | `n_test_oracle_db_nodes` | 1 guest each, **only for `db_type` `mixed_scylla` or `mixed_cassandra`** | Gemini's oracle cluster. Defaults to 1 but is provisioned only for those two db types, so an ordinary run is not charged for it. `mixed_cassandra` builds it as a `CassandraAWSCluster` rather than through `_create_oracle_cluster()` |

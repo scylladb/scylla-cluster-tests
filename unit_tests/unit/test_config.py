@@ -291,8 +291,8 @@ def test_14_check_rackaware_config_no_rack_without_loader(monkeypatch):
     monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1 eu-west-2")
     monkeypatch.setenv("SCT_AVAILABILITY_ZONE", "a,b")
     monkeypatch.setenv("SCT_SIMULATED_RACKS", "0")
-    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
-    monkeypatch.setenv("SCT_N_LOADERS", "2 2")
+    monkeypatch.setenv("SCT_N_DB_NODES", "[2, 2]")
+    monkeypatch.setenv("SCT_N_LOADERS", "[2, 2]")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
     monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2")
@@ -334,8 +334,8 @@ def test_14_check_rackaware_config_multi_region(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_RACK_AWARE_LOADER", "true")
     monkeypatch.setenv("SCT_REGION_NAME", '["eu-west-1", "us-east-1"]')
-    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
-    monkeypatch.setenv("SCT_N_LOADERS", "1 0")
+    monkeypatch.setenv("SCT_N_DB_NODES", "[2, 2]")
+    monkeypatch.setenv("SCT_N_LOADERS", "[1, 0]")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
     monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2")
@@ -356,8 +356,8 @@ def test_14_check_rackaware_config_multi_az_and_region(monkeypatch):
     monkeypatch.setenv("SCT_RACK_AWARE_LOADER", "true")
     monkeypatch.setenv("SCT_REGION_NAME", '["eu-west-1", "us-east-1"]')
     monkeypatch.setenv("SCT_AVAILABILITY_ZONE", "a,b")
-    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
-    monkeypatch.setenv("SCT_N_LOADERS", "1 1")
+    monkeypatch.setenv("SCT_N_DB_NODES", "[2, 2]")
+    monkeypatch.setenv("SCT_N_LOADERS", "[1, 1]")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
     monkeypatch.setenv("SCT_AMI_ID_LOADER", "ami-loader1 ami-loader2")
@@ -744,7 +744,7 @@ def test_27_run_fullscan_params_validtion_negative(monkeypatch):
 
 
 def test_28_number_of_nodes_per_az_must_be_divisable_by_number_of_az(monkeypatch):
-    monkeypatch.setenv("SCT_N_DB_NODES", "3 3 2")
+    monkeypatch.setenv("SCT_N_DB_NODES", "[3, 3, 2]")
     monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1 eu-west-2 us-east-1")
     monkeypatch.setenv("SCT_AVAILABILITY_ZONE", "a,b,c")
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
@@ -1888,7 +1888,7 @@ def test_scylla_network_config_multiple_nics_multi_region_raises(monkeypatch):
         '["unit_tests/test_configs/minimal_test_case.yaml", "configurations/network_config/two_interfaces.yaml"]',
     )
     monkeypatch.setenv("SCT_REGION_NAME", '["eu-west-1", "us-east-1"]')
-    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
+    monkeypatch.setenv("SCT_N_DB_NODES", "[2, 2]")
 
     with pytest.raises(ValueError, match="Multiple network interfaces aren't supported for multi region use cases"):
         sct_config.SCTConfiguration()
@@ -1915,7 +1915,7 @@ def test_use_dns_names_aws_multi_dc_raises(monkeypatch):
         "unit_tests/test_configs/minimal_test_case.yaml",
     )
     monkeypatch.setenv("SCT_REGION_NAME", '["eu-west-1", "us-east-1"]')
-    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
+    monkeypatch.setenv("SCT_N_DB_NODES", "[2, 2]")
     monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
 
     with pytest.raises(ValueError, match="use_dns_names is not supported for AWS multi-DC tests"):
@@ -1939,7 +1939,7 @@ def test_use_dns_names_gce_multi_dc_accepted(monkeypatch):
         _GCE_NETWORK_CONFIG_ENV | {"SCT_GCE_DATACENTER": "us-east1 us-west1"},
         "unit_tests/test_configs/minimal_test_case.yaml",
     )
-    monkeypatch.setenv("SCT_N_DB_NODES", "2 2")
+    monkeypatch.setenv("SCT_N_DB_NODES", "[2, 2]")
     monkeypatch.setenv("SCT_USE_DNS_NAMES", "true")
 
     conf = sct_config.SCTConfiguration()
