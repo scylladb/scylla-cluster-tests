@@ -5,7 +5,6 @@ import pytest
 from pydantic import ValidationError
 from sdcm.sct_config import (
     SCTConfiguration,
-    boolean_or_space_separated_booleans,
     dict_or_str,
     int_or_list_or_eval,
     str_or_list_or_eval,
@@ -134,43 +133,6 @@ def test_str_or_list_or_eval_invalid(value, error_fragment):
     """str_or_list_or_eval raises ValueError for non-string inputs and lists with non-string elements."""
     with pytest.raises(ValueError, match=error_fragment):
         str_or_list_or_eval(value)
-
-
-# ---------------------------------------------------------------------------
-# boolean_or_space_separated_booleans
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "input_val,expected",
-    [
-        (None, None),
-        (True, [True]),
-        (False, [False]),
-        ("true", [True]),
-        ("false", [False]),
-        ("true false", [True, False]),
-        ("yes no", [True, False]),
-        ([True], [True]),
-        ([False], [False]),
-        ([True, False], [True, False]),
-        (["true", "false"], [True, False]),
-    ],
-)
-def test_boolean_or_space_separated_booleans_valid(input_val, expected):
-    assert boolean_or_space_separated_booleans(input_val) == expected
-
-
-@pytest.mark.parametrize(
-    "input_val",
-    [
-        "not_a_bool",
-        123,
-    ],
-)
-def test_boolean_or_space_separated_booleans_invalid(input_val):
-    with pytest.raises(ValueError):
-        boolean_or_space_separated_booleans(input_val)
 
 
 # ---------------------------------------------------------------------------

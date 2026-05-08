@@ -88,22 +88,6 @@ n_db_nodes: [3, 3, 0]
 
 **Use cases**: Node counts, timeouts, thresholds
 
-#### BooleanOrList
-Always returns a `list[bool]`. Accepts boolean, list of booleans, or space-separated string — all normalized to a list:
-
-```yaml
-# Single boolean → [true]
-nemesis_during_prepare: true
-
-# Space-separated string → [true, false]
-nemesis_during_prepare: "true false"
-
-# String values (yes/no/1/0) → [true]
-nemesis_during_prepare: "yes"
-```
-
-**Use cases**: Feature flags, per-tenant boolean settings
-
 #### Enum and Literal (Choices)
 For configuration options with a fixed set of allowed values, use `Literal`:
 
@@ -190,7 +174,6 @@ Select the type based on your needs:
 | `bool` | Single boolean value |
 | `StringOrList` | Multi-value strings (always `list[str]`) |
 | `IntOrList` | Multi-value integers (always `list[int]`) |
-| `BooleanOrList` | Multi-value booleans (always `list[bool]`) |
 | `Literal["choice1", "choice2", ...]` | Fixed set of allowed string values (choices/enum) |
 | `dict` | Dictionary/mapping |
 | `DictOrStrOrPydantic` | Dict, string, or Pydantic BaseModel for nested configs |
@@ -421,7 +404,7 @@ scylla-cluster-tests/
 
 ## Best Practices
 
-1. **Use appropriate types**: Choose `StringOrList`, `IntOrList`, or `BooleanOrList` when you need flexibility
+1. **Use appropriate types**: Choose `StringOrList` or `IntOrList` when you need flexibility
 2. **Add validation**: Use Pydantic validators for complex validation logic
 3. **Document thoroughly**: Add clear descriptions to all fields
 4. **Always set defaults in YAML**: All configuration options MUST have defaults defined in `defaults/test_default.yaml` or backend-specific files - never in code
