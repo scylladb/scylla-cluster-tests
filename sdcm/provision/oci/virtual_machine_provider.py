@@ -72,8 +72,11 @@ class VirtualMachineProvider:
         az_to_use = az_list[0]
         if definition and len(az_list) > 1:
             try:
-                node_index = int(definition.tags.get("NodeIndex", 1))
-                az_to_use = az_list[(node_index - 1) % len(az_list)]
+                if definition.rack_index is not None:
+                    az_to_use = az_list[definition.rack_index % len(az_list)]
+                else:
+                    node_index = int(definition.tags.get("NodeIndex", 1))
+                    az_to_use = az_list[(node_index - 1) % len(az_list)]
             except (ValueError, TypeError):
                 LOGGER.warning(
                     "Could not determine valid NodeIndex for instance %s, using first AZ: %s",
