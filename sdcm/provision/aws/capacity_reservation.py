@@ -21,6 +21,7 @@ import boto3
 
 from sdcm.exceptions import CapacityReservationError
 from sdcm.test_config import TestConfig
+from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.common import all_aws_regions
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.aws_utils import tags_as_ec2_tags
@@ -87,28 +88,20 @@ class SCTCapacityReservation:
         cls.reservations = result
 
     @staticmethod
-    def _get_supported_availability_zones(ec2, instance_types: List[str], initial_az: str) -> List[str]:
-        response = ec2.describe_instance_type_offerings(
-            LocationType="availability-zone",
-            Filters=[
-                {"Name": "instance-type", "Values": list(instance_types)},
-            ],
+    def _get_supported_availability_zones(
+        ec2,  # noqa: ARG004
+        instance_types: List[str],
+        region: str,
+        availability_zone: str,
+    ) -> List[str]:
+        # ec2 client in signature is for backward compatibility
+        aws_region = AwsRegion(region_name=region)
+        first_letter = next((part.strip() for part in (availability_zone or "").split(",") if part.strip()), "")
+        preferred = [f"{region}{first_letter}"] if first_letter else []
+        return aws_region.get_common_availability_zones(
+            instance_types=list(instance_types),
+            preferred_azs=preferred,
         )
-        offerings = response["InstanceTypeOfferings"]
-        azs = set.intersection(
-            *[
-                {offering["Location"] for offering in offerings if offering["InstanceType"] == instance_type}
-                for instance_type in instance_types
-            ]
-        )
-        azs = list(azs)
-        try:  # put initial az as first one to try
-            azs.remove(initial_az)
-            azs.insert(0, initial_az)
-        except ValueError:
-            LOGGER.warning("Initial availability zone %s does not support required instances", initial_az)
-        LOGGER.info("Supported availability zones for instance types %s: %s", instance_types, azs)
-        return azs
 
     @staticmethod
     def is_capacity_reservation_enabled(params: dict) -> bool:
@@ -152,7 +145,10 @@ class SCTCapacityReservation:
         LOGGER.info("Creating capacity reservation for test %s with request: %s", test_id, request)
         reservations = {}
         for availability_zone in cls._get_supported_availability_zones(
-            ec2=ec2, instance_types=list(request.keys()), initial_az=region + params.get("availability_zone")
+            ec2=ec2,
+            instance_types=list(request.keys()),
+            region=region,
+            availability_zone=params.get("availability_zone"),
         ):
             reservations[availability_zone[-1]] = {}
             LOGGER.info("Creating capacity reservation in %s", availability_zone)
