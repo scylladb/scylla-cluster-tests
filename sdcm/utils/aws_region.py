@@ -101,6 +101,36 @@ class AwsRegion:
         )
         return [offering["Location"] for offering in response["InstanceTypeOfferings"]]
 
+    def get_common_availability_zones(
+        self,
+        instance_types: list[str],
+        preferred_azs: list[str] | None = None,
+    ) -> list[str]:
+        """Return AZs in the region that support ALL given instance types."""
+        if not instance_types:
+            return []
+
+        offerings = self.client.describe_instance_type_offerings(
+            LocationType="availability-zone",
+            Filters=[{"Name": "instance-type", "Values": list(instance_types)}],
+        )["InstanceTypeOfferings"]
+        azs_per_type = [{o["Location"] for o in offerings if o["InstanceType"] == itype} for itype in instance_types]
+        common_azs = set.intersection(*azs_per_type)
+
+        preferred_azs = preferred_azs or []
+        missing = [az for az in preferred_azs if az not in common_azs]
+        if missing:
+            LOGGER.warning(
+                "Preferred availability zones %s do not support all required instance types %s", missing, instance_types
+            )
+
+        # preferred valid AZs come first
+        ordered = [az for az in preferred_azs if az in common_azs]
+        ordered += [az for az in sorted(common_azs) if az not in ordered]
+
+        LOGGER.info("Availability zones in %s supporting %s: %s", self.region_name, instance_types, ordered)
+        return ordered
+
     @cached_property
     def vpc_ipv6_cidr(self):
         return ip_network(self.sct_vpc.ipv6_cidr_block_association_set[0]["Ipv6CidrBlock"])
