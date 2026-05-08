@@ -159,8 +159,8 @@ def cross_reference_config(config_path: Path) -> LintResult:
             result.warnings.append("TD-008: test_duration is not a valid integer, cannot verify duration_class")
 
     # TD-009: features consistent with config
-    n_db_nodes = config.get("n_db_nodes", "")
-    if isinstance(n_db_nodes, str) and len(n_db_nodes.split()) > 1:
+    n_db_nodes = config.get("n_db_nodes")
+    if isinstance(n_db_nodes, list) and len(n_db_nodes) > 1:
         if "multi-dc" not in meta.features:
             result.warnings.append(
                 "TD-009: multi-DC config detected (n_db_nodes has multiple values) but 'multi-dc' not in features"

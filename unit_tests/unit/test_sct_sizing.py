@@ -28,3 +28,15 @@ def test_sizing_preview_merges_dot_and_double_underscore_env_overrides(monkeypat
 
     assert result.exit_code == 0, result.output
     assert "sizing_db (env-var)" in result.output
+
+
+def test_sizing_preview_sums_multi_dc_node_counts(tmp_path):
+    """A multi-DC n_db_nodes list is summed across DCs."""
+    config = tmp_path / "multi_dc.yaml"
+    config.write_text(f"{open(_MINIMAL_CONFIG).read()}\nn_db_nodes: [3, 2]\n")
+
+    runner = CliRunner()
+    result = runner.invoke(sizing_preview, [str(config)])
+
+    assert result.exit_code == 0, result.output
+    assert "Role: db (× 5 nodes)" in result.output

@@ -76,16 +76,13 @@ stress_cmd:
 **Use cases**: Commands, file paths, package lists
 
 #### IntOrList
-Always returns a `list[int]`. Accepts integer, list of integers, or space-separated string — all normalized to a list:
+Always returns a `list[int]`. Accepts an integer or a list of integers — normalized to a list. Space-separated strings (`'3 3'`) are rejected; in `SCT_*` environment variables use a list literal, e.g. `SCT_N_DB_NODES='[3, 3]'`:
 
 ```yaml
 # Single integer → [3]
 n_db_nodes: 3
 
-# Space-separated string (for multi-DC) → [3, 3]
-n_db_nodes: "3 3"
-
-# List of integers → [3, 3, 0]
+# List of integers (for multi-DC)
 n_db_nodes: [3, 3, 0]
 ```
 
@@ -337,9 +334,9 @@ hydra run-test longevity_test.LongevityTest.test_custom_time \
 ### Multi-DC Configuration
 
 ```yaml
-# Use space-separated strings for multi-DC
-n_db_nodes: "3 3 0"  # 3 nodes in DC1, 3 in DC2, 0 in DC3
-n_loaders: "2 2"     # 2 loaders in each DC
+# Use YAML lists for multi-DC
+n_db_nodes: [3, 3, 0]  # 3 nodes in DC1, 3 in DC2, 0 in DC3
+n_loaders: [2, 2]      # 2 loaders in each DC
 ```
 
 ### Multitenant Configuration
