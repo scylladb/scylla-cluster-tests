@@ -109,6 +109,7 @@ n_db_nodes: [3, 3, 0]
 
 **Use cases**: Node counts, timeouts, thresholds
 
+<<<<<<< HEAD
 #### BooleanOrList
 Accepts boolean or list of booleans, with string conversion:
 
@@ -125,6 +126,25 @@ nemesis_during_prepare: "yes"  # → true
 
 **Use cases**: Feature flags, per-tenant boolean settings
 
+||||||| parent of fe71863d5 (refactor(config): remove unused BooleanOrList)
+#### BooleanOrList
+Always returns a `list[bool]`. Accepts boolean, list of booleans, or space-separated string — all normalized to a list:
+
+```yaml
+# Single boolean → [true]
+nemesis_during_prepare: true
+
+# Space-separated string → [true, false]
+nemesis_during_prepare: "true false"
+
+# String values (yes/no/1/0) → [true]
+nemesis_during_prepare: "yes"
+```
+
+**Use cases**: Feature flags, per-tenant boolean settings
+
+=======
+>>>>>>> fe71863d5 (refactor(config): remove unused BooleanOrList)
 #### Enum and Literal (Choices)
 For configuration options with a fixed set of allowed values, use `Literal`:
 
@@ -235,9 +255,18 @@ Select the type based on your needs:
 | `str` | Single string value |
 | `int` | Single integer value |
 | `bool` | Single boolean value |
+<<<<<<< HEAD
 | `StringOrList` | String or list of strings |
 | `IntOrList` | Integer or list of integers |
 | `BooleanOrList` | Boolean or list of booleans |
+||||||| parent of fe71863d5 (refactor(config): remove unused BooleanOrList)
+| `StringOrList` | Multi-value strings (always `list[str]`) |
+| `IntOrList` | Multi-value integers (always `list[int]`) |
+| `BooleanOrList` | Multi-value booleans (always `list[bool]`) |
+=======
+| `StringOrList` | Multi-value strings (always `list[str]`) |
+| `IntOrList` | Multi-value integers (always `list[int]`) |
+>>>>>>> fe71863d5 (refactor(config): remove unused BooleanOrList)
 | `Literal["choice1", "choice2", ...]` | Fixed set of allowed string values (choices/enum) |
 | `dict` | Dictionary/mapping |
 | `DictOrStrOrPydantic` | Dict, string, or Pydantic BaseModel for nested configs |
@@ -469,7 +498,7 @@ scylla-cluster-tests/
 
 ## Best Practices
 
-1. **Use appropriate types**: Choose `StringOrList`, `IntOrList`, or `BooleanOrList` when you need flexibility
+1. **Use appropriate types**: Choose `StringOrList` or `IntOrList` when you need flexibility
 2. **Add validation**: Use Pydantic validators for complex validation logic
 3. **Document thoroughly**: Add clear descriptions to all fields
 4. **Always set defaults in YAML**: All configuration options MUST have defaults defined in `defaults/test_default.yaml` or backend-specific files - never in code

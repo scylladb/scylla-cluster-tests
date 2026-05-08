@@ -39,7 +39,6 @@ from sdcm.sct_config.types import (
     IntOrList,
     SctField,
     StringOrList,
-    boolean_or_space_separated_booleans,
     dict_or_str,
 <<<<<<< HEAD
     int_or_space_separated_ints,
@@ -61,7 +60,14 @@ __all__ = [
     "StringOrList",
     "available_backends",
     "backend_to_cloud",
+<<<<<<< HEAD
     "boolean_or_space_separated_booleans",
+||||||| parent of fe71863d5 (refactor(config): remove unused BooleanOrList)
+    "boolean_or_space_separated_booleans",
+    "count_regions",
+=======
+    "count_regions",
+>>>>>>> fe71863d5 (refactor(config): remove unused BooleanOrList)
     "dict_or_str",
     "init_and_verify_sct_config",
     "int_or_list_or_eval",

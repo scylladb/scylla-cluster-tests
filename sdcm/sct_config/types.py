@@ -283,6 +283,7 @@ IntOrList = Annotated[list[int], BeforeValidator(int_or_list_or_eval), InputType
 >>>>>>> 22455448e (refactor(config): enforce strict types for IntOrList)
 
 
+<<<<<<< HEAD
 def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -> bool | list[bool] | None:  # noqa: PLR0911
     """Convert value to a single bool or list of bools.
 
@@ -384,6 +385,56 @@ def MultitenantValue(inner_type):  # noqa: N802
     ]
 
 
+||||||| parent of fe71863d5 (refactor(config): remove unused BooleanOrList)
+def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -> list[bool] | None:  # noqa: PLR0911
+    """Convert value to a list of bools.
+
+    Accepts:
+    - None -> None
+    - bool -> [bool]
+    - list of bools -> list of bools
+    - list of strings (true/false/yes/no/1/0) -> list of bools
+    - space-separated string of boolean values -> list of bools
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, bool):
+        return [value]
+
+    if isinstance(value, list):
+        # Handle list of bools or list of strings that can be converted to bools
+        try:
+            result = []
+            for v in value:
+                if isinstance(v, bool):
+                    result.append(v)
+                else:
+                    result.append(bool(strtobool(str(v))))
+            return result
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"{value} isn't a list of booleans") from exc
+
+    if isinstance(value, str):
+        try:
+            values = value.split()
+            return [bool(strtobool(v)) for v in values]
+        except Exception:  # noqa: BLE001
+            pass
+
+    raise ValueError(f"{value} isn't bool or list")
+
+
+#: Config type that always returns list[bool]. Accepts bool, list[bool], or space-separated boolean strings.
+BooleanOrList = Annotated[
+    list[bool],
+    BeforeValidator(boolean_or_space_separated_booleans),
+    InputType("bool | list[bool] | space-separated booleans"),
+]
+
+
+=======
+>>>>>>> fe71863d5 (refactor(config): remove unused BooleanOrList)
 def dict_or_str(value: dict | str | None) -> dict | None:
     """Coerce a dict, or a Python/YAML literal string holding a mapping, into a dict."""
     if value is None:
