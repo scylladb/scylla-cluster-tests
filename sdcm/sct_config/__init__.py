@@ -41,8 +41,14 @@ from sdcm.sct_config.types import (
     StringOrList,
     boolean_or_space_separated_booleans,
     dict_or_str,
+<<<<<<< HEAD
     int_or_space_separated_ints,
     is_multitenant_field,
+||||||| parent of 22455448e (refactor(config): enforce strict types for IntOrList)
+    int_or_space_separated_ints,
+=======
+    int_or_list_or_eval,
+>>>>>>> 22455448e (refactor(config): enforce strict types for IntOrList)
     str_or_list_or_eval,
 )
 
@@ -58,7 +64,7 @@ __all__ = [
     "boolean_or_space_separated_booleans",
     "dict_or_str",
     "init_and_verify_sct_config",
-    "int_or_space_separated_ints",
+    "int_or_list_or_eval",
     "is_arm_instance_type",
     "is_multitenant_field",
     "simulated_racks_enabled",

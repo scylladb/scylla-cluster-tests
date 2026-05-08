@@ -425,18 +425,38 @@ Number list of database nodes in multiple data centers.
 
 **default:** N/A
 
+<<<<<<< HEAD
 **type:** int | list[int]
+||||||| parent of 22455448e (refactor(config): enforce strict types for IntOrList)
+**type:** int | list[int] | space-separated ints → list[int]
+
+**backend overrides:**
+- `4`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke, k8s-eks
+- `3`: xcloud
+=======
+**type:** int | list[int] → list[int]
+
+**backend overrides:**
+- `4`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke, k8s-eks
+- `3`: xcloud
+>>>>>>> 22455448e (refactor(config): enforce strict types for IntOrList)
 
 
 <a id="n_db_zero_token_nodes"></a>
 
 ## **n_db_zero_token_nodes** / SCT_N_DB_ZERO_TOKEN_NODES
 
-Number of zero token nodes in cluster. Value should be set as '0 1 1' for multidc configuration in same manner as [`n_db_nodes`](#n_db_nodes) and should be equal number of regions
+Number of zero token nodes in cluster. Value should be set as [0, 1, 1] for multidc configuration in same manner as [`n_db_nodes`](#n_db_nodes) and should be equal number of regions
 
 **default:** N/A
 
+<<<<<<< HEAD
 **type:** int | list[int]
+||||||| parent of 22455448e (refactor(config): enforce strict types for IntOrList)
+**type:** int | list[int] | space-separated ints → list[int]
+=======
+**type:** int | list[int] → list[int]
+>>>>>>> 22455448e (refactor(config): enforce strict types for IntOrList)
 
 
 <a id="n_loaders"></a>
@@ -447,7 +467,19 @@ Number list of loader nodes in multiple data centers
 
 **default:** N/A
 
+<<<<<<< HEAD
 **type:** int | list[int]
+||||||| parent of 22455448e (refactor(config): enforce strict types for IntOrList)
+**type:** int | list[int] | space-separated ints → list[int]
+
+**backend overrides:**
+- `1`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke, k8s-eks, xcloud
+=======
+**type:** int | list[int] → list[int]
+
+**backend overrides:**
+- `1`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke, k8s-eks, xcloud
+>>>>>>> 22455448e (refactor(config): enforce strict types for IntOrList)
 
 
 <a id="n_monitor_nodes"></a>
@@ -458,7 +490,19 @@ Number list of monitor nodes in multiple data centers
 
 **default:** 1
 
+<<<<<<< HEAD
 **type:** int | list[int]
+||||||| parent of 22455448e (refactor(config): enforce strict types for IntOrList)
+**type:** int | list[int] | space-separated ints → list[int]
+
+**backend overrides:**
+- `0`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce
+=======
+**type:** int | list[int] → list[int]
+
+**backend overrides:**
+- `0`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce
+>>>>>>> 22455448e (refactor(config): enforce strict types for IntOrList)
 
 
 <a id="parallel_node_operations"></a>

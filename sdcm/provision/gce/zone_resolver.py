@@ -31,11 +31,46 @@ def _node_count_positive(value) -> bool:
         return value > 0
     if isinstance(value, list):
         return any(int(n) > 0 for n in value if str(n).strip().lstrip("-").isdigit())
-    if isinstance(value, str):
-        return any(int(n) > 0 for n in value.split() if n.strip().lstrip("-").isdigit())
     return False
 
 
+<<<<<<< HEAD
+||||||| parent of 22455448e (refactor(config): enforce strict types for IntOrList)
+def _node_count_total(value) -> int:
+    """Sum an SCT node-count parameter, which may be an int or a per-DC list/space-separated string."""
+    if value is None or isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    items = value if isinstance(value, list) else str(value).split()
+    total = 0
+    for item in items:
+        try:
+            total += int(item)
+        except TypeError, ValueError:
+            continue
+    return total
+
+
+=======
+def _node_count_total(value) -> int:
+    """Sum an SCT node-count parameter, which may be an int or a per-DC list."""
+    if value is None or isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    if not isinstance(value, list):
+        return 0
+    total = 0
+    for item in value:
+        try:
+            total += int(item)
+        except TypeError, ValueError:
+            continue
+    return total
+
+
+>>>>>>> 22455448e (refactor(config): enforce strict types for IntOrList)
 def _has_loaders(params) -> bool:
     return _node_count_positive(params.get("n_loaders"))
 

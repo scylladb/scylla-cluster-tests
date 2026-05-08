@@ -234,15 +234,9 @@ def test_resolve_multi_region_multi_az_drops_unsupported_and_fills(mock_multi_re
         ([-1, 0], False),
         (["2", "0"], True),
         (["0"], False),
-        # strings
-        ("", False),
-        ("0", False),
-        ("3", True),
-        ("3 4", True),
-        ("0 0", False),
-        ("-1", False),
-        ("abc", False),
         # unsupported types
+        ("3", False),
+        ("3 4", False),
         ({"a": 1}, False),
     ],
 )
@@ -426,3 +420,971 @@ def test_run_pre_flight_capacity_probe_raises_on_capacity_failure(mock_probe_aws
                 test_id="t-1",
             )
         )
+<<<<<<< HEAD
+||||||| parent of 22455448e (refactor(config): enforce strict types for IntOrList)
+
+
+def test_get_region_fallback_candidates_excludes_current_and_non_peered():
+    """Only actively-peered regions (other than the current one) become candidates."""
+    params = _make_params(region_name="us-east-1", availability_zone="a")
+    resolver = AZResolver(params)
+    peered = {"eu-west-1", "us-west-2"}
+
+    with (
+        patch.object(AZResolver, "_is_region_peered", side_effect=lambda cur, cand: cand in peered),
+        patch.object(AZResolver, "_common_supported_letters", return_value=["a", "b", "c"]),
+    ):
+        candidates = resolver.get_region_fallback_candidates()
+
+    regions = [region for region, _ in candidates]
+    assert "us-east-1" not in regions
+    assert "us-east-2" not in regions
+    assert set(regions) == peered
+
+
+def test_get_dc_fallback_candidates_requires_peering_with_every_staying_dc():
+    """A candidate must be peered with ALL staying DCs, not just one."""
+    params = _make_params(region_name="us-east-1 eu-west-1 us-west-2", availability_zone="a")
+    resolver = AZResolver(params)
+
+    peering = {
+        ("us-east-1", "eu-west-2"): True,
+        ("us-west-2", "eu-west-2"): True,
+        ("us-east-1", "eu-west-3"): True,
+        ("us-west-2", "eu-west-3"): False,
+    }
+
+    def is_region_peered(staying: str, candidate: str) -> bool:
+        return peering.get((staying, candidate), False)
+
+    with (
+        patch.object(AZResolver, "_is_region_peered", side_effect=is_region_peered),
+        patch.object(AZResolver, "_common_supported_letters", return_value=["a"]),
+    ):
+        regions = [region for region, _ in resolver.get_dc_fallback_candidates(dc_index=1)]
+
+    assert "eu-west-2" in regions
+    assert "eu-west-3" not in regions
+
+
+def test_is_region_peered_true_only_for_active_connection():
+    """_is_region_peered must accept only active peering, not pending-acceptance or missing."""
+    region_pair = ("us-east-1", "eu-west-1")
+    peer_name = "peer-name"
+
+    with (
+        patch("sdcm.provision.aws.az_resolver.AwsRegion"),
+        patch("sdcm.utils.aws_peering.AwsVpcPeering._find_existing_peering") as mock_find,
+    ):
+        mock_find.return_value = ({"Status": {"Code": "active"}}, peer_name)
+        assert AZResolver._is_region_peered(*region_pair) is True
+
+        mock_find.return_value = ({"Status": {"Code": "pending-acceptance"}}, peer_name)
+        assert AZResolver._is_region_peered(*region_pair) is False
+
+        mock_find.return_value = (None, peer_name)
+        assert AZResolver._is_region_peered(*region_pair) is False
+
+
+def test_region_fallback_disabled_when_use_dns_names_is_set():
+    """With use_dns_names, relocating the cluster leaves the runner unable to resolve cql_address.
+
+    EC2 private DNS names are region-scoped and inter-region VPC peering cannot resolve them,
+    so no other region is a valid fallback target (SCT-994).
+    """
+    params = _make_params(region_name="eu-west-1", availability_zone="a", use_dns_names=True)
+    resolver = AZResolver(params)
+
+    with (
+        patch.object(AZResolver, "_is_region_peered", return_value=True),
+        patch.object(AZResolver, "_common_supported_letters", return_value=["a", "b", "c"]),
+    ):
+        assert resolver.get_region_fallback_candidates() == []
+        assert resolver.get_dc_fallback_candidates(dc_index=0) == []
+
+
+def test_region_fallback_still_enabled_without_use_dns_names():
+    """The use_dns_names gate must not block the ordinary IP-addressed fallback."""
+    params = _make_params(region_name="eu-west-1", availability_zone="a", use_dns_names=False)
+    resolver = AZResolver(params)
+
+    with (
+        patch.object(AZResolver, "_is_region_peered", return_value=True),
+        patch.object(AZResolver, "_common_supported_letters", return_value=["a", "b", "c"]),
+    ):
+        assert resolver.get_region_fallback_candidates()
+
+
+class TestSpotPlacementScoreOrdering:
+    """AZ/region ordering driven by `ec2:GetSpotPlacementScores` (SCT-850)."""
+
+    @staticmethod
+    def _spot_params(**overrides):
+        defaults = {
+            "instance_provision": "spot",
+            "use_spot_placement_scores": True,
+            "availability_zone": "a,b",
+        }
+        return _make_params(**{**defaults, **overrides})
+
+    def test_disabled_by_default(self):
+        params = _make_params(instance_provision="spot")
+        assert is_spot_placement_scoring_enabled(params) is False
+
+    def test_skipped_for_on_demand(self):
+        """Placement scores describe spot capacity only, so on-demand runs must not call the API."""
+        params = self._spot_params(instance_provision="on_demand")
+        assert is_spot_placement_scoring_enabled(params) is False
+
+    def test_skipped_for_non_aws_backend(self):
+        params = self._spot_params(cluster_backend="gce")
+        assert is_spot_placement_scoring_enabled(params) is False
+
+    def test_enabled_for_aws_spot(self):
+        assert is_spot_placement_scoring_enabled(self._spot_params()) is True
+        assert is_spot_placement_scoring_enabled(self._spot_params(instance_provision="spot_fleet")) is True
+
+    def test_target_capacity_counts_db_nodes_only(self):
+        """Capacity must match `scored_instance_types()`, which is DB-only - see that method for why."""
+        resolver = AZResolver(self._spot_params(n_db_nodes=6, n_loaders=2, n_monitor_nodes=1))
+        assert resolver.spot_target_capacity() == 6
+
+    def test_target_capacity_handles_multi_dc_strings(self):
+        resolver = AZResolver(self._spot_params(n_db_nodes="3 3", n_loaders="1 1", n_monitor_nodes=1))
+        assert resolver.spot_target_capacity() == 6
+
+    def test_target_capacity_includes_zero_token_nodes(self):
+        resolver = AZResolver(
+            self._spot_params(n_db_nodes=6, n_db_zero_token_nodes=2, use_zero_nodes=True, n_loaders=2)
+        )
+        assert resolver.spot_target_capacity() == 8
+
+    def test_scored_types_exclude_loader_and_monitor(self):
+        """GetSpotPlacementScores treats InstanceTypes as interchangeable alternatives, so mixing a small
+        plentiful monitor type into the query would let it answer for the whole request and flatten scores."""
+        resolver = AZResolver(
+            self._spot_params(
+                instance_type_db="i4i.large", instance_type_loader="t3.small", instance_type_monitor="t3.small"
+            )
+        )
+        assert resolver.scored_instance_types() == ["i4i.large"]
+        assert "t3.small" in resolver.required_instance_types()  # still used for the offerings filter
+
+    def test_region_fallback_does_not_score_az_per_candidate(self, mock_aws_region_cls):
+        """One GetSpotPlacementScores call per candidate region is wasted work - each is a distinct cache
+        key, and `resolve()` re-ranks AZs for whichever region is actually switched to."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a", "us-west-2b"]
+        params = self._spot_params(availability_zone="a")
+        with (
+            patch("sdcm.provision.aws.az_resolver.rank_regions", side_effect=lambda **kw: kw["regions"]),
+            patch.object(AZResolver, "_is_region_peered", return_value=True),
+            patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles") as mock_rank_az,
+        ):
+            AZResolver(params).get_region_fallback_candidates()
+
+        mock_rank_az.assert_not_called()
+
+    def test_target_capacity_is_at_least_one(self):
+        resolver = AZResolver(self._spot_params(n_db_nodes=0, n_loaders=0, n_monitor_nodes=0))
+        assert resolver.spot_target_capacity() == 1
+
+    def test_fallback_candidates_ordered_by_score(self, mock_aws_region_cls):
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a", spot_score_overrides_configured_az=True)
+        with patch(
+            "sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=["c", "a", "b"]
+        ) as mock_rank:
+            candidates = AZResolver(params).get_fallback_candidates()
+
+        assert mock_rank.called
+        # best-scoring AZ is attempted first
+        assert candidates[0] == ["c"]
+
+    def test_unavailable_scores_preserve_existing_order(self, mock_aws_region_cls):
+        """With scores unavailable the ranking helper echoes its input, so ordering must not change."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a")
+        with patch(
+            "sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", side_effect=lambda **kw: kw["az_letters"]
+        ):
+            with_scoring = AZResolver(params).get_fallback_candidates()
+        without_scoring = AZResolver(_make_params(availability_zone="a")).get_fallback_candidates()
+
+        assert with_scoring == without_scoring
+
+    def test_configured_az_kept_first_by_default(self, mock_aws_region_cls):
+        """Without the override flag an explicit AZ pin keeps priority; only backfill is score-ordered."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a")
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=["c", "b", "a"]):
+            candidates = AZResolver(params).get_fallback_candidates()
+
+        assert candidates[0] == ["a"]
+
+    def test_no_ranking_for_multi_region_configs(self, mock_aws_region_cls):
+        """AZ letters must be valid in every region, so there is no single meaningful score ranking."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+        ]
+        params = self._spot_params(region_name="us-east-1 us-west-2")
+        params.region_names = ["us-east-1", "us-west-2"]
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles") as mock_rank:
+            AZResolver(params).get_fallback_candidates()
+
+        mock_rank.assert_not_called()
+
+    def test_region_fallback_candidates_ordered_by_score(self, mock_aws_region_cls):
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a"]
+        params = self._spot_params(availability_zone="a")
+        with (
+            patch("sdcm.provision.aws.az_resolver.rank_regions", return_value=["us-west-2", "eu-west-1"]) as rank,
+            patch.object(AZResolver, "_is_region_peered", return_value=True),
+            patch(
+                "sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", side_effect=lambda **kw: kw["az_letters"]
+            ),
+        ):
+            candidates = AZResolver(params).get_region_fallback_candidates()
+
+        assert rank.called
+        assert [region for region, _ in candidates][:2] == ["us-west-2", "eu-west-1"]
+
+    def test_region_fallback_still_gated_on_peering(self, mock_aws_region_cls):
+        """Scoring reorders candidates; it must not loosen the VPC-peering requirement."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a"]
+        params = self._spot_params(availability_zone="a")
+        with (
+            patch("sdcm.provision.aws.az_resolver.rank_regions", side_effect=lambda **kw: kw["regions"]),
+            patch.object(AZResolver, "_is_region_peered", return_value=False),
+        ):
+            assert AZResolver(params).get_region_fallback_candidates() == []
+
+    def test_no_upfront_relocation_without_margin(self):
+        """Margin 0 (the default) keeps region relocation purely reactive."""
+        assert AZResolver(self._spot_params()).get_preferred_spot_region() is None
+
+    def test_upfront_relocation_when_margin_exceeded(self, mock_aws_region_cls):
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a"]
+        params = self._spot_params(availability_zone="a", spot_score_region_relocation_margin=3)
+        scores = [
+            PlacementScore(region="us-west-2", score=9),
+            PlacementScore(region="us-east-1", score=2),
+        ]
+        with (
+            patch("sdcm.provision.aws.az_resolver.get_scores", return_value=scores),
+            patch.object(AZResolver, "get_region_fallback_candidates", return_value=[("us-west-2", ["a"])]),
+        ):
+            assert AZResolver(params).get_preferred_spot_region() == ("us-west-2", ["a"])
+
+    def test_no_upfront_relocation_when_margin_not_met(self, mock_aws_region_cls):
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a"]
+        params = self._spot_params(availability_zone="a", spot_score_region_relocation_margin=5)
+        scores = [
+            PlacementScore(region="us-west-2", score=6),
+            PlacementScore(region="us-east-1", score=4),
+        ]
+        with (
+            patch("sdcm.provision.aws.az_resolver.get_scores", return_value=scores),
+            patch.object(AZResolver, "get_region_fallback_candidates", return_value=[("us-west-2", ["a"])]),
+        ):
+            assert AZResolver(params).get_preferred_spot_region() is None
+
+    def test_score_replacement_does_not_claim_unsupported_az(self, mock_aws_region_cls, caplog):
+        """A score-driven AZ swap must not be logged as an instance-type support failure.
+
+        The two reasons for replacing the configured AZ are diagnosed very differently, so conflating
+        them sends whoever reads the log chasing a capacity problem that does not exist.
+        """
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a", spot_score_overrides_configured_az=True)
+        with (
+            caplog.at_level(logging.INFO, logger="sdcm.provision.aws.az_resolver"),
+            patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=["b", "c", "a"]),
+        ):
+            AZResolver(params).resolve()
+
+        assert params["availability_zone"] == "b"
+        assert "does not support all required instance types" not in caplog.text
+        assert "outranked on spot placement score" in caplog.text
+
+    def test_genuinely_unsupported_az_still_warns(self, mock_aws_region_cls, caplog):
+        """The original warning must survive for the real 'AZ cannot run this type' case."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-east-1b", "us-east-1c"]
+        params = self._spot_params(availability_zone="a")
+        with (
+            caplog.at_level(logging.INFO, logger="sdcm.provision.aws.az_resolver"),
+            patch(
+                "sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", side_effect=lambda **kw: kw["az_letters"]
+            ),
+        ):
+            AZResolver(params).resolve()
+
+        assert params["availability_zone"] in {"b", "c"}
+        assert "does not support all required instance types" in caplog.text
+
+    def test_min_score_rejecting_every_az_fails_loudly(self, mock_aws_region_cls):
+        """A configured minimum that nothing meets must not silently fall back to the unfiltered list."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a", spot_placement_score_min=8)
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=[]):
+            with pytest.raises(NoValidAvailabilityZoneError, match="spot_placement_score_min=8"):
+                AZResolver(params).resolve()
+
+    def test_unavailable_scores_are_not_treated_as_rejection(self, mock_aws_region_cls):
+        """None means 'could not ask' - that must keep the existing order, never raise."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+        ]
+        params = self._spot_params(availability_zone="a", spot_placement_score_min=8)
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=None):
+            AZResolver(params).resolve()
+        assert params["availability_zone"] == "a"
+
+    def test_min_score_leaving_too_few_azs_fails_loudly(self, mock_aws_region_cls):
+        """A partial rejection is the dangerous case: the cluster would quietly span fewer AZs than configured."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a,b,c", spot_placement_score_min=8)
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=["b", "c"]):
+            with pytest.raises(NoValidAvailabilityZoneError, match="but 3"):
+                AZResolver(params).resolve()
+
+    def test_min_score_keeping_enough_azs_is_fine(self, mock_aws_region_cls):
+        """Dropping AZs beyond the one slot the config asks for is the intended use, not a failure."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(
+            availability_zone="a", spot_placement_score_min=8, spot_score_overrides_configured_az=True
+        )
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=["c"]):
+            AZResolver(params).resolve()
+        assert params["availability_zone"] == "c"
+
+    def test_az_count_already_short_of_the_config_is_not_our_error(self, mock_aws_region_cls):
+        """Pre-existing truncation: fewer supported AZs than configured is not something scoring may turn fatal."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b"]
+        params = self._spot_params(availability_zone="a,b,c", spot_placement_score_min=8)
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=["b", "a"]):
+            AZResolver(params).resolve()
+        assert params["availability_zone"] == "a,b"
+
+
+class TestDefaultAzIsNotAChoice:
+    """`defaults/aws_config.yaml` pins `availability_zone: 'a'` for every AWS run.
+
+    Asking "is an AZ configured?" therefore answers yes on every test, and the placement score would never
+    be allowed to move off `a` - the same shape as the duration policy never firing because Jenkins always
+    exports `provision_type`. The question that actually distinguishes the two cases is where the value came
+    from, so that is what gets asked.
+    """
+
+    @staticmethod
+    def _params(explicit: bool, **overrides):
+        defaults = {"instance_provision": "spot", "use_spot_placement_scores": True, "availability_zone": "a"}
+        params = _make_params(**{**defaults, **overrides})
+        params.is_explicitly_set = lambda name: explicit and name == "availability_zone"
+        return params
+
+    def test_a_defaults_only_az_lets_the_score_choose(self):
+        assert AZResolver(self._params(explicit=False))._score_may_choose_az() is True
+
+    def test_a_deliberate_pin_is_honoured(self):
+        """A test case, an SCT_* env var or the command line all count as deliberate."""
+        assert AZResolver(self._params(explicit=True))._score_may_choose_az() is False
+
+    def test_the_override_flag_still_beats_a_deliberate_pin(self):
+        params = self._params(explicit=True, spot_score_overrides_configured_az=True)
+        assert AZResolver(params)._score_may_choose_az() is True
+
+    def test_on_demand_runs_never_reorder_regardless_of_provenance(self):
+        params = self._params(explicit=False, instance_provision="on_demand")
+        assert AZResolver(params)._score_may_choose_az() is False
+
+    def test_params_without_provenance_keep_todays_behaviour(self):
+        """Plain dicts (older callers, unit tests) must not be read as "nobody chose this"."""
+        params = _make_params(instance_provision="spot", use_spot_placement_scores=True, availability_zone="a")
+        assert AZResolver(params)._score_may_choose_az() is False
+
+
+class TestRolesNeverSplitAcrossAzs:
+    """Per-role scoring must not turn into per-role placement.
+
+    Each role gets its own scoring call and its own preference order, and those orders routinely disagree -
+    that disagreement is the whole point. What must never follow is a cluster with the DB nodes in one AZ
+    and the loaders in another: the roles are combined into a single ranked list before anything is chosen,
+    and the configured AZ count is what decides how many AZs come out.
+    """
+
+    @staticmethod
+    def _params(availability_zone):
+        params = _make_params(
+            instance_provision="spot",
+            use_spot_placement_scores=True,
+            availability_zone=availability_zone,
+            spot_score_overrides_configured_az=True,
+        )
+        return params
+
+    @staticmethod
+    def _conflicting_scores():
+        """db prefers a, loaders prefer b, monitor prefers c - a maximally disagreeing set."""
+        return [
+            [
+                PlacementScore(region="us-east-1", az_letter="a", score=9),
+                PlacementScore(region="us-east-1", az_letter="b", score=2),
+                PlacementScore(region="us-east-1", az_letter="c", score=2),
+            ],
+            [
+                PlacementScore(region="us-east-1", az_letter="a", score=2),
+                PlacementScore(region="us-east-1", az_letter="b", score=9),
+                PlacementScore(region="us-east-1", az_letter="c", score=3),
+            ],
+            [
+                PlacementScore(region="us-east-1", az_letter="a", score=2),
+                PlacementScore(region="us-east-1", az_letter="b", score=3),
+                PlacementScore(region="us-east-1", az_letter="c", score=9),
+            ],
+        ]
+
+    def test_one_configured_az_resolves_to_exactly_one(self, mock_aws_region_cls):
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b", "us-east-1c"]
+        params = self._params("a")
+
+        with patch("sdcm.provision.aws.spot_placement_score.get_scores", side_effect=self._conflicting_scores()):
+            AZResolver(params).resolve()
+
+        resolved = params["availability_zone"]
+        assert "," not in resolved, f"roles were split across AZs: {resolved!r}"
+        assert len(resolved) == 1
+
+    def test_two_configured_azs_resolve_to_exactly_two(self, mock_aws_region_cls):
+        """The count is the test's choice; scoring only decides which ones, never how many."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b", "us-east-1c"]
+        params = self._params("a,b")
+
+        with patch("sdcm.provision.aws.spot_placement_score.get_scores", side_effect=self._conflicting_scores()):
+            AZResolver(params).resolve()
+
+        assert len(params["availability_zone"].split(",")) == 2
+
+    def test_the_winner_is_the_best_worst_role_not_any_role_favourite(self, mock_aws_region_cls):
+        """With db=9/2/2, loaders=2/9/3 and monitor=2/3/9 the minimums are a=2, b=2, c=2 - all tied, so the
+        result must be a stable pick, never one role's favourite overriding the others."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b", "us-east-1c"]
+        params = self._params("a")
+
+        with patch("sdcm.provision.aws.spot_placement_score.get_scores", side_effect=self._conflicting_scores()):
+            AZResolver(params).resolve()
+
+        assert params["availability_zone"] == "a", "tied minimums must fall back to the deterministic order"
+=======
+
+
+def test_get_region_fallback_candidates_excludes_current_and_non_peered():
+    """Only actively-peered regions (other than the current one) become candidates."""
+    params = _make_params(region_name="us-east-1", availability_zone="a")
+    resolver = AZResolver(params)
+    peered = {"eu-west-1", "us-west-2"}
+
+    with (
+        patch.object(AZResolver, "_is_region_peered", side_effect=lambda cur, cand: cand in peered),
+        patch.object(AZResolver, "_common_supported_letters", return_value=["a", "b", "c"]),
+    ):
+        candidates = resolver.get_region_fallback_candidates()
+
+    regions = [region for region, _ in candidates]
+    assert "us-east-1" not in regions
+    assert "us-east-2" not in regions
+    assert set(regions) == peered
+
+
+def test_get_dc_fallback_candidates_requires_peering_with_every_staying_dc():
+    """A candidate must be peered with ALL staying DCs, not just one."""
+    params = _make_params(region_name="us-east-1 eu-west-1 us-west-2", availability_zone="a")
+    resolver = AZResolver(params)
+
+    peering = {
+        ("us-east-1", "eu-west-2"): True,
+        ("us-west-2", "eu-west-2"): True,
+        ("us-east-1", "eu-west-3"): True,
+        ("us-west-2", "eu-west-3"): False,
+    }
+
+    def is_region_peered(staying: str, candidate: str) -> bool:
+        return peering.get((staying, candidate), False)
+
+    with (
+        patch.object(AZResolver, "_is_region_peered", side_effect=is_region_peered),
+        patch.object(AZResolver, "_common_supported_letters", return_value=["a"]),
+    ):
+        regions = [region for region, _ in resolver.get_dc_fallback_candidates(dc_index=1)]
+
+    assert "eu-west-2" in regions
+    assert "eu-west-3" not in regions
+
+
+def test_is_region_peered_true_only_for_active_connection():
+    """_is_region_peered must accept only active peering, not pending-acceptance or missing."""
+    region_pair = ("us-east-1", "eu-west-1")
+    peer_name = "peer-name"
+
+    with (
+        patch("sdcm.provision.aws.az_resolver.AwsRegion"),
+        patch("sdcm.utils.aws_peering.AwsVpcPeering._find_existing_peering") as mock_find,
+    ):
+        mock_find.return_value = ({"Status": {"Code": "active"}}, peer_name)
+        assert AZResolver._is_region_peered(*region_pair) is True
+
+        mock_find.return_value = ({"Status": {"Code": "pending-acceptance"}}, peer_name)
+        assert AZResolver._is_region_peered(*region_pair) is False
+
+        mock_find.return_value = (None, peer_name)
+        assert AZResolver._is_region_peered(*region_pair) is False
+
+
+def test_region_fallback_disabled_when_use_dns_names_is_set():
+    """With use_dns_names, relocating the cluster leaves the runner unable to resolve cql_address.
+
+    EC2 private DNS names are region-scoped and inter-region VPC peering cannot resolve them,
+    so no other region is a valid fallback target (SCT-994).
+    """
+    params = _make_params(region_name="eu-west-1", availability_zone="a", use_dns_names=True)
+    resolver = AZResolver(params)
+
+    with (
+        patch.object(AZResolver, "_is_region_peered", return_value=True),
+        patch.object(AZResolver, "_common_supported_letters", return_value=["a", "b", "c"]),
+    ):
+        assert resolver.get_region_fallback_candidates() == []
+        assert resolver.get_dc_fallback_candidates(dc_index=0) == []
+
+
+def test_region_fallback_still_enabled_without_use_dns_names():
+    """The use_dns_names gate must not block the ordinary IP-addressed fallback."""
+    params = _make_params(region_name="eu-west-1", availability_zone="a", use_dns_names=False)
+    resolver = AZResolver(params)
+
+    with (
+        patch.object(AZResolver, "_is_region_peered", return_value=True),
+        patch.object(AZResolver, "_common_supported_letters", return_value=["a", "b", "c"]),
+    ):
+        assert resolver.get_region_fallback_candidates()
+
+
+class TestSpotPlacementScoreOrdering:
+    """AZ/region ordering driven by `ec2:GetSpotPlacementScores` (SCT-850)."""
+
+    @staticmethod
+    def _spot_params(**overrides):
+        defaults = {
+            "instance_provision": "spot",
+            "use_spot_placement_scores": True,
+            "availability_zone": "a,b",
+        }
+        return _make_params(**{**defaults, **overrides})
+
+    def test_disabled_by_default(self):
+        params = _make_params(instance_provision="spot")
+        assert is_spot_placement_scoring_enabled(params) is False
+
+    def test_skipped_for_on_demand(self):
+        """Placement scores describe spot capacity only, so on-demand runs must not call the API."""
+        params = self._spot_params(instance_provision="on_demand")
+        assert is_spot_placement_scoring_enabled(params) is False
+
+    def test_skipped_for_non_aws_backend(self):
+        params = self._spot_params(cluster_backend="gce")
+        assert is_spot_placement_scoring_enabled(params) is False
+
+    def test_enabled_for_aws_spot(self):
+        assert is_spot_placement_scoring_enabled(self._spot_params()) is True
+        assert is_spot_placement_scoring_enabled(self._spot_params(instance_provision="spot_fleet")) is True
+
+    def test_target_capacity_counts_db_nodes_only(self):
+        """Capacity must match `scored_instance_types()`, which is DB-only - see that method for why."""
+        resolver = AZResolver(self._spot_params(n_db_nodes=6, n_loaders=2, n_monitor_nodes=1))
+        assert resolver.spot_target_capacity() == 6
+
+    def test_target_capacity_handles_multi_dc_lists(self):
+        resolver = AZResolver(self._spot_params(n_db_nodes=[3, 3], n_loaders=[1, 1], n_monitor_nodes=1))
+        assert resolver.spot_target_capacity() == 6
+
+    def test_target_capacity_includes_zero_token_nodes(self):
+        resolver = AZResolver(
+            self._spot_params(n_db_nodes=6, n_db_zero_token_nodes=2, use_zero_nodes=True, n_loaders=2)
+        )
+        assert resolver.spot_target_capacity() == 8
+
+    def test_scored_types_exclude_loader_and_monitor(self):
+        """GetSpotPlacementScores treats InstanceTypes as interchangeable alternatives, so mixing a small
+        plentiful monitor type into the query would let it answer for the whole request and flatten scores."""
+        resolver = AZResolver(
+            self._spot_params(
+                instance_type_db="i4i.large", instance_type_loader="t3.small", instance_type_monitor="t3.small"
+            )
+        )
+        assert resolver.scored_instance_types() == ["i4i.large"]
+        assert "t3.small" in resolver.required_instance_types()  # still used for the offerings filter
+
+    def test_region_fallback_does_not_score_az_per_candidate(self, mock_aws_region_cls):
+        """One GetSpotPlacementScores call per candidate region is wasted work - each is a distinct cache
+        key, and `resolve()` re-ranks AZs for whichever region is actually switched to."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a", "us-west-2b"]
+        params = self._spot_params(availability_zone="a")
+        with (
+            patch("sdcm.provision.aws.az_resolver.rank_regions", side_effect=lambda **kw: kw["regions"]),
+            patch.object(AZResolver, "_is_region_peered", return_value=True),
+            patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles") as mock_rank_az,
+        ):
+            AZResolver(params).get_region_fallback_candidates()
+
+        mock_rank_az.assert_not_called()
+
+    def test_target_capacity_is_at_least_one(self):
+        resolver = AZResolver(self._spot_params(n_db_nodes=0, n_loaders=0, n_monitor_nodes=0))
+        assert resolver.spot_target_capacity() == 1
+
+    def test_fallback_candidates_ordered_by_score(self, mock_aws_region_cls):
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a", spot_score_overrides_configured_az=True)
+        with patch(
+            "sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=["c", "a", "b"]
+        ) as mock_rank:
+            candidates = AZResolver(params).get_fallback_candidates()
+
+        assert mock_rank.called
+        # best-scoring AZ is attempted first
+        assert candidates[0] == ["c"]
+
+    def test_unavailable_scores_preserve_existing_order(self, mock_aws_region_cls):
+        """With scores unavailable the ranking helper echoes its input, so ordering must not change."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a")
+        with patch(
+            "sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", side_effect=lambda **kw: kw["az_letters"]
+        ):
+            with_scoring = AZResolver(params).get_fallback_candidates()
+        without_scoring = AZResolver(_make_params(availability_zone="a")).get_fallback_candidates()
+
+        assert with_scoring == without_scoring
+
+    def test_configured_az_kept_first_by_default(self, mock_aws_region_cls):
+        """Without the override flag an explicit AZ pin keeps priority; only backfill is score-ordered."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a")
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=["c", "b", "a"]):
+            candidates = AZResolver(params).get_fallback_candidates()
+
+        assert candidates[0] == ["a"]
+
+    def test_no_ranking_for_multi_region_configs(self, mock_aws_region_cls):
+        """AZ letters must be valid in every region, so there is no single meaningful score ranking."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+        ]
+        params = self._spot_params(region_name="us-east-1 us-west-2")
+        params.region_names = ["us-east-1", "us-west-2"]
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles") as mock_rank:
+            AZResolver(params).get_fallback_candidates()
+
+        mock_rank.assert_not_called()
+
+    def test_region_fallback_candidates_ordered_by_score(self, mock_aws_region_cls):
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a"]
+        params = self._spot_params(availability_zone="a")
+        with (
+            patch("sdcm.provision.aws.az_resolver.rank_regions", return_value=["us-west-2", "eu-west-1"]) as rank,
+            patch.object(AZResolver, "_is_region_peered", return_value=True),
+            patch(
+                "sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", side_effect=lambda **kw: kw["az_letters"]
+            ),
+        ):
+            candidates = AZResolver(params).get_region_fallback_candidates()
+
+        assert rank.called
+        assert [region for region, _ in candidates][:2] == ["us-west-2", "eu-west-1"]
+
+    def test_region_fallback_still_gated_on_peering(self, mock_aws_region_cls):
+        """Scoring reorders candidates; it must not loosen the VPC-peering requirement."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a"]
+        params = self._spot_params(availability_zone="a")
+        with (
+            patch("sdcm.provision.aws.az_resolver.rank_regions", side_effect=lambda **kw: kw["regions"]),
+            patch.object(AZResolver, "_is_region_peered", return_value=False),
+        ):
+            assert AZResolver(params).get_region_fallback_candidates() == []
+
+    def test_no_upfront_relocation_without_margin(self):
+        """Margin 0 (the default) keeps region relocation purely reactive."""
+        assert AZResolver(self._spot_params()).get_preferred_spot_region() is None
+
+    def test_upfront_relocation_when_margin_exceeded(self, mock_aws_region_cls):
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a"]
+        params = self._spot_params(availability_zone="a", spot_score_region_relocation_margin=3)
+        scores = [
+            PlacementScore(region="us-west-2", score=9),
+            PlacementScore(region="us-east-1", score=2),
+        ]
+        with (
+            patch("sdcm.provision.aws.az_resolver.get_scores", return_value=scores),
+            patch.object(AZResolver, "get_region_fallback_candidates", return_value=[("us-west-2", ["a"])]),
+        ):
+            assert AZResolver(params).get_preferred_spot_region() == ("us-west-2", ["a"])
+
+    def test_no_upfront_relocation_when_margin_not_met(self, mock_aws_region_cls):
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-west-2a"]
+        params = self._spot_params(availability_zone="a", spot_score_region_relocation_margin=5)
+        scores = [
+            PlacementScore(region="us-west-2", score=6),
+            PlacementScore(region="us-east-1", score=4),
+        ]
+        with (
+            patch("sdcm.provision.aws.az_resolver.get_scores", return_value=scores),
+            patch.object(AZResolver, "get_region_fallback_candidates", return_value=[("us-west-2", ["a"])]),
+        ):
+            assert AZResolver(params).get_preferred_spot_region() is None
+
+    def test_score_replacement_does_not_claim_unsupported_az(self, mock_aws_region_cls, caplog):
+        """A score-driven AZ swap must not be logged as an instance-type support failure.
+
+        The two reasons for replacing the configured AZ are diagnosed very differently, so conflating
+        them sends whoever reads the log chasing a capacity problem that does not exist.
+        """
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a", spot_score_overrides_configured_az=True)
+        with (
+            caplog.at_level(logging.INFO, logger="sdcm.provision.aws.az_resolver"),
+            patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=["b", "c", "a"]),
+        ):
+            AZResolver(params).resolve()
+
+        assert params["availability_zone"] == "b"
+        assert "does not support all required instance types" not in caplog.text
+        assert "outranked on spot placement score" in caplog.text
+
+    def test_genuinely_unsupported_az_still_warns(self, mock_aws_region_cls, caplog):
+        """The original warning must survive for the real 'AZ cannot run this type' case."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-east-1b", "us-east-1c"]
+        params = self._spot_params(availability_zone="a")
+        with (
+            caplog.at_level(logging.INFO, logger="sdcm.provision.aws.az_resolver"),
+            patch(
+                "sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", side_effect=lambda **kw: kw["az_letters"]
+            ),
+        ):
+            AZResolver(params).resolve()
+
+        assert params["availability_zone"] in {"b", "c"}
+        assert "does not support all required instance types" in caplog.text
+
+    def test_min_score_rejecting_every_az_fails_loudly(self, mock_aws_region_cls):
+        """A configured minimum that nothing meets must not silently fall back to the unfiltered list."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a", spot_placement_score_min=8)
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=[]):
+            with pytest.raises(NoValidAvailabilityZoneError, match="spot_placement_score_min=8"):
+                AZResolver(params).resolve()
+
+    def test_unavailable_scores_are_not_treated_as_rejection(self, mock_aws_region_cls):
+        """None means 'could not ask' - that must keep the existing order, never raise."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+        ]
+        params = self._spot_params(availability_zone="a", spot_placement_score_min=8)
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=None):
+            AZResolver(params).resolve()
+        assert params["availability_zone"] == "a"
+
+    def test_min_score_leaving_too_few_azs_fails_loudly(self, mock_aws_region_cls):
+        """A partial rejection is the dangerous case: the cluster would quietly span fewer AZs than configured."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(availability_zone="a,b,c", spot_placement_score_min=8)
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=["b", "c"]):
+            with pytest.raises(NoValidAvailabilityZoneError, match="but 3"):
+                AZResolver(params).resolve()
+
+    def test_min_score_keeping_enough_azs_is_fine(self, mock_aws_region_cls):
+        """Dropping AZs beyond the one slot the config asks for is the intended use, not a failure."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = [
+            "us-east-1a",
+            "us-east-1b",
+            "us-east-1c",
+        ]
+        params = self._spot_params(
+            availability_zone="a", spot_placement_score_min=8, spot_score_overrides_configured_az=True
+        )
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=["c"]):
+            AZResolver(params).resolve()
+        assert params["availability_zone"] == "c"
+
+    def test_az_count_already_short_of_the_config_is_not_our_error(self, mock_aws_region_cls):
+        """Pre-existing truncation: fewer supported AZs than configured is not something scoring may turn fatal."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b"]
+        params = self._spot_params(availability_zone="a,b,c", spot_placement_score_min=8)
+        with patch("sdcm.provision.aws.az_resolver.rank_az_letters_for_roles", return_value=["b", "a"]):
+            AZResolver(params).resolve()
+        assert params["availability_zone"] == "a,b"
+
+
+class TestDefaultAzIsNotAChoice:
+    """`defaults/aws_config.yaml` pins `availability_zone: 'a'` for every AWS run.
+
+    Asking "is an AZ configured?" therefore answers yes on every test, and the placement score would never
+    be allowed to move off `a` - the same shape as the duration policy never firing because Jenkins always
+    exports `provision_type`. The question that actually distinguishes the two cases is where the value came
+    from, so that is what gets asked.
+    """
+
+    @staticmethod
+    def _params(explicit: bool, **overrides):
+        defaults = {"instance_provision": "spot", "use_spot_placement_scores": True, "availability_zone": "a"}
+        params = _make_params(**{**defaults, **overrides})
+        params.is_explicitly_set = lambda name: explicit and name == "availability_zone"
+        return params
+
+    def test_a_defaults_only_az_lets_the_score_choose(self):
+        assert AZResolver(self._params(explicit=False))._score_may_choose_az() is True
+
+    def test_a_deliberate_pin_is_honoured(self):
+        """A test case, an SCT_* env var or the command line all count as deliberate."""
+        assert AZResolver(self._params(explicit=True))._score_may_choose_az() is False
+
+    def test_the_override_flag_still_beats_a_deliberate_pin(self):
+        params = self._params(explicit=True, spot_score_overrides_configured_az=True)
+        assert AZResolver(params)._score_may_choose_az() is True
+
+    def test_on_demand_runs_never_reorder_regardless_of_provenance(self):
+        params = self._params(explicit=False, instance_provision="on_demand")
+        assert AZResolver(params)._score_may_choose_az() is False
+
+    def test_params_without_provenance_keep_todays_behaviour(self):
+        """Plain dicts (older callers, unit tests) must not be read as "nobody chose this"."""
+        params = _make_params(instance_provision="spot", use_spot_placement_scores=True, availability_zone="a")
+        assert AZResolver(params)._score_may_choose_az() is False
+
+
+class TestRolesNeverSplitAcrossAzs:
+    """Per-role scoring must not turn into per-role placement.
+
+    Each role gets its own scoring call and its own preference order, and those orders routinely disagree -
+    that disagreement is the whole point. What must never follow is a cluster with the DB nodes in one AZ
+    and the loaders in another: the roles are combined into a single ranked list before anything is chosen,
+    and the configured AZ count is what decides how many AZs come out.
+    """
+
+    @staticmethod
+    def _params(availability_zone):
+        params = _make_params(
+            instance_provision="spot",
+            use_spot_placement_scores=True,
+            availability_zone=availability_zone,
+            spot_score_overrides_configured_az=True,
+        )
+        return params
+
+    @staticmethod
+    def _conflicting_scores():
+        """db prefers a, loaders prefer b, monitor prefers c - a maximally disagreeing set."""
+        return [
+            [
+                PlacementScore(region="us-east-1", az_letter="a", score=9),
+                PlacementScore(region="us-east-1", az_letter="b", score=2),
+                PlacementScore(region="us-east-1", az_letter="c", score=2),
+            ],
+            [
+                PlacementScore(region="us-east-1", az_letter="a", score=2),
+                PlacementScore(region="us-east-1", az_letter="b", score=9),
+                PlacementScore(region="us-east-1", az_letter="c", score=3),
+            ],
+            [
+                PlacementScore(region="us-east-1", az_letter="a", score=2),
+                PlacementScore(region="us-east-1", az_letter="b", score=3),
+                PlacementScore(region="us-east-1", az_letter="c", score=9),
+            ],
+        ]
+
+    def test_one_configured_az_resolves_to_exactly_one(self, mock_aws_region_cls):
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b", "us-east-1c"]
+        params = self._params("a")
+
+        with patch("sdcm.provision.aws.spot_placement_score.get_scores", side_effect=self._conflicting_scores()):
+            AZResolver(params).resolve()
+
+        resolved = params["availability_zone"]
+        assert "," not in resolved, f"roles were split across AZs: {resolved!r}"
+        assert len(resolved) == 1
+
+    def test_two_configured_azs_resolve_to_exactly_two(self, mock_aws_region_cls):
+        """The count is the test's choice; scoring only decides which ones, never how many."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b", "us-east-1c"]
+        params = self._params("a,b")
+
+        with patch("sdcm.provision.aws.spot_placement_score.get_scores", side_effect=self._conflicting_scores()):
+            AZResolver(params).resolve()
+
+        assert len(params["availability_zone"].split(",")) == 2
+
+    def test_the_winner_is_the_best_worst_role_not_any_role_favourite(self, mock_aws_region_cls):
+        """With db=9/2/2, loaders=2/9/3 and monitor=2/3/9 the minimums are a=2, b=2, c=2 - all tied, so the
+        result must be a stable pick, never one role's favourite overriding the others."""
+        mock_aws_region_cls[1].get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b", "us-east-1c"]
+        params = self._params("a")
+
+        with patch("sdcm.provision.aws.spot_placement_score.get_scores", side_effect=self._conflicting_scores()):
+            AZResolver(params).resolve()
+
+        assert params["availability_zone"] == "a", "tied minimums must fall back to the deterministic order"
+>>>>>>> 22455448e (refactor(config): enforce strict types for IntOrList)

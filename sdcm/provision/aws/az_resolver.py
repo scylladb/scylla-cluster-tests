@@ -40,8 +40,6 @@ def _node_count_positive(value) -> bool:
         return value > 0
     if isinstance(value, list):
         return any(int(n) > 0 for n in value if str(n).strip().lstrip("-").isdigit())
-    if isinstance(value, str):
-        return any(int(n) > 0 for n in value.split() if n.strip().lstrip("-").isdigit())
     return False
 
 
@@ -71,6 +69,66 @@ def _always(params) -> bool:  # noqa: ARG001
     return True
 
 
+<<<<<<< HEAD
+||||||| parent of 22455448e (refactor(config): enforce strict types for IntOrList)
+def _node_count_total(value) -> int:
+    """Sum an SCT node-count parameter across regions/DCs, treating anything unparseable as 0."""
+    if value is None or isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return max(int(value), 0)
+    if isinstance(value, list):
+        return sum(int(n) for n in value if str(n).strip().lstrip("-").isdigit() and int(n) > 0)
+    if isinstance(value, str):
+        return sum(int(n) for n in value.split() if n.strip().lstrip("-").isdigit() and int(n) > 0)
+    return 0
+
+
+# Node-count params paired with the gate deciding whether the test launches them at all, mirroring
+# `_INSTANCE_TYPE_PARAM_GATES`. Used to size the spot placement score request.
+_NODE_COUNT_PARAM_GATES: tuple[tuple[str, Callable[[object], bool]], ...] = (
+    ("n_db_nodes", _always),
+    ("n_loaders", _has_loaders),
+    ("n_monitor_nodes", _has_monitor),
+    ("n_db_zero_token_nodes", _has_zero_token),
+    ("n_test_oracle_db_nodes", _has_oracle),
+)
+
+
+def is_spot_placement_scoring_enabled(params) -> bool:
+    """Return True when AZ/region ordering should consult `ec2:GetSpotPlacementScores`."""
+    return is_spot_capacity_scoring_enabled(params, backend="aws")
+
+
+=======
+def _node_count_total(value) -> int:
+    """Sum an SCT node-count parameter across regions/DCs, treating anything unparseable as 0."""
+    if value is None or isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return max(int(value), 0)
+    if isinstance(value, list):
+        return sum(int(n) for n in value if str(n).strip().lstrip("-").isdigit() and int(n) > 0)
+    return 0
+
+
+# Node-count params paired with the gate deciding whether the test launches them at all, mirroring
+# `_INSTANCE_TYPE_PARAM_GATES`. Used to size the spot placement score request.
+_NODE_COUNT_PARAM_GATES: tuple[tuple[str, Callable[[object], bool]], ...] = (
+    ("n_db_nodes", _always),
+    ("n_loaders", _has_loaders),
+    ("n_monitor_nodes", _has_monitor),
+    ("n_db_zero_token_nodes", _has_zero_token),
+    ("n_test_oracle_db_nodes", _has_oracle),
+)
+
+
+def is_spot_placement_scoring_enabled(params) -> bool:
+    """Return True when AZ/region ordering should consult `ec2:GetSpotPlacementScores`."""
+    return is_spot_capacity_scoring_enabled(params, backend="aws")
+
+
+>>>>>>> 22455448e (refactor(config): enforce strict types for IntOrList)
 # (instance-type param key, gate). The gate decides whether this type will actually
 # be launched by the test; types whose gate is False are excluded from the AZ-filter
 # intersection so SCT defaults like `instance_type_vector_store: 't4g.medium'` do not

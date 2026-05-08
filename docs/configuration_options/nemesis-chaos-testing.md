@@ -110,8 +110,14 @@ A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
 
 **default:** N/A
 
+<<<<<<< HEAD
 **type:** int | list[int]
 * supports k8s multitenancy - see [multitenancy docs](../k8s-multitenancy.md)
+||||||| parent of 22455448e (refactor(config): enforce strict types for IntOrList)
+**type:** int | list[int] | space-separated ints → list[int]
+=======
+**type:** int | list[int] → list[int]
+>>>>>>> 22455448e (refactor(config): enforce strict types for IntOrList)
 
 
 <a id="nemesis_selector"></a>

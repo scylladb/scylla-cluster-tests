@@ -15,7 +15,13 @@ Used for scale test: max size of the cluster
 
 **default:** N/A
 
+<<<<<<< HEAD
 **type:** int | list[int]
+||||||| parent of 22455448e (refactor(config): enforce strict types for IntOrList)
+**type:** int | list[int] | space-separated ints → list[int]
+=======
+**type:** int | list[int] → list[int]
+>>>>>>> 22455448e (refactor(config): enforce strict types for IntOrList)
 
 
 <a id="compaction_strategy"></a>
