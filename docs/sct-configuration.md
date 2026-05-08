@@ -95,8 +95,8 @@ Always returns a `list[bool]`. Accepts boolean, list of booleans, or space-separ
 # Single boolean → [true]
 nemesis_during_prepare: true
 
-# Space-separated string → [true, false]
-nemesis_during_prepare: "true false"
+# List of booleans (for multi-DC)
+nemesis_during_prepare: [true, false]
 
 # String values (yes/no/1/0) → [true]
 nemesis_during_prepare: "yes"

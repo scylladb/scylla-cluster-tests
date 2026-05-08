@@ -243,15 +243,19 @@ def int_or_list_or_eval(value: str | int | list[int]) -> list[int] | None:
 IntOrList = Annotated[list[int], BeforeValidator(int_or_list_or_eval), InputType("int | list[int]")]
 
 
-def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -> list[bool] | None:  # noqa: PLR0911
-    """Convert value to a list of bools.
+def bool_or_list_or_eval(value: bool | list[bool] | str | None) -> list[bool] | None:  # noqa: PLR0911
+    """Coerce value to a list of bools.
 
     Accepts:
     - None -> None
-    - bool -> [bool]
-    - list of bools -> list of bools
-    - list of strings (true/false/yes/no/1/0) -> list of bools
-    - space-separated string of boolean values -> list of bools
+    - bool -> list[bool]
+    - list[bool | str] -> list[bool]
+    - str containing a single boolean value (e.g. from an env var) -> list[bool]
+    - str containing a Python-style list literal (e.g. "[True, False]") -> list[bool]
+    - str containing a JSON/YAML-style list literal (e.g. "[true, false]") -> list[bool]
+
+    Space-separated strings (e.g. 'true false') are no longer accepted.
+    Use a YAML list instead: [true, false].
     """
     if value is None:
         return None
@@ -273,19 +277,36 @@ def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -
             raise ValueError(f"{value} isn't a list of booleans") from exc
 
     if isinstance(value, str):
+        # Try literal_eval first — handles "[True, False]", "[true]", "True", etc.
+        # ast.literal_eval handles Python-style: [True, False]
+        # json.loads handles JSON/YAML-style: [true, false]
+        parsed = None
+        for loader in (ast.literal_eval, json.loads):
+            try:
+                parsed = loader(value.strip())
+                break
+            except (ValueError, SyntaxError):
+                continue
+
+        if parsed is not None:
+            if isinstance(parsed, list):
+                return bool_or_list_or_eval(parsed)
+            if isinstance(parsed, bool):
+                return [parsed]
+
+        # literal_eval returned a non-list, non-bool (e.g. int 1 from "1") —
+        # fall through to strtobool which handles "1", "0", "yes", "no", etc.
         try:
-            values = value.split()
-            return [bool(strtobool(v)) for v in values]
-        except Exception:  # noqa: BLE001
-            pass
+            return [bool(strtobool(value))]
+        except ValueError as exc:
+            raise ValueError(f"{value} cannot be converted to bool") from exc
 
-    raise ValueError(f"{value} isn't bool or list")
+    raise ValueError(f"{value} (type {type(value).__name__}) isn't a valid bool or list[bool]")
 
 
-#: Config type that always returns list[bool]. Accepts bool, list[bool], or space-separated boolean strings.
 BooleanOrList = Annotated[
     list[bool],
-    BeforeValidator(boolean_or_space_separated_booleans),
+    BeforeValidator(bool_or_list_or_eval),
     InputType("bool | list[bool] | space-separated booleans"),
 ]
 
