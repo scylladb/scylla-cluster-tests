@@ -298,9 +298,9 @@ class SctRunner(ABC):
             until [ -f /var/lib/cloud/instance/boot-finished ]; do sleep 1; done
 
             echo "fs.aio-max-nr = {AIO_MAX_NR_RECOMMENDED_VALUE}" >> /etc/sysctl.conf
-            echo "{login_user} soft nofile 4096" >> /etc/security/limits.conf
-            echo "jenkins soft nofile 4096" >> /etc/security/limits.conf
-            echo "root soft nofile 4096" >> /etc/security/limits.conf
+            echo "{login_user} soft nofile 65536" >> /etc/security/limits.conf
+            echo "jenkins soft nofile 65536" >> /etc/security/limits.conf
+            echo "root soft nofile 65536" >> /etc/security/limits.conf
 
             # Configure default user account.
             sudo -u {login_user} mkdir -p /home/{login_user}/.ssh || true
