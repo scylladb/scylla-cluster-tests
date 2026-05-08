@@ -29,13 +29,11 @@ ORACLE_GUEST_DB_TYPES = ("mixed_scylla", "mixed_cassandra")
 
 
 def sum_node_counts(value) -> int:
-    """Sum an IntOrList param value: an int, a list, or a '3 3' multi-DC string."""
+    """Sum an IntOrList param value: an int or a list."""
     if not value:
         return 0
     if isinstance(value, int):
         return value
-    if isinstance(value, str):
-        return sum(int(part) for part in value.split())
     return sum(int(part) for part in value)
 
 
@@ -155,7 +153,7 @@ def check_host_memory(config: MinicloudConfig, params) -> None:
 
     Lightweight mode gives every guest a fixed ``lightweight_memory``, so the requirement
     is exactly guests x per-guest plus host headroom - and only params knows the guest
-    count: ``n_db_nodes`` is IntOrList ('3 3' for multi-DC), summed the way
+    count: ``n_db_nodes`` is IntOrList ([3, 3] for multi-DC), summed the way
     sct_config.py:sum(n_db_nodes) does. Without this check the container is
     cgroup-OOM-killed mid-test (exit 137) and every VM dies with it.
 

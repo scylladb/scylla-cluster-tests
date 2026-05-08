@@ -33,20 +33,19 @@ def _node_count_positive(value) -> bool:
         return value > 0
     if isinstance(value, list):
         return any(int(n) > 0 for n in value if str(n).strip().lstrip("-").isdigit())
-    if isinstance(value, str):
-        return any(int(n) > 0 for n in value.split() if n.strip().lstrip("-").isdigit())
     return False
 
 
 def _node_count_total(value) -> int:
-    """Sum an SCT node-count parameter, which may be an int or a per-DC list/space-separated string."""
+    """Sum an SCT node-count parameter, which may be an int or a per-DC list."""
     if value is None or isinstance(value, bool):
         return 0
     if isinstance(value, (int, float)):
         return int(value)
-    items = value if isinstance(value, list) else str(value).split()
+    if not isinstance(value, list):
+        return 0
     total = 0
-    for item in items:
+    for item in value:
         try:
             total += int(item)
         except TypeError, ValueError:

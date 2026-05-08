@@ -2251,9 +2251,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         seeds_num = self.get("seeds_num")
         assert seeds_num > 0, "Seed number should be at least one"
 
-        num_of_db_nodes = sum(
-            self.get("n_db_nodes") if isinstance(self.get("n_db_nodes"), list) else [self.get("n_db_nodes")]
-        )
+        num_of_db_nodes = sum(self.get("n_db_nodes"))
         assert not num_of_db_nodes or seeds_num <= num_of_db_nodes, (
             f"Seeds number ({seeds_num}) should be not more then nodes number ({num_of_db_nodes})"
         )
@@ -2299,9 +2297,7 @@ class SCTConfiguration(*CONFIG_GROUPS):
         if self.get("cluster_backend").startswith("k8s"):
             return
         az_count = len(self.get("availability_zone").split(",")) if self.get("availability_zone") else 1
-        for nodes_num in (
-            self.get("n_db_nodes") if isinstance(self.get("n_db_nodes"), list) else [self.get("n_db_nodes")]
-        ):
+        for nodes_num in self.get("n_db_nodes"):
             assert nodes_num % az_count == 0, (
                 f"Number of db nodes ({nodes_num}) should be divisible by number of availability zones ({az_count})"
             )

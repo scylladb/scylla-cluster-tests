@@ -79,7 +79,7 @@ The whole test must fit in the host's free RAM:
 `preflight_check(params=...)` enforces exactly this before the container starts and prints the
 arithmetic when it fails. Without the check, an oversized test dies mid-run as a cgroup OOM kill
 (container exit 137) that takes every VM with it and surfaces as a wall of SSH timeouts far from
-the cause. `n_db_nodes` is a multi-DC list (`"3 3"`), and is summed.
+the cause. `n_db_nodes` is a multi-DC list (`[3, 3]`), and is summed.
 
 On the Jenkins pipelines the gate runs again in `run-test`, after `provision-resources` has
 launched the guests. By then `MemAvailable` no longer includes the memory those guests use, so

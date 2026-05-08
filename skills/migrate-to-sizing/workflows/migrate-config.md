@@ -78,8 +78,6 @@ For each role (db, loader, monitor):
    - No unexpected "not in catalog" errors for resolved instances
 3. Compare estimated costs — they should be in the same ballpark as the original instances
 
-**Known limitation**: Multi-DC configs (`n_db_nodes: '4 4'`) will error in preview. The migration is still correct; preview just can't parse the space-separated node count.
-
 **Exit criteria**: Preview output shows reasonable instance resolution across all clouds.
 
 ## Phase 6: Handle Edge Cases
