@@ -23,6 +23,7 @@ import tenacity
 
 
 from sdcm.wait import exponential_retry
+from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.utils.common import all_aws_regions
 from sdcm.utils.parallel_object import ParallelObject
@@ -52,28 +53,18 @@ class SCTDedicatedHosts:
         )
 
     @staticmethod
-    def _get_supported_availability_zones(ec2, instance_types: list[str], initial_az: str) -> list[str]:
-        response = ec2.describe_instance_type_offerings(
-            LocationType="availability-zone",
-            Filters=[
-                {"Name": "instance-type", "Values": instance_types},
-            ],
+    def _get_supported_availability_zones(
+        ec2,  # noqa: ARG004
+        instance_types: list[str],
+        initial_az: str,
+    ) -> list[str]:
+        # ec2 client in signature is for backward compatibility; underlying call uses AwsRegion
+        region = initial_az[:-1] if initial_az else ""
+        preferred = [initial_az] if initial_az else []
+        return AwsRegion(region_name=region).get_common_availability_zones(
+            instance_types=list(instance_types),
+            preferred_azs=preferred,
         )
-        offerings = response["InstanceTypeOfferings"]
-        azs = set.intersection(
-            *[
-                {offering["Location"] for offering in offerings if offering["InstanceType"] == instance_type}
-                for instance_type in instance_types
-            ]
-        )
-        azs = list(azs)
-        try:  # put initial az as first one to try
-            azs.remove(initial_az)
-            azs.insert(0, initial_az)
-        except ValueError:
-            LOGGER.warning("Initial availability zone %s does not support required instances", initial_az)
-        LOGGER.info("Supported availability zones for instance types %s: %s", instance_types, azs)
-        return azs
 
     @classmethod
     def reserve(cls, params) -> None:
