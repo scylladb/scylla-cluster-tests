@@ -127,12 +127,33 @@ ExistingFile = Annotated[str, BeforeValidator(_file)]
 
 
 def str_or_list_or_eval(value: Union[str, List[str], None]) -> List[str] | None:
+<<<<<<< HEAD
     """Convert an environment variable into a Python's list."""
 
+||||||| parent of 72edfc923 (refactor(config): enforce strict types for StringOrList)
+    """Convert an environment variable into a Python's list.
+
+    Always returns list[str] | None. Single strings are wrapped in a list.
+    """
+
+=======
+    """Convert a config value into a list of strings.
+
+    Accepts:
+    - None -> None
+    - str -> [str]  (always wrapped in a list)
+    - str containing a Python list literal of strings (e.g. "['a', 'b']") -> list[str]
+    - list[str] -> list[str]  (elements must already be strings; no coercion)
+
+    All list elements must be strings. Non-string elements raise ValueError.
+    """
+>>>>>>> 72edfc923 (refactor(config): enforce strict types for StringOrList)
     if value is None:
         return None
+
     if isinstance(value, str):
         try:
+<<<<<<< HEAD
             return ast.literal_eval(value)
         except Exception:  # noqa: BLE001
             pass
@@ -143,17 +164,35 @@ def str_or_list_or_eval(value: Union[str, List[str], None]) -> List[str] | None:
             if str(value)
             else []
         )
+||||||| parent of 72edfc923 (refactor(config): enforce strict types for StringOrList)
+            result = ast.literal_eval(value)
+            return result if isinstance(result, list) else [result]
+        except Exception:  # noqa: BLE001
+            pass
+        return [str(value)] if str(value) else []
+=======
+            parsed = ast.literal_eval(value.strip())
+        except ValueError, SyntaxError:
+            # literal_eval failed — treat the whole input as a plain string.
+            return [value] if value else []
+
+        # some values may be json encoded strings, so they pass trough
+        if isinstance(parsed, str):
+            return [parsed] if parsed else []
+
+        if not isinstance(parsed, list):
+            raise ValueError(f"{value} parsed to {parsed}, expected a list of strings")
+
+        value = parsed  # fall through to list validation below
+>>>>>>> 72edfc923 (refactor(config): enforce strict types for StringOrList)
 
     if isinstance(value, list):
-        ret_values = []
-        for val in value:
-            try:
-                ret_values += [ast.literal_eval(val)]
-            except Exception:  # noqa: BLE001
-                ret_values += [str(val)]
-        return ret_values
+        for el in value:
+            if not isinstance(el, str):
+                raise ValueError(f"List element {el} isn't a string in {value}")
+        return value
 
-    raise ValueError(f"{value!r} isn't a string or a list")
+    raise ValueError(f"{value} (type {type(value).__name__}) isn't a valid string or list[str]")
 
 
 StringOrList = Annotated[
