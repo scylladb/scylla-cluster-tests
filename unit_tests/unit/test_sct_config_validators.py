@@ -88,26 +88,50 @@ def test_int_or_list_or_eval_invalid(value, error_fragment):
 
 
 @pytest.mark.parametrize(
-    "input_val,expected",
+    "value,expected",
     [
-        (None, None),
-        ("hello", ["hello"]),
-        ("", []),
-        ("['cmd1', 'cmd2']", ["cmd1", "cmd2"]),
-        ("[1, 2]", [1, 2]),
-        ("3", [3]),
-        ("{'a': 1}", [{"a": 1}]),
-        (["a", "b"], ["a", "b"]),
-        (["['nested']", "plain"], [["nested"], "plain"]),
+        # config path: YAML-native types
+        pytest.param(None, None, id="config_none"),
+        pytest.param("eu-west-1", ["eu-west-1"], id="single_str"),
+        pytest.param(["eu-west-1", "us-east-1"], ["eu-west-1", "us-east-1"], id="config_list_strs"),
+        # env path: raw strings from SCT_* environment variables
+        pytest.param("['eu-west-1', 'us-east-1']", ["eu-west-1", "us-east-1"], id="env_py_list"),
+        # a plain string with spaces is treated as a single string (not split)
+        pytest.param(
+            "modify_table and not disruptive", ["modify_table and not disruptive"], id="env_space_str_kept_as_one"
+        ),
+        # empty inputs
+        pytest.param("", [], id="env_empty_string"),
+        pytest.param([], [], id="config_empty_list"),
+        # single-element list is NOT unwrapped (unlike bool)
+        pytest.param(["only"], ["only"], id="config_single_element_list_kept"),
+        # JSON double-quoted list literal (ast.literal_eval handles it)
+        pytest.param('["eu-west-1", "us-east-1"]', ["eu-west-1", "us-east-1"], id="env_json_list"),
     ],
 )
-def test_str_or_list_or_eval_valid(input_val, expected):
-    assert str_or_list_or_eval(input_val) == expected
+def test_str_or_list_or_eval_valid(value, expected):
+    """str_or_list_or_eval accepts plain strings, string lists, and list literals from env vars."""
+    assert str_or_list_or_eval(value) == expected
 
 
-def test_str_or_list_or_eval_invalid():
-    with pytest.raises(ValueError):
-        str_or_list_or_eval(123)
+@pytest.mark.parametrize(
+    "value,error_fragment",
+    [
+        pytest.param(1, "isn't a valid string or list", id="non_string_input"),
+        pytest.param("['eu-west-1', 'us-east-1', 1]", "isn't a string", id="env_element_not_str"),
+        pytest.param("{'key': 'val'}", "parsed to", id="env_parses_to_dict"),
+        pytest.param("42", "parsed to", id="env_parses_to_int"),
+        # all-int list string — was valid in old validator, now rejected
+        pytest.param("[1, 2]", "isn't a string", id="env_all_int_list"),
+        # config path: direct list with non-string elements
+        pytest.param([True, "a"], "isn't a string", id="config_list_bool_element"),
+        pytest.param(["a", 1], "isn't a string", id="config_list_int_element"),
+    ],
+)
+def test_str_or_list_or_eval_invalid(value, error_fragment):
+    """str_or_list_or_eval raises ValueError for non-string inputs and lists with non-string elements."""
+    with pytest.raises(ValueError, match=error_fragment):
+        str_or_list_or_eval(value)
 
 
 # ---------------------------------------------------------------------------
