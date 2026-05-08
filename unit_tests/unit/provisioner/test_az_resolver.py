@@ -234,15 +234,9 @@ def test_resolve_multi_region_multi_az_drops_unsupported_and_fills(mock_multi_re
         ([-1, 0], False),
         (["2", "0"], True),
         (["0"], False),
-        # strings
-        ("", False),
-        ("0", False),
-        ("3", True),
-        ("3 4", True),
-        ("0 0", False),
-        ("-1", False),
-        ("abc", False),
         # unsupported types
+        ("3", False),
+        ("3 4", False),
         ({"a": 1}, False),
     ],
 )

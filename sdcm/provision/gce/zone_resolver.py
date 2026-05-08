@@ -31,8 +31,6 @@ def _node_count_positive(value) -> bool:
         return value > 0
     if isinstance(value, list):
         return any(int(n) > 0 for n in value if str(n).strip().lstrip("-").isdigit())
-    if isinstance(value, str):
-        return any(int(n) > 0 for n in value.split() if n.strip().lstrip("-").isdigit())
     return False
 
 

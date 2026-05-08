@@ -442,7 +442,7 @@ def cross_reference_config(config_path: Path) -> LintResult:
     Examples of cross-reference checks:
     - If config has nemesis_class_name: 'SisyphusMonkey', metadata.nemesis_labels should include it
     - If config has stress_cmd containing 'cassandra-stress', metadata.stress_tools should include it
-    - If config has n_db_nodes: '15 15 15' (multi-DC), metadata.features should include 'multi-dc'
+    - If config has n_db_nodes: [15, 15, 15] (multi-DC), metadata.features should include 'multi-dc'
     - If pipeline says backend: 'gce' but metadata.supported_backends excludes 'gce', flag mismatch
     - If test method docstring declares 'Supported backends: aws, docker' but metadata lists others, flag mismatch.
       If docstring has no such declaration, all backends are assumed valid — no mismatch.
@@ -474,7 +474,7 @@ def lint_test_docs(test_case_dir, fix, missing_only):
 | TD-007 | `supported_backends` is compatible with pipeline `backend:` parameter | warning |
 | TD-007b | If test docstring declares `Supported backends:`, metadata must be subset. No declaration = all. | warning |
 | TD-008 | `duration_class` is consistent with `test_duration` value | warning |
-| TD-009 | `features` labels are consistent with config (e.g., multi-dc detected from `n_db_nodes: '15 15 15'`) | warning |
+| TD-009 | `features` labels are consistent with config (e.g., multi-dc detected from `n_db_nodes: [15, 15, 15]`) | warning |
 | TD-010 | `tier` is appropriate for test duration (e.g., `sanity` tests should be <1h) | warning |
 | TD-011 | `supported_backends` includes the backend from associated pipeline(s) | warning |
 
@@ -633,7 +633,7 @@ From the configuration, extract:
 - **Stress tool**: Parse `stress_cmd` for tool name (cassandra-stress, scylla-bench, ycsb, etc.)
 - **Nemesis**: Read `nemesis_class_name` and `nemesis_selector`
 - **Duration**: Read `test_duration` (minutes) and classify as short/medium/long
-- **Multi-DC**: Detect from `n_db_nodes` format ('6' = single-DC, '15 15 15' = 3 DCs)
+- **Multi-DC**: Detect from `n_db_nodes` format (`6` = single-DC, `[15, 15, 15]` = 3 DCs)
 - **Features**: Detect from config keys (encryption, authorization, cdc, tablets, etc.)
 - **Backend**: Read from pipeline `backend:` parameter AND from the test method's docstring.
   Tests may declare `Supported backends: aws, gce, docker` in their docstring to restrict
@@ -698,7 +698,7 @@ Write a 2-4 sentence description that answers:
 
 | Config Key/Value | Feature Label |
 |------------------|---------------|
-| `n_db_nodes: 'X Y Z'` (space-separated) | `multi-dc` |
+| `n_db_nodes: [X, Y, Z]` (list) | `multi-dc` |
 | `authenticator: PasswordAuthenticator` | `authorization` |
 | `client_encrypt: true` or `server_encrypt: true` | `tls-ssl` |
 | `tablets_enabled: true` | `tablets` |
@@ -745,8 +745,8 @@ skills/labeling-pipelines/
 
 ## Mistake 2: Missing multi-DC detection
 
-**Wrong**: `n_db_nodes: '15 15 15'` but features doesn't include 'multi-dc'
-**Right**: Space-separated n_db_nodes always means multi-DC.
+**Wrong**: `n_db_nodes: [15, 15, 15]` but features doesn't include 'multi-dc'
+**Right**: A multi-element n_db_nodes list always means multi-DC.
 
 ## Mistake 3: Listing all possible backends instead of actual
 
