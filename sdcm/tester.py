@@ -80,6 +80,7 @@ from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.cluster_cloud import ScyllaCloudCluster
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
 from sdcm.mgmt import get_scylla_manager_tool
+from sdcm.provision.aws.az_resolver import AZResolver
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.provision.aws.emr_provisioner import EmrClusterProvisioner, ensure_emr_roles
@@ -1900,6 +1901,8 @@ class ClusterTester(unittest.TestCase):
 
         regions = self.params.get("region_name").split()
         services = get_ec2_services(regions)
+
+        AZResolver(self.params).resolve()
 
         for _ in regions:
             self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
