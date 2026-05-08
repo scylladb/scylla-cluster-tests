@@ -53,6 +53,7 @@ class InstanceDefinition:
         default_factory=list, repr=False
     )  # None when no cloud-init use at all
     use_public_ip: bool = False
+    rack_index: int | None = None  # explicit rack index for rack-aware placement
 
 
 class ProvisionError(Exception):
