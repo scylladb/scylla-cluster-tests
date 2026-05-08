@@ -28,6 +28,7 @@ db_map = ConfigParamsMap(
     local_ssd_count="gce_n_local_ssd_disk_db",
     root_disk_type="gce_root_disk_type_db",
     pd_standard_disk_size="gce_pd_standard_disk_size_db",
+    pd_ssd_disk_size="gce_pd_ssd_disk_size_db",
 )
 
 loader_map = ConfigParamsMap(
