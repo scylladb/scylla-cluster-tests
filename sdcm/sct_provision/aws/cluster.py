@@ -15,8 +15,9 @@ import abc
 from functools import cached_property
 from typing import List, Tuple
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, PrivateAttr, computed_field
 from sdcm import cluster
+from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.common.provision_plan import ProvisionPlan
@@ -68,6 +69,9 @@ class ClusterBase(BaseModel):
     _INSTANCE_PARAMS_BUILDER = None
     _USER_PARAM = None
     _USE_PLACEMENT_GROUP = True
+    # tracks instances launched by this cluster (so that AZ-fallback can terminate
+    # partial provisions when a later AZ fails)
+    _provisioned_instances: list = PrivateAttr(default_factory=list)
 
     @property
     def _provisioner(self):
@@ -221,7 +225,6 @@ class ClusterBase(BaseModel):
     def provision(self):
         if self._node_nums == [0]:
             return []
-        total_instances_provisioned = []
         for region_id in range(len(self._regions_with_nodes)):
             az_nodes = self._az_nodes(region_id=region_id)
             for az_id, _ in enumerate(self._azs):
@@ -238,9 +241,9 @@ class ClusterBase(BaseModel):
                     node_count=node_count,
                 )
                 if not instances:
-                    raise RuntimeError("End of provision plan reached, but no instances provisioned")
-                total_instances_provisioned.extend(instances)
-        return total_instances_provisioned
+                    raise ProvisioningCapacityExhausted("End of provision plan reached, but no instances provisioned")
+                self._provisioned_instances.extend(instances)
+        return list(self._provisioned_instances)
 
 
 class DBCluster(ClusterBase):
@@ -324,7 +327,6 @@ class DBCluster(ClusterBase):
     def provision(self):
         if self._node_nums == [0]:
             return []
-        total_instances_provisioned = []
         for region_id in range(len(self._regions_with_nodes)):
             az_nodes, az_zero_nodes = self._az_nodes(region_id=region_id)
             for az_id, _ in enumerate(self._azs):
@@ -341,8 +343,10 @@ class DBCluster(ClusterBase):
                         node_count=node_count,
                     )
                     if not instances:
-                        raise RuntimeError("End of provision plan reached, but no instances provisioned")
-                    total_instances_provisioned.extend(instances)
+                        raise ProvisioningCapacityExhausted(
+                            "End of provision plan reached, but no instances provisioned"
+                        )
+                    self._provisioned_instances.extend(instances)
 
                 if zero_node_count:
                     instance_parameters = self._zero_token_instance_parameters(
@@ -359,9 +363,11 @@ class DBCluster(ClusterBase):
                         node_count=zero_node_count,
                     )
                     if not instances:
-                        raise RuntimeError("End of provision plan reached, but no instances provisioned")
-                    total_instances_provisioned.extend(instances)
-        return total_instances_provisioned
+                        raise ProvisioningCapacityExhausted(
+                            "End of provision plan reached, but no instances provisioned"
+                        )
+                    self._provisioned_instances.extend(instances)
+        return list(self._provisioned_instances)
 
 
 class OracleDBCluster(ClusterBase):
