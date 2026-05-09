@@ -13,13 +13,20 @@
 
 import logging
 import unittest.mock
+
 import pytest
 
 from sdcm import sct_config
+from sdcm.utils.common import get_latest_scylla_release
 
 pytestmark = [
     pytest.mark.integration,
 ]
+
+
+def _get_latest_branch() -> str:
+    full_version = get_latest_scylla_release("scylla-enterprise")
+    return ".".join(full_version.split(".")[:2])
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -32,6 +39,11 @@ def setup():
     yield
 
 
+@pytest.fixture(scope="session")
+def latest_release():
+    return _get_latest_branch()
+
+
 @pytest.fixture(scope="function", autouse=True)
 def function_setup(monkeypatch):
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
@@ -40,17 +52,19 @@ def function_setup(monkeypatch):
 @pytest.mark.parametrize(
     argnames="scylla_version, expected_docker_image, expected_version, expected_is_enterprise",
     argvalues=[
-        pytest.param("2024.1", "scylladb/scylla-enterprise", "2024.1", True, id="2024.1"),
-        # 2025.1 is considered opensource with recent changes to the mechanisms.
-        # Issue gets much deeper and surfaced only lately. Given the culprit patch never made it to 2025.1
-        # I think it is safe to remove the test, until https://github.com/scylladb/scylla-cluster-tests/issues/13093
-        # pytest.param("2025.1", "scylladb/scylla", ("2025.1", True), id="2025.1"),
+        pytest.param("LATEST", "scylladb/scylla", "LATEST", False, id="latest-release"),
         pytest.param("latest", "scylladb/scylla-nightly", None, False, id="latest"),
         pytest.param("master:latest", "scylladb/scylla-nightly", None, False, id="master:latest"),
-        pytest.param("enterprise", "scylladb/scylla-enterprise-nightly", None, True, id="enterprise"),
     ],
 )
-def test_docker(scylla_version, expected_docker_image, expected_version, expected_is_enterprise, monkeypatch):
+def test_docker(
+    scylla_version, expected_docker_image, expected_version, expected_is_enterprise, monkeypatch, latest_release
+):
+    if scylla_version == "LATEST":
+        scylla_version = latest_release
+    if expected_version == "LATEST":
+        expected_version = latest_release
+
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", scylla_version)
@@ -69,13 +83,16 @@ def test_docker(scylla_version, expected_docker_image, expected_version, expecte
 @pytest.mark.parametrize(
     argnames="scylla_version, expected_version, expected_is_enterprise",
     argvalues=[
-        pytest.param("2024.1", "2024.1", True, id="2024.1"),
+        pytest.param("LATEST", "LATEST", True, id="latest-release"),
         pytest.param("master:latest", None, True, id="master"),
-        pytest.param("enterprise-2024.1:latest", None, True, id="enterprise-2024.1"),
-        pytest.param("branch-2025.1:latest", None, True, id="branch-2025.1"),
+        pytest.param("branch-LATEST:latest", None, True, id="branch"),
     ],
 )
-def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, distro, monkeypatch):
+def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, distro, monkeypatch, latest_release):
+    scylla_version = scylla_version.replace("LATEST", latest_release)
+    if expected_version == "LATEST":
+        expected_version = latest_release
+
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", scylla_version)
     monkeypatch.setenv(
@@ -96,15 +113,17 @@ def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, d
 @pytest.mark.parametrize(
     argnames="scylla_version, expected_version, expected_is_enterprise",
     argvalues=[
-        pytest.param("2024.1", "2024.1", True, id="2024.1"),
-        pytest.param("2025.1", "2025.1", True, id="2025.1"),
+        pytest.param("LATEST", "LATEST", True, id="latest-release"),
         pytest.param("master:latest", None, True, id="master"),
-        pytest.param("branch-2024.1:latest", None, True, id="branch-2024.1"),
-        pytest.param("branch-2025.1:latest", None, True, id="branch-2025.1"),
+        pytest.param("branch-LATEST:latest", None, True, id="branch"),
     ],
 )
 @pytest.mark.parametrize(argnames="backend", argvalues=("aws", "gce", "azure"))
-def test_images(backend, scylla_version, expected_version, expected_is_enterprise, monkeypatch):
+def test_images(backend, scylla_version, expected_version, expected_is_enterprise, monkeypatch, latest_release):
+    scylla_version = scylla_version.replace("LATEST", latest_release)
+    if expected_version == "LATEST":
+        expected_version = latest_release
+
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
     monkeypatch.setenv("SCT_SCYLLA_VERSION", scylla_version)
 
