@@ -80,6 +80,17 @@ class NoValidAvailabilityZoneError(Exception):
     """Raised when no AZ supports all required instance types in the configured region(s)."""
 
 
+def is_az_fallback_enabled(params) -> bool:
+    """Return True when AZ fallback on capacity errors is enabled.
+
+    Reads `fallback_to_next_availability_zone` (new, backend-agnostic).
+    Falls back to the deprecated `aws_fallback_to_next_availability_zone` alias.
+    """
+    if (value := params.get("fallback_to_next_availability_zone")) is not None:
+        return bool(value)
+    return bool(params.get("aws_fallback_to_next_availability_zone"))
+
+
 class AZResolver:
     """Resolve `availability_zone` config to AZs supporting all required instance types."""
 
@@ -147,6 +158,67 @@ class AZResolver:
         else:
             LOGGER.info("AZResolver: availability_zone '%s' already valid for regions %s", original_value, region_names)
 
+    def get_fallback_candidates(self) -> list[list[str]]:
+        """Build ordered AZ candidate sets for capacity-error fallback.
+
+        Each candidate preserves the configured `availability_zone` shape:
+        single-AZ stays single-AZ, and multi-AZ stays multi-AZ. The first
+        candidate is the configured AZ list with unsupported letters dropped and
+        backfilled from supported alternatives. Later candidates replace one
+        supported AZ per slot. For multi-region configs, AZ letters are
+        intersected across regions so every candidate is valid everywhere.
+
+        Single-AZ config "a", supported ["a","b","c"] -> [["a"], ["b"], ["c"]]
+        Single-AZ config "c", supported ["a","b"]     -> [["a"], ["b"]]   # 'c' dropped, 'a' backfilled
+        Multi-AZ config "a,b,c", supported ["a","b","c","d"]
+            -> [["a","b","c"], ["d","b","c"], ["a","d","c"], ["a","b","d"]]
+        """
+        configured_letters = self._configured_az_letters()
+        if not configured_letters:
+            return []
+
+        supported_letters = self._supported_az_letters()
+        if not supported_letters:
+            return [configured_letters]
+
+        primary = [letter for letter in configured_letters if letter in supported_letters]
+        for letter in supported_letters:
+            if len(primary) >= len(configured_letters):
+                break
+            if letter not in primary:
+                primary.append(letter)
+
+        if not primary:
+            return [configured_letters]
+
+        candidates = [primary]
+        seen = {tuple(primary)}
+
+        for slot_index in range(len(primary)):
+            for letter in supported_letters:
+                if letter in primary:
+                    continue
+                candidate = list(primary)
+                candidate[slot_index] = letter
+                if tuple(candidate) not in seen:
+                    candidates.append(candidate)
+                    seen.add(tuple(candidate))
+
+        return candidates
+
+    def _supported_az_letters(self) -> list[str]:
+        """Return AZ letters supported in EVERY configured region for the required types.
+
+        When no instance types are declared, returns the configured AZ letters as-is.
+        """
+        instance_types = self.required_instance_types()
+        region_names = self._region_names()
+
+        if not instance_types or not region_names:
+            return self._configured_az_letters()
+
+        return self._common_supported_letters(region_names, self._configured_az_letters(), instance_types)
+
     @staticmethod
     def _common_supported_letters(
         region_names: list[str], configured_letters: list[str], instance_types: list[str]
@@ -169,7 +241,7 @@ class AZResolver:
         if not common:
             return []
 
-        configured_first = [l for l in configured_letters if l in common]
+        configured_first = [letter for letter in configured_letters if letter in common]
         additional = sorted(common - set(configured_first))
         return configured_first + additional
 

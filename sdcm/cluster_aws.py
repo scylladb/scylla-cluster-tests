@@ -389,17 +389,32 @@ class AWSCluster(cluster.BaseCluster):
         test_id = self.test_config.test_id()
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
-        availability_zone = self.params.get("availability_zone").split(",")[az_idx] if az_idx is not None else None
         ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx])
+        region_name = self.region_names[dc_idx]
         results = list_instances_aws(
             tags_dict={"TestId": test_id, "NodeType": self.node_type},
             running=True,
-            region_name=self.region_names[dc_idx],
+            region_name=region_name,
             group_as_region=True,
-            availability_zone=availability_zone,
             verbose=True,
         )
-        instances = results[self.region_names[dc_idx]]
+        instances = results[region_name]
+
+        if az_idx is not None and instances:
+            # bucket by actual AZ letter so instances can be found even if provisioning
+            # moved them away from params["availability_zone"] (AZ fallback flow)
+            by_az = {}
+            for instance in instances:
+                by_az.setdefault(instance["Placement"]["AvailabilityZone"][-1], []).append(instance)
+
+            configured_letters = [
+                letter.strip() for letter in (self.params.get("availability_zone") or "").split(",") if letter.strip()
+            ]
+            ordered_letters = configured_letters + sorted(
+                letter for letter in by_az if letter not in configured_letters
+            )
+            ordered_letters = [letter for letter in ordered_letters if letter in by_az]
+            instances = by_az[ordered_letters[az_idx]] if az_idx < len(ordered_letters) else []
 
         def sort_by_index(item):
             for tag in item["Tags"]:

@@ -2191,8 +2191,14 @@ class SCTConfiguration(dict):
             name="aws_fallback_to_next_availability_zone",
             env="SCT_AWS_FALLBACK_TO_NEXT_AVAILABILITY_ZONE",
             type=boolean,
-            help="""Try all availability zones one by one in order to maximize the chances of getting
-                   the requested instance capacity.""",
+            help="Deprecated alias of `fallback_to_next_availability_zone`. Kept for backward compatibility.",
+        ),
+        dict(
+            name="fallback_to_next_availability_zone",
+            env="SCT_FALLBACK_TO_NEXT_AVAILABILITY_ZONE",
+            type=boolean,
+            help="On capacity errors, automatically retry provisioning in the next available AZ in the same region. "
+            "Backend-agnostic parameter; supersedes `aws_fallback_to_next_availability_zone`.",
         ),
         dict(
             name="pre_filter_unavailable_availability_zones",
