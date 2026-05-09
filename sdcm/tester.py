@@ -3924,7 +3924,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.stop_resources()
 
         with silence(parent=self, name="closing decoding queue as needed"):
-            if self.test_config.BACKTRACE_DECODING:
+            if self.test_config.BACKTRACE_DECODING and hasattr(self.test_config.DECODING_QUEUE, "close"):
                 self.test_config.DECODING_QUEUE.close()
 
         # NOTE: running on K8S we need to gather logs otherwise a lot of
