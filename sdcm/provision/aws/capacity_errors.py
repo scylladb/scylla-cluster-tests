@@ -31,3 +31,13 @@ def is_capacity_error(exception: BaseException) -> bool:
     error_code = exception.response.get("Error", {}).get("Code", "")
     codes = {error_code} | set(_AWS_ERROR_CODE_RE.findall(str(exception)))
     return bool(codes & set(CAPACITY_ERROR_CODES))
+
+
+class ProvisioningCapacityExhausted(Exception):
+    """Raised when a provision plan exits with no instances, signalling capacity exhaustion.
+
+    The AWS spot path silently swallows ``SpotCapacityNotAvailable`` / ``SpotPriceTooLow``
+    and returns an empty result instead of propagating a ``ClientError``. Cluster code
+    raises this exception in that case so the AZ-fallback layer can treat it the same
+    as an on-demand capacity ``ClientError``.
+    """
