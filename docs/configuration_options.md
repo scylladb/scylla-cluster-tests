@@ -3329,9 +3329,18 @@ Availability zone to use. Specify multiple (comma separated) to deploy resources
 
 ## **aws_fallback_to_next_availability_zone** / SCT_AWS_FALLBACK_TO_NEXT_AVAILABILITY_ZONE
 
-Try all availability zones one by one in order to maximize the chances of getting<br>the requested instance capacity.
+Deprecated alias of `fallback_to_next_availability_zone`. Kept for backward compatibility.
 
 **default:** N/A
+
+**type:** boolean
+
+
+## **fallback_to_next_availability_zone** / SCT_FALLBACK_TO_NEXT_AVAILABILITY_ZONE
+
+On capacity errors, automatically retry provisioning in the next available AZ in the same region. Backend-agnostic parameter; supersedes `aws_fallback_to_next_availability_zone`.
+
+**default:** True
 
 **type:** boolean
 
