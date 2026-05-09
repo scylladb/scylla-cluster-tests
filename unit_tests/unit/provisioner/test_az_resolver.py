@@ -15,7 +15,12 @@ from unittest.mock import patch
 
 import pytest
 
-from sdcm.provision.aws.az_resolver import AZResolver, NoValidAvailabilityZoneError, _node_count_positive
+from sdcm.provision.aws.az_resolver import (
+    AZResolver,
+    NoValidAvailabilityZoneError,
+    _node_count_positive,
+    is_az_fallback_enabled,
+)
 
 
 class _DotDict(dict):
@@ -268,3 +273,47 @@ def test_resolve_with_unset_availability_zone_stays_unset(mock_aws_region_cls, a
     params = _make_params(availability_zone=az_value)
     AZResolver(params).resolve()
     assert not params["availability_zone"]
+
+
+@pytest.mark.parametrize(
+    "new_param, alias, expected",
+    [
+        (None, True, True),
+        (False, True, False),
+    ],
+)
+def test_is_az_fallback_enabled(new_param, alias, expected):
+    params = _make_params(fallback_to_next_availability_zone=new_param, aws_fallback_to_next_availability_zone=alias)
+    assert is_az_fallback_enabled(params) is expected
+
+
+def test_get_fallback_candidates_single_az(mock_aws_region_cls):
+    _, region_instance = mock_aws_region_cls
+    region_instance.get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b", "us-east-1c"]
+    params = _make_params(availability_zone="a")
+    assert AZResolver(params).get_fallback_candidates() == [["a"], ["b"], ["c"]]
+
+
+def test_get_fallback_candidates_multi_az(mock_aws_region_cls):
+    _, region_instance = mock_aws_region_cls
+    region_instance.get_common_availability_zones.return_value = [
+        "us-east-1a",
+        "us-east-1b",
+        "us-east-1c",
+        "us-east-1d",
+    ]
+    params = _make_params(availability_zone="a,b,c")
+    candidates = AZResolver(params).get_fallback_candidates()
+    # first candidate is the configured set; subsequent candidates replace one slot at a time with "d"
+    assert candidates[0] == ["a", "b", "c"]
+    assert ["d", "b", "c"] in candidates
+    assert ["a", "d", "c"] in candidates
+    assert ["a", "b", "d"] in candidates
+
+
+def test_get_fallback_candidates_enumerates_alternatives_when_upfront_filter_disabled(mock_aws_region_cls):
+    """Fallback enumeration must NOT depend on `pre_filter_unavailable_availability_zones`."""
+    _, region_instance = mock_aws_region_cls
+    region_instance.get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b"]
+    params = _make_params(availability_zone="c", pre_filter_unavailable_availability_zones=False)
+    assert AZResolver(params).get_fallback_candidates() == [["a"], ["b"]]

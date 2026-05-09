@@ -1924,7 +1924,11 @@ class SCTConfiguration(BaseModel):
               "Same for multi-region scenario.""",
     )
     aws_fallback_to_next_availability_zone: Boolean = SctField(
-        description="Try all availability zones one by one in order to maximize the chances of getting the requested instance capacity.",
+        description="Deprecated alias of `fallback_to_next_availability_zone`. Kept for backward compatibility.",
+    )
+    fallback_to_next_availability_zone: Boolean = SctField(
+        description="On capacity errors, automatically retry provisioning in the next available AZ in the same region. "
+        "Backend-agnostic parameter; supersedes `aws_fallback_to_next_availability_zone`.",
     )
     pre_filter_unavailable_availability_zones: Boolean = SctField(
         description="Filter availability zones upfront to only those that support all required instance types. "
