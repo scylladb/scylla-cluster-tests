@@ -1726,6 +1726,10 @@ class SCTConfiguration(BaseModel):
     cs_debug: Boolean = SctField(
         description="enable debug for cassandra-stress",
     )
+    cs_extra_jvm_opts: String = SctField(
+        description="Extra JVM options passed to cassandra-stress via JVM_OPTS environment variable. "
+        "Example: '-XX:+UseG1GC -XX:MaxGCPauseMillis=50 -Xmx8g'",
+    )
     stress_cmd_mv: StringOrList = SctField(
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
     )

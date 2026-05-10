@@ -365,3 +365,4 @@ agent:
   tls: false
 
 c_s_driver_version: '3'
+cs_extra_jvm_opts: ''
