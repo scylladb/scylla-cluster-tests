@@ -143,7 +143,7 @@ from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_v
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 from utils.build_system.throttle_categories import ThrottleCategoryManager, ThrottleCategory
-from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
+from utils.get_supported_scylla_base_versions import UpgradeBaseVersion, fetch_official_supported_versions
 from sdcm.utils.docker_utils import get_ip_address_of_container
 from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
 from unit_tests.unit.nemesis.fake_cluster import FakeTester
@@ -1319,6 +1319,36 @@ def get_scylla_base_versions(
     for version in version_list:
         tbl.add_row(version, version_detector.repo_maps[version])
     click.echo(rich_table_to_string(tbl, title="Base Versions"))
+    return
+
+
+@cli.command("get-official-supported-versions", help="Get officially supported ScyllaDB versions")
+@click.option(
+    "-o",
+    "--only-print-versions",
+    type=bool,
+    default=False,
+    required=False,
+    help="Print only the versions as plain output instead of the table view",
+)
+def get_official_supported_versions(only_print_versions):
+    """
+    Fetch officially supported ScyllaDB versions from the scylladb-docs-homepage repository.
+    Returns versions that have status "Supported" in the upstream supported_versions.json.
+    """
+    add_file_logger()
+
+    version_list = fetch_official_supported_versions()
+    click.echo(f"Official Supported Versions: {' '.join(version_list)}")
+
+    if only_print_versions:
+        click.echo(" ".join(version_list))
+        return
+
+    tbl = Table("Supported Versions", show_lines=False)
+    for version in version_list:
+        tbl.add_row(version)
+    click.echo(rich_table_to_string(tbl, title="Supported Versions"))
     return
 
 
