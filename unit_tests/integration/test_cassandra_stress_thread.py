@@ -163,3 +163,31 @@ def test_05_cassandra_stress_compression(request, docker_scylla, params, compres
 
     assert "latency 99th percentile" in output[0]
     assert float(output[0]["latency 99th percentile"]) > 0
+
+
+def test_06_cassandra_stress_with_extra_jvm_opts(request, docker_scylla, params):
+    params["cs_extra_jvm_opts"] = "-XX:+UseG1GC -XX:MaxGCPauseMillis=50 -Xmx512m"
+
+    loader_set = LocalLoaderSetDummy(params=params)
+
+    cmd = (
+        "cassandra-stress write cl=ONE duration=30s -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) "
+        "compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native "
+        "-rate threads=5 -pop seq=1..10000000 -log interval=5"
+    )
+
+    cs_thread = CassandraStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params)
+
+    def cleanup_thread():
+        cs_thread.kill()
+
+    request.addfinalizer(cleanup_thread)
+
+    cs_thread.run()
+
+    output, _ = cs_thread.parse_results()
+    assert "latency mean" in output[0]
+    assert float(output[0]["latency mean"]) > 0
+
+    assert "latency 99th percentile" in output[0]
+    assert float(output[0]["latency 99th percentile"]) > 0
