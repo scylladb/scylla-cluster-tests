@@ -10,7 +10,7 @@ SCT uses constraint-based instance selection to automatically resolve hardware r
 # Specify hardware requirements — resolved per cloud at runtime
 db_instance_type:
   vcpu: 8
-  memory: ">16gb"
+  memory: 32
 
 loader_instance_type:
   vcpu: 4
@@ -29,14 +29,20 @@ The same config with `--backend gce` resolves to:
 - **loader**: `e2-standard-4` (4 vCPU, 16 GB)
 - **monitor**: `n2-highmem-4` (4 vCPU, 32 GB)
 
-### Via environment variable
+### Via environment variable (dot-notation)
+
+SCT's existing dot-notation for nested config values works out of the box:
 
 ```bash
-# Flat string format for env vars
-export SCT_DB_INSTANCE_TYPE='vcpu=16,memory=>32gb'
-export SCT_LOADER_INSTANCE_TYPE='vcpu=4'
-export SCT_MONITOR_INSTANCE_TYPE='vcpu=2'
+export SCT_DB_INSTANCE_TYPE.vcpu=16
+export SCT_DB_INSTANCE_TYPE.memory=32
+export SCT_DB_INSTANCE_TYPE.arch=arm64
+
+export SCT_LOADER_INSTANCE_TYPE.vcpu=4
+export SCT_MONITOR_INSTANCE_TYPE.vcpu=2
 ```
+
+This builds the equivalent dict `{vcpu: 16, memory: 32, arch: "arm64"}` using the same mechanism as other nested SCT config parameters (e.g. `append_scylla_yaml`).
 
 ### Literal instance type (backward compatible)
 
@@ -52,38 +58,45 @@ db_instance_type: 'i4i.2xlarge'
 
 ```yaml
 db_instance_type:
-  vcpu: 8              # exact match
-  memory: ">16gb"      # minimum 16 GB
-  disk: "500gb-2tb"    # range: 500 GB to 2 TB local disk
-  arch: "arm64"        # optional: force architecture
+  vcpu: 8              # exact match (required)
+  memory: 32           # minimum 32 GB (plain int = minimum, unit always GB)
+  disk: 500            # minimum 500 GB local disk (plain int = minimum, unit always GB)
+  arch: arm64          # optional: force architecture (accepts: arm64, arm, x86_64, x86)
 ```
 
-### Flat string format (for env vars)
+### Advanced operators (optional)
 
-```bash
-SCT_DB_INSTANCE_TYPE='vcpu=8,memory=>16gb,disk=500gb-2tb,arch=arm64'
+For power users who need more precise control:
+
+```yaml
+db_instance_type:
+  vcpu: "8-16"         # range: 8 to 16 vCPUs
+  memory: ">64"        # more than 64 GB
+  disk: "500-2048"     # range: 500 GB to 2 TB local disk
 ```
-
-Both formats are equivalent and produce identical results.
 
 ## Constraint Reference
 
-| Field | Description | Operators | Units | Default if omitted |
-|-------|-------------|-----------|-------|--------------------|
-| `vcpu` | Number of virtual CPUs | exact, `>`, `<`, `>=`, range | plain int | No filter |
-| `memory` | RAM size | exact, `>`, `<`, `>=`, range | `gb`, `tb` | No filter |
-| `disk` | Local disk size (per disk) | exact, `>`, `<`, `>=`, range | `gb`, `tb` | db role: must have local disk |
-| `arch` | CPU architecture | exact only | `arm64`, `x86_64` | aws=`arm64`, others=`x86_64` |
+| Field | Description | Operators | Units | Required? |
+|-------|-------------|-----------|-------|-----------|
+| `vcpu` | Number of virtual CPUs | exact, range (`"8-16"`) | plain int | **Yes** |
+| `memory` | RAM size (minimum) | plain int (min), `>`, `<`, `>=`, range | GB (always) | No |
+| `disk` | Local disk size per disk (minimum) | plain int (min), `>`, `<`, `>=`, range | GB (always) | No (db role: must have local disk) |
+| `arch` | CPU architecture | exact only | `arm64`/`arm`, `x86_64`/`x86` | No (aws=`arm64`, others=`x86_64`) |
+
+**Plain integers**: For `memory` and `disk`, a plain integer always means "minimum GB". `memory: 32` is equivalent to `memory: ">=32"`.
+
+**Architecture shorthands**: `arm` is shorthand for `arm64`, `x86` is shorthand for `x86_64`.
 
 ### Operator examples
 
 | Syntax | Meaning |
 |--------|---------|
 | `vcpu: 16` | Exactly 16 vCPUs |
-| `memory: ">32gb"` | More than 32 GB |
-| `memory: ">=32gb"` | 32 GB or more |
-| `memory: "<64gb"` | Less than 64 GB |
-| `disk: "500gb-2tb"` | Between 500 GB and 2 TB |
+| `vcpu: "8-16"` | Between 8 and 16 vCPUs |
+| `memory: 32` | At least 32 GB (plain int = minimum) |
+| `memory: ">64"` | More than 64 GB |
+| `disk: "500-2048"` | Between 500 GB and 2 TB |
 
 ## Selection Algorithm
 
@@ -100,14 +113,14 @@ When you specify constraints, the system:
 
 | Role | AWS | GCE | Azure | OCI |
 |------|-----|-----|-------|-----|
-| db | i8g (ARM), i4i (x86 fallback) | z3-highmem | Standard_L*s_v4 | DenseIO.E5.Flex |
+| db | i8g (ARM), i7i, i4i (x86 fallback) | z3-highmem | Standard_L*s_v4 | DenseIO.E5.Flex |
 | loader | c6i | e2-standard, e2-highcpu | Standard_F*s_v2 | VM.Standard3.Flex |
 | monitor | t3, m6i | n2-highmem | Standard_D*_v4 | VM.Standard.E4.Flex |
 
 ### Implicit constraints
 
 - **db role**: Automatically requires `local_disk_count > 0` (NVMe/local SSD) unless explicitly overridden
-- **AWS db**: Defaults to ARM (`i8g`) architecture; use `arch: "x86_64"` to get `i4i` family
+- **AWS db**: Defaults to ARM (`i8g`) architecture; use `arch: x86_64` to get `i7i`/`i4i` family
 
 ## Examples
 
@@ -116,7 +129,7 @@ When you specify constraints, the system:
 ```yaml
 db_instance_type:
   vcpu: 16
-  memory: ">64gb"
+  memory: 64
 
 loader_instance_type:
   vcpu: 16
@@ -132,10 +145,21 @@ Resolves on AWS to: `i8g.4xlarge` / `c6i.4xlarge` / `m6i.xlarge`
 ```yaml
 db_instance_type:
   vcpu: 8
-  arch: "x86_64"
+  arch: x86_64
 ```
 
-Resolves to `i4i.2xlarge` instead of the default `i8g.2xlarge`.
+Resolves to `i7i.2xlarge` instead of the default `i8g.2xlarge`.
+
+### Flexible vCPU for cross-cloud compatibility
+
+```yaml
+# OCI DenseIO starts at 16 vCPU; use range to allow flexibility
+db_instance_type:
+  vcpu: "8-16"
+  memory: 32
+```
+
+Resolves to 8-vCPU instances on AWS/GCE/Azure, 16-vCPU on OCI (smallest available).
 
 ### Minimal CI test
 
@@ -156,7 +180,7 @@ monitor_instance_type:
 # test-cases/longevity/longevity-100gb-4h.yaml
 db_instance_type:
   vcpu: 8
-  memory: ">32gb"
+  memory: 32
 
 loader_instance_type:
   vcpu: 8
@@ -172,8 +196,9 @@ n_monitor_nodes: 1
 ### Environment variable override
 
 ```bash
-# Override just the DB instance for a quick test with bigger nodes
-export SCT_DB_INSTANCE_TYPE='vcpu=16,memory=>64gb'
+# Override just the DB vCPU count for a quick test with bigger nodes
+export SCT_DB_INSTANCE_TYPE.vcpu=16
+export SCT_DB_INSTANCE_TYPE.memory=64
 hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/longevity/longevity-100gb-4h.yaml
 ```
 
@@ -217,7 +242,7 @@ Show how constraints resolve per cloud:
 ```bash
 $ uv run sct.py translate-size --config test-cases/longevity/longevity-100gb-4h.yaml
 
-Constraint: db_instance_type = {vcpu: 8, memory: ">32gb"}
+Constraint: db_instance_type = {vcpu: 8, memory: 32}
 
   AWS:   i8g.2xlarge    (8 vCPU, 64 GB, 1875 GB NVMe, arm64, $0.62/hr)
   GCE:   z3-highmem-8   (8 vCPU, 64 GB, 2x375 GB SSD, x86_64)
@@ -250,7 +275,7 @@ Instance specs and pricing live in `data/instance_catalog/`:
 
 ```
 data/instance_catalog/
-├── aws.yaml       # i8g, i4i, c6i, m6i, t3
+├── aws.yaml       # i8g, i7i, i4i, c6i, m6i, t3
 ├── gce.yaml       # z3-highmem, e2-standard, e2-highcpu, n2-highmem
 ├── azure.yaml     # Standard_L, Standard_F, Standard_D
 └── oci.yaml       # DenseIO.E5, VM.Standard3, VM.Standard.E4
@@ -275,7 +300,7 @@ azure_instance_type_db: 'Standard_L16s_v4'
 ```yaml
 db_instance_type:
   vcpu: 8
-  memory: ">16gb"
+  memory: 32
 ```
 
 ### How to migrate
@@ -306,8 +331,8 @@ db_instance_type:
 ```yaml
 db_instance_type:
   vcpu: 8
-  arch: "x86_64"
-# Resolves to i4i.2xlarge (same as before)
+  arch: x86
+# Resolves to i7i.2xlarge
 ```
 
 **Loader nodes** — compute-optimized, no local disk needed:
@@ -344,6 +369,8 @@ All 5 roles support constraint syntax:
 | `gce` | Full resolution from catalog |
 | `azure` | Full resolution from catalog |
 | `oci` | Full resolution from catalog |
-| `docker` | Silently skipped (no instance types) |
-| `baremetal` | Silently skipped (pre-existing cluster) |
-| `k8s-*` | Silently skipped (pod resources managed separately) |
+| `docker` | Skipped with info log (no instance types) |
+| `baremetal` | Skipped with info log (pre-existing cluster) |
+| `k8s-*` | Skipped with info log (pod resources managed separately) |
+
+> **Note**: k8s backends (EKS/GKE) use the same `*_instance_type` parameters for worker node pools. Constraint resolution should work for these out of the box once tested — postponed to a follow-up.

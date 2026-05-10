@@ -28,10 +28,10 @@ Replace the T-shirt sizing system (roydahan/pehala review feedback on PR #14490)
 ### Interview Summary
 **Key Discussions**:
 - T-shirt sizes removed entirely; constraint-based only
-- YAML dict syntax in configs, flat string for env vars (`SCT_DB_INSTANCE_TYPE='vcpu=16,memory=>20gb'`)
+- YAML dict syntax in configs, dot-notation for env vars (`SCT_DB_INSTANCE_TYPE.vcpu=16`)
 - Catalog: generated from live cloud APIs + manual curations, current families only
 - Selection: preferred family per role (price-based), with CLI price display
-- Constraints: exact (`vcpu: 16`), ranges (`memory: "10gb-30gb"`), comparisons (`memory: ">20gb"`), arch (`arch: "arm64"` or `arch: "x86_64"` — optional, overrides cloud default)
+- Constraints: exact (`vcpu: 16`), ranges (`vcpu: "8-16"`, `memory: "10gb-30gb"`), comparisons (`memory: ">20gb"`), plain int for memory/disk means minimum GB, arch (`arch: "arm64"` or `arch: "x86"` — optional, overrides cloud default)
 
 **Research Findings**:
 - Existing `InstanceSpec` already has vcpus, memory_gb, local_ssd_count
@@ -68,8 +68,8 @@ Enable cloud-agnostic instance selection via hardware constraints (vcpu, memory,
 
 ### Definition of Done
 - [ ] `{vcpu: 8, memory: ">16gb"}` on AWS resolves to `i8g.2xlarge` (ARM preferred) and all downstream works
-- [ ] `SCT_DB_INSTANCE_TYPE='vcpu=16,memory=>20gb'` env var parses correctly
-- [ ] `SCT_DB_INSTANCE_TYPE='vcpu=8,arch=x86_64'` forces x86 on AWS (overrides arm64 default)
+- [ ] `SCT_DB_INSTANCE_TYPE.vcpu=16` and `SCT_DB_INSTANCE_TYPE.memory=32` env vars parse correctly via dot-notation
+- [ ] `SCT_DB_INSTANCE_TYPE.vcpu=8` with `SCT_DB_INSTANCE_TYPE.arch=x86` forces x86 on AWS (overrides arm64 default)
 - [ ] `instance_type_db: 'i4i.large'` still works (literal passthrough)
 - [ ] `sct.py show-prices --cloud aws --role db` shows pricing table
 - [ ] 100% unit test coverage on matcher logic
@@ -78,9 +78,12 @@ Enable cloud-agnostic instance selection via hardware constraints (vcpu, memory,
 ### Must Have
 - Backward compatibility: literal instance type strings still work as passthrough
 - All 5 roles supported: db, db_oracle, zero_token, loader, monitor
-- Constraint types: exact value, min (>), max (<), range (min-max), arch selector (arm64|x86_64)
+- vcpu is mandatory in constraint dicts
+- Constraint types: exact value, min (> or plain int), max (<), range (min-max), arch selector (arm64|arm|x86_64|x86)
+- vcpu supports range syntax (`"8-16"`)
+- Plain int for memory/disk means minimum GB
 - Deterministic selection (same input → same output)
-- Docker/baremetal backends silently skip resolution
+- Docker/baremetal backends skip resolution with info log
 - Clear error messages when no instance matches
 
 ### Must NOT Have (Guardrails)
@@ -236,17 +239,20 @@ Wave FINAL (4 parallel reviews):
 
   **What to do**:
   - Create constraint parsing in `sdcm/utils/instance_matcher.py`
-  - Parse dict format: `{"vcpu": 16, "memory": ">20gb", "disk": "500gb-2tb", "arch": "arm64"}`
-  - Parse flat string format: `"vcpu=16,memory=>20gb,disk=500gb-2tb,arch=arm64"`
-  - Supported operators: exact (`16`), gt (`>16`), lt (`<16`), gte (`>=16`), range (`10-30`)
-  - Supported units: gb, tb (for memory/disk); plain int for vcpu
-  - Special fields: `arch` accepts "arm64" or "x86_64" (optional — if omitted, uses cloud default)
+  - Parse dict format: `{"vcpu": 16, "memory": 32, "disk": 500, "arch": "arm64"}`
+  - Plain int for memory/disk means minimum GB (e.g. `memory: 32` → `memory >= 32 GB`)
+  - vcpu is **mandatory** — raise ValueError if missing
+  - vcpu supports exact int (`8`) or range string (`"8-16"`)
+  - Supported operators for memory/disk: exact (`32`), gt (`">32"`), lt (`"<32"`), gte (`">=32"`), range (`"500-2048"`)
+  - Arch accepts `arm64`, `arm` (→arm64), `x86_64`, `x86` (→x86_64) — optional, uses cloud default if omitted
   - Output: list of `Constraint(field, operator, value)` objects
-  - Handle edge cases: whitespace, case-insensitive units, missing fields (optional)
+  - Handle edge cases: whitespace, missing fields (except vcpu)
+  - **No flat string parser** — env vars use SCT's native dot-notation (`SCT_DB_INSTANCE_TYPE.vcpu=8`)
 
   **Must NOT do**:
   - No matching against catalog — just parsing
   - No sct_config integration
+  - No flat string parser — dot-notation handles env vars natively
 
   **Recommended Agent Profile**:
   - **Category**: `deep`
@@ -271,33 +277,41 @@ Wave FINAL (4 parallel reviews):
   Scenario: Parse YAML dict constraints
     Tool: Bash (python)
     Steps:
-      1. parse_constraints({"vcpu": 16, "memory": ">20gb"})
+      1. parse_constraints({"vcpu": 16, "memory": 32})
       2. Assert 2 constraints returned
       3. Assert vcpu constraint: field="vcpus", op="eq", value=16
-      4. Assert memory constraint: field="memory_gb", op="gt", value=20.0
-    Expected Result: Correct Constraint objects
+      4. Assert memory constraint: field="memory_gb", op="gte", value=32
+    Expected Result: Correct Constraint objects, plain int = minimum
     Evidence: .sisyphus/evidence/task-2-parse-dict.txt
 
-  Scenario: Parse flat string (env var format)
+  Scenario: Parse vcpu range
     Tool: Bash (python)
     Steps:
-      1. parse_constraints("vcpu=16,memory=>20gb,disk=500gb-2tb")
-      2. Assert 3 constraints
-      3. Assert disk constraint: field="local_disk_gb", op="range", value=(500, 2048)
-    Expected Result: String parsed identically to dict
-    Evidence: .sisyphus/evidence/task-2-parse-string.txt
+      1. parse_constraints({"vcpu": "8-16", "memory": 32})
+      2. Assert vcpu constraint: field="vcpus", op="range", value=(8, 16)
+    Expected Result: Range parsed correctly
+    Evidence: .sisyphus/evidence/task-2-parse-range.txt
 
-  Scenario: Invalid constraint raises ValueError
+  Scenario: Missing vcpu raises ValueError
     Tool: Bash (python)
     Steps:
-      1. parse_constraints({"vcpu": "abc"}) → expect ValueError
-      2. parse_constraints("invalid_format") → expect ValueError
+      1. parse_constraints({"memory": 32}) → expect ValueError("vcpu is mandatory")
     Expected Result: Clear error message
-    Evidence: .sisyphus/evidence/task-2-parse-error.txt
+    Evidence: .sisyphus/evidence/task-2-missing-vcpu.txt
+
+  Scenario: Arch shorthands normalized
+    Tool: Bash (python)
+    Steps:
+      1. parse_constraints({"vcpu": 8, "arch": "arm"})
+      2. Assert arch constraint value == "arm64"
+      3. parse_constraints({"vcpu": 8, "arch": "x86"})
+      4. Assert arch constraint value == "x86_64"
+    Expected Result: Shorthands expanded
+    Evidence: .sisyphus/evidence/task-2-arch-shorthands.txt
   ```
 
   **Commit**: YES
-  - Message: `feature(sizing): add constraint parser with range/comparison support`
+  - Message: `feature(sizing): add constraint parser with range and arch shorthand support`
   - Files: `sdcm/utils/instance_matcher.py`, `unit_tests/unit/test_instance_matcher.py`
 
 - [ ] 3. Catalog file format and loader
@@ -306,7 +320,7 @@ Wave FINAL (4 parallel reviews):
   - Create `data/instance_catalog/` directory
   - Create initial curated catalog files: `aws.yaml`, `gce.yaml`, `azure.yaml`, `oci.yaml`
   - Populate with current families we use (from existing SIZING dict data):
-    - AWS: i8g, i4i, c6i, m6i, t3
+    - AWS: i8g, i7i, i4i, c6i, m6i, t3
     - GCE: z3-highmem, e2-standard, e2-highcpu, n2-highmem
     - Azure: Standard_L*s_v4, Standard_F*s_v2, Standard_D*_v4
     - OCI: DenseIO.E5.Flex, VM.Standard3.Flex, VM.Standard.E4.Flex
@@ -331,7 +345,7 @@ Wave FINAL (4 parallel reviews):
   - `sdcm/utils/cloud_sizes.py:80-220` — existing SIZING dict with all instance types and specs
 
   **Acceptance Criteria**:
-  - [ ] `data/instance_catalog/aws.yaml` has all i8g/i4i/c6i/m6i/t3 entries
+  - [ ] `data/instance_catalog/aws.yaml` has all i8g/i7i/i4i/c6i/m6i/t3 entries
   - [ ] YAML files are valid and loadable by Task 1's InstanceCatalog
 
   **QA Scenarios**:
@@ -356,7 +370,7 @@ Wave FINAL (4 parallel reviews):
   - Define preferred family ordering per role per cloud in catalog files or separate config
   - Structure: `{role: {cloud: [family1, family2, ...]}}` — ordered by preference (first = best)
   - Defaults:
-    - db/aws: ["i8g", "i4i"] (ARM preferred, x86 fallback)
+    - db/aws: ["i8g", "i7i", "i4i"] (ARM preferred, x86 fallback via i7i then i4i)
     - db/gce: ["z3-highmem"]
     - db/azure: ["Standard_L"]
     - db/oci: ["DenseIO.E5"]
@@ -476,7 +490,7 @@ Wave FINAL (4 parallel reviews):
   - Create `sdcm/utils/catalog_generator.py` with `generate_aws_catalog(families, region) -> list[InstanceTypeInfo]`
   - Use `boto3` `describe_instance_types` to get vcpu/memory/disk specs
   - Use AWS Pricing API (`get_products`) to get on-demand hourly pricing
-  - Filter to specified families only (i8g, i4i, c6i, m6i, t3)
+  - Filter to specified families only (i8g, i7i, i4i, c6i, m6i, t3)
   - Output: write `data/instance_catalog/aws.yaml`
   - CLI entry: `sct.py update-catalog --cloud aws`
 
@@ -603,9 +617,9 @@ Wave FINAL (4 parallel reviews):
   **What to do**:
   - Modify `_resolve_instance_sizes()` to detect constraint syntax:
     - If value is a `dict` → parse as constraints, call `select_instance()`
-    - If value is a `str` matching flat constraint format (`vcpu=...`) → parse + select
     - If value is a `str` that looks like an instance type (contains `.` or `-`) → passthrough (backward compat)
-    - If backend is docker/baremetal → skip resolution entirely
+    - If backend is docker/baremetal → skip resolution with info log
+    - Env var dot-notation (`SCT_DB_INSTANCE_TYPE.vcpu=8`) already builds dicts natively — no custom parsing needed
   - Load `InstanceCatalog` at config init (from `data/instance_catalog/`)
   - Resolved instance type flows into existing params (`instance_type_db`, `gce_instance_type_db`, etc.)
   - All 5 roles: db, db_oracle, zero_token, loader, monitor
