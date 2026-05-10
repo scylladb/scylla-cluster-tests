@@ -96,10 +96,9 @@ def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, d
 @pytest.mark.parametrize(
     argnames="scylla_version, expected_version, expected_is_enterprise",
     argvalues=[
-        pytest.param("2024.1", "2024.1", True, id="2024.1"),
+        pytest.param("2024.2", "2024.2", True, id="2024.2"),
         pytest.param("2025.1", "2025.1", True, id="2025.1"),
         pytest.param("master:latest", None, True, id="master"),
-        pytest.param("branch-2024.1:latest", None, True, id="branch-2024.1"),
         pytest.param("branch-2025.1:latest", None, True, id="branch-2025.1"),
     ],
 )
