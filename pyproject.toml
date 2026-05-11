@@ -125,6 +125,12 @@ force-exclude = true
 line-length = 120
 respect-gitignore = true
 
+[tool.ruff.lint.per-file-ignores]
+# sct.py and sct_cmd_helpers.py use function-level imports intentionally
+# to speed up tab completion (~0.3s vs ~8s with top-level imports)
+"sct.py" = ["PLC0415"]
+"sdcm/utils/sct_cmd_helpers.py" = ["PLC0415"]
+
 [tool.ruff.lint.pylint]
 max-args = 12
 max-statements = 100
