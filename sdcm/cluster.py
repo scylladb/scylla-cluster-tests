@@ -54,7 +54,7 @@ from invoke.runners import Result
 from cassandra import ConsistencyLevel, DriverException
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver
-from cassandra.cluster import NoHostAvailable, ConnectionShutdown
+from cassandra.cluster import NoHostAvailable, ConnectionShutdown, ControlConnectionQueryFallback
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy, RackAwareRoundRobinPolicy, LoadBalancingPolicy
 from cassandra.query import SimpleStatement
@@ -4569,6 +4569,8 @@ class BaseCluster:
         self.log.debug("ssl_context: %s", str(ssl_context))
 
         kwargs = dict(contact_points=node_ips, port=port, ssl_context=ssl_context)
+        if self.test_config.IP_SSH_CONNECTIONS == "public":
+            kwargs["allow_control_connection_query_fallback"] = ControlConnectionQueryFallback.SkipPoolCreation
         cluster_driver = ClusterDriver(
             auth_provider=auth_provider,
             compression=compression,
