@@ -91,28 +91,28 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         debug_message="",
         is_alternator=True,
     ):
-        if not is_alternator:
-            stress_cmd = stress_cmd.replace("dynamodb", "scylla")
+        for cmd in stress_cmd:
+            actual_cmd = cmd if is_alternator else cmd.replace("dynamodb", "scylla")
 
-        if debug_message:
-            self.log.debug(debug_message)
+            if debug_message:
+                self.log.debug(debug_message)
 
-        self.log.info(f"Starting stress cmd: {stress_cmd}")
-        stress_queue = self.run_stress_thread(
-            stress_cmd=stress_cmd,
-            stress_num=stress_num,
-            keyspace_num=keyspace_num,
-            prefix=prefix,
-            stats_aggregate_cmds=False,
-        )
-        self.log.info(f"Started stress cmd: {stress_cmd}, waiting for results")
-        try:
-            self.get_stress_results(queue=stress_queue, store_results=True)
-        except:
-            self.log.exception(f"Stress cmd failed: {stress_cmd}")
-            self.log.error(traceback.format_exc())
-            raise
-        self.log.info(f"Completed stress cmd: {stress_cmd}")
+            self.log.info(f"Starting stress cmd: {actual_cmd}")
+            stress_queue = self.run_stress_thread(
+                stress_cmd=actual_cmd,
+                stress_num=stress_num,
+                keyspace_num=keyspace_num,
+                prefix=prefix,
+                stats_aggregate_cmds=False,
+            )
+            self.log.info(f"Started stress cmd: {actual_cmd}, waiting for results")
+            try:
+                self.get_stress_results(queue=stress_queue, store_results=True)
+            except:
+                self.log.exception(f"Stress cmd failed: {actual_cmd}")
+                self.log.error(traceback.format_exc())
+                raise
+            self.log.info(f"Completed stress cmd: {actual_cmd}")
 
     def create_cql_ks_and_table(self, field_number):
         node = self.db_cluster.nodes[0]
@@ -136,37 +136,22 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             stress_queue = []
             params = {"prefix": "preload-"}
             for stress_type in ["dynamodb", "scylla"]:
-                # Check if the prepare_cmd is a list of commands
-                if not isinstance(prepare_write_cmd, str) and len(prepare_write_cmd) > 1:
-                    # Check if it should be round_robin across loaders
-                    if self.params.get("round_robin"):
-                        self.log.debug("Populating data using round_robin")
-                        params.update({"stress_num": 1, "round_robin": True})
+                if self.params.get("round_robin"):
+                    self.log.debug("Populating data using round_robin")
+                    params.update({"stress_num": 1, "round_robin": True})
 
-                    for stress_cmd in prepare_write_cmd:
-                        params.update(
-                            {
-                                "stress_cmd": stress_cmd.replace("dynamodb", stress_type),
-                                "duration": self.params.get("prepare_stress_duration"),
-                            }
-                        )
-
-                        # Run all stress commands
-                        params.update(dict(stats_aggregate_cmds=False))
-                        self.log.debug("RUNNING stress cmd: {}".format(stress_cmd.replace("dynamodb", stress_type)))
-                        stress_queue.append(self.run_stress_thread(**params))
-
-                # One stress cmd command
-                else:
-                    stress_queue.append(
-                        self.run_stress_thread(
-                            stress_cmd=prepare_write_cmd.replace("dynamodb", stress_type),
-                            duration=self.params.get("prepare_stress_duration"),
-                            stress_num=1,
-                            prefix="preload-",
-                            stats_aggregate_cmds=False,
-                        )
+                for stress_cmd in prepare_write_cmd:
+                    params.update(
+                        {
+                            "stress_cmd": stress_cmd.replace("dynamodb", stress_type),
+                            "duration": self.params.get("prepare_stress_duration"),
+                        }
                     )
+
+                    # Run all stress commands
+                    params.update(dict(stats_aggregate_cmds=False))
+                    self.log.debug("RUNNING stress cmd: {}".format(stress_cmd.replace("dynamodb", stress_type)))
+                    stress_queue.append(self.run_stress_thread(**params))
 
             self.log.debug("Waiting for loaders...")
             for stress in stress_queue:
@@ -240,7 +225,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 target_ops_text=total_target_ops_per_sec_text,
                 test_name=self.id() + "_read",
                 sub_type="cql",
-                stress_cmd=base_cmd_r + cmd_add_params,
+                stress_cmd=[cmd + cmd_add_params for cmd in base_cmd_r],
                 stress_num=1,
                 keyspace_num=1,
                 is_alternator=False,
@@ -253,7 +238,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 target_ops_text=total_target_ops_per_sec_text,
                 test_name=self.id() + "_read",
                 sub_type="without-lwt",
-                stress_cmd=base_cmd_r + cmd_add_params,
+                stress_cmd=[cmd + cmd_add_params for cmd in base_cmd_r],
                 stress_num=1,
                 keyspace_num=1,
                 row_name="alternator-no-lwt",
@@ -264,7 +249,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 target_ops_text=total_target_ops_per_sec_text,
                 test_name=self.id() + "_write",
                 sub_type="cql",
-                stress_cmd=base_cmd_w + cmd_add_params,
+                stress_cmd=[cmd + cmd_add_params for cmd in base_cmd_w],
                 stress_num=1,
                 keyspace_num=1,
                 is_alternator=False,
@@ -277,7 +262,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 target_ops_text=total_target_ops_per_sec_text,
                 test_name=self.id() + "_write",
                 sub_type="without-lwt",
-                stress_cmd=base_cmd_w + cmd_add_params,
+                stress_cmd=[cmd + cmd_add_params for cmd in base_cmd_w],
                 stress_num=1,
                 keyspace_num=1,
                 row_name="alternator-no-lwt",
@@ -289,7 +274,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 target_ops_text=total_target_always_lwt_ops_per_sec_text,
                 test_name=self.id() + "_write",
                 sub_type="with-lwt",
-                stress_cmd=base_cmd_w + cmd_add_write_always_lwt_params,
+                stress_cmd=[cmd + cmd_add_write_always_lwt_params for cmd in base_cmd_w],
                 stress_num=1,
                 keyspace_num=1,
                 row_name="alternator-always-lwt",
@@ -300,7 +285,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 target_ops_text=total_target_ops_per_sec_text,
                 test_name=self.id() + "_mixed",
                 sub_type="cql",
-                stress_cmd=base_cmd_m + cmd_add_params,
+                stress_cmd=[cmd + cmd_add_params for cmd in base_cmd_m],
                 stress_num=1,
                 keyspace_num=1,
                 is_alternator=False,
@@ -313,7 +298,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 target_ops_text=total_target_ops_per_sec_text,
                 test_name=self.id() + "_mixed",
                 sub_type="without-lwt",
-                stress_cmd=base_cmd_m + cmd_add_params,
+                stress_cmd=[cmd + cmd_add_params for cmd in base_cmd_m],
                 stress_num=1,
                 keyspace_num=1,
                 row_name="alternator-no-lwt",
@@ -325,7 +310,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 target_ops_text=total_target_always_lwt_ops_per_sec_text,
                 test_name=self.id() + "_mixed",
                 sub_type="with-lwt",
-                stress_cmd=base_cmd_m + cmd_add_write_always_lwt_params,
+                stress_cmd=[cmd + cmd_add_write_always_lwt_params for cmd in base_cmd_m],
                 stress_num=1,
                 keyspace_num=1,
                 row_name="alternator-always-lwt",
@@ -336,7 +321,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 target_ops_text="unthrottled",
                 test_name=self.id() + "_throughput_read",
                 sub_type="cql",
-                stress_cmd=base_cmd_r + cmd_add_throughput_params,
+                stress_cmd=[cmd + cmd_add_throughput_params for cmd in base_cmd_r],
                 stress_num=1,
                 keyspace_num=1,
                 is_alternator=False,
@@ -349,7 +334,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 target_ops_text="unthrottled",
                 test_name=self.id() + "_throughput_read",
                 sub_type="without-lwt",
-                stress_cmd=base_cmd_r + cmd_add_throughput_params,
+                stress_cmd=[cmd + cmd_add_throughput_params for cmd in base_cmd_r],
                 stress_num=1,
                 keyspace_num=1,
                 row_name="alternator-no-lwt",
@@ -360,7 +345,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 target_ops_text="unthrottled",
                 test_name=self.id() + "_throughput_write",
                 sub_type="cql",
-                stress_cmd=base_cmd_w + cmd_add_throughput_params,
+                stress_cmd=[cmd + cmd_add_throughput_params for cmd in base_cmd_w],
                 stress_num=1,
                 keyspace_num=1,
                 is_alternator=False,
@@ -373,7 +358,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 target_ops_text="unthrottled",
                 test_name=self.id() + "_throughput_write",
                 sub_type="without-lwt",
-                stress_cmd=base_cmd_w + cmd_add_throughput_params,
+                stress_cmd=[cmd + cmd_add_throughput_params for cmd in base_cmd_w],
                 stress_num=1,
                 keyspace_num=1,
                 row_name="alternator-no-lwt",
