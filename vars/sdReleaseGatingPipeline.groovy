@@ -215,6 +215,7 @@ def buildTextReport(Map results, String[] scyllaVersions, String sdVersionDispla
  * OS variant × Scylla version, with links to individual job logs for failed runs.
  */
 def call(Map pipelineParams = [:]) {
+    List discoveredVersions = []
 
     // Artifact test job definitions: each entry maps a human-readable OS label to the
     // Jenkins job path (relative to the current folder) and backend-specific settings.
@@ -225,156 +226,81 @@ def call(Map pipelineParams = [:]) {
     def ARTIFACT_TEST_JOBS = [
         [
             os_label: 'centos9',
-            job_path: 'artifacts-centos9-test',
+            job_path: 'oss/artifacts/artifacts-centos9-test',
             backend: 'gce',
         ],
         [
             os_label: 'rocky9',
-            job_path: 'artifacts-rocky9-test',
+            job_path: 'oss/artifacts/artifacts-rocky9-test',
             backend: 'gce',
         ],
         [
             os_label: 'ubuntu2404',
-            job_path: 'artifacts-ubuntu2404-test',
+            job_path: 'oss/artifacts/artifacts-ubuntu2404-test',
             backend: 'gce',
         ],
         [
             os_label: 'debian12',
-            job_path: 'artifacts-debian12-test',
+            job_path: 'oss/artifacts/artifacts-debian12-test',
             backend: 'gce',
         ],
         [
             os_label: 'ami',
-            job_path: 'artifacts-ami-test',
+            job_path: 'aoss/artifacts/artifacts-ami-test',
             backend: 'aws',
         ],
         [
             os_label: 'amazon2023',
-            job_path: 'artifacts-amazon2023-arm-test',
+            job_path: 'oss/artifacts/artifacts-amazon2023-arm-test',
             backend: 'aws',
         ],
         [
             os_label: 'ubuntu2204',
-            job_path: 'artifacts-ubuntu2204-test',
+            job_path: 'oss/artifacts/artifacts-ubuntu2204-test',
             backend: 'gce',
         ],
         [
             os_label: 'rhel10',
-            job_path: 'artifacts-rhel10',
+            job_path: 'oss/artifacts/artifacts-rhel10-test',
             backend: 'aws',
         ],
         // AMI is not found for OEL9, so we are skipping it for now. We can re-enable it later when the AMI will be available.
 //         [
 //             os_label: 'oel9',
-//             job_path: 'artifacts-oel9-test',
+//             job_path: 'oss/artifacts/artifacts-oel9-test',
 //             backend: 'aws',
 //         ],
         [
             os_label: 'amazon2023',
-            job_path: 'artifacts-amazon2023',
+            job_path: 'oss/artifacts/artifacts-amazon2023-test',
             backend: 'aws',
         ],
         [
             os_label: 'centos9-arm',
-            job_path: 'artifacts-centos9-arm',
+            job_path: 'oss/artifacts/artifacts-centos9-arm-test',
             backend: 'aws',
         ],
         [
             os_label: 'ubuntu2204-arm',
-            job_path: 'artifacts-ubuntu2204-arm',
+            job_path: 'oss/artifacts/artifacts-ubuntu2204-arm-test',
             backend: 'aws',
         ],
         [
             os_label: 'ubuntu2404-arm',
-            job_path: 'artifacts-ubuntu2404-arm',
+            job_path: 'oss/artifacts/artifacts-ubuntu2404-arm-test',
             backend: 'aws',
         ],
         [
             os_label: 'ami-arm',
-            job_path: 'artifacts-ami-arm',
+            job_path: 'oss/artifacts/artifacts-ami-arm-test',
             backend: 'aws',
         ],
         [
             os_label: 'docker',
-            job_path: 'artifacts-docker-test',
+            job_path: 'oss/artifacts/artifacts-docker-test',
             backend: 'docker',
         ],
     ]
-
- // TODO: Once the feateure will be merged, we can remove the comments form the official artifact tests list.
-
-//     def ARTIFACT_TEST_JOBS = [
-//         [
-//             os_label: 'centos9',
-//             job_path: 'artifacts/artifacts-centos9',
-//             backend: 'gce',
-//         ],
-//         [
-//             os_label: 'rocky9',
-//             job_path: 'artifacts/artifacts-rocky9',
-//             backend: 'gce',
-//         ],
-//         [
-//             os_label: 'ubuntu2204',
-//             job_path: 'artifacts/artifacts-ubuntu2204',
-//             backend: 'gce',
-//         ],
-//         [
-//             os_label: 'ubuntu2404',
-//             job_path: 'artifacts/artifacts-ubuntu2404',
-//             backend: 'gce',
-//         ],
-//         [
-//             os_label: 'debian12',
-//             job_path: 'artifacts/artifacts-debian12',
-//             backend: 'gce',
-//         ],
-//         [
-//             os_label: 'ami',
-//             job_path: 'artifacts/artifacts-ami',
-//             backend: 'aws',
-//         ],
-//         [
-//             os_label: 'docker',
-//             job_path: 'artifacts/artifacts-docker',
-//             backend: 'docker',
-//         ],
-//         [
-//             os_label: 'rhel10',
-//             job_path: 'artifacts/artifacts-rhel10',
-//             backend: 'aws',
-//         ],
-//         [
-//             os_label: 'oel9',
-//             job_path: 'artifacts/artifacts-oel9',
-//             backend: 'aws',
-//         ],
-//         [
-//             os_label: 'amazon2023',
-//             job_path: 'artifacts/artifacts-amazon2023',
-//             backend: 'aws',
-//         ],
-//         [
-//             os_label: 'centos9-arm',
-//             job_path: 'artifacts/artifacts-centos9-arm',
-//             backend: 'aws',
-//         ],
-//         [
-//             os_label: 'ubuntu2204-arm',
-//             job_path: 'artifacts/artifacts-ubuntu2204-arm',
-//             backend: 'aws',
-//         ],
-//         [
-//             os_label: 'ubuntu2404-arm',
-//             job_path: 'artifacts/artifacts-ubuntu2404-arm',
-//             backend: 'aws',
-//         ],
-//         [
-//             os_label: 'ami-arm',
-//             job_path: 'artifacts/artifacts-ami-arm',
-//             backend: 'aws',
-//         ],
-//     ]
 
     def builder = getJenkinsLabels('aws', 'eu-west-1')
 
@@ -408,9 +334,9 @@ def call(Map pipelineParams = [:]) {
                    description: 'on_demand|spot|spot_fleet')
 
             separator(name: 'NOTIFICATION_CONFIG', sectionHeader: 'Notification Configuration')
-            string(name: 'email_recipients', defaultValue: 'qa@scylladb.com',
+            string(name: 'email_recipients', defaultValue: 'vladz@scylladb.com',
                    description: 'Email recipients for the gating summary report')
-            string(name: 'requested_by_user', defaultValue: '',
+            string(name: 'requested_by_user', defaultValue: 'scylla-doctor',
                    description: 'Actual user requesting job start, for automated job builds')
         }
 
@@ -457,73 +383,39 @@ def call(Map pipelineParams = [:]) {
 
             stage('Discover Scylla Versions') {
                 steps {
-                    script {
-                        env.DISCOVERED_VERSIONS = ''
-
-                        if (params.scylla_versions?.trim()) {
-                            // Use explicitly provided versions
-                            env.DISCOVERED_VERSIONS = params.scylla_versions.trim()
-                            println("Using explicitly provided Scylla versions: ${env.DISCOVERED_VERSIONS}")
-                        } else {
-                            // Auto-discover supported enterprise release versions using hydra
-                            dir('scylla-cluster-tests') {
-                                def output = sh(
-                                    returnStdout: true,
-                                    script: '''#!/bin/bash
-                                        set -e
-                                        cat > discover_versions.py << 'PYTHON_EOF'
-import json
-from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, get_all_versions, is_enterprise
-
-repo_map = get_s3_scylla_repos_mapping('centos')
-enterprise_branches = sorted(
-    [v for v in repo_map.keys() if is_enterprise(v)],
-    key=lambda x: [int(p) for p in x.split('.')]
-)
-
-# Walk branches from newest to oldest, collect 2 that have actual released versions
-result = {}
-for branch in reversed(enterprise_branches):
-    if len(result) >= 2:
-        break
-    try:
-        versions = get_all_versions(repo_map[branch])
-    except Exception as exc:
-        print(f"WARNING: skipping branch {branch} — failed to fetch versions: {exc}")
-        continue
-    # Filter out rc/dev versions and get the latest patch
-    release_versions = sorted(
-        [v for v in versions if 'rc' not in v and 'dev' not in v],
-        key=lambda x: [int(p) for p in x.split('.')]
-    )
-    if release_versions:
-        result[branch] = release_versions[-1]
-    else:
-        print(f"WARNING: skipping branch {branch} — no release versions found")
-
-print('SD_VERSIONS_JSON=' + json.dumps(result))
-PYTHON_EOF
-                                        ./docker/env/hydra.sh python -u discover_versions.py
-                                    '''
-                                ).trim()
-
-                                println("Hydra version discovery output:\n${output}")
-                                def versionLine = output.split('\n').find { it.startsWith('SD_VERSIONS_JSON=') }
-                                if (versionLine) {
-                                    def versionJson = versionLine.replace('SD_VERSIONS_JSON=', '')
-                                    def versionMap = new JsonSlurperClassic().parseText(versionJson)
-                                    env.DISCOVERED_VERSIONS = versionMap.values().join(' ')
-                                    env.DISCOVERED_VERSIONS_JSON = versionJson
-                                    println("Auto-discovered Scylla versions: ${env.DISCOVERED_VERSIONS}")
-                                    println("Version map (branch → latest patch): ${versionJson}")
+                    catchError(stageResult: 'FAILURE') {
+                        timeout(time: 10, unit: 'MINUTES') {
+                            script {
+                                if (params.scylla_versions?.trim()) {
+                                    // Use explicitly provided versions
+                                    discoveredVersions = params.scylla_versions.trim().split('\\s+') as List
+                                    println("Using explicitly provided Scylla versions: ${discoveredVersions}")
                                 } else {
-                                    error("Failed to auto-discover Scylla versions. Output: ${output}")
+                                    // Auto-discover supported enterprise release versions using sct.py
+                                    dir('scylla-cluster-tests') {
+                                        dockerLogin(params)
+
+                                        def output = sh(
+                                            returnStdout: true,
+                                            script: './docker/env/hydra.sh get-official-supported-versions --only-print-versions true'
+                                        ).trim()
+
+                                        println("Hydra version discovery output:\n${output}")
+                                        // The last line contains space-separated versions
+                                        def versionLine = output.split('\n').last().trim()
+                                        if (versionLine) {
+                                            discoveredVersions = versionLine.split('\\s+') as List
+                                            println("Auto-discovered Scylla versions: ${discoveredVersions}")
+                                        } else {
+                                            error("Failed to auto-discover Scylla versions. Output: ${output}")
+                                        }
+                                    }
+                                }
+
+                                if (!discoveredVersions) {
+                                    error("No Scylla versions discovered or provided. Cannot proceed.")
                                 }
                             }
-                        }
-
-                        if (!env.DISCOVERED_VERSIONS?.trim()) {
-                            error("No Scylla versions discovered or provided. Cannot proceed.")
                         }
                     }
                 }
@@ -532,7 +424,8 @@ PYTHON_EOF
             stage('Run Artifact Tests') {
                 steps {
                     script {
-                        def scyllaVersions = env.DISCOVERED_VERSIONS.trim().split('\\s+')
+                        def scyllaVersions = discoveredVersions as String[]
+                        println("Scheduling artifact tests for Scylla versions: ${scyllaVersions}")
                         def osFilter = params.os_filter?.trim() ? params.os_filter.trim().split(',').collect { it.trim() } : []
 
                         // Filter OS variants if os_filter is specified
@@ -548,6 +441,7 @@ PYTHON_EOF
 
                         for (def jobDef in jobsToRun) {
                             for (def version in scyllaVersions) {
+                                println("Scheduling job for OS=${jobDef.os_label}, Scylla version=${version}")
                                 def osLabel = jobDef.os_label
                                 def jobPath = jobDef.job_path
                                 def stageKey = "${osLabel}/${version}"
@@ -566,11 +460,10 @@ PYTHON_EOF
                                         // Workaround for staging where artifact test jobs are temporarily located in the same folder as the gating job, without the 'artifacts/' subfolder prefix in their paths. This allows us to reference them directly without needing to adjust the paths in the job definitions.
                                         // TODO: Once the feature will be merged, we can remove next line
                                         def fullJobPath = "${currentJobDir}/${jobPath}"
+                                        println("Triggering job at path: ${fullJobPath} with parameters: scylla_version=${scyllaVersion}, sd_tarball_url=${params.sd_tarball_url.trim()}, post_behavior_db_nodes=${params.post_behavior_db_nodes}, provision_type=${params.provision_type}, requested_by_user=${params.requested_by_user}")
 
                                         // TODO: Once the feature will be merged, we can remove comment from next line
 //                                         def fullJobPath = "${currentJobDir}/../${jobPath}"
-
-                                        println("Triggering ${stageKey}: job=${fullJobPath}, version=${scyllaVersion}")
 
                                         def triggered = build(
                                             job: fullJobPath,
@@ -637,7 +530,7 @@ PYTHON_EOF
                 steps {
                     script {
                         def results = new JsonSlurperClassic().parseText(env.GATING_RESULTS_JSON)
-                        def scyllaVersions = env.DISCOVERED_VERSIONS.trim().split('\\s+')
+                        def scyllaVersions = discoveredVersions as String[]
                         def sdVersionDisplay = "tarball: ${params.sd_tarball_url}"
 
                         // Print plain-text report to Jenkins console

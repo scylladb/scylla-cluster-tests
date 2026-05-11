@@ -550,10 +550,10 @@ class ArtifactsTest(ClusterTester):
             )
             return
 
-        # if self.node.parent_cluster.cluster_backend == "docker":
-        #     self.log.info("Scylla Doctor check in SCT isn't yet supported for docker backend")
-        #     self.actions_log.info("Scylla Doctor check in SCT isn't yet supported for docker backend")
-        #     return
+        if self.node.parent_cluster.cluster_backend == "docker":
+            self.log.info("Scylla Doctor check in SCT isn't yet supported for docker backend")
+            self.actions_log.info("Scylla Doctor check in SCT isn't yet supported for docker backend")
+            return
 
         for node in self.db_cluster.nodes:
             with self.actions_log.action_scope("installing and running Scylla Doctor"):
