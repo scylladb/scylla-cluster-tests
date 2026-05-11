@@ -808,3 +808,18 @@ def test_migrator_source_hosts_and_test_id_mutually_exclusive(monkeypatch):
     conf = sct_config.SCTConfiguration()
     with pytest.raises(ValueError, match="mutually exclusive"):
         conf.verify_configuration()
+
+
+@pytest.mark.parametrize(
+    "raw_value,expected",
+    [
+        ("  2025.1.0  ", "2025.1.0"),
+        ("\t5.4.0\n", "5.4.0"),
+        ("2025.1.0", "2025.1.0"),
+    ],
+)
+def test_env_var_whitespace_is_stripped(monkeypatch, raw_value, expected):
+    """Environment variable values with leading/trailing whitespace are trimmed (SCT-340)."""
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", raw_value)
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("scylla_version") == expected
