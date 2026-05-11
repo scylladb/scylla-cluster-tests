@@ -166,7 +166,7 @@ def test_05_cassandra_stress_compression(request, docker_scylla, params, compres
 
 
 def test_06_cassandra_stress_with_extra_jvm_opts(request, docker_scylla, params):
-    params["cs_extra_jvm_opts"] = "-XX:+UseG1GC -XX:MaxGCPauseMillis=50 -Xmx512m"
+    params["cs_extra_jvm_opts"] = "-XX:+UseZGC -XX:+ZGenerational -Xms512m -Xmx512m -XX:+AlwaysPreTouch"
 
     loader_set = LocalLoaderSetDummy(params=params)
 

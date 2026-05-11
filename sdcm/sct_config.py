@@ -424,7 +424,7 @@ def count_regions(region_string: str) -> int:
         regions = json.loads(region_string.replace("'", '"'))
         if isinstance(regions, list):
             return len(regions)
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         # Not a JSON array — fall through to treat as a plain string
         pass
     if " " in region_string:
@@ -1728,7 +1728,8 @@ class SCTConfiguration(BaseModel):
     )
     cs_extra_jvm_opts: String = SctField(
         description="Extra JVM options passed to cassandra-stress via JVM_OPTS environment variable. "
-        "Example: '-XX:+UseG1GC -XX:MaxGCPauseMillis=50 -Xmx8g'",
+        "Recommended for low-latency: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch' "
+        "(requires Java 21+, which cassandra-stress 3.20.6+ ships with).",
     )
     stress_cmd_mv: StringOrList = SctField(
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
