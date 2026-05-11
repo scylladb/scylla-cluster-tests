@@ -791,3 +791,18 @@ def test_vector_store_ami_name_resolved_to_ami_id(monkeypatch):
     assert "vector-store-1-5-0-arm64-2026-03-17t07-07-32z" in resolved_names, (
         "convert_name_to_ami_if_needed was not called for ami_id_vector_store"
     )
+
+
+@pytest.mark.parametrize(
+    "raw_value,expected",
+    [
+        ("  2025.1.0  ", "2025.1.0"),
+        ("\t5.4.0\n", "5.4.0"),
+        ("2025.1.0", "2025.1.0"),
+    ],
+)
+def test_env_var_whitespace_is_stripped(monkeypatch, raw_value, expected):
+    """Environment variable values with leading/trailing whitespace are trimmed (SCT-340)."""
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", raw_value)
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("scylla_version") == expected

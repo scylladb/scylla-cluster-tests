@@ -3157,7 +3157,10 @@ class SCTConfiguration(BaseModel):
             if field_env and any(key.startswith(field_env) for key in os.environ.keys()):
                 if field_env in os.environ.keys():
                     try:
-                        environment_vars[field_name] = from_env_func(os.environ[field_env])
+                        raw_value = os.environ[field_env]
+                        if isinstance(raw_value, str):
+                            raw_value = raw_value.strip()
+                        environment_vars[field_name] = from_env_func(raw_value)
                     except Exception as ex:  # noqa: BLE001
                         raise ValueError("failed to parse {} from environment variable".format(field_env)) from ex
                 nested_keys = [key for key in os.environ if key.startswith(field_env + ".")]
@@ -3166,10 +3169,13 @@ class SCTConfiguration(BaseModel):
                     dict_value = {}
                     for key in nested_keys:
                         nest_key, *_ = key.split(".")[1:]
+                        nested_value = os.environ.get(key)
+                        if isinstance(nested_value, str):
+                            nested_value = nested_value.strip()
                         if nest_key.isdigit():
-                            list_value.insert(int(nest_key), os.environ.get(key))
+                            list_value.insert(int(nest_key), nested_value)
                         else:
-                            dict_value[nest_key] = os.environ.get(key)
+                            dict_value[nest_key] = nested_value
                     current_value = environment_vars.get(field_name)
                     if current_value and isinstance(current_value, dict):
                         current_value.update(dict_value)
