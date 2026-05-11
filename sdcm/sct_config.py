@@ -2690,19 +2690,23 @@ class SCTConfiguration(BaseModel):
 
                 for region in oci_region_names:
                     try:
-                        oci_image = oci_utils.get_scylla_images(scylla_version, region)[0]
+                        if ":" in scylla_version:
+                            oci_image = oci_utils.get_scylla_images_by_branch(scylla_version, region)[0]
+                        else:
+                            oci_image = oci_utils.get_scylla_images_by_version(scylla_version, region)[0]
                     except Exception as ex:  # noqa: BLE001
                         raise ValueError(
                             f"Oracle Image for scylla_version='{scylla_version}' not found in {region}"
                         ) from ex
-                    self.log.debug(
+                    # NOTE: oci_image: ["OCI", <name>, <id>, ...]
+                    self.log.info(
                         "Found Oracle Image %s for scylla_version='%s' in %s",
-                        oci_image.display_name,
+                        oci_image[1],
                         scylla_version,
                         region,
                     )
                     scylla_oci_images.append(oci_image)
-                self["oci_image_db"] = " ".join(getattr(image, "id", None) for image in scylla_oci_images)
+                self["oci_image_db"] = " ".join(image[2] for image in scylla_oci_images)
             elif self.get("cluster_backend") == "xcloud" and ":" in scylla_version:
                 self._resolve_xcloud_version_tag(self.get("scylla_version"))
             elif not self.get("scylla_repo"):
