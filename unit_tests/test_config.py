@@ -1092,3 +1092,19 @@ class TestCommonTags:
         tags = TestConfig.common_tags()
         assert "JenkinsJobTag" not in tags
         assert "JenkinsJob" not in tags
+
+
+
+@pytest.mark.parametrize(
+    "raw_value,expected",
+    [
+        ("  2025.1.0  ", "2025.1.0"),
+        ("\t5.4.0\n", "5.4.0"),
+        ("2025.1.0", "2025.1.0"),
+    ],
+)
+def test_env_var_whitespace_is_stripped(monkeypatch, raw_value, expected):
+    """Environment variable values with leading/trailing whitespace are trimmed (SCT-340)."""
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", raw_value)
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("scylla_version") == expected
