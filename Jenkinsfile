@@ -36,7 +36,7 @@ def createRunConfiguration(String backend) {
         // TODO: set scylla version when we have Scylla releases in OCI
         configuration.scylla_version = ''
         // TODO: unset the image when 'scylla_version' gets specified
-        configuration.oci_image_db = 'ocid1.image.oc1.iad.aaaaaaaawlq4rpsf5j3blmia6vxuu3d7tdv5ir5x3izs4ogxmdyibskhpoxq'
+        configuration.oci_image_db = 'ocid1.image.oc1.iad.aaaaaaaa6ytiwaqasjpphbmmw5tqsjptdhmjuiyfo6pyvuy6x44xrq4xkxtq'
     } else if (backend.contains('docker')) {
         // use latest version of nightly image for docker backend, until we get rid off rebuilding docker image for SCT
         configuration.scylla_version = 'latest'
