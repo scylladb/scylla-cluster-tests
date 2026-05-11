@@ -76,7 +76,7 @@ from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
-from sdcm.utils.oci_utils import list_instances_oci
+from sdcm.utils.oci_utils import get_scylla_images_by_branch, get_scylla_images_by_version, list_instances_oci
 from sdcm.utils.common import (
     S3Storage,
     aws_tags_to_dict,
@@ -1124,6 +1124,17 @@ def list_images(  # noqa: PLR0912, PLR0914
                         azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
                         click.echo(azure_images_json)
 
+                case "oci":
+                    rows = get_scylla_images_by_version(version=version, region=region, arch=arch_enum)
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title=f"OCI Machine Images by version in region {region}"
+                            )
+                        )
+                    elif output_format == "json":
+                        click.echo(images_dict_in_json_format(rows=rows, field_names=version_fields))
+
                 case _:
                     click.echo(f"Cloud provider {cloud_provider} is not supported")
 
@@ -1171,6 +1182,16 @@ def list_images(  # noqa: PLR0912, PLR0914
                     elif output_format == "json":
                         azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
                         click.echo(azure_images_json)
+                case "oci":
+                    oci_images = get_scylla_images_by_branch(branch=branch, region=region, arch=arch_enum)
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=oci_images, field_names=branch_fields).get_string(
+                                title=f"OCI Machine Images for {branch} in region {region}"
+                            )
+                        )
+                    elif output_format == "json":
+                        click.echo(images_dict_in_json_format(rows=oci_images, field_names=branch_fields))
                 case _:
                     click.echo(f"Cloud provider {cloud_provider} is not supported")
 

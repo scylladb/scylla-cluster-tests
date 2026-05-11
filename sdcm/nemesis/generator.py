@@ -38,7 +38,13 @@ def generate_nemesis_yaml(file_opener=open):
 class NemesisJobGenerator:
     """Generates Config files and pipelines for all nemesis"""
 
-    BACKEND_TO_REGION = {"aws": "eu-west-1", "gce": "us-east1", "azure": "eastus", "docker": "eu-west-1"}
+    BACKEND_TO_REGION = {
+        "aws": "eu-west-1",
+        "gce": "us-east1",
+        "azure": "eastus",
+        "docker": "eu-west-1",
+        "oci": "us-ashburn-1",
+    }
 
     BACKEND_CONFIGS = {"docker": ["configurations/nemesis/additional_configs/docker_backend.yaml"]}
 
