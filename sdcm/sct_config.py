@@ -3584,7 +3584,10 @@ class SCTConfiguration(dict):
         for opt in self.config_options:
             if opt["env"] in os.environ:
                 try:
-                    environment_vars[opt["name"]] = opt["type"](os.environ[opt["env"]])
+                    raw_value = os.environ[opt["env"]]
+                    if isinstance(raw_value, str):
+                        raw_value = raw_value.strip()
+                    environment_vars[opt["name"]] = opt["type"](raw_value)
                 except Exception as ex:  # noqa: BLE001
                     raise ValueError("failed to parse {} from environment variable".format(opt["env"])) from ex
             nested_keys = [key for key in os.environ if key.startswith(opt["env"] + ".")]
@@ -3593,10 +3596,13 @@ class SCTConfiguration(dict):
                 dict_value = {}
                 for key in nested_keys:
                     nest_key, *_ = key.split(".")[1:]
+                    nested_value = os.environ.get(key)
+                    if isinstance(nested_value, str):
+                        nested_value = nested_value.strip()
                     if nest_key.isdigit():
-                        list_value.insert(int(nest_key), os.environ.get(key))
+                        list_value.insert(int(nest_key), nested_value)
                     else:
-                        dict_value[nest_key] = os.environ.get(key)
+                        dict_value[nest_key] = nested_value
                 current_value = environment_vars.get(opt["name"])
                 if current_value and isinstance(current_value, dict):
                     current_value.update(dict_value)
