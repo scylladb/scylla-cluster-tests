@@ -187,17 +187,18 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         prefix="",
         debug_message="",
     ):
-        if debug_message:
-            self.log.debug(debug_message)
+        for cmd in stress_cmd:
+            if debug_message:
+                self.log.debug(debug_message)
 
-        stress_queue = self.run_stress_thread(
-            stress_cmd=stress_cmd,
-            stress_num=stress_num,
-            keyspace_num=keyspace_num,
-            prefix=prefix,
-            stats_aggregate_cmds=False,
-        )
-        self.get_stress_results(queue=stress_queue, store_results=True)
+            stress_queue = self.run_stress_thread(
+                stress_cmd=cmd,
+                stress_num=stress_num,
+                keyspace_num=keyspace_num,
+                prefix=prefix,
+                stats_aggregate_cmds=False,
+            )
+            self.get_stress_results(queue=stress_queue, store_results=True)
 
     def _stop_load_when_nemesis_threads_end(self):
         for nemesis_thread in self.db_cluster.nemesis_threads:
