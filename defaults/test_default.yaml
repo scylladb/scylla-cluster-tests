@@ -85,7 +85,7 @@ server_encrypt_mtls: false
 
 scylla_encryption_options: ''
 
-compaction_strategy: 'SizeTieredCompactionStrategy'
+compaction_strategy: 'IncrementalCompactionStrategy'
 
 use_preinstalled_scylla: false
 

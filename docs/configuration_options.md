@@ -2359,7 +2359,7 @@ At the end of prepare stage, run major compaction and wait for this time (in min
 
 Choose a specific compaction strategy to pre-create schema with.
 
-**default:** SizeTieredCompactionStrategy
+**default:** IncrementalCompactionStrategy
 
 **type:** str (appendable)
 
