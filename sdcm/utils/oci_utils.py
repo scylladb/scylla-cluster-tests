@@ -854,29 +854,6 @@ def import_image_from_object_storage(
     return image
 
 
-def get_scylla_images(scylla_version: str, region: str) -> list:
-    compute_client = OciService().get_compute_client(region=region)
-    images = oci.pagination.list_call_get_all_results_generator(
-        compute_client.list_images,
-        yield_mode="record",
-        compartment_id=get_oci_compartment_id(),
-        image_type="CUSTOM",
-        lifecycle_state="AVAILABLE",
-        sort_by="TIMECREATED",
-        sort_order="DESC",
-    )
-    filtered_images = []
-    while current_image := next(images, None):
-        # NOTE: image names examples:
-        #       - debug-scylla-2026.1.0~dev-x86_64-2026-01-06T14:23:24
-        #       - debug-scylla-2026.1.0-x86_64-2025-12-31T15:14:42
-        # TODO: differentiate the released and dev images
-        # TODO: change behavior when we have explicit scylla version and branch/latest
-        if scylla_version in current_image.display_name.lower():
-            filtered_images.append(current_image)
-    return filtered_images
-
-
 def is_shape_available(shape_name: str, region: str) -> bool:
     shape_name = shape_name.split(":")[0]
     compute_client = OciService().get_compute_client(region=region)
@@ -910,3 +887,107 @@ def build_hostname_label(name: str, default_hostname: str = "node") -> str:
     max_base_len = 63 - len(suffix)
     hostname = hostname[:max_base_len].strip("-") or default_hostname
     return f"{hostname}{suffix}"
+
+
+def _get_images(region: str | None = None):
+    """Get OCI images available in the test compartment."""
+    compartment_id = get_oci_compartment_id()
+    compute_client = OciService().get_compute_client(region=region)
+    return oci.pagination.list_call_get_all_results_generator(
+        compute_client.list_images,
+        yield_mode="record",
+        compartment_id=compartment_id,
+        lifecycle_state="AVAILABLE",
+        sort_by="TIMECREATED",
+        sort_order="DESC",
+    )
+
+
+def get_scylla_images_by_branch(
+    branch: str,
+    region: str | None = None,
+    arch: VmArch = VmArch.X86,
+) -> list:
+    """Get OCI Scylla images filtered by branch tag.
+
+    Args:
+        branch: Branch specifier, e.g. "master:latest" or "branch-2024.1:all"
+        region: OCI region. If None, uses config default.
+        arch: VM architecture to filter by.
+
+    Returns:
+        List of OCI Image objects matching the criteria.
+    """
+    branch_name, build_id = branch.split(":", 1)
+    filtered_images = []
+    for img in _get_images(region=region):
+        if img.display_name.startswith("debug-") or "-debug-" in img.display_name:
+            continue
+        tags = (img.defined_tags or {}).get("scylla", {})
+        if tags.get("branch") != branch_name:
+            continue
+        if tags.get("arch") and tags.get("arch") != vmarch_to_oci(arch):
+            continue
+        if tags.get("build_mode") and tags.get("build_mode") != "release":
+            continue
+        if build_id not in ("latest", "all") and tags.get("build_tag", "") != build_id:
+            continue
+        filtered_images.append(img)
+
+    if build_id == "latest" and filtered_images:
+        filtered_images = [filtered_images[0]]
+
+    rows = []
+    for img in filtered_images:
+        tags = (img.defined_tags or {}).get("scylla", {})
+        build_tag = tags.get("build_tag", "")
+        build_id = build_tag.rsplit("-", 1)[-1] if build_tag else "N/A"
+        rows.append(
+            [
+                "OCI",
+                img.display_name,
+                img.id,
+                str(img.time_created.strftime("%Y-%m-%dT%H:%M:%S") if img.time_created else "N/A"),
+                build_id,
+                tags.get("arch", "N/A"),
+                tags.get("scylla_version", "N/A"),
+            ]
+        )
+    return rows
+
+
+def get_scylla_images_by_version(
+    version: str,
+    region: str | None = None,
+    arch: VmArch = VmArch.X86,
+) -> list[list[str]]:
+    """List OCI Scylla images filtered by version.
+
+    Args:
+        version: Scylla version string, e.g. "2026.1.0"
+        region: OCI region. If None, uses config default.
+        arch: VM architecture to filter by.
+
+    Returns:
+        List of rows: [Backend, Name, ImageId, CreationDate, ScyllaVersion]
+    """
+    rows = []
+    for img in _get_images(region=region):
+        if img.display_name.startswith("debug-") or "-debug-" in img.display_name:
+            continue
+        tags = (img.defined_tags or {}).get("scylla", {})
+        scylla_version = tags.get("scylla_version", "")
+        if version != "all" and version not in img.display_name and not scylla_version.startswith(version):
+            continue
+        if tags.get("arch") and tags.get("arch") != vmarch_to_oci(arch):
+            continue
+        rows.append(
+            [
+                "OCI",
+                img.display_name,
+                img.id,
+                str(img.time_created.strftime("%Y-%m-%dT%H:%M:%S") if img.time_created else "N/A"),
+                scylla_version or "N/A",
+            ]
+        )
+    return rows
