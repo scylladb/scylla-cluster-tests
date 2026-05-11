@@ -397,6 +397,7 @@ AWS_SUPPORTED_REGIONS: list[str] = [
     "eu-west-3",
     "us-west-2",
     "us-east-1",
+    "us-east-2",
     "eu-north-1",
     "eu-central-1",
 ]
@@ -424,7 +425,7 @@ def count_regions(region_string: str) -> int:
         regions = json.loads(region_string.replace("'", '"'))
         if isinstance(regions, list):
             return len(regions)
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         # Not a JSON array — fall through to treat as a plain string
         pass
     if " " in region_string:
