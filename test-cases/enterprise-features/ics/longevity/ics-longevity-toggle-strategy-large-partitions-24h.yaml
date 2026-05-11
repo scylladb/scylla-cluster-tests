@@ -1,6 +1,5 @@
 test_duration: 1600
 
-compaction_strategy: 'IncrementalCompactionStrategy'
 nemesis_class_name: "SisyphusMonkey"
 nemesis_selector: 'ToggleTableIcsMonkey'
 nemesis_interval: 30
