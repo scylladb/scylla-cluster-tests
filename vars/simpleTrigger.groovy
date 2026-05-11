@@ -6,7 +6,7 @@ def call(List jobs) {
             string(name: "scylla_ami_id", defaultValue: "", description: "AMI ID for ScyllaDB")
             string(name: "region",
                    defaultValue: "'eu-west-1'",
-                   description: "Supported: us-east-1 | eu-west-1 | eu-west-2 | eu-north-1 | eu-central-1 | us-west-2 | random (randomly select region)")
+                   description: "Supported: us-east-1 | us-east-2 | us-west-2 | eu-west-1 | eu-west-2 | eu-west-3 | eu-north-1 | eu-central-1 | ca-central-1 | random (randomly select region)")
             string(name: "provision_type",
                    defaultValue: "spot",
                    description: "spot|on_demand|spot_fleet")
