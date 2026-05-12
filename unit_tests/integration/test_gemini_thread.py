@@ -146,8 +146,18 @@ def build_gemini_thread(
         "--max-mutation-retries-backoff=1s",
         "--replication-strategy=\"{'class': 'SimpleStrategy', 'replication_factor': '1'}\"",
         "--oracle-replication-strategy=\"{'class': 'SimpleStrategy', 'replication_factor': '1'}\"",
-        "--partition-count=100",
+        # Large partition count reduces the probability that concurrent reader/writer goroutines
+        # collide on the same partition.  With --concurrency=5 (5R+5W) and only 100 partitions
+        # the collision rate was ~5% per write, making write-timeout-induced divergence nearly
+        # certain within a 30-second run.  10 000 partitions drops that rate to ~0.05%.
+        "--partition-count=10000",
         "--max-errors-to-store=1",
+        # Override the aggressive SCT default (3 s) with a more generous value.  On a local
+        # Docker host the latency is sub-millisecond, but under CPU/memory pressure a 3-second
+        # deadline causes write timeouts.  A timed-out write that actually committed on the test
+        # cluster but not the oracle (or vice versa) is the primary source of "different
+        # clustering-key values" divergence errors because gemini retries with new data.
+        "--request-timeout=10s",
         f"--statement-ratios='{load_statement_ratios(gemini_schemas_dir)}'",
     ]
     if extra_options:
@@ -243,6 +253,72 @@ def assert_mixed_result(result):
     assert result["read_ops"] > 0, "Mixed run produced zero read_ops — did gemini actually run?"
 
 
+def _format_debug_report(thread: GeminiStressThread) -> str:
+    """Read all gemini output files and return a formatted debug report.
+
+    Reads the result JSON, summary, test-statement and oracle-statement log
+    files that were written by the loader.  Designed to be called *after*
+    :meth:`get_gemini_results` — the underlying ``get_results()`` call is
+    safe to invoke again because completed futures return cached values.
+
+    Args:
+        thread: A finished :class:`GeminiStressThread` instance.
+
+    Returns:
+        Multi-section string, one section per loader, ready to embed in a
+        ``pytest.fail()`` message.
+    """
+    raw_results = thread.get_results()
+    sections = []
+
+    for loader_idx, (_docker, _result, local_result_file) in enumerate(raw_results):
+        logdir = Path(local_result_file).parent
+        section = [
+            f"\n{'=' * 70}",
+            f"Loader #{loader_idx}  logdir={logdir}",
+            f"{'=' * 70}",
+        ]
+
+        # ── Result JSON ───────────────────────────────────────────────────────
+        section.append("\n[Result File]")
+        try:
+            content = Path(local_result_file).read_text(encoding="utf-8")
+            try:
+                section.append(json.dumps(json.loads(content), indent=2))
+            except json.JSONDecodeError:
+                section.append(content or "(empty)")
+        except FileNotFoundError:
+            section.append(f"(not found: {local_result_file})")
+
+        # ── Summary ───────────────────────────────────────────────────────────
+        summary_path = logdir / Path(thread.gemini_summary_file).name
+        section.append("\n[Summary File]")
+        try:
+            section.append(summary_path.read_text(encoding="utf-8") or "(empty)")
+        except FileNotFoundError:
+            section.append(f"(not found: {summary_path})")
+
+        # ── Test statement log ────────────────────────────────────────────────
+        test_stmts_path = logdir / Path(thread.gemini_test_statements_file).name
+        section.append("\n[Test Statement Log]")
+        try:
+            section.append(test_stmts_path.read_text(encoding="utf-8") or "(empty)")
+        except FileNotFoundError:
+            section.append(f"(not found: {test_stmts_path})")
+
+        # ── Oracle statement log ──────────────────────────────────────────────
+        oracle_stmts_path = logdir / Path(thread.gemini_oracle_statements_file).name
+        section.append("\n[Oracle Statement Log]")
+        try:
+            section.append(oracle_stmts_path.read_text(encoding="utf-8") or "(empty)")
+        except FileNotFoundError:
+            section.append(f"(not found: {oracle_stmts_path})")
+
+        sections.append("\n".join(section))
+
+    return "\n".join(sections) if sections else "(no loader results found)"
+
+
 def test_gemini_mixed_mode_with_oracle(request, docker_scylla, docker_scylla_oracle, params, gemini_schemas_dir):
     """A full mixed-mode run against an oracle cluster must complete without errors.
 
@@ -258,9 +334,37 @@ def test_gemini_mixed_mode_with_oracle(request, docker_scylla, docker_scylla_ora
     results = thread.get_gemini_results()
     stats = thread.verify_gemini_results(results)
 
-    assert stats["status"] == "PASSED", f"Gemini mixed-mode run failed: {stats}"
-    assert len(results) == 1, "Expected exactly one result from a single-loader run"
-    assert_mixed_result(results[0])
+    def _fail(msg: str) -> None:
+        """Fail the test and append a full debug report (files, logs) to *msg*."""
+        pytest.fail(f"{msg}\n{_format_debug_report(thread)}")
+
+    if stats["status"] != "PASSED":
+        _fail(f"Gemini mixed-mode run failed\n  status : {stats['status']}\n  errors : {stats.get('errors', {})}")
+
+    if len(results) != 1:
+        _fail(f"Expected exactly 1 result from a single-loader run, got {len(results)}")
+
+    result = results[0]
+    issues = []
+
+    for field in ("write_ops", "read_ops", "write_errors", "read_errors"):
+        if field not in result:
+            issues.append(f"missing required field '{field}'")
+
+    if result.get("write_ops", 0) <= 0:
+        issues.append(f"write_ops={result.get('write_ops')} — did gemini actually run?")
+    if result.get("read_ops", 0) <= 0:
+        issues.append(f"read_ops={result.get('read_ops')} — did gemini actually run?")
+    if result.get("write_errors"):
+        issues.append(f"write_errors={result['write_errors']}")
+    if result.get("read_errors"):
+        issues.append(f"read_errors={result['read_errors']}")
+    errors = result.get("errors")
+    if errors:
+        issues.append(f"{len(errors)} validation error(s) found in 'errors' field")
+
+    if issues:
+        _fail("Gemini mixed-mode result has issues:\n  " + "\n  ".join(issues))
 
 
 def test_gemini_write_only_with_oracle(request, docker_scylla, docker_scylla_oracle, params, gemini_schemas_dir):
@@ -305,7 +409,7 @@ def test_gemini_with_schema(request, docker_scylla, docker_scylla_oracle, cql_se
     # Verify the schema path is correctly injected into the gemini command
     gemini_cmd = thread.generate_gemini_command(schema_path="/tmp/schema.json")
     assert '--schema="/tmp/schema.json"' in gemini_cmd, "Schema path must appear in the generated command"
-    assert "--partition-count=100" in gemini_cmd, "partition-count must be forwarded from stress_cmd"
+    assert "--partition-count=10000" in gemini_cmd, "partition-count must be forwarded from stress_cmd"
     assert "--duration=30s" in gemini_cmd, "duration must appear in the generated command"
     assert "--warmup=0" in gemini_cmd, "warmup must appear in the generated command"
     assert f"--statement-ratios='{load_statement_ratios(gemini_schemas_dir)}'" in gemini_cmd, (
