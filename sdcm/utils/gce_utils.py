@@ -81,6 +81,19 @@ def random_zone(region: str) -> str:
     return f"{random.choice(availability_zones)}"
 
 
+def get_alternative_zones(region: str, exhausted_zone: str) -> list[str]:
+    """Return alternative zone letters for a region, excluding the exhausted zone.
+
+    Used by runtime fallback when provisioning fails with ZoneResourcesExhaustedError.
+    """
+    zone_letters = SUPPORTED_REGIONS.get(region, "")
+    if not zone_letters:
+        return []
+    exhausted_letter = exhausted_zone[-1] if len(exhausted_zone) > 1 else exhausted_zone
+    alternatives = [z for z in zone_letters if z != exhausted_letter]
+    return alternatives
+
+
 def get_gce_compute_instances_client() -> tuple[compute_v1.InstancesClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
