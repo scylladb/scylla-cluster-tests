@@ -313,13 +313,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
             orig_is_enterprise = node.is_product_enterprise
             if node.distro.is_rhel_like:
-                result = node.remoter.run("sudo yum search scylla-enterprise 2>&1", ignore_status=True)
-                new_is_enterprise = bool(
-                    "scylla-enterprise.x86_64" in result.stdout or "No matches found" not in result.stdout
-                )
+                result = node.remoter.run("sudo yum search scylla-enterprise-server 2>&1", ignore_status=True)
+                new_is_enterprise = "scylla-enterprise-server" in result.stdout
             else:
-                result = node.remoter.run("sudo apt-cache search scylla-enterprise", ignore_status=True)
-                new_is_enterprise = "scylla-enterprise" in result.stdout
+                result = node.remoter.run("sudo apt-cache search scylla-enterprise-server", ignore_status=True)
+                new_is_enterprise = "scylla-enterprise-server" in result.stdout
 
             scylla_pkg = "scylla-enterprise" if new_is_enterprise else "scylla"
             ver_suffix = r"\*{}".format(new_version) if new_version else ""
@@ -342,11 +340,22 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             with self.actions_log.action_scope("updating packages"):
                 if node.distro.is_rhel_like:
                     node.remoter.run(r"sudo yum update {}\* -y".format(scylla_pkg_ver))
+                    # scylla-node-exporter may have moved to an independent versioning scheme
+                    # (e.g. 1.11.1) which RPM considers a downgrade from the old scylla-versioned
+                    # package (e.g. 2026.x). Force-reinstall it so the transition is handled.
+                    node.remoter.run(
+                        "sudo yum install -y scylla-node-exporter || sudo yum reinstall -y scylla-node-exporter",
+                        ignore_status=True,
+                    )
                 else:
                     node.remoter.sudo("apt-get update")
                     node.remoter.sudo(
                         f"DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade {scylla_pkg_ver} -y"
                         f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+                    )
+                    node.remoter.sudo(
+                        "DEBIAN_FRONTEND=noninteractive apt-get install -y scylla-node-exporter",
+                        ignore_status=True,
                     )
 
         node.remoter.sudo(
@@ -464,9 +473,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             recover_conf(node)
             node.remoter.run("sudo systemctl daemon-reload")
         elif self.upgrade_rollback_mode == "minor_release":
-            node.remoter.run(r"sudo yum downgrade scylla\*%s-\* -y" % self.orig_ver.split("-")[0])
+            node.remoter.run(
+                r"sudo yum downgrade scylla\*%s-\* -y --allowerasing --nobest" % self.orig_ver.split("-")[0]
+            )
         else:
-            node.remoter.run(r"sudo yum downgrade scylla\* -y")
+            node.remoter.run(r"sudo yum downgrade scylla\* -y --allowerasing --nobest")
             recover_conf(node)
             node.remoter.run("sudo systemctl daemon-reload")
 
