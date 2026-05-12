@@ -874,7 +874,7 @@ class NemesisRunner:
         try:
             # Run connect a new session after authenticator switch, and run a short workload
             self.actions_log.info("Run a short workload after Authenticator switch")
-            self._prepare_test_table(ks="keyspace_for_authenticator_switch", table="standard1")
+            self._prepare_test_table(ks="keyspace_for_authenticator_switch")
         finally:
             # Wait 2 mins to let the workloads run with new Authenticator,
             # then switch Authenticator back to original
@@ -1650,7 +1650,7 @@ class NemesisRunner:
         # prepare test tables and fill test data
         self.actions_log.info("Preparing test tables")
         for i in range(10):
-            self._prepare_test_table(ks=f"drop_table_during_repair_ks_{i}", table="standard1")
+            self._prepare_test_table(ks=f"drop_table_during_repair_ks_{i}")
             self.cluster.wait_for_schema_agreement()
 
         self.log.debug("Start repair target_node in background")
@@ -1681,7 +1681,7 @@ class NemesisRunner:
     def disrupt_load_and_stream(self):
         # Checking the columns number of keyspace1.standard1
         self.log.debug("Prepare keyspace1.standard1 if it does not exist")
-        self._prepare_test_table(ks="keyspace1", table="standard1")
+        self._prepare_test_table(ks="keyspace1")
         column_num = SstableLoadUtils.calculate_columns_count_in_table(self.target_node)
 
         # Run load-and-stream test on regular standard1 table of cassandra-stress.
@@ -1708,7 +1708,7 @@ class NemesisRunner:
     def disrupt_nodetool_refresh(self, big_sstable: bool = False):
         # Checking the columns number of keyspace1.standard1
         self.log.debug("Prepare keyspace1.standard1 if it does not exist")
-        self._prepare_test_table(ks="keyspace1", table="standard1")
+        self._prepare_test_table(ks="keyspace1")
         column_num = SstableLoadUtils.calculate_columns_count_in_table(self.target_node)
 
         # Note: when issue #6617 is fixed, we can try to load snapshot (cols=5) to a table (1 < cols < 5),
@@ -2170,22 +2170,17 @@ class NemesisRunner:
     def disrupt_nodetool_cleanup(self):
         self.nodetool_cleanup_on_all_nodes_parallel()
 
-    def _prepare_test_table(self, ks="keyspace1", table=None):
-        ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
-        table_exist = f"{ks}.{table}" in ks_cfs if table else True
-
-        test_keyspaces = [cql_unquote_if_needed(ks) for ks in self.cluster.get_test_keyspaces()]
-        # if keyspace or table doesn't exist, create it by cassandra-stress
-        if ks not in test_keyspaces or not table_exist:
-            stress_cmd = (
-                "cassandra-stress write n=400000 cl=QUORUM -mode native cql3 "
-                f"-schema 'replication(strategy=NetworkTopologyStrategy,"
-                f"replication_factor={self.tester.reliable_replication_factor})' -log interval=5"
-            )
-            cs_thread = self.tester.run_stress_thread(
-                stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False, round_robin=True
-            )
-            self.tester.verify_stress_thread(cs_thread, error_handler=self._nemesis_stress_failure_handler)
+    def _prepare_test_table(self, ks="keyspace1"):
+        """Populate ``ks.standard1`` with 400 K rows via cassandra-stress."""
+        stress_cmd = (
+            "cassandra-stress write n=400000 cl=QUORUM -mode native cql3 "
+            f"-schema 'replication(strategy=NetworkTopologyStrategy,"
+            f"replication_factor={self.tester.reliable_replication_factor})' -log interval=5"
+        )
+        cs_thread = self.tester.run_stress_thread(
+            stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False, round_robin=True
+        )
+        self.tester.verify_stress_thread(cs_thread, error_handler=self._nemesis_stress_failure_handler)
 
     def _nemesis_stress_failure_handler(self, stress_pool, errors):
         """
