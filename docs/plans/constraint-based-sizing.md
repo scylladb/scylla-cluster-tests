@@ -1,5 +1,41 @@
 # Constraint-Based Instance Sizing
 
+## Implementation Status
+
+> **Status**: Implementation complete in PR #14576.
+>
+> All 32 review comments from PR #14517 are resolved in the implementation.
+>
+> ### Key Deviations from Original Plan
+>
+> | Plan | Actual Implementation |
+> |------|----------------------|
+> | CLI: `show-prices`, `translate-size`, `show-sizes` | CLI: `sizing catalog`, `sizing resolve`, `sizing preview` (grouped under `sizing` subcommand) |
+> | Config key: `db_instance_type` | Config key: `instance_type_db` (matches existing SCT naming) |
+> | Env var: `SCT_DB_INSTANCE_TYPE.vcpu=8` | Env var: `SCT_INSTANCE_TYPE_DB.VCPU=8` |
+> | 9 separate commits | 3 commits (core + config extraction + agnostic defaults) |
+> | `sdcm/utils/cloud_sizes.py` removal (Task 13) | Deferred — old code still present, not yet removed |
+> | CLI in `sct.py` | CLI extracted to `sct_sizing.py` (separate module) |
+> | Preferred families in catalog YAML files | Preferred families in `sizing_config.yaml` (separate config) |
+> | OCI pricing hardcoded | OCI pricing fetched live from Oracle API with lazy caching |
+> | GCE catalog: z3-highmem only | GCE catalog: z3-highmem + n2-highmem (with disk variants 1-24 SSDs) |
+> | DenseIO memory: 16 GB/OCPU | DenseIO memory: 12 GB/OCPU (corrected from Oracle docs) |
+> | Tier1 configs: all migrated uniformly | 3 configs had memory lowered for OCI compatibility; 7 with vcpu≤8 left with `# no OCI match` |
+>
+> ### Files Created (not in plan)
+>
+> - `sct_sizing.py` — extracted sizing CLI (plan had it in `sct.py`)
+> - `data/instance_catalog/sizing_config.yaml` — role constraints, preferred families, sort order
+> - `sdcm/utils/instance_catalog.py` — catalog model + loader (as planned)
+> - `sdcm/utils/instance_matcher.py` — constraint parser + matching engine (as planned)
+> - `sdcm/utils/catalog_generator.py` — catalog generators for all 4 clouds (as planned)
+>
+> ### Test Coverage
+>
+> - `unit_tests/unit/test_instance_matcher.py` — 40 test functions
+> - `unit_tests/unit/test_instance_catalog.py` — 14 test functions
+> - `unit_tests/integration/test_catalog_generator.py` — integration tests for API generation
+
 ## TL;DR
 
 > **Quick Summary**: Replace T-shirt sizing (`db_instance_type: '2xlarge'`) with constraint-based selection (`db_instance_type: {vcpu: 16, memory: ">20gb"}`). An instance catalog per cloud (populated from APIs + curated) is matched against user constraints, selecting the best instance from preferred families by price.
