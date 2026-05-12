@@ -210,31 +210,32 @@ When you modify code that touches backend-specific provisioning logic, you MUST 
 
 If you modify any of these files, add the corresponding provision test label:
 
-**AWS Backend** (`provision-aws` label):
+**AWS Backend** (`test-provision-aws` label):
 - `sdcm/cluster_aws.py` - AWS cluster implementation
 - `sdcm/provision/aws/*` - AWS-specific provisioning
 - `sdcm/utils/aws_utils.py` - AWS utilities
 
-**GCE Backend** (`provision-gce` label):
+**GCE Backend** (`test-provision-gce` label):
 - `sdcm/cluster_gce.py` - GCE cluster implementation
 - `sdcm/provision/gce/*` - GCE-specific provisioning (if exists)
 - `sdcm/utils/gce_utils.py` - GCE utilities
 
-**Azure Backend** (`provision-azure` label):
+**Azure Backend** (`test-provision-azure` label):
 - `sdcm/cluster_azure.py` - Azure cluster implementation
 - `sdcm/provision/azure/*` - Azure-specific provisioning
 - `sdcm/utils/azure_utils.py` - Azure utilities
 
-**Docker Backend** (`provision-docker` label):
+**Docker Backend** (`test-provision-docker` label):
 - `sdcm/cluster_docker.py` - Docker cluster implementation
 - `sdcm/utils/docker_utils.py` - Docker utilities
 
-**Kubernetes Backends** (`provision-k8s` label):
+**Kubernetes Backends** (`test-provision-k8s-eks` label):
 - `sdcm/cluster_k8s/*` - Kubernetes cluster implementations
 - `sdcm/utils/k8s/*` - Kubernetes utilities
 
-**Baremetal Backend** (`provision-baremetal` label):
-- `sdcm/cluster_baremetal.py` - Baremetal cluster implementation
+**OCI Backend** (`test-provision-oci` label):
+- `sdcm/cluster_oci.py` - OCI cluster implementation
+- `sdcm/provision/oci/*` - OCI-specific provisioning
 
 ### How to Add Labels
 
@@ -251,8 +252,8 @@ In your PR description, mention the backends affected:
 Or explicitly request labels:
 ```markdown
 ## Required Labels
-- `provision-aws`
-- `provision-docker`
+- `test-provision-aws`
+- `test-provision-docker`
 ```
 
 ## Manual Testing Notes in PRs
