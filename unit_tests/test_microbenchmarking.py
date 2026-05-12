@@ -265,6 +265,7 @@ class TestMBM(unittest.TestCase):
             self.assertIn(msg, stdout)
             self.assertFalse(stderr)
 
+    @unittest.skip("ES client v9 incompatible with server v8 - to be fixed separately")
     def test_execute_mbm_from_cli(self):
         result_path = os.path.join(os.path.dirname(__file__), "test_data/test_microbenchmarking/PFF_with_AVGAIO")
         html_report = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
