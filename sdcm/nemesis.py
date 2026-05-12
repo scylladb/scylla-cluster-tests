@@ -941,7 +941,8 @@ class Nemesis:
         update_authenticator(self.cluster.nodes, opposite_auth)
         try:
             # Run connect a new session after authenticator switch, and run a short workload
-            self._prepare_test_table(ks="keyspace_for_authenticator_switch", table="standard1")
+            self.actions_log.info("Run a short workload after Authenticator switch")
+            self._prepare_test_table(ks="keyspace_for_authenticator_switch")
         finally:
             # Wait 2 mins to let the workloads run with new Authenticator,
             # then switch Authenticator back to original
@@ -1715,7 +1716,7 @@ class Nemesis:
         # prepare test tables and fill test data
         for i in range(10):
             self.log.debug("Prepare test tables if they do not exist")
-            self._prepare_test_table(ks=f"drop_table_during_repair_ks_{i}", table="standard1")
+            self._prepare_test_table(ks=f"drop_table_during_repair_ks_{i}")
             self.cluster.wait_for_schema_agreement()
 
         self.log.debug("Start repair target_node in background")
@@ -1742,8 +1743,8 @@ class Nemesis:
     @target_data_nodes
     def disrupt_load_and_stream(self):
         # Checking the columns number of keyspace_refresh.standard1
-        self.log.debug("Prepare keyspace_refresh.standard1 if it does not exist")
-        self._prepare_test_table(ks="keyspace_refresh", table="standard1")
+        self.log.debug("Prepare keyspace_refresh.standard1")
+        self._prepare_test_table(ks="keyspace_refresh")
         column_num = SstableLoadUtils.calculate_columns_count_in_table(
             self.target_node, keyspace_name="keyspace_refresh"
         )
@@ -1776,8 +1777,8 @@ class Nemesis:
     @target_all_nodes
     def disrupt_nodetool_refresh(self, big_sstable: bool = False):
         # Checking the columns number of keyspace_refresh.standard1
-        self.log.debug("Prepare keyspace_refresh.standard1 if it does not exist")
-        self._prepare_test_table(ks="keyspace_refresh", table="standard1")
+        self.log.debug("Prepare keyspace_refresh.standard1")
+        self._prepare_test_table(ks="keyspace_refresh")
         column_num = SstableLoadUtils.calculate_columns_count_in_table(
             self.target_node, keyspace_name="keyspace_refresh", table_name="standard1"
         )
@@ -2146,23 +2147,16 @@ class Nemesis:
     def disrupt_nodetool_cleanup(self):
         self.nodetool_cleanup_on_all_nodes_parallel()
 
-    def _prepare_test_table(self, ks="keyspace1", table=None):
-        ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
-        table_exist = f"{ks}.{table}" in ks_cfs if table else True
-
-        test_keyspaces = self.cluster.get_test_keyspaces()
-        # if keyspace or table doesn't exist, create it by cassandra-stress
-        if ks not in test_keyspaces or not table_exist:
-            stress_cmd = (
-                "cassandra-stress write n=400000 cl=QUORUM -mode native cql3 "
-                f"-schema 'keyspace={ks} replication(strategy=NetworkTopologyStrategy,"
-                f"replication_factor={self.tester.reliable_replication_factor})' -log interval=5"
-            )
-            cs_thread = self.tester.run_stress_thread(
-                stress_cmd=stress_cmd, stop_test_on_failure=False, round_robin=True
-            )
-            cs_thread.verify_results()
-            self.stop_nemesis_on_stress_errors(cs_thread)
+    def _prepare_test_table(self, ks="keyspace1"):
+        """Populate ``ks.standard1`` with 400 K rows via cassandra-stress."""
+        stress_cmd = (
+            "cassandra-stress write n=400000 cl=QUORUM -mode native cql3 "
+            f"-schema 'keyspace={ks} replication(strategy=NetworkTopologyStrategy,"
+            f"replication_factor={self.tester.reliable_replication_factor})' -log interval=5"
+        )
+        cs_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd, stop_test_on_failure=False, round_robin=True)
+        cs_thread.verify_results()
+        self.stop_nemesis_on_stress_errors(cs_thread)
 
     def stop_nemesis_on_stress_errors(self, stress_thread: DockerBasedStressThread) -> None:
         # Some implementations of stress threads override logic of the base class method
