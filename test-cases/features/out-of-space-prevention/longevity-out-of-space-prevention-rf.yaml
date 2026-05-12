@@ -1,0 +1,19 @@
+# Maintained by Storage QA
+
+test_duration: 1440
+# This will fill a 3 x i4i.xlarge cluster to 60% disk usage
+prepare_write_cmd: [
+  "cassandra-stress write no-warmup cl=QUORUM n=160000000 -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..160000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=160000000 -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=160000001..320000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=160000000 -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=320000001..480000000",
+]
+prepare_stress_duration: 360
+
+n_db_nodes: 3
+simulated_racks: 3
+instance_type_db: 'i4i.xlarge'
+nemesis_grow_shrink_instance_type: 'i4i.large'
+n_loaders: 3
+
+user_prefix: 'oos-test'
+round_robin: true

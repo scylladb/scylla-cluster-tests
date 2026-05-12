@@ -15,11 +15,14 @@
 from itertools import cycle
 from contextlib import ExitStack, contextmanager
 from time import sleep, time
+
+from cassandra import InvalidRequest, OperationTimedOut
 from longevity_test import LongevityTest
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.exceptions import WaitForTimeoutError
 from sdcm.mgmt.common import ScyllaManagerError, TaskStatus
+from sdcm.provision.scylla_yaml.auxiliaries import SeedProvider
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
@@ -29,6 +32,7 @@ from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.decorators import retrying
 from sdcm.nemesis.utils.indexes import create_index, verify_query_by_index_works, wait_for_index_to_be_built
+from sdcm.utils.replication_strategy_utils import NetworkTopologyReplicationStrategy, ReplicationStrategy
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
 from threading import Thread
 
@@ -184,16 +188,17 @@ class LongevityOutOfSpaceTest(LongevityTest):
         # [{'metric': {}, 'values': [[1749638594.936, '0'], [1749638614.936, '0'], [1749638634.936, '0'], [1749638654.936, '0']]}]
         return sum(int(v[1]) for v in results[0]["values"]) if results else 0
 
-    def prepare(self):
+    def prepare(self, check_disk_usage=True):
         self.run_prepare_write_cmd()
-        for node in self.db_cluster.nodes:
-            usage = self.get_disk_usage(node)
-            if usage <= 85:
-                TestFrameworkEvent(
-                    source=self.__class__.__name__,
-                    message=f"Node {node.name} ({node.private_ip_address}) max disk is only {usage:.2f}% after prepare.",
-                    severity=Severity.CRITICAL,
-                ).publish()
+        if check_disk_usage:
+            for node in self.db_cluster.nodes:
+                usage = self.get_disk_usage(node)
+                if usage <= 85:
+                    TestFrameworkEvent(
+                        source=self.__class__.__name__,
+                        message=f"Node {node.name} ({node.private_ip_address}) max disk is only {usage:.2f}% after prepare.",
+                        severity=Severity.CRITICAL,
+                    ).publish()
 
     def test_oos_write(self):
         """
@@ -406,3 +411,102 @@ class LongevityOutOfSpaceTest(LongevityTest):
 
         with self.db_cluster.cql_connection_patient(node, connect_timeout=300) as session:
             verify_query_by_index_works(session, ks, cf, column)
+
+    def add_nodes_in_new_dc(self):
+        """
+        Add nodes to a new dc, with smaller instance type than the original nodes.
+
+        :param count: The number of nodes to add.
+        """
+        instance_type = self.params.get("nemesis_grow_shrink_instance_type")
+        added_nodes: list[BaseNode] = self.db_cluster.add_nodes(
+            count=3,
+            dc_idx=0,
+            rack=None,
+            instance_type=instance_type,
+            enable_auto_bootstrap=True,
+            after_config=self.configure_new_dc,
+        )
+
+        self.db_cluster.wait_for_init(
+            node_list=added_nodes, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, check_node_health=False
+        )
+        for new_node in added_nodes:
+            new_node.wait_node_fully_start()
+        self.monitors.reconfigure_scylla_monitoring()
+
+    def configure_new_dc(self, node: BaseNode):
+        """Configure node for new datacenter before Scylla starts."""
+        with node.remote_scylla_yaml() as scylla_yml:
+            scylla_yml.rpc_address = node.ip_address
+            scylla_yml.seed_provider = [
+                SeedProvider(
+                    class_name="org.apache.cassandra.locator.SimpleSeedProvider",
+                    parameters=[{"seeds": ",".join(self.db_cluster.seed_nodes_addresses)}],
+                )
+            ]
+
+        endpoint_snitch = self.params.get("endpoint_snitch") or ""
+        if endpoint_snitch.endswith("GossipingPropertyFileSnitch"):
+            rackdc_value = {"dc": "test_oos_dc"}
+        else:
+            rackdc_value = {"dc_suffix": "_oos_dc"}
+
+        with node.remote_cassandra_rackdc_properties() as properties_file:
+            properties_file.update(**rackdc_value)
+
+    def test_oos_rf(self):
+        """
+        Fill the cluster to 60%
+        Add a new dc, with smaller nodes
+        Add replication to the new dc
+        RF change should fail, and rollback
+        """
+        self.prepare(check_disk_usage=False)
+
+        node = self.db_cluster.nodes[0]
+        initial_dc_name = list(self.db_cluster.get_nodetool_status().keys())[0]
+
+        self.add_nodes_in_new_dc()
+        new_dc_name = [n for n in list(self.db_cluster.get_nodetool_status().keys()) if n != initial_dc_name][0]
+
+        system_keyspaces = ["system_distributed", "system_traces"]
+        if not node.raft.is_consistent_topology_changes_enabled:
+            system_keyspaces.append("system_auth")
+
+        # switch system keyspaces to NetworkTopologyStrategy
+        for keyspace in system_keyspaces:
+            old_rs = ReplicationStrategy.get(node, keyspace)
+            if not isinstance(old_rs, NetworkTopologyReplicationStrategy):
+                ntrs = NetworkTopologyReplicationStrategy(**{initial_dc_name: 3})
+                ntrs.apply(node, keyspace)
+
+        # add the new DC to the replication strategy
+        for keyspace in system_keyspaces:
+            dc_rs = ReplicationStrategy.get(node, keyspace)
+            dc_rs.replication_factors_per_dc.update({new_dc_name: 3})
+            dc_rs.apply(node, keyspace)
+
+        # Separate for the test keyspace, since it needs a big timeout
+        dc_rs = ReplicationStrategy.get(node, "keyspace1")
+        dc_rs.replication_factors_per_dc.update({new_dc_name: 3})
+        with self.db_cluster.cql_connection_patient(node, connect_timeout=300) as session:
+            try:
+                session.execute(f"ALTER KEYSPACE keyspace1 WITH replication = {dc_rs}", timeout=10 * 60 * 60)
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    message="ALTER KEYSPACE should have failed due to OOS on new DC nodes, but it succeeded.",
+                    severity=Severity.CRITICAL,
+                ).publish()
+            except (OperationTimedOut, InvalidRequest) as exc:
+                self.log.info(f"ALTER KEYSPACE failed as expected: {exc}")
+
+        # Verify rollback: the new DC should no longer be in the replication strategy
+        final_rs = ReplicationStrategy.get(node, "keyspace1")
+        if new_dc_name in final_rs.replication_factors_per_dc:
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                message=f"Replication strategy for keyspace1 should have rolled back, "
+                f"but {new_dc_name} is still present: {final_rs}",
+                severity=Severity.ERROR,
+            ).publish()
