@@ -269,9 +269,11 @@ def test_get_alternative_zones_returns_empty_for_unknown_region(mock_zone_letter
     assert get_alternative_zones("unknown-region-1", "a") == []
 
 
-def test_get_alternative_zones_returns_shuffled_list(mock_zone_letters):
+def test_get_alternative_zones_returns_deterministic_order(mock_zone_letters):
+    """Alternative zones are returned in deterministic order for predictable fallback."""
     results = [tuple(get_alternative_zones("us-central1", "a")) for _ in range(20)]
-    assert len(set(results)) > 1
+    assert len(set(results)) == 1
+    assert results[0] == ("b", "c", "f")
 
 
 def test_get_alternative_zones_single_zone_region_returns_empty():

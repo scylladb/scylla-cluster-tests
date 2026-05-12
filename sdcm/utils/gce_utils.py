@@ -128,7 +128,6 @@ def get_alternative_zones(region: str, exhausted_zone: str) -> list[str]:
         return []
     exhausted_letter = exhausted_zone[-1] if len(exhausted_zone) > 1 else exhausted_zone
     alternatives = [z for z in zone_letters if z != exhausted_letter]
-    random.shuffle(alternatives)
     return alternatives
 
 
