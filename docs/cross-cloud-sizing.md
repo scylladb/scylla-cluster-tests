@@ -1,376 +1,152 @@
 # Cross-Cloud Instance Sizing
 
-SCT uses constraint-based instance selection to automatically resolve hardware requirements to cloud-specific instance types. Instead of memorizing instance type names across providers, you describe what you need and the system picks the best match.
+SCT uses a constraint-based system to specify hardware requirements. Instead of hardcoding per-cloud instance types, you define hardware constraints that the system resolves to concrete instance types for AWS, GCE, Azure, or OCI.
 
-## Quick Start
-
-### In a test config YAML
-
-```yaml
-# Specify hardware requirements — resolved per cloud at runtime
-db_instance_type:
-  vcpu: 8
-  memory: 32
-
-loader_instance_type:
-  vcpu: 4
-
-monitor_instance_type:
-  vcpu: 2
-```
-
-When you run this config with `--backend aws`, it resolves to:
-- **db**: `i8g.2xlarge` (ARM, 8 vCPU, 64 GB, NVMe)
-- **loader**: `c6i.xlarge` (4 vCPU, 8 GB)
-- **monitor**: `t3.large` (2 vCPU, 8 GB)
-
-The same config with `--backend gce` resolves to:
-- **db**: `z3-highmem-8` (8 vCPU, 64 GB, local SSD)
-- **loader**: `e2-standard-4` (4 vCPU, 16 GB)
-- **monitor**: `n2-highmem-4` (4 vCPU, 32 GB)
-
-### Via environment variable (dot-notation)
-
-SCT's existing dot-notation for nested config values works out of the box:
-
-```bash
-export SCT_DB_INSTANCE_TYPE.vcpu=16
-export SCT_DB_INSTANCE_TYPE.memory=32
-export SCT_DB_INSTANCE_TYPE.arch=arm64
-
-export SCT_LOADER_INSTANCE_TYPE.vcpu=4
-export SCT_MONITOR_INSTANCE_TYPE.vcpu=2
-```
-
-This builds the equivalent dict `{vcpu: 16, memory: 32, arch: "arm64"}` using the same mechanism as other nested SCT config parameters (e.g. `append_scylla_yaml`).
-
-### Literal instance type (backward compatible)
-
-If you already know the exact instance type you want, use it directly — no resolution happens:
-
-```yaml
-db_instance_type: 'i4i.2xlarge'
-```
+Literal instance type strings (like `i4i.4xlarge`) still work and bypass the resolution system for backward compatibility.
 
 ## Constraint Syntax
 
-### YAML dict format (in config files)
+You can specify constraints in YAML configuration files or via environment variables.
+
+### YAML format
+Constraints are defined as a dictionary under the role's instance type parameter.
 
 ```yaml
-db_instance_type:
-  vcpu: 8              # exact match (required)
-  memory: 32           # minimum 32 GB (plain int = minimum, unit always GB)
-  disk: 500            # minimum 500 GB local disk (plain int = minimum, unit always GB)
-  arch: arm64          # optional: force architecture (accepts: arm64, arm, x86_64, x86)
+instance_type_db:
+  vcpu: 8
+  memory: 32
+  arch: arm64
 ```
 
-### Advanced operators (optional)
+### Environment variables
+Use dot notation to set specific constraint fields.
 
-For power users who need more precise control:
-
-```yaml
-db_instance_type:
-  vcpu: "8-16"         # range: 8 to 16 vCPUs
-  memory: ">64"        # more than 64 GB
-  disk: "500-2048"     # range: 500 GB to 2 TB local disk
+```bash
+export SCT_INSTANCE_TYPE_DB.VCPU=8
+export SCT_INSTANCE_TYPE_DB.MEMORY=32
 ```
 
-## Constraint Reference
+### Constraint Fields
 
-| Field | Description | Operators | Units | Required? |
-|-------|-------------|-----------|-------|-----------|
-| `vcpu` | Number of virtual CPUs | exact, range (`"8-16"`) | plain int | **Yes** |
-| `memory` | RAM size (minimum) | plain int (min), `>`, `<`, `>=`, range | GB (always) | No |
-| `disk` | Local disk size per disk (minimum) | plain int (min), `>`, `<`, `>=`, range | GB (always) | No (db role: must have local disk) |
-| `arch` | CPU architecture | exact only | `arm64`/`arm`, `x86_64`/`x86` | No (aws=`arm64`, others=`x86_64`) |
+| Field | Aliases | Type | Required | Default | Description |
+|-------|---------|------|----------|---------|-------------|
+| vcpu | vcpus | int or range | YES | - | Number of virtual CPUs |
+| memory | memory_gb | int, float, or string | no | any | RAM in GB |
+| disk | local_disk_gb | int, float, or string | no | auto for db roles | Local disk in GB |
+| arch | - | string | no | per-cloud default | x86_64 or arm64 |
 
-**Plain integers**: For `memory` and `disk`, a plain integer always means "minimum GB". `memory: 32` is equivalent to `memory: ">=32"`.
-
-**Architecture shorthands**: `arm` is shorthand for `arm64`, `x86` is shorthand for `x86_64`.
-
-### Operator examples
-
-| Syntax | Meaning |
-|--------|---------|
-| `vcpu: 16` | Exactly 16 vCPUs |
-| `vcpu: "8-16"` | Between 8 and 16 vCPUs |
-| `memory: 32` | At least 32 GB (plain int = minimum) |
-| `memory: ">64"` | More than 64 GB |
-| `disk: "500-2048"` | Between 500 GB and 2 TB |
+### Operators and Units
+- **Implicit Minimum**: A plain integer (e.g., `vcpu: 8`) means `vcpu >= 8`.
+- **Comparison Prefixes**: Use `>`, `>=`, `<`, `<=`.
+- **Ranges**: Use a string like `"8-16"`.
+- **Units**: Memory and disk default to GB. You can specify `gb` or `tb`.
+- **Architecture Aliases**: `x86` maps to `x86_64`, and `arm` maps to `arm64`.
+- **Default Architecture**: AWS defaults to `arm64`. Other clouds default to `x86_64`.
 
 ## Selection Algorithm
 
-When you specify constraints, the system:
+The resolver follows these steps to select the best instance:
 
-1. **Filters by cloud** — only considers instances for the active backend
-2. **Filters by architecture** — uses `arch` constraint if specified, otherwise cloud default (aws=arm64, others=x86_64)
-3. **Filters by preferred family** — each role has preferred instance families per cloud (see below)
-4. **Applies constraints** — removes instances that don't satisfy vcpu/memory/disk requirements
-5. **Sorts by**: family preference order → price (cheapest first) → vCPU count (ascending)
-6. **Returns first match** — deterministic, always the same result for the same input
+1. **Filter**: Identify all instance types in the cloud catalog that satisfy every constraint.
+2. **Implicit Local Storage**: For roles named `db`, `db_oracle`, or `zero_token`, the system requires local storage (`local_disk_count > 0`) unless a `disk` constraint is explicitly provided.
+3. **Sort**:
+   - Primary: Preferred family order (defined in the cloud catalog).
+   - Secondary: Hourly price (ascending).
+   - Tertiary: vCPU count (ascending).
+4. **Select**: Return the first match from the sorted list.
 
-### Preferred Families
-
-| Role | AWS | GCE | Azure | OCI |
-|------|-----|-----|-------|-----|
-| db | i8g (ARM), i7i, i4i (x86 fallback) | z3-highmem | Standard_L*s_v4 | DenseIO.E5.Flex |
-| loader | c6i | e2-standard, e2-highcpu | Standard_F*s_v2 | VM.Standard3.Flex |
-| monitor | t3, m6i | n2-highmem | Standard_D*_v4 | VM.Standard.E4.Flex |
-
-### Implicit constraints
-
-- **db role**: Automatically requires `local_disk_count > 0` (NVMe/local SSD) unless explicitly overridden
-- **AWS db**: Defaults to ARM (`i8g`) architecture; use `arch: x86_64` to get `i7i`/`i4i` family
+If no instance matches the criteria, the system raises a `NoMatchingInstanceError` showing the constraints and the search scope.
 
 ## Examples
 
-### Performance test — large DB nodes
-
+### Minimal (vCPU only)
 ```yaml
-db_instance_type:
-  vcpu: 16
-  memory: 64
+instance_type_db:
+  vcpu: 8
+```
+On AWS, this resolves to an `i8g` instance because `arm64` is the default architecture and `i8g` is a preferred family for the `db` role.
 
-loader_instance_type:
+### Multi-role Configuration
+```yaml
+instance_type_db:
   vcpu: 16
-
-monitor_instance_type:
+  memory: ">60"
+instance_type_loader:
+  vcpu: 8
+instance_type_monitor:
   vcpu: 4
 ```
 
-Resolves on AWS to: `i8g.4xlarge` / `c6i.4xlarge` / `m6i.xlarge`
-
-### Force x86 architecture on AWS
-
+### Architecture Override
 ```yaml
-db_instance_type:
+instance_type_db:
   vcpu: 8
   arch: x86_64
 ```
+This forces the use of x86 instances, such as `i4i` on AWS, instead of the `arm64` default.
 
-Resolves to `i7i.2xlarge` instead of the default `i8g.2xlarge`.
-
-### Flexible vCPU for cross-cloud compatibility
-
+### Literal Passthrough
 ```yaml
-# OCI DenseIO starts at 16 vCPU; use range to allow flexibility
-db_instance_type:
-  vcpu: "8-16"
-  memory: 32
+instance_type_db: 'i4i.4xlarge'
 ```
-
-Resolves to 8-vCPU instances on AWS/GCE/Azure, 16-vCPU on OCI (smallest available).
-
-### Minimal CI test
-
-```yaml
-db_instance_type:
-  vcpu: 2
-
-loader_instance_type:
-  vcpu: 2
-
-monitor_instance_type:
-  vcpu: 2
-```
-
-### Multi-role config (full example)
-
-```yaml
-# test-cases/longevity/longevity-100gb-4h.yaml
-db_instance_type:
-  vcpu: 8
-  memory: 32
-
-loader_instance_type:
-  vcpu: 8
-
-monitor_instance_type:
-  vcpu: 2
-
-n_db_nodes: 4
-n_loaders: 2
-n_monitor_nodes: 1
-```
-
-### Environment variable override
-
-```bash
-# Override just the DB vCPU count for a quick test with bigger nodes
-export SCT_DB_INSTANCE_TYPE.vcpu=16
-export SCT_DB_INSTANCE_TYPE.memory=64
-hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/longevity/longevity-100gb-4h.yaml
-```
-
-## Error Handling
-
-If no instance matches your constraints, you get a clear error:
-
-```
-NoMatchingInstanceError: No instance found for role='db', cloud='aws' satisfying:
-  - vcpu: 1024  (no instance has >= 1024 vCPUs)
-  Candidates considered: i8g family (max 64 vCPUs)
-  Suggestion: reduce vcpu constraint or check available families
-```
+The system treats literal strings as-is and skips resolution.
 
 ## CLI Tools
 
-### show-prices
+All sizing commands live under the `sizing` subcommand group.
 
-Display available instances with pricing for a role:
-
+### sizing catalog
+Browse the instance catalog with pricing for a cloud provider.
 ```bash
-$ uv run sct.py show-prices --cloud aws --role db
-
-AWS DB Instances (preferred family: i8g)
-┌──────────────────┬──────┬───────────┬──────────┬──────────┬─────────────┐
-│ Instance Type    │ vCPU │ Memory GB │ Disk GB  │ Arch     │ $/hour      │
-├──────────────────┼──────┼───────────┼──────────┼──────────┼─────────────┤
-│ i8g.large        │    2 │        16 │      468 │ arm64    │ $0.15       │
-│ i8g.xlarge       │    4 │        32 │      937 │ arm64    │ $0.31       │
-│ i8g.2xlarge      │    8 │        64 │    1,875 │ arm64    │ $0.62       │
-│ i8g.4xlarge      │   16 │       128 │    3,750 │ arm64    │ $1.24       │
-│ i8g.8xlarge      │   32 │       256 │    7,500 │ arm64    │ $2.48       │
-│ i8g.16xlarge     │   64 │       512 │   15,000 │ arm64    │ $4.96       │
-└──────────────────┴──────┴───────────┴──────────┴──────────┴─────────────┘
+uv run sct.py sizing catalog --cloud aws --role db
+uv run sct.py sizing catalog --cloud oci --family DenseIO.E5
 ```
 
-### translate-size
-
-Show how constraints resolve per cloud:
-
+### sizing update-catalog
+Fetch the latest instance data from cloud provider APIs to refresh local catalogs.
 ```bash
-$ uv run sct.py translate-size --config test-cases/longevity/longevity-100gb-4h.yaml
-
-Constraint: db_instance_type = {vcpu: 8, memory: 32}
-
-  AWS:   i8g.2xlarge    (8 vCPU, 64 GB, 1875 GB NVMe, arm64, $0.62/hr)
-  GCE:   z3-highmem-8   (8 vCPU, 64 GB, 2x375 GB SSD, x86_64)
-  Azure: Standard_L8s_v4 (8 vCPU, 64 GB, 1x1788 GB NVMe, x86_64)
-  OCI:   DenseIO.E5.Flex:4:64 (4 oCPU/8 vCPU, 64 GB, local NVMe)
-
-Constraint: loader_instance_type = {vcpu: 8}
-
-  AWS:   c6i.2xlarge    (8 vCPU, 16 GB, x86_64, $0.34/hr)
-  GCE:   e2-standard-8  (8 vCPU, 32 GB, x86_64)
-  Azure: Standard_F8s_v2 (8 vCPU, 16 GB, x86_64)
-  OCI:   VM.Standard3.Flex:4:32 (4 oCPU/8 vCPU, 32 GB)
+uv run sct.py sizing update-catalog --cloud aws
+uv run sct.py sizing update-catalog --cloud all
 ```
 
-### update-catalog
-
-Refresh the instance catalog from live cloud APIs:
-
+### sizing resolve
+Resolve hardware constraints to instance types across all clouds.
 ```bash
-# Update all clouds
-uv run sct.py update-catalog
+uv run sct.py sizing resolve --vcpu 8 --role db
+uv run sct.py sizing resolve --vcpu 8-16 --memory ">60" --role db
+uv run sct.py sizing resolve --vcpu 4 --arch x86_64 --role loader
+```
 
-# Update specific cloud
-uv run sct.py update-catalog --cloud aws
+### sizing preview
+Preview how a config file resolves instance types across all clouds.
+```bash
+uv run sct.py sizing preview test-cases/my-test.yaml
 ```
 
 ## Catalog Management
 
-Instance specs and pricing live in `data/instance_catalog/`:
+Catalog files are stored in `data/instance_catalog/{aws,gce,azure,oci}.yaml`.
 
-```
-data/instance_catalog/
-├── aws.yaml       # i8g, i7i, i4i, c6i, m6i, t3
-├── gce.yaml       # z3-highmem, e2-standard, e2-highcpu, n2-highmem
-├── azure.yaml     # Standard_L, Standard_F, Standard_D
-└── oci.yaml       # DenseIO.E5, VM.Standard3, VM.Standard.E4
-```
+Each entry in the catalog includes:
+- Instance name and family
+- Hardware specs: vCPUs, memory (GB), architecture
+- Storage: Local disk count and total local disk size (GB)
+- Price: Hourly cost
 
-Catalog files are generated by `sct.py update-catalog` (queries cloud pricing APIs) and can also be manually edited for new families.
-
-## Migration Guide
-
-### Migrating existing test configs
-
-If your config currently uses cloud-specific instance types:
-
-**Before** (cloud-specific, one backend only):
-```yaml
-instance_type_db: 'i4i.2xlarge'
-gce_instance_type_db: 'z3-highmem-16'
-azure_instance_type_db: 'Standard_L16s_v4'
-```
-
-**After** (single line, works on all backends):
-```yaml
-db_instance_type:
-  vcpu: 8
-  memory: 32
-```
-
-### How to migrate
-
-1. Look at the instance type you're currently using and note its vCPU/memory specs
-2. Use `show-prices` to see what's available:
-   ```bash
-   uv run sct.py show-prices --cloud aws --role db
-   ```
-3. Write constraints that match your hardware needs
-4. Verify resolution with `translate-size`:
-   ```bash
-   uv run sct.py translate-size --config your-test.yaml
-   ```
-5. Confirm the resolved types match what you had before (or better)
-
-### Common migration patterns
-
-**DB nodes** — typically need local NVMe storage. Just specify vCPU count:
-```yaml
-# Was: instance_type_db: 'i4i.2xlarge' (8 vCPU, 64 GB, NVMe)
-# Now: system picks i8g.2xlarge (ARM, cheaper, same specs)
-db_instance_type:
-  vcpu: 8
-```
-
-**DB nodes — force x86** (if your workload requires it):
-```yaml
-db_instance_type:
-  vcpu: 8
-  arch: x86
-# Resolves to i7i.2xlarge
-```
-
-**Loader nodes** — compute-optimized, no local disk needed:
-```yaml
-# Was: instance_type_loader: 'c6i.2xlarge' (8 vCPU)
-loader_instance_type:
-  vcpu: 8
-```
-
-**Monitor nodes** — minimal resources:
-```yaml
-# Was: instance_type_monitor: 't3.large' (2 vCPU)
-monitor_instance_type:
-  vcpu: 2
-```
-
-## Supported Parameters
-
-All 5 roles support constraint syntax:
-
-| Parameter | Role | Description |
-|-----------|------|-------------|
-| `db_instance_type` | db | Database nodes |
-| `oracle_instance_type` | db_oracle | Oracle comparison nodes |
-| `zero_token_instance_type` | zero_token | Zero-token nodes |
-| `loader_instance_type` | loader | Stress tool nodes |
-| `monitor_instance_type` | monitor | Monitoring stack |
+The catalog also defines `preferred_families` for different roles and `cloud_defaults` for settings like architecture. You can update these by running `update-catalog` or by editing the YAML files.
 
 ## Backends
 
-| Backend | Constraint resolution |
-|---------|----------------------|
-| `aws` | Full resolution from catalog |
-| `gce` | Full resolution from catalog |
-| `azure` | Full resolution from catalog |
-| `oci` | Full resolution from catalog |
-| `docker` | Skipped with info log (no instance types) |
-| `baremetal` | Skipped with info log (pre-existing cluster) |
-| `k8s-*` | Skipped with info log (pod resources managed separately) |
+- **AWS, GCE, Azure, OCI**: Support full constraint resolution.
+- **Docker, baremetal, k8s-local-kind**: Skip resolution. The system logs a message and uses the provided values directly.
+- **Kubernetes**: `k8s-eks` uses the AWS resolver, and `k8s-gke` uses the GCE resolver.
 
-> **Note**: k8s backends (EKS/GKE) use the same `*_instance_type` parameters for worker node pools. Constraint resolution should work for these out of the box once tested — postponed to a follow-up.
+## Implementation Details
+
+The resolution process is integrated into the `SCTConfiguration` lifecycle:
+
+1. `_resolve_instance_sizes()` executes during `SCTConfiguration.__init__` after environment variables are merged.
+2. The system checks the `cluster_backend` to select the appropriate cloud catalog.
+3. For each role-based instance parameter (e.g., `instance_type_db`, `gce_instance_type_db`), the system checks the value type.
+4. If the value is a dictionary, the resolver finds the best matching instance string.
+5. If the value is a string, it is used as a literal.
