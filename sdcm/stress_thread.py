@@ -349,6 +349,7 @@ class CassandraStressThread(DockerBasedStressThread):
             jvm_opts = ""
             if cs_extra_jvm_opts := self.params.get("cs_extra_jvm_opts"):
                 jvm_opts = f" -e JVM_OPTS='{cs_extra_jvm_opts}'"
+                LOGGER.info("Passing JVM_OPTS to cassandra-stress container: %s", cs_extra_jvm_opts)
             cmd_runner = cleanup_context = RemoteDocker(
                 loader,
                 self.docker_image_name,
@@ -393,6 +394,13 @@ class CassandraStressThread(DockerBasedStressThread):
             hdrh_logger_context = contextlib.nullcontext()
 
         LOGGER.info("Stress command:\n%s", stress_cmd)
+
+        if self.params.get("cs_extra_jvm_opts"):
+            try:
+                env_check = cmd_runner.run("echo JVM_OPTS=$JVM_OPTS", ignore_status=True, verbose=False)
+                LOGGER.info("JVM_OPTS env inside container: %s", env_check.stdout.strip())
+            except Exception:  # pylint: disable=broad-except
+                LOGGER.debug("Could not verify JVM_OPTS inside container", exc_info=True)
 
         tag = f"TAG: loader_idx:{loader_idx}-cpu_idx:{cpu_idx}-keyspace_idx:{keyspace_idx}"
 
