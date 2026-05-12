@@ -57,6 +57,8 @@ from unit_tests.lib.fake_remoter import FakeRemoter
 from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
 
 
+UNIT_TESTS_DIR = Path(__file__).parent
+
 pytest_plugins = ["pytester"]
 
 
@@ -122,6 +124,12 @@ def events_function_scope():
 @pytest.fixture(scope="session")
 def prom_address():
     yield start_metrics_server()
+
+
+@pytest.fixture(scope="session")
+def test_data_dir() -> Path:
+    """Return the path to unit_tests/test_data/."""
+    return UNIT_TESTS_DIR / "test_data"
 
 
 @contextmanager
