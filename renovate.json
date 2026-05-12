@@ -30,7 +30,13 @@
     {
       "groupName": "All pip dependencies",
       "matchManagers": ["pep621"],
-      "packageNames": ["!scylla-driver"],
+      "packageNames": ["!scylla-driver", "!elasticsearch"],
+      "enabled": true
+    },
+    {
+      "matchPackageNames": ["elasticsearch"],
+      "matchManagers": ["pep621"],
+      "allowedVersions": "<9",
       "enabled": true
     },
     {

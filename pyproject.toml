@@ -28,7 +28,7 @@ dependencies = [
     "confluent-kafka[avro]==2.12.1",
     "deepdiff==8.6.1",
     "docker==7.1.0",
-    "elasticsearch==9.2.0",
+    "elasticsearch>=8.17.2,<9",  # ES server only supports protocol version 7/8
     "fabric==3.2.2",
     "fastavro==1.11.1",
     "gimme-aws-creds==2.8.2",
