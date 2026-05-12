@@ -137,7 +137,6 @@ def get_alternative_zones(region: str, exhausted_zone: str, machine_types: list[
             return []
         alternatives = [z for z in zone_letters if z != exhausted_letter]
 
-    random.shuffle(alternatives)
     return alternatives
 
 
