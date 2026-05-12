@@ -2929,6 +2929,7 @@ class SCTConfiguration(dict):
         "eu-west-2",
         "us-west-2",
         "us-east-1",
+        "us-east-2",
         "eu-north-1",
         "eu-central-1",
         "eu-west-3",
