@@ -69,23 +69,47 @@ class AwsVpcPeering:
         return origin_vpx, target_vpx
 
     @staticmethod
+    def _ensure_route(route_table, vpc_peering_id, origin_region, **route_kwargs):
+        try:
+            route_table.create_route(VpcPeeringConnectionId=vpc_peering_id, **route_kwargs)
+        except ClientError as ex:
+            if "already exists" not in str(ex):
+                raise
+            dest_cidr = route_kwargs.get("DestinationCidrBlock") or route_kwargs.get("DestinationIpv6CidrBlock")
+            for route in route_table.routes:
+                existing_cidr = route.destination_cidr_block or route.destination_ipv6_cidr_block
+                if existing_cidr == dest_cidr and route.vpc_peering_connection_id != vpc_peering_id:
+                    LOG.warning(
+                        "Replacing stale route %s in %s rt %s: %s -> %s",
+                        dest_cidr,
+                        origin_region.region_name,
+                        route_table.route_table_id,
+                        route.vpc_peering_connection_id,
+                        vpc_peering_id,
+                    )
+                    origin_region.client.replace_route(
+                        RouteTableId=route_table.route_table_id,
+                        VpcPeeringConnectionId=vpc_peering_id,
+                        **route_kwargs,
+                    )
+                    break
+
+    @staticmethod
     def configure_route_tables(origin_region, target_region, vpc_peering_id):
         for index in range(AwsRegion.SCT_SUBNET_PER_AZ):
             route_table = origin_region.sct_route_table(index=index)
-            try:
-                route_table.create_route(
-                    DestinationCidrBlock=str(target_region.vpc_ipv4_cidr), VpcPeeringConnectionId=vpc_peering_id
-                )
-            except ClientError as ex:
-                if "already exists" not in str(ex):
-                    raise
-            try:
-                route_table.create_route(
-                    DestinationIpv6CidrBlock=str(target_region.vpc_ipv6_cidr), VpcPeeringConnectionId=vpc_peering_id
-                )
-            except ClientError as ex:
-                if "already exists" not in str(ex):
-                    raise
+            AwsVpcPeering._ensure_route(
+                route_table,
+                vpc_peering_id,
+                origin_region,
+                DestinationCidrBlock=str(target_region.vpc_ipv4_cidr),
+            )
+            AwsVpcPeering._ensure_route(
+                route_table,
+                vpc_peering_id,
+                origin_region,
+                DestinationIpv6CidrBlock=str(target_region.vpc_ipv6_cidr),
+            )
 
     @staticmethod
     def open_security_group(origin_region, target_region):
