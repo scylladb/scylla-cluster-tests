@@ -26,8 +26,9 @@ from google.cloud import compute_v1
 
 from sdcm import cluster
 from sdcm.provision.gce.provisioner import GceProvisioner
+from sdcm.provision.gce.instance_provider import _is_zone_exhausted
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration, ssh_connection_ip_type
-from sdcm.provision.provisioner import PricingModel
+from sdcm.provision.provisioner import PricingModel, ProvisionError, ZoneResourcesExhaustedError
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
@@ -36,6 +37,7 @@ from sdcm.sct_events.gce_events import GceInstanceEvent
 from sdcm.utils.gce_utils import (
     GceLoggingClient,
     get_gce_compute_disks_client,
+    get_alternative_zones,
     wait_for_extended_operation,
     gce_private_addresses,
     gce_public_addresses,
@@ -426,6 +428,16 @@ class GCECluster(cluster.BaseCluster):
                     identifier += "%s: %s | " % (disk_type, disk_size)
         return identifier
 
+    @property
+    def is_az_fallback_enabled(self) -> bool:
+        """Return True when AZ fallback on capacity errors is enabled.
+
+        Reads `fallback_to_next_availability_zone`.
+        """
+        if (value := self.params.get("fallback_to_next_availability_zone")) is not None:
+            return bool(value)
+        return False
+
     def _create_instances(self, count, dc_idx=0, instance_type=None):
         region = self._definition_builder.regions[dc_idx]
         pricing_model = PricingModel.SPOT if "spot" in self.instance_provision else PricingModel.ON_DEMAND
@@ -440,12 +452,57 @@ class GCECluster(cluster.BaseCluster):
                     instance_type=instance_type,
                 )
             )
-        return provision_instances_with_fallback(
-            self.provisioners[dc_idx],
-            definitions=definitions,
-            pricing_model=pricing_model,
-            fallback_on_demand=self.params.get("instance_provision_fallback_on_demand"),
-        )
+        try:
+            return provision_instances_with_fallback(
+                self.provisioners[dc_idx],
+                definitions=definitions,
+                pricing_model=pricing_model,
+                fallback_on_demand=self.params.get("instance_provision_fallback_on_demand"),
+            )
+        except (ZoneResourcesExhaustedError, ProvisionError) as exc:
+            if isinstance(exc, ProvisionError) and not _is_zone_exhausted(exc):
+                raise
+            if not self.is_az_fallback_enabled:
+                raise
+            if count > 1:
+                self.log.warning(
+                    "AZ fallback is only supported for single-node provisioning (count=%d), not retrying", count
+                )
+                raise
+            exhausted_zone = self.provisioners[dc_idx].availability_zone
+            self.log.warning("Zone %s exhausted, trying alternative zones in region %s", exhausted_zone, region)
+            alternative_zones = get_alternative_zones(region, exhausted_zone)
+            if not alternative_zones:
+                raise
+            for alt_zone in alternative_zones:
+                self.log.info("Attempting zone %s-%s as fallback", region, alt_zone)
+                try:
+                    new_provisioner = GceProvisioner(
+                        test_id=str(self.test_config.test_id()),
+                        region=region,
+                        availability_zone=alt_zone,
+                        network_name=self._gce_network,
+                    )
+                    result = provision_instances_with_fallback(
+                        new_provisioner,
+                        definitions=definitions,
+                        pricing_model=pricing_model,
+                        fallback_on_demand=self.params.get("instance_provision_fallback_on_demand"),
+                    )
+                    # Update provisioner and zone for this dc_idx on success
+                    self.provisioners[dc_idx] = new_provisioner
+                    self._gce_zone_names[dc_idx] = new_provisioner.availability_zone
+                    self.log.info("Successfully provisioned instances in fallback zone %s-%s", region, alt_zone)
+                    return result
+                except (ZoneResourcesExhaustedError, ProvisionError) as fallback_exc:
+                    if isinstance(fallback_exc, ProvisionError) and not _is_zone_exhausted(fallback_exc):
+                        raise
+                    self.log.warning("Fallback zone %s-%s also exhausted, trying next", region, alt_zone)
+                    continue
+            raise ZoneResourcesExhaustedError(
+                f"All zones in region {region} are exhausted: tried {exhausted_zone} and "
+                f"{[f'{region}-{z}' for z in alternative_zones]}"
+            ) from exc
 
     def _destroy_instance(self, name: str, dc_idx: int):
         target_node = self._get_instances_by_name(dc_idx=dc_idx, name=name)
