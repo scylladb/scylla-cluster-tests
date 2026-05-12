@@ -18,7 +18,7 @@ def call(Map pipelineParams) {
             choice(choices: ["${pipelineParams.get('backend', 'k8s-gke')}", 'k8s-eks', 'k8s-gke'],
                    name: 'backend')
             string(defaultValue: "${pipelineParams.get('region', '')}",
-               description: 'Supported: us-east-1 | eu-west-1 | eu-west-2 | eu-north-1 | eu-central-1 | us-west-2 | random (randomly select region)',
+               description: 'Supported: us-east-1 | us-east-2 | us-west-2 | eu-west-1 | eu-west-2 | eu-west-3 | eu-north-1 | eu-central-1 | ca-central-1 | random (randomly select region)',
                name: 'region')
             string(defaultValue: "${pipelineParams.get('availability_zone', 'b')}",
                description: 'Availability zone',
