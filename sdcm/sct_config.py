@@ -761,6 +761,10 @@ class SCTConfiguration(BaseModel):
         "'instance_provision' type creation failed. "
         "Expected values: true|false (default - false",
     )
+    enable_kernel_panic_checker: Boolean = SctField(
+        description="Enable kernel panic detection by monitoring cloud instance console output for panic indicators. "
+        "When enabled, a background thread monitors each node's console output for kernel panic patterns.",
+    )
     reuse_cluster: String = SctField(
         description="""
         If reuse_cluster is set it should hold test_id of the cluster that will be reused.

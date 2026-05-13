@@ -19,10 +19,11 @@ from sdcm import cluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
 from sdcm.sct_events.system import SpotTerminationEvent
+from sdcm.kernel_panic_checker import AzureKernelPanicChecker
+from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
-from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import resolve_ip_to_dns
 
 LOGGER = logging.getLogger(__name__)
@@ -86,6 +87,16 @@ class AzureNode(cluster.BaseNode):
         self.remoter.sudo("systemctl disable auditd", ignore_status=True)
         self.remoter.sudo("systemctl mask auditd", ignore_status=True)
         self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
+
+    def _create_kernel_panic_checker(self):
+        return AzureKernelPanicChecker(
+            node_name=self.name,
+            vm_name=self._instance.name,
+            region=self.region,
+            resource_group=self._instance._provisioner.resource_group_name,
+            host=self.external_address,
+            logdir=self.logdir,
+        )
 
     def wait_for_cloud_init(self):
         pass  # azure for it, on resources creation
