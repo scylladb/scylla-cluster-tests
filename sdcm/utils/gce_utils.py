@@ -65,7 +65,7 @@ SUPPORTED_REGIONS = {
     "us-east1": "cd",
     "us-east4": "abc",
     "us-west1": "abc",
-    "us-central1": "a",
+    "us-central1": "abcf",
 }
 
 
