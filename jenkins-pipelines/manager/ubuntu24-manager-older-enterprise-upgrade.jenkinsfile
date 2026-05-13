@@ -7,7 +7,7 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
 
-    scylla_version: '2024.1',
+    scylla_version: '2025.1',
 
     // Upgrade from some old Manager release which is still used in production
     // Use Metabase to check it (https://scylladb.metabaseapp.com/question/1685-manager-version)
