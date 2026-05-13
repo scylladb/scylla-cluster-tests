@@ -21,6 +21,7 @@ from socket import socket, AF_INET, AF_INET6, SOCK_STREAM, gaierror, gethostbyna
 from threading import Thread, Lock, Event, BoundedSemaphore
 from abc import abstractmethod, ABC
 from queue import SimpleQueue as Queue
+import codecs
 import ipaddress
 
 from ssh2.channel import Channel
@@ -488,6 +489,10 @@ class Client:
             raise ConnectError("Error connecting to host '%s:%s' - %s" % (host, port, str(error_type))) from ex
 
     @staticmethod
+    def _make_decoder(encoding, stream):
+        return codecs.getincrementaldecoder(encoding)(errors="replace") if stream is not None else None
+
+    @staticmethod
     def _process_output(
         watchers: List[StreamWatcher],
         encoding: str,
@@ -508,6 +513,8 @@ class Client:
             end_time = perf_counter() + timeout
         else:
             end_time = float_info.max
+        stdout_decoder = Client._make_decoder(encoding, stdout_stream)
+        stderr_decoder = Client._make_decoder(encoding, stderr_stream)
         while reader.is_alive() or reader.stdout.qsize() or reader.stderr.qsize():
             if perf_counter() > end_time:
                 reader.stop()
@@ -517,7 +524,7 @@ class Client:
             if stdout_stream is not None and reader.stdout.qsize():
                 try:
                     stdout = reader.stdout.get(timeout=timeout_read_data_chunk)
-                    data = stdout.decode(encoding, errors="ignore") + "\n"
+                    data = stdout_decoder.decode(stdout) + "\n"
                     stdout_stream.write(data)
                     for watcher in watchers:
                         watcher.submit_line(data)
@@ -527,7 +534,7 @@ class Client:
             if stderr_stream is not None and reader.stderr.qsize():
                 try:
                     stderr = reader.stderr.get(timeout=timeout_read_data_chunk)
-                    data = stderr.decode(encoding) + "\n"
+                    data = stderr_decoder.decode(stderr) + "\n"
                     stderr_stream.write(data)
                     for watcher in watchers:
                         watcher.submit_line(data)
@@ -536,6 +543,9 @@ class Client:
                     pass
             if not data_processed:  # prevent unbounded loop in case no data on the streams
                 sleep(timeout_read_data_chunk or 0.5)
+        for decoder, stream in ((stdout_decoder, stdout_stream), (stderr_decoder, stderr_stream)):
+            if decoder is not None:
+                stream.write(decoder.decode(b"", final=True))
         return True
 
     @staticmethod
@@ -553,6 +563,8 @@ class Client:
             end_time = perf_counter() + timeout
         else:
             end_time = float_info.max
+        stdout_decoder = Client._make_decoder(encoding, stdout_stream)
+        stderr_decoder = Client._make_decoder(encoding, stderr_stream)
         while LIBSSH2_ERROR_EAGAIN in (eof_result, stdout_size, stderr_size) or stdout_size > 0 or stderr_size > 0:
             if perf_counter() > end_time:
                 return False
@@ -563,9 +575,12 @@ class Client:
                 stdout_size, stdout_chunk = channel.read()
                 stderr_size, stderr_chunk = channel.read_stderr()
             if stdout_chunk and stdout_stream is not None:
-                stdout_stream.write(stdout_chunk.decode(encoding))
+                stdout_stream.write(stdout_decoder.decode(stdout_chunk))
             if stderr_chunk and stderr_stream is not None:
-                stderr_stream.write(stderr_chunk.decode(encoding))
+                stderr_stream.write(stderr_decoder.decode(stderr_chunk))
+        for decoder, stream in ((stdout_decoder, stdout_stream), (stderr_decoder, stderr_stream)):
+            if decoder is not None:
+                stream.write(decoder.decode(b"", final=True))
         return True
 
     def check_if_alive(self, timeout: NullableTiming = __DEFAULT__):
