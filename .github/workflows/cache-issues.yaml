@@ -18,22 +18,78 @@ jobs:
       - run: |
           set -euo pipefail
 
-          MAX_RETRIES=3
+          fetch_issues_graphql() {
+            local repo="$1"
+            local state="$2"
+            local output_file="$3"
+            local gql_state
+            gql_state=$(echo "$state" | tr '[:lower:]' '[:upper:]')
+            local cursor=""
+            local after_clause=""
 
-          fetch_with_retry() {
-            local output_file="$1"
-            shift
-            local attempt=1
-            while [ $attempt -le $MAX_RETRIES ]; do
-              if "$@" > "$output_file"; then
-                return 0
+            while true; do
+              if [ -n "$cursor" ]; then
+                after_clause=", after: \"$cursor\""
               fi
-              echo "  Attempt $attempt/$MAX_RETRIES failed, retrying in 10s..."
-              sleep 10
-              attempt=$((attempt + 1))
+              response=$(gh api graphql -f query="
+                query {
+                  repository(owner: \"scylladb\", name: \"$repo\") {
+                    issues(states: [$gql_state], first: 100, orderBy: {field: CREATED_AT, direction: ASC}$after_clause) {
+                      pageInfo { hasNextPage endCursor }
+                      nodes {
+                        number
+                        state
+                        labels(first: 10) { nodes { name } }
+                        title
+                      }
+                    }
+                  }
+                }
+              ")
+              echo "$response" | jq -r '.data.repository.issues.nodes[] | "\(.number),\(.state | ascii_downcase),\([.labels.nodes[].name] | join("|")),\(.title)"' >> "$output_file"
+
+              has_next=$(echo "$response" | jq -r '.data.repository.issues.pageInfo.hasNextPage')
+              cursor=$(echo "$response" | jq -r '.data.repository.issues.pageInfo.endCursor')
+              if [ "$has_next" != "true" ]; then
+                break
+              fi
             done
-            echo "ERROR: Failed after $MAX_RETRIES attempts: $*"
-            return 1
+          }
+
+          fetch_prs_graphql() {
+            local repo="$1"
+            local states="$2"
+            local output_file="$3"
+            local cursor=""
+            local after_clause=""
+
+            while true; do
+              if [ -n "$cursor" ]; then
+                after_clause=", after: \"$cursor\""
+              fi
+              response=$(gh api graphql -f query="
+                query {
+                  repository(owner: \"scylladb\", name: \"$repo\") {
+                    pullRequests(states: [$states], first: 100, orderBy: {field: CREATED_AT, direction: ASC}$after_clause) {
+                      pageInfo { hasNextPage endCursor }
+                      nodes {
+                        number
+                        state
+                        labels(first: 10) { nodes { name } }
+                        title
+                      }
+                    }
+                  }
+                }
+              ")
+              echo "$response" | jq -r '.data.repository.pullRequests.nodes[] | "\(.number),\(.state | ascii_downcase),\([.labels.nodes[].name] | join("|")),\(.title)"' >> "$output_file"
+
+              has_next=$(echo "$response" | jq -r '.data.repository.pullRequests.pageInfo.hasNextPage')
+              cursor=$(echo "$response" | jq -r '.data.repository.pullRequests.pageInfo.endCursor')
+              if [ "$has_next" != "true" ]; then
+                break
+              fi
+            done
           }
 
           mkdir -p issues
@@ -41,26 +97,16 @@ jobs:
 
           for repo in scylladb scylla-enterprise scylla-manager scylla-operator scylla-cluster-tests scylla-dtest qa-tasks scylla-tools-java siren scylla-drivers python-driver ; do
             echo "Fetching issues for scylladb/$repo..."
-            > issues/scylladb_$repo.csv
+            > "issues/scylladb_$repo.csv"
             for state in open closed; do
-              fetch_with_retry "issues/scylladb_$repo.csv.tmp" \
-                gh api --paginate "repos/scylladb/$repo/issues?state=$state&per_page=100&direction=asc" \
-                  --jq '.[] | select(.pull_request == null) | "\(.number),\(.state),\([.labels[].name] | join("|")),\(.title)"'
-              cat "issues/scylladb_$repo.csv.tmp" >> "issues/scylladb_$repo.csv"
-              rm -f "issues/scylladb_$repo.csv.tmp"
+              fetch_issues_graphql "$repo" "$state" "issues/scylladb_$repo.csv"
             done
             count=$(wc -l < "issues/scylladb_$repo.csv")
             echo "  Total issues: $count"
 
             echo "Fetching PRs for scylladb/$repo..."
-            > issues/pull-requests/scylladb_$repo.csv
-            for state in open closed; do
-              fetch_with_retry "issues/pull-requests/scylladb_$repo.csv.tmp" \
-                gh api --paginate "repos/scylladb/$repo/pulls?state=$state&per_page=100&direction=asc" \
-                  --jq '.[] | "\(.number),\(if .merged_at then "MERGED" elif .state == "closed" then "closed" else .state end),\([.labels[].name] | join("|")),\(.title)"'
-              cat "issues/pull-requests/scylladb_$repo.csv.tmp" >> "issues/pull-requests/scylladb_$repo.csv"
-              rm -f "issues/pull-requests/scylladb_$repo.csv.tmp"
-            done
+            > "issues/pull-requests/scylladb_$repo.csv"
+            fetch_prs_graphql "$repo" "OPEN, CLOSED, MERGED" "issues/pull-requests/scylladb_$repo.csv"
             count=$(wc -l < "issues/pull-requests/scylladb_$repo.csv")
             echo "  Total PRs: $count"
           done
