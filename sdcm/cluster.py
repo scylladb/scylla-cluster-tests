@@ -455,6 +455,7 @@ class BaseNode(AutoSshContainerMixin):
         self.stop_wait_db_up_event = threading.Event()
         self.lock = threading.Lock()
 
+        self.kernel_panic_checker = None
         self.running_nemesis = None
 
         # We should disable bootstrap when we create nodes to establish the cluster,
@@ -598,6 +599,25 @@ class BaseNode(AutoSshContainerMixin):
                         "Encountered an unhadled exception while changing 'perf_event_paranoid' value", exc_info=True
                     )
         self._add_node_to_argus()
+        self._start_kernel_panic_checker()
+
+    def _create_kernel_panic_checker(self):
+        return None
+
+    def _start_kernel_panic_checker(self):
+        if not self.parent_cluster.params.get("enable_kernel_panic_checker"):
+            return
+        self.kernel_panic_checker = self._create_kernel_panic_checker()
+        if self.kernel_panic_checker:
+            self.kernel_panic_checker.start()
+            LOGGER.debug("Started kernel panic monitoring for node %s", self.name)
+
+    def _stop_kernel_panic_checker(self):
+        if self.kernel_panic_checker:
+            LOGGER.debug("Stopping kernel panic monitoring for node %s", self.name)
+            self.kernel_panic_checker.stop()
+            self.kernel_panic_checker.join(timeout=5)
+            self.kernel_panic_checker = None
 
     def _add_node_to_argus(self):
         try:
@@ -1631,6 +1651,7 @@ class BaseNode(AutoSshContainerMixin):
             return None
 
     def destroy(self):
+        self._stop_kernel_panic_checker()
         self.stop_task_threads()
         if self.remoter:
             self.remoter.stop()

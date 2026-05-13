@@ -40,6 +40,7 @@ from sdcm.utils.gce_utils import (
     gce_set_labels,
 )
 from sdcm.wait import exponential_retry
+from sdcm.kernel_panic_checker import GCPKernelPanicChecker
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
@@ -124,6 +125,16 @@ class GCENode(cluster.BaseNode):
         time.sleep(10)
 
         super().init()
+
+    def _create_kernel_panic_checker(self):
+        return GCPKernelPanicChecker(
+            node_name=self.name,
+            instance_name=self._instance.name,
+            project=self.project,
+            zone=self.zone,
+            host=self.external_address,
+            logdir=self.logdir,
+        )
 
     def wait_for_cloud_init(self):
         self.remoter.is_up(timeout=300)

@@ -217,6 +217,8 @@ pre_filter_unavailable_availability_zones: true
 
 enable_argus: true
 
+enable_kernel_panic_checker: true
+
 # the default stress tools are now defined a separate file for each /default/docker_image/[tool]/values_[tool].yaml
 # cause limitation dependabot have related to us putting all of them in same dockerhub repository
 stress_image: {}

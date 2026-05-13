@@ -52,6 +52,7 @@ from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
 from sdcm.utils.common import list_instances_aws
+from sdcm.kernel_panic_checker import AWSKernelPanicChecker
 from sdcm.utils.decorators import retrying
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import to_inet_ntop_format
@@ -730,6 +731,15 @@ class AWSNode(cluster.BaseNode):
         for tag in self._instance.tags:
             if tag["Key"] == "ZeroTokenNode" and tag["Value"] == "True":
                 self._is_zero_token_node = True
+
+    def _create_kernel_panic_checker(self):
+        return AWSKernelPanicChecker(
+            node_name=self.name,
+            instance_id=self._instance.id,
+            region=self._ec2_service.meta.client.meta.region_name,
+            host=self.external_address,
+            logdir=self.logdir,
+        )
 
     def wait_for_cloud_init(self):
         self.remoter.is_up(timeout=300)

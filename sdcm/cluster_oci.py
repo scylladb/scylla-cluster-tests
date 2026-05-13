@@ -19,6 +19,7 @@ from functools import cached_property
 from typing import Dict, List
 
 from sdcm import cluster
+from sdcm.kernel_panic_checker import OCIKernelPanicChecker
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.provision.oci.provisioner import OciProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
@@ -28,6 +29,7 @@ from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
 from sdcm.utils.net import resolve_ip_to_dns
+from sdcm.utils.oci_utils import get_oci_compartment_id
 
 LOGGER = logging.getLogger(__name__)
 SPOT_TERMINATION_CHECK_DELAY = 15
@@ -85,6 +87,33 @@ class OciNode(cluster.BaseNode):
     def wait_for_cloud_init(self):
         # NOTE: cloud-init gets checked by sdcm/provision/helpers/cloud_init
         pass
+
+    def init(self) -> None:
+        super().init()
+
+    def _create_kernel_panic_checker(self):
+        instance_id = self._get_oci_instance_id()
+        if not instance_id:
+            return None
+        return OCIKernelPanicChecker(
+            node_name=self.name,
+            instance_id=instance_id,
+            compartment_id=get_oci_compartment_id(),
+            region=self.region,
+            host=self.external_address,
+            logdir=self.logdir,
+        )
+
+    def _get_oci_instance_id(self) -> str:
+        """Resolve the OCI instance OCID from the provisioner cache."""
+        try:
+            provisioner = self.parent_cluster.provisioners[self.dc_idx]
+            vm_provider = provisioner._vm_provider  # noqa: SLF001
+            instance = vm_provider._resolve_instance(self._instance.name)  # noqa: SLF001
+            return instance.id if instance else ""
+        except (AttributeError, IndexError):
+            LOGGER.warning("Could not resolve OCI instance ID for %s", self.name)
+            return ""
 
     @cached_property
     def tags(self) -> Dict[str, str]:

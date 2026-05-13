@@ -901,6 +901,7 @@ class ScyllaLogCollector(LogCollector):
             "-u scylla-housekeeping-daily.service -o short-precise",
             search_locally=True,
         ),
+        FileLog(name="console_output.log", search_locally=True),
         FileLog(name="system_*", search_locally=True),
         FileLog(name="kallsyms_*", search_locally=True),
         FileLog(name="lsof_*", search_locally=True),
@@ -1098,6 +1099,7 @@ class LoaderLogCollector(LogCollector):
         ),
         CommandLog(name="cloud-init-output.log", command="cat /var/log/cloud-init-output.log"),
         CommandLog(name="cloud-init.log", command="cat /var/log/cloud-init.log"),
+        FileLog(name="console_output.log", search_locally=True),
     ]
 
     def collect_logs(self, local_search_path=None) -> list[str]:
@@ -1136,6 +1138,7 @@ class MonitorLogCollector(LogCollector):
         GrafanaScreenShot(name="grafana-screenshot"),
         CommandLog(name="cloud-init-output.log", command="cat /var/log/cloud-init-output.log"),
         CommandLog(name="cloud-init.log", command="cat /var/log/cloud-init.log"),
+        FileLog(name="console_output.log", search_locally=True),
     ]
     cluster_log_type = "monitor-set"
     cluster_dir_prefix = "monitor-set"

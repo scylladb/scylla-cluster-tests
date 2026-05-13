@@ -689,6 +689,15 @@ instance_provision_fallback_on_demand: create instance on_demand provision type 
 **type:** bool
 
 
+## **enable_kernel_panic_checker** / SCT_ENABLE_KERNEL_PANIC_CHECKER
+
+Enable kernel panic detection by monitoring cloud instance console output for panic indicators. When enabled, a background thread monitors each node's console output for kernel panic patterns.
+
+**default:** True
+
+**type:** bool
+
+
 ## **reuse_cluster** / SCT_REUSE_CLUSTER
 
 If reuse_cluster is set it should hold test_id of the cluster that will be reused.<br>`reuse_cluster: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71`
