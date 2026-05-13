@@ -292,6 +292,12 @@ class SubtestsSuccessTest(ClusterTesterForTests):
     ],
 )
 def test_tester_subclass(pytester, test_class, results, outcomes):
+    # pytester sets HOME to its temp path; create a mock SSH key file
+    # so the ExistingFile validator for user_credentials_path succeeds.
+    ssh_dir = pytester.path / ".ssh"
+    ssh_dir.mkdir()
+    (ssh_dir / "scylla_test_id_ed25519").write_text("mock-key")
+
     # Create a pytest file with the test class. We cannot just use the class directly
     # because it would not be collected. If we made it collectable it would be run as part of standard test run as well.
     # Which we do not want, as it is intended only to be run with pytester
