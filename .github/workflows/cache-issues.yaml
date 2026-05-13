@@ -18,23 +18,21 @@ jobs:
       - run: |
           set -euo pipefail
 
-          BATCH_SIZE=5000
           MAX_RETRIES=3
-          TEMPLATE='{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}}|{{end}},{{.title}}{{println ""}}{{end}}'
 
           fetch_with_retry() {
-            local cmd="$1"
-            local output_file="$2"
+            local output_file="$1"
+            shift
             local attempt=1
             while [ $attempt -le $MAX_RETRIES ]; do
-              if eval "$cmd" >> "$output_file"; then
+              if "$@" > "$output_file"; then
                 return 0
               fi
-              echo "Attempt $attempt/$MAX_RETRIES failed, retrying in 10s..."
+              echo "  Attempt $attempt/$MAX_RETRIES failed, retrying in 10s..."
               sleep 10
               attempt=$((attempt + 1))
             done
-            echo "ERROR: Failed after $MAX_RETRIES attempts: $cmd"
+            echo "ERROR: Failed after $MAX_RETRIES attempts: $*"
             return 1
           }
 
@@ -45,14 +43,26 @@ jobs:
             echo "Fetching issues for scylladb/$repo..."
             > issues/scylladb_$repo.csv
             for state in open closed; do
-              fetch_with_retry "gh issue list --state $state --json number,state,labels,title --limit $BATCH_SIZE --template '$TEMPLATE' --repo scylladb/$repo" "issues/scylladb_$repo.csv"
+              fetch_with_retry "issues/scylladb_$repo.csv.tmp" \
+                gh api --paginate "repos/scylladb/$repo/issues?state=$state&per_page=100&direction=asc" \
+                  --jq '.[] | select(.pull_request == null) | "\(.number),\(.state),\([.labels[].name] | join("|")),\(.title)"'
+              cat "issues/scylladb_$repo.csv.tmp" >> "issues/scylladb_$repo.csv"
+              rm -f "issues/scylladb_$repo.csv.tmp"
             done
+            count=$(wc -l < "issues/scylladb_$repo.csv")
+            echo "  Total issues: $count"
 
             echo "Fetching PRs for scylladb/$repo..."
             > issues/pull-requests/scylladb_$repo.csv
-            for state in open closed merged; do
-              fetch_with_retry "gh pr list --state $state --json number,state,labels,title --limit $BATCH_SIZE --template '$TEMPLATE' --repo scylladb/$repo" "issues/pull-requests/scylladb_$repo.csv"
+            for state in open closed; do
+              fetch_with_retry "issues/pull-requests/scylladb_$repo.csv.tmp" \
+                gh api --paginate "repos/scylladb/$repo/pulls?state=$state&per_page=100&direction=asc" \
+                  --jq '.[] | "\(.number),\(if .merged_at then "MERGED" elif .state == "closed" then "closed" else .state end),\([.labels[].name] | join("|")),\(.title)"'
+              cat "issues/pull-requests/scylladb_$repo.csv.tmp" >> "issues/pull-requests/scylladb_$repo.csv"
+              rm -f "issues/pull-requests/scylladb_$repo.csv.tmp"
             done
+            count=$(wc -l < "issues/pull-requests/scylladb_$repo.csv")
+            echo "  Total PRs: $count"
           done
         env:
           GH_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
