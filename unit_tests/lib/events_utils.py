@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import json
 import time
 import shutil
 import tempfile
@@ -82,3 +83,19 @@ class EventsUtilsMixin:
     @classmethod
     def get_raw_events_log(cls):
         return get_events_main_device(_registry=cls.events_processes_registry).raw_events_log
+
+    @property
+    def published_events(self):
+        """Read all published events from the raw events log and return as list of dicts."""
+        events = []
+        raw_log = self.get_raw_events_log()
+        if raw_log.exists():
+            with open(raw_log, "r", encoding="utf-8") as f:
+                for raw_line in f:
+                    stripped = raw_line.strip()
+                    if stripped:
+                        try:
+                            events.append(json.loads(stripped))
+                        except json.JSONDecodeError:
+                            continue
+        return events
