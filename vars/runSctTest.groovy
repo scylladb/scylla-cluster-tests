@@ -140,6 +140,9 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     if [[ -n "${params.oci_image_db ? params.oci_image_db : ''}" ]] ; then
         export SCT_OCI_IMAGE_DB="${params.oci_image_db}"
     fi
+    if [[ -n "${params.oci_instance_type_db ? params.oci_instance_type_db : ''}" ]] ; then
+        export SCT_OCI_INSTANCE_TYPE_DB="${params.oci_instance_type_db}"
+    fi
     if [[ -n "${params.scylla_version ? params.scylla_version : ''}" ]] ; then
         export SCT_SCYLLA_VERSION="${params.scylla_version}"
     fi
