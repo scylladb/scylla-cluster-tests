@@ -707,6 +707,7 @@ class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
             node.remoter.sudo(f"mkdir -p {SCYLLA_SSL_CONF_DIR}")
             node.remoter.send_files(src=f"{ssl_dir}/", dst="/tmp/ssl_conf_tmp/")
             node.remoter.sudo(f"cp -r /tmp/ssl_conf_tmp/. {SCYLLA_SSL_CONF_DIR}/")
+            node.remoter.sudo(f"chown -R scylla:scylla {SCYLLA_SSL_CONF_DIR}")
             node.remoter.run("rm -rf /tmp/ssl_conf_tmp/")
 
         for node in self.db_cluster.nodes:
