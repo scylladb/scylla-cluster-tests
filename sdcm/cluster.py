@@ -4571,6 +4571,8 @@ class BaseCluster:
         kwargs = dict(contact_points=node_ips, port=port, ssl_context=ssl_context)
         if self.test_config.IP_SSH_CONNECTIONS == "public":
             kwargs["allow_control_connection_query_fallback"] = ControlConnectionQueryFallback.SkipPoolCreation
+        elif self.params.get("use_zero_nodes"):
+            kwargs["allow_control_connection_query_fallback"] = ControlConnectionQueryFallback.Fallback
         cluster_driver = ClusterDriver(
             auth_provider=auth_provider,
             compression=compression,
