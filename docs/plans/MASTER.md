@@ -80,6 +80,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Plan | Status | File / PR |
 |------|--------|-----------|
 | Health Check Optimization | `draft` | [health-check-optimization.md](infrastructure/health-check-optimization.md) |
+| Feature-Aware Adaptive Timeouts for Topology Operations | `draft` | [feature-aware-adaptive-topology-timeouts.md](infrastructure/feature-aware-adaptive-topology-timeouts.md) |
 | Full Version Tag Lookup | `draft` | [full-version-tag-lookup.md](config/full-version-tag-lookup.md) |
 | Keystore Improvements | `pending_pr` | [#14055](https://github.com/scylladb/scylla-cluster-tests/pull/14055) |
 
