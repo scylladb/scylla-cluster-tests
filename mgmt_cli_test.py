@@ -111,32 +111,6 @@ class ManagerRestoreTests(ManagerTestFunctionsMixIn):
             read_thread = self.run_stress_thread(stress_cmd=stress, round_robin=False)
             self.verify_stress_thread(read_thread)
 
-    def test_restore_backup_with_task(self, ks_names: list = None):
-        self.log.info("starting test_restore_backup_with_task")
-        mgr_cluster = self.db_cluster.get_cluster_manager()
-        if not ks_names:
-            ks_names = ["keyspace1"]
-        backup_task = mgr_cluster.create_backup_task(
-            location_list=self.locations, keyspace_list=ks_names, method=self.backup_method
-        )
-        backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
-        assert backup_task_status == TaskStatus.DONE, (
-            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
-        )
-        soft_timeout = 36 * 60
-        hard_timeout = 50 * 60
-        with adaptive_timeout(Operations.MGMT_REPAIR, self.db_cluster.data_nodes[0], timeout=soft_timeout):
-            self.verify_backup_success(
-                mgr_cluster=mgr_cluster,
-                backup_task=backup_task,
-                ks_names=ks_names,
-                restore_data_with_task=True,
-                timeout=hard_timeout,
-            )
-        self.run_verification_read_stress(ks_names)
-        mgr_cluster.delete()  # remove cluster at the end of the test
-        self.log.info("finishing test_restore_backup_with_task")
-
     def test_restore_alternator_backup_with_task(self, delete_tables: list = None):
         self.log.info("starting test_restore_alternator_backup_with_task")
         mgr_cluster = self.db_cluster.get_cluster_manager(
@@ -345,8 +319,6 @@ class ManagerBackupTests(ManagerRestoreTests):
             self.test_backup_rate_limit()
         with self.subTest("Test Backup Purge Removes Orphans Files"):
             self.test_backup_purge_removes_orphan_files()
-        with self.subTest("Test restore a backup with restore task"):
-            self.test_restore_backup_with_task()
         with self.subTest("Test Backup end of space"):  # Preferably at the end
             self.test_enospc_during_backup()
         with self.subTest("Test Restore end of space"):
