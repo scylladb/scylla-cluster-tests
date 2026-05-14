@@ -3326,6 +3326,8 @@ class SCTConfiguration(BaseModel):
                     if cmd.startswith("latte"):
                         script_name_regx = re.compile(r"([/\w-]*\.rn)")
                         script_name = script_name_regx.search(cmd).group(1)
+                        if script_name.startswith("scylla-qa-internal"):
+                            continue
                         full_path = pathlib.Path(get_sct_root_path()) / script_name
                         assert full_path.exists(), f"{full_path} doesn't exists, please check your configuration"
 
@@ -3695,6 +3697,8 @@ class SCTConfiguration(BaseModel):
     def _validate_scylla_d_overrides_files_exists(self):
         if scylla_d_overrides_files := self.get("scylla_d_overrides_files"):
             for config_file_path in scylla_d_overrides_files:
+                if config_file_path.startswith("scylla-qa-internal"):
+                    continue
                 config_file = pathlib.Path(get_sct_root_path()) / config_file_path
                 assert config_file.exists(), f"{config_file} doesn't exists, please check your configuration"
 
@@ -3711,7 +3715,7 @@ class SCTConfiguration(BaseModel):
                 self.backend_required_params["aws"].extend(
                     ["ami_id_vector_store", "instance_type_vector_store", "ami_vector_store_user"]
                 )
-                self._check_backend_defaults(backend, self.backend_required_params[backend])
+            self._check_backend_defaults(backend, self.backend_required_params[backend])
         else:
             raise ValueError("Unsupported backend [{}]".format(backend))
 
