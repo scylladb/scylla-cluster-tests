@@ -77,6 +77,8 @@ email_recipients: ['scylla-perf-results@scylladb.com']
 
 use_hdrhistogram: true
 
+cs_extra_jvm_opts: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch'
+
 append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
 append_scylla_yaml:
   auto_snapshot: false
