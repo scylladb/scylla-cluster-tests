@@ -659,6 +659,19 @@ def ignore_aborted_snapshot_upload_storage_io_errors():
         yield
 
 
+@contextmanager
+def ignore_snapshot_listing_oversized_allocation():
+    with ExitStack() as stack:
+        stack.enter_context(
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent,
+                regex=r".*OVERSIZED_ALLOCATION.*storage_service_json::snapshot",
+            )
+        )
+        yield
+
+
 def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):
     """
     helper to decorate a function to run with a list of callables that return context managers
