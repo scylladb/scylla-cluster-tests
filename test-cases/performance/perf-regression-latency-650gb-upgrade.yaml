@@ -29,6 +29,8 @@ backtrace_stall_decoding: false
 email_recipients: ["scylla-perf-results@scylladb.com"]
 use_prepared_loaders: false
 use_hdrhistogram: true
+
+cs_extra_jvm_opts: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch'
 use_placement_group: true
 email_subject_postfix: 'latency during upgrades'
 argus_email_report_template: email_report_performance.yaml

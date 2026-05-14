@@ -1791,8 +1791,8 @@ class SCTConfiguration(dict):
             env="SCT_CS_EXTRA_JVM_OPTS",
             type=str,
             help="Extra JVM options passed to cassandra-stress via JVM_OPTS environment variable. "
-                 "Recommended for low-latency: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch' "
-                 "(requires Java 21+, which cassandra-stress 3.20.6+ ships with).",
+            "Recommended for low-latency: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch' "
+            "(requires Java 21+, which cassandra-stress 3.20.6+ ships with).",
         ),
         dict(
             name="stress_cmd_mv",

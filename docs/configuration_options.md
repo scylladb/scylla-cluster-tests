@@ -2622,8 +2622,7 @@ Extra JVM options passed to cassandra-stress via JVM_OPTS environment variable. 
 
 **default:** N/A
 
-**type:** str
-* appendable
+**type:** str (appendable)
 
 
 ## **stress_cmd_mv** / SCT_STRESS_CMD_MV
