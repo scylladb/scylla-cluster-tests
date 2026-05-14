@@ -153,22 +153,22 @@ def call(Map pipelineParams) {
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-vnodes',
-                                region: 'eu-west-2',
+                                region: 'us-east-2',
                                 versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"', '"test_latency_read_with_nemesis"', '"test_latency_write_with_nemesis"'],
                                 labels: ['master-monthly'],
-                                job_throttle_category: 'SCT-perf-eu-west-2-i8g',
+                                job_throttle_category: 'SCT-perf-us-east-2-i8g',
                                 arch: 'aarch64'
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-vnodes',
-                                region: 'eu-west-2',
+                                region: 'us-east-2',
                                 ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: [],
-                                job_throttle_category: 'SCT-perf-eu-west-2-i8g',
+                                job_throttle_category: 'SCT-perf-us-east-2-i8g',
                                 arch: 'aarch64'
                             ],
                             [
@@ -297,44 +297,44 @@ def call(Map pipelineParams) {
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets',
-                                region: 'eu-west-2',
+                                region: 'us-west-2',
                                 versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_upgrade"'],
                                 labels: ['master-3weeks'],
                                 rolling_upgrade_test: true,
-                                job_throttle_category: 'SCT-perf-eu-west-2-i8g',
+                                job_throttle_category: 'SCT-perf-us-west-2-i8g',
                                 arch: 'aarch64'
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets',
-                                region: 'eu-west-2',
+                                region: 'us-west-2',
                                 ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_upgrade"'],
                                 labels: [],
                                 rolling_upgrade_test: true,
-                                job_throttle_category: 'SCT-perf-eu-west-2-i8g',
+                                job_throttle_category: 'SCT-perf-us-west-2-i8g',
                                 arch: 'aarch64'
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets',
-                                region: 'eu-north-1',
+                                region: 'us-east-2',
                                 versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-3weeks'],
-                                job_throttle_category: 'SCT-perf-eu-north-1-i8g',
+                                job_throttle_category: 'SCT-perf-us-east-2-i8g',
                                 arch: 'aarch64'
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets',
-                                region: 'eu-north-1',
+                                region: 'us-east-2',
                                 ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_read_with_nemesis"', '"test_latency_mixed_with_nemesis"'],
                                 labels: [],
-                                job_throttle_category: 'SCT-perf-eu-north-1-i8g',
+                                job_throttle_category: 'SCT-perf-us-east-2-i8g',
                                 arch: 'aarch64'
                             ],
                             [
