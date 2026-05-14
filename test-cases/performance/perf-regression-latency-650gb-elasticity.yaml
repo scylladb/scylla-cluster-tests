@@ -32,6 +32,8 @@ argus_email_report_template: email_report_performance.yaml
 email_recipients: ["scylla-perf-results@scylladb.com"]
 use_prepared_loaders: false
 use_hdrhistogram: true
+
+cs_extra_jvm_opts: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch'
 email_subject_postfix: 'elasticity test'
 nemesis_double_load_during_grow_shrink_duration: 30
 parallel_node_operations: true

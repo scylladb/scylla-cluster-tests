@@ -1787,6 +1787,14 @@ class SCTConfiguration(dict):
         dict(name="cs_duration", env="SCT_CS_DURATION", type=str, help=""),
         dict(name="cs_debug", env="SCT_CS_DEBUG", type=boolean, help="enable debug for cassandra-stress"),
         dict(
+            name="cs_extra_jvm_opts",
+            env="SCT_CS_EXTRA_JVM_OPTS",
+            type=str,
+            help="Extra JVM options passed to cassandra-stress via JVM_OPTS environment variable. "
+            "Recommended for low-latency: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch' "
+            "(requires Java 21+, which cassandra-stress 3.20.6+ ships with).",
+        ),
+        dict(
             name="stress_cmd_mv",
             env="SCT_STRESS_CMD_MV",
             type=str_or_list,
