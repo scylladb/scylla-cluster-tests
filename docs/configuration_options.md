@@ -3364,6 +3364,16 @@ enable debug for cassandra-stress
 **type:** bool
 
 
+## **cs_extra_jvm_opts** / SCT_CS_EXTRA_JVM_OPTS
+
+Extra JVM options passed to cassandra-stress via JVM_OPTS environment variable. Recommended for low-latency: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch' (requires Java 21+, which cassandra-stress 3.20.6+ ships with).
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
 ## **stress_cmd_mv** / SCT_STRESS_CMD_MV
 
 cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list
