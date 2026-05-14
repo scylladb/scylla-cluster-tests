@@ -10,6 +10,9 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
+import subprocess
+import time
+
 import pytest
 
 from sdcm.stress_thread import CassandraStressThread
@@ -156,6 +159,69 @@ def test_05_cassandra_stress_compression(request, docker_scylla, params, compres
     request.addfinalizer(cleanup_thread)
 
     cs_thread.run()
+
+    output, _ = cs_thread.parse_results()
+    assert "latency mean" in output[0]
+    assert float(output[0]["latency mean"]) > 0
+
+    assert "latency 99th percentile" in output[0]
+    assert float(output[0]["latency 99th percentile"]) > 0
+
+
+def test_06_cassandra_stress_with_extra_jvm_opts(request, docker_scylla, params):
+    jvm_opts = "-XX:+UseZGC -XX:+ZGenerational -Xms512m -Xmx512m -XX:+AlwaysPreTouch"
+    params["cs_extra_jvm_opts"] = jvm_opts
+
+    loader_set = LocalLoaderSetDummy(params=params)
+
+    cmd = (
+        "cassandra-stress write cl=ONE duration=30s -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) "
+        "compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native "
+        "-rate threads=5 -pop seq=1..10000000 -log interval=5"
+    )
+
+    cs_thread = CassandraStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params)
+
+    def cleanup_thread():
+        cs_thread.kill()
+
+    request.addfinalizer(cleanup_thread)
+
+    cs_thread.run()
+
+    # Wait briefly for the Java process to start inside the container
+    time.sleep(5)
+
+    # Find the cassandra-stress container by shell_marker label
+    result = subprocess.run(
+        ["docker", "ps", "--filter", f"label=shell_marker={cs_thread.shell_marker}", "--format", "{{.ID}}"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    container_id = result.stdout.strip().split("\n")[0]
+    assert container_id, "Could not find cassandra-stress container"
+
+    # Verify JVM_OPTS env var is set inside the container
+    result = subprocess.run(
+        ["docker", "exec", container_id, "bash", "-c", "echo $JVM_OPTS"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    actual_jvm_opts = result.stdout.strip()
+    assert actual_jvm_opts == jvm_opts, f"JVM_OPTS not set correctly inside container: {actual_jvm_opts!r}"
+
+    result = subprocess.run(
+        ["docker", "exec", container_id, "bash", "-c", "cat /proc/$(pgrep -x java | head -1)/cmdline | tr '\\0' ' '"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    java_cmdline = result.stdout
+    assert "-XX:+UseZGC" in java_cmdline, f"ZGC flag not found in Java cmdline: {java_cmdline}"
+    assert "-XX:+ZGenerational" in java_cmdline, f"ZGenerational flag not found in Java cmdline: {java_cmdline}"
+    assert "-Xms512m" in java_cmdline, f"-Xms512m not found in Java cmdline: {java_cmdline}"
 
     output, _ = cs_thread.parse_results()
     assert "latency mean" in output[0]
