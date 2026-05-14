@@ -8,6 +8,7 @@ stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=4320m -mode cql3 nat
 
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 60}']
 availability_zone: 'a,b,c'
+simulated_racks: 0
 n_db_nodes: 6
 n_loaders: 3
 
