@@ -488,9 +488,11 @@ class DatabaseOperations(ClusterTester):
             return base_id.replace("-", "")
         return base_id
 
-    def create_keyspace_and_basic_table(self, keyspace_name, table_name="example_table", replication_factor=1):
+    def create_keyspace_and_basic_table(
+        self, keyspace_name, table_name="example_table", replication_factor=1, tablets_config=None
+    ):
         self.log.info("creating keyspace {}".format(keyspace_name))
-        keyspace_existence = self.create_keyspace(keyspace_name, replication_factor)
+        keyspace_existence = self.create_keyspace(keyspace_name, replication_factor, tablets_config=tablets_config)
         assert keyspace_existence, "keyspace creation failed"
         # Keyspaces without tables won't appear in the repair, so the must have one
         self.log.info("creating the table {} in the keyspace {}".format(table_name, keyspace_name))

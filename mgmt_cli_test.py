@@ -506,7 +506,9 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         rf = self.get_rf_based_on_nodes_number() if self.db_node.test_config.MULTI_REGION else 3
         self.create_keyspace_and_basic_table(self.NETWORKSTRATEGY_KEYSPACE_NAME, replication_factor=rf)
 
-        self.create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, replication_factor=0)
+        self.create_keyspace_and_basic_table(
+            self.LOCALSTRATEGY_KEYSPACE_NAME, replication_factor=0, tablets_config=TabletsConfiguration(enabled=False)
+        )
         repair_task = mgr_cluster.create_repair_task()
         task_final_status = repair_task.wait_and_get_final_status(timeout=7200)
         assert task_final_status == TaskStatus.DONE, "Task: {} final status is: {}.".format(
