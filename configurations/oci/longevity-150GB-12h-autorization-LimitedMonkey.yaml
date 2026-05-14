@@ -1,0 +1,12 @@
+# NOTE: it is config-wrapper for the test-cases/longevity/longevity-150GB-12h-autorization-LimitedMonkey.yaml
+
+user_prefix: 'long-150gb-12h-oci'
+
+simulated_racks: 0
+availability_zone: "a,b,c" # use real AZs to balance limited DenseIO shapes usage
+
+# NOTE: set minimal possible DenseIO shape size, it is twice bigger than the 'i4i.2xlarge' used in AWS test
+oci_instance_type_db: "VM.DenseIO.E5.Flex:8" # <shape-name>:<ocpus>:<ram>:<nvmes>
+instance_provision: 'on_demand' # DenseIO shapes cannot be 'spot'
+
+oci_instance_type_loader:  "VM.Standard3.Flex:8:32" # <shape-name>:<ocpus>:<ram>:<nvmes>
