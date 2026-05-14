@@ -336,3 +336,4 @@ vector_store_version: ''
 argus_email_report_template: email_report_template_basic.yaml
 
 c_s_driver_version: '3'
+cs_extra_jvm_opts: ''
