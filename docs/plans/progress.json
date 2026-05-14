@@ -1,5 +1,5 @@
 {
-  "generated": "2026-03-30",
+  "generated": "2026-05-14",
   "plans": [
     {
       "id": "ai-skills-framework",
@@ -49,6 +49,26 @@
       "status": "draft",
       "created": "2026-01-11",
       "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "feature-aware-adaptive-topology-timeouts",
+      "title": "Feature-Aware Adaptive Timeouts for Topology Operations",
+      "file": "infrastructure/feature-aware-adaptive-topology-timeouts.md",
+      "domain": "framework",
+      "status": "draft",
+      "created": "2026-05-14",
+      "phases_total": 5,
+      "phases_done": 0
+    },
+    {
+      "id": "jenkins-reuse-cluster",
+      "title": "Jenkins Pipeline Cluster Reuse",
+      "file": "jenkins/jenkins-reuse-cluster.md",
+      "domain": "ci-cd",
+      "status": "draft",
+      "created": "2026-03-18",
+      "phases_total": 5,
       "phases_done": 0
     },
     {
