@@ -37,7 +37,11 @@ class Argus:
     @classmethod
     def get(cls, init_default=False) -> "Argus":
         if init_default and not cls.INIT_DONE.is_set():
-            cls.init_global(get_argus_client(run_id=os.environ.get("SCT_TEST_ID"), init_global=False))
+            cls.init_global(
+                get_argus_client(
+                    run_id=os.environ.get("SCT_TEST_ID"), init_global=False, use_tunnel=get_argus_use_tunnel_from_env()
+                )
+            )
         return cls.INSTANCE
 
     @property
@@ -55,6 +59,11 @@ class ArgusError(Exception):
         return self._message
 
 
+def get_argus_use_tunnel_from_env() -> bool:
+    val = os.environ.get("SCT_ARGUS_USE_SSH_TUNNEL", "false")
+    return val.lower() in ("true", "yes", "y", "1")
+
+
 def is_uuid(uuid) -> bool:
     if isinstance(uuid, UUID):
         return True
@@ -66,13 +75,17 @@ def is_uuid(uuid) -> bool:
         return False
 
 
-def get_argus_client(run_id: UUID | str, init_global=True) -> ArgusSCTClient:
+def get_argus_client(run_id: UUID | str, use_tunnel: bool, init_global=True) -> ArgusSCTClient:
     if not is_uuid(run_id):
         raise ArgusError("Malformed UUID provided")
 
     creds = KeyStore().get_argus_rest_credentials_per_provider()
     argus_client = ArgusSCTClient(
-        run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers")
+        run_id=run_id,
+        auth_token=creds["token"],
+        base_url=creds["baseUrl"],
+        extra_headers=creds.get("extra_headers"),
+        use_tunnel=use_tunnel,
     )
 
     if init_global:

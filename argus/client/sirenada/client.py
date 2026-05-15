@@ -46,10 +46,10 @@ class ArgusSirenadaClient(ArgusClient):
     }
 
     def __init__(self, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None,
-                 timeout: int = 60, max_retries: int = 3) -> None:
+                 timeout: int = 60, max_retries: int = 3, use_tunnel: bool | None = None) -> None:
         self.results_path: Path | None = None
         super().__init__(auth_token, base_url, api_version, extra_headers=extra_headers,
-                         timeout=timeout, max_retries=max_retries)
+                         timeout=timeout, max_retries=max_retries, use_tunnel=use_tunnel)
 
     def _verify_required_files_exist(self, results_path: Path):
         assert (results_path / self._junit_xml_filename).exists(), "Missing jUnit XML results file!"

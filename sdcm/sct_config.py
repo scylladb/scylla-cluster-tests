@@ -2166,6 +2166,9 @@ class SCTConfiguration(BaseModel):
         description="Dict of the images to use for the stress tools",
     )
     enable_argus: Boolean = SctField(description="Control reporting to argus")
+    argus_use_ssh_tunnel: Boolean = SctField(
+        description="Enable SSH tunnel support in the Argus client connection",
+    )
     cs_populating_distribution: String = SctField(
         description="set c-s parameter '-pop' with gauss/uniform distribution for performance gradual throughput grow tests",
     )
