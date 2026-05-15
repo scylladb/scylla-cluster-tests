@@ -11,6 +11,8 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
+import re
+
 import pytest
 
 from sdcm.stress_thread import get_timeout_from_stress_cmd
@@ -59,3 +61,78 @@ def test_duration_str_to_seconds_function(duration, seconds):
 )
 def test_get_timeout_from_stress_cmd(stress_cmd, timeout):
     assert get_timeout_from_stress_cmd(stress_cmd) == timeout
+
+
+def _apply_gemini_stress_duration(cmd: str, stress_duration: int) -> str:
+    """Mirror of the substitution logic in ClusterTester.run_gemini()."""
+    if "--duration" in cmd:
+        cmd = re.sub(r"(^|\s)--duration\s+\S+", f"\\1--duration {stress_duration}m", cmd)
+    else:
+        cmd = cmd + f" --duration {stress_duration}m"
+    return cmd
+
+
+@pytest.mark.parametrize(
+    "original_cmd, stress_duration, expected_duration",
+    [
+        # Standard case with leading space before --duration
+        pytest.param(
+            " --duration 3h --concurrency 50",
+            60,
+            "--duration 60m",
+            id="leading-space-before-duration",
+        ),
+        # The actual bug: YAML block scalar puts --duration at start (no leading space)
+        pytest.param(
+            "--duration 3h\n--concurrency 50\n--mode mixed",
+            60,
+            "--duration 60m",
+            id="yaml-block-scalar-no-leading-space",
+        ),
+        # YAML block scalar with warmup present (warmup must be left untouched)
+        pytest.param(
+            "--duration 8h\n--warmup 30m\n--concurrency 50",
+            120,
+            "--duration 120m",
+            id="yaml-block-scalar-warmup-untouched",
+        ),
+        # Duration with seconds unit
+        pytest.param(
+            "--duration 600s\n--concurrency 10",
+            30,
+            "--duration 30m",
+            id="duration-in-seconds",
+        ),
+        # Duration at end of command (no trailing whitespace after value)
+        pytest.param(
+            "--concurrency 50\n--duration 3h",
+            45,
+            "--duration 45m",
+            id="duration-at-end-of-command",
+        ),
+        # gemini-1tb-10h.yaml scenario: 10h run should be overridden to custom duration
+        pytest.param(
+            "--duration 8h\n--concurrency 50\n--mode mixed\n--io-worker-pool 2048",
+            60,
+            "--duration 60m",
+            id="10h-test-override-to-1h",
+        ),
+        # stress_duration set but gemini_cmd has no --duration at all → must be injected
+        pytest.param(
+            "--concurrency 50\n--mode mixed",
+            90,
+            "--duration 90m",
+            id="no-duration-in-cmd-stress-duration-injected",
+        ),
+    ],
+)
+def test_run_gemini_stress_duration_substitution(original_cmd, stress_duration, expected_duration):
+    """Verify stress_duration always takes precedence: replaces existing --duration or injects one."""
+    result = _apply_gemini_stress_duration(original_cmd, stress_duration)
+
+    assert expected_duration in result, f"Expected '{expected_duration}' in result, got: {result!r}"
+    # original flags unrelated to duration must survive
+    assert "--concurrency" in result, f"--concurrency must be preserved, got: {result!r}"
+    # warmup flag must be left untouched
+    if "--warmup" in original_cmd:
+        assert "--warmup 30m" in result, f"--warmup should not be modified, got: {result!r}"

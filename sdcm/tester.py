@@ -725,11 +725,8 @@ class ClusterTester(unittest.TestCase):
             seed = self.params.get("gemini_seed")
             gemini_command, *_ = self.gemini_results["cmd"]
             if not seed:
-                seed_match = re.search(r"--seed (?P<seed>\d+) ", gemini_command)
-                if seed_match:
-                    seed = seed_match.groupdict().get("seed", -1)
-                else:
-                    seed = -1
+                seed_match = re.search(r"--seed[= ](\d+)", gemini_command)
+                seed = seed_match.group(1) if seed_match else -1
 
             results = self.gemini_results["results"]
             results = results[0] if len(results) > 0 else None
@@ -3113,10 +3110,12 @@ class ClusterTester(unittest.TestCase):
     def run_gemini(self, cmd, duration=None):
         if duration:
             timeout = self.get_duration(duration)
-        elif self._stress_duration and " --duration" in cmd:
+        elif self._stress_duration:
             timeout = self.get_duration(self._stress_duration)
-            cmd = re.sub(r"\s--duration\s+\d+[mhd]\s", f" --duration {self._stress_duration}m ", cmd)
-            cmd = re.sub(r"\s--warmup\s+\d+[mhd]\s", f" --warmup {int(self._stress_duration * 0.2)}m ", cmd)
+            if "--duration" in cmd:
+                cmd = re.sub(r"(^|\s)--duration\s+\S+", f"\\1--duration {self._stress_duration}m", cmd)
+            else:
+                cmd = cmd + f" --duration {self._stress_duration}m"
         else:
             timeout = get_timeout_from_stress_cmd(cmd) or self.get_duration(duration)
         return GeminiStressThread(
