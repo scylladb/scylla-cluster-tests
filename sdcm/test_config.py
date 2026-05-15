@@ -378,7 +378,10 @@ class TestConfig(metaclass=Singleton):
         if params.get("enable_argus") and get_job_name() != "local_run":
             LOGGER.info("Initializing Argus connection...")
             try:
-                cls._argus_client = get_argus_client(run_id=cls.test_id() if not test_id else test_id)
+                cls._argus_client = get_argus_client(
+                    run_id=cls.test_id() if not test_id else test_id,
+                    use_tunnel=params.argus_use_ssh_tunnel,
+                )
                 enable_argus_posting()
                 start_posting_argus_events()
                 return
