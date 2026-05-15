@@ -17,7 +17,7 @@ from sdcm.nemesis.monkey.modify_table import (
     ModifyTableTwcsWindowSizeMonkey,
 )
 from test_lib.compaction import CompactionStrategy, TimeWindowCompactionProperties
-from unit_tests.nemesis import TestRunner
+from unit_tests.unit.nemesis import TestRunner
 
 _MODULE = "sdcm.nemesis.monkey.modify_table"
 
