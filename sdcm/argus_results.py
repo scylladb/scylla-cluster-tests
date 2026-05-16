@@ -192,6 +192,25 @@ class ManagerSnapshotDetails(StaticGenericResultTable):
         ]
 
 
+class MigratorBenchmarkResult(StaticGenericResultTable):
+    class Meta:
+        name = "spark-migrator - benchmark"
+        description = (
+            "Target-Scylla p99 write latency, throughput, dataset size and speed during spark-migrator runs "
+            "(max/avg over the migration window)"
+        )
+        Columns = [
+            ColumnMetadata(name="P99 write max", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 write avg", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Throughput max", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="Throughput avg", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="Data size", unit="GB", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Speed", unit="MB/s", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
+        ]
+
+
 class PerfSimpleQueryResult(StaticGenericResultTable):
     def __init__(self, workload: str, parameters: dict):
         super().__init__(name=f"{workload} - Perf Simple Query", description=json.dumps(parameters))
@@ -447,6 +466,21 @@ def send_manager_snapshot_details_to_argus(argus_client: ArgusClient, snapshot_d
     for key, value in snapshot_details.items():
         result_table.add_result(column=key, row="#1", value=value, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)
+
+
+def send_migrator_results_to_argus(argus_client: ArgusClient, metrics: dict) -> None:
+    """Submit spark-migrator benchmark metrics to Argus."""
+    if not argus_client:
+        LOGGER.warning("Will not submit migrator results to argus - no client initialized")
+        return
+
+    if not metrics:
+        return
+
+    metrics_table = MigratorBenchmarkResult()
+    for column, value in metrics.items():
+        metrics_table.add_result(column=column, row="#1", value=value, status=Status.UNSET)
+    submit_results_to_argus(argus_client, metrics_table)
 
 
 def send_iotune_results_to_argus(argus_client: ArgusClient, results: dict, node, params):
