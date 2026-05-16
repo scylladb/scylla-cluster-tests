@@ -19,12 +19,14 @@ import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 
 from cassandra import ConsistencyLevel
 from cassandra.cluster import Cluster as CassandraCluster
 from cassandra.concurrent import execute_concurrent_with_args
 from cassandra.query import SimpleStatement
 
+from sdcm.argus_results import send_migrator_results_to_argus
 from sdcm.cluster import BaseNode
 from sdcm.spark_migrator import (
     MigratorConfig,
@@ -70,6 +72,95 @@ class SparkMigratorTest(ClusterTester):
         self.log.info("Migrator JAR available at %s", s3_uri)
         self.params["emr_spark_migrator_jar_path"] = s3_uri
 
+    def _collect_migration_metrics(self, start: float, end: float, data_size_bytes: int | None = None) -> dict:
+        """Query Prometheus over [start, end] and return MigratorBenchmarkResult columns."""
+        if not self.prometheus_db:
+            self.log.warning("No prometheus_db available — migrator metrics skipped")
+            return {}
+
+        def floats(series):
+            if not series:
+                return []
+            return [float(raw) for _, raw in series if raw.lower() != "nan"]
+
+        def avg(values):
+            return sum(values) / len(values)
+
+        try:
+            write_lat_us = floats(self.prometheus_db.get_latency_write_99(start, end))
+            throughput = floats(self.prometheus_db.get_throughput(start, end))
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Prometheus query for migrator metrics failed: %s", exc)
+            return {}
+
+        if not (write_lat_us or throughput):
+            return {}
+
+        columns: dict = {}
+        if write_lat_us:
+            columns["P99 write max"] = max(write_lat_us) / 1000.0  # µs → ms
+            columns["P99 write avg"] = avg(write_lat_us) / 1000.0
+        if throughput:
+            columns["Throughput max"] = int(max(throughput))
+            columns["Throughput avg"] = int(avg(throughput))
+        duration = end - start
+        if data_size_bytes and duration > 0:
+            columns["Data size"] = data_size_bytes / (1024**3)
+            columns["Speed"] = data_size_bytes / (1024**2) / duration
+        columns["duration"] = int(duration)
+        columns["start time"] = datetime.fromtimestamp(start, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        return columns
+
+    def _report_migration_to_argus(self, write_window, data_size_bytes: int | None = None):
+        """Build the migrator benchmark table and submit it to Argus."""
+        try:
+            argus_client = self.test_config.argus_client()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Argus client unavailable — skipping migrator results submission: %s", exc)
+            return
+
+        if not argus_client:
+            self.log.warning("Argus client unavailable — skipping migrator results submission")
+            return
+
+        try:
+            send_migrator_results_to_argus(
+                argus_client, self._collect_migration_metrics(*write_window, data_size_bytes=data_size_bytes)
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to submit migrator results to Argus: %s", exc)
+
+    def _get_source_data_size_bytes(self, source_cluster, keyspace: str) -> int | None:
+        """Estimate logical bytes of source keyspace via 'nodetool cfstats' summed across nodes."""
+        try:
+            with source_cluster.cql_connection_patient(source_cluster.nodes[0]) as session:
+                row = session.execute(
+                    "SELECT replication FROM system_schema.keyspaces WHERE keyspace_name = %s", (keyspace,)
+                ).one()
+
+            rep = (row.replication or {}) if row else {}
+            klass = rep.get("class", "")
+            if "NetworkTopologyStrategy" in klass:
+                rf = sum(
+                    int(value)
+                    for key, value in rep.items()
+                    if key not in {"class", "replication_factor"} and str(value).isdigit()
+                )
+            elif "LocalStrategy" in klass:
+                rf = 1
+            else:
+                rf = int(rep.get("replication_factor", "1"))
+
+            total_bytes = 0
+            for node in source_cluster.nodes:
+                stats = node.get_cfstats(keyspace)
+                total_bytes += int(stats.get("Space used (live)", 0))
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to estimate source data size for keyspace %s: %s", keyspace, exc)
+            return None
+
+        return total_bytes // max(rf, 1) or None
+
     def test_full_migration(self):
         """Run a full table migration from Scylla source to Scylla target.
 
@@ -107,14 +198,15 @@ class SparkMigratorTest(ClusterTester):
             )
 
         self.log.info("Submitting spark-migrator job...")
-        start_time = time.time()
+        write_start = time.time()
         result = runner.run_migration(
             cluster_id=self.emr_cluster.cluster_id,
             jar_s3_path=jar_path,
             migrator_config=migrator_config,
             timeout_minutes=self.params.get("migrator_step_timeout_minutes") or 360,
         )
-        duration = time.time() - start_time
+        write_end = time.time()
+        duration = write_end - write_start
 
         self.migration_results = {
             "step_id": result["step_id"],
@@ -124,7 +216,8 @@ class SparkMigratorTest(ClusterTester):
 
         self.log.info("Migration completed in %.1f seconds", duration)
 
-        # Validate migration
+        self._report_migration_to_argus(write_window=(write_start, write_end))
+
         self._validate_migration()
 
     def test_migration_from_external_source(self):
@@ -192,13 +285,17 @@ class SparkMigratorTest(ClusterTester):
             target_keyspace,
             target_table,
         )
-        result = runner.run_migration(
+        write_start = time.time()
+        runner.run_migration(
             cluster_id=self.emr_cluster.cluster_id,
             jar_s3_path=jar_path,
             migrator_config=migrator_config,
             timeout_minutes=self.params.get("migrator_step_timeout_minutes") or 360,
         )
-        self.log.info("Migration completed in %.1f seconds", result["duration_seconds"])
+        write_end = time.time()
+        self.log.info("Migration completed in %.1f seconds", write_end - write_start)
+
+        self._report_migration_to_argus(write_window=(write_start, write_end))
 
         self._validate_external_migration(
             source_hosts,
@@ -383,13 +480,18 @@ class SparkMigratorTest(ClusterTester):
             region_name=region,
         )
 
+        write_start = time.time()
         result = runner.run_migration(
             cluster_id=self.emr_cluster.cluster_id,
             jar_s3_path=jar_path,
             migrator_config=migrator_config,
             timeout_minutes=self.params.get("migrator_step_timeout_minutes") or 360,
         )
+        write_end = time.time()
         self.log.info("Migration completed in %.1f seconds", result["duration_seconds"])
+
+        data_size_bytes = self._get_source_data_size_bytes(self.cs_db_cluster, source_keyspace)
+        self._report_migration_to_argus(write_window=(write_start, write_end), data_size_bytes=data_size_bytes)
 
         self._validate_migration_count_and_sample(
             source_cluster=self.cs_db_cluster,
@@ -500,13 +602,18 @@ class SparkMigratorTest(ClusterTester):
             region_name=region,
         )
 
+        write_start = time.time()
         result = runner.run_migration(
             cluster_id=self.emr_cluster.cluster_id,
             jar_s3_path=jar_path,
             migrator_config=migrator_config,
             timeout_minutes=self.params.get("migrator_step_timeout_minutes") or 360,
         )
+        write_end = time.time()
         self.log.info("Migration completed in %.1f seconds", result["duration_seconds"])
+
+        data_size_bytes = self._get_source_data_size_bytes(self.cs_db_cluster, source_keyspace)
+        self._report_migration_to_argus(write_window=(write_start, write_end), data_size_bytes=data_size_bytes)
 
         if self.params.get("migrator_run_validator"):
             self._run_validator(runner, jar_path, migrator_config)
