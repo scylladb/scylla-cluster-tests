@@ -1432,6 +1432,7 @@ class VectorStoreAWSNode(VectorStoreNodeMixin, AWSNode):
         base_logdir=None,
         dc_idx=0,
         rack=0,
+        after_config=None,
     ):
         super().__init__(
             ec2_instance=ec2_instance,
@@ -1444,6 +1445,7 @@ class VectorStoreAWSNode(VectorStoreNodeMixin, AWSNode):
             base_logdir=base_logdir,
             dc_idx=dc_idx,
             rack=rack,
+            after_config=after_config,
         )
 
     def init(self):

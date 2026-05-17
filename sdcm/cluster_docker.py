@@ -308,6 +308,7 @@ class VectorStoreDockerNode(VectorStoreNodeMixin, DockerNode):
         base_logdir: Optional[str] = None,
         ssh_login_info: Optional[dict] = None,
         node_index: int = 1,
+        after_config=None,
     ) -> None:
         super().__init__(
             parent_cluster=parent_cluster,
@@ -316,6 +317,7 @@ class VectorStoreDockerNode(VectorStoreNodeMixin, DockerNode):
             base_logdir=base_logdir,
             ssh_login_info=ssh_login_info,
             node_index=node_index,
+            after_config=after_config,
         )
 
     def node_container_run_args(self, seed_ip=None):
@@ -827,6 +829,7 @@ class DockerMonitoringNode(cluster.BaseNode):
         base_logdir: Optional[str] = None,
         node_index: int = 1,
         ssh_login_info: Optional[dict] = None,
+        after_config=None,
     ) -> None:
         super().__init__(
             name=f"{node_prefix}-{node_index}",
@@ -834,6 +837,7 @@ class DockerMonitoringNode(cluster.BaseNode):
             base_logdir=base_logdir,
             node_prefix=node_prefix,
             ssh_login_info=ssh_login_info,
+            after_config=after_config,
         )
         self.node_index = node_index
 

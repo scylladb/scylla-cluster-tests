@@ -7680,7 +7680,17 @@ class NoMonitorSet:
 
 
 class LocalNode(BaseNode):
-    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0):
+    def __init__(
+        self,
+        name,
+        parent_cluster,
+        ssh_login_info=None,
+        base_logdir=None,
+        node_prefix=None,
+        dc_idx=0,
+        rack=0,
+        after_config=None,
+    ):
         super().__init__(
             name=name,
             parent_cluster=parent_cluster,
@@ -7689,6 +7699,7 @@ class LocalNode(BaseNode):
             node_prefix=node_prefix,
             dc_idx=dc_idx,
             rack=rack,
+            after_config=after_config,
         )
 
     @property

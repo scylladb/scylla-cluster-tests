@@ -1925,6 +1925,7 @@ class BasePodContainer(cluster.BaseNode):
         base_logdir: Optional[str] = None,
         dc_idx: int = 0,
         rack=0,
+        after_config=None,
     ):
         self.node_index = node_index
         cluster.BaseNode.__init__(
@@ -1935,6 +1936,7 @@ class BasePodContainer(cluster.BaseNode):
             node_prefix=node_prefix,
             dc_idx=dc_idx,
             rack=rack,
+            after_config=after_config,
         )
         self.k8s_cluster = self.parent_cluster.k8s_clusters[self.dc_idx]
         self._rack_name = None
@@ -2509,6 +2511,7 @@ class LoaderPodContainer(BasePodContainer):
         base_logdir: Optional[str] = None,
         dc_idx: int = 0,
         rack=0,
+        after_config=None,
     ):
         self.loader_cluster_name = parent_cluster.loader_cluster_name
         self.loader_name = name
@@ -2521,6 +2524,7 @@ class LoaderPodContainer(BasePodContainer):
             base_logdir=base_logdir,
             dc_idx=dc_idx,
             rack=rack,
+            after_config=after_config,
         )
 
     def init(self):

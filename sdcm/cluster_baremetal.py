@@ -44,6 +44,7 @@ class PhysicalMachineNode(cluster.BaseNode):
         credentials,
         base_logdir=None,
         node_prefix=None,
+        after_config=None,
     ):
         ssh_login_info = {
             "hostname": None,
@@ -58,6 +59,7 @@ class PhysicalMachineNode(cluster.BaseNode):
             base_logdir=base_logdir,
             ssh_login_info=ssh_login_info,
             node_prefix=node_prefix,
+            after_config=after_config,
         )
 
     def init(self):
