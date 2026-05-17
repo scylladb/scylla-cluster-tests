@@ -108,6 +108,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_vector_store_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_vector_store_nodes')
+            string(defaultValue: "${pipelineParams.get('n_vector_store_nodes', '')}",
+                   description: 'Number of Vector Search nodes to deploy.',
+                   name: 'n_vector_store_nodes')
 
             // Cluster Reuse
             separator(name: 'CLUSTER_REUSE', sectionHeader: 'Cluster Reuse')
