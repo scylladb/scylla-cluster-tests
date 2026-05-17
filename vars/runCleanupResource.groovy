@@ -61,6 +61,9 @@ def call(Map params, String region){
     if [[ -n "${params.post_behavior_vector_store_nodes ? params.post_behavior_vector_store_nodes : ''}" ]] ; then
         export SCT_POST_BEHAVIOR_VECTOR_STORE_NODES="${params.post_behavior_vector_store_nodes}"
     fi
+    if [[ -n "${params.n_vector_store_nodes ? params.n_vector_store_nodes : ''}" ]] ; then
+        export SCT_N_VECTOR_STORE_NODES="${params.n_vector_store_nodes}"
+    fi
 
     echo "Starting to clean resources ..."
     RUNNER_IP=\$(cat sct_runner_ip||echo "")

@@ -2,7 +2,7 @@
   <actions/>
   <description>Triggers Scylla Cloud provisioning tests on weekly basis every Saturday at 6:00
 
-  Tests Scylla Cloud provisioning capabilities using PR-provision-test configuration.
+  Tests Scylla Cloud provisioning capabilities using PR-provision-test configuration (including Vector Search nodes).
   </description>
   <keepDependencies>false</keepDependencies>
   <properties>
@@ -53,8 +53,10 @@
 provision_type=on_demand
 region=us-east-1
 xcloud_provider=aws
+n_vector_store_nodes=2
 post_behavior_db_nodes=destroy
 post_behavior_monitor_nodes=destroy
+post_behavior_vector_store_nodes=destroy
 requested_by_user=dimakr</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
@@ -71,8 +73,10 @@ requested_by_user=dimakr</properties>
 provision_type=on_demand
 gce_datacenter=us-east1
 xcloud_provider=gce
+n_vector_store_nodes=2
 post_behavior_db_nodes=destroy
 post_behavior_monitor_nodes=destroy
+post_behavior_vector_store_nodes=destroy
 requested_by_user=dimakr</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
