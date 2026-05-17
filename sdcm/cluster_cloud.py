@@ -420,6 +420,7 @@ class CloudVSNode(CloudNode):
         base_logdir: str | None = None,
         dc_idx: int = 0,
         rack: int = 0,
+        after_config=None,
     ):
         super().__init__(
             cloud_instance_data=cloud_instance_data,
@@ -429,6 +430,7 @@ class CloudVSNode(CloudNode):
             base_logdir=base_logdir,
             dc_idx=dc_idx,
             rack=rack,
+            after_config=after_config,
         )
 
     def _get_ssh_address(self, localhost) -> dict:
@@ -475,6 +477,7 @@ class CloudManagerNode(CloudNode):
         base_logdir: str | None = None,
         dc_idx: int = 0,
         rack: int = 0,
+        after_config=None,
     ):
         # minimal cloud_instance_data for manager node (most of the node details will be fetched via SDM)
         cloud_instance_data = {
@@ -493,6 +496,7 @@ class CloudManagerNode(CloudNode):
             base_logdir=base_logdir,
             dc_idx=dc_idx,
             rack=rack,
+            after_config=after_config,
         )
 
     def _get_ssh_address(self, localhost) -> dict:

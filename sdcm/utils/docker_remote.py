@@ -17,7 +17,14 @@ LOGGER = logging.getLogger(__name__)
 
 class RemoteDocker(BaseNode):
     def __init__(
-        self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts="", docker_network=None
+        self,
+        node,
+        image_name,
+        ports=None,
+        command_line="tail -f /dev/null",
+        extra_docker_opts="",
+        docker_network=None,
+        after_config=None,
     ):
         self.node = node
         self._internal_ip_address = None
@@ -35,7 +42,7 @@ class RemoteDocker(BaseNode):
         self.docker_id = res.stdout.strip()
         self.image_name = image_name
         self.docker_network = docker_network
-        super().__init__(name=image_name, parent_cluster=node.parent_cluster)
+        super().__init__(name=image_name, parent_cluster=node.parent_cluster, after_config=after_config)
 
     @property
     def internal_ip_address(self):

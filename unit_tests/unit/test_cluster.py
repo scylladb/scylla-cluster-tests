@@ -11,6 +11,8 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import importlib
+import inspect
 import logging
 import tempfile
 import time
@@ -20,7 +22,7 @@ from datetime import datetime, timezone
 import pytest
 from invoke import Result
 
-from sdcm.cluster import BaseMonitorSet
+from sdcm.cluster import BaseMonitorSet, BaseNode
 from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.filters import DbEventsFilter
@@ -875,3 +877,103 @@ def test_base_node_init_with_none_ssh_login_info():
     node.init()
 
     assert isinstance(node.remoter, LocalCmdRunner), f"Expected LocalCmdRunner, got {type(node.remoter)}"
+
+
+# backend modules whose `BaseNode` subclasses must be loaded into the class hierarchy
+_BACKEND_MODULES = (
+    "sdcm.cluster_aws",
+    "sdcm.cluster_azure",
+    "sdcm.cluster_baremetal",
+    "sdcm.cluster_cloud",
+    "sdcm.cluster_docker",
+    "sdcm.cluster_gce",
+    "sdcm.cluster_k8s",
+    "sdcm.cluster_k8s.eks",
+    "sdcm.cluster_k8s.gke",
+    "sdcm.cluster_k8s.mini_k8s",
+    "sdcm.cluster_oci",
+    "sdcm.utils.docker_remote",
+)
+
+
+def _all_base_node_subclasses() -> list[type]:
+    """Return all `BaseNode` subclasses from the `sdcm` package, excluding test fixtures."""
+    for module_name in _BACKEND_MODULES:
+        importlib.import_module(module_name)
+
+    all_subclasses = set()
+    stack = list(BaseNode.__subclasses__())
+    while stack:
+        cls = stack.pop()
+        if cls not in all_subclasses:
+            all_subclasses.add(cls)
+            stack.extend(cls.__subclasses__())
+
+    production = [cls for cls in all_subclasses if cls.__module__.startswith("sdcm.")]
+    return sorted(production, key=lambda c: c.__name__)
+
+
+# classes that use cloud-SDK clients in __init__ and need those patched out during construction
+_INIT_CONSTRUCT_PATCHES: dict[str, tuple[str, ...]] = {
+    "GCENode": ("sdcm.cluster_gce.GceLoggingClient",),
+}
+
+# `BaseNode.__init__` kwargs a subclass intentionally does NOT accept.
+_NO_SSH = frozenset({"ssh_login_info"})
+_NO_DC_RACK = frozenset({"dc_idx", "rack"})
+_NARROWED_KWARGS: dict[str, frozenset[str]] = {
+    "AWSNode": _NO_SSH,
+    "AzureNode": _NO_SSH,
+    "BasePodContainer": _NO_SSH,
+    "CloudManagerNode": _NO_SSH,
+    "CloudNode": _NO_SSH,
+    "CloudVSNode": _NO_SSH,
+    "GCENode": _NO_SSH,
+    "LoaderPodContainer": _NO_SSH,
+    "OciNode": _NO_SSH,
+    "VectorStoreAWSNode": _NO_SSH,
+    "DockerMonitoringNode": _NO_DC_RACK,
+    "DockerNode": _NO_DC_RACK,
+    "VectorStoreDockerNode": _NO_DC_RACK,
+    "PhysicalMachineNode": _NO_DC_RACK | _NO_SSH,
+    "RemoteDocker": _NO_DC_RACK | _NO_SSH | frozenset({"base_logdir", "node_prefix"}),
+}
+
+
+def _build_init_kwargs(cls: type) -> dict:
+    """Build the minimal kwargs needed to construct `cls` for this test."""
+    kwargs: dict[str, object] = {}
+    constructor_params = inspect.signature(cls.__init__).parameters
+
+    for name, param in constructor_params.items():
+        if name == "self" or param.default is not inspect.Parameter.empty:
+            continue
+        if name == "cloud_instance_data":
+            kwargs[name] = {}
+            continue
+        if name == "parent_cluster":
+            parent_cluster = unittest.mock.MagicMock(name="parent_cluster")
+            parent_cluster.params = {}
+            kwargs[name] = parent_cluster
+            continue
+        kwargs[name] = unittest.mock.MagicMock(name=name)
+
+    narrowed_kwargs = _NARROWED_KWARGS.get(cls.__name__, frozenset())
+    for name, param in inspect.signature(BaseNode.__init__).parameters.items():
+        if param.default is inspect.Parameter.empty or name in kwargs or name in narrowed_kwargs:
+            continue
+        kwargs[name] = param.default
+
+    return kwargs
+
+
+@pytest.mark.parametrize("cls", _all_base_node_subclasses(), ids=lambda cls: cls.__name__)
+def test_base_node_subclass_constructs_with_forwarded_kwargs(cls, monkeypatch):
+    """Verify each `BaseNode` subclass can be constructed polymorphically."""
+    if "__init__" not in cls.__dict__:
+        pytest.skip(f"{cls.__name__} inherits __init__ from a parent")
+
+    for target in _INIT_CONSTRUCT_PATCHES.get(cls.__name__, ()):
+        monkeypatch.setattr(target, unittest.mock.MagicMock())
+
+    cls(**_build_init_kwargs(cls))
