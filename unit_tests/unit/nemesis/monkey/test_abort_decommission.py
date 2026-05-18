@@ -66,11 +66,18 @@ def runner(base_runner):
 
 
 @pytest.fixture(autouse=True)
-def sequential_parallel_object():
-    """Replace ParallelObject.call_objects with sequential execution for all tests.
+def mock_tablets():
+    """Patch is_tablets_feature_enabled to return True for all tests."""
+    with patch(f"{_MODULE}.is_tablets_feature_enabled", return_value=True):
+        yield
 
-    Ensures the two callables passed to ParallelObject run deterministically
-    in-process so tests can assert on their side-effects without real threads.
+
+@pytest.fixture(autouse=True)
+def sequential_parallel_object():
+    """Replace ParallelObject.call_objects with deterministic sequential execution.
+
+    Runs the two callables in-process and returns successfully. Individual
+    tests patch this fixture when they need an exceptional ParallelObject path.
     """
 
     def _call_objects(self_po):
@@ -94,23 +101,19 @@ def mock_nodetool_ops():
     """
     with (
         patch(f"{_MODULE}.wait_for_tasks", return_value=[{"task_id": "task-id"}]) as mock_tasks,
-        patch(f"{_MODULE}.wait_for", side_effect=lambda func, **kw: func()),
+        patch(f"{_MODULE}.wait_for", side_effect=lambda func, **kw: func()) as mock_wait_for,
     ):
+        mock_tasks.wait_for = mock_wait_for
         yield mock_tasks
 
 
 # ---------------------------------------------------------------------------
-# Tests for disrupt() — abort succeeds (node stays in cluster)
+# Tests for disrupt() — successful abort
 # ---------------------------------------------------------------------------
 
 
 def test_disrupt_abort_succeeds(runner):
-    """When the abort works the node stays in the ring.
-
-    verify_decommission raises NodeStayInClusterAfterDecommission, so
-    wait_for_nodes_up_and_normal must be called with timeout=300 and
-    add_new_nodes must NOT be called.
-    """
+    """When verify shows the node stayed in the ring, wait for recovery."""
     runner.cluster.verify_decommission.side_effect = NodeStayInClusterAfterDecommission("still in ring")
 
     AbortDecommissionMonkey(runner).disrupt()
@@ -118,6 +121,40 @@ def test_disrupt_abort_succeeds(runner):
     runner.cluster.verify_decommission.assert_called_once_with(runner.target_node)
     runner.cluster.wait_for_nodes_up_and_normal.assert_called_once_with(nodes=[runner.target_node], timeout=300)
     runner.add_new_nodes.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Tests for disrupt() — ParallelObject raises → exception branch
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "verify_side_effect, expect_replacement",
+    [
+        (None, True),
+        (NodeStayInClusterAfterDecommission("still in ring"), False),
+    ],
+    ids=["decommission_completed", "abort_succeeded"],
+)
+def test_disrupt_parallel_object_exception(runner, verify_side_effect, expect_replacement):
+    """When ParallelObject.call_objects raises, disrupt() still calls verify_decommission()
+    and takes either the replacement or recovery path depending on the outcome."""
+    with patch(f"{_MODULE}.ParallelObject.call_objects", side_effect=RuntimeError("simulated failure")):
+        if verify_side_effect is None:
+            runner.cluster.verify_decommission.return_value = None
+        else:
+            runner.cluster.verify_decommission.side_effect = verify_side_effect
+
+        AbortDecommissionMonkey(runner).disrupt()
+
+    runner.cluster.verify_decommission.assert_called_once_with(runner.target_node)
+
+    if expect_replacement:
+        runner.add_new_nodes.assert_called_once_with(count=1, rack=runner.target_node.rack)
+        runner.monitoring_set.reconfigure_scylla_monitoring.assert_called_once()
+    else:
+        runner.cluster.wait_for_nodes_up_and_normal.assert_called_once_with(nodes=[runner.target_node], timeout=300)
+        runner.add_new_nodes.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +205,7 @@ def test_disrupt_node_decommissioned_sets_seed_flag_when_target_was_seed(runner)
 
 
 # ---------------------------------------------------------------------------
-# Tests for disrupt() — single node in rack guard
+# Tests for disrupt() — guard checks
 # ---------------------------------------------------------------------------
 
 
@@ -178,6 +215,23 @@ def test_disrupt_raises_unsupported_when_single_node_in_rack(runner):
 
     with pytest.raises(UnsupportedNemesis, match="only one in rack"):
         AbortDecommissionMonkey(runner).disrupt()
+
+
+def test_disrupt_raises_unsupported_when_tablets_not_enabled(runner):
+    """UnsupportedNemesis raised when tablets feature is not enabled."""
+    with patch(f"{_MODULE}.is_tablets_feature_enabled", return_value=False):
+        with pytest.raises(UnsupportedNemesis, match="only supported with tablets"):
+            AbortDecommissionMonkey(runner).disrupt()
+
+
+def test_disrupt_raises_unsupported_when_no_tablet_tables(runner):
+    """UnsupportedNemesis raised when no test tables with tablets are found."""
+    runner.cluster.get_non_system_ks_cf_with_tablets_list.return_value = []
+
+    with pytest.raises(UnsupportedNemesis, match="No test tables with tablets found"):
+        AbortDecommissionMonkey(runner).disrupt()
+
+    runner.cluster.get_non_system_ks_cf_with_tablets_list.assert_called_once_with(db_node=runner.target_node)
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +294,11 @@ def test_abort_decommission_task_calls_nodetool_in_order(runner, mock_nodetool_o
         timeout=60,
         filter={"entity": runner.target_node.host_id, "type": "decommission"},
     )
+    runner.target_node.follow_system_log.assert_called_once_with(
+        patterns=[r"stream_blob - stream_sstables\[[0-9a-f-]+\] Finished sending"]
+    )
+    mock_nodetool_ops.wait_for.assert_called_once()
+    assert mock_nodetool_ops.wait_for.call_args.kwargs["timeout"] == 600
 
     # Each run_nodetool call that uses a positional first arg exposes it via c.args[0]
     subcmds = [c.args[0] for c in runner.target_node.run_nodetool.call_args_list if c.args]
