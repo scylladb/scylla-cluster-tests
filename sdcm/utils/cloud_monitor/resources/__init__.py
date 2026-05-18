@@ -1,7 +1,7 @@
 from datetime import datetime
 from math import ceil
 
-CLOUD_PROVIDERS = ("aws", "gce", "azure")
+CLOUD_PROVIDERS = ("aws", "gce", "azure", "oci")
 
 
 class CloudInstance:

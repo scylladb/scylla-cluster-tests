@@ -118,3 +118,4 @@ class StaticIPs(CloudResources):
         self.get_aws_elastic_ips()
         self.get_gce_static_ips()
         self.get_azure_static_ips()
+        self["oci"] = []  # OCI reserved public IPs not yet supported in cloud monitor
