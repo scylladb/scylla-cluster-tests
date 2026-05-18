@@ -1,5 +1,13 @@
 test_duration: 360
 
+pre_create_keyspace:
+  - "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND storage = {'type': 'S3', 'endpoint': 's3.us-east-1.amazonaws.com', 'bucket': 'manager-backup-tests-us-east-1'}"
+  - "CREATE KEYSPACE IF NOT EXISTS keyspace_entire_test WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND storage = {'type': 'S3', 'endpoint': 's3.us-east-1.amazonaws.com', 'bucket': 'manager-backup-tests-us-east-1'}"
+  - "CREATE KEYSPACE IF NOT EXISTS scylla_bench WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND storage = {'type': 'S3', 'endpoint': 's3.us-east-1.amazonaws.com', 'bucket': 'manager-backup-tests-us-east-1'}"
+  - "CREATE KEYSPACE IF NOT EXISTS scylla_bench_during_upgrade WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND storage = {'type': 'S3', 'endpoint': 's3.us-east-1.amazonaws.com', 'bucket': 'manager-backup-tests-us-east-1'}"
+  - "CREATE KEYSPACE IF NOT EXISTS keyspace_complex WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND storage = {'type': 'S3', 'endpoint': 's3.us-east-1.amazonaws.com', 'bucket': 'manager-backup-tests-us-east-1'}"
+  - "CREATE KEYSPACE IF NOT EXISTS keyspace_fill_db_data WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND storage = {'type': 'S3', 'endpoint': 's3.us-east-1.amazonaws.com', 'bucket': 'manager-backup-tests-us-east-1'}"
+
 # workloads
 write_stress_during_entire_test: cassandra-stress write no-warmup cl=QUORUM n=20100200 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..20100200 -log interval=5
 verify_stress_after_cluster_upgrade: cassandra-stress read no-warmup cl=QUORUM n=20100200 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..20100200 -log interval=5
