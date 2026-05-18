@@ -1,15 +1,20 @@
+import logging
+
 from invoke import UnexpectedExit
 
 from sdcm.cluster import NodeCleanedAfterDecommissionAborted, NodeStayInClusterAfterDecommission
-from sdcm.exceptions import UnsupportedNemesis
+from sdcm.exceptions import KillNemesis, UnsupportedNemesis
 from sdcm.nemesis import NemesisBaseClass, target_data_nodes
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
+from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.tasks import wait_for_tasks
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.wait import wait_for
+
+logger = logging.getLogger(__name__)
 
 # How long to wait for the node to recover to UN after a successful abort.
 # A node may land in a transitional state (UJ / DN) for up to several minutes
@@ -91,14 +96,26 @@ class AbortDecommissionMonkey(NemesisBaseClass):
                 f"Target node {self.runner.target_node.name} is the only one in rack {self.runner.target_node.rack}, cannot decommission it."
             )
 
+        # Aborting decommission is only supported with tablets, https://github.com/scylladb/scylladb/pull/24129
+        if not is_tablets_feature_enabled(self.runner.target_node):
+            raise UnsupportedNemesis("Aborting decommission is only supported with tablets.")
+
+        if not self.runner.cluster.get_non_system_ks_cf_with_tablets_list(db_node=self.runner.target_node):
+            raise UnsupportedNemesis("No test tables with tablets found.")
+
         # save info of the target node, as it will not be available if decommission succeeds
         target_is_seed = self.runner.target_node.is_seed
         target_name = self.runner.target_node.name
 
-        # Run decommission and abort in parallel, since we want to abort as soon as streaming starts, without waiting for decommission to finish
-        ParallelObject(
-            objects=[self.decommission_target_node, self.abort_decommission_task], timeout=600
-        ).call_objects()
+        try:
+            # Run decommission and abort in parallel, since we want to abort as soon as streaming starts, without waiting for decommission to finish
+            ParallelObject(
+                objects=[self.decommission_target_node, self.abort_decommission_task], timeout=600
+            ).call_objects()
+        except KillNemesis:
+            return
+        except Exception as exc:
+            logger.exception("ParallelObject failed during decommission/abort: %s", exc)
 
         # verify_decommission checks gossip + Raft to determine the actual outcome.
         # It also calls terminate_node() internally when the node has left the ring,
