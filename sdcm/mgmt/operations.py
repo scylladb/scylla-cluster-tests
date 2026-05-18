@@ -6,6 +6,7 @@ from functools import cached_property
 from pathlib import Path
 from textwrap import dedent
 from time import sleep
+from typing import TYPE_CHECKING
 
 import boto3
 import yaml
@@ -16,6 +17,7 @@ from sdcm.mgmt.cli import ScyllaManagerTool
 from sdcm.mgmt.common import ObjectStorageUploadMode
 from sdcm import mgmt
 from sdcm.exceptions import FilesNotCorrupted
+from sdcm.keystore import KeyStore
 from sdcm.remote import shell_script_cmd, LOCALRUNNER
 from sdcm.sct_events.system import InfoEvent
 from sdcm.test_config import TestConfig
@@ -23,10 +25,14 @@ from sdcm.tester import ClusterTester
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.cluster_tools import flush_nodes, major_compaction_nodes, clear_snapshot_nodes
 from sdcm.utils.compaction_ops import CompactionOps
-from sdcm.utils.gce_utils import get_gce_storage_client
+from sdcm.utils.gce_region import GceRegion
+from sdcm.utils.gce_utils import create_gce_storage_bucket, get_gce_storage_client, gce_override_object_retention
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.utils.time_utils import ExecutionTimer
 from sdcm.utils.version_utils import ComparableScyllaVersion
+
+if TYPE_CHECKING:
+    from google.cloud.storage import Bucket
 
 
 class ClusterOperations(ClusterTester):
@@ -223,6 +229,30 @@ class BucketOperations(ClusterTester):
         else:
             raise ValueError(f"Unsupported cluster backend - {cluster_backend}, should be either aws or gce")
 
+    @staticmethod
+    def create_worm_bucket(region: str, bucket_name: str) -> "Bucket":
+        bucket = create_gce_storage_bucket(name=bucket_name, region=region, object_lock_enabled=True)
+
+        # Grant the access to this bucket for sct-manager-backup service account
+        project_id = KeyStore().get_gcp_credentials()["project_id"]
+        sa_email = f"{GceRegion.SCT_BACKUP_SERVICE_ACCOUNT}@{project_id}.iam.gserviceaccount.com"
+
+        policy = bucket.get_iam_policy(requested_policy_version=3)
+        policy.bindings.append({"role": "roles/storage.objectAdmin", "members": {f"serviceAccount:{sa_email}"}})
+        bucket.set_iam_policy(policy)
+
+        return bucket
+
+    @staticmethod
+    def destroy_worm_bucket(bucket: "Bucket") -> None:
+        gce_override_object_retention(bucket_name=bucket.name, path="")
+
+        blobs = list(bucket.list_blobs())
+        for blob in blobs:
+            blob.delete()
+
+        bucket.delete()
+
 
 @dataclass
 class SnapshotData:
@@ -253,6 +283,8 @@ class SnapshotData:
 
 
 class SnapshotOperations(ClusterTester):
+    BACKUP_FILE_PREFIXES = ("backup/sst", "backup/meta", "backup/schema")
+
     def _get_total_loaders(self) -> int:
         """Get total number of loaders, handling both single-DC (int) and multi-DC (space-separated string or list) formats."""
         n_loaders = self.params.get("n_loaders")
@@ -293,50 +325,70 @@ class SnapshotOperations(ClusterTester):
         return snapshot_data
 
     @staticmethod
-    def _get_all_snapshot_files_s3(cluster_id, bucket_name, region_name):
+    def _get_all_snapshot_files_s3(bucket_name: str, region_name: str, prefixes: list[str]) -> set[str]:
         file_set = set()
         s3_client = boto3.client("s3", region_name=region_name)
         paginator = s3_client.get_paginator("list_objects")
-        pages = paginator.paginate(Bucket=bucket_name, Prefix=f"backup/sst/cluster/{cluster_id}")
-        for page in pages:
-            # No Contents key means that no snapshot file of the cluster exist,
-            # probably no backup ran before this function
-            if "Contents" in page:
-                content_list = page["Contents"]
-                file_set.update([item["Key"] for item in content_list])
+        for prefix in prefixes:
+            pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
+            for page in pages:
+                # No Contents key means that no snapshot file of the cluster exist,
+                # probably no backup ran before this function
+                if "Contents" in page:
+                    file_set.update(item["Key"] for item in page["Contents"])
         return file_set
 
     @staticmethod
-    def _get_all_snapshot_files_gce(cluster_id, bucket_name):
+    def _get_all_snapshot_files_gce(bucket_name: str, prefixes: list[str]) -> set[str]:
         file_set = set()
         storage_client, _ = get_gce_storage_client()
-        blobs = storage_client.list_blobs(bucket_or_name=bucket_name, prefix=f"backup/sst/cluster/{cluster_id}")
-        for listing_object in blobs:
-            file_set.add(listing_object.name)
+        for prefix in prefixes:
+            blobs = storage_client.list_blobs(bucket_or_name=bucket_name, prefix=prefix)
+            for listing_object in blobs:
+                file_set.add(listing_object.name)
         # Unlike S3, if no files match the prefix, no error will occur
         return file_set
 
     @staticmethod
-    def _get_all_snapshot_files_azure(cluster_id, bucket_name):
+    def _get_all_snapshot_files_azure(bucket_name: str, prefixes: list[str]) -> set[str]:
         file_set = set()
         azure_service = AzureService()
         container_client = azure_service.blob.get_container_client(container=bucket_name)
-        dir_listing = container_client.list_blobs(name_starts_with=f"backup/sst/cluster/{cluster_id}")
-        for listing_object in dir_listing:
-            file_set.add(listing_object.name)
+        for prefix in prefixes:
+            dir_listing = container_client.list_blobs(name_starts_with=prefix)
+            for listing_object in dir_listing:
+                file_set.add(listing_object.name)
         return file_set
 
-    def get_all_snapshot_files(self, cluster_id):
+    def get_all_snapshot_files(
+        self,
+        cluster_id: str,
+        bucket_location: str | None = None,
+        only_sstables: bool = True,
+    ) -> set[str]:
+        """Return backup object paths in the bucket for the given cluster.
+
+        Args:
+            cluster_id: Scylla Manager cluster ID.
+            bucket_location: Bucket name; falls back to `backup_bucket_location` param.
+            only_sstables: If True (default), collect only SSTable files (`backup/sst`).
+                           If False, collect all types: `backup/sst`, `backup/meta`, `backup/schema`.
+
+        Returns:
+            Set of object path strings found in the bucket.
+        """
         region_name = next(iter(self.params.region_names), "")
-        bucket_name = self.params.get("backup_bucket_location")[0].format(region=region_name)
+        bucket_name = bucket_location or self.params.get("backup_bucket_location")[0].format(region=region_name)
+
+        file_type_prefixes = ("backup/sst",) if only_sstables else self.BACKUP_FILE_PREFIXES
+        prefixes = [f"{p}/cluster/{cluster_id}" for p in file_type_prefixes]
+
         if self.params.get("backup_bucket_backend") == "s3":
-            return self._get_all_snapshot_files_s3(
-                cluster_id=cluster_id, bucket_name=bucket_name, region_name=region_name
-            )
+            return self._get_all_snapshot_files_s3(bucket_name=bucket_name, region_name=region_name, prefixes=prefixes)
         elif self.params.get("backup_bucket_backend") == "gcs":
-            return self._get_all_snapshot_files_gce(cluster_id=cluster_id, bucket_name=bucket_name)
+            return self._get_all_snapshot_files_gce(bucket_name=bucket_name, prefixes=prefixes)
         elif self.params.get("backup_bucket_backend") == "azure":
-            return self._get_all_snapshot_files_azure(cluster_id=cluster_id, bucket_name=bucket_name)
+            return self._get_all_snapshot_files_azure(bucket_name=bucket_name, prefixes=prefixes)
         else:
             raise ValueError(f'"{self.params.get("backup_bucket_backend")}" not supported')
 
