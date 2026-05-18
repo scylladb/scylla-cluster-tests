@@ -20,6 +20,8 @@ import time
 from contextlib import nullcontext
 from datetime import timedelta
 
+from google.api_core.exceptions import Forbidden
+
 from sdcm import mgmt
 from sdcm.argus_results import (
     send_manager_benchmark_results_to_argus,
@@ -34,6 +36,7 @@ from sdcm.mgmt.common import (
     reconfigure_scylla_manager,
     get_persistent_snapshots,
     get_backup_size,
+    BackupRetentionLockMode,
     ObjectStorageUploadMode,
 )
 from sdcm.provision.helpers.certificate import (
@@ -309,6 +312,57 @@ class ManagerBackupTests(ManagerRestoreTests):
                 clean_enospc_on_node(target_node=target_node, sleep_time=30)
         self.log.info("finishing test_enospc_before_restore")
 
+    def test_worm_backup(self):
+        self.log.info("starting test_worm_backup")
+        mgr_cluster = self.db_cluster.get_cluster_manager()
+
+        self.log.info("Create WORM backup bucket")
+        worm_bucket_name = f"manager-worm-backup-test-{self.test_id[:8]}"
+        location = f"gcs:{worm_bucket_name}"
+        worm_bucket = self.create_worm_bucket(region=self.params.gce_datacenters[0], bucket_name=worm_bucket_name)
+
+        try:
+            self.log.info("Wait 30s for backup location accessibility after bucket creation")
+            # We tried to use `scylla-manager-agent check-location` here instead of dummy sleep, but the approach
+            # turned out to be not stable enough - check-location could proceed while the follow-up sctool backup
+            # could fail immediately due to bucket access issue. The reason - check-location command issued in test
+            # initializes rclone from scratch with fresh tokens, while backup runs through the SM agent server may
+            # hold stale tokens. A fixed sleep is the most robust approach here.
+            time.sleep(30)
+
+            self.log.info("Create backup task and wait for its completion")
+            backup_task = mgr_cluster.create_backup_task(
+                location_list=[location],
+                method=self.backup_method,
+                retention_days=1,
+                retention_lock_mode=BackupRetentionLockMode.UNLOCKED,
+            )
+            task_status = backup_task.wait_and_get_final_status(timeout=1500)
+            assert task_status == TaskStatus.DONE, f"Backup task ended in {task_status} instead of {TaskStatus.DONE}"
+
+            snapshot_files = self.get_all_snapshot_files(
+                cluster_id=mgr_cluster.id,
+                bucket_location=worm_bucket_name,
+                only_sstables=False,
+            )
+            assert snapshot_files, "No snapshot files found after backup"
+
+            self.log.info("Try to delete locked backup files")
+            for file_path in snapshot_files:
+                blob = worm_bucket.blob(file_path)
+                try:
+                    blob.delete()
+                    raise AssertionError(f"Deletion of locked file {file_path} unexpectedly succeeded")
+                except Forbidden:
+                    self.log.debug("File %s is properly locked (deletion forbidden)", file_path)
+            self.log.info("All snapshot files are properly protected by object lock")
+
+        finally:
+            self.destroy_worm_bucket(bucket=worm_bucket)
+            mgr_cluster.delete()
+
+        self.log.info("finishing test_worm_backup")
+
     def test_backup_feature(self):
         self.generate_load_and_wait_for_results()
         with self.subTest("Backup Multiple KS' and Tables"):
@@ -319,6 +373,10 @@ class ManagerBackupTests(ManagerRestoreTests):
             self.test_backup_rate_limit()
         with self.subTest("Test Backup Purge Removes Orphans Files"):
             self.test_backup_purge_removes_orphan_files()
+        if self.params.get("cluster_backend") == "gce":
+            # WORM backup feature is currently available for GCP only
+            with self.subTest("Test WORM backup with object lock"):
+                self.test_worm_backup()
         with self.subTest("Test Backup end of space"):  # Preferably at the end
             self.test_enospc_during_backup()
         with self.subTest("Test Restore end of space"):

@@ -174,6 +174,67 @@ def get_gce_storage_client() -> tuple[storage.Client, dict]:
     return storage.Client(credentials=credentials), info
 
 
+def create_gce_storage_bucket(name: str, region: str, object_lock_enabled: bool = False) -> storage.Bucket:
+    """Create a GCS bucket.
+
+    Args:
+        name: bucket name
+        region: GCS region (e.g., 'us-east1')
+        object_lock_enabled: if True, enables object retention (object lock) on the bucket.
+                             Requires uniform bucket-level access (set automatically).
+
+    Returns:
+        the created Bucket object
+    """
+    storage_client, _ = get_gce_storage_client()
+
+    bucket = storage_client.bucket(name)
+    if object_lock_enabled:
+        bucket.iam_configuration.uniform_bucket_level_access_enabled = True
+
+    storage_client.create_bucket(
+        bucket,
+        location=region,
+        enable_object_retention=object_lock_enabled,
+    )
+    LOGGER.info("Created GCS bucket gs://%s in %s (object_lock_enabled=%s)", name, region, object_lock_enabled)
+    return bucket
+
+
+def gce_override_object_retention(bucket_name: str, path: str) -> None:
+    """Override governance-mode object retention locks on blobs in a GCS bucket.
+
+    Processes all matching blobs individually — if one blob fails, the rest are
+    still attempted. Raises after all blobs have been processed if any failed.
+
+    Args:
+        bucket_name: the name of the GCS bucket
+        path: path prefix to match blobs (empty string means all blobs)
+    """
+    storage_client, _ = get_gce_storage_client()
+
+    if path.startswith("/"):
+        path = path[1:]
+
+    blobs = list(storage_client.list_blobs(bucket_or_name=bucket_name, prefix=path))
+    if not blobs:
+        LOGGER.warning("No blobs found in gs://%s/%s to unlock", bucket_name, path)
+        return
+
+    LOGGER.info("Overriding retention on %d blob(s) in gs://%s/%s", len(blobs), bucket_name, path)
+    failed = []
+    for blob in blobs:
+        try:
+            blob.retention.mode = None
+            blob.retention.retain_until_time = None
+            blob.patch(override_unlocked_retention=True)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error("Failed to override retention on gs://%s/%s: %s", bucket_name, blob.name, exc)
+            failed.append((blob.name, exc))
+    if failed:
+        raise RuntimeError(f"Failed to override retention on {len(failed)}/{len(blobs)} blob(s) in gs://{bucket_name}")
+
+
 def get_gce_compute_disks_client() -> tuple[compute_v1.DisksClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
