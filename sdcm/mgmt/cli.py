@@ -720,6 +720,8 @@ class ManagerCluster(ScyllaManagerBase):
         num_retries=None,
         rate_limit_list=None,
         retention=None,
+        retention_days=None,
+        retention_lock_mode=None,
         show_tables=None,
         snapshot_parallel_list=None,
         start_date=None,
@@ -747,6 +749,10 @@ class ManagerCluster(ScyllaManagerBase):
             cmd += " --rate-limit {} ".format(rate_limit_string)
         if retention is not None:
             cmd += " --retention {} ".format(retention)
+        if retention_days is not None:
+            cmd += " --retention-days {} ".format(retention_days)
+        if retention_lock_mode is not None:
+            cmd += " --retention-lock-mode {} ".format(retention_lock_mode)
         if show_tables is not None:
             cmd += " --show-tables {} ".format(show_tables)
         if snapshot_parallel_list is not None:

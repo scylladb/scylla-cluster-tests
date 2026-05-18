@@ -1,7 +1,7 @@
 import logging
 import re
 from datetime import datetime, timedelta
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Optional, TYPE_CHECKING
 
 import yaml
@@ -52,6 +52,12 @@ class ScyllaManagerError(Exception):
 # ---------------------------------------------------------------------------
 # Enum classes (alphabetical)
 # ---------------------------------------------------------------------------
+
+
+class BackupRetentionLockMode(StrEnum):
+    DISABLED = "disabled"
+    UNLOCKED = "unlocked"
+    LOCKED = "locked"
 
 
 class HostRestStatus(Enum):
