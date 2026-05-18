@@ -9,7 +9,8 @@ from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.cloud_monitor.common import InstanceLifecycle, NA
 from sdcm.utils.cloud_monitor.resources import CloudInstance, CloudResources
 from sdcm.utils.common import aws_tags_to_dict, gce_meta_to_dict, list_instances_aws, list_instances_gce
-from sdcm.utils.pricing import AWSPricing, GCEPricing, AzurePricing
+from sdcm.utils.oci_utils import list_instances_oci
+from sdcm.utils.pricing import AWSPricing, GCEPricing, AzurePricing, OCIPricing
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
 from sdcm.utils.context_managers import environment
 
@@ -139,6 +140,34 @@ class AzureInstance(CloudInstance):
         return self.region_az
 
 
+class OCIInstance(CloudInstance):
+    pricing = OCIPricing()
+
+    def __init__(self, instance):
+        tags = (instance.defined_tags or {}).get("sct", {})
+        lifecycle_state = instance.lifecycle_state.lower() if instance.lifecycle_state else "unknown"
+        state = "running" if lifecycle_state == "running" else "stopped"
+        self._region = instance.region
+        super().__init__(
+            cloud="oci",
+            name=instance.display_name or NA,
+            instance_id=instance.id,
+            region_az=instance.availability_domain or NA,
+            state=state,
+            lifecycle=InstanceLifecycle.ON_DEMAND,
+            instance_type=instance.shape or NA,
+            owner=tags.get("RunByUser", NA),
+            create_time=instance.time_created,
+            keep=tags.get("keep", ""),
+            project=tags.get("billing_project", NA),
+            billing_project=tags.get("billing_project", NA),
+        )
+
+    @property
+    def region(self):
+        return self._region
+
+
 class CloudInstances(CloudResources):
     def get_aws_instances(self):
         aws_instances = list_instances_aws(verbose=True)
@@ -178,8 +207,19 @@ class CloudInstances(CloudResources):
             LOGGER.error("Failed to retrieve Azure instances: %s. Continuing with other cloud providers.", e)
             self["azure"] = []  # Set empty list to indicate partial failure
 
+    def get_oci_instances(self):
+        try:
+            oci_instances = list_instances_oci(verbose=True)
+            self["oci"] = [OCIInstance(instance) for instance in oci_instances]
+            self.all.extend(self["oci"])
+            LOGGER.info("Successfully retrieved OCI instances")
+        except Exception as e:  # noqa: BLE001
+            LOGGER.error("Failed to retrieve OCI instances: %s. Continuing with other cloud providers.", e)
+            self["oci"] = []
+
     def get_all(self):
         LOGGER.info("Getting all cloud instances...")
         self.get_aws_instances()
         self.get_gce_instances()
         self.get_azure_instances()
+        self.get_oci_instances()

@@ -299,3 +299,12 @@ class AzurePricing:
             LOGGER.warning("Failed to fetch prices for %s in location: %s", instance_type, region)
             return []
         return [item for item in resp.json()["Items"] if "Windows" not in item["productName"]]
+
+
+class OCIPricing:
+    """OCI pricing - returns 0 as OCI does not have a public retail pricing API like AWS/Azure."""
+
+    def get_instance_price(self, region, instance_type, state, lifecycle):
+        # OCI does not expose a simple public pricing API for compute instances.
+        # Return 0 to indicate pricing is unavailable rather than failing.
+        return 0
