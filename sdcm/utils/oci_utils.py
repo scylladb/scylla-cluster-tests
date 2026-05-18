@@ -38,6 +38,15 @@ from sdcm.utils.metaclasses import Singleton
 
 LOGGER = logging.getLogger(__name__)
 
+OCI_RETRY_STRATEGY = oci.retry.RetryStrategyBuilder(
+    max_attempts_check=True,
+    max_attempts=10,
+    retry_max_wait_between_calls_seconds=60,
+    retry_base_sleep_time_seconds=3,
+    service_error_retry_on_any_5xx=True,
+    service_error_retry_config={429: []},
+).get_retry_strategy()
+
 # Suppress verbose OCI SDK logging
 logging.getLogger("oci").setLevel(logging.WARNING)
 
@@ -117,42 +126,42 @@ class OciService(metaclass=Singleton):
         config = self.config.copy()
         if region:
             config["region"] = region
-        return ComputeClient(config)
+        return ComputeClient(config, retry_strategy=OCI_RETRY_STRATEGY)
 
     def get_identity_client(self, region: str | None = None) -> IdentityClient:
         """Get Identity client for specified region."""
         config = self.config.copy()
         if region:
             config["region"] = region
-        return IdentityClient(config)
+        return IdentityClient(config, retry_strategy=OCI_RETRY_STRATEGY)
 
     def get_network_client(self, region: str | None = None) -> VirtualNetworkClient:
         """Get Virtual Network client for specified region."""
         config = self.config.copy()
         if region:
             config["region"] = region
-        return VirtualNetworkClient(config)
+        return VirtualNetworkClient(config, retry_strategy=OCI_RETRY_STRATEGY)
 
     def get_object_storage_client(self, region: str | None = None) -> ObjectStorageClient:
         """Get Object Storage client for specified region."""
         config = self.config.copy()
         if region:
             config["region"] = region
-        return ObjectStorageClient(config)
+        return ObjectStorageClient(config, retry_strategy=OCI_RETRY_STRATEGY)
 
     def get_block_storage_client(self, region: str | None = None) -> BlockstorageClient:
         """Get Block Storage client for specified region."""
         config = self.config.copy()
         if region:
             config["region"] = region
-        return BlockstorageClient(config)
+        return BlockstorageClient(config, retry_strategy=OCI_RETRY_STRATEGY)
 
     def get_work_request_client(self, region: str | None = None) -> WorkRequestClient:
         """Get Work Request client for specified region."""
         config = self.config.copy()
         if region:
             config["region"] = region
-        return WorkRequestClient(config)
+        return WorkRequestClient(config, retry_strategy=OCI_RETRY_STRATEGY)
 
 
 def get_availability_domains(compartment_id: str, region: str | None = None) -> list[str]:
