@@ -188,7 +188,7 @@ def call(Map pipelineParams) {
                                                         export SCT_REGION_NAME='${params.region}'
                                                     fi
                                                     if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-                                                        export SCT_GCE_DATACENTER=${params.gce_datacenter}
+                                                        export SCT_GCE_DATACENTER='${params.gce_datacenter}'
                                                     fi
                                                     if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
                                                         export SCT_AZURE_REGION_NAME=${params.azure_region_name}

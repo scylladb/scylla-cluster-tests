@@ -3,10 +3,7 @@
 def call(Map params, String region, functional_test = false, Map pipelineParams = [:]){
     // handle params which can be a json list
     def current_region = initAwsRegionParam(params.region, region)
-    def current_gce_datacenter = ""
-    if (params.gce_datacenter) {
-        current_gce_datacenter = groovy.json.JsonOutput.toJson(params.gce_datacenter)
-    }
+    def current_gce_datacenter = params.gce_datacenter ?: ""
     def current_oci_region = ""
     if (params.oci_region_name) {
         current_oci_region = initAwsRegionParam(params.oci_region_name, region)
@@ -65,7 +62,7 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     fi
 
     if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-        export SCT_GCE_DATACENTER=${current_gce_datacenter}
+        export SCT_GCE_DATACENTER='${current_gce_datacenter}'
     fi
 
     if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
