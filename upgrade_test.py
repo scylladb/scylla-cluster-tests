@@ -386,8 +386,45 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if upgrade_sstables:
             self.upgradesstables_if_command_available(node)
 
+        self._verify_node_exporter_after_upgrade(node)
+
         self.db_cluster.wait_all_nodes_un()
         self.actions_log.info(f"Upgrade {node.name} node completed")
+
+    def _verify_node_exporter_after_upgrade(self, node):
+        """Verify scylla-node-exporter service runs the binary shipped by the installed package."""
+        with self.actions_log.action_scope("verify_node_exporter"):
+            # Check the service is active
+            result = node.remoter.run("systemctl is-active scylla-node-exporter", ignore_status=True)
+            assert result.ok, f"scylla-node-exporter service is NOT active on {node.name}"
+            self.log.info("scylla-node-exporter service is active on %s", node.name)
+
+            # Get the ExecStart binary path from the systemd unit
+            result = node.remoter.run(
+                r"systemctl show scylla-node-exporter -p ExecStart --value | grep -oP 'path=\K[^;\s]+'",
+            )
+            service_binary = result.stdout.strip()
+            self.log.info("scylla-node-exporter ExecStart binary on %s: %s", node.name, service_binary)
+            assert service_binary, f"Could not determine ExecStart binary for scylla-node-exporter on {node.name}"
+
+            # Verify the binary is owned by the scylla-node-exporter package
+            if node.distro.is_rhel_like or node.distro.is_sles:
+                pkg_result = node.remoter.run(f"rpm -qf {service_binary}", ignore_status=True)
+            else:
+                pkg_result = node.remoter.run(f"dpkg -S {service_binary}", ignore_status=True)
+            assert pkg_result.ok and "scylla-node-exporter" in pkg_result.stdout, (
+                f"Binary {service_binary} on {node.name} is NOT owned by scylla-node-exporter package. "
+                f"Output: {pkg_result.stdout.strip()}"
+            )
+            self.log.info(
+                "Confirmed %s is owned by scylla-node-exporter package on %s",
+                service_binary,
+                node.name,
+            )
+
+            # Log the binary version for reference
+            result = node.remoter.run(f"{service_binary} --version 2>&1 | head -1")
+            self.log.info("node_exporter binary version on %s: %s", node.name, result.stdout.strip())
 
     def upgrade_os(self, nodes):
         def upgrade(node):
