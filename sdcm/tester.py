@@ -52,6 +52,7 @@ from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from sdcm.provision.gce.kms_provider import GcpKmsProvider
+from sdcm.provision.gce.zone_resolver import GceAZResolver
 from sdcm.cluster import (
     BaseCluster,
     NoMonitorSet,
@@ -1601,6 +1602,8 @@ class ClusterTester(unittest.TestCase):
         return nemesis_threads
 
     def get_cluster_gce(self, loader_info, db_info, monitor_info):  # noqa: PLR0912, PLR0914
+        GceAZResolver(self.params).resolve()
+
         datacenters = self.params.gce_datacenters
         test_id = str(TestConfig().test_id())
         provisioners: List[GceProvisioner] = []
