@@ -624,6 +624,13 @@ def create_instance(  # noqa: PLR0913
         instance.scheduling.on_host_maintenance = "TERMINATE"
         instance.scheduling.provisioning_model = compute_v1.Scheduling.ProvisioningModel.SPOT.name
         instance.scheduling.instance_termination_action = instance_termination_action
+    elif machine_type.split("/")[-1].startswith("e2-"):
+        # e2 family supports only on_host_maintenance=MIGRATE for non-spot VMs
+        instance.scheduling.on_host_maintenance = "MIGRATE"
+    else:
+        # avoid live migration and unexpected restarts disrupting tests
+        instance.scheduling.on_host_maintenance = "TERMINATE"
+        instance.scheduling.automatic_restart = False
 
     if custom_hostname is not None:
         # Set the custom hostname for the instance
