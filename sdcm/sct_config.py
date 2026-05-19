@@ -75,9 +75,9 @@ from sdcm.utils.version_utils import (
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import (
-    SUPPORTED_REGIONS as GCE_SUPPORTED_REGIONS,
     get_gce_image_tags,
     get_gce_compute_machine_types_client,
+    get_gce_compute_regions_client,
     gce_check_if_machine_type_supported,
 )
 from sdcm.utils.azure_utils import (
@@ -1987,7 +1987,8 @@ class SCTConfiguration(BaseModel):
     )
     pre_filter_unavailable_availability_zones: Boolean = SctField(
         description="Filter availability zones upfront to only those that support all required instance types. "
-        "Replaces invalid AZs with valid alternatives in the same region before any provisioning attempt. AWS only.",
+        "Replaces invalid AZs with valid alternatives in the same region before any provisioning attempt. "
+        "Supported backends: AWS, GCE.",
     )
     num_nodes_to_rollback: int = SctField(
         description="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade",
@@ -3730,9 +3731,11 @@ class SCTConfiguration(BaseModel):
                         )
                 case "gce":
                     machine_types_client, info = get_gce_compute_machine_types_client()
+                    regions_client, _ = get_gce_compute_regions_client()
                     for datacenter in self.gce_datacenters:
-                        for zone in GCE_SUPPORTED_REGIONS.get(datacenter):
-                            _zone = f"{datacenter}-{zone}"
+                        region_info = regions_client.get(project=info["project_id"], region=datacenter)
+                        zones = [z.rsplit("/", 1)[-1] for z in region_info.zones]
+                        for _zone in zones:
                             assert gce_check_if_machine_type_supported(
                                 machine_types_client, instance_type, project=info["project_id"], zone=_zone
                             ), f"Instance type[{instance_type}] not supported in zone [{_zone}]"
