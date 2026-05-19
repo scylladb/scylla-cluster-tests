@@ -805,7 +805,7 @@ class NemesisRunner:
         time.sleep(60)
 
     def disrupt_hard_reboot_node(self):
-        with ignore_raft_topology_cmd_failing():
+        with suppress_expected_unavailability_errors():
             self.reboot_node(target_node=self.target_node, hard=True)
         with self.action_log_scope(f"Wait for {self.target_node.name} node to be fully started"):
             self.target_node.wait_node_fully_start()
@@ -1317,8 +1317,11 @@ class NemesisRunner:
             self.set_target_node(allow_only_last_node_in_rack=True)
 
         target_is_seed = self.target_node.is_seed
-        with self.action_log_scope(
-            f"Decommission {self.target_node.name} node. is_zero_token_node: {self.target_node._is_zero_token_node}"
+        with (
+            suppress_expected_unavailability_errors(),
+            self.action_log_scope(
+                f"Decommission {self.target_node.name} node. is_zero_token_node: {self.target_node._is_zero_token_node}"
+            ),
         ):
             dc_topology_rf_change = self.cluster.decommission(self.target_node)
         new_node = None
@@ -5580,7 +5583,10 @@ class NemesisRunner:
                     self.cluster.decommission(new_node, timeout=decommission_timeout)
 
     def disrupt_disable_binary_gossip_execute_major_compaction(self):
-        with nodetool_context(node=self.target_node, start_command="disablebinary", end_command="enablebinary"):
+        with (
+            suppress_expected_unavailability_errors(),
+            nodetool_context(node=self.target_node, start_command="disablebinary", end_command="enablebinary"),
+        ):
             self.actions_log.info("Executed nodetool disablebinary")
             self.target_node.run_nodetool("statusbinary")
             self.target_node.run_nodetool("status")
