@@ -21,6 +21,7 @@ import uuid
 from functools import cached_property
 from typing import Any, List, Literal
 
+import google.api_core.exceptions
 from google.oauth2 import service_account
 from google.cloud import compute_v1
 from google.cloud.compute_v1 import Image
@@ -59,15 +60,13 @@ def vmarch_to_gcp(arch: VmArch) -> str:
         raise ValueError(f"Unsupported architecture: {arch}")
 
 
-# The keys are the region name, the value is the available zones, which will be used for random.choice()
-SUPPORTED_REGIONS = {
-    # us-east1 zones: b, c, and d. Details: https://cloud.google.com/compute/docs/regions-zones#locations
-    # Currently choose only zones c and d as zone b frequently fails allocating resources.
-    "us-east1": "cd",
-    "us-east4": "abc",
-    "us-west1": "abc",
-    "us-central1": "abcf",
-}
+# Regions where SCT has infrastructure (VPCs, firewall rules, etc.)
+SUPPORTED_REGIONS = [
+    "us-east1",
+    "us-east4",
+    "us-west1",
+    "us-central1",
+]
 
 
 SUPPORTED_PROJECTS = {"gcp-sct-project-1", "gcp-local-ssd-latency"} | {
@@ -75,11 +74,22 @@ SUPPORTED_PROJECTS = {"gcp-sct-project-1", "gcp-local-ssd-latency"} | {
 }
 
 
+def _get_zone_letters_for_region(region: str) -> list[str]:
+    """Query GCE Regions API to get available zone letters for a region."""
+    try:
+        regions_client, _ = get_gce_compute_regions_client()
+        region_info = regions_client.get(project=KeyStore().get_gcp_credentials()["project_id"], region=region)
+        return [z.rsplit("/", 1)[-1].split("-")[-1] for z in region_info.zones]
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Failed to get zones from GCE API for region %s", region)
+        return []
+
+
 def random_zone(region: str) -> str:
-    availability_zones = SUPPORTED_REGIONS.get(region, None)
-    if not availability_zones:
-        raise Exception(f"Unsupported region: {region}")
-    return f"{random.choice(availability_zones)}"
+    zone_letters = _get_zone_letters_for_region(region)
+    if not zone_letters:
+        raise Exception(f"No zones found for region: {region}")
+    return random.choice(zone_letters)
 
 
 def get_alternative_zones(region: str, exhausted_zone: str, machine_types: list[str] | None = None) -> list[str]:
@@ -101,11 +111,12 @@ def get_alternative_zones(region: str, exhausted_zone: str, machine_types: list[
         valid_letters = [zone.split("-")[-1] for zone in common_zones]
         alternatives = [z for z in valid_letters if z != exhausted_letter]
     else:
-        zone_letters = SUPPORTED_REGIONS.get(region, "")
+        zone_letters = _get_zone_letters_for_region(region)
         if not zone_letters:
             return []
         alternatives = [z for z in zone_letters if z != exhausted_letter]
 
+    random.shuffle(alternatives)
     return alternatives
 
 
