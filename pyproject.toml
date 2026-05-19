@@ -64,7 +64,7 @@ dependencies = [
     "questionary==2.1.1",
     "requests==2.33.0",
     "rich==15.0.0",
-    "scylla-driver==3.29.10",
+    "scylla-driver",
     "sortedcontainers==2.4.0",
     "ssh2-python>=1.1.2.post1",
     "tcconfig==0.29.1",
@@ -98,6 +98,7 @@ environments = ["sys_platform != 'win32'"]
 build-constraint-dependencies = ["setuptools>=65.0.0,<75"]
 
 [tool.uv.sources]
+scylla-driver = { git = "https://github.com/Lorak-mmk/python-driver.git", branch = "fix-libev" }
 ssh2-python = [
     { url = "https://roy-rpms.s3.us-east-1.amazonaws.com/ssh2_python-1.2.0.post1%2B0.gc92aa3e.dirty-cp314-cp314-macosx_26_0_arm64.whl", marker = "sys_platform == 'darwin' and platform_machine == 'arm64' and python_version == '3.14'" },
 ]

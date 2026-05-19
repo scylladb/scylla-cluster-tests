@@ -27,6 +27,7 @@ RUN apt-get update
 RUN apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
+    git \
     libssl-dev \
     zlib1g-dev \
     libffi-dev \
