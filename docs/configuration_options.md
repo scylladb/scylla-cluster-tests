@@ -3365,7 +3365,7 @@ On capacity errors, automatically retry provisioning in the next available AZ in
 
 ## **pre_filter_unavailable_availability_zones** / SCT_PRE_FILTER_UNAVAILABLE_AVAILABILITY_ZONES
 
-Filter availability zones upfront to only those that support all required instance types. Replaces invalid AZs with valid alternatives in the same region before any provisioning attempt. AWS only.
+Filter availability zones upfront to only those that support all required instance types. Replaces invalid AZs with valid alternatives in the same region before any provisioning attempt. Supported backends: AWS, GCE.
 
 **default:** True
 

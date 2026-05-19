@@ -1,12 +1,28 @@
 """Tests for GCE zone fallback on resource pool exhaustion."""
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import google.api_core.exceptions
 
 from sdcm.utils.gce_utils import get_alternative_zones
 from sdcm.cluster_gce import _ZoneExhaustedError
+
+ZONE_MAP = {
+    "us-east1": ["b", "c", "d"],
+    "us-east4": ["a", "b", "c"],
+    "us-west1": ["a", "b", "c"],
+    "us-central1": ["a", "b", "c", "f"],
+}
+
+
+@pytest.fixture(autouse=True)
+def mock_zone_letters():
+    with patch(
+        "sdcm.utils.gce_utils._get_zone_letters_for_region",
+        side_effect=lambda region: ZONE_MAP.get(region, []),
+    ):
+        yield
 
 
 class TestGetAlternativeZones:
@@ -30,12 +46,10 @@ class TestGetAlternativeZones:
         assert "d" in alternatives
 
     def test_returns_all_other_zones_for_region(self):
-        # us-east1 has zones "cd" in SUPPORTED_REGIONS
         alternatives = get_alternative_zones("us-east1", "us-east1-c")
-        assert alternatives == ["d"]
+        assert set(alternatives) == {"b", "d"}
 
     def test_multi_zone_region(self):
-        # us-central1 has zones "abcf"
         alternatives = get_alternative_zones("us-central1", "us-central1-a")
         assert set(alternatives) == {"b", "c", "f"}
 

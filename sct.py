@@ -309,7 +309,11 @@ def provision_resources(backend, test_name: str, config: str):
         if backend == "aws":
             layout = SCTProvisionLayout(params=params)
             layout.provision()
-        elif backend in ("azure", "oci"):
+        elif backend in ("azure", "gce", "oci"):
+            if backend == "gce":
+                from sdcm.provision.gce.zone_resolver import GceAZResolver  # noqa: PLC0415
+
+                GceAZResolver(params).resolve()
             provision_sct_resources(params=params, test_config=test_config)
         elif backend == "xcloud":
             cloud_provider = params.get("xcloud_provider").lower()
