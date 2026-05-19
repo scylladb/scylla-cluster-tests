@@ -276,7 +276,11 @@ def provision_resources(backend, test_name: str, config: str):
         if backend == "aws":
             layout = SCTProvisionLayout(params=params)
             layout.provision()
-        elif backend == "azure":
+        elif backend in ("azure", "gce"):
+            if backend == "gce":
+                from sdcm.provision.gce.zone_resolver import GceAZResolver  # noqa: PLC0415
+
+                GceAZResolver(params).resolve()
             provision_sct_resources(params=params, test_config=test_config)
         else:
             raise ValueError(f"backend {backend} is not supported")
