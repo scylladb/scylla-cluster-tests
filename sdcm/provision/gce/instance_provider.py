@@ -274,6 +274,13 @@ class VirtualMachineProvider:
             instance.scheduling.on_host_maintenance = "TERMINATE"
             instance.scheduling.provisioning_model = compute_v1.Scheduling.ProvisioningModel.SPOT.name
             instance.scheduling.instance_termination_action = "STOP"
+        elif definition.type.startswith("e2-"):
+            # e2 family supports only on_host_maintenance=MIGRATE for non-spot VMs
+            instance.scheduling.on_host_maintenance = "MIGRATE"
+        else:
+            # avoid live migration and unexpected restarts disrupting tests
+            instance.scheduling.on_host_maintenance = "TERMINATE"
+            instance.scheduling.automatic_restart = False
 
         # Network tags and service accounts
         network_tags = self.network_provider.get_network_tags(allow_public_access=definition.use_public_ip)
