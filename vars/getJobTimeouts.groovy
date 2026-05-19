@@ -16,7 +16,7 @@ List<Integer> call(Map params, String region){
     fi
 
     if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-        export SCT_GCE_DATACENTER=${groovy.json.JsonOutput.toJson(params.gce_datacenter)}
+        export SCT_GCE_DATACENTER='${params.gce_datacenter}'
     fi
 
     if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then

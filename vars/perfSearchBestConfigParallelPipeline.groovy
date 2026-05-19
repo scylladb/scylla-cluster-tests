@@ -304,7 +304,7 @@ def call(Map pipelineParams) {
                                                         fi
 
                                                         if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-                                                            export SCT_GCE_DATACENTER=${params.gce_datacenter}
+                                                            export SCT_GCE_DATACENTER='${params.gce_datacenter}'
                                                         fi
 
                                                         export SCT_EMAIL_RECIPIENTS="${email_recipients}"
