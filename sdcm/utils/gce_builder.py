@@ -244,7 +244,7 @@ class GceBuilder:
     def configure_in_all_region(cls, regions=None):
         for project in SUPPORTED_PROJECTS:
             with environment(SCT_GCE_PROJECT=project):
-                regions = regions or SUPPORTED_REGIONS.keys()
+                regions = regions or SUPPORTED_REGIONS
                 for region_name in regions:
                     gce_builder = cls(GceRegion(region_name))
                     gce_builder.configure()
