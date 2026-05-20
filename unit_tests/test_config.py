@@ -1094,7 +1094,6 @@ class TestCommonTags:
         assert "JenkinsJob" not in tags
 
 
-
 @pytest.mark.parametrize(
     "raw_value,expected",
     [
