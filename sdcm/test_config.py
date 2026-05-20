@@ -57,6 +57,7 @@ class TestConfig(metaclass=Singleton):
     SYSLOGNG_ADDRESS = None
     VECTOR_ADDRESS = None
     LDAP_ADDRESS = None
+    LDAP_USERS_ON_SCYLLA: bool = False
     DECODING_QUEUE = None
 
     _test_id = None
