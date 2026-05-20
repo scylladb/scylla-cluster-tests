@@ -29,7 +29,6 @@ from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.gce_utils import create_gce_storage_bucket, get_gce_storage_client, gce_override_object_retention
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.utils.time_utils import ExecutionTimer
-from sdcm.utils.version_utils import ComparableScyllaVersion
 
 if TYPE_CHECKING:
     from google.cloud.storage import Bucket
@@ -944,10 +943,6 @@ class ManagerTestFunctionsMixIn(
         InfoEvent(
             message=f"The restore task has ended successfully. Restore run time: {restore_task.duration}."
         ).publish()
-
-        should_restart = restore_schema and ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version) <= "2024.1"
-        if should_restart:
-            self.db_cluster.restart_scylla()
 
         return restore_task
 
