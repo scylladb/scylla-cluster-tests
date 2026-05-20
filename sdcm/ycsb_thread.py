@@ -200,29 +200,6 @@ class YcsbStressThread(DockerBasedStressThread):
 
             with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as tmp_file:
                 tmp_file.write(dynamodb_teample)
-                tmp_file.write(
-                    dedent(f"""
-                    dynamodb.debug = false
-                    dynamodb.alternator.port = {alternator_port}
-                    dynamodb.alternator.loadbalancing = {native_loading}
-                    dynamodb.virtualThreads = true
-                    dynamodb.alternator.trustAllCertificates = {trustAllCerts}
-                    dynamodb.awsAccessKey = {access_key}
-                    dynamodb.awsSecretKey = {secret_key}
-                    aws.accessKeyId = {access_key}
-                    aws.secretKey = {secret_key}
-                """)
-                )
-                # Only write datacenter/rack when non-empty. Java's Properties.getProperty()
-                # returns "" for empty values (not null), so `datacenter != null` would be
-                # true for "", creating DatacenterScope.of("") which routes to a non-existent
-                # datacenter and causes all operations to fail.
-                loader_datacenter = getattr(loader, "datacenter", "")
-                loader_rack = getattr(loader, "rack", "")
-                if loader_datacenter:
-                    tmp_file.write(f"dynamodb.alternator.datacenter = {loader_datacenter}\n")
-                if loader_rack:
-                    tmp_file.write(f"dynamodb.alternator.rack = {loader_rack}\n")
                 tmp_file.flush()
                 cmd_runner.send_files(tmp_file.name, os.path.join("/tmp", "dynamodb.properties"))
 
