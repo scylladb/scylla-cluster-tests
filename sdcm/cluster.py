@@ -4340,7 +4340,7 @@ class BaseCluster:
             node.destroy()
 
     def get_db_auth(self):
-        if self.params.get("use_ldap") and self.params.get("are_ldap_users_on_scylla"):
+        if self.params.get("use_ldap") and TestConfig().LDAP_USERS_ON_SCYLLA:
             user = LDAP_USERS[0]
             password = LDAP_PASSWORD
         else:
