@@ -15,6 +15,5 @@ scylla_linux_distro: 'centos'
 test_duration: 60
 use_preinstalled_scylla: false
 user_prefix: 'artifacts-al2023'
-aws_fallback_to_next_availability_zone: true
 
 user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
