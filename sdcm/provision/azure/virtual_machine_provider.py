@@ -148,7 +148,7 @@ class VirtualMachineProvider:
                 error_to_raise = err
         for definition, poller in pollers:
             try:
-                poller.wait()
+                poller.wait(timeout=900)
                 v_m = self._azure_service.compute.virtual_machines.get(
                     self._resource_group_name, definition.name, expand="instanceView"
                 )

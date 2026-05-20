@@ -43,7 +43,7 @@ class WaitableObject:
     def __init__(self, error: AzureError = None):
         self.error = error
 
-    def wait(self):
+    def wait(self, timeout=None):
         if self.error:
             raise self.error
 
