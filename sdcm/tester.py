@@ -10,6 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
+import contextlib
 import shutil
 import configparser
 import importlib
@@ -79,7 +80,8 @@ from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.cluster_cloud import ScyllaCloudCluster
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
 from sdcm.mgmt import get_scylla_manager_tool
-from sdcm.provision.aws.az_resolver import AZResolver
+from sdcm.provision.aws.az_resolver import AZResolver, is_az_fallback_enabled
+from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, is_capacity_error
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
@@ -109,7 +111,6 @@ from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
 from sdcm.utils.argus import report_scylla_yaml_to_argus
 from sdcm.utils.aws_kms import AwsKms
-from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import (
     init_monitoring_info_from_params,
     get_ec2_services,
@@ -1847,6 +1848,34 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.monitors = NoMonitorSet()
 
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
+        AZResolver(self.params).resolve()
+
+        # capacity reservation handles its own AZ fallback internally
+        cr_enabled = SCTCapacityReservation.is_capacity_reservation_enabled(self.params)
+        fallback_enabled = is_az_fallback_enabled(self.params) and not cr_enabled
+
+        self._populate_aws_info_dicts(loader_info, db_info, monitor_info)
+
+        original_az = self.params.get("availability_zone")
+        if fallback_enabled and (az_candidates := AZResolver(self.params).get_fallback_candidates()):
+            candidates = az_candidates
+        else:
+            candidates = [original_az.split(",") if original_az else []]
+
+        region_exhausted, last_error = self._provision_legacy_with_az_fallback(
+            loader_info, db_info, monitor_info, candidates, last_error=None
+        )
+        if not region_exhausted:
+            return
+
+        self.params["availability_zone"] = original_az
+        tried = ", ".join("+".join(c) for c in candidates)
+        raise CriticalTestFailure(
+            f"Failed creating AWS clusters in all {len(candidates)} AZ candidate(s) [{tried}]: {last_error}"
+        ) from last_error
+
+    def _populate_aws_info_dicts(self, loader_info: dict, db_info: dict, monitor_info: dict) -> None:
+        """Fill missing AWS info values for the current region."""
         regions = self.params.get("region_name").split()
 
         if loader_info["n_nodes"] is None:
@@ -1876,14 +1905,69 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         init_db_info_from_params(db_info, params=self.params, regions=regions)
         init_monitoring_info_from_params(monitor_info, params=self.params, regions=regions)
-        user_prefix = self.params.get("user_prefix")
 
-        user_credentials = self.params.get("user_credentials_path")
+    def _provision_legacy_with_az_fallback(
+        self,
+        loader_info: dict,
+        db_info: dict,
+        monitor_info: dict,
+        candidates: list[list[str]],
+        last_error: Exception | None,
+    ) -> tuple[bool, Exception | None]:
+        """Try AZ candidates in the current region.
 
+        Return `(False, last_error)` on success, or `(True, last_error)` if all
+        candidates fail with capacity errors.
+        """
+        for attempt_idx, candidate in enumerate(candidates, start=1):
+            if candidate:
+                self.params["availability_zone"] = ",".join(candidate)
+
+            if attempt_idx > 1:
+                self.log.warning(
+                    "Capacity error in previous AZ; retrying in '%s' (attempt %d/%d)",
+                    self.params["availability_zone"],
+                    attempt_idx,
+                    len(candidates),
+                )
+                self._cleanup_legacy_partial_aws_clusters()
+
+            try:
+                self._provision_legacy_aws_clusters(loader_info, db_info, monitor_info)
+                return False, last_error
+            except (botocore.exceptions.ClientError, ProvisioningCapacityExhausted) as exc:
+                if isinstance(exc, botocore.exceptions.ClientError) and not is_capacity_error(exc):
+                    raise
+                last_error = exc
+                self.log.warning(
+                    "Provision failed with capacity error in AZ '%s': %s",
+                    self.params.get("availability_zone"),
+                    exc,
+                )
+
+        return True, last_error
+
+    def _cleanup_legacy_partial_aws_clusters(self) -> None:
+        """Destroy partially created AWS clusters before retrying provisioning."""
+        for attr in ("db_cluster", "cs_db_cluster", "loaders", "monitors"):
+            cluster = getattr(self, attr, None)
+            if cluster is None or isinstance(cluster, NoMonitorSet):
+                continue
+            with contextlib.suppress(Exception):
+                cluster.destroy()
+            setattr(self, attr, None)
+
+        self.credentials = []
+
+    def _provision_legacy_aws_clusters(self, loader_info, db_info, monitor_info):
+        """Provision AWS clusters using the current region and availability zone.
+
+        Used by `get_cluster_aws` to retry provisioning with different AZs.
+        """
         regions = self.params.get("region_name").split()
         services = get_ec2_services(regions)
-
-        AZResolver(self.params).resolve()
+        user_prefix = self.params.get("user_prefix")
+        user_credentials = self.params.get("user_credentials_path")
 
         for _ in regions:
             self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
@@ -1892,47 +1976,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         for idx, ami_id in enumerate(ami_ids):
             wait_ami_available(services[idx].meta.client, ami_id)
 
-        def _get_all_zones_common_params() -> list[dict]:
-            all_zones_common_params = []
-            aws_region = AwsRegion(region_name=regions[0])
-            availability_zones = [
-                zone[-1]
-                for zone in aws_region.get_availability_zones_for_instance_type(self.params.get("instance_type_db"))
-            ]
-            for zone in availability_zones:
-                all_zones_common_params.append(
-                    get_common_params(
-                        params=self.params,
-                        regions=regions,
-                        credentials=self.credentials,
-                        services=services,
-                        availability_zone=zone,
-                    )
-                )
-            return all_zones_common_params
-
         common_params = get_common_params(
             params=self.params, regions=regions, credentials=self.credentials, services=services
         )
-
-        def _create_auto_zone_scylla_aws_cluster():
-            capacity_errors = []
-            for cl_zone_params in _get_all_zones_common_params():
-                cl_zone_params.update(_get_instance_params())
-                try:
-                    return ScyllaAWSCluster(
-                        ec2_ami_id=self.params.get("ami_id_db_scylla").split(),
-                        ec2_ami_username=self.params.get("ami_db_scylla_user"),
-                        **cl_zone_params,
-                    )
-                except botocore.exceptions.ClientError as error:
-                    capacity_error_keywards = ["Unsupported", "InsufficientInstanceCapacity"]
-                    if any(capacity_error in str(error) for capacity_error in capacity_error_keywards):
-                        self.log.warning("Failed creating a Scylla AWS cluster: %s", error)
-                        capacity_errors.append(error)
-                    else:
-                        raise
-            raise CriticalTestFailure(f"Failed creating a Scylla AWS cluster: {capacity_errors}")
 
         def _get_instance_params() -> dict:
             return dict(
@@ -1945,8 +1991,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             cl_params = _get_instance_params()
             cl_params.update(common_params)
             if db_type == "scylla":
-                if self.params.get("aws_fallback_to_next_availability_zone"):
-                    return _create_auto_zone_scylla_aws_cluster()
                 return ScyllaAWSCluster(
                     ec2_ami_id=self.params.get("ami_id_db_scylla").split(),
                     ec2_ami_username=self.params.get("ami_db_scylla_user"),

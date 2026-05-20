@@ -17,9 +17,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
+from sdcm.cluster import NoMonitorSet
 from sdcm.cluster_aws import AWSCluster
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted
 from sdcm.sct_provision.aws.layout import SCTProvisionAWSLayout
+from sdcm.tester import ClusterTester
 
 
 class _DotDict(dict):
@@ -28,7 +30,14 @@ class _DotDict(dict):
     __delattr__ = dict.__delitem__
 
 
-def _make_params(**overrides):
+def _capacity_error() -> ClientError:
+    return ClientError(
+        error_response={"Error": {"Code": "InsufficientInstanceCapacity", "Message": "Insufficient capacity."}},
+        operation_name="RunInstances",
+    )
+
+
+def _make_layout_params(**overrides):
     params = _DotDict(
         {
             "cluster_backend": "aws",
@@ -71,16 +80,9 @@ def patched_capacity_reservation_fixture():
         yield mock_cr
 
 
-def _capacity_error() -> ClientError:
-    return ClientError(
-        error_response={"Error": {"Code": "InsufficientInstanceCapacity", "Message": "Insufficient capacity."}},
-        operation_name="RunInstances",
-    )
-
-
 def test_provision_retries_on_capacity_error(patched_aws_region, patched_capacity_reservation):  # noqa: ARG001
     """Core fallback flow: capacity error -> cleanup -> cache clear -> retry next AZ -> success."""
-    params = _make_params()
+    params = _make_layout_params()
     layout = SCTProvisionAWSLayout(params)
     seen_azs: list[str] = []
 
@@ -103,7 +105,7 @@ def test_provision_retries_on_capacity_error(patched_aws_region, patched_capacit
 
 def test_provision_non_capacity_error_propagates(patched_aws_region, patched_capacity_reservation):  # noqa: ARG001
     """Non-capacity errors (e.g. AuthFailure) must not trigger AZ retry."""
-    layout = SCTProvisionAWSLayout(_make_params())
+    layout = SCTProvisionAWSLayout(_make_layout_params())
     other_error = ClientError({"Error": {"Code": "AuthFailure", "Message": "Not authorized"}}, "RunInstances")
     with patch.object(layout, "_do_provision", side_effect=other_error):
         with patch.object(layout, "_cleanup_partial_provision") as mock_cleanup:
@@ -115,7 +117,7 @@ def test_provision_non_capacity_error_propagates(patched_aws_region, patched_cap
 def test_provision_retries_on_spot_capacity_exhausted(patched_aws_region, patched_capacity_reservation):  # noqa: ARG001
     """Spot path raises ProvisioningCapacityExhausted (no ClientError) when capacity is unavailable;
     AZ fallback must treat it the same as an on-demand capacity ClientError."""
-    params = _make_params(instance_provision="spot")
+    params = _make_layout_params(instance_provision="spot")
     layout = SCTProvisionAWSLayout(params)
     seen_azs: list[str] = []
 
@@ -139,7 +141,7 @@ def test_provision_retries_on_spot_capacity_exhausted(patched_aws_region, patche
 def test_provision_capacity_reservation_enabled_skips_layout_fallback(patched_aws_region, patched_capacity_reservation):  # noqa: ARG001
     """CR owns AZ iteration; layout-level retry would double-fallback and orphan reservations."""
     patched_capacity_reservation.is_capacity_reservation_enabled.return_value = True
-    layout = SCTProvisionAWSLayout(_make_params(use_capacity_reservation=True, instance_provision="on_demand"))
+    layout = SCTProvisionAWSLayout(_make_layout_params(use_capacity_reservation=True, instance_provision="on_demand"))
     with patch.object(layout, "_do_provision", side_effect=_capacity_error()) as mock_do:
         with pytest.raises(ClientError):
             layout.provision()
@@ -156,7 +158,7 @@ def _fake_instance(instance_id: str, region: str) -> SimpleNamespace:
 
 def test_cleanup_partial_provision_groups_terminations_by_region():
     """Partial instances from different regions must be terminated against each region's client."""
-    layout = SCTProvisionAWSLayout(_make_params(region_name="us-east-1 eu-west-1"))
+    layout = SCTProvisionAWSLayout(_make_layout_params(region_name="us-east-1 eu-west-1"))
     layout.__dict__["db_cluster"] = SimpleNamespace(
         _provisioned_instances=[_fake_instance("i-aaa", "us-east-1"), _fake_instance("i-bbb", "eu-west-1")]
     )
@@ -219,3 +221,118 @@ def test_get_instances_returns_empty_when_az_idx_out_of_bounds(patched_ec2_for_g
     }
     result = AWSCluster._get_instances(_fake_aws_cluster(availability_zone="a"), dc_idx=0, az_idx=5)
     assert result == []
+
+
+def _make_tester_params(**overrides) -> _DotDict:
+    return _DotDict(
+        {
+            "region_name": "us-east-1",
+            "availability_zone": "a",
+            "n_db_nodes": 1,
+            **overrides,
+        }
+    )
+
+
+def _make_tester_stub(params: dict) -> SimpleNamespace:
+    """Build a stub with only the attributes the legacy-fallback helpers touch."""
+    return SimpleNamespace(
+        params=params, log=MagicMock(), db_cluster=None, cs_db_cluster=None, loaders=None, monitors=None, credentials=[]
+    )
+
+
+def _raise_or_none(queue):
+    item = queue.pop(0)
+    if isinstance(item, BaseException):
+        raise item
+    return item
+
+
+def test_cleanup_destroys_existing_clusters_and_clears_credentials():
+    stub = _make_tester_stub(_make_tester_params())
+    db_cluster, loaders, monitors = MagicMock(), MagicMock(), MagicMock()
+    stub.db_cluster = db_cluster
+    stub.loaders = loaders
+    stub.monitors = monitors
+    stub.credentials = [MagicMock(), MagicMock()]
+
+    ClusterTester._cleanup_legacy_partial_aws_clusters(stub)
+
+    db_cluster.destroy.assert_called_once()
+    loaders.destroy.assert_called_once()
+    monitors.destroy.assert_called_once()
+    assert stub.db_cluster is None
+    assert stub.loaders is None
+    assert stub.monitors is None
+    assert stub.credentials == []
+
+
+def test_cleanup_skips_no_monitor_set_and_swallows_destroy_errors():
+    """`NoMonitorSet` has no instances to terminate; `destroy()` failures must not propagate."""
+    stub = _make_tester_stub(_make_tester_params())
+    stub.monitors = NoMonitorSet()
+    broken = MagicMock()
+    broken.destroy.side_effect = RuntimeError("boom")
+    stub.db_cluster = broken
+
+    ClusterTester._cleanup_legacy_partial_aws_clusters(stub)
+
+    broken.destroy.assert_called_once()
+    assert stub.db_cluster is None
+    assert isinstance(stub.monitors, NoMonitorSet)
+
+
+@pytest.mark.parametrize(
+    ("first_exc", "expected_calls", "expected_cleanup_calls", "expected_final_az"),
+    [
+        pytest.param(None, 1, 0, "a", id="success_first_attempt"),
+        pytest.param(_capacity_error(), 2, 1, "b", id="capacity_error_then_retry"),
+        pytest.param(ProvisioningCapacityExhausted("spot empty"), 2, 1, "b", id="spot_exhaustion_then_retry"),
+    ],
+)
+def test_provision_legacy_with_az_fallback_succeeds(
+    first_exc, expected_calls, expected_cleanup_calls, expected_final_az
+):
+    """Both on-demand capacity errors (ClientError) and spot exhaustion (ProvisioningCapacityExhausted)
+    trigger AZ retry; clean first attempts skip cleanup entirely."""
+    stub = _make_tester_stub(_make_tester_params(availability_zone="a"))
+    calls = [first_exc, None]
+    stub._provision_legacy_aws_clusters = MagicMock(side_effect=lambda *_a, **_k: _raise_or_none(calls))
+    stub._cleanup_legacy_partial_aws_clusters = MagicMock()
+
+    region_exhausted, _ = ClusterTester._provision_legacy_with_az_fallback(
+        stub, loader_info={}, db_info={}, monitor_info={}, candidates=[["a"], ["b"]], last_error=None
+    )
+
+    assert region_exhausted is False
+    assert stub._provision_legacy_aws_clusters.call_count == expected_calls
+    assert stub._cleanup_legacy_partial_aws_clusters.call_count == expected_cleanup_calls
+    assert stub.params["availability_zone"] == expected_final_az
+
+
+def test_provision_legacy_with_az_fallback_returns_region_exhausted_when_all_candidates_fail():
+    stub = _make_tester_stub(_make_tester_params(availability_zone="a"))
+    error = _capacity_error()
+    stub._provision_legacy_aws_clusters = MagicMock(side_effect=error)
+    stub._cleanup_legacy_partial_aws_clusters = MagicMock()
+
+    region_exhausted, last_error = ClusterTester._provision_legacy_with_az_fallback(
+        stub, loader_info={}, db_info={}, monitor_info={}, candidates=[["a"], ["b"]], last_error=None
+    )
+
+    assert region_exhausted is True
+    assert last_error is error
+    assert stub._provision_legacy_aws_clusters.call_count == 2
+
+
+def test_provision_legacy_with_az_fallback_non_capacity_error_propagates():
+    stub = _make_tester_stub(_make_tester_params(availability_zone="a"))
+    other_error = ClientError({"Error": {"Code": "AuthFailure", "Message": "denied"}}, "RunInstances")
+    stub._provision_legacy_aws_clusters = MagicMock(side_effect=other_error)
+    stub._cleanup_legacy_partial_aws_clusters = MagicMock()
+
+    with pytest.raises(ClientError):
+        ClusterTester._provision_legacy_with_az_fallback(
+            stub, loader_info={}, db_info={}, monitor_info={}, candidates=[["a"], ["b"]], last_error=None
+        )
+    assert stub._provision_legacy_aws_clusters.call_count == 1
