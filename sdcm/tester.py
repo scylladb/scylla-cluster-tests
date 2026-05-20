@@ -769,7 +769,7 @@ class ClusterTester(unittest.TestCase):
         return None
 
     def _init_ldap(self):
-        self.params["are_ldap_users_on_scylla"] = False
+        self.test_config.LDAP_USERS_ON_SCYLLA = False
 
         match self.params.get("ldap_server_type"):
             case LdapServerType.MS_AD:
@@ -795,7 +795,7 @@ class ClusterTester(unittest.TestCase):
         for user in LDAP_USERS:
             node.run_cqlsh(f"CREATE ROLE '{user}' WITH login=true")
         node.run_cqlsh(f"ALTER ROLE '{LDAP_USERS[0]}' with SUPERUSER=true and password='{LDAP_PASSWORD}'")
-        self.params["are_ldap_users_on_scylla"] = True
+        self.test_config.LDAP_USERS_ON_SCYLLA = True
 
     def configure_ldap(self, node, use_ssl=False):
         self.test_config.configure_ldap(node=node, use_ssl=use_ssl)
