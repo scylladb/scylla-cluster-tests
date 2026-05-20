@@ -24,7 +24,7 @@ from google.cloud import compute_v1
 
 from sdcm import cluster
 from sdcm.provision.gce.provisioner import GceProvisioner
-from sdcm.provision.network_configuration import ssh_connection_ip_type
+from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration, ssh_connection_ip_type
 from sdcm.provision.provisioner import PricingModel
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.sct_provision import region_definition_builder
@@ -124,6 +124,12 @@ class GCENode(cluster.BaseNode):
         # related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1121
         time.sleep(10)
 
+        if self.parent_cluster.params.get("scylla_network_config"):
+            self.scylla_network_configuration = ScyllaNetworkConfiguration(
+                network_interfaces=self.network_interfaces,
+                scylla_network_config=self.parent_cluster.params["scylla_network_config"],
+            )
+
         super().init()
 
     def _create_kernel_panic_checker(self):
@@ -189,7 +195,26 @@ class GCENode(cluster.BaseNode):
 
     @property
     def network_interfaces(self):
-        pass
+        interfaces = []
+        for idx, iface in enumerate(self._instance.network_interfaces):
+            public_ip = None
+            if iface.access_configs:
+                public_ip = iface.access_configs[0].nat_i_p or None
+            interfaces.append(
+                NetworkInterface(
+                    ipv4_public_address=public_ip,
+                    ipv6_public_addresses=[],
+                    ipv4_private_addresses=[iface.network_i_p],
+                    ipv6_private_address="",
+                    dns_private_name=self.private_dns_name,
+                    dns_public_name=self.public_dns_name,
+                    device_index=idx,
+                    device_name=None,
+                    mac_address=None,
+                    use_dns_names=self.use_dns_names,
+                )
+            )
+        return interfaces
 
     @property
     def vm_region(self):
