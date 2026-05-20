@@ -169,30 +169,6 @@ class YcsbStressThread(DockerBasedStressThread):
 
             with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as tmp_file:
                 tmp_file.write(dynamodb_teample)
-<<<<<<< HEAD
-||||||| parent of acdd6bed5 (fix(alternator-dns): use json.loads to parse /localnodes response)
-                tmp_file.write(
-                    dedent(f"""
-                    dynamodb.debug = false
-                    dynamodb.alternator.port = {alternator_port}
-                    dynamodb.alternator.loadbalancing = {native_loading}
-                    dynamodb.virtualThreads = true
-                    dynamodb.alternator.trustAllCertificates = {trustAllCerts}
-                    dynamodb.awsAccessKey = {access_key}
-                    dynamodb.awsSecretKey = {secret_key}
-                """)
-                )
-                # Only write datacenter/rack when non-empty. Java's Properties.getProperty()
-                # returns "" for empty values (not null), so `datacenter != null` would be
-                # true for "", creating DatacenterScope.of("") which routes to a non-existent
-                # datacenter and causes all operations to fail.
-                loader_datacenter = getattr(loader, "datacenter", "")
-                loader_rack = getattr(loader, "rack", "")
-                if loader_datacenter:
-                    tmp_file.write(f"dynamodb.alternator.datacenter = {loader_datacenter}\n")
-                if loader_rack:
-                    tmp_file.write(f"dynamodb.alternator.rack = {loader_rack}\n")
-=======
                 tmp_file.write(
                     dedent(f"""
                     dynamodb.debug = false
@@ -216,7 +192,6 @@ class YcsbStressThread(DockerBasedStressThread):
                     tmp_file.write(f"dynamodb.alternator.datacenter = {loader_datacenter}\n")
                 if loader_rack:
                     tmp_file.write(f"dynamodb.alternator.rack = {loader_rack}\n")
->>>>>>> acdd6bed5 (fix(alternator-dns): use json.loads to parse /localnodes response)
                 tmp_file.flush()
                 cmd_runner.send_files(tmp_file.name, os.path.join("/tmp", "dynamodb.properties"))
 
@@ -311,18 +286,6 @@ class YcsbStressThread(DockerBasedStressThread):
                     extra_docker_opts=f"--cap-add=NET_BIND_SERVICE --label shell_marker={self.shell_marker}",
                     docker_network=self.params.get("docker_network"),
                 )
-<<<<<<< HEAD
-                dns_options += f"--dns {dns.internal_ip_address} --dns-option use-vc"
-||||||| parent of 75f52900d (fix(alternator-dns): add NET_BIND_SERVICE cap and readiness check to DNS container)
-                dns_options += f"--dns {dns.internal_ip_address} --dns-option use-vc"
-            extra_docker_opts = (
-                f"{dns_options} {cpu_options} --entrypoint /bin/bash --label shell_marker={self.shell_marker}"
-            )
-            if self.params["use_hdrhistogram"]:
-                hdr_files_directory = self._prepare_directory_for_hdr_files_on_loader_node(loader_idx, cpu_idx)
-                extra_docker_opts += f" -v {hdr_files_directory}:{self._hdr_files_directory_inside_ycsb_container(loader_idx, cpu_idx)}:z"
-
-=======
                 dns_ip = dns.internal_ip_address
                 # Wait for the DNS server to be ready (port 53/tcp)
                 for attempt in range(30):
@@ -337,14 +300,6 @@ class YcsbStressThread(DockerBasedStressThread):
                         raise RuntimeError(f"DNS container failed to bind port 53 after 30s. Logs:\n{dns_logs}")
                     time.sleep(1)
                 dns_options += f"--dns {dns_ip} --dns-option use-vc"
-            extra_docker_opts = (
-                f"{dns_options} {cpu_options} --entrypoint /bin/bash --label shell_marker={self.shell_marker}"
-            )
-            if self.params["use_hdrhistogram"]:
-                hdr_files_directory = self._prepare_directory_for_hdr_files_on_loader_node(loader_idx, cpu_idx)
-                extra_docker_opts += f" -v {hdr_files_directory}:{self._hdr_files_directory_inside_ycsb_container(loader_idx, cpu_idx)}:z"
-
->>>>>>> 75f52900d (fix(alternator-dns): add NET_BIND_SERVICE cap and readiness check to DNS container)
             cmd_runner = RemoteDocker(
                 loader,
                 self.docker_image_name,
