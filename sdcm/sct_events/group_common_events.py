@@ -333,6 +333,20 @@ def ignore_compaction_stopped_exceptions():
 
 
 @contextmanager
+def ignore_ignore_runtime_errors():
+    # These are actually INFO logs, but they get caught by RUNTIME_ERROR filter
+    with ExitStack() as stack:
+        stack.enter_context(
+            EventsSeverityChangerFilter(
+                new_severity=Severity.INFO,
+                event_class=DatabaseLogEvent,
+                regex=r".*ignoring error response: std::runtime_error.*",
+            )
+        )
+        yield
+
+
+@contextmanager
 def ignore_large_collection_warning():
     with ExitStack() as stack:
         stack.enter_context(DbEventsFilter(db_event=DatabaseLogEvent.WARNING, line="Writing large collection"))
@@ -606,6 +620,113 @@ def ignore_ipv6_failure_to_assign():
         yield
 
 
+<<<<<<< HEAD
+||||||| parent of 470fbf5a6 (feature(sct_event): decrease severity of runtime_error when it is ignored)
+NODE_UNAVAILABLE_CONTEXTS: list[Callable[[], ContextManager]] = [
+    ignore_raft_topology_cmd_failing,
+    ignore_raft_transport_failing,
+    ignore_ycsb_connection_refused,
+    ignore_stream_mutation_fragments_errors,
+    ignore_compaction_stopped_exceptions,
+]
+
+
+@contextmanager
+def suppress_expected_unavailability_errors():
+    """Unified context manager for suppressing expected errors during node unavailability.
+
+    Activates a core set of event filters that cover the most common errors seen when
+    a Scylla node becomes temporarily unreachable (restart, shutdown, network block, etc.).
+
+    Args:
+        extra_contexts: Additional context managers (or callables returning them)
+            to activate alongside the core set. Use this for scenario-specific filters
+    """
+    LOGGER.debug("Entered the context of suppressing expected errors")
+    with ExitStack() as stack:
+        for ctx_factory in NODE_UNAVAILABLE_CONTEXTS:
+            stack.enter_context(ctx_factory())
+        yield
+
+
+@contextmanager
+def ignore_aborted_snapshot_upload_storage_io_errors():
+    with ExitStack() as stack:
+        if SkipPerIssues(
+            issues="https://github.com/scylladb/scylladb/issues/24642",
+            params=TestConfig().tester_obj().params,
+        ):
+            stack.enter_context(
+                EventsSeverityChangerFilter(
+                    new_severity=Severity.WARNING,
+                    event_class=DatabaseLogEvent,
+                    regex=r".*std::runtime_error \(Failed to parse ETag list\. Aborting multipart upload\.\)",
+                )
+            )
+            stack.enter_context(
+                EventsSeverityChangerFilter(
+                    new_severity=Severity.WARNING,
+                    event_class=DatabaseLogEvent,
+                    regex=r".*storage_io_error \(S3 error \(seastar::abort_requested_exception \(abort requested\)\)\)",
+                )
+            )
+        yield
+
+
+=======
+NODE_UNAVAILABLE_CONTEXTS: list[Callable[[], ContextManager]] = [
+    ignore_raft_topology_cmd_failing,
+    ignore_raft_transport_failing,
+    ignore_ycsb_connection_refused,
+    ignore_stream_mutation_fragments_errors,
+    ignore_compaction_stopped_exceptions,
+    ignore_ignore_runtime_errors,
+]
+
+
+@contextmanager
+def suppress_expected_unavailability_errors():
+    """Unified context manager for suppressing expected errors during node unavailability.
+
+    Activates a core set of event filters that cover the most common errors seen when
+    a Scylla node becomes temporarily unreachable (restart, shutdown, network block, etc.).
+
+    Args:
+        extra_contexts: Additional context managers (or callables returning them)
+            to activate alongside the core set. Use this for scenario-specific filters
+    """
+    LOGGER.debug("Entered the context of suppressing expected errors")
+    with ExitStack() as stack:
+        for ctx_factory in NODE_UNAVAILABLE_CONTEXTS:
+            stack.enter_context(ctx_factory())
+        yield
+
+
+@contextmanager
+def ignore_aborted_snapshot_upload_storage_io_errors():
+    with ExitStack() as stack:
+        if SkipPerIssues(
+            issues="https://github.com/scylladb/scylladb/issues/24642",
+            params=TestConfig().tester_obj().params,
+        ):
+            stack.enter_context(
+                EventsSeverityChangerFilter(
+                    new_severity=Severity.WARNING,
+                    event_class=DatabaseLogEvent,
+                    regex=r".*std::runtime_error \(Failed to parse ETag list\. Aborting multipart upload\.\)",
+                )
+            )
+            stack.enter_context(
+                EventsSeverityChangerFilter(
+                    new_severity=Severity.WARNING,
+                    event_class=DatabaseLogEvent,
+                    regex=r".*storage_io_error \(S3 error \(seastar::abort_requested_exception \(abort requested\)\)\)",
+                )
+            )
+        yield
+
+
+>>>>>>> 470fbf5a6 (feature(sct_event): decrease severity of runtime_error when it is ignored)
 def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):
     """
     helper to decorate a function to run with a list of callables that return context managers
