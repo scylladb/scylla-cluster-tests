@@ -135,36 +135,69 @@ class ManagerRestoreTests(ManagerTestFunctionsMixIn):
 
 
 class ManagerBackupTests(ManagerRestoreTests):
-    def test_backup_and_restore(self, restore_with_task: bool = True):
-        self.log.info(f"starting test_backup_and_restore[restore_with_task={restore_with_task}]")
+    def test_backup_and_restore(self):
+        self.log.info("starting test_backup_and_restore")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
         )
-        self.verify_backup_success(
+
+        self.truncate_tables()
+        self.restore_backup_with_task(
             mgr_cluster=mgr_cluster,
-            backup_task=backup_task,
-            ks_names=ks_names,
-            restore_data_with_task=restore_with_task,
+            snapshot_tag=backup_task.get_snapshot_tag(),
+            restore_data=True,
         )
+
         self.run_verification_read_stress()
         mgr_cluster.delete()  # remove cluster at the end of the test
-        self.log.info(f"finishing test_backup_and_restore[restore_with_task={restore_with_task}]")
+        self.log.info("finishing test_backup_and_restore")
+
+    def test_backup_and_restore_without_manager(self):
+        self.log.info("starting test_backup_and_restore_without_manager")
+        mgr_cluster = self.db_cluster.get_cluster_manager()
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
+        backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
+        assert backup_task_status == TaskStatus.DONE, (
+            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        )
+
+        ks_tables_map = self.get_ks_tables_map()
+        self.truncate_tables(ks_tables_map=ks_tables_map)
+        self.restore_backup_without_manager(
+            mgr_cluster=mgr_cluster,
+            snapshot_tag=backup_task.get_snapshot_tag(),
+            ks_tables_map=ks_tables_map,
+        )
+
+        self.run_verification_read_stress()
+        mgr_cluster.delete()  # remove cluster at the end of the test
+        self.log.info("finishing test_backup_and_restore_without_manager")
 
     def test_backup_multiple_ks_tables(self):
         self.log.info("starting test_backup_multiple_ks_tables")
         mgr_cluster = self.db_cluster.get_cluster_manager()
+
         tables = self.create_ks_and_tables(10, 100)
         self.log.debug("tables list = {}".format(tables))
         # TODO: insert data to those tables
+
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
         )
-        self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
+
+        ks_tables_map = self.get_ks_tables_map()
+        self.truncate_tables(ks_tables_map=ks_tables_map)
+        self.restore_backup_without_manager(
+            mgr_cluster=mgr_cluster,
+            snapshot_tag=backup_task.get_snapshot_tag(),
+            ks_tables_map=ks_tables_map,
+        )
+
         self.log.info("finishing test_backup_multiple_ks_tables")
 
     def test_backup_location_with_path(self):
@@ -181,18 +214,26 @@ class ManagerBackupTests(ManagerRestoreTests):
     def test_backup_rate_limit(self):
         self.log.info("starting test_backup_rate_limit")
         mgr_cluster = self.db_cluster.get_cluster_manager()
+
         rate_limit_list = [f"{dc}:{random.randint(15, 25)}" for dc in self.get_all_dcs_names()]
         self.log.info("rate limit will be {}".format(rate_limit_list))
+
         backup_task = mgr_cluster.create_backup_task(
             location_list=self.locations, rate_limit_list=rate_limit_list, method=self.backup_method
         )
         task_status = backup_task.wait_and_get_final_status(timeout=18000)
-        assert task_status == TaskStatus.DONE, (
-            f"Task {backup_task.id} did not end successfully:\n{backup_task.detailed_progress}"
-        )
+        assert task_status == TaskStatus.DONE, f"Backup task ended in {task_status} instead of {TaskStatus.DONE}"
         self.log.info("backup task finished with status {}".format(task_status))
         # TODO: verify that the rate limit is as set in the cmd
-        self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
+
+        ks_tables_map = self.get_ks_tables_map()
+        self.truncate_tables(ks_tables_map=ks_tables_map)
+        self.restore_backup_without_manager(
+            mgr_cluster=mgr_cluster,
+            snapshot_tag=backup_task.get_snapshot_tag(),
+            ks_tables_map=ks_tables_map,
+        )
+
         self.log.info("finishing test_backup_rate_limit")
 
     def test_backup_purge_removes_orphan_files(self):
@@ -441,8 +482,12 @@ class ManagerBackupTests(ManagerRestoreTests):
         assert backup_task_2.duration < timedelta(seconds=15), "No-delta backup took more than 15 seconds"
 
         self.log.info("Verify restore from backup #2")
-        self.verify_backup_success(
-            mgr_cluster=mgr_cluster, backup_task=backup_task_2, restore_data_with_task=True, timeout=3600
+        self.truncate_tables()
+        self.restore_backup_with_task(
+            mgr_cluster=mgr_cluster,
+            snapshot_tag=backup_task_2.get_snapshot_tag(),
+            restore_data=True,
+            timeout=3600,
         )
 
         self.log.info("Run verification read stress")
@@ -1033,9 +1078,9 @@ class ManagerSanityTests(
 
         if not is_multi_dc_cluster:
             with self.subTest("Backup and restore (via nodetool refresh, out of Manager) test"):
-                self.test_backup_and_restore(restore_with_task=False)
+                self.test_backup_and_restore_without_manager()
         with self.subTest("Backup and restore (via Manager task) test"):
-            self.test_backup_and_restore(restore_with_task=True)
+            self.test_backup_and_restore()
         with self.subTest("Repair multiple keyspace types test"):
             self.test_repair_multiple_keyspace_types()
         with self.subTest("Manager cluster CRUD operations test"):
@@ -1343,7 +1388,7 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
                 self.restore_backup_without_manager(
                     mgr_cluster=mgr_cluster,
                     snapshot_tag=snapshot_data.tag,
-                    ks_tables_list=snapshot_data.ks_tables_map,
+                    ks_tables_map=snapshot_data.ks_tables_map,
                     location=locations[0],
                     precreated_backup=True,
                 )
