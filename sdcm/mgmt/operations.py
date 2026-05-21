@@ -841,14 +841,14 @@ class ManagerTestFunctionsMixIn(
         for table_name in delete_tables:
             self.log.info(f"running delete on {table_name}")
             self.alternator.delete_table(self.db_cluster.nodes[0], table_name=table_name, wait_until_table_removed=True)
-        self.restore_backup_with_task(
+        self.restore_with_manager_task(
             mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(), timeout=timeout, restore_schema=True
         )
-        self.restore_backup_with_task(
+        self.restore_with_manager_task(
             mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(), timeout=timeout, restore_data=True
         )
 
-    def restore_backup_without_manager(
+    def restore_with_nodetool_refresh(
         self, mgr_cluster, snapshot_tag, ks_tables_map, location=None, precreated_backup=False
     ):
         """Restore backup without Scylla Manager but using the `nodetool refresh` operation
@@ -905,7 +905,16 @@ class ManagerTestFunctionsMixIn(
                         node.run_nodetool(f"refresh {keyspace} {table} {nodetool_refresh_extra_flags}")
                     self.log.info(f"[Node {index}][{keyspace}.{table}] Nodetool refresh took {timer.duration}")
 
-    def restore_backup_with_task(
+    def backup_with_manager_task(self, mgr_cluster, timeout=1500, **kwargs):
+        """Create a backup task, wait for completion, assert success, and return the task."""
+        location_list = kwargs.pop("location_list", self.locations)
+        method = kwargs.pop("method", self.backup_method)
+        backup_task = mgr_cluster.create_backup_task(location_list=location_list, method=method, **kwargs)
+        task_status = backup_task.wait_and_get_final_status(timeout=timeout)
+        assert task_status == TaskStatus.DONE, f"Backup task ended in {task_status} instead of {TaskStatus.DONE}"
+        return backup_task
+
+    def restore_with_manager_task(
         self,
         mgr_cluster,
         snapshot_tag,
