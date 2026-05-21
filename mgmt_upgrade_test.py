@@ -216,7 +216,7 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
         with self.subTest("Restoring an older version backup task with nodetool refresh"):
             ks_tables_map = self.get_ks_tables_map(keyspace_filter=["keyspace1"])
             self.truncate_tables(ks_tables_map=ks_tables_map)
-            self.restore_backup_without_manager(
+            self.restore_with_nodetool_refresh(
                 mgr_cluster=mgr_cluster,
                 snapshot_tag=backup_task_snapshot,
                 ks_tables_map=ks_tables_map,
@@ -225,7 +225,7 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
 
         with self.subTest("Restoring an older version backup task with a Manager restore task"):
             self.truncate_tables(ks_tables_map=ks_tables_map)
-            self.restore_backup_with_task(
+            self.restore_with_manager_task(
                 mgr_cluster=mgr_cluster,
                 snapshot_tag=backup_task_snapshot,
                 restore_data=True,
