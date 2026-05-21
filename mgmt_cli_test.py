@@ -132,7 +132,7 @@ class ManagerRestoreTests(ManagerTestFunctionsMixIn):
 
 
 class ManagerBackupTests(ManagerRestoreTests):
-    def test_backup_and_restore(self, restore_with_task: bool = True, ks_names: list = None):
+    def test_backup_and_restore(self, restore_with_task: bool = True):
         self.log.info(f"starting test_backup_and_restore[restore_with_task={restore_with_task}]")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
@@ -146,7 +146,7 @@ class ManagerBackupTests(ManagerRestoreTests):
             ks_names=ks_names,
             restore_data_with_task=restore_with_task,
         )
-        self.run_verification_read_stress(ks_names)
+        self.run_verification_read_stress()
         mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info(f"finishing test_backup_and_restore[restore_with_task={restore_with_task}]")
 
@@ -955,7 +955,7 @@ class ManagerSanityTests(
     ManagerSuspendTests,
     ManagerEncryptionTests,
 ):
-    def test_manager_sanity(self, prepared_ks: bool = False, ks_names: list = None):
+    def test_manager_sanity(self, prepared_ks: bool = False):
         """
         Test steps:
         1) Generate load (unless keyspaces are pre-created via prepared_ks).
@@ -975,9 +975,9 @@ class ManagerSanityTests(
 
         if not is_multi_dc_cluster:
             with self.subTest("Backup and restore (via nodetool refresh, out of Manager) test"):
-                self.test_backup_and_restore(restore_with_task=False, ks_names=ks_names)
+                self.test_backup_and_restore(restore_with_task=False)
         with self.subTest("Backup and restore (via Manager task) test"):
-            self.test_backup_and_restore(restore_with_task=True, ks_names=ks_names)
+            self.test_backup_and_restore(restore_with_task=True)
         with self.subTest("Repair multiple keyspace types test"):
             self.test_repair_multiple_keyspace_types()
         with self.subTest("Manager cluster CRUD operations test"):
@@ -1003,13 +1003,12 @@ class ManagerSanityTests(
         self.log.info("starting test_manager_sanity_vnodes_tablets_cluster")
 
         ks_config = [("tablets_keyspace", True), ("vnodes_keyspace", False)]
-        ks_names = [i[0] for i in ks_config]
         for ks_name, tablets_enabled in ks_config:
             tablets_config = TabletsConfiguration(enabled=tablets_enabled)
             self.create_keyspace(ks_name, replication_factor=3, tablets_config=tablets_config)
             self.generate_load_and_wait_for_results(keyspace_name=ks_name)
 
-        self.test_manager_sanity(prepared_ks=True, ks_names=ks_names)
+        self.test_manager_sanity(prepared_ks=True)
 
         self.log.info("finishing test_manager_sanity_vnodes_tablets_cluster")
 
