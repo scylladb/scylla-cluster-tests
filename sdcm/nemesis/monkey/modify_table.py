@@ -7,6 +7,7 @@ the abstract base class ``ModifyTableBaseMonkey``.
 
 import abc
 import logging
+import re
 import time
 from typing import Any, Dict
 
@@ -23,6 +24,20 @@ from test_lib.compaction import (
 
 LOGGER = logging.getLogger(__name__)
 
+# Matches CREATE TABLE [IF NOT EXISTS] ks.table — used to identify which CQL
+# statements in pre_create_keyspace
+_RE_CREATE_TABLE = re.compile(
+    r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+\.\w+)",
+    re.IGNORECASE,
+)
+
+# Matches ALTER TABLE ks.table — used to identify which CQL statements in
+# post_prepare_cql_cmds set explicit properties.
+_RE_ALTER_TABLE = re.compile(
+    r"ALTER\s+TABLE\s+(\w+\.\w+)",
+    re.IGNORECASE,
+)
+
 
 class ModifyTableBaseMonkey(NemesisBaseClass, abc.ABC):
     """
@@ -32,6 +47,42 @@ class ModifyTableBaseMonkey(NemesisBaseClass, abc.ABC):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.random = self.runner.random
+
+    def _get_tables_with_explicit_property(self, property_name: str) -> set[str]:
+        """Return ks.table names where ``property_name`` is explicitly set via test configuration.
+
+        Scans the following sources:
+        1. ``pre_create_keyspace`` — CREATE TABLE statements with explicit properties.
+        2. ``post_prepare_cql_cmds`` — ALTER TABLE statements that set properties after data load.
+        3. ``compaction_strategy`` param — when set, protects ``keyspace1.standard1`` from
+           compaction changes (this is the table created by ``_pre_create_schema()``).
+        """
+        tables = set()
+        pattern = re.compile(rf"\b{property_name}\s*=", re.IGNORECASE)
+
+        # 1. pre_create_keyspace — CREATE TABLE with explicit properties
+        pre_create = self.runner.cluster.params.get("pre_create_keyspace") or []
+        if isinstance(pre_create, str):
+            pre_create = [pre_create]
+        for cql in pre_create:
+            match = _RE_CREATE_TABLE.search(cql)
+            if match and pattern.search(cql):
+                tables.add(match.group(1))
+
+        # 2. post_prepare_cql_cmds — ALTER TABLE with explicit properties
+        post_cmds = self.runner.cluster.params.get("post_prepare_cql_cmds") or []
+        if isinstance(post_cmds, str):
+            post_cmds = [post_cmds]
+        for cql in post_cmds:
+            match = _RE_ALTER_TABLE.search(cql)
+            if match and pattern.search(cql):
+                tables.add(match.group(1))
+
+        # 3. compaction_strategy param — protects the pre-created keyspace1.standard1 table
+        if property_name == "compaction" and self.runner.cluster.params.get("compaction_strategy"):
+            tables.add("keyspace1.standard1")
+
+        return tables
 
     def modify_table_property(
         self,
@@ -56,12 +107,23 @@ class ModifyTableBaseMonkey(NemesisBaseClass, abc.ABC):
                 filter_out_mv=True,
             )  # not allowed to modify MV
 
-            keyspace_table = self.random.choice(ks_cfs) if ks_cfs else ks_cfs
+            if not ks_cfs:
+                raise UnsupportedNemesis(
+                    "Non-system keyspace and table are not found. ModifyTableProperties nemesis can't be run"
+                )
 
-        if not keyspace_table:
-            raise UnsupportedNemesis(
-                "Non-system keyspace and table are not found. ModifyTableProperties nemesis can't be run"
-            )
+            # Remove tables where this property is explicitly set in test configuration
+            # so that intentional user settings are not silently overwritten.
+            explicit_tables = self._get_tables_with_explicit_property(name)
+            if explicit_tables:
+                ks_cfs = [table for table in ks_cfs if table not in explicit_tables]
+                if not ks_cfs:
+                    raise UnsupportedNemesis(
+                        f"All available tables have '{name}' explicitly set in test configuration. "
+                        f"Skipping to preserve intentional settings."
+                    )
+
+            keyspace_table = self.random.choice(ks_cfs)
 
         cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(
             keyspace_table=keyspace_table, name=name, val=val
@@ -298,6 +360,17 @@ class ModifyTableDefaultTimeToLiveMonkey(ModifyTableBaseMonkey):
 
         if not ks_cfs:
             raise UnsupportedNemesis("No non-system user tables found")
+
+        # Filter out tables where default_time_to_live is explicitly set in test configuration
+        # so that intentional TTL settings are not silently overwritten.
+        explicit_tables = self._get_tables_with_explicit_property("default_time_to_live")
+        if explicit_tables:
+            ks_cfs = [t for t in ks_cfs if t not in explicit_tables]
+            if not ks_cfs:
+                raise UnsupportedNemesis(
+                    "All available tables have 'default_time_to_live' explicitly set in test configuration. "
+                    "Skipping to preserve intentional settings."
+                )
 
         keyspace_table = self.random.choice(ks_cfs)
         keyspace, table = keyspace_table.split(".")
