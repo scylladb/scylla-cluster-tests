@@ -136,11 +136,19 @@ class ManagerBackupTests(ManagerRestoreTests):
         mgr_cluster = self.db_cluster.get_cluster_manager()
 
         backup_task = self.backup_with_manager_task(mgr_cluster)
+        snapshot_tag = backup_task.get_snapshot_tag()
 
-        self.truncate_tables()
+        for ks in self.db_cluster.get_test_keyspaces():
+            self.db_cluster.nodes[0].run_cqlsh(f"DROP KEYSPACE IF EXISTS {ks}")
+
         self.restore_with_manager_task(
             mgr_cluster=mgr_cluster,
-            snapshot_tag=backup_task.get_snapshot_tag(),
+            snapshot_tag=snapshot_tag,
+            restore_schema=True,
+        )
+        self.restore_with_manager_task(
+            mgr_cluster=mgr_cluster,
+            snapshot_tag=snapshot_tag,
             restore_data=True,
         )
 
