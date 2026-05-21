@@ -589,6 +589,38 @@ class DatabaseOperations(ClusterTester):
             target_node = self.db_cluster.nodes[2]
             self.delete_keyspace_directory(db_node=target_node, keyspace_name="keyspace1")
 
+    def get_ks_tables_map(self, keyspace_filter: list[str] | None = None) -> dict[str, list[str]]:
+        """Discover non-system keyspaces and their tables, excluding materialized views.
+
+        Args:
+            keyspace_filter: If provided, only include these keyspaces
+        """
+        ks_cf_list = self.db_cluster.get_non_system_ks_cf_list(
+            db_node=self.db_cluster.nodes[0],
+            filter_out_mv=True,
+            filter_by_keyspace=keyspace_filter,
+        )
+        ks_tables_map: dict[str, list[str]] = {}
+        for ks_cf in ks_cf_list:
+            ks, table = ks_cf.split(".", maxsplit=1)
+            ks_tables_map.setdefault(ks, []).append(table)
+        self.log.debug(f"ks_tables_map: {ks_tables_map}")
+        if not ks_tables_map:
+            raise ValueError("No non-system tables were found")
+        return ks_tables_map
+
+    def truncate_tables(self, ks_tables_map: dict[str, list[str]] | None = None) -> None:
+        """Truncate all tables in the given keyspace-tables map.
+
+        If ks_tables_map is not provided, it is fetched automatically via get_ks_tables_map().
+        """
+        if ks_tables_map is None:
+            ks_tables_map = self.get_ks_tables_map()
+        for ks, tables in ks_tables_map.items():
+            for table_name in tables:
+                self.log.info(f"Truncating {ks}.{table_name}")
+                self.db_cluster.nodes[0].run_cqlsh(f"TRUNCATE {ks}.{table_name}")
+
 
 class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
     def _get_total_loaders(self) -> int:
@@ -753,51 +785,6 @@ class ManagerTestFunctionsMixIn(
         else:
             return None
 
-    def verify_backup_success(
-        self,
-        mgr_cluster,
-        backup_task,
-        ks_names: list = None,
-        truncate=True,
-        restore_data_with_task=False,
-        timeout=None,
-    ):
-        snapshot_tag = backup_task.get_snapshot_tag()
-        ks_tables_map: dict[str, list[str]] = {}
-
-        ks_cf_list = self.db_cluster.get_non_system_ks_cf_list(
-            db_node=self.db_cluster.nodes[0],
-            filter_out_mv=True,
-            filter_by_keyspace=ks_names,
-        )
-        for ks_cf in ks_cf_list:
-            ks, table = ks_cf.split(".", maxsplit=1)
-            ks_tables_map.setdefault(ks, []).append(table)
-        self.log.debug(f"ks_tables_map: {ks_tables_map}")
-        if not ks_tables_map:
-            raise ValueError("No non-system tables were found for backup restore verification")
-
-        if truncate:
-            for ks, tables in ks_tables_map.items():
-                for table_name in tables:
-                    self.log.info(f"running truncate on {ks}.{table_name}")
-                    self.db_cluster.nodes[0].run_cqlsh(f"TRUNCATE {ks}.{table_name}")
-
-        if restore_data_with_task:
-            self.restore_backup_with_task(
-                mgr_cluster=mgr_cluster,
-                snapshot_tag=snapshot_tag,
-                timeout=timeout,
-                restore_data=True,
-            )
-            return
-
-        self.restore_backup_without_manager(
-            mgr_cluster=mgr_cluster,
-            snapshot_tag=snapshot_tag,
-            ks_tables_list=ks_tables_map,
-        )
-
     def verify_alternator_backup_success(self, mgr_cluster, backup_task, delete_tables: list = None, timeout=None):
         for table_name in delete_tables:
             self.log.info(f"running delete on {table_name}")
@@ -810,7 +797,7 @@ class ManagerTestFunctionsMixIn(
         )
 
     def restore_backup_without_manager(
-        self, mgr_cluster, snapshot_tag, ks_tables_list, location=None, precreated_backup=False
+        self, mgr_cluster, snapshot_tag, ks_tables_map, location=None, precreated_backup=False
     ):
         """Restore backup without Scylla Manager but using the `nodetool refresh` operation
         (https://opensource.docs.scylladb.com/stable/operating-scylla/nodetool-commands/refresh.html).
@@ -849,7 +836,7 @@ class ManagerTestFunctionsMixIn(
             # If the backup was not created with the cluster under test (precreated backup), get node_id from
             # sctool backup files output, otherwise, use node_ids of cluster under test
             backed_up_node_id = backed_up_node_ids[index] if precreated_backup else node.host_id
-            for keyspace, tables in ks_tables_list.items():
+            for keyspace, tables in ks_tables_map.items():
                 keyspace_path = node_data_path / keyspace
                 for table in tables:
                     table_id = self.get_table_id(node=node, table_name=table, keyspace_name=keyspace)
@@ -870,7 +857,7 @@ class ManagerTestFunctionsMixIn(
         self,
         mgr_cluster,
         snapshot_tag,
-        timeout,
+        timeout=1500,
         restore_schema=False,
         restore_data=False,
         location_list=None,

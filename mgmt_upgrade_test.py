@@ -213,17 +213,23 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
                 f"Task {stopped_backup_task.id} failed to continue after Manager upgrade"
             )
 
-        with self.subTest("Restoring an older version backup task with newer version of Manager"):
-            self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, ks_names=["keyspace1"])
+        with self.subTest("Restoring an older version backup task with nodetool refresh"):
+            ks_tables_map = self.get_ks_tables_map(keyspace_filter=["keyspace1"])
+            self.truncate_tables(ks_tables_map=ks_tables_map)
+            self.restore_backup_without_manager(
+                mgr_cluster=mgr_cluster,
+                snapshot_tag=backup_task_snapshot,
+                ks_tables_map=ks_tables_map,
+            )
             self.run_verification_read_stress(ks_names=["keyspace1"])
 
-        with self.subTest("Restoring an older version backup task with newer version of Manager, using a restore task"):
-            self.verify_backup_success(
+        with self.subTest("Restoring an older version backup task with a Manager restore task"):
+            self.truncate_tables(ks_tables_map=ks_tables_map)
+            self.restore_backup_with_task(
                 mgr_cluster=mgr_cluster,
-                backup_task=backup_task,
-                restore_data_with_task=True,
+                snapshot_tag=backup_task_snapshot,
+                restore_data=True,
                 timeout=600,
-                ks_names=["keyspace1"],
             )
             self.run_verification_read_stress(ks_names=["keyspace1"])
 
