@@ -215,7 +215,7 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
 
         with self.subTest("Restoring an older version backup task with newer version of Manager"):
             self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, ks_names=["keyspace1"])
-            self.run_verification_read_stress()
+            self.run_verification_read_stress(ks_names=["keyspace1"])
 
         with self.subTest("Restoring an older version backup task with newer version of Manager, using a restore task"):
             self.verify_backup_success(
@@ -225,7 +225,7 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
                 timeout=600,
                 ks_names=["keyspace1"],
             )
-            self.run_verification_read_stress()
+            self.run_verification_read_stress(ks_names=["keyspace1"])
 
         with self.subTest(
             "Executing the 'backup list' and 'backup files' commands on a older version backup"

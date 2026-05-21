@@ -700,16 +700,18 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
         time.sleep(15)
         return stress_thread
 
-    def run_verification_read_stress(self, ks_names=None):
+    def run_verification_read_stress(self, ks_names: list[str] | None = None):
         stress_queue = []
         stress_cmd = self.params.get("stress_read_cmd")
-        keyspace_num = self.params.get("keyspace_num")
+
+        if ks_names is None:
+            ks_names = self.db_cluster.get_test_keyspaces()
+        assert ks_names, "No keyspaces provided for data verification"
+
         InfoEvent(message="Starting read stress for data verification").publish()
         stress_start_time = datetime.now()
-        if ks_names:
-            self.assemble_and_run_all_stress_cmd_by_ks_names(stress_queue, stress_cmd, ks_names)
-        else:
-            self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
+        self.log.debug(f"Running read stress for keyspaces: {ks_names}")
+        self.assemble_and_run_all_stress_cmd_by_ks_names(stress_queue, stress_cmd, ks_names)
         for stress in stress_queue:
             self.verify_stress_thread(stress)
         stress_run_time = datetime.now() - stress_start_time
