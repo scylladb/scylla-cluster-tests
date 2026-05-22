@@ -81,6 +81,7 @@
 | TerminateKubernetesHostThenDecommissionAndAddScyllaNode | Skipped | Not a k8s backend
 | TerminateKubernetesHostThenReplaceScyllaNode | Skipped | Not a k8s backend
 | ToggleAuditNemesisSyslog | Pass | Should be executed on enterprise
+| ToggleAuditRulesNemesisSyslog | Pass | Should be executed on enterprise
 | ToggleCDCMonkey | Pass |
 | ToggleGcModeMonkey | Pass |
 | ToggleLdapConfiguration | Pass | Should be executed on enterprise

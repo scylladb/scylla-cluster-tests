@@ -101,6 +101,7 @@
 - TerminateKubernetesHostThenDecommissionAndAddScyllaNode
 - TerminateKubernetesHostThenReplaceScyllaNode
 - ToggleAuditNemesisSyslog
+- ToggleAuditRulesNemesisSyslog
 - ToggleCDCMonkey
 - ToggleGcModeMonkey
 - ToggleLdapConfiguration
