@@ -25,6 +25,7 @@ class Severity(enum.Enum):
     WARNING = 2
     ERROR = 3
     CRITICAL = 4
+    INFO = 5
 
 
 @runtime_checkable
