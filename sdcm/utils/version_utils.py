@@ -767,7 +767,7 @@ def get_relocatable_pkg_url(scylla_version: str) -> str | None:
         try:
             scylla_build_id = scylla_version.split("build-id")[-1].split()[0]
             response = requests.get(
-                "https://api.backtrace.scylladb.com/api/search/build_id",
+                "https://backtrace.scylladb.com/api/search/build_id",
                 params={"build_id": scylla_build_id},
                 timeout=10,
             )
