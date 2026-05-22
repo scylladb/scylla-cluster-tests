@@ -5401,7 +5401,14 @@ class NemesisRunner:
     def disrupt_toggle_audit_syslog(self):
         self._disrupt_toggle_audit(store="syslog")
 
-    def _disrupt_toggle_audit(self, store: "AuditStore"):
+    def disrupt_toggle_audit_rules_syslog(self):
+        with self.target_node.remote_scylla_yaml() as scylla_yaml:
+            configured_audit = scylla_yaml.audit or "none"
+        if configured_audit != "none":
+            raise UnsupportedNemesis("ToggleAuditRulesNemesisSyslog requires audit to be initially disabled")
+        self._disrupt_toggle_audit(store="syslog", use_audit_rules=True)
+
+    def _disrupt_toggle_audit(self, store: "AuditStore", use_audit_rules: bool = False):  # noqa: PLR0914
         """
         Enable audit log with all categories and user keyspaces (if audit already enabled, disable it and finish the Nemesis),
         verify audit log content,
@@ -5418,6 +5425,10 @@ class NemesisRunner:
             raise UnsupportedNemesis(
                 "Audit feature log format was changed in Scylla 2025.2 and later. Use old sct-branch for Scylla < 2025.2"
             )
+        if use_audit_rules and (
+            ComparableScyllaVersion(self.target_node.scylla_version) < ComparableScyllaVersion("2026.2.0-dev")
+        ):
+            raise UnsupportedNemesis("audit_rules are supported by Scylla 2026.2.0-dev and later")
 
         audit = Audit(self.cluster)
 
@@ -5428,19 +5439,34 @@ class NemesisRunner:
 
         audit_keyspace = "audit_keyspace"
         keyspaces_for_audit = [audit_keyspace]
-        InfoEvent(f"Enabling full audit for keyspaces: {keyspaces_for_audit}").publish()
+        audit_categories = ["DCL", "DDL", "AUTH", "ADMIN", "DML", "QUERY"]
+        audit_rules = None
+        if use_audit_rules:
+            audit_rules = [
+                {
+                    "sinks": [store],
+                    "categories": audit_categories,
+                    "qualified_table_names": [f"{audit_keyspace}.*"],
+                    "roles": ["*"],
+                }
+            ]
+            audit_categories = []
+            keyspaces_for_audit = []
+        InfoEvent(f"Enabling full audit for keyspaces: {[audit_keyspace]}").publish()
         audit_config = AuditConfiguration(
             store=store,
-            categories=["DCL", "DDL", "AUTH", "ADMIN", "DML", "QUERY"],
+            categories=audit_categories,
             keyspaces=keyspaces_for_audit,
             tables=[],
+            rules=audit_rules,
         )
         try:
             with self.action_log_scope(
-                f"Enable {store} audit on categories: {audit_config.categories} in {keyspaces_for_audit} keyspace"
+                f"Enable {store} audit on categories: {audit_config.categories or audit_rules} "
+                f"in {[audit_keyspace]} keyspace"
             ):
                 audit.configure(audit_config)
-            keyspace_name = keyspaces_for_audit[0]
+            keyspace_name = audit_keyspace
             errors = []
             audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)
             InfoEvent(message="Writing/Reading data from audited keyspace").publish()
@@ -5481,15 +5507,23 @@ class NemesisRunner:
                     LOGGER.error("QUERY audit log row: %s", row)
         except Exception as ex:
             LOGGER.error("Exception while testing full audit: %s", ex)
-            audit_config.categories = ["DCL", "DDL", "AUTH", "ADMIN"]
-            with self.action_log_scope(f"Reconfiguring audit with {audit_config.categories} categories"):
+            reduced_audit_categories = ["DCL", "DDL", "AUTH", "ADMIN"]
+            if use_audit_rules:
+                audit_config.rules[0]["categories"] = reduced_audit_categories
+            else:
+                audit_config.categories = reduced_audit_categories
+            with self.action_log_scope(f"Reconfiguring audit with {reduced_audit_categories} categories"):
                 audit.configure(audit_config)
             raise
 
         InfoEvent("Reducing audit categories and setting back audited keyspaces").publish()
 
-        audit_config.categories = ["DCL", "DDL", "AUTH", "ADMIN"]
-        with self.action_log_scope(f"Reconfiguring audit with {audit_config.categories} categories"):
+        reduced_audit_categories = ["DCL", "DDL", "AUTH", "ADMIN"]
+        if use_audit_rules:
+            audit_config.rules[0]["categories"] = reduced_audit_categories
+        else:
+            audit_config.categories = reduced_audit_categories
+        with self.action_log_scope(f"Reconfiguring audit with {reduced_audit_categories} categories"):
             audit.configure(audit_config)
         table_name = "audit_cf"
         audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)

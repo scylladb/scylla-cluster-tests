@@ -1749,6 +1749,23 @@ ToggleAuditNemesisSyslog:
   topology_changes: false
   xcloud: false
   zero_node_changes: false
+ToggleAuditRulesNemesisSyslog:
+  config_changes: true
+  delete_rows: false
+  disruptive: true
+  enospc: false
+  free_tier_set: true
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  xcloud: false
+  zero_node_changes: false
 ToggleCDCMonkey:
   config_changes: true
   delete_rows: false
