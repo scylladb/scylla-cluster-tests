@@ -13,7 +13,7 @@
 
 """Integration tests for BaseNode._decode_via_external_service().
 
-External services: HTTPS to api.backtrace.scylladb.com
+External services: HTTPS to backtrace.scylladb.com
 """
 
 import pytest
