@@ -14,7 +14,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, date
-from typing import Literal, Optional, List
+from typing import Any, List, Literal, Optional
 
 from cassandra.util import uuid_from_time, datetime_from_uuid1
 
@@ -39,6 +39,7 @@ class AuditConfiguration:
     categories: List[AuditCategory]
     tables: List[str]
     keyspaces: List[str]
+    rules: Optional[List[dict[str, Any]]] = None
 
     @classmethod
     def from_scylla_yaml(cls, scylla_yaml):
@@ -46,7 +47,8 @@ class AuditConfiguration:
         categories = scylla_yaml.audit_categories.split(",") if scylla_yaml.audit_categories else []
         tables = scylla_yaml.audit_tables.split(",") if scylla_yaml.audit_tables else []
         keyspaces = scylla_yaml.audit_keyspaces.split(",") if scylla_yaml.audit_keyspaces else []
-        return cls(store=store, categories=categories, tables=tables, keyspaces=keyspaces)
+        rules = getattr(scylla_yaml, "audit_rules", None)
+        return cls(store=store, categories=categories, tables=tables, keyspaces=keyspaces, rules=rules)
 
 
 @dataclass
@@ -219,14 +221,17 @@ class Audit:
         for node in self._cluster.nodes:
             LOGGER.debug("Configuring audit on node %s", node.name)
             with node.remote_scylla_yaml() as scylla_yaml:
-                scylla_yaml.update(
-                    {
-                        "audit": audit_configuration.store,
-                        "audit_categories": ",".join(audit_configuration.categories),
-                        "audit_tables": ",".join(audit_configuration.tables),
-                        "audit_keyspaces": ",".join(audit_configuration.keyspaces),
-                    }
-                )
+                scylla_yaml_options: dict[str, Any] = {
+                    "audit": audit_configuration.store,
+                    "audit_categories": ",".join(audit_configuration.categories),
+                    "audit_tables": ",".join(audit_configuration.tables),
+                    "audit_keyspaces": ",".join(audit_configuration.keyspaces),
+                }
+                if audit_configuration.rules is not None:
+                    scylla_yaml_options["audit_rules"] = audit_configuration.rules
+                elif getattr(scylla_yaml, "audit_rules", None) is not None:
+                    scylla_yaml_options["audit_rules"] = []
+                scylla_yaml.update(scylla_yaml_options)
         self._cluster.restart_scylla()
         LOGGER.debug("Audit configuration completed")
         self._configuration = audit_configuration
@@ -253,5 +258,13 @@ class Audit:
         return self._configuration.store != "none"
 
     def disable(self):
-        self.configure(AuditConfiguration(store="none", categories=[], tables=[], keyspaces=[]))
+        self.configure(
+            AuditConfiguration(
+                store="none",
+                categories=[],
+                tables=[],
+                keyspaces=[],
+                rules=[] if self._configuration.rules is not None else None,
+            )
+        )
         LOGGER.info("Audit has been disabled on all nodes")

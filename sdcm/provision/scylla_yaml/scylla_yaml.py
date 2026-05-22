@@ -370,6 +370,7 @@ class ScyllaYaml(BaseModel):
     audit_categories: str = None  # None
     audit_tables: str = None  # None
     audit_keyspaces: str = None  # None
+    audit_rules: list = None  # None
 
     compaction_collection_items_count_warning_threshold: int = None  # None
 
