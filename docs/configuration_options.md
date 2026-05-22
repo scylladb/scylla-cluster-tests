@@ -4543,6 +4543,35 @@ Vector Store indexing threads (if not set, defaults to number of CPU cores on VS
 **type:** int
 
 
+## **vector_store_scylla_username** / SCT_VECTOR_STORE_SCYLLA_USERNAME
+
+Username for Vector Store to authenticate with ScyllaDB. When set, a role and service level are auto-created on the ScyllaDB cluster.
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **vector_store_scylla_password** / SCT_VECTOR_STORE_SCYLLA_PASSWORD
+
+Password for the Vector Store ScyllaDB user
+
+**default:** N/A
+
+**type:** str
+* appendable
+
+
+## **vector_store_service_level_shares** / SCT_VECTOR_STORE_SERVICE_LEVEL_SHARES
+
+Shares for the Vector Store service level (default: 1000)
+
+**default:** 1000
+
+**type:** int
+
+
 ## **download_from_s3** / SCT_DOWNLOAD_FROM_S3
 
 Destination-source map of dirs/buckets to download from S3 before starting the test

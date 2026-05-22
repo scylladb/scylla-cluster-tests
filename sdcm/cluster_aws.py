@@ -1477,6 +1477,17 @@ class VectorStoreAWSNode(VectorStoreNodeMixin, AWSNode):
         if (threads := self.parent_cluster.params.get("vector_store_threads")) > 0:
             env_content += f"\nVECTOR_STORE_THREADS={threads}"
 
+        if username := self.parent_cluster.params.get("vector_store_scylla_username"):
+            env_content += f"\nVECTOR_STORE_SCYLLADB_USERNAME={username}"
+        if password := self.parent_cluster.params.get("vector_store_scylla_password"):
+            password_file_path = "/home/ubuntu/vector-store/.scylla_password"
+            self.remoter.run(
+                f"echo -n '{password}' | sudo tee {password_file_path} > /dev/null && "
+                f"sudo chmod 600 {password_file_path}",
+                verbose=True,
+            )
+            env_content += f"\nVECTOR_STORE_SCYLLADB_PASSWORD_FILE={password_file_path}"
+
         self.remoter.run(f"echo '{env_content}' | sudo tee /home/ubuntu/vector-store/.env > /dev/null", verbose=True)
         self.remoter.run(
             f"sudo chown {self.parent_cluster.params.get('ami_vector_store_user')}: /home/ubuntu/vector-store/.env",
