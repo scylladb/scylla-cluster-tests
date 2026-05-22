@@ -12,6 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 import logging
+import time
 from dataclasses import dataclass, field
 
 from typing import Dict, List
@@ -85,6 +86,8 @@ class NetworkInterfaceProvider:
             LOGGER.info("Provisioned nic %s in the %s resource group", nic.name, self._resource_group_name)
             self._cache[nic_name] = nic
             nics.append(nic)
+        if pollers:
+            time.sleep(5)  # wait for nic to be fully propagated before returning (SCT-373)
         return nics
 
     def delete(self, nic: NetworkInterface):
