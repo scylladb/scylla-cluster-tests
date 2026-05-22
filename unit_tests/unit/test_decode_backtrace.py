@@ -276,7 +276,7 @@ def test_external_service_post_request_payload(monitor_node):
         _run_decode_with_queue_item(monitor_node, "abc123def", "0x1234\n0x5678")
 
     mock_post.assert_called_once_with(
-        "https://api.backtrace.scylladb.com/api/backtrace",
+        "https://backtrace.scylladb.com/api/backtrace",
         json={"build_id": "abc123def", "input": "Backtrace:\n0x1234\n0x5678"},
         timeout=120,
     )
