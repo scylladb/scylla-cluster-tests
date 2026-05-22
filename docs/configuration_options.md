@@ -28,7 +28,7 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-532 options across 29 groups.
+535 options across 29 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
@@ -42,7 +42,7 @@ concerns first, then one page per backend, then one per test type.
 | [Scylla Manager](configuration_options/scylla-manager.md) | 26 | Scylla Manager server and agent: versions, repos and backup/restore settings. |
 | [Auxiliary DB cluster (oracle / Cassandra)](configuration_options/auxiliary-db-cluster-oracle-cassandra.md) | 10 | A second database cluster used for comparison or migration testing -- the 'oracle' cluster in Gemini runs, or a Cassandra... |
 | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) | 10 | Scylla's DynamoDB-compatible API: the endpoint, write isolation, load-balancing and the credentials the tests use against it. |
-| [Vector Store](configuration_options/vector-store.md) | 6 | The Vector Store service under test alongside Scylla. |
+| [Vector Store](configuration_options/vector-store.md) | 9 | The Vector Store service under test alongside Scylla. |
 | [Kafka / CDC connectors](configuration_options/kafka-cdc-connectors.md) | 2 | Kafka deployment and connector configuration for CDC testing. |
 | [AWS backend](configuration_options/aws-backend.md) | 24 | AWS-specific provisioning: AMIs, EC2 instance and disk settings, placement groups, capacity reservations and dedicated hosts. |
 | [GCE backend](configuration_options/gce-backend.md) | 24 | Google Compute Engine provisioning. |
@@ -582,7 +582,10 @@ concerns first, then one page per backend, then one per test type.
 | [`validator_step_timeout_minutes`](configuration_options/spark-migrator-cassandra-to-scylla.md#validator_step_timeout_minutes) | `SCT_VALIDATOR_STEP_TIMEOUT_MINUTES` | [Spark migrator (Cassandra to Scylla)](configuration_options/spark-migrator-cassandra-to-scylla.md) |
 | [`vector_store_docker_image`](configuration_options/vector-store.md#vector_store_docker_image) | `SCT_VECTOR_STORE_DOCKER_IMAGE` | [Vector Store](configuration_options/vector-store.md) |
 | [`vector_store_port`](configuration_options/vector-store.md#vector_store_port) | `SCT_VECTOR_STORE_PORT` | [Vector Store](configuration_options/vector-store.md) |
+| [`vector_store_scylla_password`](configuration_options/vector-store.md#vector_store_scylla_password) | `SCT_VECTOR_STORE_SCYLLA_PASSWORD` | [Vector Store](configuration_options/vector-store.md) |
 | [`vector_store_scylla_port`](configuration_options/vector-store.md#vector_store_scylla_port) | `SCT_VECTOR_STORE_SCYLLA_PORT` | [Vector Store](configuration_options/vector-store.md) |
+| [`vector_store_scylla_username`](configuration_options/vector-store.md#vector_store_scylla_username) | `SCT_VECTOR_STORE_SCYLLA_USERNAME` | [Vector Store](configuration_options/vector-store.md) |
+| [`vector_store_service_level_shares`](configuration_options/vector-store.md#vector_store_service_level_shares) | `SCT_VECTOR_STORE_SERVICE_LEVEL_SHARES` | [Vector Store](configuration_options/vector-store.md) |
 | [`vector_store_threads`](configuration_options/vector-store.md#vector_store_threads) | `SCT_VECTOR_STORE_THREADS` | [Vector Store](configuration_options/vector-store.md) |
 | [`vector_store_version`](configuration_options/vector-store.md#vector_store_version) | `SCT_VECTOR_STORE_VERSION` | [Vector Store](configuration_options/vector-store.md) |
 | [`verify_data_after_entire_test`](configuration_options/upgrade-tests.md#verify_data_after_entire_test) | `SCT_VERIFY_DATA_AFTER_ENTIRE_TEST` | [Upgrade tests](configuration_options/upgrade-tests.md) |

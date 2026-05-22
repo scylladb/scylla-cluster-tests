@@ -8,7 +8,7 @@ import pytest
 from unittest.mock import Mock, patch
 import botocore.exceptions
 
-from sdcm.cluster_aws import AWSNode
+from sdcm.cluster_aws import AWSNode, VectorStoreAWSNode
 from sdcm.sct_events import Severity
 
 
@@ -171,3 +171,39 @@ def test_destroy_continues_when_release_address_fails(mock_aws_node, release_err
     assert mock_event.call_args.kwargs["severity"] is Severity.WARNING
     assert "eipalloc-05bed6a4528b5369f" in mock_event.call_args.kwargs["message"]
     mock_event.return_value.publish_or_dump.assert_called_once()
+
+
+VECTOR_STORE_PASSWORD_FILE = "/home/ubuntu/vector-store/.scylla_password"
+
+
+@pytest.fixture
+def vector_store_aws_node():
+    """Vector Store AWS node with a remoter that records the commands it runs."""
+    node = VectorStoreAWSNode.__new__(VectorStoreAWSNode)
+    node.parent_cluster = Mock(scylla_cluster=None)
+    node.parent_cluster.params = {
+        "vector_store_port": 6080,
+        "vector_store_threads": 0,
+        "vector_store_scylla_username": "vs_user",
+        "vector_store_scylla_password": "vs_password",
+        "ami_vector_store_user": "vs-service",
+    }
+    node.remoter = Mock()
+    return node
+
+
+def test_configure_vector_store_service_password_file_readable_by_service_user(vector_store_aws_node):
+    """The vector-store service runs as ami_vector_store_user and must read the owner-only password file.
+
+    The password must not reach the SCT log.
+    """
+    vector_store_aws_node.configure_vector_store_service()
+
+    password_calls = [
+        call for call in vector_store_aws_node.remoter.run.call_args_list if "vs_password" in call.args[0]
+    ]
+    assert len(password_calls) == 1
+    command = password_calls[0].args[0]
+    assert f"sudo chown vs-service: {VECTOR_STORE_PASSWORD_FILE}" in command
+    assert f"sudo chmod 600 {VECTOR_STORE_PASSWORD_FILE}" in command
+    assert password_calls[0].kwargs["verbose"] is False

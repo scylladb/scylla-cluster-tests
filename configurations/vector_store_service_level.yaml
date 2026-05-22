@@ -1,0 +1,6 @@
+# Vector Store with a dedicated ScyllaDB user and service level.
+# Layer after configurations/auth_cassandra.yaml.
+vector_store_version: "1.11.0"
+vector_store_scylla_username: 'vector_store_user'
+vector_store_scylla_password: 'vector_store_pass'
+vector_store_service_level_shares: 500

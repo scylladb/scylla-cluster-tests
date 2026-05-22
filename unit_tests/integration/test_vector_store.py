@@ -183,3 +183,40 @@ def test_vector_search_error_handling(docker_scylla, docker_vector_store, params
     test_vector = [random.uniform(-1.0, 1.0) for _ in range(128)]
     with pytest.raises(Exception):
         vector_client.ann_search(keyspace="nonexistent", index="nonexistent_idx", vector=test_vector, limit=5)
+
+
+@pytest.mark.docker_scylla_args(
+    scylla_docker_image="scylladb/scylla:2026.2.7",
+    vs_docker_image="scylladb/vector-store:1.11.0",
+    vector_store_auth=True,
+)
+def test_vector_search_with_dedicated_scylla_user(docker_scylla, docker_vector_store, params):
+    """Vector Store indexes and serves data as its own ScyllaDB user, under its own service level.
+
+    Scylla runs with PasswordAuthenticator and CassandraAuthorizer, so indexing works only when
+    the role has the VECTOR_SEARCH_INDEXING permission.
+
+    External services: Docker (Scylla and Vector Store containers)
+    """
+    db_cluster, vs_cluster = docker_scylla.parent_cluster, docker_vector_store
+    vector_client = vs_cluster.nodes[0].get_vector_store_api_client()
+
+    create_vector_table(db_cluster)
+    test_vectors = insert_test_vectors(db_cluster, count=10)
+    wait_for_vector_indexing(vector_client)
+
+    with db_cluster.cql_connection_patient(db_cluster.nodes[0]) as session:
+        query_vector = test_vectors[0]["vector"]
+        ann_rows = list(
+            session.execute(f"SELECT id FROM vector_test.embeddings ORDER BY vector ANN OF {query_vector} LIMIT 5")
+        )
+        vs_clients = list(
+            session.execute("SELECT username FROM system.clients WHERE username = 'vs_user' ALLOW FILTERING")
+        )
+        permissions = session.execute("SELECT permissions FROM system.role_permissions WHERE role = 'vs_user'").one()
+        service_level = session.execute("LIST ATTACHED SERVICE_LEVEL OF 'vs_user'").one()
+
+    assert ann_rows, "ANN query returned no rows"
+    assert vs_clients, "Vector Store has no CQL connection as vs_user"
+    assert permissions and "VECTOR_SEARCH_INDEXING" in permissions.permissions
+    assert service_level and service_level.service_level == "vector_store_sl"
