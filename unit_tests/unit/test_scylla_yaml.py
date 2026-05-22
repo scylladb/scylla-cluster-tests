@@ -171,6 +171,7 @@ def test_scylla_yaml():
             "audit": None,
             "audit_categories": None,
             "audit_keyspaces": None,
+            "audit_rules": None,
             "audit_tables": None,
             "auth_superuser_name": None,
             "auth_superuser_salted_password": None,
@@ -473,6 +474,23 @@ def test_update_with_dict_object(test_data_dir):
     assert yaml1.enable_sstables_md_format == append_scylla_args_dict["enable_sstables_md_format"]
 
     assert yaml1.force_schema_commit_log == append_scylla_args_dict["force_schema_commit_log"]
+
+
+def test_update_with_extra_audit_rules():
+    audit_rules = [
+        {
+            "sinks": ["syslog"],
+            "categories": ["DML"],
+            "qualified_table_names": ["audit_keyspace.*"],
+            "roles": ["*"],
+        }
+    ]
+    yaml1 = ScyllaYaml()
+
+    yaml1.update({"audit_rules": audit_rules})
+
+    dumped_yaml = yaml1.model_dump(exclude_defaults=True, exclude_unset=True, exclude_none=True)
+    assert dumped_yaml["audit_rules"] == audit_rules
 
 
 def test_copy():

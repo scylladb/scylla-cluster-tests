@@ -1,27 +1,133 @@
+from contextlib import contextmanager
 from datetime import datetime
-from pathlib import Path
+
+import pytest
+
+from sdcm.audit import Audit, AuditConfiguration, get_audit_log_rows
+from sdcm.provision.scylla_yaml import ScyllaYaml
+from unit_tests.lib.fake_cluster import DummyDbCluster, DummyNode
 
 
-from sdcm.audit import get_audit_log_rows
-from sdcm.cluster import BaseNode
+class AuditConfigNode:
+    name = "dummy-node"
+
+    def __init__(self):
+        self.scylla_yaml = ScyllaYaml(audit="none")
+
+    @contextmanager
+    def remote_scylla_yaml(self):
+        yield self.scylla_yaml
 
 
-class DummyAuditNode(BaseNode):
-    def __init__(self, system_log: Path, **kwargs):
-        super().__init__(**kwargs)
-        self._system_log_path = system_log
+class AuditCluster(DummyDbCluster):
+    def __init__(self, node):
+        super().__init__([node])
+        self.restarted = False
 
-    @property
-    def system_log(self):
-        return str(self._system_log_path)
+    def restart_scylla(self, nodes=None, random_order=False):
+        self.restarted = True
 
 
-def test_get_audit_log_rows_can_be_filtered_by_time(test_data_dir):
-    node = DummyAuditNode(
-        system_log=test_data_dir / "test_audit.log",
+@pytest.fixture
+def audit_rules():
+    return [
+        {
+            "sinks": ["syslog"],
+            "categories": ["DML"],
+            "qualified_table_names": ["audit_keyspace.*"],
+            "roles": ["*"],
+        }
+    ]
+
+
+@pytest.fixture
+def audit_node():
+    return AuditConfigNode()
+
+
+@pytest.fixture
+def audit_cluster(audit_node):
+    return AuditCluster(audit_node)
+
+
+@pytest.fixture
+def audit_with_rules(audit_cluster, audit_rules):
+    audit_cluster.nodes[0].scylla_yaml.update(
+        {
+            "audit": "syslog",
+            "audit_categories": "",
+            "audit_tables": "",
+            "audit_keyspaces": "",
+            "audit_rules": audit_rules,
+        }
+    )
+    return Audit(audit_cluster)
+
+
+def get_node_scylla_yaml(cluster):
+    return cluster.nodes[0].scylla_yaml.model_dump(exclude_defaults=True, exclude_unset=True, exclude_none=True)
+
+
+def get_audit_log_node(test_data_dir, log_name):
+    node = DummyNode(
         name="dummy-node",
         parent_cluster=None,
     )
+    node.system_log = str(test_data_dir / log_name)
+    return node
+
+
+def test_configure_audit_rules_keeps_sink_enabled(audit_cluster, audit_rules, events):
+    audit = Audit(audit_cluster)
+
+    audit.configure(AuditConfiguration(store="syslog", categories=[], tables=[], keyspaces=[], rules=audit_rules))
+
+    assert get_node_scylla_yaml(audit_cluster) == {
+        "audit": "syslog",
+        "audit_categories": "",
+        "audit_tables": "",
+        "audit_keyspaces": "",
+        "audit_rules": audit_rules,
+    }
+    assert audit_cluster.restarted
+    assert audit.is_enabled()
+
+
+def test_empty_audit_rules_do_not_disable_legacy_sink(audit_cluster):
+    audit_cluster.nodes[0].scylla_yaml.update({"audit": "syslog", "audit_rules": []})
+    audit = Audit(audit_cluster)
+
+    assert audit.is_enabled()
+
+
+def test_configure_legacy_audit_clears_existing_rules(audit_cluster, audit_with_rules, events):
+    audit_with_rules.configure(AuditConfiguration(store="syslog", categories=["DML"], tables=[], keyspaces=["ks"]))
+
+    assert get_node_scylla_yaml(audit_cluster) == {
+        "audit": "syslog",
+        "audit_categories": "DML",
+        "audit_tables": "",
+        "audit_keyspaces": "ks",
+        "audit_rules": [],
+    }
+
+
+def test_disable_audit_rules_clears_rules(audit_cluster, audit_with_rules, events):
+    audit_with_rules.disable()
+
+    assert get_node_scylla_yaml(audit_cluster) == {
+        "audit": "none",
+        "audit_categories": "",
+        "audit_tables": "",
+        "audit_keyspaces": "",
+        "audit_rules": [],
+    }
+    assert audit_cluster.restarted
+    assert not audit_with_rules.is_enabled()
+
+
+def test_get_audit_log_rows_can_be_filtered_by_time(test_data_dir):
+    node = get_audit_log_node(test_data_dir, "test_audit.log")
     # no date filter provided
     rows = get_audit_log_rows(node, from_datetime=None)
     assert len(list(rows)) == 69
@@ -35,11 +141,7 @@ def test_get_audit_log_rows_can_be_filtered_by_time(test_data_dir):
 
 
 def test_get_audit_log_rows_can_be_filtered_by_time_comma_separated(test_data_dir):
-    node = DummyAuditNode(
-        system_log=test_data_dir / "test_audit_comma_sep.log",
-        name="dummy-node",
-        parent_cluster=None,
-    )
+    node = get_audit_log_node(test_data_dir, "test_audit_comma_sep.log")
     # no date filter provided
     rows = get_audit_log_rows(node, from_datetime=None)
     assert len(list(rows)) == 211
@@ -53,11 +155,7 @@ def test_get_audit_log_rows_can_be_filtered_by_time_comma_separated(test_data_di
 
 
 def test_get_audit_log_rows_can_be_filtered_by_category(test_data_dir):
-    node = DummyAuditNode(
-        system_log=test_data_dir / "test_audit.log",
-        name="dummy-node",
-        parent_cluster=None,
-    )
+    node = get_audit_log_node(test_data_dir, "test_audit.log")
     # no date filter provided
     rows = get_audit_log_rows(node, from_datetime=None, category="DML")
     rows = list(rows)
@@ -73,11 +171,7 @@ def test_get_audit_log_rows_can_be_filtered_by_category(test_data_dir):
 
 
 def test_get_audit_log_rows_can_be_filtered_by_operation(test_data_dir):
-    node = DummyAuditNode(
-        system_log=test_data_dir / "test_audit.log",
-        name="dummy-node",
-        parent_cluster=None,
-    )
+    node = get_audit_log_node(test_data_dir, "test_audit.log")
     # no date filter provided
     rows = get_audit_log_rows(node, from_datetime=None, operation='USE "audit_keyspace"')
     rows = list(rows)
