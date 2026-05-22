@@ -46,6 +46,20 @@ class VectorStoreConfigMixin(BaseModel):
     vector_store_threads: int = SctField(
         description="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)",
     )
+    vector_store_scylla_username: String = SctField(
+        description="Username for Vector Store to authenticate with ScyllaDB. "
+        "When set, SCT creates this role and a service level on the ScyllaDB cluster, and attaches "
+        "the service level to the role. With CassandraAuthorizer, SCT also grants VECTOR_SEARCH_INDEXING "
+        "on all keyspaces to the role. Requires PasswordAuthenticator and the superuser in "
+        "append_scylla_yaml (auth_superuser_name, auth_superuser_salted_password). "
+        "configurations/auth_cassandra.yaml sets all of them.",
+    )
+    vector_store_scylla_password: String = SctField(
+        description="Password for the Vector Store ScyllaDB user",
+    )
+    vector_store_service_level_shares: int = SctField(
+        description="Shares for the Vector Store service level (default: 1000)",
+    )
     vector_store_version: String = SctField(
         description="Vector Store version / docker image tag",
     )

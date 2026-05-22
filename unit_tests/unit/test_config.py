@@ -1966,3 +1966,51 @@ def test_fallback_on_demand_is_opt_in(monkeypatch, backend, config_file, expecte
     conf = sct_config.SCTConfiguration()
     # strict `is`: None must fail too - ProvisionPlanBuilder rejects it as a non-bool
     assert conf.get("instance_provision_fallback_on_demand") is expected
+
+
+# Vector Store ScyllaDB user
+
+
+VECTOR_STORE_AUTH_ENV = {
+    "SCT_AUTHENTICATOR": "PasswordAuthenticator",
+    "SCT_AUTHENTICATOR_USER": "cassandra",
+    "SCT_AUTHENTICATOR_PASSWORD": "cassandra",
+    "SCT_VECTOR_STORE_SCYLLA_USERNAME": "vs_user",
+    "SCT_VECTOR_STORE_SCYLLA_PASSWORD": "vs_password",
+}
+
+
+@pytest.mark.parametrize(
+    "append_scylla_yaml",
+    [
+        pytest.param(None, id="no-append-scylla-yaml"),
+        pytest.param({"auth_superuser_salted_password": "$6$hash"}, id="no-superuser-name"),
+        pytest.param({"auth_superuser_name": "admin", "auth_superuser_salted_password": "$6$hash"}, id="other-name"),
+        pytest.param({"auth_superuser_name": "cassandra"}, id="no-salted-password"),
+    ],
+)
+def test_vector_store_scylla_username_without_superuser_raises(monkeypatch, append_scylla_yaml):
+    """The superuser must come from scylla.yaml: Scylla 2026.2+ creates no default one for SCT to log in with."""
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
+    for key, value in VECTOR_STORE_AUTH_ENV.items():
+        monkeypatch.setenv(key, value)
+    if append_scylla_yaml:
+        monkeypatch.setenv("SCT_APPEND_SCYLLA_YAML", str(append_scylla_yaml))
+
+    with pytest.raises(ValueError, match="append_scylla_yaml.auth_superuser_name"):
+        sct_config.SCTConfiguration()
+
+
+def test_vector_store_scylla_username_with_superuser_accepted(monkeypatch):
+    """A superuser in scylla.yaml that matches authenticator_user is enough to set up the Vector Store user."""
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
+    for key, value in VECTOR_STORE_AUTH_ENV.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv(
+        "SCT_APPEND_SCYLLA_YAML",
+        str({"auth_superuser_name": "cassandra", "auth_superuser_salted_password": "$6$hash"}),
+    )
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.get("vector_store_scylla_username") == "vs_user"

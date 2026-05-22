@@ -19,6 +19,8 @@ from sdcm.utils.vector_store_client import VectorStoreClient
 
 LOGGER = logging.getLogger(__name__)
 
+VECTOR_STORE_SERVICE_LEVEL_NAME = "vector_store_sl"
+
 
 class VectorStoreNodeMixin:
     """Mixin class providing common Vector Store node functionality."""
@@ -73,8 +75,49 @@ class VectorStoreClusterMixin:
             return
 
         self.scylla_cluster = scylla_cluster
+        self._setup_vector_store_scylla_auth()
         self._reconfigure_vector_store_nodes()
         self._configure_scylla_nodes_with_vector_store()
+
+    def _setup_vector_store_scylla_auth(self):
+        """Create a ScyllaDB role and service level for Vector Store authentication.
+
+        When vector_store_scylla_username is configured, this method:
+        1. Creates a login role for Vector Store on the ScyllaDB cluster
+        2. Grants VECTOR_SEARCH_INDEXING to the role when the cluster uses CassandraAuthorizer
+        3. Creates a service level with the configured shares
+        4. Attaches the service level to the role
+
+        This enables Vector Store to authenticate with ScyllaDB and have its
+        workload governed by the attached service level for SLA/QoS purposes.
+        """
+        username = self.params.get("vector_store_scylla_username")
+        if not username:
+            return
+
+        password = self.params.get("vector_store_scylla_password")
+        shares = self.params.get("vector_store_service_level_shares") or 1000
+        auth_user = self.params.get("authenticator_user")
+        auth_password = self.params.get("authenticator_password")
+
+        self.log.info("Setting up ScyllaDB role '%s' and service level for Vector Store", username)
+
+        node = self.scylla_cluster.nodes[0]
+        with self.scylla_cluster.cql_connection_patient(node=node, user=auth_user, password=auth_password) as session:
+            session.execute(f"CREATE ROLE IF NOT EXISTS '{username}' WITH PASSWORD = '{password}' AND LOGIN = true")
+            self.log.info("Created ScyllaDB role '%s' for Vector Store", username)
+
+            if self.params.get("authorizer") == "CassandraAuthorizer":
+                session.execute(f"GRANT VECTOR_SEARCH_INDEXING ON ALL KEYSPACES TO '{username}'")
+                self.log.info("Granted VECTOR_SEARCH_INDEXING on all keyspaces to role '%s'", username)
+
+            session.execute(
+                f"CREATE SERVICE_LEVEL IF NOT EXISTS '{VECTOR_STORE_SERVICE_LEVEL_NAME}' WITH shares = {shares}"
+            )
+            self.log.info("Created service level '%s' with shares=%d", VECTOR_STORE_SERVICE_LEVEL_NAME, shares)
+
+            session.execute(f"ATTACH SERVICE_LEVEL '{VECTOR_STORE_SERVICE_LEVEL_NAME}' TO '{username}'")
+            self.log.info("Attached service level '%s' to role '%s'", VECTOR_STORE_SERVICE_LEVEL_NAME, username)
 
     def _configure_scylla_nodes_with_vector_store(self):
         """Configure Scylla nodes with Vector Store URIs"""
