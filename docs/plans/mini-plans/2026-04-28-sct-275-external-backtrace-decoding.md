@@ -23,7 +23,7 @@ debug info into memory for every backtrace.
 
 Add `_decode_via_external_service(self, build_id, raw_backtrace)` to the monitor node class
 in `sdcm/cluster.py`:
-- POST to `https://api.backtrace.scylladb.com/api/backtrace` with JSON body
+- POST to `https://backtrace.scylladb.com/api/backtrace` with JSON body
   `{"build_id": "<hex>", "input": "Backtrace:\n<addresses>"}`
 - Timeout: 120 seconds (decoding large binaries can take 30+ seconds on cache miss)
 - Return `output.stdout` on success (`response["success"] == True`)
