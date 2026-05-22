@@ -2015,7 +2015,7 @@ class BaseNode(AutoSshContainerMixin):
             ValueError: if the service returns success=false
         """
         response = requests.post(
-            "https://api.backtrace.scylladb.com/api/backtrace",
+            "https://backtrace.scylladb.com/api/backtrace",
             json={"build_id": build_id, "input": "Backtrace:\n" + raw_backtrace},
             timeout=120,
         )
