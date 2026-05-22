@@ -341,7 +341,7 @@ def ignore_ignore_runtime_errors():
     with ExitStack() as stack:
         stack.enter_context(
             EventsSeverityChangerFilter(
-                new_severity=Severity.INFO,
+                new_severity=Severity.NORMAL,
                 event_class=DatabaseLogEvent,
                 regex=r".*ignoring error response: std::runtime_error.*",
             )
