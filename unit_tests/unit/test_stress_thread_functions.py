@@ -13,7 +13,7 @@
 
 import pytest
 
-from sdcm.stress_thread import get_timeout_from_stress_cmd
+from sdcm.stress_thread import CassandraStressThread, get_timeout_from_stress_cmd
 from sdcm.utils.common import time_period_str_to_seconds
 
 
@@ -59,3 +59,176 @@ def test_duration_str_to_seconds_function(duration, seconds):
 )
 def test_get_timeout_from_stress_cmd(stress_cmd, timeout):
     assert get_timeout_from_stress_cmd(stress_cmd) == timeout
+
+
+# --- _classify_user_profile_ops tests ---
+
+
+@pytest.mark.parametrize(
+    "stress_cmd, expected",
+    (
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(insert=1)' -rate threads=10",
+            (True, False),
+            id="insert_only",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(read=2)' -rate threads=10",
+            (False, True),
+            id="read_only",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(insert=1,read=2)' -rate threads=10",
+            (True, True),
+            id="insert_and_read_mixed",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/mv_synchronous_updates.yaml"
+            " ops'(select_base=3,select_mv=3,select_mv_2=3,url_column_update=1,row_delete=1)'"
+            " cl=QUORUM duration=360m -mode cql3 native -rate threads=50",
+            (True, True),
+            id="issue_13401_mv_synchronous_updates",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(select_base=3,select_mv=3)' -rate threads=10",
+            (False, True),
+            id="select_queries_only",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(url_column_update=1,row_delete=1)' -rate threads=10",
+            (True, False),
+            id="update_and_delete_only",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1)'"
+            " -rate threads=10",
+            (True, False),
+            id="lwt_update_operations",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(insert=2,read1=1,update_number=1,delete_row=1)'"
+            " -rate threads=10",
+            (True, True),
+            id="cdc_profile_mixed_ops",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(insert_query=1)' -rate threads=10",
+            (True, False),
+            id="insert_query_operation",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(scan_all=1)' -rate threads=10",
+            (False, True),
+            id="scan_operation",
+        ),
+    ),
+)
+def test_classify_user_profile_ops(stress_cmd, expected):
+    assert CassandraStressThread._classify_user_profile_ops(stress_cmd) == expected
+
+
+def test_classify_user_profile_ops_unknown_op_defaults_to_mixed():
+    """Unknown operation names that don't match any keyword should be treated as mixed."""
+    stress_cmd = "cassandra-stress user profile=/tmp/test.yaml ops'(custom_op=1)' -rate threads=10"
+    has_write, has_read = CassandraStressThread._classify_user_profile_ops(stress_cmd)
+    assert has_write is True
+    assert has_read is True
+
+
+def test_classify_user_profile_ops_no_ops_clause_insert():
+    """Fallback to legacy insert= matching when no ops() clause found."""
+    stress_cmd = "cassandra-stress user profile=/tmp/test.yaml insert=1 -rate threads=10"
+    has_write, has_read = CassandraStressThread._classify_user_profile_ops(stress_cmd)
+    assert has_write is True
+    assert has_read is False
+
+
+def test_classify_user_profile_ops_no_ops_clause_read():
+    """Fallback to legacy read= matching when no ops() clause found."""
+    stress_cmd = "cassandra-stress user profile=/tmp/test.yaml read=1 -rate threads=10"
+    has_write, has_read = CassandraStressThread._classify_user_profile_ops(stress_cmd)
+    assert has_write is False
+    assert has_read is True
+
+
+# --- set_hdr_tags tests (using a lightweight stub to avoid full CassandraStressThread init) ---
+
+
+def _make_hdr_tag_stub():
+    """Create a minimal stub with the attributes set_hdr_tags needs."""
+    stub = object.__new__(CassandraStressThread)
+    stub.hdr_tags = []
+    return stub
+
+
+@pytest.mark.parametrize(
+    "stress_cmd, expected_tags",
+    (
+        pytest.param(
+            "cassandra-stress write cl=ONE duration=3m -mode cql3 native -rate threads=1000",
+            ["WRITE-st"],
+            id="standard_write_unthrottled",
+        ),
+        pytest.param(
+            "cassandra-stress read cl=ONE duration=3m -mode cql3 native -rate threads=1000",
+            ["READ-st"],
+            id="standard_read_unthrottled",
+        ),
+        pytest.param(
+            "cassandra-stress mixed cl=ONE duration=3m -mode cql3 native -rate threads=1000",
+            ["WRITE-st", "READ-st"],
+            id="standard_mixed_unthrottled",
+        ),
+        pytest.param(
+            "cassandra-stress write cl=ONE duration=3m -mode cql3 native -rate 'fixed=100/s threads=10'",
+            ["WRITE-rt"],
+            id="standard_write_throttled",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(insert=1)' -mode cql3 native -rate threads=50",
+            ["WRITE-st"],
+            id="user_profile_insert",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(read=2)' -mode cql3 native -rate threads=50",
+            ["READ-st"],
+            id="user_profile_read",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/mv_synchronous_updates.yaml"
+            " ops'(select_base=3,select_mv=3,select_mv_2=3,url_column_update=1,row_delete=1)'"
+            " cl=QUORUM duration=360m -mode cql3 native -rate threads=50",
+            ["WRITE-st", "READ-st"],
+            id="issue_13401_custom_ops_mixed",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(select_base=3,select_mv=1)'"
+            " -mode cql3 native -rate threads=50",
+            ["READ-st"],
+            id="user_profile_select_only",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(url_column_update=1,row_delete=1)'"
+            " -mode cql3 native -rate threads=50",
+            ["WRITE-st"],
+            id="user_profile_write_ops_only",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml ops'(insert=1)'"
+            " -mode cql3 native -rate 'fixed=100/s threads=10'",
+            ["WRITE-rt"],
+            id="user_profile_insert_throttled",
+        ),
+    ),
+)
+def test_set_hdr_tags(stress_cmd, expected_tags):
+    stub = _make_hdr_tag_stub()
+    stub.set_hdr_tags(stress_cmd)
+    assert stub.hdr_tags == expected_tags
+
+
+def test_set_hdr_tags_user_profile_no_known_ops_raises():
+    """set_hdr_tags should raise ValueError when no ops clause and no insert=/read= found."""
+    stub = _make_hdr_tag_stub()
+    with pytest.raises(ValueError, match="Cannot detect stress operation type"):
+        stub.set_hdr_tags("cassandra-stress user profile=/tmp/test.yaml -mode cql3 native -rate threads=50")
