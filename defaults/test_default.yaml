@@ -125,8 +125,16 @@ authenticator_password: ''
 n_test_oracle_db_nodes: 1
 oracle_scylla_version: '2026.1'
 append_scylla_args_oracle: '--enable-cache false'
-instance_type_db_oracle: 'i8g.2xlarge'
+instance_type_db_oracle: ''
 run_gemini_in_rolling_upgrade: false
+
+# cloud-agnostic instance sizing constraints (resolved per-cloud by _resolve_instance_sizes)
+sizing_loader:
+  vcpu: 4
+  memory: '>=8'
+sizing_monitor:
+  vcpu: 2
+  memory: '>=8'
 
 # cassandra-stress defaults
 stress_multiplier: 1
@@ -285,7 +293,7 @@ assert_linux_distro_features: []
 skip_test_stages: {}
 
 n_db_zero_token_nodes: 0
-zero_token_instance_type_db: 'i4i.large'
+zero_token_instance_type_db: ''
 use_zero_nodes: false
 
 latte_schema_parameters: {}
