@@ -2047,6 +2047,7 @@ class SchemaLogCollector(BaseSCTLogCollector):
         FileLog(name="system_schema_tables.log", search_locally=True),
         FileLog(name="system_truncated.log", search_locally=True),
         FileLog(name="schema_with_internals.log", search_locally=True),
+        FileLog(name="system_tablets.log", search_locally=True),
     ]
     cluster_log_type = "schema-logs"
     cluster_dir_prefix = "schema-logs"
