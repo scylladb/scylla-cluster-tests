@@ -33,8 +33,9 @@ from sdcm.provision.provisioner import (
 from sdcm.provision.gce.disk_provider import DiskProvider
 from sdcm.provision.gce.network_provider import NetworkProvider
 from sdcm.provision.gce.instance_provider import VirtualMachineProvider
+from sdcm.provision.gce.utils import normalize_instance_name
 from sdcm.provision.user_data import UserDataBuilder
-from sdcm.utils.gce_utils import get_gce_compute_instances_client, random_zone
+from sdcm.utils.gce_utils import gce_instance_zone, get_gce_compute_instances_client, random_zone
 from sdcm.keystore import KeyStore
 from sdcm.remote import RemoteCmdRunnerBase
 
@@ -51,46 +52,75 @@ class GceProvisioner(Provisioner):
         Args:
             test_id: Test ID for tagging resources
             region: GCE region (e.g., 'us-east1')
-            availability_zone: GCE zone letter (e.g., 'b') or None for random
+            availability_zone: GCE zone letter (e.g., 'b'), or comma-separated
+                letters (e.g., 'a,b,c') to distribute nodes across AZs.
+                If None/empty, a random zone is selected.
             network_name: VPC network name (from gce_network SCT parameter)
             **config: Additional configuration options
         """
-        # If availability_zone is None or empty, use random_zone
-        # This matches the logic in GCECluster.__init__
-        if not availability_zone:
-            availability_zone = random_zone(region)
+        # Nodes are spread over every configured zone; which zone a node lands in is derived from its
+        # rack - see `_zone_for_definition` - the same contract AWS implements with per-AZ subnets.
+        self._zone_names = [f"{region}-{letter}" for letter in self._parse_zone_letters(region, availability_zone)]
 
-        # Construct full zone name (region + zone)
-        zone = f"{region}-{availability_zone}"
-        super().__init__(test_id, region, zone)
+        # The first zone is this provisioner's own AZ, used wherever a single zone is expected.
+        super().__init__(test_id, region, self._zone_names[0])
 
         # Get GCE credentials
         credentials = KeyStore().get_gcp_credentials()
         self.project_id = credentials["project_id"]
 
-        # Initialize providers
-        self._disk_provider = DiskProvider(self.project_id, zone)
+        # One VM provider per zone: the GCE API is zone-scoped, so every instance operation has to be
+        # issued against the zone the instance actually lives in.
         self._network_provider = NetworkProvider(self.project_id, network_name)
-        self._vm_provider = VirtualMachineProvider(
+        self._vm_providers: Dict[str, VirtualMachineProvider] = {
+            zone: self._make_vm_provider(zone) for zone in self._zone_names
+        }
+
+        # Cache for instances, and the zone each of them was found in
+        self._cache: Dict[str, VmInstance] = {}
+        self._instance_zones: Dict[str, str] = {}
+
+        # Populate cache with existing instances from all zones
+        for vm_provider in self._vm_providers.values():
+            for gce_instance in vm_provider.list():
+                try:
+                    vm_instance = self._gce_instance_to_vm_instance(gce_instance)
+                    self._cache[vm_instance.name] = vm_instance
+                except Exception as exc:  # noqa: BLE001
+                    LOGGER.warning("Failed to cache instance %s: %s", gce_instance.name, exc)
+
+        LOGGER.debug(
+            "Initialized GceProvisioner for test_id=%s, region=%s, zones=%s",
+            test_id,
+            region,
+            self._zone_names,
+        )
+
+    @staticmethod
+    def _cache_key(name: str) -> str:
+        """Key an instance is tracked under: the name GCE gives it, which is the normalized one.
+
+        A definition name can differ from it - anything outside [a-z0-9-] is replaced on creation,
+        and a `user_prefix` may well carry a dot - so looking a definition up by its own name would
+        never find the instance that was just created for it.
+        """
+        return normalize_instance_name(name)
+
+    def _make_vm_provider(self, zone: str) -> VirtualMachineProvider:
+        """Build a VM provider bound to one zone."""
+        return VirtualMachineProvider(
             self.project_id,
             zone,
-            test_id,
-            self._disk_provider,
+            self.test_id,
+            DiskProvider(self.project_id, zone),
             self._network_provider,
         )
 
-        # Cache for instances
-        self._cache: Dict[str, VmInstance] = {}
-
-        # Populate cache with existing instances
-        for gce_instance in self._vm_provider.list():
-            try:
-                vm_instance = self._gce_instance_to_vm_instance(gce_instance)
-                self._cache[vm_instance.name] = vm_instance
-            except Exception as exc:  # noqa: BLE001
-                LOGGER.warning("Failed to cache instance %s: %s", gce_instance.name, exc)
-
-        LOGGER.debug("Initialized GceProvisioner for test_id=%s, region=%s, zone=%s", test_id, region, zone)
+    @staticmethod
+    def _parse_zone_letters(region: str, availability_zone: str) -> List[str]:
+        """Zone letters to use: 'a,b,c' -> ['a', 'b', 'c']; when unset, one randomly picked zone."""
+        letters = [letter.strip() for letter in (availability_zone or "").split(",") if letter.strip()]
+        return letters or [random_zone(region)]
 
     def __str__(self):
         return f"{self.__class__.__name__}(region={self.region}, zone={self.availability_zone})"
@@ -99,6 +129,51 @@ class GceProvisioner(Provisioner):
     def zone(self) -> str:
         """Get the full zone name."""
         return self.availability_zone
+
+    @property
+    def availability_zones(self) -> List[str]:
+        """Full names of every zone this provisioner places instances in."""
+        return list(self._zone_names)
+
+    def _zone_for_definition(self, definition: InstanceDefinition) -> str:
+        """Zone an instance belongs to: its rack index, falling back to its node index.
+
+        Placement is keyed on the node's identity and never on its position in the batch being
+        provisioned, so a node lands in the same zone whether the cluster is created in one call or
+        grown a node at a time, and a retry after a partial failure does not move the nodes around.
+        """
+        if len(self._zone_names) == 1:
+            return self._zone_names[0]
+        if definition.rack_index is not None:
+            return self._zone_names[definition.rack_index % len(self._zone_names)]
+        try:
+            node_index = int(definition.tags.get("NodeIndex", 1))
+        except (TypeError, ValueError):
+            LOGGER.warning(
+                "Could not determine NodeIndex of instance %s, using zone %s", definition.name, self._zone_names[0]
+            )
+            return self._zone_names[0]
+        return self._zone_names[(node_index - 1) % len(self._zone_names)]
+
+    def _provider_for_instance(self, name: str) -> VirtualMachineProvider:
+        """VM provider bound to the zone the instance lives in.
+
+        An instance can sit outside the configured zones - runtime AZ fallback relocates one on a
+        capacity error - so a provider for its own zone is created on demand. Sending the operation
+        to the primary zone instead would either fail silently or hit the wrong instance.
+        """
+        zone = self._instance_zones.get(self._cache_key(name))
+        if zone is None:
+            LOGGER.warning(
+                "Zone of instance %s is unknown, issuing the operation against %s", name, self.availability_zone
+            )
+            return self._vm_providers[self.availability_zone]
+        if zone not in self._vm_providers:
+            LOGGER.warning(
+                "Instance %s lives in zone %s, outside the configured zones %s", name, zone, self._zone_names
+            )
+            self._vm_providers[zone] = self._make_vm_provider(zone)
+        return self._vm_providers[zone]
 
     @classmethod
     def discover_regions(cls, test_id: str, **config) -> List["GceProvisioner"]:
@@ -110,7 +185,13 @@ class GceProvisioner(Provisioner):
             **config: Additional configuration
 
         Returns:
-            List of GceProvisioner instances, one per region
+            List of GceProvisioner instances, one per zone holding resources of the test
+
+        Note:
+            This is a discovery/cleanup path, so each provisioner is built for a single zone: the
+            zones of a multi-AZ cluster come back as separate single-zone provisioners rather than
+            one provisioner covering them all. Every zone is still reachable, but a caller that
+            expects one provisioner to span the whole cluster has to iterate all of them.
         """
         # Get GCE credentials
         credentials = KeyStore().get_gcp_credentials()
@@ -173,42 +254,59 @@ class GceProvisioner(Provisioner):
         """
         Create a set of instances specified by a list of InstanceDefinition.
 
-        Instances are created in parallel for better performance.
+        Each instance goes to the zone its rack maps to (`_zone_for_definition`). Instances sharing a
+        zone are created in one call, in parallel.
 
         Args:
             definitions: List of instance definitions
             pricing_model: Pricing model (spot or on-demand)
 
         Returns:
-            List of VmInstance objects
+            List of VmInstance objects, in the same order as `definitions`
         """
         # Separate cached from new, prepare user data
-        cached, vms_to_create, user_data_list = [], [], []
+        vms_to_create, user_data_list = [], []
         for definition in definitions:
-            if definition.name in self._cache:
-                cached.append(self._cache[definition.name])
-            else:
-                user_data = ""
-                if definition.user_data:
-                    user_data = UserDataBuilder(user_data_objects=definition.user_data).build_user_data_yaml()
-                vms_to_create.append(definition)
-                user_data_list.append(user_data)
+            if self._cache_key(definition.name) in self._cache:
+                continue
+            user_data = ""
+            if definition.user_data:
+                user_data = UserDataBuilder(user_data_objects=definition.user_data).build_user_data_yaml()
+            vms_to_create.append(definition)
+            user_data_list.append(user_data)
 
-        # Create instances in parallel
-        provisioned = list(cached)
         if vms_to_create:
-            gce_instances = self._vm_provider.get_or_create(
-                definitions=vms_to_create,
-                pricing_model=pricing_model,
-                user_data_list=user_data_list,
-                startup_script_list=[""] * len(vms_to_create),
-            )
-            for gce_instance in gce_instances:
-                vm_instance = self._gce_instance_to_vm_instance(gce_instance)
-                self._cache[vm_instance.name] = vm_instance
-                provisioned.append(vm_instance)
+            # Group definitions by the zone they belong to
+            zone_groups: Dict[str, List[tuple[InstanceDefinition, str]]] = {}
+            for definition, user_data in zip(vms_to_create, user_data_list):
+                zone_groups.setdefault(self._zone_for_definition(definition), []).append((definition, user_data))
 
-        return provisioned
+            # Create instances in each zone
+            for zone, group in zone_groups.items():
+                zone_definitions = [definition for definition, _ in group]
+                LOGGER.info(
+                    "Creating %d instance(s) in zone %s: %s",
+                    len(zone_definitions),
+                    zone,
+                    [definition.name for definition in zone_definitions],
+                )
+                gce_instances = self._vm_providers[zone].get_or_create(
+                    definitions=zone_definitions,
+                    pricing_model=pricing_model,
+                    user_data_list=[user_data for _, user_data in group],
+                    startup_script_list=[""] * len(zone_definitions),
+                )
+                for gce_instance in gce_instances:
+                    vm_instance = self._gce_instance_to_vm_instance(gce_instance)
+                    self._cache[vm_instance.name] = vm_instance
+
+        # Callers zip the result with the definitions they passed in, so keep the requested order and
+        # never return a short list - a missing instance would silently shift every pairing after it.
+        if missing := [
+            definition.name for definition in definitions if self._cache_key(definition.name) not in self._cache
+        ]:
+            raise ProvisionError(f"Provisioning did not return {len(missing)} requested instance(s): {missing}")
+        return [self._cache[self._cache_key(definition.name)] for definition in definitions]
 
     def terminate_instance(self, name: str, wait: bool = False) -> None:
         """
@@ -218,7 +316,9 @@ class GceProvisioner(Provisioner):
             name: Instance name
             wait: Whether to wait for termination to complete
         """
-        self._vm_provider.delete(name, wait=wait)
+        name = self._cache_key(name)
+        self._provider_for_instance(name).delete(name, wait=wait)
+        self._instance_zones.pop(name, None)
         if name in self._cache:
             del self._cache[name]
 
@@ -231,7 +331,8 @@ class GceProvisioner(Provisioner):
             wait: Whether to wait for reboot to complete
             hard: Whether to perform a hard reboot
         """
-        self._vm_provider.reboot(name, wait=wait, hard=hard)
+        name = self._cache_key(name)
+        self._provider_for_instance(name).reboot(name, wait=wait, hard=hard)
         # Invalidate cache
         if name in self._cache:
             del self._cache[name]
@@ -255,7 +356,7 @@ class GceProvisioner(Provisioner):
         Args:
             wait: Whether to wait for each deletion to complete
         """
-        LOGGER.info("Cleaning up instances for test %s in zone %s", self.test_id, self.zone)
+        LOGGER.info("Cleaning up instances for test %s in zones %s", self.test_id, self._zone_names)
 
         # Delete all cached instances concurrently (deletion is slow; serial wait=True would take minutes).
         instance_names = list(self._cache.keys())
@@ -270,7 +371,9 @@ class GceProvisioner(Provisioner):
 
         # Clear cache
         self._cache.clear()
-        self._vm_provider.clear_cache()
+        self._instance_zones.clear()
+        for vm_provider in self._vm_providers.values():
+            vm_provider.clear_cache()
 
         LOGGER.info("Cleanup completed for test %s", self.test_id)
 
@@ -282,7 +385,8 @@ class GceProvisioner(Provisioner):
             name: Instance name
             tags: Tags to add
         """
-        self._vm_provider.add_tags(name, tags)
+        name = self._cache_key(name)
+        self._provider_for_instance(name).add_tags(name, tags)
 
         # Update cache
         if name in self._cache:
@@ -299,6 +403,7 @@ class GceProvisioner(Provisioner):
         Returns:
             Result object with command output
         """
+        name = self._cache_key(name)
         if name not in self._cache:
             raise ProvisionError(f"Instance {name} not found in cache")
 
@@ -382,6 +487,10 @@ class GceProvisioner(Provisioner):
             creation_time = datetime.fromisoformat(gce_instance.creation_timestamp.replace("Z", "+00:00"))
         elif "creation_time" in tags:
             creation_time = datetime.fromisoformat(tags.pop("creation_time")).replace(tzinfo=timezone.utc)
+
+        # Remember where the instance lives: every GCE instance operation is zone-scoped
+        if gce_instance.zone:
+            self._instance_zones[gce_instance.name] = gce_instance_zone(gce_instance)
 
         return VmInstance(
             name=gce_instance.name,
