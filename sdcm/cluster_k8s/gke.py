@@ -651,7 +651,9 @@ class MonitorSetGKE(MonitorSetGCE):
         pass
 
     # NOTE: setting and filtering of the "monitorid" tag is needed for the multi-tenant setup.
-    def _get_instances(self, dc_idx):
+    def _get_instances(self, dc_idx, az_idx=None):
+        # az_idx is accepted for signature compatibility with GCECluster: a GKE monitor set is
+        # always confined to a single zone, so there is nothing to filter by rack.
         if not self.monitor_id:
             raise ValueError("'monitor_id' must exist")
         instances_by_nodetype = list_instances_gce(tags_dict={"MonitorId": self.monitor_id, "NodeType": self.node_type})
