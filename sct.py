@@ -45,6 +45,7 @@ from argus.client.base import ArgusClientError
 from argus.common.enums import TestStatus
 from argus.common.sct_types import RawEventPayload
 
+import sct_sizing
 import sct_ssh
 import sct_scan_issues
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
@@ -2846,6 +2847,8 @@ cli.add_command(sct_ssh.ssh_cmd)
 cli.add_command(sct_ssh.gcp_allow_public)
 cli.add_command(sct_ssh.update_scylla_packages)
 cli.add_command(sct_scan_issues.scan_issue_skips)
+cli.add_command(sct_sizing.sizing_group)
+
 
 if __name__ == "__main__":
     cli.main(prog_name="hydra")
