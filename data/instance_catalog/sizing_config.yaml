@@ -1,0 +1,187 @@
+# Sizing configuration: role definitions, implicit constraints, sort order,
+# and cloud-specific defaults used by the instance matcher.
+#
+# This file is loaded alongside per-cloud catalog YAML files and drives
+# the matching logic in sdcm.utils.instance_matcher.select_instance().
+
+# Roles define how instance selection behaves for each cluster component.
+# - category: 'storage' (needs local disk) or 'compute' (no local disk)
+# - implicit_constraints: auto-applied constraints (user doesn't need to specify them)
+# - arch_source: 'cloud_default' (use cloud's default arch) or 'fixed' (use arch below)
+# - arch: architecture when arch_source is 'fixed'
+roles:
+  db:
+    category: storage
+    implicit_constraints:
+      local_disk_count: "> 0"
+    arch_source: cloud_default
+  db_oracle:
+    category: storage
+    implicit_constraints:
+      local_disk_count: "> 0"
+    arch_source: cloud_default
+  zero_token:
+    category: storage
+    implicit_constraints:
+      local_disk_count: "> 0"
+    arch_source: cloud_default
+  loader:
+    category: compute
+    implicit_constraints:
+      local_disk_count: 0
+    arch_source: fixed
+    arch: x86_64
+  monitor:
+    category: compute
+    implicit_constraints:
+      local_disk_count: 0
+    arch_source: fixed
+    arch: x86_64
+
+# Sort order for candidate instances after filtering.
+# Instances are sorted by these fields in order; first match wins.
+# - preferred_family_rank: index in the preferred_families list (lower = better)
+# - vcpus: fewer vCPUs preferred (closest match to request)
+# - price_per_hour: cheaper preferred as tiebreaker
+sort_order:
+  - preferred_family_rank
+  - vcpus
+  - price_per_hour
+
+# Default memory-per-vCPU ratio used when only vcpu is specified without memory.
+# Example: vcpu=8 with mem_per_vcpu=4.0 implies memory >= 32 GB.
+flex_defaults:
+  mem_per_vcpu: 4.0
+
+# Cloud-specific configuration for catalog generation and instance resolution.
+# - families: which instance families to fetch when running 'sizing update-catalog'
+# - cloud_defaults.arch: default architecture for roles with arch_source=cloud_default
+# - preferred_families: per-role priority list; resolver picks first matching family
+clouds:
+  aws:
+    families:
+      - i8g
+      - i7ie
+      - i7i
+      - i4i
+      - i3en
+      - im4gn
+      - c7i
+      - c7i-flex
+      - c7g
+      - c6i
+      - c6gn
+      - c6g
+      - m7i
+      - r5b
+      - t3
+      - m6i
+    cloud_defaults:
+      arch: arm64
+    preferred_families:
+      db:
+        - i8g
+        - i8ge
+        - i7i
+        - i7ie
+        - i4i
+      db_oracle:
+        - i8g
+        - i8ge
+        - i7i
+        - i7ie
+        - i4i
+      zero_token:
+        - i8g
+        - i8ge
+        - i7i
+        - i7ie
+        - i4i
+      loader:
+        - c7i
+        - c7i-flex
+        - c6i
+        - c6g
+      monitor:
+        - t3
+        - m6i
+  gce:
+    families:
+      - z3
+      - n2d
+      - n2
+      - e2
+    cloud_defaults:
+      arch: x86_64
+    preferred_families:
+      db:
+        - z3-highmem-highlssd
+        - z3-highmem-standardlssd
+        - n2
+      db_oracle:
+        - z3-highmem-highlssd
+        - z3-highmem-standardlssd
+        - n2
+      zero_token:
+        - z3-highmem-highlssd
+        - z3-highmem-standardlssd
+        - n2
+      loader:
+        - e2-standard
+        - e2-highcpu
+      monitor:
+        - e2-standard
+  azure:
+    families:
+      - Standard_L
+      - Standard_D
+      - Standard_E
+      - Standard_F
+    series_patterns:
+      - "^Standard_L\\d+s_v[34]$"
+      - "^Standard_D\\d+s_v[45]$"
+      - "^Standard_D\\d+as_v[56]$"
+      - "^Standard_D\\d+_v[45]$"
+      - "^Standard_E\\d+s_v[45]$"
+      - "^Standard_E\\d+as_v[56]$"
+      - "^Standard_F\\d+s_v2$"
+      - "^Standard_F\\d+as_v6$"
+    cloud_defaults:
+      arch: x86_64
+    preferred_families:
+      db:
+        - Standard_L
+      db_oracle:
+        - Standard_L
+      zero_token:
+        - Standard_L
+      loader:
+        - Standard_F
+        - Standard_D
+      monitor:
+        - Standard_D
+  oci:
+    families:
+      - DenseIO.E5
+      - BM.DenseIO
+      - VM.DenseIO
+      - VM.Standard
+    cloud_defaults:
+      arch: x86_64
+    preferred_families:
+      db:
+        - DenseIO.E5
+        - BM.DenseIO
+        - VM.DenseIO
+      db_oracle:
+        - DenseIO.E5
+        - BM.DenseIO
+        - VM.DenseIO
+      zero_token:
+        - DenseIO.E5
+        - BM.DenseIO
+        - VM.DenseIO
+      loader:
+        - VM.Standard
+      monitor:
+        - VM.Standard
