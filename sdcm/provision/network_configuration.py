@@ -30,13 +30,31 @@ class ScyllaNetworkConfiguration:
         self.scylla_network_config = scylla_network_config
 
     @property
+    def _use_dns_names(self) -> bool:
+        """Check if any network interface has use_dns_names enabled."""
+        return any(iface.use_dns_names for iface in self.network_interfaces)
+
+    def _get_dns_private_name(self, address_config: dict) -> str:
+        """Get DNS private name for the interface specified in address_config."""
+        if not (interface := [conf for conf in self.network_interfaces if address_config["nic"] == conf.device_index]):
+            raise NetworkInterfaceNotFound(
+                f"Not found network interface with device_index {address_config['nic']}. "
+                f"Check 'scylla_network_config' definition in the test configuration"
+            )
+        return interface[0].dns_private_name
+
+    @property
     def listen_address(self):
         listen_address_config = [conf for conf in self.scylla_network_config if conf["address"] == "listen_address"][0]
+        if self._use_dns_names:
+            return self._get_dns_private_name(listen_address_config)
         return self.get_ip_by_address_config(address_config=listen_address_config)
 
     @property
     def rpc_address(self):
         rpc_address_config = [conf for conf in self.scylla_network_config if conf["address"] == "rpc_address"][0]
+        if self._use_dns_names:
+            return self._get_dns_private_name(rpc_address_config)
         return self.get_ip_by_address_config(address_config=rpc_address_config)
 
     @property
@@ -44,6 +62,8 @@ class ScyllaNetworkConfiguration:
         if broadcast_rpc_address_config := [
             conf for conf in self.scylla_network_config if conf["address"] == "broadcast_rpc_address"
         ]:
+            if self._use_dns_names:
+                return self._get_dns_private_name(broadcast_rpc_address_config[0])
             return self.get_ip_by_address_config(address_config=broadcast_rpc_address_config[0])
         else:
             return self.rpc_address
