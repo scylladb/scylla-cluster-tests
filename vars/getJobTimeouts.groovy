@@ -51,7 +51,11 @@ List<Integer> call(Map params, String region){
     }
     Integer testStartupTimeout = 20
     Integer testTeardownTimeout = 40
-    Integer collectLogsTimeout = 90
+    // Scale log collection timeout with test duration: base 90 min + 1 min per hour of test.
+    // For a 3-day test (4320 min): max(90, 90 + 72) = 162 minutes.
+    // Can be overridden per-job via params.collect_logs_timeout.
+    Integer collectLogsTimeout = params.collect_logs_timeout ? params.collect_logs_timeout.toInteger()
+        : Math.max(90, 90 + (testDuration / 60).toInteger())
     Integer resourceCleanupTimeout = 30
     Integer sendEmailTimeout = 5
     Integer testRunTimeout = testStartupTimeout + testDuration + testTeardownTimeout
