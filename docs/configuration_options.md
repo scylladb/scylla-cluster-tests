@@ -1184,6 +1184,42 @@ Enable running Gemini workload during rolling upgrade test. Default is false.
 **type:** bool
 
 
+## **sizing_db** / SCT_SIZING_DB
+
+Cloud-agnostic instance sizing constraints for db nodes
+
+**default:** N/A
+
+**type:** dict
+
+
+## **sizing_db_oracle** / SCT_SIZING_DB_ORACLE
+
+Cloud-agnostic instance sizing constraints for db_oracle nodes
+
+**default:** N/A
+
+**type:** dict
+
+
+## **sizing_loader** / SCT_SIZING_LOADER
+
+Cloud-agnostic instance sizing constraints for loader nodes
+
+**default:** {'vcpu': 4, 'memory': '>=8'}
+
+**type:** dict
+
+
+## **sizing_monitor** / SCT_SIZING_MONITOR
+
+Cloud-agnostic instance sizing constraints for monitor nodes
+
+**default:** {'vcpu': 2, 'memory': '>=8'}
+
+**type:** dict
+
+
 ## **instance_type_loader** / SCT_INSTANCE_TYPE_LOADER
 
 AWS image type of the loader node
@@ -1218,7 +1254,7 @@ AWS image type of the db node
 
 AWS image type of the oracle node
 
-**default:** i8g.2xlarge
+**default:** N/A
 
 **type:** str
 * appendable
@@ -1908,7 +1944,7 @@ Number of zero token nodes in cluster. Value should be set as '0 1 1' for multid
 
 Instance type for zero token node
 
-**default:** i4i.large
+**default:** N/A
 
 **type:** str
 * appendable
