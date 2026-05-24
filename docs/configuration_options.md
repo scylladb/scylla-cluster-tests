@@ -2041,6 +2041,15 @@ Store adaptive timeout metrics in Argus. Disabled for performance tests only.
 **type:** bool
 
 
+## **adaptive_timeout_multipliers** / SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS
+
+Optional dict of adaptive-timeout multipliers keyed by operation name (from Operations enum value[0], e.g. decommission, remove_node, new_node, repair, etc.). If the current operation key is absent, multiplier 1.0 is used.<br>YAML example:<br>adaptive_timeout_multipliers:<br>  decommission: 4<br>  new_node: 2<br>Environment variable examples:<br>SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS="{'decommission': 4, 'new_node': 2}"<br>Or dot-notation: SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission=4
+
+**default:** N/A
+
+**type:** sdcm.sct_config.AdaptiveTimeoutMultipliers
+
+
 ## **gce_n_local_ssd_disk_monitor** / SCT_GCE_N_LOCAL_SSD_DISK_MONITOR
 
 Number of local SSD disks for monitor nodes in Google Compute Engine
