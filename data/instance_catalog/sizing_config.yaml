@@ -2,7 +2,9 @@
 # and cloud-specific defaults used by the instance matcher.
 #
 # This file is loaded alongside per-cloud catalog YAML files and drives
-# the matching logic in sdcm.utils.instance_matcher.select_instance().
+# the matching logic in sdcm.utils.cloud_catalog.instance_matcher.select_instance().
+#
+# To add a new instance family, see docs/cross-cloud-sizing.md#adding-a-new-instance-family
 
 # Roles define how instance selection behaves for each cluster component.
 # - category: 'storage' (needs local disk) or 'compute' (no local disk)
