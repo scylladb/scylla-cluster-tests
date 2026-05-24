@@ -3,8 +3,8 @@ instance_provision_fallback_on_demand: true
 region_name:
   - eu-west-1
 user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
-instance_type_loader: 'c6i.xlarge'
-instance_type_monitor: 't3.large'
+instance_type_loader: ''
+instance_type_monitor: ''
 ami_id_loader: 'resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id'
 # manual on updating monitor images see: docs/monitoring-images.md
 ami_id_monitor: 'scylladb-monitor-4-15-0-rc0-2026-04-30t01-12-58z'

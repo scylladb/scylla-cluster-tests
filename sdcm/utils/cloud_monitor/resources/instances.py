@@ -10,7 +10,7 @@ from sdcm.utils.cloud_monitor.common import InstanceLifecycle, NA
 from sdcm.utils.cloud_monitor.resources import CloudInstance, CloudResources
 from sdcm.utils.common import aws_tags_to_dict, gce_meta_to_dict, list_instances_aws, list_instances_gce
 from sdcm.utils.oci_utils import list_instances_oci
-from sdcm.utils.pricing import AWSPricing, GCEPricing, AzurePricing, OCIPricing
+from sdcm.utils.cloud_catalog.pricing import AWSPricing, GCEPricing, AzurePricing, OCIPricing
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
 from sdcm.utils.context_managers import environment
 

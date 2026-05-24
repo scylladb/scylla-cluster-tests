@@ -91,6 +91,10 @@ from sdcm.test_config import TestConfig
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
 from sdcm.mgmt.common import AgentBackupParameters
 from sdcm.utils.version_utils import parse_scylla_version_tag
+from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog
+from sdcm.utils.cloud_catalog.instance_matcher import NoMatchingInstanceError, select_instance
+
+_SIZING_RESOLUTION_CACHE: dict[tuple, str] = {}
 
 
 class IgnoredType:
@@ -1011,6 +1015,18 @@ class SCTConfiguration(BaseModel):
         description="Enable running Gemini workload during rolling upgrade test. Default is false.",
     )
     # AWS config options
+    sizing_db: dict | None = SctField(
+        default=None, description="Cloud-agnostic instance sizing constraints for db nodes"
+    )
+    sizing_db_oracle: dict | None = SctField(
+        default=None, description="Cloud-agnostic instance sizing constraints for db_oracle nodes"
+    )
+    sizing_loader: dict | None = SctField(
+        default=None, description="Cloud-agnostic instance sizing constraints for loader nodes"
+    )
+    sizing_monitor: dict | None = SctField(
+        default=None, description="Cloud-agnostic instance sizing constraints for monitor nodes"
+    )
     instance_type_loader: String = SctField(
         description="AWS image type of the loader node",
     )
@@ -2658,6 +2674,7 @@ class SCTConfiguration(BaseModel):
                         raise ValueError(f"{region} isn't supported, use: {self.aws_supported_regions}")
 
         # 3) overwrite with environment variables
+        self._resolve_instance_sizes(env)
         merge_dicts_append_strings(self, env)
 
         if not self.get("billing_project"):
@@ -3307,6 +3324,130 @@ class SCTConfiguration(BaseModel):
                         environment_vars[field_name] = list_value or dict_value
 
         return environment_vars
+
+    def _resolve_instance_sizes(self, env: dict | None = None) -> None:  # noqa: PLR0914
+        """Resolve constraint dicts for instance-type params to literal type strings.
+
+        If *env* is provided (pre-merge env vars), resolution happens in *env*
+        in-place so the dict is replaced by a string before it hits the Pydantic
+        model (which only accepts strings for instance-type fields).  When *env*
+        is None, values are read from and written to ``self``.
+
+        Raises:
+            ValueError: If a constraint dict cannot be resolved to any instance.
+        """
+        SKIP_BACKENDS = {"docker", "baremetal", "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"}
+        BACKEND_TO_CLOUD = {
+            "aws": "aws",
+            "aws-siren": "aws",
+            "k8s-eks": "aws",
+            "gce": "gce",
+            "gce-siren": "gce",
+            "k8s-gke": "gce",
+            "azure": "azure",
+            "oci": "oci",
+        }
+        ROLE_PARAMS = {
+            "aws": {
+                "db": "instance_type_db",
+                "db_oracle": "instance_type_db_oracle",
+                "zero_token": "zero_token_instance_type_db",
+                "loader": "instance_type_loader",
+                "monitor": "instance_type_monitor",
+            },
+            "gce": {
+                "db": "gce_instance_type_db",
+                "loader": "gce_instance_type_loader",
+                "monitor": "gce_instance_type_monitor",
+            },
+            "azure": {
+                "db": "azure_instance_type_db",
+                "db_oracle": "azure_instance_type_db_oracle",
+                "loader": "azure_instance_type_loader",
+                "monitor": "azure_instance_type_monitor",
+            },
+            "oci": {
+                "db": "oci_instance_type_db",
+                "db_oracle": "oci_instance_type_db_oracle",
+                "loader": "oci_instance_type_loader",
+                "monitor": "oci_instance_type_monitor",
+            },
+        }
+
+        backend = (env.get("cluster_backend") if env else None) or self.get("cluster_backend")
+        if backend in SKIP_BACKENDS:
+            self.log.info("Skipping instance size resolution for backend %s", backend)
+            return
+
+        cloud = BACKEND_TO_CLOUD.get(backend)
+        if not cloud:
+            self.log.info("Unknown backend %s — skipping instance size resolution", backend)
+            return
+
+        AGNOSTIC_FALLBACK = {
+            "db": "sizing_db",
+            "db_oracle": "sizing_db_oracle",
+            "zero_token": "sizing_db",
+            "loader": "sizing_loader",
+            "monitor": "sizing_monitor",
+        }
+
+        db_type = self.get("db_type") or ""
+        role_params = ROLE_PARAMS.get(cloud, {})
+        for role, param_name in role_params.items():
+            if role == "db_oracle" and db_type not in ("mixed_scylla", "mixed_cassandra"):
+                continue
+            is_fallback = False
+            if env is not None and param_name in env:
+                value = env[param_name]
+            else:
+                value = self.get(param_name)
+            if isinstance(value, str) and value:
+                continue
+            if not value:
+                fallback_param = AGNOSTIC_FALLBACK.get(role)
+                if not fallback_param or fallback_param == param_name:
+                    continue
+                fallback_value = (env.get(fallback_param) if env else None) or self.get(fallback_param)
+                if not isinstance(fallback_value, dict):
+                    continue
+                value = fallback_value
+                is_fallback = True
+                self.log.info("Using agnostic fallback %s for %s", fallback_param, param_name)
+            if isinstance(value, dict):
+                cache_key = (role, cloud, tuple(sorted(value.items())))
+                resolved = _SIZING_RESOLUTION_CACHE.get(cache_key)
+                if resolved is None:
+                    try:
+                        catalog_dir = pathlib.Path(__file__).parent.parent / "data" / "instance_catalog"
+                        catalog = InstanceCatalog.from_directory(catalog_dir)
+                        result = select_instance(catalog, role, cloud, value)
+                        resolved = result.instance_type
+                        _SIZING_RESOLUTION_CACHE[cache_key] = resolved
+                    except NoMatchingInstanceError as exc:
+                        if is_fallback:
+                            self.log.warning("Agnostic fallback for %s found no match: %s", param_name, exc)
+                            if env is not None:
+                                env.pop(param_name, None)
+                            continue
+                        raise ValueError(f"Cannot resolve {param_name}: {exc}") from exc
+                    except FileNotFoundError as exc:
+                        self.log.warning("Instance catalog not found for %s: %s", param_name, exc)
+                        if env is not None:
+                            env.pop(param_name, None)
+                        continue
+                    except ValueError as exc:
+                        if is_fallback:
+                            self.log.warning("Agnostic fallback for %s has invalid constraints: %s", param_name, exc)
+                            if env is not None:
+                                env.pop(param_name, None)
+                            continue
+                        raise ValueError(f"Invalid constraint for {param_name}: {exc}") from exc
+                self.log.info("Resolved %s: %s → %s", param_name, value, resolved)
+                if env is not None and param_name in env:
+                    env[param_name] = resolved
+                else:
+                    setattr(self, param_name, resolved)
 
     def get(self, key: str | None):
         """
