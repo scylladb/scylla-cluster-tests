@@ -8,8 +8,10 @@ n_db_nodes: 6
 n_loaders: 1
 simulated_racks: 3
 
-instance_type_db: 'i7i.2xlarge'
-gce_instance_type_db: 'n2-highmem-16'
+sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
+  vcpu: 8
+  memory: '>=64'
+  arch: x86_64
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'limited'

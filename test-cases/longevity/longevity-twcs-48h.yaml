@@ -13,7 +13,10 @@ stress_read_cmd: [
 n_db_nodes: 6
 n_loaders: 3
 
-instance_type_db: 'i8ge.xlarge'
+sizing_db:
+  vcpu: 4
+  memory: '>=32'
+  local_disk_gb: '>=900'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '025'

@@ -44,11 +44,12 @@ n_loaders: 5 # Each loader will have 1 scylla-bench process at every step of the
 
 round_robin: true
 
-instance_type_db: 'i3en.2xlarge'
-gce_instance_type_db: 'n2-highmem-16'
-gce_instance_type_loader: 'e2-standard-16'
-gce_n_local_ssd_disk_db: 16
-instance_type_loader: 'c5n.4xlarge'
+sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
+  vcpu: 8
+  memory: '>=64'
+sizing_loader:
+  vcpu: 16
+  memory: '>=16'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '016'
