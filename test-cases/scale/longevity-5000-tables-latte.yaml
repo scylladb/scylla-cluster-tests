@@ -1,9 +1,15 @@
 test_duration: 900 # 1h prepare + 10h mixed + 4h margin
 
 n_db_nodes: 6
-instance_type_db: 'i4i.4xlarge'
+sizing_db:
+  vcpu: 16
+  # OCI DenseIO.E5 at 16 vCPUs provides only 96 GB (12 GB/OCPU fixed ratio).
+  # Lowered from >=128 to >=96 so OCI can match; other clouds still pick >=128 naturally.
+  memory: '>=96'
 n_loaders: 1
-instance_type_loader: 'c6i.4xlarge'
+sizing_loader:
+  vcpu: 16
+  memory: '>=32'
 
 user_prefix: 'schema-scale-tablets-5000t'
 append_scylla_yaml:

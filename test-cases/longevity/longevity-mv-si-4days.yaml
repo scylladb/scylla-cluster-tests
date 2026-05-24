@@ -13,11 +13,15 @@ run_fullscan: ['{"mode": "table", "ks_cf": "random", "interval": 15}']
 n_db_nodes: 6
 n_loaders: 2
 
-instance_type_db: 'i4i.8xlarge'
-gce_instance_type_db: 'n2-highmem-64'
-gce_n_local_ssd_disk_db: 16
+sizing_db:
+  vcpu: 32
+  # OCI DenseIO.E5 at 32 vCPUs provides only 192 GB (12 GB/OCPU fixed ratio).
+  # Lowered from >=256 to >=192 so OCI can match; other clouds still pick >=256 naturally.
+  memory: '>=192'
 
-instance_type_monitor: 't3.xlarge'
+sizing_monitor:
+  vcpu: 4
+  memory: '>=16'
 
 root_disk_size_runner: 120
 

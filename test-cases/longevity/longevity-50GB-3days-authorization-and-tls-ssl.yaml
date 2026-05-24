@@ -12,9 +12,16 @@ simulated_racks: 0
 n_db_nodes: 6
 n_loaders: 3
 
-instance_type_db: 'i7i.4xlarge'
+sizing_db:
+  vcpu: 16
+  # OCI DenseIO.E5 at 16 vCPUs provides only 96 GB (12 GB/OCPU fixed ratio).
+  # Lowered from >=128 to >=96 so OCI can match; other clouds still pick >=128 naturally.
+  memory: '>=96'
+  arch: x86_64
 # Seems the c5.xlarge type is small for this load - I receive OOM on 2 loaders
-instance_type_loader: 'c6i.2xlarge'
+sizing_loader:
+  vcpu: 8
+  memory: '>=16'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '027'

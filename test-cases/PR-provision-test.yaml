@@ -14,7 +14,9 @@ prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -max-rate=30
                     ]
 
 n_loaders: 1
-instance_type_db: 'i4i.large'
+sizing_db:
+  vcpu: '>=2'
+  memory: '>=16.0'
 # testing the force iotune feature
 force_run_iotune: true
 n_db_nodes: 3
