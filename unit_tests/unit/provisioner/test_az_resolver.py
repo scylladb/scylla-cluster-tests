@@ -11,16 +11,19 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+from botocore.exceptions import ClientError
 
 from sdcm.provision.aws.az_resolver import (
     AZResolver,
     NoValidAvailabilityZoneError,
     _node_count_positive,
     is_az_fallback_enabled,
+    run_pre_flight_capacity_probe,
 )
+from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted
 
 
 class _DotDict(dict):
@@ -317,3 +320,113 @@ def test_get_fallback_candidates_enumerates_alternatives_when_upfront_filter_dis
     region_instance.get_common_availability_zones.return_value = ["us-east-1a", "us-east-1b"]
     params = _make_params(availability_zone="c", pre_filter_unavailable_availability_zones=False)
     assert AZResolver(params).get_fallback_candidates() == [["a"], ["b"]]
+
+
+def _capacity_error() -> ClientError:
+    return ClientError({"Error": {"Code": "InsufficientInstanceCapacity", "Message": "no capacity"}}, "RunInstances")
+
+
+def _non_capacity_error() -> ClientError:
+    return ClientError({"Error": {"Code": "UnauthorizedOperation", "Message": "not allowed"}}, "RunInstances")
+
+
+@pytest.fixture(name="mock_probe_aws")
+def mock_probe_aws_fixture():
+    """Patch boto3 clients and AwsRegion used by `probe_capacity_for_types`.
+    Yields the ec2 mock so tests can configure run_instances / terminate_instances.
+    """
+    ec2 = MagicMock()
+    ec2.describe_instance_types.return_value = {
+        "InstanceTypes": [{"ProcessorInfo": {"SupportedArchitectures": ["x86_64"]}}]
+    }
+    ssm = MagicMock()
+    ssm.get_parameter.return_value = {"Parameter": {"Value": "ami-deadbeef"}}
+
+    clients = {"ec2": ec2, "ssm": ssm}
+
+    region_obj = MagicMock()
+    region_obj.sct_subnet.return_value = MagicMock(subnet_id="subnet-abc")
+    region_obj.sct_security_group = MagicMock(group_id="sg-xyz")
+
+    with (
+        patch("sdcm.provision.aws.az_resolver.boto3.client", side_effect=lambda svc, **_: clients[svc]),
+        patch("sdcm.provision.aws.az_resolver.AwsRegion", return_value=region_obj),
+        patch("sdcm.provision.aws.az_resolver.TestConfig.common_tags", return_value={"RunByUser": "tester"}),
+    ):
+        yield ec2
+
+
+def test_probe_capacity_returns_true_on_successful_launch(mock_probe_aws):
+    mock_probe_aws.run_instances.return_value = {"Instances": [{"InstanceId": "i-1"}]}
+    params = _make_params(test_id="t-1", instance_type_db_target="m6g.large")
+
+    results = AZResolver(params).probe_capacity_for_types(types=["m6g.large"], az="a")
+
+    assert results == {"m6g.large": True}
+    mock_probe_aws.terminate_instances.assert_called_once_with(InstanceIds=["i-1"])
+
+
+def test_probe_capacity_returns_false_on_capacity_error(mock_probe_aws):
+    mock_probe_aws.run_instances.side_effect = _capacity_error()
+    resolver = AZResolver(_make_params(test_id="t-1"))
+
+    assert resolver.probe_capacity_for_types(types=["m6g.large"], az="a") == {"m6g.large": False}
+
+    mock_probe_aws.terminate_instances.assert_not_called()
+
+
+def test_probe_capacity_passes_through_non_capacity_error(mock_probe_aws):
+    """SCP denies, IAM gaps, etc. must not fail the test — the probe degrades to a no-op pass."""
+    mock_probe_aws.run_instances.side_effect = _non_capacity_error()
+    resolver = AZResolver(_make_params(test_id="t-1"))
+
+    assert resolver.probe_capacity_for_types(types=["m6g.large"], az="a") == {"m6g.large": True}
+
+    mock_probe_aws.terminate_instances.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"pre_flight_capacity_probe": False, "instance_type_db_target": "m6g.large"},
+        {
+            "pre_flight_capacity_probe": True,
+            "instance_type_db_target": None,
+            "nemesis_grow_shrink_instance_type": "",
+        },
+    ],
+    ids=["flag_off", "no_dynamic_types"],
+)
+def test_run_pre_flight_capacity_probe_noop(mock_probe_aws, overrides):
+    """The orchestrator skips all AWS calls when the flag is off or no dynamic-add instance types are configured."""
+    run_pre_flight_capacity_probe(_make_params(**overrides))
+    mock_probe_aws.run_instances.assert_not_called()
+
+
+def test_run_pre_flight_capacity_probe_succeeds_when_all_types_available(mock_probe_aws):
+    mock_probe_aws.run_instances.return_value = {"Instances": [{"InstanceId": "i-1"}]}
+    run_pre_flight_capacity_probe(
+        _make_params(
+            pre_flight_capacity_probe=True,
+            instance_type_db_target="m6g.large",
+            nemesis_grow_shrink_instance_type="i4i.xlarge",
+            availability_zone="a,b",
+            test_id="t-1",
+        )
+    )
+
+    assert mock_probe_aws.run_instances.call_count == 4
+    assert mock_probe_aws.terminate_instances.call_count == 4
+
+
+def test_run_pre_flight_capacity_probe_raises_on_capacity_failure(mock_probe_aws):
+    mock_probe_aws.run_instances.side_effect = _capacity_error()
+    with pytest.raises(ProvisioningCapacityExhausted, match="m6g.large@a"):
+        run_pre_flight_capacity_probe(
+            _make_params(
+                pre_flight_capacity_probe=True,
+                instance_type_db_target="m6g.large",
+                availability_zone="a",
+                test_id="t-1",
+            )
+        )
