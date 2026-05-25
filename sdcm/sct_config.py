@@ -957,6 +957,18 @@ class SCTConfiguration(dict):
             help="the aws_secret_access_key that would be used for alternator",
         ),
         dict(
+            name="alternator_loadbalancing",
+            env="SCT_ALTERNATOR_LOADBALANCING",
+            type=boolean,
+            help="If true, enable client-side load balancing across alternator nodes",
+        ),
+        dict(
+            name="alternator_trust_all_certificates",
+            env="SCT_ALTERNATOR_TRUST_ALL_CERTIFICATES",
+            type=boolean,
+            help="If true, trust all TLS certificates when connecting to alternator (useful for self-signed certs)",
+        ),
+        dict(
             name="region_aware_loader",
             env="SCT_REGION_AWARE_LOADER",
             type=boolean,
