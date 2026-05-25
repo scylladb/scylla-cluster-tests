@@ -4877,7 +4877,7 @@ class BaseCluster:
         filter_empty_tables=True,
         filter_by_keyspace: list = None,
         filter_func: Callable[..., bool] = None,
-        filter_out_paxos_tables: bool = False,
+        filter_out_paxos_tables: bool = True,
     ) -> List[str]:
         return self.get_any_ks_cf_list(
             db_node,
