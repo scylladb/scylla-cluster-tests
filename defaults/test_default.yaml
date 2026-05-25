@@ -213,7 +213,7 @@ bare_loaders: false
 
 aws_fallback_to_next_availability_zone: false
 
-fallback_to_next_availability_zone: true
+fallback_to_next_availability_zone: false
 
 pre_filter_unavailable_availability_zones: true
 
