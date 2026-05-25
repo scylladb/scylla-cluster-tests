@@ -12,3 +12,4 @@ region_name: 'us-east-1'
 scylla_linux_distro: 'centos'
 test_duration: 60
 user_prefix: 'artifacts-ami'
+fallback_to_next_availability_zone: true
