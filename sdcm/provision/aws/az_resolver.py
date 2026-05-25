@@ -14,9 +14,20 @@
 import logging
 from typing import Callable
 
+import boto3
+from botocore.exceptions import ClientError
+
+from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, is_capacity_error
+from sdcm.test_config import TestConfig
 from sdcm.utils.aws_region import AwsRegion
 
 LOGGER = logging.getLogger(__name__)
+
+# instance types added mid-test; AZ fallback at provisioning time is unsafe for them
+_DYNAMIC_ADD_TYPE_PARAMS: tuple[str, ...] = (
+    "instance_type_db_target",
+    "nemesis_grow_shrink_instance_type",
+)
 
 
 def _node_count_positive(value) -> bool:
@@ -254,3 +265,123 @@ class AZResolver:
     def _configured_az_letters(self) -> list[str]:
         raw = self._params.get("availability_zone") or ""
         return [letter.strip() for letter in raw.split(",") if letter.strip()]
+
+    def probe_capacity_for_types(self, types: list[str], az: str) -> dict[str, bool]:
+        """Confirm AWS has on-demand capacity for each `type` in `az`.
+
+        Launches and immediately terminates one on-demand instance per type. Returns
+        `{type: True}` on success and `{type: False}` for capacity-class errors per
+        `is_capacity_error`. Re-raises any non-capacity ClientError. Probe instances
+        always terminate in `finally` so a probe failure cannot leak a running
+        instance.
+        """
+        if not types:
+            return {}
+
+        region_names = self._region_names()
+        if not region_names:
+            raise RuntimeError("Pre-flight capacity probe: no region configured")
+        region = region_names[0]
+        region_az = az if az.startswith(region) else f"{region}{az[-1]}"
+
+        aws_region = AwsRegion(region_name=region)
+        subnet = aws_region.sct_subnet(region_az=region_az, subnet_index=0)
+        if subnet is None:
+            raise RuntimeError(
+                f"Pre-flight capacity probe: no SCT subnet found in {region_az}; "
+                f"run `hydra prepare-aws-region --region {region}` to enable"
+            )
+        security_group = aws_region.sct_security_group
+        if security_group is None:
+            raise RuntimeError(f"Pre-flight capacity probe: no SCT security group in {region}")
+
+        ec2_client = boto3.client("ec2", region_name=region)
+        ssm_client = boto3.client("ssm", region_name=region)
+
+        results = {}
+        for instance_type in types:
+            ami_id = _get_amazon_linux_ami_for_type(ec2_client, ssm_client, instance_type)
+            tags = TestConfig.common_tags(self._params) | {
+                "Purpose": "capacity-probe",
+                "Name": f"capacity-probe-{instance_type}-{region_az}",
+                "keep_alive": "false",
+            }
+            instance_ids = []
+            try:
+                response = ec2_client.run_instances(
+                    ImageId=ami_id,
+                    InstanceType=instance_type,
+                    MinCount=1,
+                    MaxCount=1,
+                    SubnetId=subnet.subnet_id,
+                    SecurityGroupIds=[security_group.group_id],
+                    TagSpecifications=[
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [{"Key": k, "Value": str(v)} for k, v in tags.items()],
+                        }
+                    ],
+                )
+                instance_ids = [i["InstanceId"] for i in response.get("Instances", [])]
+                results[instance_type] = True
+                LOGGER.info("Pre-flight probe: capacity available for %s in %s", instance_type, region_az)
+            except ClientError as exc:
+                if is_capacity_error(exc):
+                    LOGGER.warning("Pre-flight probe: no capacity for %s in %s: %s", instance_type, region_az, exc)
+                    results[instance_type] = False
+                else:
+                    LOGGER.warning(
+                        "Pre-flight probe: skipping %s in %s due to non-capacity error (%s): %s",
+                        instance_type,
+                        region_az,
+                        exc.response.get("Error", {}).get("Code"),
+                        exc,
+                    )
+                    results[instance_type] = True
+            finally:
+                if instance_ids:
+                    try:
+                        ec2_client.terminate_instances(InstanceIds=instance_ids)
+                    except Exception as exc:  # noqa: BLE001
+                        LOGGER.warning(
+                            "Pre-flight probe: failed to terminate %s in %s: %s", instance_ids, region_az, exc
+                        )
+        return results
+
+
+def _get_amazon_linux_ami_for_type(ec2_client, ssm_client, instance_type: str) -> str:
+    """Return the latest Amazon Linux 2 AMI matching `instance_type`'s architecture."""
+    info = ec2_client.describe_instance_types(InstanceTypes=[instance_type])
+    arch = info["InstanceTypes"][0]["ProcessorInfo"]["SupportedArchitectures"][0]
+    ssm_arch = "arm64" if arch == "arm64" else "x86_64"
+    ssm_path = f"/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-{ssm_arch}-gp2"
+    return ssm_client.get_parameter(Name=ssm_path)["Parameter"]["Value"]
+
+
+def run_pre_flight_capacity_probe(params) -> None:
+    """Probe each configured AZ for capacity of every dynamically-added instance type."""
+    if not params.get("pre_flight_capacity_probe"):
+        return
+
+    types = [t for key in _DYNAMIC_ADD_TYPE_PARAMS if (t := params.get(key))]
+    if not types:
+        return
+
+    az_letters = [az.strip() for az in (params.get("availability_zone") or "").split(",") if az.strip()]
+    if not az_letters:
+        return
+
+    LOGGER.info(
+        "pre_flight_capacity_probe enabled — probing types %s in AZs %s (~1 min per type per AZ)",
+        types,
+        az_letters,
+    )
+
+    resolver = AZResolver(params)
+    failures = []
+    for letter in az_letters:
+        results = resolver.probe_capacity_for_types(types=types, az=letter)
+        failures.extend(f"{instance_type}@{letter}" for instance_type, ok in results.items() if not ok)
+
+    if failures:
+        raise ProvisioningCapacityExhausted(f"Pre-flight capacity probe failed for: {failures}")
