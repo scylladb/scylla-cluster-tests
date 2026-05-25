@@ -19,3 +19,4 @@ n_monitor_nodes: 0
 nemesis_class_name: 'NoOpMonkey'
 test_duration: 60
 use_preinstalled_scylla: false
+fallback_to_next_availability_zone: true
