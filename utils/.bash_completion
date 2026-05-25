@@ -1,8 +1,26 @@
 _hydra_completion() {
     local IFS=$'\n'
     local response
+    local cache_dir="/tmp/.sct_completion_cache"
+    local cache_ttl=86400
+    local cache_key cache_file
 
-    response=$(env COMP_WORDS="${COMP_WORDS[*]}" COMP_CWORD=$COMP_CWORD _HYDRA_COMPLETE=bash_complete $1)
+    cache_key=$(echo "${COMP_WORDS[*]}|${COMP_CWORD}" | md5sum | cut -d' ' -f1)
+    cache_file="${cache_dir}/${cache_key}"
+
+    mkdir -p "$cache_dir" 2>/dev/null
+
+    if [[ -f "$cache_file" ]]; then
+        local file_age=$(( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) ))
+        if (( file_age < cache_ttl )); then
+            response=$(cat "$cache_file")
+        fi
+    fi
+
+    if [[ -z "$response" ]]; then
+        response=$(env COMP_WORDS="${COMP_WORDS[*]}" COMP_CWORD=$COMP_CWORD _HYDRA_COMPLETE=bash_complete $1)
+        echo "$response" > "$cache_file" 2>/dev/null
+    fi
 
     for completion in $response; do
         IFS=',' read type value <<< "$completion"

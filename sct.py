@@ -33,121 +33,63 @@ import xml.etree.ElementTree as ET
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial, reduce
-from typing import List, Literal
+from typing import List, Literal, TYPE_CHECKING
 from uuid import UUID
 
-import pytest
 import click
 import yaml
 from rich.table import Table
-from argus.client.sct.types import LogLink
-from argus.client.base import ArgusClientError
-from argus.common.enums import TestStatus
-from argus.common.sct_types import RawEventPayload
 
-import sct_ssh
-import sct_scan_issues
-from sdcm.cloud_api_client import ScyllaCloudAPIClient
-from sdcm.cluster_cloud import extract_short_test_id_from_name
-from sdcm.keystore import KeyStore
-from sdcm.localhost import LocalHost
-from sdcm.provision import AzureProvisioner
-from sdcm.provision.provisioner import VmInstance, VmArch
-from sdcm.remote import LOCALRUNNER
-from sdcm.nemesis.monkey.runners import SisyphusMonkey
-from sdcm.sct_config import AWS_SUPPORTED_REGIONS, SCTConfiguration, init_and_verify_sct_config, available_backends
-from sdcm.sct_provision.common.layout import SCTProvisionLayout
-from sdcm.sct_provision.instances_provider import provision_sct_resources
-from sdcm.sct_runner import (
-    AwsSctRunner,
-    GceSctRunner,
-    AzureSctRunner,
-    OciSctRunner,
-    get_sct_runner,
-    clean_sct_runners,
-    update_sct_runner_tags,
-    list_sct_runners,
-)
 
-from sdcm.utils.ci_tools import get_job_name, get_job_url
-from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
-from sdcm.utils.argus import argus_offline_collect_events, create_proxy_argus_s3_url, get_argus_client
-from sdcm.utils.aws_kms import AwsKms
-from sdcm.utils.azure_region import AzureRegion
-from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
-from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
-from sdcm.utils.lint.env_builder import build_env
-from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile, discover_pipeline_files
-from sdcm.utils.oci_utils import get_scylla_images_by_branch, get_scylla_images_by_version, list_instances_oci
-from sdcm.utils.common import (
-    S3Storage,
-    aws_tags_to_dict,
-    create_pretty_table,
-    rich_table_to_string,
-    get_ami_images,
-    get_ami_images_versioned,
-    get_gce_images,
-    get_gce_images_versioned,
-    gce_meta_to_dict,
-    get_builder_by_test_id,
-    list_clusters_eks,
-    list_clusters_gke,
-    list_elastic_ips_aws,
-    list_test_security_groups,
-    list_load_balancers_aws,
-    list_cloudformation_stacks_aws,
-    list_instances_aws,
-    list_placement_groups_aws,
-    list_instances_gce,
-    list_logs_by_test_id,
-    list_resources_docker,
-    search_test_id_in_latest,
-    get_latest_scylla_release,
-    images_dict_in_json_format,
-    get_hdr_tags,
-    download_and_unpack_logs,
-    find_equivalent_ami,
-)
-from sdcm.nemesis.generator import generate_nemesis_yaml, NemesisJobGenerator
-from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
-from sdcm.utils.resources_cleanup import (
-    clean_cloud_resources,
-    clean_resources_according_post_behavior,
-    init_argus_client,
-)
-from sdcm.utils.net import get_sct_runner_ip
-from sdcm.utils.jepsen import JepsenResults
-from sdcm.utils.docker_utils import docker_hub_login, running_in_podman
-from sdcm.monitorstack import (
-    restore_monitoring_stack,
-    get_monitoring_stack_services,
-    kill_running_monitoring_stack_services,
-)
 from sdcm.utils.log import setup_stdout_logger, disable_loggers_during_startup
-from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder, AwsFipsCiBuilder
-from sdcm.utils.gce_region import GceRegion
-from sdcm.utils.gce_builder import GceBuilder
-from sdcm.utils.oci_region import OciRegion
-from sdcm.utils.oci_builder import OciBuilder
-from sdcm.utils.aws_peering import AwsVpcPeering
-from sdcm.utils.oci_peering import OciVcnPeering
-from sdcm.utils.get_username import get_username
+
 from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
-from sdcm.utils.aws_utils import AwsArchType
-from sdcm.utils.aws_okta import try_auth_with_okta
-from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
-from sdcm.utils.context_managers import environment
-from sdcm.cluster_k8s import mini_k8s
-from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
-import sdcm.provision.azure.utils as azure_utils
-from utils.build_system.create_test_release_jobs import JenkinsPipelines
-from utils.build_system.throttle_categories import ThrottleCategoryManager, ThrottleCategory
-from utils.get_supported_scylla_base_versions import UpgradeBaseVersion, fetch_official_supported_versions
-from sdcm.utils.docker_utils import get_ip_address_of_container
-from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
-from unit_tests.unit.nemesis.fake_cluster import FakeTester
-from sdcm.logcollector import Collector
+
+available_backends = [
+    "azure",
+    "baremetal",
+    "docker",
+    "aws",
+    "aws-siren",
+    "k8s-local-kind-aws",
+    "k8s-eks",
+    "gce",
+    "gce-siren",
+    "k8s-local-kind-gce",
+    "k8s-gke",
+    "k8s-local-kind",
+    "xcloud",
+    "oci",
+]
+
+if TYPE_CHECKING:
+    from sdcm.localhost import LocalHost
+    from sdcm.sct_config import init_and_verify_sct_config
+    from sdcm.sct_provision.common.layout import SCTProvisionLayout
+    from sdcm.sct_runner import clean_sct_runners
+    from sdcm.utils.resources_cleanup import clean_cloud_resources
+    from utils.get_supported_scylla_base_versions import fetch_official_supported_versions
+
+_LAZY_MODULE_ATTRS = {
+    "clean_cloud_resources": ("sdcm.utils.resources_cleanup", "clean_cloud_resources"),
+    "clean_sct_runners": ("sdcm.sct_runner", "clean_sct_runners"),
+    "init_and_verify_sct_config": ("sdcm.sct_config", "init_and_verify_sct_config"),
+    "LocalHost": ("sdcm.localhost", "LocalHost"),
+    "SCTProvisionLayout": ("sdcm.sct_provision.common.layout", "SCTProvisionLayout"),
+    "fetch_official_supported_versions": ("utils.get_supported_scylla_base_versions", "fetch_official_supported_versions"),
+}
+
+
+def __getattr__(name):
+    if name in _LAZY_MODULE_ATTRS:
+        module_path, attr_name = _LAZY_MODULE_ATTRS[name]
+        import importlib
+        module = importlib.import_module(module_path)
+        value = getattr(module, attr_name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module 'sct' has no attribute {name!r}")
+
 
 SUPPORTED_CLOUDS = (
     "aws",
@@ -156,8 +98,6 @@ SUPPORTED_CLOUDS = (
     "oci",
 )
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
-
-SCT_RUNNER_HOST = get_sct_runner_ip()
 
 LOGGER = setup_stdout_logger()
 
@@ -208,7 +148,57 @@ class SctLoader(unittest.TestLoader):
         return test_cases
 
 
-@click.group()
+_LAZY_SUBCOMMANDS = {
+    "ssh": "sct_ssh.ssh",
+    "tunnel": "sct_ssh.tunnel",
+    "cp": "sct_ssh.copy_cmd",
+    "attach-test-sg": "sct_ssh.attach_test_sg_cmd",
+    "ssh-cmd": "sct_ssh.ssh_cmd",
+    "gce-allow-public": "sct_ssh.gcp_allow_public",
+    "update-scylla-packages": "sct_ssh.update_scylla_packages",
+    "scan-issue-skips": "sct_scan_issues.scan_issue_skips",
+}
+
+
+class LazyGroup(click.Group):
+    def __init__(self, *args, lazy_subcommands=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lazy_subcommands = lazy_subcommands or {}
+
+    def list_commands(self, ctx):
+        base = super().list_commands(ctx)
+        lazy = sorted(self.lazy_subcommands.keys())
+        return base + lazy
+
+    def get_command(self, ctx, cmd_name):
+        if cmd_name in self.lazy_subcommands:
+            return self._lazy_load(cmd_name)
+        return super().get_command(ctx, cmd_name)
+
+    def _lazy_load(self, cmd_name):
+        import importlib
+
+        import_path = self.lazy_subcommands[cmd_name]
+        modname, cmd_object_name = import_path.rsplit(".", 1)
+        mod = importlib.import_module(modname)
+        return getattr(mod, cmd_object_name)
+
+    def shell_complete(self, ctx, incomplete):
+        from click.shell_completion import CompletionItem
+
+        results = []
+        for name in self.list_commands(ctx):
+            if name.startswith(incomplete):
+                if name in self.lazy_subcommands:
+                    results.append(CompletionItem(name, type="plain"))
+                else:
+                    command = self.get_command(ctx, name)
+                    if command and not command.hidden:
+                        results.append(CompletionItem(name, type="plain", help=command.get_short_help_str(limit=150)))
+        return results
+
+
+@click.group(cls=LazyGroup, lazy_subcommands=_LAZY_SUBCOMMANDS)
 @click.option(
     "--install-bash-completion",
     is_flag=True,
@@ -227,6 +217,11 @@ class SctLoader(unittest.TestLoader):
 )
 @click.pass_context
 def cli(ctx):
+    from sdcm.utils.aws_okta import try_auth_with_okta
+    from sdcm.keystore import KeyStore
+    from sdcm.remote import LOCALRUNNER
+    from sdcm.utils.docker_utils import docker_hub_login
+
     disable_loggers_during_startup()
     # Ugly way of filtering the few command that do not require OKTA verification
     if ctx.invoked_subcommand not in (
@@ -263,6 +258,10 @@ def cli(ctx):
     help="Test config .yaml to use, can have multiple of those",
 )
 def provision_resources(backend, test_name: str, config: str):
+    from argus.common.enums import TestStatus
+    from argus.common.sct_types import RawEventPayload
+    from sdcm.sct_provision.instances_provider import provision_sct_resources
+
     if config:
         os.environ["SCT_CONFIG_FILES"] = str(list(config))
     if backend:
@@ -358,6 +357,9 @@ def provision_resources(backend, test_name: str, config: str):
 @click.pass_context
 def clean_aws_kms_aliases(ctx, regions, time_delta_h, dry_run):
     """Clean AWS KMS old aliases."""
+    from sdcm.sct_config import AWS_SUPPORTED_REGIONS
+    from sdcm.utils.aws_kms import AwsKms
+
     add_file_logger()
     regions = regions or AWS_SUPPORTED_REGIONS
     aws_kms, kwargs = AwsKms(region_names=regions), {"dry_run": dry_run}
@@ -406,6 +408,10 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
 
     Also you can add --dry-run option to see what should be cleaned.
     """
+    from sdcm.sct_config import SCTConfiguration
+    from sdcm.utils.common import search_test_id_in_latest
+    from sdcm.utils.resources_cleanup import clean_resources_according_post_behavior
+
     add_file_logger()
 
     if clean_runners and not user and not test_id:
@@ -511,6 +517,31 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
 )
 @click.pass_context
 def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running, verbose, backend_type, xcloud_envs):  # noqa: PLR0912, PLR0914, PLR0915
+    from sdcm.cloud_api_client import ScyllaCloudAPIClient
+    from sdcm.cluster_cloud import extract_short_test_id_from_name
+    from sdcm.keystore import KeyStore
+    from sdcm.provision import AzureProvisioner
+    from sdcm.provision.provisioner import VmInstance
+    from sdcm.utils.common import (
+        aws_tags_to_dict,
+        rich_table_to_string,
+        gce_meta_to_dict,
+        list_clusters_eks,
+        list_clusters_gke,
+        list_elastic_ips_aws,
+        list_test_security_groups,
+        list_load_balancers_aws,
+        list_cloudformation_stacks_aws,
+        list_instances_aws,
+        list_placement_groups_aws,
+        list_instances_gce,
+        list_resources_docker,
+    )
+    from sdcm.utils.docker_utils import get_ip_address_of_container
+    from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
+    from sdcm.utils.context_managers import environment
+    from sdcm.utils.oci_utils import list_instances_oci
+
     add_file_logger()
 
     params = {}
@@ -969,8 +1000,8 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
 @click.option(
     "-a",
     "--arch",
-    type=click.Choice([str(v) for v in VmArch]),
-    default=str(VmArch.X86),
+    type=click.Choice(["x86_64", "aarch64"]),
+    default="x86_64",
     show_choices=True,
     show_default=True,
     help="architecture of the AMI",
@@ -984,6 +1015,21 @@ def list_images(  # noqa: PLR0912, PLR0914
     arch: str,
     output_format: Literal["table", "json"] = "table",
 ):
+    from sdcm.utils.common import (
+        rich_table_to_string,
+        create_pretty_table,
+        get_ami_images,
+        get_ami_images_versioned,
+        get_gce_images,
+        get_gce_images_versioned,
+        images_dict_in_json_format,
+    )
+    from sdcm.utils.version_utils import parse_scylla_version_tag
+    import sdcm.provision.azure.utils as azure_utils
+    from sdcm.nemesis.generator import NemesisJobGenerator
+    from sdcm.provision.provisioner import VmArch
+    from sdcm.utils.oci_utils import get_scylla_images_by_branch, get_scylla_images_by_version
+
     if len(regions) == 0:
         regions = [NemesisJobGenerator.BACKEND_TO_REGION[cloud_provider]]
     add_file_logger()
@@ -1177,7 +1223,7 @@ def list_images(  # noqa: PLR0912, PLR0914
 @click.option(
     "-a",
     "--target-arch",
-    type=click.Choice(AwsArchType.__args__),
+    type=click.Choice(["x86_64", "arm64"]),
     help="Target architecture (x86_64 or arm64). If not specified, uses same arch as source AMI.",
 )
 @click.option(
@@ -1191,10 +1237,12 @@ def find_ami_equivalent(
     ami_id: str,
     source_region: str,
     target_regions: tuple[str, ...],
-    target_arch: AwsArchType | None,
+    target_arch: str | None,
     output_format: str,
 ):
     """Find equivalent AMIs in different regions or architectures based on tags."""
+    from sdcm.utils.common import find_equivalent_ami, rich_table_to_string
+
     add_file_logger()
 
     # Convert tuple to list or None
@@ -1281,6 +1329,9 @@ def find_ami_equivalent(
     help="deb style versions",
 )
 def list_repos(dist_type, dist_version):
+    from sdcm.utils.common import rich_table_to_string
+    from sdcm.utils.version_utils import get_s3_scylla_repos_mapping
+
     add_file_logger()
 
     if not dist_type == "centos" and dist_version is None:
@@ -1317,6 +1368,9 @@ def get_scylla_base_versions(
     get the base versions according to the scylla repo and distro type, then we don't need to hardcode
     the base version for each branch.
     """
+    from sdcm.utils.common import rich_table_to_string
+    from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
+
     add_file_logger()
 
     with Path("defaults/test_default.yaml").open(mode="r", encoding="utf-8") as test_defaults_yaml:
@@ -1363,6 +1417,8 @@ def get_official_supported_versions(only_print_versions):
     Fetch officially supported ScyllaDB versions from the scylladb-docs-homepage repository.
     Returns versions that have status "Supported" in the upstream supported_versions.json.
     """
+    from sdcm.utils.common import rich_table_to_string
+
     add_file_logger()
 
     version_list = fetch_official_supported_versions()
@@ -1383,6 +1439,8 @@ def get_official_supported_versions(only_print_versions):
 @click.argument("config_files", type=str, default="")
 @click.option("-b", "--backend", type=click.Choice(available_backends))
 def output_conf(config_files, backend):
+    from sdcm.sct_config import SCTConfiguration
+
     add_file_logger()
 
     if backend:
@@ -1395,6 +1453,8 @@ def output_conf(config_files, backend):
 
 
 def _run_yaml_test(backend, full_path, env):
+    from sdcm.sct_config import SCTConfiguration
+
     output = []
     error = False
     output.append(f"---- linting: {full_path} -----")
@@ -1483,6 +1543,9 @@ def _validate_single_pipeline(pipeline_path, env):
 
 def _discover_and_parse_pipelines(pipeline_dir, pipeline_file, include_filter, exclude_filter):
     """Discover pipeline files, parse them, and build validation environments."""
+    from sdcm.utils.lint.env_builder import build_env
+    from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile, discover_pipeline_files
+
     original_env = {**os.environ}
 
     include_re = re.compile(include_filter) if include_filter else None
@@ -1538,6 +1601,9 @@ def _write_junit_xml(junit_xml_path, tasks, failures, total, failed_count, skipp
     "--junit-xml", "junit_xml_path", default=None, type=click.Path(), help="Write JUnit XML report to this path"
 )
 def lint_pipelines(pipeline_dir, pipeline_file, workers, include_filter, exclude_filter, junit_xml_path):
+    from sdcm.remote import LOCALRUNNER
+    from sdcm.utils.git import clone_repo
+
     scylla_qa_internal_path = Path(__file__).resolve().parent / "scylla-qa-internal"
     if not scylla_qa_internal_path.exists():
         click.echo("scylla-qa-internal not found, trying to clone...")
@@ -1618,6 +1684,8 @@ def lint_pipelines(pipeline_dir, pipeline_file, workers, include_filter, exclude
 @click.argument("config_file", type=str, default="")
 @click.option("-b", "--backend", type=click.Choice(available_backends), default="aws")
 def conf(config_file, backend):
+    from sdcm.sct_config import SCTConfiguration
+
     add_file_logger()
 
     if backend:
@@ -1642,6 +1710,8 @@ def conf(config_file, backend):
     "-o", "--output-format", type=click.Choice(["yaml", "markdown"]), default="yaml", help="type of the output"
 )
 def conf_docs(output_format):
+    from sdcm.sct_config import SCTConfiguration
+
     if output_format == "markdown":
         click.secho(SCTConfiguration.dump_help_config_markdown())
     elif output_format == "yaml":
@@ -1650,6 +1720,8 @@ def conf_docs(output_format):
 
 @cli.command("update-conf-docs", help="Update the docs configuration markdown")
 def update_conf_docs():
+    from sdcm.sct_config import SCTConfiguration
+
     markdown_file = Path(__name__).parent / "docs" / "configuration_options.md"
     markdown_file.write_text(SCTConfiguration.dump_help_config_markdown())
     click.secho(f"docs written into {markdown_file}")
@@ -1669,6 +1741,8 @@ def investigate():
     "--update-argus/--no-update-argus", type=bool, required=False, default=False, help="Update argus with links"
 )
 def show_log(test_id, output_format, update_argus: bool):
+    from sdcm.utils.common import list_logs_by_test_id, rich_table_to_string
+
     add_file_logger()
 
     files = list_logs_by_test_id(test_id)
@@ -1700,6 +1774,15 @@ def show_log(test_id, output_format, update_argus: bool):
 @click.option("--date-time", type=str, required=False, help="Datetime of monitor-set archive is collected")
 @click.option("--kill", type=bool, required=False, help="Kill and remove containers")
 def show_monitor(test_id, date_time, kill, cluster_name):
+    from sdcm.utils.net import get_sct_runner_ip
+    from sdcm.monitorstack import (
+        restore_monitoring_stack,
+        get_monitoring_stack_services,
+        kill_running_monitoring_stack_services,
+    )
+    from sdcm.utils.common import rich_table_to_string
+
+    sct_runner_host = get_sct_runner_ip()
     add_file_logger()
 
     click.echo("Search monitoring stack archive files for test id {} and restoring...".format(test_id))
@@ -1721,7 +1804,7 @@ def show_monitor(test_id, date_time, kill, cluster_name):
         click.echo(f"Monitoring stack for cluster {cluster} restored")
         table = Table("Service", "Container", "Link", show_lines=False)
         for docker in get_monitoring_stack_services(ports=containers_ports):
-            table.add_row(docker["service"], docker["name"], f"http://{SCT_RUNNER_HOST}:{docker['port']}")
+            table.add_row(docker["service"], docker["name"], f"http://{sct_runner_host}:{docker['port']}")
         click.echo(rich_table_to_string(table, title=f"Monitoring stack services for cluster {cluster}"))
         click.echo("")
         if kill:
@@ -1731,6 +1814,10 @@ def show_monitor(test_id, date_time, kill, cluster_name):
 @investigate.command("show-jepsen-results", help="Run a server with Jepsen results")
 @click.argument("test_id")
 def show_jepsen_results(test_id):
+    from sdcm.utils.net import get_sct_runner_ip
+    from sdcm.utils.jepsen import JepsenResults
+
+    sct_runner_host = get_sct_runner_ip()
     add_file_logger()
 
     click.secho(message=f"\nSearch Jepsen results archive files for test id {test_id} and restoring...\n", fg="green")
@@ -1738,10 +1825,10 @@ def show_jepsen_results(test_id):
     if jepsen.restore_jepsen_data(test_id):
         click.secho(
             message=f"\nJepsen data restored, starting web server on "
-            f"http://{SCT_RUNNER_HOST}:{jepsen.jepsen_results_port}/",
+            f"http://{sct_runner_host}:{jepsen.jepsen_results_port}/",
             fg="green",
         )
-        detach = SCT_RUNNER_HOST != "127.0.0.1"
+        detach = sct_runner_host != "127.0.0.1"
         if not detach:
             click.secho(message="Press Ctrl-C to stop the server.", fg="green")
         click.echo("")
@@ -1751,6 +1838,8 @@ def show_jepsen_results(test_id):
 @investigate.command("search-builder", help="Search builder where test run with test-id located")
 @click.argument("test-id")
 def search_builder(test_id):
+    from sdcm.utils.common import get_builder_by_test_id, rich_table_to_string
+
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     add_file_logger()
 
@@ -1775,6 +1864,8 @@ def search_builder(test_id):
 @click.option("--last-n", type=int, required=False, help="return last n lines from events.log file")
 @click.option("--save-to", type=str, required=False, help="Download events.log file and save to provided dir")
 def show_events(test_id: str, follow: bool = False, last_n: int = None, save_to: str = None):
+    from sdcm.utils.common import get_builder_by_test_id
+
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     add_file_logger()
     builders = get_builder_by_test_id(test_id)
@@ -1815,6 +1906,8 @@ cli.add_command(investigate)
 @click.option("-n", required=False, default=4, help="Sets number of parallel tests to run, default is 4")
 @click.option("--junit-xml", required=False, default="", help="Path to write JUnit XML report")
 def unit_tests(test, n, junit_xml):
+    import pytest
+
     args = ["-v", "-m", "not integration", f"-n{n}", *(f"unit_tests/{t}" for t in test)]
     if junit_xml:
         args.append(f"--junit-xml={junit_xml}")
@@ -1828,6 +1921,11 @@ def unit_tests(test, n, junit_xml):
 @click.option("-n", required=False, default=4, help="Sets number of parallel tests to run, default is 4")
 @click.option("--junit-xml", required=False, default="", help="Path to write JUnit XML report")
 def integration_tests(test, n, junit_xml):
+    import pytest
+    from sdcm.sct_config import SCTConfiguration
+    from sdcm.cluster_k8s import mini_k8s
+    from sdcm.utils.docker_utils import running_in_podman
+
     get_test_config().logdir()
     add_file_logger()
 
@@ -1905,6 +2003,8 @@ class OutputLogger:
 )
 @click.option("-l", "--logdir", help="Directory to use for logs")
 def run_test(argv, backend, config, logdir):
+    import pytest
+
     if config:
         os.environ["SCT_CONFIG_FILES"] = str(list(config))
     if backend:
@@ -1944,6 +2044,8 @@ def run_test(argv, backend, config, logdir):
 )
 @click.option("-l", "--logdir", help="Directory to use for logs")
 def run_pytest(target, backend, config, logdir):
+    import pytest
+
     if config:
         os.environ["SCT_CONFIG_FILES"] = str(list(config))
     if backend:
@@ -1986,6 +2088,9 @@ def run_pytest(target, backend, config, logdir):
     "--billing-project", required=False, type=str, default="", help="Billing project tag filter (currently not applied)"
 )
 def cloud_usage_report(emails, report_type, user, billing_project):
+    from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
+    from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
+
     add_file_logger()
 
     email_list = emails.split(",")
@@ -2006,6 +2111,12 @@ def cloud_usage_report(emails, report_type, user, billing_project):
 @click.option("--backend", help="Cloud where search nodes", default=None)
 @click.option("--config-file", type=str, help="config test file path")
 def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
+    from sdcm.sct_config import SCTConfiguration
+    from sdcm.logcollector import Collector
+    from sdcm.sct_runner import update_sct_runner_tags
+    from sdcm.utils.argus import create_proxy_argus_s3_url
+    from sdcm.utils.common import rich_table_to_string
+
     add_file_logger()
 
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
@@ -2057,6 +2168,9 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
 
 def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]], update: bool = False):
+    from sdcm.utils.argus import argus_offline_collect_events, get_argus_client
+    from argus.client.sct.types import LogLink
+
     try:
         argus_client = get_argus_client(run_id=test_id)
         log_links = []
@@ -2099,6 +2213,9 @@ def send_email(
     email_recipients=None,
     logdir=None,
 ):
+    from sdcm.sct_config import SCTConfiguration
+    from sdcm.utils.resources_cleanup import init_argus_client
+
     add_file_logger()
 
     if not email_recipients:
@@ -2142,6 +2259,9 @@ def send_email(
 @click.option("--sct_repo", default="git@github.com:scylladb/scylla-cluster-tests.git", type=str)
 @click.option("--triggers/--no-triggers", default=False)
 def create_operator_test_release_jobs(branch, username, password, sct_branch, sct_repo, triggers):
+    from sdcm.utils.common import get_latest_scylla_release
+    from utils.build_system.create_test_release_jobs import JenkinsPipelines
+
     add_file_logger()
 
     base_job_dir = f"scylla-operator/{branch}"
@@ -2163,6 +2283,9 @@ def create_operator_test_release_jobs(branch, username, password, sct_branch, sc
 @click.option("--sct_repo", default="git@github.com:scylladb/scylla-cluster-tests.git", type=str)
 @click.option("--triggers/--no-triggers", default=False)
 def create_manager_test_release_jobs(branch, username, password, sct_branch, sct_repo, triggers):
+    from sdcm.utils.common import get_latest_scylla_release
+    from utils.build_system.create_test_release_jobs import JenkinsPipelines
+
     add_file_logger()
 
     server = JenkinsPipelines(
@@ -2182,6 +2305,8 @@ def create_manager_test_release_jobs(branch, username, password, sct_branch, sct
 @click.option("--sct_repo", default="git@github.com:scylladb/scylla-cluster-tests.git", type=str)
 @click.option("--triggers/--no-triggers", default=False)
 def create_qa_tools_jobs(username, password, sct_branch, sct_repo, triggers):
+    from utils.build_system.create_test_release_jobs import JenkinsPipelines
+
     add_file_logger()
 
     base_job_dir = "QA-tools"
@@ -2200,6 +2325,8 @@ def create_qa_tools_jobs(username, password, sct_branch, sct_repo, triggers):
 @click.option("--sct_repo", default="git@github.com:scylladb/scylla-cluster-tests.git", type=str)
 @click.option("--triggers/--no-triggers", default=False)
 def create_performance_jobs(username, password, sct_branch, sct_repo, triggers):
+    from utils.build_system.create_test_release_jobs import JenkinsPipelines
+
     add_file_logger()
 
     # we start from the root of jenkins, because we have jobs to scylla-master and scylla-enterprise
@@ -2217,6 +2344,9 @@ def create_performance_jobs(username, password, sct_branch, sct_repo, triggers):
 @cli.command("create-nemesis-yaml")
 @click.option("--diff/--no-diff", default=True)
 def create_nemesis_yaml(diff):
+    from sdcm.nemesis.generator import generate_nemesis_yaml
+    from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
+
     error_carrier = ErrorCarrier() if diff else None
     file_opener = partial(OpenWithDiff, error_carrier=error_carrier) if diff else open
 
@@ -2227,9 +2357,12 @@ def create_nemesis_yaml(diff):
 
 @cli.command("create-nemesis-pipelines")
 @click.option("--base-job", default=None, type=str)
-@click.option("--backend", default=NemesisJobGenerator.BACKEND_TO_REGION.keys(), multiple=True)
+@click.option("--backend", default=["aws", "gce", "oci", "azure", "docker"], multiple=True)
 @click.option("--diff/--no-diff", default=True)
 def create_nemesis_pipelines(base_job: str, backend: list[str], diff: bool):
+    from sdcm.nemesis.generator import NemesisJobGenerator
+    from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
+
     error_carrier = ErrorCarrier() if diff else None
     file_opener = partial(OpenWithDiff, error_carrier=error_carrier) if diff else open
 
@@ -2249,6 +2382,8 @@ def create_nemesis_pipelines(base_job: str, backend: list[str], diff: bool):
 @click.option("--sct_branch", default="master", type=str)
 @click.option("--sct_repo", default="git@github.com:scylladb/scylla-cluster-tests.git", type=str)
 def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
+    from utils.build_system.create_test_release_jobs import JenkinsPipelines
+
     add_file_logger()
 
     base_job_dir = f"{branch}"
@@ -2277,6 +2412,8 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
     "Base categories (no suffix) are always created.",
 )
 def configure_jenkins_throttle(username, password, dry_run, suffix):
+    from utils.build_system.throttle_categories import ThrottleCategoryManager, ThrottleCategory
+
     add_file_logger()
 
     # AWS regions used by performance tests
@@ -2311,6 +2448,11 @@ def configure_jenkins_throttle(username, password, dry_run, suffix):
 @cloud_provider_option
 @click.option("-r", "--regions", type=CloudRegion(), help="Cloud region", multiple=True)
 def prepare_regions(cloud_provider, regions):
+    from sdcm.utils.aws_region import AwsRegion
+    from sdcm.utils.azure_region import AzureRegion
+    from sdcm.utils.gce_region import GceRegion
+    from sdcm.utils.oci_region import OciRegion
+
     add_file_logger()
     regions = regions or get_all_regions(cloud_provider)
 
@@ -2333,6 +2475,8 @@ def prepare_regions(cloud_provider, regions):
     "-r", "--regions", type=CloudRegion(cloud_provider="aws"), default=[], help="Cloud regions", multiple=True
 )
 def configure_aws_peering(regions):
+    from sdcm.utils.aws_peering import AwsVpcPeering
+
     add_file_logger()
     peering = AwsVpcPeering(regions)
     peering.configure()
@@ -2341,6 +2485,8 @@ def configure_aws_peering(regions):
 @cli.command("configure-oci-peering", help="Configure OCI cross-region VCN peering for multi-dc SCT runs")
 @click.option("-r", "--regions", type=CloudRegion(cloud_provider="oci"), default=[], help="OCI regions", multiple=True)
 def configure_oci_peering(regions):
+    from sdcm.utils.oci_peering import OciVcnPeering
+
     add_file_logger()
     peering = OciVcnPeering(regions or None)
     peering.configure()
@@ -2348,16 +2494,17 @@ def configure_oci_peering(regions):
 
 @cli.command(
     "create-runner-image",
-    help=f"Create an SCT runner image in the selected cloud region."
-    f" If the requested region is not a source region"
-    f" (aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION},"
-    f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}, oci: {OciSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
-    f" source region and then copied to the chosen one.",
+    help="Create an SCT runner image in the selected cloud region."
+    " If the requested region is not a source region the image will be first created in the"
+    " source region and then copied to the chosen one.",
 )
 @cloud_provider_option
 @click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")
 @click.option("-z", "--availability-zone", default="", type=str, help="Name of availability zone, ex. 'a'")
 def create_runner_image(cloud_provider, region, availability_zone):
+    from sdcm.sct_config import SCTConfiguration
+    from sdcm.sct_runner import get_sct_runner
+
     if cloud_provider == "aws":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     elif cloud_provider == "oci":
@@ -2404,6 +2551,9 @@ def create_runner_instance(
     restored_test_id="",
     address_pool=None,
 ):
+    from sdcm.sct_config import SCTConfiguration
+    from sdcm.sct_runner import get_sct_runner
+
     add_file_logger()
     sct_runner_ip_path = Path("sct_runner_ip")
     sct_runner_ip_path.unlink(missing_ok=True)
@@ -2454,6 +2604,8 @@ def create_runner_instance(
     multiple=True,
 )
 def set_runner_tags(runner_ip, backend, tags):
+    from sdcm.sct_runner import update_sct_runner_tags
+
     add_file_logger()
     update_sct_runner_tags(test_runner_ip=runner_ip, backend=backend, tags=dict(tags))
 
@@ -2465,6 +2617,8 @@ def set_runner_tags(runner_ip, backend, tags):
     "-d", "--duration", required=False, type=int, default=0, help="New test duration in minutes (extends keep tag)"
 )
 def find_runner_instance(test_id, backend, duration):
+    from sdcm.sct_runner import list_sct_runners, update_sct_runner_tags
+
     add_file_logger()
     sct_runner_ip_path = Path("sct_runner_ip")
     sct_runner_ip_path.unlink(missing_ok=True)
@@ -2510,6 +2664,7 @@ def find_runner_instance(test_id, backend, duration):
 @click.option("--dry-run", is_flag=True, default=False, help="dry run")
 @click.option("--force", is_flag=True, default=False, help="Skip cleaning logic and terminate the instance")
 def clean_runner_instances(runner_ip, test_status, backend, user, billing_project, test_id, dry_run, force):
+
     add_file_logger()
     # Note: clean_sct_runners does not currently support billing_project; option accepted for CLI parity.
     clean_sct_runners(
@@ -2527,6 +2682,11 @@ def clean_runner_instances(runner_ip, test_status, backend, user, billing_projec
 @cloud_provider_option
 @click.option("-r", "--regions", type=CloudRegion(), default=[], help="Cloud regions", multiple=True)
 def configure_jenkins_builders(cloud_provider, regions):
+    from sdcm.utils.aws_region import AwsRegion
+    from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder, AwsFipsCiBuilder
+    from sdcm.utils.gce_builder import GceBuilder
+    from sdcm.utils.oci_builder import OciBuilder
+
     add_file_logger()
     logging.basicConfig(level=logging.INFO)
 
@@ -2562,6 +2722,10 @@ def get_nemesis_list(backend, config):
     hydra nemesis-list
 
     """
+    from sdcm.sct_config import SCTConfiguration
+    from sdcm.nemesis.monkey.runners import SisyphusMonkey
+    from unit_tests.unit.nemesis.fake_cluster import FakeTester
+
     add_file_logger()
     logging.basicConfig(level=logging.WARNING)
 
@@ -2583,6 +2747,12 @@ def get_nemesis_list(backend, config):
 
 @cli.command("create-argus-test-run", help="Initialize an argus test run.")
 def create_argus_test_run():
+    from sdcm.sct_config import SCTConfiguration
+    from sdcm.utils.ci_tools import get_job_name, get_job_url
+    from sdcm.utils.git import get_git_commit_id, get_git_status_info
+    from sdcm.utils.get_username import get_username
+    from argus.client.base import ArgusClientError
+
     try:
         params = SCTConfiguration()
         git_status = get_git_status_info()
@@ -2609,6 +2779,10 @@ def create_argus_test_run():
 @cli.command("finish-argus-test-run", help="Finish argus test run if it is not finished by SCT.")
 @click.option("-s", "--jenkins-status", type=str, help="jenkins build status", required=True)
 def finish_argus_test_run(jenkins_status):
+    from sdcm.sct_config import SCTConfiguration
+    from argus.client.base import ArgusClientError
+    from argus.common.enums import TestStatus
+
     try:
         LOGGER.info("Finishing Argus TestRun with jenkins status %s", jenkins_status)
         params = SCTConfiguration()
@@ -2642,6 +2816,9 @@ def finish_argus_test_run(jenkins_status):
     help="Allows to skip making backend detection API calls.",
 )
 def fetch_junit(runner_ip, backend):
+    import sct_ssh
+    from sdcm.sct_runner import list_sct_runners
+
     add_file_logger()
 
     runner = list_sct_runners(backend=backend, test_runner_ip=runner_ip)
@@ -2665,6 +2842,11 @@ def fetch_junit(runner_ip, backend):
 @click.option("--public/--no-public", default=False)
 @click.argument("file-path", type=str, required=True)
 def upload_artifact_file(test_id: str, file_path: str, use_argus: bool, public: bool):
+    from sdcm.sct_config import SCTConfiguration
+    from sdcm.utils.common import S3Storage
+    from argus.client.sct.types import LogLink
+    from argus.client.base import ArgusClientError
+
     add_file_logger()
     if use_argus:
         params = SCTConfiguration()
@@ -2777,6 +2959,9 @@ def hdr_investigate(
        hydra hdr-investigate --stress-operation READ --throttled-load true --test-id 8732ecb1-7e1f-44e7-b109-6d789b15f4b5
        --start-time \"2025-09-14\\ 20:45:18\" --duration-from-start-min 30
     """
+    from sdcm.utils.common import get_hdr_tags, download_and_unpack_logs, rich_table_to_string
+    from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
+
     stress_operation = stress_operation.upper()
 
     try:
@@ -2827,15 +3012,6 @@ def hdr_investigate(
     )
     click.echo(rich_table_to_string(hdr_table, title="HDR Latency Spikes"))
 
-
-cli.add_command(sct_ssh.ssh)
-cli.add_command(sct_ssh.tunnel)
-cli.add_command(sct_ssh.copy_cmd)
-cli.add_command(sct_ssh.attach_test_sg_cmd)
-cli.add_command(sct_ssh.ssh_cmd)
-cli.add_command(sct_ssh.gcp_allow_public)
-cli.add_command(sct_ssh.update_scylla_packages)
-cli.add_command(sct_scan_issues.scan_issue_skips)
 
 if __name__ == "__main__":
     cli.main(prog_name="hydra")

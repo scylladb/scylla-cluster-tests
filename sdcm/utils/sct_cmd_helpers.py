@@ -19,17 +19,12 @@ import click
 
 import __main__
 
-from sdcm.cluster import TestConfig
-from sdcm.utils.azure_utils import AzureService
-from sdcm.utils.oci_region import SUPPORTED_REGIONS as OCI_SUPPORTED_REGIONS
-from sdcm.utils.azure_region import region_name_to_location
-from sdcm.utils.common import (
-    all_aws_regions,
-    get_all_gce_regions,
-)
-
 
 def get_all_regions(cloud_provider: str) -> list[str] | None:
+    from sdcm.utils.azure_utils import AzureService
+    from sdcm.utils.oci_region import SUPPORTED_REGIONS as OCI_SUPPORTED_REGIONS
+    from sdcm.utils.common import all_aws_regions, get_all_gce_regions
+
     regions = None
     if cloud_provider == "aws":
         regions = all_aws_regions(cached=True)
@@ -50,6 +45,8 @@ class CloudRegion(click.ParamType):
         self.cloud_provider = cloud_provider
 
     def convert(self, value, param, ctx):
+        from sdcm.utils.azure_region import region_name_to_location
+
         cloud_provider = self.cloud_provider or ctx.params["cloud_provider"]
         regions = get_all_regions(cloud_provider)
         if not regions:
@@ -62,6 +59,8 @@ class CloudRegion(click.ParamType):
 
 
 def get_test_config():
+    from sdcm.cluster import TestConfig
+
     return TestConfig()
 
 
