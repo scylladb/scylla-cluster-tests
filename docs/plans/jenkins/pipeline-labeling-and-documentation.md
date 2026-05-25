@@ -98,6 +98,32 @@ A plan exists for structural config validation (`sct.py lint-pipelines`). This p
 4. **Bootstrap metadata** for all ~267 test-case files using AI-assisted generation, with human review.
 5. **Achieve >90% metadata coverage** across all test-case YAML files within the first release cycle.
 
+### Design Decisions
+
+**Why `.meta.yaml` sidecar files instead of embedding in test-case YAML?**
+
+We considered adding a top-level `_meta:` key directly in test-case YAML files. This was rejected because:
+- SCT's config loading (`sct_config.py`) validates all keys strictly — adding `_meta` would require changes to config parsing across all backends, risking regressions.
+- Test-case YAMLs are loaded by multiple tools (Jenkins job builder, `sct.py`, test runners). Each would need to know to ignore `_meta`.
+- Sidecar files can be linted/validated independently without loading the full SCT config machinery.
+- Sidecar files allow metadata to evolve (new fields, schema changes) without touching the config loading code.
+
+The trade-off is an extra file to maintain. The lint tool (TD-001) enforces that every test case has a `.meta.yaml`, and the AI skills auto-generate drafts, making drift manageable.
+
+**Relationship to `jenkins-pipeline-config-linter.md` plan:**
+
+The two plans share the `sdcm/utils/lint/` package but have distinct responsibilities:
+- **Config linter**: Validates structural correctness of pipeline configs (type mismatches, missing required params, invalid values). Produces `PipelineConfig` parsed objects.
+- **This plan**: Validates documentation completeness and label accuracy against taxonomy and config content.
+
+This plan's cross-reference checks (TD-007, TD-007b) will import and reuse the config linter's `PipelineConfig` parser to read backend/region from Jenkinsfiles rather than re-implementing Groovy parsing. Phase 2 of this plan has a soft dependency on Phase 1 of the config linter plan for the parser module. If the linter plan is not yet implemented, a minimal Jenkinsfile parser (regex-based, covering `backend:` extraction) will be used as a stopgap.
+
+Both linters run as separate `sct.py` subcommands and can share a CI stage.
+
+**Nemesis taxonomy auto-population:**
+
+The `nemesis` values in `taxonomy.yaml` are auto-populated by a pre-commit hook that reads all `NemesisBaseClass` subclasses from `sdcm/nemesis/`. The hook runs `python -c "from sdcm.nemesis import NemesisRegistry; ..."` and regenerates the nemesis section. This ensures taxonomy never lags behind the registry. The 8 values shown in the example are illustrative, not exhaustive.
+
 ## Implementation Phases
 
 ### Phase 1: Metadata Schema and Taxonomy (Importance: Critical)
@@ -129,8 +155,6 @@ labels:
   nemesis:
     - SisyphusMonkey
   features: []
-  storage:
-    - instance-store
 
 pipelines:
   - jenkins-pipelines/oss/longevity/longevity-10gb-3h.jenkinsfile
@@ -177,7 +201,7 @@ duration_class:
     - long        # >24 hours
 
 backends:
-  description: "Cloud/infra backends the test runs on"
+  description: "Cloud/infra backends the test runs on. Source: pipeline `backend:` parameter and/or the test method's docstring (`Supported backends: ...`). If the docstring omits this field, the test supports all backends."
   values:
     - aws
     - gce
@@ -249,16 +273,11 @@ features:
     - tombstone-gc
     - twcs                 # TimeWindowCompactionStrategy
     - zero-token-nodes
-    - alternator-streams
+     - alternator-streams
 
-storage:
-  description: "Storage type used by DB nodes"
-  values:
-    - instance-store       # Local NVMe (i3, i4i, etc.)
-    - ebs-gp3              # AWS EBS gp3
-    - local-ssd            # GCE local SSD
-    - managed-disk         # Azure managed disk
-    - raid                 # Software RAID
+# NOTE: `storage` label intentionally omitted — only a handful of test cases
+# use EBS or managed disks. Not worth the maintenance overhead at this time.
+# Can be added later if needed.
 ```
 
 3. **JSON schema for `.meta.yaml` validation** — `docs/pipeline-labels/meta-schema.json`:
@@ -290,8 +309,8 @@ class LintResult:
     errors: list[str]      # Schema violations, missing required fields
     warnings: list[str]    # Suggestions (e.g., "nemesis_class_name is SisyphusMonkey but labels.nemesis does not include it")
 
-def lint_meta_file(meta_path: Path, taxonomy: dict) -> LintResult:
-    """Validate a single .meta.yaml file."""
+def lint_meta_file(meta_path: Path, taxonomy_path: Path) -> LintResult:
+    """Validate a single .meta.yaml file against the taxonomy."""
     ...
 
 def cross_reference_config(meta_path: Path, config_path: Path) -> list[str]:
@@ -302,6 +321,7 @@ def cross_reference_config(meta_path: Path, config_path: Path) -> list[str]:
     - If config has stress_cmd containing 'cassandra-stress', labels.stress_tools should include 'cassandra-stress'
     - If config has n_db_nodes: '15 15 15' (multi-DC), labels.features should include 'multi-dc'
     - If meta lists backend 'aws' but pipeline file says backend: 'gce', flag mismatch
+    - If test method docstring declares 'Supported backends: aws, docker' but meta lists other backends, flag mismatch. If docstring has no such declaration, all backends are assumed valid — no mismatch.
     """
     ...
 ```
@@ -328,6 +348,7 @@ def lint_test_docs(test_case_dir, fix, missing_only):
 | TD-005 | `nemesis` labels match `nemesis_class_name` in config | warning |
 | TD-006 | `stress_tools` labels match stress commands in config | warning |
 | TD-007 | `backends` labels match pipeline `backend:` parameter | warning |
+| TD-007b | If test docstring declares `Supported backends:`, meta `backends` must be a subset of that list. No declaration = all backends supported. | warning |
 | TD-008 | `duration_class` is consistent with `test_duration` value | warning |
 | TD-009 | `data_size` label is consistent with test name/config | info |
 | TD-010 | `pipelines` list references existing `.jenkinsfile` files | error |
@@ -414,8 +435,7 @@ From the configuration, extract:
 - **Data size**: Infer from test name or stress parameters
 - **Multi-DC**: Detect from `n_db_nodes` format ('6' = single-DC, '15 15 15' = 3 DCs)
 - **Features**: Detect from config keys (encryption, authorization, cdc, tablets, etc.)
-- **Backend**: Read from pipeline `backend:` parameter
-- **Storage**: Infer from `instance_type_db` (i3/i4i = instance-store, etc.)
+- **Backend**: Read from pipeline `backend:` parameter AND from the test method's docstring. Tests may declare `Supported backends: aws, gce, docker` in their docstring to restrict which backends are valid. If the docstring has no `Supported backends:` line, the test is assumed to support ALL backends.
 
 ## Phase 3: Write Description
 
@@ -674,6 +694,8 @@ types are fallback configs, not active backends for this pipeline.
 2. **Human review process**:
    - AI skills (`reviewing-pipeline-docs`, `labeling-pipelines`) assist in writing descriptions and fixing label warnings
    - PRs are split by test-case category (one PR per directory: longevity, performance, manager, etc.)
+   - **Ownership**: Each category PR is assigned to the team owning those tests (e.g., longevity → QA-longevity team). The PR author (AI-assisted) provides drafts; the owning team reviews descriptions for accuracy within 2 sprint cycles.
+   - **Converting TODOs to descriptions**: After bootstrap, run the `reviewing-pipeline-docs` skill per-category to generate description drafts from config analysis. Human reviewers then approve/edit. Target: all TODO placeholders replaced within 4 weeks of bootstrap completion.
 
 3. **Coverage target**: >90% of test cases have `.meta.yaml` with complete labels; >70% have human-reviewed descriptions.
 
@@ -728,10 +750,12 @@ types are fallback configs, not active backends for this pipeline.
 
 2. **Update `AGENTS.md`**: Add both new skills to the Skills table
 3. **Update `CLAUDE.md`**: Add `@skills/reviewing-pipeline-docs/SKILL.md` and `@skills/labeling-pipelines/SKILL.md`
+4. **Migrate `_display_name` files**: Replace existing `_display_name` files (10+ directories) with `_folder_definitions.yaml` equivalents. Each `_display_name` file contains only a display string; the replacement `_folder_definitions.yaml` adds `job-type`, `job-sub-type`, and `folder-description` fields. Remove the old `_display_name` files after migration.
 
 **Definition of Done**:
 - [ ] `docs/pipeline-labels/README.md` created
 - [ ] `AGENTS.md` and `CLAUDE.md` updated with new skills
+- [ ] All `_display_name` files migrated to `_folder_definitions.yaml` and removed
 
 **Dependencies**: All previous phases.
 
