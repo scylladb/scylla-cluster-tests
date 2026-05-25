@@ -37,6 +37,11 @@ space_node_threshold: 0
 
 cluster_health_check: true
 cluster_health_check_parallel_workers: 5
+cluster_health_check_interval: 60
+cluster_health_check_deadline: 600
+cluster_health_check_nemesis_grace_period: 60
+cluster_health_check_node_retries: 3
+cluster_health_check_connect_timeout: 30
 
 add_node_cnt: 1
 

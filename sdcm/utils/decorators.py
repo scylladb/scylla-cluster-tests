@@ -65,22 +65,25 @@ class retrying:
     def __call__(self, func):
         @wraps(func)
         def inner(*args, **kwargs):
-            if self.timeout:
-                end_time = time.time() + self.timeout
+            n = kwargs.pop("_retry_n", self.n)
+            sleep_time = kwargs.pop("_retry_sleep_time", self.sleep_time)
+            timeout = kwargs.pop("_retry_timeout", self.timeout)
+
+            if timeout:
+                end_time = time.time() + timeout
             else:
                 end_time = 0
-            if self.n == 1:
-                # there is no need to retry
+            if n == 1:
                 return func(*args, **kwargs)
-            for i in range(self.n):
+            for i in range(n):
                 try:
                     if self.message and i > 0:
                         LOGGER.info("%s [try #%s]", self.message, i)
                     return func(*args, **kwargs)
                 except self.allowed_exceptions as ex:
                     LOGGER.debug("'%s': failed with '%r', retrying [#%s]", func.__name__, ex, i)
-                    time.sleep(self.sleep_time)
-                    if i == self.n - 1 or (end_time and time.time() > end_time):
+                    time.sleep(sleep_time)
+                    if i == n - 1 or (end_time and time.time() > end_time):
                         LOGGER.error("'%s': Number of retries exceeded!", func.__name__)
                         if self.raise_on_exceeded:
                             raise

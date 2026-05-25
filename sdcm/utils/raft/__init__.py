@@ -138,7 +138,7 @@ class RaftFeatureOperations(ABC):
     def is_ready(self) -> bool: ...
 
     @abstractmethod
-    def get_group0_members(self) -> list[Group0Member]: ...
+    def get_group0_members(self, connect_timeout=None) -> list[Group0Member]: ...
 
     @abstractmethod
     def get_group0_non_voters(self) -> list[Group0Member]: ...
@@ -147,7 +147,8 @@ class RaftFeatureOperations(ABC):
     def clean_group0_garbage(self, raise_exception: bool = False) -> None: ...
 
     def check_group0_tokenring_consistency(
-        self, group0_members: list[Group0Member], tokenring_members: list[TokenRingMember]
+        self, group0_members: list[Group0Member], tokenring_members: list[TokenRingMember],
+        connect_timeout: int | None = None,
     ) -> [HealthEventsGenerator | None]: ...
 
     def get_message_waiting_timeout(self, message_position: MessagePosition) -> MessageTimeout:
@@ -169,7 +170,7 @@ class RaftFeatureOperations(ABC):
     def call_read_barrier(self):
         """Trigger raft global read barrier"""
 
-    def search_inconsistent_host_ids(self) -> list[str]:
+    def search_inconsistent_host_ids(self, connect_timeout: int | None = None) -> list[str]:
         """Search host id of node which violate group0 and token ring consistency"""
 
 
@@ -216,11 +217,12 @@ class RaftFeature(RaftFeatureOperations):
             LOGGER.error(err_msg)
             return ""
 
-    def get_group0_members(self) -> list[Group0Member]:
+    def get_group0_members(self, connect_timeout=None) -> list[Group0Member]:
         LOGGER.debug("Get group0 members")
         group0_members = []
         try:
-            with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node) as session:
+            cql_kwargs = {"connect_timeout": connect_timeout} if connect_timeout else {}
+            with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node, **cql_kwargs) as session:
                 raft_group0_id = self.get_group0_id(session)
                 assert raft_group0_id, "Group0 id was not found"
                 rows = session.execute(
@@ -401,7 +403,8 @@ class RaftFeature(RaftFeatureOperations):
         return not diff and not non_voters_ids and len(group0_ids) == len(token_ring_ids) == num_of_nodes
 
     def check_group0_tokenring_consistency(
-        self, group0_members: list[Group0Member], tokenring_members: list[TokenRingMember]
+        self, group0_members: list[Group0Member], tokenring_members: list[TokenRingMember],
+        connect_timeout: int | None = None,
     ) -> HealthEventsGenerator:
         """Check group0 and token ring consistency.
 
@@ -432,7 +435,7 @@ class RaftFeature(RaftFeatureOperations):
                 )
 
             token_ring_node_ids = [member.host_id for member in valid_tokenring_members]
-            broken_hosts = self.search_inconsistent_host_ids()
+            broken_hosts = self.search_inconsistent_host_ids(connect_timeout=connect_timeout)
 
             for member in group0_members:
                 if member.host_id in token_ring_node_ids and member.host_id not in broken_hosts:
@@ -490,13 +493,14 @@ class RaftFeature(RaftFeatureOperations):
         except Exception as exc:  # noqa: BLE001
             LOGGER.error("Trigger read-barrier via rest api failed %s", exc)
 
-    def search_inconsistent_host_ids(self) -> list[str]:
+    def search_inconsistent_host_ids(self, connect_timeout: int | None = None) -> list[str]:
         """Search inconsistent hosts in group zero and token ring
 
         Find difference between group0 and tokenring and return hostid
         of nodes which should be removed for restoring consistency
         """
-        with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node) as session:
+        cql_kwargs = {"connect_timeout": connect_timeout} if connect_timeout else {}
+        with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node, **cql_kwargs) as session:
             limited_voters_feature_enabled = is_group0_limited_voters_enabled(session)
         host_ids = self.get_diff_group0_token_ring_members()
 
@@ -533,7 +537,7 @@ class NoRaft(RaftFeatureOperations):
     def is_ready(self) -> bool:
         return False
 
-    def get_group0_members(self) -> list[Group0Member]:
+    def get_group0_members(self, connect_timeout=None) -> list[Group0Member]:
         return []
 
     def get_group0_non_voters(self) -> list[Group0Member]:
@@ -558,15 +562,15 @@ class NoRaft(RaftFeatureOperations):
         return len(token_ring_ids) == num_of_nodes
 
     def check_group0_tokenring_consistency(
-        self, group0_members: list[Group0Member], tokenring_members: list[TokenRingMember]
-    ) -> Generator[None, None, None]:
+        self, group0_members: list[Group0Member], tokenring_members: list[TokenRingMember],
+        connect_timeout: int | None = None,
+    ) -> HealthEventsGenerator:
         LOGGER.debug("Raft feature is disabled on node %s (host_id=%s)", self._node.name, self._node.host_id)
-
-        yield None
+        return iter(())
 
     def call_read_barrier(self): ...
 
-    def search_inconsistent_host_ids(self) -> list[str]:
+    def search_inconsistent_host_ids(self, connect_timeout: int | None = None) -> list[str]:
         return []
 
 

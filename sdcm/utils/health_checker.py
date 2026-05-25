@@ -36,24 +36,35 @@ LOGGER = logging.getLogger(__name__)
 HealthEventsGenerator = Generator[ClusterHealthValidatorEvent, None, None]
 
 
-def check_nodes_status(nodes_status: dict, current_node, removed_nodes_list=()) -> HealthEventsGenerator:
+def check_nodes_status(nodes_status: dict, current_node, removed_nodes_list=(),
+                       nemesis_node_ips: set[str] | None = None) -> HealthEventsGenerator:
     node_type = "target" if current_node.running_nemesis else "regular"
     if not nodes_status:
         LOGGER.warning("Node status info is not available. Search for the warning above")
         return
+    nemesis_ips = nemesis_node_ips or set()
     LOGGER.debug("Status for %s node %s", node_type, current_node.name)
     for node, node_properties in nodes_status.items():
         if node_properties["status"] != "UN":
             LOGGER.debug("All nodes that have been removed up until this point: %s", str(removed_nodes_list))
             is_target = current_node.print_node_running_nemesis(node.ip_address)
+            # Downgrade severity if the reported node is under active nemesis — DN is expected
+            if node.ip_address in nemesis_ips:
+                severity = Severity.WARNING
+                suffix = " (expected: node under nemesis/grace period)"
+            else:
+                severity = Severity.CRITICAL
+                suffix = ""
             yield ClusterHealthValidatorEvent.NodeStatus(
-                severity=Severity.CRITICAL,
+                severity=severity,
                 node=current_node.name,
-                error=f"Current node {current_node}. Node {node}{is_target} status is {node_properties['status']}",
+                error=f"Current node {current_node}. Node {node}{is_target} "
+                      f"status is {node_properties['status']}{suffix}",
             )
 
 
-def check_nulls_in_peers(gossip_info, peers_details, current_node) -> HealthEventsGenerator:
+def check_nulls_in_peers(gossip_info, peers_details, current_node,
+                         nemesis_node_ips: set[str] | None = None) -> HealthEventsGenerator:
     """
     This validation is added to recreate the issue: https://github.com/scylladb/scylla/issues/4652
     Found scenario described in the https://github.com/scylladb/scylla/issues/6397
@@ -61,6 +72,8 @@ def check_nulls_in_peers(gossip_info, peers_details, current_node) -> HealthEven
     if not gossip_info:
         LOGGER.warning("Gossip info is not available. Search for the warning above")
         return
+
+    nemesis_ips = nemesis_node_ips or set()
 
     for node, node_info in peers_details.items():
         if all(value != "null" for value in node_info.values()):
@@ -73,14 +86,19 @@ def check_nulls_in_peers(gossip_info, peers_details, current_node) -> HealthEven
             f"{node_info}"
         )
 
-        # By Asias request: https://github.com/scylladb/scylla/issues/6397#issuecomment-666893877
-        LOGGER.debug("Print all columns from system.peers for peer %s", node)
-        with current_node.parent_cluster.cql_connection_patient_exclusive(current_node) as session:
-            result = session.execute(f"select * from system.peers where peer = '{node.ip_address}'")
-            LOGGER.debug(result.one()._asdict())
+        # Historical note: By Asias request (issue #6397), there was a CQL query here:
+        #   select * from system.peers where peer = '{node.ip_address}'
+        # Removed because:
+        # 1. cql_connection_patient_exclusive can block for up to 55 min (@retrying n=30, sleep=10, timeout=100s)
+        # 2. The data is already available in peers_details (passed as argument)
+        # 3. Issue #6397 is long resolved
+        # 4. I/O inside a health check generator breaks the bounded-time guarantee
+        LOGGER.debug("Peers details for node %s: %s", node, node_info)
         if node in gossip_info and gossip_info[node]["status"] not in current_node.GOSSIP_STATUSES_FILTER_OUT:
+            # Downgrade severity if node is under nemesis — nulls may be transient
+            severity = Severity.WARNING if node.ip_address in nemesis_ips else Severity.ERROR
             yield ClusterHealthValidatorEvent.NodePeersNulls(
-                severity=Severity.ERROR,
+                severity=severity,
                 node=current_node.name,
                 error=message,
             )
@@ -90,20 +108,24 @@ def check_nulls_in_peers(gossip_info, peers_details, current_node) -> HealthEven
             LOGGER.warning(message)
 
 
-def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, current_node) -> HealthEventsGenerator:
+def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, current_node,
+                                                     nemesis_node_ips: set[str] | None = None) -> HealthEventsGenerator:
     if not nodes_status:
         LOGGER.warning(
             "Node status info is not available. Search for the warning above. Verify node status can't be performed"
         )
         return
 
+    nemesis_ips = nemesis_node_ips or set()
+
     for node, node_info in gossip_info.items():
         is_target = current_node.print_node_running_nemesis(node)
         if node not in nodes_status:
             if node_info["status"] not in current_node.GOSSIP_STATUSES_FILTER_OUT:
                 LOGGER.debug("Gossip info: %s\nnodetool.status info: %s", gossip_info, nodes_status)
+                severity = Severity.WARNING if node.ip_address in nemesis_ips else Severity.ERROR
                 yield ClusterHealthValidatorEvent.NodeStatus(
-                    severity=Severity.ERROR,
+                    severity=severity,
                     node=current_node.name,
                     error=f"Current node {current_node}. The node {node}{is_target} "
                     f"exists in the gossip but doesn't exist in the nodetool.status",
@@ -114,8 +136,9 @@ def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, c
             node_info["status"] != "NORMAL" and nodes_status[node]["status"] == "UN"
         ):
             LOGGER.debug("Gossip info: %s\nnodetool.status info: %s", gossip_info, nodes_status)
+            severity = Severity.WARNING if node.ip_address in nemesis_ips else Severity.ERROR
             yield ClusterHealthValidatorEvent.NodeStatus(
-                severity=Severity.ERROR,
+                severity=severity,
                 node=current_node.name,
                 error=f"Current node {current_node}. Wrong node status. "
                 f"Node {node}{is_target} status in nodetool.status is "
@@ -128,15 +151,17 @@ def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, c
         if nodes_status[node]["status"] == "UN":
             is_target = current_node.print_node_running_nemesis(node.ip_address)
             LOGGER.debug("Gossip info: %s\nnodetool.status info: %s", gossip_info, nodes_status)
+            severity = Severity.WARNING if node.ip_address in nemesis_ips else Severity.ERROR
             yield ClusterHealthValidatorEvent.NodeSchemaVersion(
-                severity=Severity.ERROR,
+                severity=severity,
                 node=current_node.name,
                 error=f"Current node {current_node}. "
                 f"Node {node}{is_target} exists in the nodetool.status but missed in gossip.",
             )
 
 
-def check_schema_version(gossip_info, peers_details, nodes_status, current_node) -> HealthEventsGenerator:
+def check_schema_version(gossip_info, peers_details, nodes_status, current_node,
+                         nemesis_node_ips: set[str] | None = None) -> HealthEventsGenerator:
     if nodes_status and len(nodes_status.keys()) == 1:
         LOGGER.debug("There is one node only in the cluster. No peers data. Verify schema version can't be performed")
         return
@@ -153,6 +178,7 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
         )
         return
 
+    nemesis_ips = nemesis_node_ips or set()
     debug_message = f"Gossip info: {gossip_info}\nSYSTEM.PEERS info: {peers_details}"
     # Validate schema version
     for node, node_info in gossip_info.items():
@@ -162,6 +188,11 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
 
         # Can't validate the schema version if the node is not in NORMAL status
         if node_info["status"] != "NORMAL":
+            continue
+
+        # Skip schema validation for nodes under nemesis — schema may be stale/unavailable
+        if node.ip_address in nemesis_ips:
+            LOGGER.debug("Skipping schema validation for node %s (under nemesis)", node.ip_address)
             continue
 
         is_target = current_node.print_node_running_nemesis(node.ip_address)
@@ -278,6 +309,9 @@ def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_H
 
 
 def check_group0_tokenring_consistency(
-    group0_members: list[Group0Member], tokenring_members: list[TokenRingMember], current_node
+    group0_members: list[Group0Member], tokenring_members: list[TokenRingMember], current_node,
+    connect_timeout: int | None = None,
 ) -> HealthEventsGenerator:
-    return current_node.raft.check_group0_tokenring_consistency(group0_members, tokenring_members)
+    return current_node.raft.check_group0_tokenring_consistency(
+        group0_members, tokenring_members, connect_timeout=connect_timeout
+    )

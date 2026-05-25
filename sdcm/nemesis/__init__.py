@@ -1895,16 +1895,19 @@ class NemesisRunner:
         class_name = nemesis.__class__.__name__
         target_pool_type = getattr(nemesis, DISRUPT_POOL_PROPERTY_NAME, DISRUPT_DEFAULT_POOL)
 
-        # Skip health check if previous nemesis was skipped to avoid wasting 2+ hours on large clusters
-        last_event = self.last_nemesis_event
-        if last_event and last_event.is_skipped:
-            self.log.info(
-                "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
-                last_event.nemesis_name,
-                last_event.skip_reason,
-            )
-        else:
-            self.cluster.check_cluster_health()
+        # Health check — non-blocking query of background monitor, never kills nemesis thread
+        try:
+            last_event = self.last_nemesis_event
+            if last_event and last_event.is_skipped:
+                self.log.info(
+                    "Skipping health check: previous nemesis '%s' was skipped (reason: %s)",
+                    last_event.nemesis_name,
+                    last_event.skip_reason,
+                )
+            else:
+                self.cluster.check_cluster_health()
+        except Exception:  # noqa: BLE001
+            self.log.warning("Health check query failed (non-fatal, proceeding with nemesis)")
         start_time = time.time()
 
         nemesis_event = None
