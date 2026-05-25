@@ -3340,7 +3340,7 @@ Deprecated alias of `fallback_to_next_availability_zone`. Kept for backward comp
 
 On capacity errors, automatically retry provisioning in the next available AZ in the same region. Backend-agnostic parameter; supersedes `aws_fallback_to_next_availability_zone`.
 
-**default:** True
+**default:** N/A
 
 **type:** boolean
 
