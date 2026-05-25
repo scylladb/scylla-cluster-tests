@@ -1,3 +1,8 @@
 append_scylla_yaml:
   enable_tablets: false
   tablets_mode_for_new_keyspaces: 'disabled'
+
+latte_schema_parameters:
+  tablets: "false"
+  enable_tablets: "false"
+  use_tablets: "false"
