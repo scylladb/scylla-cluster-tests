@@ -910,7 +910,7 @@ Set the write isolation for the alternator table, see https://github.com/scyllad
 
 If true, spawn a docker with a dns server for the ycsb loader to point to
 
-**default:** N/A
+**default:** True
 
 **type:** boolean
 
@@ -949,6 +949,24 @@ the aws_secret_access_key that would be used for alternator
 **default:** N/A
 
 **type:** str (appendable)
+
+
+## **alternator_loadbalancing** / SCT_ALTERNATOR_LOADBALANCING
+
+If true, enable client-side load balancing across alternator nodes
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **alternator_trust_all_certificates** / SCT_ALTERNATOR_TRUST_ALL_CERTIFICATES
+
+If true, trust all TLS certificates when connecting to alternator (useful for self-signed certs)
+
+**default:** True
+
+**type:** boolean
 
 
 ## **region_aware_loader** / SCT_REGION_AWARE_LOADER
