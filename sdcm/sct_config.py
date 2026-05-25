@@ -1934,6 +1934,11 @@ class SCTConfiguration(BaseModel):
         description="Filter availability zones upfront to only those that support all required instance types. "
         "Replaces invalid AZs with valid alternatives in the same region before any provisioning attempt. AWS only.",
     )
+    pre_flight_capacity_probe: Boolean = SctField(
+        description="Before provisioning, probe capacity by launching and terminating one on-demand instance per dynamic type "
+        "(`instance_type_db_target`, `nemesis_grow_shrink_instance_type`) in the chosen AZ. On capacity errors, raise to "
+        "trigger AZ/region fallback. Costs ~1 min per type. AWS-only.",
+    )
     num_nodes_to_rollback: int = SctField(
         description="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade",
     )

@@ -121,6 +121,44 @@ def test_reservation_cancelled_when_one_reservation_fails(mock_ec2, params):
     assert SCTCapacityReservation.reservations == {}
 
 
+def test_request_includes_instance_type_db_target(params):
+    """When `instance_type_db_target` is set, reserve it at `n_db_nodes` count.
+
+    Platform-migration tests add the full target cluster (`n_db_nodes` instances)
+    of the target arch before decommissioning source nodes.
+    """
+    params.update(n_db_nodes=4, instance_type_db_target="m6g.large")
+
+    request, _ = SCTCapacityReservation._get_cr_request_based_on_sct_config(params)
+    assert request["m6g.large"] == 4
+    assert request["i4i.large"] == 1  # cluster_target_size from fixture
+    assert request["t3.small"] == 1
+
+
+@pytest.mark.parametrize(
+    "db_type, expected_present",
+    [
+        ("mixed_scylla", True),
+        ("mixed_cassandra", True),
+        ("scylla", False),
+    ],
+)
+def test_oracle_reservation_gated_by_db_type(params, db_type, expected_present):
+    """Oracle reservation must follow the `_has_oracle` gate: included only when `db_type` is one of
+    `mixed_scylla` / `mixed_cassandra`. `n_test_oracle_db_nodes` as `IntOrList` is summed across regions.
+    """
+    params.update(
+        db_type=db_type,
+        instance_type_db_oracle="i3.large",
+        n_test_oracle_db_nodes=[1, 2],
+    )
+
+    request, _ = SCTCapacityReservation._get_cr_request_based_on_sct_config(params)
+    assert ("i3.large" in request) is expected_present
+    if expected_present:
+        assert request["i3.large"] == 3
+
+
 def test_can_cancel_reservation(mock_ec2, params):
     mock_ec2.describe_capacity_reservations.return_value = {
         "CapacityReservations": [
