@@ -16,7 +16,7 @@ from functools import cached_property
 
 from botocore.exceptions import ClientError
 
-from sdcm.provision.aws.az_resolver import AZResolver, is_az_fallback_enabled
+from sdcm.provision.aws.az_resolver import AZResolver, is_az_fallback_enabled, run_pre_flight_capacity_probe
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, is_capacity_error
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
@@ -95,6 +95,10 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
         use_scylla_cloud = self._params.get("cluster_backend") == "xcloud" or self._params.get(
             "xcloud_provisioning_mode"
         )
+
+        # raises ProvisioningCapacityExhausted on probe failure; the surrounding
+        # AZ fallback loop in `provision()` retries the next candidate.
+        run_pre_flight_capacity_probe(self._params)
 
         if self.placement_group:
             self.placement_group.provision()
