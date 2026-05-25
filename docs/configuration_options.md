@@ -3923,6 +3923,15 @@ Filter availability zones upfront to only those that support all required instan
 **type:** bool
 
 
+## **pre_flight_capacity_probe** / SCT_PRE_FLIGHT_CAPACITY_PROBE
+
+Before provisioning, probe capacity by launching and terminating one on-demand instance per dynamic type (`instance_type_db_target`, `nemesis_grow_shrink_instance_type`) in the chosen AZ. On capacity errors, raise to trigger AZ/region fallback. Costs ~1 min per type. AWS-only.
+
+**default:** N/A
+
+**type:** bool
+
+
 ## **num_nodes_to_rollback** / SCT_NUM_NODES_TO_ROLLBACK
 
 Number of nodes to upgrade and rollback in test_generic_cluster_upgrade
