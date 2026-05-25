@@ -605,6 +605,20 @@ def ignore_ipv6_failure_to_assign():
         yield
 
 
+@contextmanager
+def ignore_hints_sending_errors():
+    with ExitStack() as stack:
+        stack.enter_context(
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent,
+                regex=r".*hints_manager - hint_sender.*send_one_file: Segment error.*Segment data corruption.*",
+                extra_time_to_expiration=30,
+            )
+        )
+        yield
+
+
 NODE_UNAVAILABLE_CONTEXTS: list[Callable[[], ContextManager]] = [
     ignore_raft_topology_cmd_failing,
     ignore_raft_transport_failing,
@@ -612,6 +626,7 @@ NODE_UNAVAILABLE_CONTEXTS: list[Callable[[], ContextManager]] = [
     ignore_stream_mutation_fragments_errors,
     ignore_compaction_stopped_exceptions,
     ignore_ignore_runtime_errors,
+    ignore_hints_sending_errors,
 ]
 
 
