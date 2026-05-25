@@ -54,7 +54,20 @@ class SCTCapacityReservation:
         else:
             cluster_max_size += nemesis_node_count
 
+        def _to_int_sum(value) -> int:
+            if isinstance(value, list):
+                return sum(int(n) for n in value)
+            return int(value or 0)
+
         instance_counts[params.get("instance_type_db")] += cluster_max_size
+
+        if instance_type_db_target := params.get("instance_type_db_target"):
+            instance_counts[instance_type_db_target] += _to_int_sum(params.get("n_db_nodes"))
+        if (instance_type_db_oracle := params.get("instance_type_db_oracle")) and params.get("db_type") in (
+            "mixed_scylla",
+            "mixed_cassandra",
+        ):
+            instance_counts[instance_type_db_oracle] += _to_int_sum(params.get("n_test_oracle_db_nodes"))
         instance_counts[params.get("instance_type_loader")] += params.get("n_loaders")
         # don't reserve capacity for monitor - as usually it's not a problem to spin it
         duration = params.get("test_duration")

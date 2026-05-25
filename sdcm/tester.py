@@ -81,7 +81,7 @@ from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.cluster_cloud import ScyllaCloudCluster
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
 from sdcm.mgmt import get_scylla_manager_tool
-from sdcm.provision.aws.az_resolver import AZResolver, is_az_fallback_enabled
+from sdcm.provision.aws.az_resolver import AZResolver, is_az_fallback_enabled, run_pre_flight_capacity_probe
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, is_capacity_error
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
@@ -1987,6 +1987,8 @@ class ClusterTester(unittest.TestCase):
 
         Used by `get_cluster_aws` to retry provisioning with different AZs.
         """
+        run_pre_flight_capacity_probe(self.params)
+
         regions = self.params.get("region_name").split()
         services = get_ec2_services(regions)
         user_prefix = self.params.get("user_prefix")
