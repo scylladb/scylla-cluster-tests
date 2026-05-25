@@ -883,7 +883,7 @@ Set the write isolation for the alternator table, see https://github.com/scyllad
 
 If true, spawn a docker with a dns server for the ycsb loader to point to
 
-**default:** N/A
+**default:** True
 
 **type:** boolean
 
