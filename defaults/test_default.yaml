@@ -216,6 +216,8 @@ fallback_to_next_availability_zone: true
 
 pre_filter_unavailable_availability_zones: true
 
+pre_flight_capacity_probe: false
+
 enable_argus: true
 
 # the default stress tools are now defined a separate file for each /default/docker_image/[tool]/values_[tool].yaml
