@@ -1,16 +1,11 @@
 name: Claude Code Review
 
 on:
-  # Disabled: automatic PR review is not needed for now.
-  # To re-enable, restore the pull_request trigger below.
-  # pull_request:
-  #   types: [opened, synchronize, ready_for_review, reopened]
-  workflow_dispatch:
+  pull_request_target:
+    types: [opened, synchronize, ready_for_review, reopened]
 
 jobs:
   claude-review:
-    # Skip fork PRs — secrets are unavailable for pull_request from forks.
-    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -19,17 +14,49 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - name: Check PR author org membership
+        id: membership
+        env:
+          AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+          AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$AUTHOR_ASSOC" in
+            OWNER|MEMBER|COLLABORATOR)
+              echo "is_member=true" >> "$GITHUB_OUTPUT"
+              echo "✅ $AUTHOR_LOGIN has association $AUTHOR_ASSOC — proceeding"
+              ;;
+            *)
+              # author_association occasionally misclassifies org members as CONTRIBUTOR.
+              # Fall back to a live org membership check to avoid false rejections.
+              STATUS=$(gh api "orgs/scylladb/members/$AUTHOR_LOGIN" \
+                --silent -i 2>&1 | head -1 | awk '{print $2}')
+              if [ "$STATUS" = "204" ]; then
+                echo "is_member=true" >> "$GITHUB_OUTPUT"
+                echo "✅ $AUTHOR_LOGIN is a scylladb org member (live check)"
+              else
+                echo "is_member=false" >> "$GITHUB_OUTPUT"
+                echo "❌ $AUTHOR_LOGIN ($AUTHOR_ASSOC) is not a scylladb org member — skipping"
+              fi
+              ;;
+          esac
+
+      - name: Checkout base repository
+        if: steps.membership.outputs.is_member == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
+          # Always checkout the BASE branch, never the fork's HEAD.
+          # pull_request_target runs with base-repo secrets; executing untrusted
+          # fork code here would expose them ("pwn request" attack vector).
           ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 1
 
       - name: Run Claude Code Review
+        if: steps.membership.outputs.is_member == 'true'
         id: claude-review
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251  # v1.0.133
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
