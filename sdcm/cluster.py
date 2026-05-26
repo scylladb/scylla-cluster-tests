@@ -2112,9 +2112,10 @@ class BaseNode(AutoSshContainerMixin):
                 # Try each HKP keyserver
                 for keyserver in hkp_keyservers:
                     result = self.remoter.sudo(
-                        f"gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --keyserver {keyserver} --keyserver-options timeout=10 --recv-keys {apt_key}",
+                        f"timeout 30 gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --keyserver {keyserver} --keyserver-options timeout=10 --recv-keys {apt_key}",
                         retry=1,
                         ignore_status=True,
+                        timeout=120,
                     )
                     if result.ok:
                         LOGGER.debug("Fetched GPG key %s from %s", apt_key, keyserver)
@@ -2130,6 +2131,7 @@ class BaseNode(AutoSshContainerMixin):
                         ),
                         retry=1,
                         ignore_status=True,
+                        timeout=120,
                     )
                     if result.ok:
                         LOGGER.debug("Fetched GPG key %s from HTTPS fallback", apt_key)

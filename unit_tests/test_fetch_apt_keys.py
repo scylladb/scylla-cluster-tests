@@ -30,9 +30,10 @@ def _make_result(ok):
 
 def _gpg_recv_call(temp_keyring, keyserver, apt_key):
     return mock.call(
-        f"gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --keyserver {keyserver} --keyserver-options timeout=10 --recv-keys {apt_key}",
+        f"timeout 30 gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --keyserver {keyserver} --keyserver-options timeout=10 --recv-keys {apt_key}",
         retry=1,
         ignore_status=True,
+        timeout=120,
     )
 
 
@@ -44,6 +45,7 @@ def _https_fallback_call(temp_keyring, apt_key):
         ),
         retry=1,
         ignore_status=True,
+        timeout=120,
     )
 
 
