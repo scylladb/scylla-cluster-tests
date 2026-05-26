@@ -548,14 +548,14 @@ class GrafanaEntity(BaseMonitoringEntity):
         phantomjs_base {str} -- name and version of phantomjs package
     """
 
+    grafana_port = 3000
+    grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}/render{path}?from={st}&to=now&refresh=1d"
+    sct_base_path = get_sct_root_path()
+
     base_grafana_dashboards = [
         monitoring_ui.OverviewDashboard(),
         monitoring_ui.ServerMetricsNemesisDashboard(),
     ]
-
-    grafana_port = 3000
-    grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}/render{path}?from={st}&to=now&refresh=1d"
-    sct_base_path = get_sct_root_path()
 
     def __init__(self, *args, **kwargs):
         test_start_time = kwargs.pop("test_start_time", None)

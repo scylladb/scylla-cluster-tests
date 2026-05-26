@@ -118,7 +118,7 @@ from sdcm.utils.resources_cleanup import (
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login, running_in_podman
-from sdcm.monitorstack import (
+from sdcm.monitorstack.restore import (
     restore_monitoring_stack,
     get_monitoring_stack_services,
     kill_running_monitoring_stack_services,
