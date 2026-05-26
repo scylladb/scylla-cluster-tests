@@ -2,6 +2,7 @@ import logging
 
 import pytest
 
+from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo
 from sdcm.utils.cloud_catalog.instance_matcher import (
     Constraint,
     NoMatchingInstanceError,
@@ -214,7 +215,7 @@ def test_parse_constraints_unknown_arch_raises():
 
 
 def test_parse_constraints_unknown_key_logs_warning(caplog):
-    with caplog.at_level(logging.WARNING, logger="sdcm.utils.instance_matcher"):
+    with caplog.at_level(logging.WARNING, logger="sdcm.utils.cloud_catalog.instance_matcher"):
         result = parse_constraints({"vcpu": 8, "gpu": 2, "network": "10gbe"})
     assert any("gpu" in msg for msg in caplog.messages)
     assert any("network" in msg for msg in caplog.messages)
@@ -301,8 +302,6 @@ def test_no_matching_instance_error_zero_candidates():
 
 @pytest.fixture
 def test_catalog():
-    from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo  # noqa: PLC0415
-
     cat = InstanceCatalog()
     cat.cloud_defaults = {"aws": {"arch": "arm64"}, "gce": {"arch": "x86_64"}, "oci": {"arch": "x86_64"}}
     cat.preferred_families = {
@@ -416,8 +415,6 @@ def test_select_no_match_raises(test_catalog):
 
 
 def test_select_prefers_cheaper(test_catalog):
-    from sdcm.utils.cloud_catalog.instance_catalog import InstanceTypeInfo  # noqa: PLC0415
-
     test_catalog.instances.append(
         InstanceTypeInfo("i8g.2xlarge-cheap", "aws", "i8g", 8, 64.0, 1875.0, 1, "arm64", 1.50),
     )

@@ -16,7 +16,7 @@ n_db_nodes: 6
 n_loaders: 4
 seeds_num: 2
 
-sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 8
   memory: '>=64'
 root_disk_size_runner: 120

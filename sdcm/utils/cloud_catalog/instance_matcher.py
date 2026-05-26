@@ -154,6 +154,8 @@ def _parse_memory_or_disk(field: str, raw) -> Constraint:
     if m:
         lo_val = float(m.group(1)) * _UNIT_MULTIPLIER.get((m.group(2) or "gb").lower(), 1.0)
         hi_val = float(m.group(3)) * _UNIT_MULTIPLIER.get((m.group(4) or "gb").lower(), 1.0)
+        if lo_val > hi_val:
+            raise ValueError(f"Invalid {field} range {raw!r}: lo ({lo_val}) > hi ({hi_val})")
         return Constraint(field, "range", (lo_val, hi_val))
 
     # Comparison: >=32, >32, <=64, <64 (with optional gb/tb suffix)
@@ -195,7 +197,10 @@ def _parse_vcpu(raw) -> Constraint:
         raw = raw.strip()
         m = re.match(r"^(\d+)\s*-\s*(\d+)$", raw)
         if m:
-            return Constraint("vcpus", "range", (int(m.group(1)), int(m.group(2))))
+            lo, hi = int(m.group(1)), int(m.group(2))
+            if lo > hi:
+                raise ValueError(f"Invalid vCPU range {raw!r}: lo ({lo}) > hi ({hi})")
+            return Constraint("vcpus", "range", (lo, hi))
         m = re.match(r"^(>=|>|<=|<)\s*(\d+)$", raw)
         if m:
             op_map = {">=": "gte", ">": "gt", "<=": "lte", "<": "lt"}

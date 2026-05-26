@@ -10,10 +10,13 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2025 ScyllaDB
+import os
 import re
+from dataclasses import replace as dc_replace
 from pathlib import Path
 
 import click
+import yaml
 
 _SSD_SUFFIX_RE = re.compile(r"-(\d+)ssd$")
 
@@ -49,6 +52,7 @@ def sizing_group():
 @click.option("--family", type=str, default=None, help="Filter by instance family")
 @click.pass_context
 def sizing_catalog(ctx, cloud, role, family):
+    # lazy: sdcm imports pull boto3/google-cloud/azure-mgmt — too heavy for CLI startup
     from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog  # noqa: PLC0415
 
     catalog_dir = Path(__file__).parent / "data" / "instance_catalog"
@@ -97,6 +101,7 @@ def sizing_catalog(ctx, cloud, role, family):
 )
 @click.pass_context
 def sizing_update_catalog(ctx, cloud):
+    # lazy: sdcm imports pull boto3/google-cloud/azure-mgmt — too heavy for CLI startup
     from sdcm.utils.cloud_catalog.catalog_generator import update_catalog  # noqa: PLC0415
 
     output_dir = Path(__file__).parent / "data" / "instance_catalog"
@@ -120,6 +125,7 @@ def sizing_update_catalog(ctx, cloud):
 @click.option("--region", type=str, default=None, help="Region for pricing (e.g. us-east-1, eu-west-1)")
 @click.pass_context
 def sizing_resolve(ctx, vcpu, memory, disk, arch, role, region):
+    # lazy: sdcm imports pull boto3/google-cloud/azure-mgmt — too heavy for CLI startup
     from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog  # noqa: PLC0415
     from sdcm.utils.cloud_catalog.instance_matcher import select_instance, NoMatchingInstanceError  # noqa: PLC0415
 
@@ -166,12 +172,13 @@ def sizing_resolve(ctx, vcpu, memory, disk, arch, role, region):
 
 
 def _resolve_config_files(config_files: tuple[str, ...]) -> list[str]:
+    # lazy: pulls groovy parser dependencies not needed unless Jenkinsfiles are passed
     from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile  # noqa: PLC0415
 
     resolved = []
     for path_str in config_files:
         path = Path(path_str)
-        if path.suffix in {".jenkinsfile", ".groovy"}:
+        if path.suffix in {".jenkinsfile", ".groovy"} or path.name == "Jenkinsfile":
             pipeline_config = parse_jenkinsfile(path)
             if pipeline_config and pipeline_config.test_config:
                 resolved.extend(pipeline_config.test_config)
@@ -211,16 +218,13 @@ def sizing_preview(  # noqa: PLR0912, PLR0914, PLR0915
     instance_type_monitor,
     duration,
 ):
-    import yaml  # noqa: PLC0415
-
+    # lazy: sdcm imports pull boto3/google-cloud/azure-mgmt — too heavy for CLI startup
     from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog  # noqa: PLC0415
     from sdcm.utils.cloud_catalog.instance_matcher import (  # noqa: PLC0415
         is_literal_instance_type,
         select_instance,
         NoMatchingInstanceError,
     )
-
-    from dataclasses import replace as dc_replace  # noqa: PLC0415
 
     config_files = _resolve_config_files(config_files)
     if not config_files:
@@ -255,8 +259,6 @@ def sizing_preview(  # noqa: PLR0912, PLR0914, PLR0915
             if data:
                 user_config.update(data)
                 merged_config.update(data)
-
-    import os  # noqa: PLC0415
 
     env_overrides: dict = {}
     for key, val in os.environ.items():
@@ -427,28 +429,28 @@ def sizing_preview(  # noqa: PLR0912, PLR0914, PLR0915
                 continue
             if param_name in cli_overrides and cli_overrides[param_name]:
                 role_values[cloud_name] = cli_overrides[param_name]
-                role_sources[cloud_name] = "cli"
+                role_sources[cloud_name] = (param_name, "cli")
             elif agnostic_param in cli_overrides and cli_overrides[agnostic_param]:
                 role_values[cloud_name] = cli_overrides[agnostic_param]
-                role_sources[cloud_name] = "cli"
+                role_sources[cloud_name] = (agnostic_param, "cli")
             elif param_name in env_overrides and env_overrides[param_name]:
                 role_values[cloud_name] = env_overrides[param_name]
-                role_sources[cloud_name] = "env-var"
+                role_sources[cloud_name] = (param_name, "env-var")
             elif agnostic_param in env_overrides and env_overrides[agnostic_param]:
                 role_values[cloud_name] = env_overrides[agnostic_param]
-                role_sources[cloud_name] = "env-var"
+                role_sources[cloud_name] = (agnostic_param, "env-var")
             elif param_name in user_config and user_config[param_name]:
                 role_values[cloud_name] = user_config[param_name]
-                role_sources[cloud_name] = "test-config"
+                role_sources[cloud_name] = (param_name, "test-config")
             elif agnostic_param in user_config and isinstance(user_config.get(agnostic_param), dict):
                 role_values[cloud_name] = user_config[agnostic_param]
-                role_sources[cloud_name] = "test-config"
+                role_sources[cloud_name] = (agnostic_param, "test-config")
             elif isinstance(agnostic_value, dict) and param_name != agnostic_param:
                 role_values[cloud_name] = agnostic_value
-                role_sources[cloud_name] = "defaults"
+                role_sources[cloud_name] = (agnostic_param, "defaults")
             elif param_name in merged_config and merged_config[param_name]:
                 role_values[cloud_name] = merged_config[param_name]
-                role_sources[cloud_name] = "defaults"
+                role_sources[cloud_name] = (param_name, "defaults")
 
         aws_param = CLOUD_PARAM["aws"].get(role)
         default_value = merged_config.get(aws_param) if aws_param else None
@@ -491,8 +493,8 @@ def sizing_preview(  # noqa: PLR0912, PLR0914, PLR0915
                 )
                 continue
             if cloud_name in role_values:
-                source_origin = role_sources.get(cloud_name, "defaults")
-                source_param = f"{param_name} ({source_origin})"
+                src_key, src_origin = role_sources.get(cloud_name, (param_name, "defaults"))
+                source_param = f"{src_key} ({src_origin})"
             else:
                 source_param = f"{param_name} (defaults)"
 
