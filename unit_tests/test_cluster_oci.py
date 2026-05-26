@@ -2,7 +2,9 @@
 
 from unittest.mock import Mock, patch
 
-from sdcm.cluster_oci import OciNode
+import pytest
+
+from sdcm.cluster_oci import OciCluster, OciNode
 
 
 MOCK_CREDENTIALS = Mock(key_file="/tmp/test_key")
@@ -121,3 +123,85 @@ def test_create_node_certificate_includes_short_and_fqdn_dns_names(mock_create_c
     dns_names = mock_create_cert.call_args.kwargs["dns_names"]
     assert "db-node-short" in dns_names
     assert "db-node-short.subnet.vcn.oraclevcn.com" in dns_names
+
+
+# --- OciCluster.add_nodes rack assignment tests ---
+
+
+@pytest.fixture()
+def oci_cluster_for_rack_tests():
+    """Real OciCluster instance with patched init and mocked external dependencies."""
+    with patch.object(OciCluster, "__init__", lambda self: None):
+        cluster = OciCluster()
+    cluster._node_index = 0
+    cluster.racks_count = 3
+    cluster.nodes = []
+    cluster.log = Mock()
+    cluster.params = Mock()
+    cluster.params.get = Mock(return_value=0)  # simulated_regions=0
+    cluster.instance_provision = "on_demand"
+    # needed by @mark_new_nodes_as_running_nemesis decorator
+    cluster.test_config = Mock()
+    cluster.test_config.tester_obj = Mock(return_value=Mock(spec=[]))
+    # mock external boundaries (provisioning and node creation)
+    cluster._create_instances = Mock(
+        side_effect=lambda count, *args, **kwargs: [_mock_cloud_instance() for _ in range(count)]
+    )
+    cluster._create_node = Mock(
+        side_effect=lambda instance, node_index, dc_idx, rack: Mock(
+            name=f"node-{node_index}",
+            rack=rack,
+            enable_auto_bootstrap=False,
+        )
+    )
+    return cluster
+
+
+def test_add_nodes_rack_none_assigns_zero_based_indices(oci_cluster_for_rack_tests):
+    """Rack indices must be 0-based to match AZ selection in _get_availability_domain."""
+    oci_cluster_for_rack_tests.add_nodes(count=6, rack=None)
+
+    actual_racks = [call.kwargs["rack"] for call in oci_cluster_for_rack_tests._create_node.call_args_list]
+    assert actual_racks == [0, 1, 2, 0, 1, 2]
+
+
+def test_add_nodes_explicit_rack_uses_value_for_all_nodes(oci_cluster_for_rack_tests):
+    """When rack is explicitly specified, all nodes get that rack value."""
+    oci_cluster_for_rack_tests.add_nodes(count=3, rack=2)
+
+    actual_racks = [call.kwargs["rack"] for call in oci_cluster_for_rack_tests._create_node.call_args_list]
+    assert actual_racks == [2, 2, 2]
+
+
+def test_add_nodes_propagates_explicit_rack_to_create_instances(oci_cluster_for_rack_tests):
+    """Explicit rack must be forwarded to _create_instances for AZ placement."""
+    oci_cluster_for_rack_tests.add_nodes(count=1, rack=1)
+
+    oci_cluster_for_rack_tests._create_instances.assert_called_once_with(1, 0, instance_type=None, rack=1)
+
+
+def test_add_nodes_propagates_none_rack_to_create_instances(oci_cluster_for_rack_tests):
+    """rack=None must be forwarded so _create_instances falls back to NodeIndex-based AZ."""
+    oci_cluster_for_rack_tests.add_nodes(count=1, rack=None)
+
+    oci_cluster_for_rack_tests._create_instances.assert_called_once_with(1, 0, instance_type=None, rack=None)
+
+
+@pytest.mark.parametrize(
+    "node_index_start,count,expected_racks",
+    [
+        pytest.param(0, 3, [0, 1, 2], id="offset-0"),
+        pytest.param(3, 3, [0, 1, 2], id="offset-3"),
+        pytest.param(6, 3, [0, 1, 2], id="offset-6"),
+    ],
+)
+def test_add_nodes_rack_none_consistent_across_node_index_offsets(
+    oci_cluster_for_rack_tests, node_index_start, count, expected_racks
+):
+    """Rack round-robin must produce 0,1,2 regardless of _node_index offset."""
+    oci_cluster_for_rack_tests._node_index = node_index_start
+
+    oci_cluster_for_rack_tests.add_nodes(count=count, rack=None)
+
+    actual_racks = [call.kwargs["rack"] for call in oci_cluster_for_rack_tests._create_node.call_args_list]
+    assert actual_racks == expected_racks
