@@ -358,8 +358,9 @@ class OciCluster(cluster.BaseCluster):
 
         self.log.debug("instances: %s", instances)
         for node_index, instance in enumerate(instances, start=self._node_index + 1):
-            # in case rack is not specified, spread nodes to different racks
-            node_rack = node_index % self.racks_count if rack is None else rack
+            # NOTE: In case rack is not specified, spread nodes to different racks using
+            #       the 0-based formula to stay consistent with AZ selection in '_get_availability_domain'.
+            node_rack = (node_index - 1) % self.racks_count if rack is None else rack
             node = self._create_node(instance, node_index, dc_idx, rack=node_rack, after_config=after_config)
             nodes.append(node)
             self.nodes.append(node)
