@@ -151,6 +151,7 @@ def call(Map pipelineParams) {
                                 cloud_provider: 'gce',
                                 region: 'us-east1',
                                 versions: ['2025.1', '2025.2', '2025.3', '2025.4', 'master'],
+                                use_job_throttling: false,
                                 pre_release: ['rc1', 'rc3'],
                                 sub_tests: ['"test_latency_steady_state"'],
                                 labels: ['gce-custom-monthly']
@@ -177,6 +178,7 @@ def call(Map pipelineParams) {
                                 cloud_provider: 'gce',
                                 region: 'us-east1',
                                 versions: ['2025.1', '2025.2', '2025.3', '2025.4', 'master'],
+                                use_job_throttling: false,
                                 pre_release: ['rc1', 'rc3'],
                                 sub_tests: ['"test_latency_steady_state"'],
                                 labels: ['gce-custom-monthly']
@@ -230,6 +232,7 @@ def call(Map pipelineParams) {
                         def image_name = null
                         for (job_name in jobs_names) {
                             println("Job name: $job_name")
+                            def use_job_throttling_override = null
                             for (def entry in testRegionMatrix) {
                                  def cloud_provider = entry.cloud_provider ?: 'aws'
                                  def version = null
@@ -266,6 +269,7 @@ def call(Map pipelineParams) {
                                             println("Skipping job $job_name because $version version doesn't match specified pre-releases: ${entry.pre_release}")
                                             continue
                                         }
+                                        use_job_throttling_override = entry.containsKey('use_job_throttling') ? entry.use_job_throttling : null
                                         region = entry.region
                                         sub_tests = entry.sub_tests
                                         println("Found for job $job_name: region : $region, version: $version, sub_tests: $sub_tests")
@@ -283,7 +287,7 @@ def call(Map pipelineParams) {
                                             string(name: 'base_versions', value: rolling_upgrade_test ? params.base_versions : null),
                                             string(name: 'provision_type', value: 'on_demand'),
                                             string(name: 'new_scylla_repo', value: rolling_upgrade_test ? params.new_scylla_repo : null),
-                                            booleanParam(name: 'use_job_throttling', value: params.use_job_throttling),
+                                            booleanParam(name: 'use_job_throttling', value: use_job_throttling_override != null ? use_job_throttling_override : params.use_job_throttling),
                                             string(name: 'sub_tests', value: groovy.json.JsonOutput.toJson(sub_tests)),
                                             string(name: 'region', value: region),
                                             string(name: 'requested_by_user', value: params.requested_by_user),
