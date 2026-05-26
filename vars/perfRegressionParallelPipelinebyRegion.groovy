@@ -226,6 +226,7 @@ def call(Map pipelineParams) {
                                 job_name: 'scylla-master/perf-regression/latte-perf-regression-latency-steady-state-custom-d1-workload1-vnodes',
                                 cloud_provider: 'gce',
                                 region: 'us-east1',
+                                use_job_throttling: false,
                                 ignore_versions: ['2024.1', '2024.2'],
                                 pre_release: ['rc1', 'rc3'],
                                 sub_tests: ['"test_latency_steady_state"'],
@@ -272,6 +273,7 @@ def call(Map pipelineParams) {
                                 job_name: 'scylla-master/perf-regression/latte-perf-regression-latency-steady-state-custom-d1-workload1-tablets',
                                 cloud_provider: 'gce',
                                 region: 'us-east1',
+                                use_job_throttling: false,
                                 ignore_versions: ['2024.1', '2024.2'],
                                 pre_release: ['rc1', 'rc3'],
                                 sub_tests: ['"test_latency_steady_state"'],
@@ -395,6 +397,7 @@ def call(Map pipelineParams) {
                             def rolling_upgrade_test = null
                             def microbenchmark = null
                             def job_throttle_category = null
+                            def use_job_throttling_override = null
                             def job_arch = null
                             for (def entry in testRegionMatrix) {
 
@@ -430,6 +433,7 @@ def call(Map pipelineParams) {
                                         rolling_upgrade_test = entry.rolling_upgrade_test
                                         microbenchmark = entry.microbenchmark
                                         job_throttle_category = entry.job_throttle_category
+                                        use_job_throttling_override = entry.containsKey('use_job_throttling') ? entry.use_job_throttling : null
                                         job_arch = entry.arch ?: 'x86_64'
                                         if (rolling_upgrade_test || microbenchmark) {
                                             image_name_for_job = null
@@ -451,7 +455,7 @@ def call(Map pipelineParams) {
                                             string(name: 'base_versions', value: rolling_upgrade_test ? params.base_versions : null),
                                             string(name: 'provision_type', value: 'on_demand'),
                                             string(name: 'new_scylla_repo', value: rolling_upgrade_test ? params.new_scylla_repo : null),
-                                            booleanParam(name: 'use_job_throttling', value: params.use_job_throttling),
+                                            booleanParam(name: 'use_job_throttling', value: use_job_throttling_override != null ? use_job_throttling_override : params.use_job_throttling),
                                             string(name: 'sub_tests', value: groovy.json.JsonOutput.toJson(sub_tests)),
                                             string(name: 'region', value: region),
                                             string(name: 'requested_by_user', value: params.requested_by_user),
