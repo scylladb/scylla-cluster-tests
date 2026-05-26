@@ -212,6 +212,8 @@ class GCENode(cluster.BaseNode):
                     case "compute.instances.preempted":
                         self.log.warning("Got spot termination notification from GCE")
                         SpotTerminationEvent(node=self, message="Instance was preempted.").publish()
+                    case "compute.instances.migrateOnHostMaintenance" | "compute.instances.terminateOnHostMaintenance":
+                        GceInstanceEvent(entry, severity=Severity.CRITICAL).publish()
                     case "compute.instances.automaticRestart" | "compute.instances.hostError":
                         GceInstanceEvent(entry).publish()
                     case _:
