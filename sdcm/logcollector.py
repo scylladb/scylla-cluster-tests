@@ -302,28 +302,24 @@ class FileLog(CommandLog):
     """
 
     @staticmethod
-    def find_local_files(search_in_dir, search_pattern, except_patterns="collected_logs"):
+    def find_local_files(search_in_dir: str, search_pattern: str, except_patterns: str = "collected_logs") -> list[str]:
         local_files = []
-        for root, _, files in os.walk(search_in_dir):
-            for f in files:
-                full_path = os.path.join(root, f)
-                if except_patterns in full_path:
-                    continue
-                if full_path.endswith(search_pattern) or fnmatch.fnmatch(full_path, "*{}".format(search_pattern)):
-                    if os.path.islink(full_path):
-                        full_path = os.path.realpath(full_path)
-                    local_files.append(full_path)
+        for path in Path(search_in_dir).rglob("*"):
+            if not path.is_file():
+                continue
+            full_path = str(path)
+            if except_patterns in full_path:
+                continue
+            if full_path.endswith(search_pattern) or fnmatch.fnmatch(full_path, f"*{search_pattern}"):
+                local_files.append(str(path.resolve()))
         return local_files
 
     @staticmethod
-    def find_on_builder(builder, file_name, search_in_dir="/"):
-        result = builder.remoter.run("find {search_in_dir} -name {file_name}".format(**locals()), ignore_status=True)
+    def find_on_builder(builder, file_name: str, search_in_dir: str = "/") -> Optional[str]:
+        result = builder.remoter.run(f"find {search_in_dir} -name {file_name}", ignore_status=True)
         if not result.exited and not result.stderr:
-            path = result.stdout.strip()
-        else:
-            path = None
-
-        return path
+            return result.stdout.strip()
+        return None
 
     def _is_file_collected(self, local_dst):
         for collected_file in os.listdir(local_dst):
