@@ -19,7 +19,10 @@ jobs:
         env:
           AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
           AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
-          GH_TOKEN: ${{ github.token }}
+          # AUTO_BACKPORT_TOKEN has read:org scope — required to call the org
+          # membership API. GITHUB_TOKEN (Actions bot) is not an org member and
+          # cannot reliably check membership via any GitHub endpoint.
+          GH_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
         run: |
           case "$AUTHOR_ASSOC" in
             OWNER|MEMBER|COLLABORATOR)
@@ -27,19 +30,17 @@ jobs:
               echo "✅ $AUTHOR_LOGIN has association $AUTHOR_ASSOC — proceeding"
               ;;
             *)
-              # author_association occasionally misclassifies org members as CONTRIBUTOR.
-              # Fall back to a live org membership check to avoid false rejections.
-              # Use the repo collaborators endpoint — works with the repo-scoped
-              # GITHUB_TOKEN (unlike orgs/members which requires org membership
-              # on the caller side and returns 302 for the Actions bot).
-              STATUS=$(gh api "repos/scylladb/scylla-cluster-tests/collaborators/$AUTHOR_LOGIN" \
+              # author_association returns CONTRIBUTOR instead of MEMBER for some
+              # org members due to a known GitHub bug. Fall back to a live check.
+              # See: https://github.com/orgs/community/discussions/18690
+              STATUS=$(gh api "orgs/scylladb/members/$AUTHOR_LOGIN" \
                 --silent -i 2>&1 | head -1 | awk '{print $2}')
               if [ "$STATUS" = "204" ]; then
                 echo "is_member=true" >> "$GITHUB_OUTPUT"
-                echo "✅ $AUTHOR_LOGIN is a repo collaborator (live check)"
+                echo "✅ $AUTHOR_LOGIN is a scylladb org member (live check)"
               else
                 echo "is_member=false" >> "$GITHUB_OUTPUT"
-                echo "❌ $AUTHOR_LOGIN ($AUTHOR_ASSOC) is not a repo collaborator — skipping"
+                echo "❌ $AUTHOR_LOGIN ($AUTHOR_ASSOC) is not a scylladb org member — skipping"
               fi
               ;;
           esac
