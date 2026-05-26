@@ -187,6 +187,8 @@ To re-run the review on an existing PR, push an empty commit to the PR branch:
 git commit --allow-empty -m "re-trigger Claude review" && git push
 ```
 
+The review comment is posted directly on the PR by the `claude[bot]` user.
+
 ## How to find equivalent AMIs across regions or architectures?
 
 Use the `find-ami-equivalent` command to find equivalent AWS AMIs in different regions or architectures based on image tags:
