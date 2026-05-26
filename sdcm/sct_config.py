@@ -956,19 +956,19 @@ class SCTConfiguration(BaseModel):
                 longer supported. Use an explicit YAML list instead.
         """,
     )
-    nemesis_interval: IntOrList = SctField(
+    nemesis_interval: int = SctField(
         description="""Nemesis sleep interval to use if None provided specifically in the test""",
     )
-    nemesis_sequence_sleep_between_ops: IntOrList = SctField(
+    nemesis_sequence_sleep_between_ops: int = SctField(
         description="""Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests""",
     )
-    nemesis_during_prepare: BooleanOrList = SctField(
+    nemesis_during_prepare: Boolean = SctField(
         description="""Run nemesis during prepare stage of the test""",
     )
     nemesis_seed: IntOrList = SctField(
         description="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey""",
     )
-    nemesis_add_node_cnt: IntOrList = SctField(
+    nemesis_add_node_cnt: int = SctField(
         description="""Add/remove nodes during GrowShrinkCluster nemesis""",
     )
     nemesis_grow_shrink_instance_type: String = SctField(
@@ -977,7 +977,7 @@ class SCTConfiguration(BaseModel):
     cluster_target_size: IntOrList = SctField(
         description="""Used for scale test: max size of the cluster""",
     )
-    space_node_threshold: IntOrList = SctField(
+    space_node_threshold: int = SctField(
         description="""
              Space node threshold before starting nemesis (bytes)
              The default value is 6GB (6x1024^3 bytes)
@@ -985,7 +985,7 @@ class SCTConfiguration(BaseModel):
              https://github.com/scylladb/scylla/issues/1140
          """,
     )
-    nemesis_filter_seeds: BooleanOrList = SctField(
+    nemesis_filter_seeds: Boolean = SctField(
         description="""If true runs the nemesis only on non seed nodes""",
     )
 
@@ -1705,7 +1705,7 @@ class SCTConfiguration(BaseModel):
     keyspace_num: int = SctField(
         description="Number of keyspaces to use in the test",
     )
-    round_robin: BooleanOrList = SctField(
+    round_robin: Boolean = SctField(
         description="Enable or disable round robin selection of nodes for operations",
     )
     batch_size: int = SctField(
@@ -2197,7 +2197,7 @@ class SCTConfiguration(BaseModel):
         (In other words filters out all nemesis that doesn't ONE of these properties set to true)
         IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.""",
     )
-    nemesis_multiply_factor: IntOrList = SctField(
+    nemesis_multiply_factor: int = SctField(
         description="Multiply the list of nemesis to execute by the specified factor",
     )
     raid_level: int = SctField(
