@@ -29,14 +29,17 @@ jobs:
             *)
               # author_association occasionally misclassifies org members as CONTRIBUTOR.
               # Fall back to a live org membership check to avoid false rejections.
-              STATUS=$(gh api "orgs/scylladb/members/$AUTHOR_LOGIN" \
+              # Use the repo collaborators endpoint — works with the repo-scoped
+              # GITHUB_TOKEN (unlike orgs/members which requires org membership
+              # on the caller side and returns 302 for the Actions bot).
+              STATUS=$(gh api "repos/scylladb/scylla-cluster-tests/collaborators/$AUTHOR_LOGIN" \
                 --silent -i 2>&1 | head -1 | awk '{print $2}')
               if [ "$STATUS" = "204" ]; then
                 echo "is_member=true" >> "$GITHUB_OUTPUT"
-                echo "✅ $AUTHOR_LOGIN is a scylladb org member (live check)"
+                echo "✅ $AUTHOR_LOGIN is a repo collaborator (live check)"
               else
                 echo "is_member=false" >> "$GITHUB_OUTPUT"
-                echo "❌ $AUTHOR_LOGIN ($AUTHOR_ASSOC) is not a scylladb org member — skipping"
+                echo "❌ $AUTHOR_LOGIN ($AUTHOR_ASSOC) is not a repo collaborator — skipping"
               fi
               ;;
           esac
