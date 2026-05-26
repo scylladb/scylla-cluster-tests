@@ -63,6 +63,13 @@ jobs:
         uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251  # v1.0.133
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # pass github_token to bypass OIDC federation — the action's federation
+          # server rejects OIDC tokens from pull_request_target events (not in its
+          # allowlist). Passing github_token directly skips the exchange and uses
+          # the workflow token instead. Comments appear from github-actions[bot]
+          # rather than claude[bot], but review content is identical.
+          # Ref: https://github.com/anthropics/claude-code-action/issues/1348
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
