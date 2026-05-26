@@ -1039,7 +1039,7 @@ Nemesis sleep interval to use if None provided specifically in the test
 
 **default:** 5
 
-**type:** int | list[int]
+**type:** int
 
 
 ## **nemesis_sequence_sleep_between_ops** / SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS
@@ -1048,7 +1048,7 @@ Sleep interval between nemesis operations for use in unique_sequence nemesis kin
 
 **default:** N/A
 
-**type:** int | list[int]
+**type:** int
 
 
 ## **nemesis_during_prepare** / SCT_NEMESIS_DURING_PREPARE
@@ -1057,7 +1057,7 @@ Run nemesis during prepare stage of the test
 
 **default:** True
 
-**type:** bool | list[bool]
+**type:** bool
 
 
 ## **nemesis_seed** / SCT_NEMESIS_SEED
@@ -1075,7 +1075,7 @@ Add/remove nodes during GrowShrinkCluster nemesis
 
 **default:** 3
 
-**type:** int | list[int]
+**type:** int
 
 
 ## **nemesis_grow_shrink_instance_type** / SCT_NEMESIS_GROW_SHRINK_INSTANCE_TYPE
@@ -1102,7 +1102,7 @@ Space node threshold before starting nemesis (bytes)<br>The default value is 6GB
 
 **default:** 0
 
-**type:** int | list[int]
+**type:** int
 
 
 ## **nemesis_filter_seeds** / SCT_NEMESIS_FILTER_SEEDS
@@ -1111,7 +1111,7 @@ If true runs the nemesis only on non seed nodes
 
 **default:** False
 
-**type:** bool | list[bool]
+**type:** bool
 
 
 ## **stress_cmd** / SCT_STRESS_CMD
@@ -3217,7 +3217,7 @@ Enable or disable round robin selection of nodes for operations
 
 **default:** False
 
-**type:** bool | list[bool]
+**type:** bool
 
 
 ## **batch_size** / SCT_BATCH_SIZE
@@ -4423,7 +4423,7 @@ Multiply the list of nemesis to execute by the specified factor
 
 **default:** 2
 
-**type:** int | list[int]
+**type:** int
 
 
 ## **raid_level** / SCT_RAID_LEVEL
