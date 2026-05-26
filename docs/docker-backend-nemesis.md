@@ -48,7 +48,7 @@
 | NodeToolCleanupMonkey | Pass |
 | OperatorNodeReplace | Skipped | Should be skipped for docker backend
 | OperatorNodetoolFlushAndReshard | Pass |
-| PauseLdapNemesis | Pass | Should be executed on enterprise
+| PauseLdapNemesis | Pass |
 | RandomInterruptionNetworkMonkey | Pass |
 | RebuildStreamingErrMonkey | Skipped | Backend doesn't support hard reboot
 | RefreshBigMonkey | Pass |
@@ -80,11 +80,11 @@
 | TerminateAndRemoveNodeMonkey | Fail | [scylla-cluster-tests/issues/7331](https://github.com/scylladb/scylla-cluster-tests/issues/7331)
 | TerminateKubernetesHostThenDecommissionAndAddScyllaNode | Skipped | Not a k8s backend
 | TerminateKubernetesHostThenReplaceScyllaNode | Skipped | Not a k8s backend
-| ToggleAuditNemesisSyslog | Pass | Should be executed on enterprise
-| ToggleAuditRulesNemesisSyslog | Pass | Should be executed on enterprise
+| ToggleAuditNemesisSyslog | Pass |
+| ToggleAuditRulesNemesisSyslog | Pass |
 | ToggleCDCMonkey | Pass |
 | ToggleGcModeMonkey | Pass |
-| ToggleLdapConfiguration | Pass | Should be executed on enterprise
+| ToggleLdapConfiguration | Pass |
 | ToggleTableIcsMonkey | Pass |
 | TopPartitions | Pass |
 | TruncateLargeParititionMonkey | Pass |
