@@ -20,7 +20,7 @@ def _get_catalog():
     if _CATALOG is None:
         from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog  # noqa: PLC0415 — avoid circular import
 
-        catalog_dir = Path(__file__).parent.parent.parent / "data" / "instance_catalog"
+        catalog_dir = Path(__file__).parent.parent.parent.parent / "data" / "instance_catalog"
         if catalog_dir.exists():
             _CATALOG = InstanceCatalog.from_directory(catalog_dir)
         else:
@@ -89,9 +89,7 @@ class AWSPricing:
             ],
             MaxResults=10,
         )
-        assert response["PriceList"], "failed to get price for {instance_type} in {region_name}".format(
-            region_name=region_name, instance_type=instance_type
-        )
+        assert response["PriceList"], f"failed to get price for {instance_type} in {region_name}"
         price = response["PriceList"][0]
         price_dimensions = next(iter(json.loads(price)["terms"]["OnDemand"].values()))["priceDimensions"]
         instance_price = next(iter(price_dimensions.values()))["pricePerUnit"]["USD"]
@@ -237,7 +235,7 @@ class AzurePricing:
                     ][0]
                 else:
                     return [price["retailPrice"] for price in prices if "Spot" in price["meterName"]][0]
-            except KeyError, IndexError:
+            except (KeyError, IndexError):
                 LOGGER.warning("Failed to get price from prices: %s", prices)
                 return 0
         else:

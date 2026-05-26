@@ -129,6 +129,8 @@ instance_type_db_oracle: ''
 run_gemini_in_rolling_upgrade: false
 
 # cloud-agnostic instance sizing constraints (resolved per-cloud by _resolve_instance_sizes)
+sizing_db: null
+sizing_db_oracle: null
 sizing_loader:
   vcpu: 4
   memory: '>=8'

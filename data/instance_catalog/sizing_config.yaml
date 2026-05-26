@@ -63,6 +63,7 @@ clouds:
   aws:
     families:
       - i8g
+      - i8ge
       - i7ie
       - i7i
       - i4i

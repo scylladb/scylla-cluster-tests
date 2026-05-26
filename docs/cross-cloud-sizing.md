@@ -41,7 +41,7 @@ uv run sct.py sizing preview test-cases/longevity/my-test.yaml
 
 Output shows resolved instances per cloud with pricing:
 
-```
+```text
 Role: db  Constraints: {vcpu: 8, memory: >=32}
   AWS:   i8g.2xlarge       (8 vCPU, 64 GB, 1875 GB NVMe, arm64)    $0.62/hr
   GCE:   z3-highmem-8      (8 vCPU, 64 GB, 750 GB SSD, x86_64)
@@ -105,15 +105,13 @@ Configured in `data/instance_catalog/sizing_config.yaml`.
 
 ## Environment Variables
 
-Use SCT's dot-notation to override constraints from the command line:
+Use SCT's underscore-separated naming convention to override sizing constraints:
 
 ```bash
-export SCT_INSTANCE_TYPE_DB.VCPU=16
-export SCT_INSTANCE_TYPE_DB.MEMORY=64
-export SCT_INSTANCE_TYPE_DB.ARCH=arm64
+export SCT_SIZING_DB='{"vcpu": 16, "memory": 64, "arch": "arm64"}'
 ```
 
-This builds the dict `{vcpu: 16, memory: 64, arch: "arm64"}` using the same mechanism as other nested SCT parameters.
+This overrides the `sizing_db` dict using SCT's standard env-var mechanism for nested parameters.
 
 ### Overriding for Quick Evaluation
 
@@ -252,7 +250,7 @@ This picks 8 vCPU on AWS/GCE/Azure and 16 vCPU on OCI (smallest available).
 
 When no instance matches:
 
-```
+```text
 NoMatchingInstanceError: No instance found for role='db', cloud='oci' satisfying:
   vcpu == 8, memory_gb >= 128
   Candidates checked: 6 (from families: DenseIO.E5)

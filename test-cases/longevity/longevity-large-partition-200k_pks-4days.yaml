@@ -44,7 +44,7 @@ n_loaders: 5 # Each loader will have 1 scylla-bench process at every step of the
 
 round_robin: true
 
-sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 8
   memory: '>=64'
 sizing_loader:
