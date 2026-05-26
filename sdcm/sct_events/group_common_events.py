@@ -19,7 +19,6 @@ from sdcm.cluster import TestConfig
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter, EventsFilter
-from sdcm.sct_events.gce_events import GceInstanceEvent
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 from sdcm.utils.issues import SkipPerIssues
@@ -568,18 +567,6 @@ def ignore_take_snapshot_failing():
                 extra_time_to_expiration=60,
             )
         )
-        yield
-
-
-@contextmanager
-def critical_host_maintenance_migration(extra_time_to_expiration: int = 360):
-    """Escalate GCE host-maintenance migration events to CRITICAL for the duration of the block."""
-    with EventsSeverityChangerFilter(
-        new_severity=Severity.CRITICAL,
-        event_class=GceInstanceEvent,
-        regex=r".*migrateOnHostMaintenance.*",
-        extra_time_to_expiration=extra_time_to_expiration,
-    ):
         yield
 
 

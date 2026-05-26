@@ -21,5 +21,11 @@ class GceInstanceEvent(SctEvent):
         return super().msgfmt + ": {0.method} on node {0.node} at {0.date}: {0.message}"
 
 
-# lift cap to CRITICAL for migrateOnHostMaintenance, so critical_host_maintenance_migration() can escalate
-add_severity_limit_rules(["GceInstanceEvent.migrateOnHostMaintenance=CRITICAL"])
+# lift cap to CRITICAL for planned host-maintenance events (migrate + terminate) so the global
+# GceInstanceEvent cap doesn't downgrade them back to ERROR
+add_severity_limit_rules(
+    [
+        "GceInstanceEvent.migrateOnHostMaintenance=CRITICAL",
+        "GceInstanceEvent.terminateOnHostMaintenance=CRITICAL",
+    ]
+)

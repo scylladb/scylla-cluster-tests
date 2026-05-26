@@ -46,8 +46,12 @@ class FakeGceLogClient(GceLoggingClient):
         auto_restart_entry["protoPayload"]["methodName"] = "compute.instances.automaticRestart"
         some_entry = copy.deepcopy(entry)
         some_entry["protoPayload"]["methodName"] = "compute.instances.some"
+        migrate_entry = copy.deepcopy(entry)
+        migrate_entry["protoPayload"]["methodName"] = "compute.instances.migrateOnHostMaintenance"
+        terminate_entry = copy.deepcopy(entry)
+        terminate_entry["protoPayload"]["methodName"] = "compute.instances.terminateOnHostMaintenance"
         print(host_error)
-        return [host_error, auto_restart_entry, some_entry]
+        return [host_error, auto_restart_entry, some_entry, migrate_entry, terminate_entry]
 
 
 class FakeGceNode(GCENode):
@@ -84,4 +88,13 @@ class TestGceErrorLog(FakeEventsMixin):
         assert (
             "compute.instances.some on node longevity-10gb-3h-master-db-node-fac7b27a-0-6 "
             "at 2022-06-30" in warning_events
+        )
+        critical_events = "\n".join(events_by_category.get("CRITICAL", []))
+        assert (
+            "compute.instances.migrateOnHostMaintenance on node "
+            "longevity-10gb-3h-master-db-node-fac7b27a-0-6 at 2022-06-30" in critical_events
+        )
+        assert (
+            "compute.instances.terminateOnHostMaintenance on node "
+            "longevity-10gb-3h-master-db-node-fac7b27a-0-6 at 2022-06-30" in critical_events
         )
