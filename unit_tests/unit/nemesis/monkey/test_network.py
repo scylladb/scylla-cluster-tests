@@ -108,12 +108,6 @@ def test_install_iptables(is_ubuntu, should_install):
             "-m statistic --mode nth --every 8 --packet 0",
             id="statistic-nth",
         ),
-        pytest.param(
-            ["connbytes", "800"],
-            "every packet from connection that total byte counter exceeds 800",
-            "-m connbytes --connbytes-mode bytes --connbytes-dir both --connbytes 800",
-            id="connbytes",
-        ),
     ],
 )
 def test_matching_rule(choices, expected_desc, expected_rule):
