@@ -99,7 +99,31 @@ Real incident catalog in [common-issues.md](references/common-issues.md).
 - Alphabetically sorted within each group
 - Only exception: cyclic dependency with explanatory comment
 
-### Check 3: Error Handling
+### Check 3: Circular Import Prevention
+
+**Trigger**: Any PR that adds new `import` statements between `sdcm/` subpackages, or modifies `__init__.py` files.
+
+Circular imports in SCT cause hard-to-diagnose `ImportError` or `AttributeError` at module load time. They are invisible to linting and only surface at runtime.
+
+**Detection patterns:**
+1. Module A imports from module B's `__init__.py`, and B (transitively) imports from A
+2. `__init__.py` files that re-export symbols from submodules — importing the package triggers all submodule imports
+3. Inline/deferred imports with comments like `# avoid circular import` — these are workarounds, not fixes
+
+**What to flag:**
+- New imports added to `__init__.py` files (especially in packages like `sdcm/monitorstack/`, `sdcm/sct_events/`, `sdcm/utils/`)
+- New cross-package imports between modules that are known to have tight coupling (e.g., `logcollector` ↔ `monitorstack`, `cluster` ↔ `provision`)
+- Deferred imports introduced as a "fix" — the real fix is restructuring the dependency graph
+
+**Resolution approach:**
+- Extract shared constants/types into a leaf module (e.g., `constants.py`)
+- Move functions that create the cycle into a separate submodule
+- Keep `__init__.py` empty — callers import directly from submodules
+- Verify with: `python -c "from sdcm.<module> import <symbol>"` for both sides of the cycle
+
+Real incident: `sdcm/monitorstack/__init__.py` imported `logcollector` for verify functions, while `logcollector` imported `sdcm.monitorstack.ui` — triggering `__init__.py` and creating a cycle. Fixed by splitting into `constants.py`, `verify.py`, `restore.py` with empty `__init__.py`.
+
+### Check 4: Error Handling
 
 **Trigger**: Any `try/except`, `raise`, or error handling code.
 
@@ -108,7 +132,7 @@ Real incident catalog in [common-issues.md](references/common-issues.md).
 - Custom exceptions should subclass appropriate SCT base exceptions
 - Error messages should include enough context for debugging
 
-### Check 4: Test Coverage
+### Check 5: Test Coverage
 
 **Trigger**: Any non-trivial code change.
 
@@ -117,7 +141,7 @@ Real incident catalog in [common-issues.md](references/common-issues.md).
 - Tests must use fixtures, not `setUp`/`tearDown`
 - Parametrize when testing multiple input variations
 
-### Check 5: Configuration Changes
+### Check 6: Configuration Changes
 
 **Trigger**: Any change to `sdcm/sct_config.py` or config-related files.
 
@@ -125,7 +149,7 @@ Real incident catalog in [common-issues.md](references/common-issues.md).
 - Config parameter must have proper type, description, and example
 - Pre-commit hook updates `docs/configuration_options.md` automatically
 
-### Check 6: Backend Impact
+### Check 7: Backend Impact
 
 **Trigger**: Any change to files in `sdcm/cluster_*.py`, `sdcm/provision/`, or `sdcm/utils/*_utils.py`.
 
@@ -133,7 +157,7 @@ Real incident catalog in [common-issues.md](references/common-issues.md).
 - Check if the same change is needed for other backends
 - Backend file -> label mapping in [review-checklist.md](references/review-checklist.md)
 
-### Check 7: Commit Message Format
+### Check 8: Commit Message Format
 
 **Trigger**: Every PR.
 
@@ -141,7 +165,7 @@ Real incident catalog in [common-issues.md](references/common-issues.md).
 - Valid types: `ci`, `docs`, `feature`, `fix`, `improvement`, `perf`, `refactor`, `revert`, `style`, `test`, `unit-test`, `build`, `chore`
 - Scope minimum 3 chars, subject 10-120 chars, body minimum 30 chars
 
-### Check 8: HTTP Resilience & Retry Patterns
+### Check 9: HTTP Resilience & Retry Patterns
 
 **Trigger**: PR touches files with `curl`, `requests.get`, `requests.post`, or `remoter.run("curl`.
 
@@ -169,6 +193,7 @@ A complete code review:
 
 - [ ] Override safety checked — all method signature changes verified against subclass overrides
 - [ ] Import conventions verified — no inline imports, correct grouping
+- [ ] Circular imports checked — no new cycles introduced, no deferred import workarounds
 - [ ] Error handling reviewed — no empty catches, appropriate patterns used
 - [ ] Test coverage assessed — new logic has corresponding tests
 - [ ] Configuration defaults verified — new options have defaults
