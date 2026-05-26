@@ -18,7 +18,7 @@ n_db_nodes: 6
 n_loaders: 4
 nemesis_grow_shrink_instance_type: 'i8g.2xlarge'
 
-sizing_db:  # no GCE/OCI match (min 16 vCPUs in OCI catalog, min 8 in GCE z3)
+sizing_db:  # no GCE/OCI match (DenseIO min 16 vCPUs on OCI, z3 min 8 vCPUs on GCE)
   vcpu: 2
   memory: '>=16'
 sizing_loader:

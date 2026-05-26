@@ -3362,7 +3362,7 @@ class SCTConfiguration(BaseModel):
             "monitor": "sizing_monitor",
         }
 
-        db_type = self.get("db_type") or ""
+        db_type = (env.get("db_type") if env else None) or self.get("db_type") or ""
         role_params = ROLE_PARAMS.get(cloud, {})
         for role, param_name in role_params.items():
             if role == "db_oracle" and db_type not in ("mixed_scylla", "mixed_cassandra"):

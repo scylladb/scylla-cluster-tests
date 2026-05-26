@@ -26,11 +26,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import urllib.request
 from pathlib import Path
 from typing import Any
 
+import requests
 import yaml
 
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceTypeInfo
@@ -679,13 +681,6 @@ def _azure_fetch_prices(sku_prefix: str, region: str) -> dict[str, float]:
     Returns:
         Dict mapping armSkuName -> hourly price (USD).
     """
-    # requests import is deferred: not needed in non-Azure environments.
-    try:
-        import requests  # noqa: PLC0415
-    except ImportError:
-        LOG.error("requests is not installed — cannot fetch Azure prices")
-        return {}
-
     prices: dict[str, float] = {}
     url = "https://prices.azure.com/api/retail/prices"
     params = {
@@ -754,7 +749,6 @@ def generate_azure_catalog(  # noqa: PLR0914
     try:
         from azure.identity import DefaultAzureCredential  # noqa: PLC0415
         from azure.mgmt.compute import ComputeManagementClient  # noqa: PLC0415
-        import os  # noqa: PLC0415
 
         subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID", "")
         if subscription_id:
@@ -861,8 +855,6 @@ def _oci_fetch_pricing() -> dict[str, dict[str, float]]:
     Returns dict mapping series -> {ocpu_hr, mem_gb_hr, nvme_tb_hr (optional)}.
     Raises on failure.
     """
-    import requests  # noqa: PLC0415
-
     resp = requests.get(_OCI_PRICING_API, params={"currencyCode": "USD"}, timeout=30)
     resp.raise_for_status()
     items = resp.json().get("items", [])
@@ -1232,8 +1224,6 @@ _CLOUD_GENERATORS = {
 
 def _load_cloud_configs(config_path: Path) -> dict[str, dict[str, Any]]:
     """Load cloud configurations from sizing_config.yaml."""
-    import yaml  # noqa: PLC0415
-
     with open(config_path) as fh:
         config = yaml.safe_load(fh)
 
