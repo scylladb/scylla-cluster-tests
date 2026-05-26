@@ -1,32 +1,32 @@
 /*
 Master weekly (master-weekly):
-- predefined-throughput-steps-i8g-tablets — versions: ['master'], labels: ['master-weekly'], all 4 sub tests
-- All 4 microbenchmark jobs — ignore_versions: [], labels: ['master-weekly']
+- predefined-throughput-steps-i8g-tablets — us-east-1, versions: ['master'], labels: ['master-weekly'], all 4 sub tests
+- All 4 microbenchmark jobs — us-east-1, ignore_versions: [], labels: ['master-weekly']
 
 Master 3-weeks (master-3weeks):
-- latency-650gb-during-rolling-upgrade-i8g-tablets — versions: ['master'], labels: ['master-3weeks'], mixed load
-- latency-650gb-with-nemesis-i8g-tablets — versions: ['master'], labels: ['master-3weeks'], mixed load
+- latency-650gb-during-rolling-upgrade-i8g-tablets — us-east-2, versions: ['master'], labels: ['master-3weeks'], mixed load
+- latency-650gb-with-nemesis-i8g-tablets — eu-north-1, versions: ['master'], labels: ['master-3weeks'], mixed load
 
 Master monthly (master-monthly):
-- predefined-throughput-steps-i8g-vnodes — versions: ['master'], labels: ['master-monthly'], all 4 sub tests
-- latency-650gb-with-nemesis-i8g-vnodes — versions: ['master'], labels: ['master-monthly'], all 3 sub tests (mixed, read, write)
+- predefined-throughput-steps-i8g-vnodes — eu-west-2, versions: ['master'], labels: ['master-monthly'], all 4 sub tests
+- latency-650gb-with-nemesis-i8g-vnodes — eu-west-3, versions: ['master'], labels: ['master-monthly'], all 3 sub tests (mixed, read, write)
 
 < Scylla version 2025.3 (non-master, versions 2025.2, 2025.1, 2024.2, 2024.1):
-- predefined-throughput-steps-vnodes — versions: ['2025.2', '2025.1', '2024.2', '2024.1'], all sub tests (read, mixed, disk_only)
-- predefined-throughput-steps-write-vnodes — versions: ['2025.2', '2025.1', '2024.2', '2024.1']
-- latency-650gb-with-nemesis — versions: ['2025.2', '2025.1', '2024.2', '2024.1'], mixed load
-- Microbenchmark jobs — ignore_versions: [] means they match all versions; labels: ['master-weekly'] only gates master trigger, non-master versions pass through
-- predefined-throughput-steps-tablets — versions: ['2025.2', '2025.1'], all sub tests
-- predefined-throughput-steps-write-tablets — versions: ['2025.2', '2025.1']
-- latency-650gb-during-rolling-upgrade-tablets — versions: ['2025.2', '2025.1'], mixed load
-- latency-650gb-with-nemesis-tablets — versions: ['2025.2', '2025.1'], read + mixed
+- predefined-throughput-steps-vnodes — us-east-1, versions: ['2025.2', '2025.1', '2024.2', '2024.1'], all sub tests (read, mixed, disk_only)
+- predefined-throughput-steps-write-vnodes — us-east-1, versions: ['2025.2', '2025.1', '2024.2', '2024.1']
+- latency-650gb-with-nemesis — eu-west-2, versions: ['2025.2', '2025.1', '2024.2', '2024.1'], mixed load
+- Microbenchmark jobs — us-east-1, ignore_versions: [] means they match all versions; labels: ['master-weekly'] only gates master trigger, non-master versions pass through
+- predefined-throughput-steps-tablets — us-east-1, versions: ['2025.2', '2025.1'], all sub tests
+- predefined-throughput-steps-write-tablets — us-east-1, versions: ['2025.2', '2025.1']
+- latency-650gb-during-rolling-upgrade-tablets — eu-west-2, versions: ['2025.2', '2025.1'], mixed load
+- latency-650gb-with-nemesis-tablets — eu-west-3, versions: ['2025.2', '2025.1'], read + mixed
 
->= Scylla version 2025.3 (non-master):
-- predefined-throughput-steps-i8g-tablets — ignore_versions: ['2025.2', '2025.1', '2024.1', '2024.2', 'master'], all sub tests
-- latency-650gb-during-rolling-upgrade-i8g-tablets — ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed load
-- latency-650gb-with-nemesis-i8g-tablets — ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], read + mixed
-- predefined-throughput-steps-i8g-vnodes — ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed only
-- latency-650gb-with-nemesis-i8g-vnodes — ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed only
+>= Scylla version 2025.3 (non-master/release):
+- predefined-throughput-steps-i8g-tablets — us-west-2, ignore_versions: ['2025.2', '2025.1', '2024.1', '2024.2', 'master'], all sub tests
+- latency-650gb-during-rolling-upgrade-i8g-tablets — eu-west-3, ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed load
+- latency-650gb-with-nemesis-i8g-tablets — eu-west-2, ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], read + mixed
+- predefined-throughput-steps-i8g-vnodes — eu-west-2, ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed only
+- latency-650gb-with-nemesis-i8g-vnodes — eu-west-1, ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed only
 */
 
 def isVersionIgnored(String version, List ignoreVersions) {
@@ -92,22 +92,22 @@ def call(Map pipelineParams) {
                         def testRegionMatrix = [
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-vnodes',
-                                region: 'us-east-1',
+                                region: 'eu-west-2',
                                 versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"', '"test_write_gradual_increase_load"', '"test_read_disk_only_gradual_increase_load"'],
                                 labels: ['master-monthly'],
-                                job_throttle_category: 'SCT-perf-us-east-1-i8g',
+                                job_throttle_category: 'SCT-perf-eu-west-2-i8g',
                                 arch: 'aarch64'
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-vnodes',
-                                region: 'us-east-1',
+                                region: 'eu-west-2',
                                 ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
                                 pre_release: [],
                                 sub_tests: ['"test_mixed_gradual_increase_load"'],
                                 labels: [],
-                                job_throttle_category: 'SCT-perf-us-east-1-i8g',
+                                job_throttle_category: 'SCT-perf-eu-west-2-i8g',
                                 arch: 'aarch64'
                             ],
                             [
@@ -153,22 +153,22 @@ def call(Map pipelineParams) {
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-vnodes',
-                                region: 'us-east-2',
+                                region: 'eu-west-3',
                                 versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"', '"test_latency_read_with_nemesis"', '"test_latency_write_with_nemesis"'],
                                 labels: ['master-monthly'],
-                                job_throttle_category: 'SCT-perf-us-east-2-i8g',
+                                job_throttle_category: 'SCT-perf-eu-west-3-i8g',
                                 arch: 'aarch64'
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-vnodes',
-                                region: 'us-east-2',
+                                region: 'eu-west-1',
                                 ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: [],
-                                job_throttle_category: 'SCT-perf-us-east-2-i8g',
+                                job_throttle_category: 'SCT-perf-eu-west-1-i8g',
                                 arch: 'aarch64'
                             ],
                             [
@@ -244,12 +244,12 @@ def call(Map pipelineParams) {
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets',
-                                region: 'us-east-1',
+                                region: 'us-west-2',
                                 ignore_versions: ['2025.2', '2025.1', '2024.1', '2024.2', 'master'],
                                 pre_release: [],
                                 sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"', '"test_write_gradual_increase_load"', '"test_read_disk_only_gradual_increase_load"'],
                                 labels: [],
-                                job_throttle_category: 'SCT-perf-us-east-1-i8g',
+                                job_throttle_category: 'SCT-perf-us-west-2-i8g',
                                 arch: 'aarch64'
                             ],
                             [
@@ -297,44 +297,44 @@ def call(Map pipelineParams) {
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets',
-                                region: 'us-west-2',
+                                region: 'us-east-2',
                                 versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_upgrade"'],
                                 labels: ['master-3weeks'],
                                 rolling_upgrade_test: true,
-                                job_throttle_category: 'SCT-perf-us-west-2-i8g',
+                                job_throttle_category: 'SCT-perf-us-east-2-i8g',
                                 arch: 'aarch64'
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets',
-                                region: 'us-west-2',
+                                region: 'eu-west-3',
                                 ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_upgrade"'],
                                 labels: [],
                                 rolling_upgrade_test: true,
-                                job_throttle_category: 'SCT-perf-us-west-2-i8g',
+                                job_throttle_category: 'SCT-perf-eu-west-3-i8g',
                                 arch: 'aarch64'
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets',
-                                region: 'us-east-2',
+                                region: 'eu-north-1',
                                 versions: ['master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-3weeks'],
-                                job_throttle_category: 'SCT-perf-us-east-2-i8g',
+                                job_throttle_category: 'SCT-perf-eu-north-1-i8g',
                                 arch: 'aarch64'
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets',
-                                region: 'us-east-2',
+                                region: 'eu-west-2',
                                 ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
                                 pre_release: [],
                                 sub_tests: ['"test_latency_read_with_nemesis"', '"test_latency_mixed_with_nemesis"'],
                                 labels: [],
-                                job_throttle_category: 'SCT-perf-us-east-2-i8g',
+                                job_throttle_category: 'SCT-perf-eu-west-2-i8g',
                                 arch: 'aarch64'
                             ],
                             [
