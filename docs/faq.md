@@ -172,6 +172,21 @@ SCT_PERF_GRADUAL_THREADS={"read": [450, 400, 450], "write": 400, "mixed": 1900}
 SCT_PERF_GRADUAL_THROTTLE_STEPS={"read": ['700000', 'unthrottled', 'unthrottled'], "mixed": ['50000', '150000', '300000', '450000', 'unthrottled'], "write": ['200000', '300000', 'unthrottled']}
 ```
 
+## How does the Claude AI code review work?
+
+The Claude Code Review workflow runs automatically on every PR opened by a scylladb org member.
+It uses the `pull_request_target` trigger, which means:
+
+- The workflow always executes code from the **base branch (master)**, not the PR branch — this is a GitHub security requirement that prevents secrets from being exposed to fork code
+- Because of this, changes to the workflow file only take effect **after they are merged to master**
+- The review is restricted to scylladb org members and collaborators; PRs from external contributors are silently skipped
+
+To re-run the review on an existing PR, push an empty commit to the PR branch:
+
+```bash
+git commit --allow-empty -m "re-trigger Claude review" && git push
+```
+
 ## How to find equivalent AMIs across regions or architectures?
 
 Use the `find-ami-equivalent` command to find equivalent AWS AMIs in different regions or architectures based on image tags:
