@@ -30,8 +30,10 @@ jobs:
               echo "✅ $AUTHOR_LOGIN has association $AUTHOR_ASSOC — proceeding"
               ;;
             *)
-              # author_association returns CONTRIBUTOR instead of MEMBER for some
-              # org members due to a known GitHub bug. Fall back to a live check.
+              # author_association only returns MEMBER when the user's org
+              # membership is public. GitHub defaults membership to private, so
+              # most org members appear as CONTRIBUTOR here. Fall back to a live
+              # API call with a read:org token to check actual membership.
               # See: https://github.com/orgs/community/discussions/18690
               STATUS=$(gh api "orgs/scylladb/members/$AUTHOR_LOGIN" \
                 --silent -i 2>&1 | head -1 | awk '{print $2}')
