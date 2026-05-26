@@ -148,3 +148,17 @@ def test_failure_statistics_collector_does_not_raise_when_no_files(tmp_path):
     # collect_logs should return empty list when no files exist, NOT raise an exception
     result = collector.collect_logs(local_search_path=str(tmp_path))
     assert result == []
+
+
+def test_no_circular_import_between_logcollector_and_monitorstack():
+    """Regression test for SCT-399: circular import must not occur."""
+    import importlib  # noqa: PLC0415 - must be local to manipulate sys.modules safely
+    import sys  # noqa: PLC0415
+
+    modules_to_remove = [key for key in sys.modules if key.startswith(("sdcm.logcollector", "sdcm.monitorstack"))]
+    saved = {key: sys.modules.pop(key) for key in modules_to_remove}
+    try:
+        importlib.import_module("sdcm.logcollector")
+        importlib.import_module("sdcm.monitorstack")
+    finally:
+        sys.modules.update(saved)
