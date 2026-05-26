@@ -15,17 +15,25 @@ Convert literal per-cloud instance type parameters to cloud-agnostic sizing cons
 
 ## Essential Principles
 
+### Derive Intent from Available Instance Types
+
+The sizing constraint should capture what the test **needs**, not a specific instance. Derive intent from whichever instance types are present in the config — if only `gce_instance_type_db` is set (and no AWS), base constraints on the GCE instance specs. If multiple clouds are configured, use the primary cloud's instance as the reference (AWS > GCE > Azure > OCI).
+
 ### Map Instance Specs to Constraints
 
 Every literal instance type has specific vCPU, memory, and disk characteristics. The sizing constraint must capture the **intent** (what resources the test needs) not the specific instance. Use the minimum constraints that would resolve to an equivalent or better instance across all clouds.
+
+### Dense Storage Families Require Disk Constraints
+
+When the original config uses a dense storage family (i8ge, i7ie, i4i, i3en, BM.DenseIO, VM.DenseIO, L-series), always include a `local_disk_gb` constraint. These families were chosen deliberately for their storage capacity — without a disk constraint, the resolver may pick a smaller-disk instance from the same family.
 
 ### DB Role Always Gets Local Disk Implicitly
 
 The sizing system adds `local_disk_count > 0` automatically for db/db_oracle/zero_token roles. Never specify `local_disk_count` in sizing_db — it's redundant. Only specify `local_disk_gb` when you need to differentiate between disk tiers (e.g., i7ie's 5000 GB vs i7i's 1875 GB).
 
-### Pin Architecture Only When Required
+### Pin Architecture to Preserve Original Behavior
 
-Only add `arch: x86_64` when the original config used Intel-only families (i7i, i7ie, i3en) AND the test specifically needs x86. If the original used i4i/i8g/i8ge (which have both arch variants or ARM), don't pin arch — let the resolver pick the best match per cloud.
+Add `arch: x86_64` when the original config used Intel-only families (i7i, i7ie, i3en) — this preserves the original instance selection behavior. If the original used i4i/i8g/i8ge (which have ARM variants or are ARM-only), don't pin arch — let the resolver pick the best match per cloud.
 
 ### Loader and Monitor Use Defaults Unless Overridden
 
@@ -51,7 +59,7 @@ This uses `parse_jenkinsfile()` to extract the `test_config` YAML paths and runs
 When a sizing constraint produces "No match" for a specific cloud (commonly OCI due to min 16 vCPUs in catalog), add a YAML comment on the `sizing_db:` line:
 
 ```yaml
-sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
   vcpu: 8
   memory: '>=64'
 ```
@@ -59,7 +67,7 @@ sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
 For multiple clouds:
 
 ```yaml
-sizing_db:  # no GCE/OCI match (min 16 vCPUs in OCI catalog, min 8 in GCE z3)
+sizing_db:  # no GCE/OCI match (DenseIO min 16 vCPUs on OCI, z3 min 8 vCPUs on GCE)
   vcpu: 2
   memory: '>=16'
 ```
@@ -148,22 +156,22 @@ sizing_monitor:
 
 ### Decision Tree: When to Pin Architecture
 
-```
+```text
 Was the original instance Intel-only (i7i, i7ie, i3en)?
-├── YES → Does the test NEED Intel specifically?
-│   ├── YES (e.g., testing Intel-specific features) → add arch: x86_64
-│   └── NO (just happened to be Intel) → still add arch: x86_64 to preserve behavior
+├── YES → add arch: x86_64 (preserves original behavior)
 └── NO (i4i, i8g, i8ge, or mixed) → do NOT pin arch
 ```
 
 ### Decision Tree: When to Pin Disk Size
 
-```
-Does the original instance have notably large disk (>= 2500 GB per disk)?
-├── YES → Is there a smaller-disk instance with same vCPU/memory/arch?
-│   ├── YES → add local_disk_gb: '>=XXXX' to differentiate
-│   └── NO → don't pin (resolver will find the right one)
-└── NO → don't pin
+```text
+Is the original instance from a dense storage family (i8ge, i7ie, i4i, i3en, BM.DenseIO, L-series)?
+├── YES → add local_disk_gb: '>=XXXX' (use ~80% of the instance's actual disk)
+└── NO → Does the original instance have notably large disk (>= 2500 GB per disk)?
+    ├── YES → Is there a smaller-disk instance with same vCPU/memory/arch?
+    │   ├── YES → add local_disk_gb: '>=XXXX' to differentiate
+    │   └── NO → don't pin (resolver will find the right one)
+    └── NO → don't pin
 ```
 
 ## Handling Multi-DC Configs

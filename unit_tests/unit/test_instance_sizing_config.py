@@ -20,7 +20,13 @@ import pytest
 from sdcm import sct_config
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo
 
-logging.basicConfig(level=logging.ERROR)
+
+@pytest.fixture(autouse=True)
+def _suppress_sizing_logs(caplog):
+    """Suppress noisy sizing resolution logs during tests."""
+    with caplog.at_level(logging.ERROR, logger="sdcm"):
+        yield
+
 
 _MINIMAL_CONFIG = "unit_tests/test_configs/minimal_test_case.yaml"
 

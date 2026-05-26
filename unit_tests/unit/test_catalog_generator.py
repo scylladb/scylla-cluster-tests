@@ -18,6 +18,21 @@ import pytest
 from sdcm.utils.cloud_catalog.catalog_generator import generate_oci_catalog, write_catalog_file
 from sdcm.utils.cloud_catalog.instance_catalog import InstanceCatalog, InstanceTypeInfo
 
+_FAKE_OCI_PRICING = {
+    "E4": {"ocpu_hr": 0.025, "mem_gb_hr": 0.0015},
+    "E5": {"ocpu_hr": 0.026, "mem_gb_hr": 0.0016},
+    "DenseIO.E4": {"ocpu_hr": 0.025, "mem_gb_hr": 0.0015, "nvme_tb_hr": 0.026},
+    "DenseIO.E5": {"ocpu_hr": 0.026, "mem_gb_hr": 0.0016, "nvme_tb_hr": 0.026},
+}
+
+
+@pytest.fixture(autouse=True)
+def _mock_oci_pricing(monkeypatch):
+    monkeypatch.setattr(
+        "sdcm.utils.cloud_catalog.catalog_generator._oci_get_pricing",
+        lambda: _FAKE_OCI_PRICING,
+    )
+
 
 @pytest.fixture()
 def sample_instances() -> list[InstanceTypeInfo]:
