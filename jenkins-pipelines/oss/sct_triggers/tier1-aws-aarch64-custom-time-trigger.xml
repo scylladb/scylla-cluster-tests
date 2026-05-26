@@ -59,7 +59,7 @@ stress_duration=$stress_duration</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../tier1/longevity-twcs-48h-test</projects>
+          <projects>../tier1/longevity-twcs-48h-test,../tier1/elasticity-90-percent-with-nemesis-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
