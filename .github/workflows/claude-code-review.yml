@@ -70,6 +70,7 @@ jobs:
           # rather than claude[bot], but review content is identical.
           # Ref: https://github.com/anthropics/claude-code-action/issues/1348
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: '--model claude-sonnet-4-6'
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
