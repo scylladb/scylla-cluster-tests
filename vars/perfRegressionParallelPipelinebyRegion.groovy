@@ -262,7 +262,7 @@ def call(Map pipelineParams) {
                                         }
                                         // NOTE: Check that Scylla version matches specified 'pre-release' parts.
                                         //       Semver structure: <major> "." <minor> "." <patch> "-" <pre-release> "+" <build>
-                                        if (entry.pre_release && !entry.pre_release.any { pr -> version.contains("-${pr}") }) {
+                                        if (!scylla_version?.startsWith("master") && entry.pre_release && !entry.pre_release.any { pr -> version.contains("-${pr}") }) {
                                             println("Skipping job $job_name because $version version doesn't match specified pre-releases: ${entry.pre_release}")
                                             continue
                                         }
