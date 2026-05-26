@@ -761,7 +761,7 @@ class ClusterTester(unittest.TestCase):
             self.log.warning("Error submitting gemini results to argus", exc_info=True)
 
     def collect_ssl_conf(self):
-        shutil.copytree(Path(get_data_dir_path("ssl_conf")), Path(self.logdir) / "ssl_conf")
+        shutil.copytree(Path(get_data_dir_path("ssl_conf")), Path(self.logdir) / "ssl_conf", dirs_exist_ok=True)
 
     def _init_data_validation(self):
         if data_validation := self.params.get("data_validation"):
