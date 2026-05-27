@@ -2,6 +2,7 @@
 
 def call(Map params) {
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+
     retry(3) {
 		sh """#!/bin/bash
 			set -xe

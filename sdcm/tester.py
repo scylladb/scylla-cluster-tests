@@ -462,6 +462,8 @@ class ClusterTester(unittest.TestCase):
         try:
             self.test_config.init_argus_client(self.params)
             git_status = get_git_status_info()
+            metadata = self.params.get("test_metadata")
+            metadata_dict = metadata.model_dump() if metadata else None
             self.test_config.argus_client().submit_sct_run(
                 job_name=get_job_name(),
                 job_url=get_job_url(),
@@ -470,6 +472,7 @@ class ClusterTester(unittest.TestCase):
                 origin_url=git_status.get("upstream.url"),
                 branch_name=git_status.get("branch.upstream"),
                 sct_config=self.params.model_dump(),
+                test_metadata=metadata_dict,
             )
             self.log.info("Submitted Argus TestRun with test id %s", self.test_config.argus_client().run_id)
             self.test_config.argus_client().set_sct_runner(

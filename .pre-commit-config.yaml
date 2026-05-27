@@ -77,6 +77,13 @@ repos:
         pass_filenames: false
         files: ^sdcm/nemesis/
 
+    -   id: update-taxonomy-nemesis
+        name: update-taxonomy-nemesis
+        entry: ./sct.py update-taxonomy-nemesis
+        language: system
+        pass_filenames: false
+        files: ^sdcm/nemesis/
+
     -   id: create-nemesis-pipelines
         name: create-nemesis-pipelines
         entry: ./sct.py create-nemesis-pipelines
