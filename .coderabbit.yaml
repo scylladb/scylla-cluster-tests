@@ -1,0 +1,135 @@
+language: "en-US"
+
+reviews:
+  high_level_summary: false
+  high_level_summary_in_walkthrough: true
+  auto_review:
+    enabled: true
+    ignore_title_keywords:
+      - "[Backport"
+    labels_to_ignore:
+      - "skip-review"
+      - "backport"
+    path_filters:
+      - "!argus/**"
+  request_changes_workflow: false
+  collapse_walkthrough: true
+  poem: false
+  review_status: false
+  sequence_diagrams: false
+  changed_files_summary: false
+  labeling_instructions:
+    - label: "Bug"
+      instructions: "Apply when the PR fixes a bug (not adding features or refactoring)"
+    - label: "Performance"
+      instructions: "Apply when the PR modifies performance test logic, stress tool wrappers, or benchmarking code"
+    - label: "Infrastructure"
+      instructions: "Apply when the PR modifies cloud provisioning code in sdcm/provision/, cluster backend files, or SCT runner infrastructure"
+    - label: "scylla-operator"
+      instructions: "Apply when the PR modifies files under sdcm/cluster_k8s/ or functional_tests/"
+    - label: "docker-backend"
+      instructions: "Apply when the PR modifies sdcm/cluster_docker.py or docker-specific configurations"
+    - label: "GCE"
+      instructions: "Apply when the PR modifies sdcm/cluster_gce.py or GCE-specific provisioning"
+    - label: "cloud/azure"
+      instructions: "Apply when the PR modifies sdcm/cluster_azure.py or Azure-specific provisioning"
+    - label: "monitor"
+      instructions: "Apply when the PR modifies sdcm/monitorstack/, prometheus.py, or Grafana-related code"
+    - label: "dependencies"
+      instructions: "Apply when the PR modifies pyproject.toml dependencies"
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        - Only comment on issues that would block merging — ignore minor or stylistic concerns.
+        - Restrict feedback to errors, security risks, or functionality-breaking problems.
+        - Do not post comments on code style, formatting, or non-critical improvements.
+        - Keep reviews short: flag only issues that make the PR unsafe to merge.
+        - Limit review comments to 3–5 items maximum, unless additional blockers exist.
+
+    - path: "sdcm/cluster*.py"
+      instructions: |
+        CRITICAL: Check for method signature changes on base classes. SCT uses deep class hierarchies.
+        If a method signature changed, ALL overrides must be updated (see AGENTS.md "Method Signature Changes" section).
+        High-risk methods with 5+ overrides: add_nodes, _create_instances, wait_for_init, destroy.
+        Reference: PR #13445/#14113 for real-world failure pattern.
+
+    - path: "sdcm/nemesis/**"
+      instructions: |
+        Nemesis code review checklist (see docs/nemesis.md and skills/writing-nemesis/SKILL.md):
+        - NemesisBaseClass subclass must set boolean flags
+        - disrupt() method must be implemented
+        - Node allocation must use NemesisNodeAllocator
+        - Check nemesis flag filtering expressions are valid
+
+    - path: "sdcm/provision/**"
+      instructions: |
+        Provisioning changes may require backend-specific provision test labels.
+        Verify PR has appropriate test-provision-* labels (see AGENTS.md "Backend-Specific Provision Tests").
+
+    - path: "sdcm/utils/curl.py|sdcm/rest/**"
+      instructions: |
+        HTTP/Curl conventions (AGENTS.md "HTTP/Curl Conventions"):
+        - All remoter.run("curl ...") must use curl_with_retry()
+        - All requests calls must use a session with retry adapter
+        - Exceptions must have "# no-retry: <reason>" comments
+
+    - path: "unit_tests/**"
+      instructions: |
+        Unit test conventions (AGENTS.md "Unit Testing Guidelines" and skills/writing-unit-tests/SKILL.md):
+        - Must use pytest style (top-level def test_*, NOT class-based)
+        - Use fixtures, parametrize, simple assert statements
+        - No unittest.TestCase subclasses
+
+    - path: "**/*.py"
+      instructions: |
+        Import conventions (AGENTS.md "Code Style Guidelines"):
+        - All imports at top of file, NOT inside functions
+        - Exception only for cyclic dependencies (must have explanatory comment)
+        - Group: stdlib, third-party, internal (separated by blank lines)
+
+    - path: "sdcm/sct_config.py|defaults/**"
+      instructions: |
+        Configuration changes (AGENTS.md "Configuration Changes"):
+        - Every new config option MUST have a default in defaults/*.yaml
+        - Include type, default, valid range in parameter definition
+
+    - path: "sdcm/remote/**"
+      instructions: |
+        Remote execution commands that install packages must follow skills/package-installation/SKILL.md:
+        - Always include timeouts, retries, and non-interactive flags
+        - apt-get must use DEBIAN_FRONTEND=noninteractive
+        - yum/dnf must use -y flag
+
+chat:
+  auto_reply: false
+
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  jira:
+    usage: "enabled"
+    project_keys:
+      - "SCT"
+      - "SCYLLADB"
+      - "QATOOLS"
+  linear:
+    team_keys: []
+  pull_requests:
+    scope: auto
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "docs/nemesis.md"
+      - "docs/sct-configuration.md"
+      - "skills/code-review/SKILL.md"
+      - "skills/writing-unit-tests/SKILL.md"
+      - "skills/package-installation/SKILL.md"
+      - "skills/writing-nemesis/SKILL.md"
+
+tone_instructions: "Be extremely concise. No pleasantries, no summaries, no follow-up suggestions. Only report actionable issues found in the code."
+
+pull_request_summary:
+  enabled: false
