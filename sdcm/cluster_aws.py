@@ -1539,7 +1539,9 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
                 self.log.error("Failed to reconfigure Vector Store node %s: %s", node.name, e)
                 raise
 
-    def _create_node(self, instance, ami_username, node_prefix, node_index, base_logdir, dc_idx, rack):
+    def _create_node(
+        self, instance, ami_username, node_prefix, node_index, base_logdir, dc_idx, rack, after_config=None
+    ):
         ec2_service = self._ec2_services[0 if self.params.get("simulated_regions") else dc_idx]
         credentials = self._credentials[0 if self.params.get("simulated_regions") else dc_idx]
         node = VectorStoreAWSNode(
@@ -1553,6 +1555,7 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
             base_logdir=base_logdir,
             dc_idx=dc_idx,
             rack=rack,
+            after_config=after_config,
         )
         node.init()
         return node
