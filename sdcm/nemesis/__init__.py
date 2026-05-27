@@ -21,7 +21,6 @@ import datetime
 import importlib
 import inspect
 import logging
-import math
 import os
 import pkgutil
 import random
@@ -35,11 +34,11 @@ from contextlib import ExitStack
 from datetime import timedelta
 from typing import List, Optional, Callable, Union, Iterable, TYPE_CHECKING
 from functools import partial, cached_property
-from collections import defaultdict, Counter, namedtuple
+from collections import Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
-from cassandra import ConsistencyLevel, InvalidRequest
+from cassandra import InvalidRequest
 from cassandra.query import SimpleStatement
 from invoke import UnexpectedExit
 from argus.common.enums import NemesisStatus
@@ -103,8 +102,6 @@ from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import (
-    get_db_tables,
-    generate_random_string,
     reach_enospc_on_node,
     clean_enospc_on_node,
     parse_nodetool_listsnapshots,
@@ -140,6 +137,7 @@ from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
 
 from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS, DefaultValue, node_operations, unique_disruption_name
+from sdcm.nemesis.utils.common import nemesis_stress_failure_handler, prepare_test_table
 from sdcm.nemesis.utils.indexes import (
     ViewFinishedBuildingException,
     is_cf_a_view,
@@ -172,8 +170,6 @@ from sdcm.exceptions import (
     FilesNotCorrupted,
     LogContentNotFound,
     LdapNotRunning,
-    TimestampNotFound,
-    PartitionNotFound,
     WatcherCallableException,
     UnsupportedNemesis,
     CdcStreamsWasNotUpdated,
@@ -190,7 +186,6 @@ from test_lib.compaction import (
     get_gc_mode,
     GcMode,
 )
-from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
 
@@ -202,7 +197,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 DISRUPT_POOL_PROPERTY_NAME = "target_pool"
 
-__all__ = ["DataValidatorEvent"]
+__all__ = ["DataValidatorEvent", "NemesisStressFailure"]
 
 
 def target_data_nodes(func: Callable) -> Callable:
@@ -300,20 +295,6 @@ class NemesisRunner:
         self.task_used_streaming = None
         self.filter_seed = self.cluster.params.get("nemesis_filter_seeds")
         self.nemesis_seed = nemesis_seed or random.randint(0, 1000)
-        self._add_drop_column_max_per_drop = 5
-        self._add_drop_column_max_per_add = 5
-        self._add_drop_column_max_column_name_size = 10
-        self._add_drop_column_max_columns = 200
-        self._add_drop_column_columns_info = {}
-        self._add_drop_column_target_table = []
-        self._add_drop_column_tables_to_ignore = {
-            "alternator_usertable": "*",  # Ignore alternator tables
-            "ks_truncate": "counter1",  # Ignore counter table
-            "keyspace1": "counter1",  # Ignore counter table
-            # TODO: issue https://github.com/scylladb/scylla/issues/6074. Waiting for dev conclusions
-            "cqlstress_lwt_example": "*",  # Ignore LWT user-profile tables
-        }
-        self._init_partition_deletion_divisor()
         self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
         self.hdr_tags = []
 
@@ -322,23 +303,6 @@ class NemesisRunner:
         self.node_allocator: NemesisNodeAllocator = self.tester.nemesis_allocator
 
         self.log.debug("Instantiated %s nemesis with %d seed", self.__class__.__name__, self.nemesis_seed)
-
-    def _init_partition_deletion_divisor(self):
-        # partition_deletion_divisor is used to limit how many partitions are deleted at once.
-        # The available partitions count is divided by this value to get the actual number to delete.
-        # Higher value = fewer partitions deleted per operation.
-        # Example: partitions_amount = non_validated_partitions // self.partition_deletion_divisor
-        self.partition_deletion_divisor = 5
-        if stress_cmds := self.cluster.params.get("stress_cmd"):
-            for stress_cmd in stress_cmds:
-                stress_cmd_splitted = stress_cmd.split()
-                # In case background load has writes, we can delete more partitions since they are rewritten.
-                # Use divisor of 3 to ensure enough partitions remain available for subsequent delete
-                # operations (e.g., delete_range_in_few_partitions after delete_by_range_using_timestamp)
-                # to avoid "No partitions for deletion found" errors, even if nemesis deletes twice in a row.
-                if "scylla-bench" in stress_cmd_splitted and "-mode=write" in stress_cmd_splitted:
-                    self.partition_deletion_divisor = 3
-                    break
 
     @cached_property
     def random(self) -> random.Random:
@@ -2174,569 +2138,21 @@ class NemesisRunner:
         self.nodetool_cleanup_on_all_nodes_parallel()
 
     def _prepare_test_table(self, ks="keyspace1"):
-        """Populate ``ks.standard1`` with 400 K rows via cassandra-stress."""
-        stress_cmd = (
-            "cassandra-stress write n=400000 cl=QUORUM -mode native cql3 "
-            f"-schema 'keyspace={ks} replication(strategy=NetworkTopologyStrategy,"
-            f"replication_factor={self.tester.reliable_replication_factor})' -log interval=5"
+        """Ensure ``<ks>.standard1`` exists. Delegates to common_ops.prepare_test_table."""
+        prepare_test_table(
+            self.tester,
+            self.cluster,
+            self.target_node,
+            ks=ks,
+            stress_failure_handler=self._nemesis_stress_failure_handler,
         )
-        cs_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd, stop_test_on_failure=False, round_robin=True)
-        self.tester.verify_stress_thread(cs_thread, error_handler=self._nemesis_stress_failure_handler)
 
     def _nemesis_stress_failure_handler(self, stress_pool, errors):
         """
-        Error handler for nemesis thread - aborts the nemesis if a stress command failed on all loaders
-
-        :param stress_pool: list, pool of stress threads that were executing the stress command
-        :param errors: dict, errors occurred on each loader
+        Error handler for nemesis thread - aborts the nemesis if a stress command failed on all loaders.
+        Redirects to the nemesis.util.common.nemesis_stress_failure_handler for the actual error handling.
         """
-        if len(errors) == len(stress_pool.get_results()):
-            errors_str = "".join(f" on node '{node_name}': {errors}\n" for node_name, errors in errors.items())
-            raise NemesisStressFailure(
-                f"Aborting '{self.__class__.__name__}' nemesis as stress command failed "
-                f"with the following errors:\n{errors_str}"
-            )
-
-    @scylla_versions(("5.2.rc0", None), ("2023.1.rc0", None))
-    def _truncate_cmd_timeout_suffix(self, truncate_timeout):
-        # NOTE: 'self' is used by the 'scylla_versions' decorator
-        return f" USING TIMEOUT {int(truncate_timeout)}s"
-
-    @scylla_versions((None, "5.1"), (None, "2022.2"))
-    def _truncate_cmd_timeout_suffix(self, truncate_timeout):
-        # NOTE: 'self' is used by the 'scylla_versions' decorator
-        return ""
-
-    def disrupt_truncate(self):
-        keyspace_truncate = "ks_truncate"
-        table = "standard1"
-
-        ks_cf = f"{keyspace_truncate}.{table}"
-        self.actions_log.info(f"Preparing test table for truncate nemesis: {ks_cf}")
-        self._prepare_test_table(ks=keyspace_truncate)
-
-        # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
-        with adaptive_timeout(Operations.FLUSH, self.target_node, timeout=HOUR_IN_SEC * 2):
-            self.target_node.run_nodetool("flush")
-        # do the actual truncation
-        truncate_timeout = 600
-        truncate_cmd_timeout_suffix = self._truncate_cmd_timeout_suffix(truncate_timeout)
-        with self.action_log_scope(f"Truncate {ks_cf} table using cqlsh"):
-            self.target_node.run_cqlsh(
-                cmd=f"TRUNCATE {keyspace_truncate}.{table}{truncate_cmd_timeout_suffix}", timeout=truncate_timeout
-            )
-
-    def disrupt_truncate_large_partition(self):
-        """
-        Introduced a new truncate nemesis, it truncates a large-partition table,
-        it's used to cover one improvement of compaction.
-        The increase frequency of checking abortion is very useful for truncate.
-        """
-        if SkipPerIssues(
-            issues="https://github.com/scylladb/scylladb/issues/20356", params=self.tester.params
-        ) and self.tester.params.get("use_zero_nodes"):
-            raise UnsupportedNemesis("Unsupported nemesis due to scylladb/scylladb#20356")
-        ks_name = "ks_truncate_large_partition"
-        table = "test_table"
-        ks_cf = f"{ks_name}.{table}"
-        stress_cmd = (
-            "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=10 "
-            + "-clustering-row-count=5555 -clustering-row-size=uniform:10..20 -concurrency=10 "
-            + "-connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=60s "
-            + f"-keyspace {ks_name} -table {table}"
-        )
-        self.actions_log.info(f"Preparing test table for truncate with scylla-bench: {ks_cf}")
-        bench_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd, stop_test_on_failure=False)
-        self.tester.verify_stress_thread(bench_thread, error_handler=self._nemesis_stress_failure_handler)
-
-        # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
-        with adaptive_timeout(Operations.FLUSH, self.target_node, timeout=HOUR_IN_SEC * 2):
-            self.target_node.run_nodetool("flush")
-        # do the actual truncation
-        truncate_timeout = 600
-        truncate_cmd_timeout_suffix = self._truncate_cmd_timeout_suffix(truncate_timeout)
-        with self.action_log_scope(f"Truncate {ks_cf} table using cqlsh"):
-            self.target_node.run_cqlsh(
-                cmd=f"TRUNCATE {ks_name}.{table}{truncate_cmd_timeout_suffix}", timeout=truncate_timeout
-            )
-
-    def _get_all_tables_with_no_compact_storage(self, tables_to_skip=None):
-        """
-        Return all tables with no "COMPACT STORAGE" in table code
-        :param tables_to_skip: Dict of keyspaces/tables to be excluded from results.
-            Examples:
-                {'ks': 'table'} - will skip ks.table
-                {'ks': '*'} - will skip any tables from keyspace "ks"
-                {'*': 'table1,table2'} - will skip table1 and table2 from any keyspace
-        :return: Dict of with keyspaces as key and list of table names as value
-        """
-        keyspaces = []
-        output = {}
-        if tables_to_skip is None:
-            tables_to_skip = {}
-        to_be_skipped_default = tables_to_skip.get("*", "").split(",")
-        with self.cluster.cql_connection_patient(self.target_node) as session:
-            query_result = session.execute("SELECT keyspace_name FROM system_schema.keyspaces;")
-            for result_rows in query_result:
-                keyspaces.extend(
-                    [row.lower() for row in result_rows if not row.lower().startswith(("system", "audit"))]
-                )
-            for ks in keyspaces:
-                to_be_skipped = tables_to_skip.get(ks, None)
-                if to_be_skipped is None:
-                    to_be_skipped = to_be_skipped_default
-                elif to_be_skipped == "*":
-                    continue
-                elif to_be_skipped == "":
-                    to_be_skipped = []
-                else:
-                    to_be_skipped = to_be_skipped.split(",") + to_be_skipped_default
-                tables = get_db_tables(keyspace_name=ks, node=self.target_node, with_compact_storage=False)
-                if to_be_skipped:
-                    tables = [table for table in tables if table not in to_be_skipped]
-                if not tables:
-                    continue
-                output[ks] = tables
-        return output
-
-    def _add_drop_column_get_target_table(self, stored_target_table: list):
-        current_tables = self._get_all_tables_with_no_compact_storage(self._add_drop_column_tables_to_ignore)
-        if stored_target_table:
-            if stored_target_table[1] in current_tables.get(stored_target_table[0], []):
-                return stored_target_table
-        if not current_tables:
-            return None
-        ks_name = next(iter(current_tables.keys()))
-        table_name = current_tables[ks_name][0]
-        return [ks_name, table_name]
-
-    @staticmethod
-    def _add_drop_column_get_added_columns_info(target_table: list, added_fields):
-        ks = added_fields.get(target_table[0], None)
-        if ks is None:
-            output = {"column_names": {}, "column_types": {}}
-            added_fields[target_table[0]] = {target_table[1]: output}
-            return output
-        table = ks.get(target_table[1], None)
-        if table is not None:
-            return table
-        ks[target_table[1]] = output = {"column_names": {}, "column_types": {}}
-        return output
-
-    @staticmethod
-    def _random_column_name(avoid_names=None, max_name_size=5):
-        if avoid_names is None:
-            avoid_names = []
-        while True:
-            column_name = generate_random_string(max_name_size)
-            if column_name not in avoid_names:
-                break
-        return column_name
-
-    def _add_drop_column_generate_columns_to_drop(self, added_columns_info):
-        drop = []
-        columns_to_drop = min(len(added_columns_info["column_names"]) + 1, self._add_drop_column_max_per_drop + 1)
-        if columns_to_drop > 1:
-            columns_to_drop = random.randrange(1, columns_to_drop)
-        for _ in range(columns_to_drop):
-            choice = [n for n in added_columns_info["column_names"] if n not in drop]
-            if choice:
-                column_name = random.choice(choice)
-                drop.append(column_name)
-        return drop
-
-    def _add_drop_column_run_cql_query(self, cmd, ks, consistency_level=ConsistencyLevel.ALL):
-        try:
-            with self.cluster.cql_connection_patient(self.target_node, keyspace=ks) as session:
-                session.default_consistency_level = consistency_level
-                session.execute(cmd)
-        except Exception as exc:  # noqa: BLE001
-            self.log.debug(f"Add/Remove Column Nemesis: CQL query '{cmd}' execution has failed with error '{exc!s}'")
-            self.actions_log.info(f"Failed to add/drop column: {exc!s}")
-            return False
-        return True
-
-    def _add_drop_column_generate_columns_to_add(self, added_columns_info):
-        add = []
-        columns_to_add = min(
-            self._add_drop_column_max_columns - len(added_columns_info["column_names"]),
-            self._add_drop_column_max_per_add,
-        )
-        if columns_to_add > 1:
-            columns_to_add = random.randrange(1, columns_to_add)
-        for _ in range(columns_to_add):
-            new_column_name = self._random_column_name(
-                added_columns_info["column_names"].keys(), self._add_drop_column_max_column_name_size
-            )
-            new_column_type = CQLTypeBuilder.get_random(
-                added_columns_info["column_types"], allow_levels=10, avoid_types=["counter"], forget_on_exhaust=True
-            )
-            if new_column_type is None:
-                continue
-            add.append([new_column_name, new_column_type])
-        return add
-
-    def _add_drop_column(self, drop=True, add=True):
-        self._add_drop_column_target_table = self._add_drop_column_get_target_table(self._add_drop_column_target_table)
-        if self._add_drop_column_target_table is None:
-            return
-        added_columns_info = self._add_drop_column_get_added_columns_info(
-            self._add_drop_column_target_table, self._add_drop_column_columns_info
-        )
-        added_columns_info.get("column_names", None)
-        if not added_columns_info["column_names"]:
-            drop = False
-        if drop:
-            drop = self._add_drop_column_generate_columns_to_drop(added_columns_info)
-        if add:
-            add = self._add_drop_column_generate_columns_to_add(added_columns_info)
-        if not add and not drop:
-            return
-        # TBD: Scylla does not support DROP and ADD in the same statement
-        ks_cf = f"{self._add_drop_column_target_table[0]}.{self._add_drop_column_target_table[1]}"
-        if drop:
-            self.actions_log.info(f"Dropping {len(drop)} columns from {ks_cf} table")
-            cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} DROP ( {', '.join(drop)} );"
-            if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
-                for column_name in drop:
-                    column_type = added_columns_info["column_names"][column_name]
-                    del added_columns_info["column_names"][column_name]
-        if add:
-            self.actions_log.info(f"Adding {len(add)} columns to {ks_cf} table")
-            cmd = (
-                f"ALTER TABLE {self._add_drop_column_target_table[1]} "
-                f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
-            )
-            if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
-                for column_name, column_type in add:
-                    added_columns_info["column_names"][column_name] = column_type
-                    column_type.remember_variant(added_columns_info["column_types"])
-
-    def _add_drop_column_run_in_cycle(self):
-        start_time = time.time()
-        end_time = start_time + 600
-        while time.time() < end_time:
-            self._add_drop_column()
-
-    def verify_initial_inputs_for_delete_nemesis(self):
-        test_keyspaces = self.cluster.get_test_keyspaces()
-
-        if "scylla_bench" not in test_keyspaces:
-            raise UnsupportedNemesis("This nemesis can run on scylla_bench test only")
-
-        if not (self.tester.partitions_attrs and self.tester.partitions_attrs.max_partitions_in_test_table):
-            raise UnsupportedNemesis(
-                'This nemesis expects "max_partitions_in_test_table" sub-parameter of data_validation to be set'
-            )
-
-    def choose_partitions_for_delete(
-        self, partitions_amount, ks_cf, with_clustering_key_data=False, exclude_partitions=None
-    ):
-        """
-        :type partitions_amount: int
-        :type ks_cf: str
-        :type with_clustering_key_data: bool
-        :type exclude_partitions: list
-        :return: defaultdict
-        """
-        if not exclude_partitions:
-            exclude_partitions = []
-
-        # In the large partition tests part of partitions are used for data validation. We do not want to delete a data in those partitions
-        # to prevent scylla-bench command failure
-        partitions_attrs = self.tester.partitions_attrs
-        if partitions_attrs.partition_range_with_data_validation:
-            partitions_amount = min(partitions_amount, partitions_attrs.non_validated_partitions)
-            available_partitions_for_deletion = list(
-                range(partitions_attrs.partition_end_range + 1, partitions_attrs.max_partitions_in_test_table)
-            )
-        else:
-            available_partitions_for_deletion = list(range(partitions_attrs.max_partitions_in_test_table))
-        self.log.debug(f"Partitions amount for delete : {partitions_amount}")
-
-        partitions_for_delete = defaultdict(list)
-        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
-            session.default_consistency_level = ConsistencyLevel.ONE
-
-            while available_partitions_for_deletion and len(partitions_for_delete) < partitions_amount:
-                random_index = random.randint(0, len(available_partitions_for_deletion) - 1)
-                partition_key = available_partitions_for_deletion.pop(random_index)
-
-                if exclude_partitions and partition_key in exclude_partitions:
-                    continue
-
-                # Get the max cl value in the partition.
-                cmd = f"select ck from {ks_cf} where pk={partition_key} order by ck desc limit 1"
-                try:
-                    result = session.execute(SimpleStatement(cmd, fetch_size=1), timeout=300)
-                except Exception as exc:  # noqa: BLE001
-                    self.log.error(str(exc))
-                    continue
-
-                if not result:
-                    continue
-
-                first_row = result.one()
-                if not first_row or first_row.ck is None:
-                    continue
-
-                if not with_clustering_key_data:
-                    partitions_for_delete[partition_key] = []
-                    continue
-
-                # Suppose that min ck value is 0 in the partition
-                partitions_for_delete[partition_key].extend([0, first_row.ck])
-
-                if None in partitions_for_delete[partition_key]:
-                    partitions_for_delete.pop(partition_key)
-
-        self.log.debug(f"Partitions for delete: {partitions_for_delete}")
-        return partitions_for_delete
-
-    def get_random_timestamp_from_partition(self, ks_cf, pkey, partition_percentage=0.25) -> tuple[int, int]:
-        """
-        Get a write timestamp from a "pivot" row inside a single partition.
-        partition_percentage controls where the "pivot" is, default is 25% of the partition size (total number of rows)
-        Returns timestamp and the clustering key value as tuple
-        """
-        with self.cluster.cql_connection_patient(node=self.target_node) as session:
-            count_result = session.execute(SimpleStatement(f"select count(ck) from {ks_cf} where pk = {pkey}")).one()
-            if not count_result or count_result.system_count_ck is None:
-                message = f"Unable to count rows in partition (pk = {pkey})"
-                self.log.error(message)
-                raise PartitionNotFound(message)
-            number_of_rows = count_result.system_count_ck
-            if number_of_rows == 0:
-                message = f"Partition (pk = {pkey}) is empty"
-                self.log.error(message)
-                raise PartitionNotFound(message)
-            fetch_limit = max(math.ceil(number_of_rows * partition_percentage), 11)
-            self.log.debug(
-                "[%s_using_timestamp] Partition size: %s, fetching up to %s",
-                self.base_disruption_name,
-                number_of_rows,
-                fetch_limit,
-            )
-            partition = session.execute(
-                SimpleStatement(f"select pk, ck from {ks_cf} where pk = {pkey} limit {fetch_limit}")
-            ).all()
-            if not partition:
-                message = (
-                    f"No rows found in partition (pk = {pkey}) after counting {number_of_rows} rows. "
-                    "The partition may have been deleted."
-                )
-                self.log.error(message)
-                raise PartitionNotFound(message)
-            delete_mark = partition[-1].ck
-            timestamp_result = session.execute(
-                SimpleStatement(f"select writetime(v) from {ks_cf} where pk = {pkey} and ck = {delete_mark}")
-            ).one()
-            if not timestamp_result or timestamp_result.writetime_v is None:
-                message = f"Unable to get writetime for row (pk = {pkey}, ck = {delete_mark})"
-                self.log.error(message)
-                raise TimestampNotFound(message)
-            timestamp = timestamp_result.writetime_v
-
-            return timestamp, delete_mark
-
-    def run_deletions(self, queries, ks_cf):
-        for cmd in queries:
-            self.log.debug(f"delete query: {cmd}")
-            with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
-                session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM), timeout=3600)
-
-        self.target_node.run_nodetool("flush", args=ks_cf.replace(".", " "))
-
-    def _verify_using_timestamp_deletions(self, ks_cf: str, verification_queries: list[tuple[int, int, int]]):
-        mv_not_configured = False
-        mv_table_name = ".".join([ks_cf.split(sep=".")[0], "view_test"])
-        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
-            for pk, ck, ts in verification_queries:
-                result = session.execute(
-                    SimpleStatement(f"SELECT pk, ck, writetime(v) FROM {ks_cf} WHERE pk = {pk} AND ck = {ck}")
-                ).one()
-                assert not result or result.writetime_v != ts, (
-                    f"USING TIMESTAMP: deletion failed for ({pk}, {ck}), row still exists, timestamp used: {ts}"
-                )
-                if not mv_not_configured:
-                    try:
-                        result = session.execute(
-                            SimpleStatement(
-                                f"SELECT pk, ck, writetime(v) FROM {mv_table_name} WHERE pk = {pk} AND ck = {ck}"
-                            )
-                        ).one()
-                        assert not result or result.writetime_v != ts, (
-                            f"USING TIMESTAMP: deletion failed for ({pk}, {ck}), "
-                            f"row still exists in MV (!!!), timestamp used: {ts}"
-                        )
-                    except InvalidRequest:
-                        mv_not_configured = True
-
-    def delete_half_partition(self, ks_cf):
-        self.log.debug("Delete by range - half of partition")
-
-        # Select half of partitions because we need available partitions in the next step: delete_range_in_few_partitions module
-        partitions_amount = self.tester.partitions_attrs.non_validated_partitions / 2
-        self.log.debug("delete_half_partition.partitions_amount: %s", partitions_amount)
-        partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=partitions_amount, ks_cf=ks_cf, with_clustering_key_data=True
-        )
-        if not partitions_for_delete:
-            raise UnsupportedNemesis("Not found partitions for delete. Nemesis can not be run")
-
-        self.actions_log.info(f"Deleting half ({len(partitions_for_delete)}) of partitions on {ks_cf} table")
-        queries = []
-        for pkey, ckey in partitions_for_delete.items():
-            queries.append(f"delete from {ks_cf} where pk = {pkey} and ck > {int(ckey[1] / 2)}")
-        self.run_deletions(queries=queries, ks_cf=ks_cf)
-        return partitions_for_delete
-
-    def delete_by_range_using_timestamp(self, ks_cf: str):
-        self.log.debug("Delete by range - using timestamp")
-
-        partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.partition_deletion_divisor,
-            ks_cf=ks_cf,
-            with_clustering_key_data=False,
-        )
-        if not partitions_for_delete:
-            message = "Unable to find partitions to delete"
-            self.log.error(message)
-            raise PartitionNotFound(message)
-
-        queries = []
-        verification_queries = []
-        partition_percentage = random.randint(25, 75) / 100
-        self.actions_log.info(
-            f"Deleting partitions using timestamp in {ks_cf} table."
-            f" Partitions count: {len(partitions_for_delete)}, "
-            f"partitions percentage: {partition_percentage}"
-        )
-        for pkey, _ in partitions_for_delete.items():
-            self.log.debug("Using USING TIMESTAMP clause in the deletion for this partition: %s", pkey)
-            timestamp, clustering_key = self.get_random_timestamp_from_partition(
-                ks_cf=ks_cf, pkey=pkey, partition_percentage=partition_percentage
-            )
-            queries.append(f"delete from {ks_cf} using timestamp {timestamp} where pk = {pkey}")
-            verification_queries.append([pkey, clustering_key, timestamp])
-
-        self.run_deletions(queries=queries, ks_cf=ks_cf)
-        self._verify_using_timestamp_deletions(ks_cf=ks_cf, verification_queries=verification_queries)
-
-        return partitions_for_delete
-
-    def delete_range_in_few_partitions(self, ks_cf, partitions_for_exclude_dict):
-        self.log.debug("Delete same range in the few partitions")
-
-        partitions_for_exclude = list(partitions_for_exclude_dict.keys())
-        partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.partition_deletion_divisor,
-            ks_cf=ks_cf,
-            with_clustering_key_data=True,
-            exclude_partitions=partitions_for_exclude,
-        )
-        if not partitions_for_delete:
-            raise Exception("No partitions for deletion found. Cannot execute a range deletion.")
-
-        # Choose same "ck" values that exists for all partitions
-        # min_clustering_key - the biggest from min(ck) value for all selected partitions
-        # max_clustering_key - the smallest from max(ck) value for all selected partitions
-        min_clustering_key = max([v[0] for v in partitions_for_delete.values()])
-        max_clustering_key = min([v[1] for v in partitions_for_delete.values()])
-        clustering_keys = []
-        if max_clustering_key > min_clustering_key:
-            third_ck = int((max_clustering_key - min_clustering_key) / 3)
-            clustering_keys = range(min_clustering_key + third_ck, max_clustering_key - third_ck)
-
-        if not clustering_keys:
-            clustering_keys = range(min_clustering_key, max_clustering_key)
-
-        self.actions_log.info(
-            f"Delete same range in the few partitions in {ks_cf} table. Partitions count: {len(partitions_for_delete)}"
-        )
-        queries = []
-        for pkey in partitions_for_delete.keys():
-            queries.append(
-                f"delete from {ks_cf} where pk = {pkey} and ck >= {clustering_keys[0]} and ck <= {clustering_keys[-1]}"
-            )
-
-        self.run_deletions(queries=queries, ks_cf=ks_cf)
-
-        return list(partitions_for_delete.keys()) + partitions_for_exclude
-
-    def disrupt_delete_10_full_partitions(self):
-        """
-        Delete few partitions in the table with large partitions
-        """
-        self.verify_initial_inputs_for_delete_nemesis()
-
-        ks_cf = "scylla_bench.test"
-        partitions_for_delete = self.choose_partitions_for_delete(10, ks_cf)
-
-        if not partitions_for_delete:
-            raise UnsupportedNemesis("Not found partitions for delete. Nemesis can not be run")
-
-        self.actions_log.info(f"Delete partitions in {ks_cf} table. Partitions count: {len(partitions_for_delete)}")
-        queries = []
-        for partition_key in partitions_for_delete.keys():
-            queries.append(f"delete from {ks_cf} where pk = {partition_key}")
-
-        self.run_deletions(queries=queries, ks_cf=ks_cf)
-
-    def disrupt_delete_overlapping_row_ranges(self):
-        """
-        Delete several overlapping row ranges in the table with large partitions.
-        """
-        self.verify_initial_inputs_for_delete_nemesis()
-        ks_cf = "scylla_bench.test"
-        partitions_for_delete = self.choose_partitions_for_delete(
-            partitions_amount=self.tester.partitions_attrs.non_validated_partitions // self.partition_deletion_divisor,
-            ks_cf=ks_cf,
-            with_clustering_key_data=True,
-        )
-        if not partitions_for_delete:
-            self.log.error("No partitions for delete found!")
-            raise UnsupportedNemesis("DeleteOverlappingRowRangesMonkey: No partitions for delete found!")
-
-        self.actions_log.info(
-            f"Delete random row ranges in few partitions in {ks_cf} table. "
-            f"Partitions count: {len(partitions_for_delete)}"
-        )
-        queries = []
-        for pkey, ckey in partitions_for_delete.items():
-            for _ in range(random.randint(3, 20)):  # Get a random number of ranges to delete.
-                min_ck = random.randint(0, ckey[1])  # Generate a random range of rows to delete in a single partition.
-                max_ck = random.randint(min_ck, ckey[1])
-                queries.append(f"delete from {ks_cf} where pk = {pkey} and ck > {min_ck} and ck < {max_ck}")
-        self.run_deletions(queries=queries, ks_cf=ks_cf)
-
-    def disrupt_delete_by_rows_range(self):
-        """
-        Delete few partitions in the table with large partitions
-        """
-        self.verify_initial_inputs_for_delete_nemesis()
-
-        ks_cf = "scylla_bench.test"
-        # Step-1: delete_half_partition or delete_by_range_using_timestamp
-        if random.random() > 0.5:
-            partitions_for_exclude = self.delete_half_partition(ks_cf)
-        else:
-            partitions_for_exclude = self.delete_by_range_using_timestamp(ks_cf)
-        # Step-2: delete_range_in_few_partitions
-        self.delete_range_in_few_partitions(ks_cf, partitions_for_exclude)
-
-    def disrupt_add_drop_column(self):
-        """
-        It searches for a table that allow add/drop columns (non compact storage table)
-        If there is no such table it draw an error and quit
-        It keeps tracking what columns where added and never drops column that were added by someone else.
-        """
-        self.log.debug("AddDropColumnMonkey: Started")
-        self._add_drop_column_target_table = self._add_drop_column_get_target_table(self._add_drop_column_target_table)
-        if self._add_drop_column_target_table is None:
-            raise UnsupportedNemesis("AddDropColumnMonkey: can't find table to run on")
-        InfoEvent(f"AddDropColumnMonkey table {'.'.join(self._add_drop_column_target_table)}").publish()
-        self._add_drop_column_run_in_cycle()
+        return nemesis_stress_failure_handler(self.__class__.__name__, stress_pool, errors)
 
     def toggle_table_gc_mode(self):
         """

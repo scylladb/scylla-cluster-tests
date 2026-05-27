@@ -838,7 +838,7 @@ class scylla_versions:
     Limitations:
         - Can't work if the same method name in the same file is used in different classes
         - Can't work with 'static' and 'class' methods. Only 'class instance' ones.
-        - Depends on the 'params' or 'cluster.params' attributes presence
+        - Depends on the 'params', 'cluster.params' or 'runner.cluster.params' attributes presence
           which store SCT configuration.
     Example:
         # Having "scylla_version" be set to "4.4.4" in the sct config

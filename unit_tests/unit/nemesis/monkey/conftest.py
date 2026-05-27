@@ -57,4 +57,10 @@ def base_runner():
     runner.cluster.data_nodes = [node1, node2]
     runner.target_node = node1
 
+    # -- CQL context manager support -----------------------------------------
+    # MagicMock natively supports `with` statements, so any code doing
+    # `with cluster.cql_connection_patient(node, ...) as session:` will get
+    # a usable mock session without extra setup.
+    runner.cluster.cql_session = runner.cluster.cql_connection_patient.return_value.__enter__.return_value
+
     return runner
