@@ -60,17 +60,26 @@ jobs:
               ;;
           esac
 
-      - name: Checkout PR branch for review
+      - name: Checkout base branch
         if: steps.membership.outputs.is_member == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
-          # Check out the PR's actual code so Claude can read the files being
-          # reviewed. The security risk of pull_request_target (secrets exposed
-          # to fork code) applies only when untrusted code is *executed* — we
-          # prevent that by restricting Claude to read-only tools (Read + safe
-          # git/gh subcommands only; no Write, Edit, or arbitrary Bash).
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 1
+
+      - name: Checkout PR code into subdirectory
+        if: steps.membership.outputs.is_member == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          # PR head goes into a subdirectory, not the workspace root.
+          # persist-credentials: false ensures the GITHUB_TOKEN is not written
+          # into the subdirectory's git config, preventing fork code from
+          # accessing it. Claude reads the PR files via --add-dir below.
+          # Ref: https://github.com/anthropics/claude-code-action/blob/main/docs/security.md
           ref: ${{ github.event.pull_request.head.sha }}
+          path: pr-code
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Run Claude Code Review
         if: steps.membership.outputs.is_member == 'true'
@@ -87,6 +96,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: >-
             --model claude-sonnet-4-6
+            --add-dir pr-code
             --allowedTools Read,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git blame:*),Bash(gh pr view:*),Bash(gh pr diff:*)
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
