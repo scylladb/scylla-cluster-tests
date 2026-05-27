@@ -69,6 +69,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Checkout PR code into subdirectory
         if: steps.membership.outputs.is_member == 'true'
