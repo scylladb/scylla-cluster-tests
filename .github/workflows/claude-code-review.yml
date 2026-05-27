@@ -104,7 +104,7 @@ jobs:
             --allowedTools Read,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git blame:*),Bash(gh pr view:*),Bash(gh pr diff:*)
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          prompt: '/code-review:code-review https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
           allowed_bots: 'claude,renovate[bot]'
           show_full_output: 'true'
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
