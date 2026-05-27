@@ -28,3 +28,5 @@ Available skills (invoke via Skill tool or `/skill-name`):
 - `commit-summary` — Generate weekly commit summary reports
 - `writing-nemesis` — Create new chaos engineering disruptions
 - `code-review` — Review PRs for correctness and convention compliance
+- `labeling-pipelines` — Add test_metadata to test-case YAML files
+- `reviewing-pipeline-docs` — Review test_metadata sections for accuracy

@@ -42,6 +42,7 @@ from typing_extensions import Annotated
 from pydantic.functional_validators import BeforeValidator
 from pydantic.fields import FieldInfo
 from sdcm import sct_abs_path
+from sdcm.test_metadata import TestMetadata
 import sdcm.provision.azure.utils as azure_utils
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.keystore import KeyStore
@@ -2393,6 +2394,11 @@ class SCTConfiguration(BaseModel):
     )
     c_s_driver_version: Literal["3", "4", "random"] = SctField(
         description="cassandra-stress driver version to use: 3|4|random",
+    )
+    test_metadata: Annotated[TestMetadata | None, BeforeValidator(dict_or_str_or_pydantic)] = SctField(
+        description=(
+            "Structured metadata for test documentation and labeling. Validated by pydantic model. Flows to Argus."
+        ),
     )
 
     required_params: Annotated[list, IgnoredType] = [
