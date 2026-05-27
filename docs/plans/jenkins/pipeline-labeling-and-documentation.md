@@ -213,16 +213,22 @@ class TestMetadata(BaseModel):
         ),
     )
 
+VALID_BACKENDS = {
+    "aws", "gce", "azure", "docker", "k8s-eks", "k8s-gke",
+    "k8s-local-kind", "baremetal", "xcloud",
+}
+
+class TestMetadata(BaseModel):
+    # ... fields above ...
+
     @field_validator("supported_backends", mode="before")
     @classmethod
     def validate_backends(cls, v):
         if v is None:
             return v
-        valid = {"aws", "gce", "azure", "docker", "k8s-eks", "k8s-gke",
-                 "k8s-local-kind", "baremetal", "xcloud"}
         for b in v:
-            if b not in valid:
-                raise ValueError(f"Invalid backend '{b}'. Valid: {sorted(valid)}")
+            if b not in VALID_BACKENDS:
+                raise ValueError(f"Invalid backend '{b}'. Valid: {sorted(VALID_BACKENDS)}")
         return v
 ```
 
@@ -230,6 +236,8 @@ class TestMetadata(BaseModel):
 
 ```python
 # In sdcm/sct_config.py, add to SCTConfiguration class:
+from sdcm.test_metadata import TestMetadata
+
 test_metadata: TestMetadata | None = SctField(
     description="Structured metadata for test documentation and labeling. "
                 "Validated by pydantic model. Flows to Argus.",
@@ -398,6 +406,7 @@ test_metadata: null
 - [ ] Config loads successfully with and without `test_metadata` present
 - [ ] `dump_help_config_markdown()` includes metadata field documentation
 - [ ] Unit tests validate the pydantic model (valid/invalid inputs)
+- [ ] Pre-commit hook auto-populates nemesis values in taxonomy.yaml from NemesisRegistry
 
 **Dependencies**: None.
 
@@ -425,8 +434,10 @@ def lint_test_metadata(config_path: Path, taxonomy_path: Path) -> LintResult:
     """Validate test_metadata in a test-case YAML against taxonomy and config content."""
     ...
 
-def cross_reference_config(config_path: Path) -> list[str]:
+def cross_reference_config(config_path: Path) -> LintResult:
     """Check that metadata labels match the actual test configuration.
+
+    Returns a LintResult with warnings for mismatches between metadata and config.
 
     Examples of cross-reference checks:
     - If config has nemesis_class_name: 'SisyphusMonkey', metadata.nemesis_labels should include it
@@ -464,6 +475,8 @@ def lint_test_docs(test_case_dir, fix, missing_only):
 | TD-007b | If test docstring declares `Supported backends:`, metadata must be subset. No declaration = all. | warning |
 | TD-008 | `duration_class` is consistent with `test_duration` value | warning |
 | TD-009 | `features` labels are consistent with config (e.g., multi-dc detected from `n_db_nodes: '15 15 15'`) | warning |
+| TD-010 | `tier` is appropriate for test duration (e.g., `sanity` tests should be <1h) | warning |
+| TD-011 | `supported_backends` includes the backend from associated pipeline(s) | warning |
 
 **Auto-fix (`--fix`)** capabilities:
 - TD-005: Add missing nemesis labels from config
@@ -473,7 +486,7 @@ def lint_test_docs(test_case_dir, fix, missing_only):
 
 **Definition of Done**:
 - [ ] `sct.py lint-test-docs` validates all test-case YAML files
-- [ ] All 10 validation rules implemented
+- [ ] All 12 validation rules implemented
 - [ ] `--fix` auto-corrects TD-005, TD-006, TD-008, TD-009
 - [ ] `--missing-only` reports coverage gaps
 - [ ] Exit code 1 on errors, 0 on clean (warnings don't fail)
