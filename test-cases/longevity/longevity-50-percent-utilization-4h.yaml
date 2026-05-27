@@ -1,0 +1,86 @@
+# LONGEVITY TEST: FIFTY PERCENT UTILIZATION 4H
+#
+# Purpose:
+#   Validates ScyllaDB stability under a 4-hour sustained cassandra-stress mixed
+#   workload targeting approximately 60-70 percent disk utilization on each node
+#   (i8g.xlarge — 1.9 TB NVMe).
+#   - Exercises ICS compaction under heavy sequential write and mixed read/write load
+#   - Encrypted client and inter-node communication (TLS)
+#
+# Cluster:
+#   - 6 DB nodes (i8g.xlarge — ARM64/Graviton), 3 simulated racks, 2 loaders
+#   - Replication factor: 3, ICS compaction
+#   - Nemesis: SisyphusMonkey (general chaos)
+#
+# Workload (cassandra-stress, 4h):
+#   - Prepare: 2x write streams, 120M rows each, 512B x 10 columns (~60-70% disk fill)
+#   - Stress: 2x mixed streams (read/write), 240min each, same schema
+#
+# Encryption: server + client TLS enabled
+
+test_duration: 600
+
+n_db_nodes: 6
+n_loaders: 2
+seeds_num: 3
+simulated_racks: 3
+
+round_robin: true
+
+instance_type_db: 'i8g.xlarge'
+append_scylla_setup_args: ' --no-ec2-check '
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_interval: 15
+
+user_prefix: 'longevity-50-percent-utilization-4h'
+space_node_threshold: 64424
+
+pre_create_schema: true
+sstable_size: 100
+
+server_encrypt: true
+client_encrypt: true
+
+hinted_handoff: 'enabled'
+parallel_node_operations: true
+
+nemesis_during_prepare: false
+
+prepare_write_cmd:
+  - >-
+    cassandra-stress write cl=QUORUM n=120000000
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=1..120000000
+    -col 'n=FIXED(5) size=FIXED(512)'
+    -log interval=5
+  - >-
+    cassandra-stress write cl=QUORUM n=120000000
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=120000001..240000000
+    -col 'n=FIXED(5) size=FIXED(512)'
+    -log interval=5
+
+stress_cmd:
+  - >-
+    cassandra-stress mixed cl=QUORUM duration=180m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=1..120000000
+    -col 'n=FIXED(5) size=FIXED(512)'
+    -log interval=5
+  - >-
+    cassandra-stress mixed cl=QUORUM duration=180m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=120000001..240000000
+    -col 'n=FIXED(5) size=FIXED(512)'
+    -log interval=5
+
+use_hdrhistogram: true
