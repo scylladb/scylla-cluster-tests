@@ -11,9 +11,13 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
+import logging
 from functools import cached_property
 
+from sdcm.reporting.tooling_reporter import VectorStoreVersionReporter
 from sdcm.utils.vector_store_client import VectorStoreClient
+
+LOGGER = logging.getLogger(__name__)
 
 
 class VectorStoreNodeMixin:
@@ -96,3 +100,15 @@ class VectorStoreClusterMixin:
             if not node.wait_for_vector_store_ready(timeout=timeout):
                 raise RuntimeError(f"Vector Store node {node.name} failed to become ready within {timeout} seconds")
         self.log.info("All Vector Store nodes are ready")
+        self._report_vector_store_version()
+
+    def _report_vector_store_version(self) -> None:
+        """Submit Vector Store version to Argus."""
+        if not self.nodes:
+            return
+        try:
+            VectorStoreVersionReporter(
+                self.nodes[0].get_vector_store_api_client(), self.test_config.argus_client()
+            ).report()
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Error submitting vector store version, VS package won't show in Argus.", exc_info=True)

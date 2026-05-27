@@ -38,7 +38,7 @@ from sdcm.utils.cloud_api_utils import (
 )
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.get_username import get_username
-from sdcm.utils.vector_store_utils import VectorStoreClusterMixin
+from sdcm.utils.vector_store_utils import VectorStoreClusterMixin, VectorStoreNodeMixin
 from sdcm.test_config import TestConfig
 from sdcm.remote import RemoteLibSSH2CmdRunner, shell_script_cmd
 from sdcm.provision.network_configuration import ssh_connection_ip_type
@@ -408,7 +408,7 @@ class CloudNode(cluster.BaseNode):
         )
 
 
-class CloudVSNode(CloudNode):
+class CloudVSNode(VectorStoreNodeMixin, CloudNode):
     """A Vector Search node running on Scylla Cloud"""
 
     def __init__(
@@ -822,9 +822,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         if self.vector_store_cluster and len(self.vector_store_cluster.nodes) > 0:
             try:
                 node = self.vector_store_cluster.nodes[0]
-                VectorStoreVersionReporter(
-                    node.remoter, "/home/ubuntu/vector-store/vector-store", self.test_config.argus_client()
-                ).report()
+                VectorStoreVersionReporter(node.get_vector_store_api_client(), self.test_config.argus_client()).report()
             except Exception:  # noqa: BLE001
                 LOGGER.warning("Error submitting vector store version, VS package won't show in Argus.", exc_info=True)
 

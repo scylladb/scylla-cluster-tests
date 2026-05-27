@@ -7,6 +7,7 @@ from argus.client.sct.client import ArgusSCTClient
 from argus.client.sct.types import Package
 
 from sdcm.remote.base import CommandRunner
+from sdcm.utils.vector_store_client import VectorStoreClient
 
 LOGGER = logging.getLogger(__name__)
 
@@ -368,10 +369,11 @@ class YcsbVersionReporter(ToolReporterBase):
 class VectorStoreVersionReporter(ToolReporterBase):
     TOOL_NAME = "vector-store"
 
-    def _collect_version_info(self):
-        output = self.runner.sudo(f"{self.command_prefix} --version")
-        LOGGER.info("%s: Collected vector-store output:\n%s", self, output.stdout)
+    def __init__(self, vector_store_client: VectorStoreClient, argus_client: ArgusSCTClient = None) -> None:
+        super().__init__(runner=None, command_prefix=None, argus_client=argus_client)
+        self.vector_store_client = vector_store_client
 
-        name, version, *_ = output.stdout.split(" ")
-        LOGGER.info("%s: Collected %s version:\n%s", self, name, version)
-        self.version = version
+    def _collect_version_info(self):
+        info = self.vector_store_client.get_info()
+        LOGGER.info("%s: Collected vector-store info: %s", self, info)
+        self.version = info.get("version", "#FAILED_CHECK_LOGS")
