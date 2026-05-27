@@ -13,10 +13,13 @@ on:
 
 jobs:
   claude-review:
-    # Deduplicate: pull_request_target fires for every PR including same-repo ones.
-    # Skip it when pull_request already covers the same PR (same-repo only).
+    # Route by PR origin:
+    # - Same-repo PR: pull_request fires with secrets from the PR branch (testable)
+    # - Fork PR:      pull_request_target fires with secrets from master
+    # Each PR type triggers exactly one run; the other event is skipped.
     if: |
-      github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
       (github.event_name == 'pull_request_target' &&
        github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: ubuntu-latest
