@@ -884,7 +884,11 @@ class scylla_versions:
         def inner(*args, **kwargs):
             cls_self = args[0]
             try:
-                cluster_object = getattr(cls_self, "cluster", cls_self)
+                cluster_object = (
+                    getattr(cls_self, "cluster", None)
+                    or getattr(getattr(cls_self, "runner", None), "cluster", None)
+                    or cls_self
+                )
                 scylla_version = cluster_object.params.get("scylla_version")
                 if not scylla_version or scylla_version.endswith(":latest"):
                     # NOTE: in case we run Scylla cluster with "latest" version then we need
