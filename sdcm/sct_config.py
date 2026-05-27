@@ -220,12 +220,12 @@ IntOrList = Annotated[
 ]
 
 
-def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -> bool | list[bool] | None:  # noqa: PLR0911
-    """Convert value to a single bool or list of bools.
+def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -> list[bool] | None:  # noqa: PLR0911
+    """Convert value to a list of bools.
 
     Accepts:
     - None -> None
-    - bool -> bool
+    - bool -> [bool]
     - list of bools -> list of bools
     - list of strings (true/false/yes/no/1/0) -> list of bools
     - space-separated string of boolean values -> list of bools
@@ -234,16 +234,9 @@ def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -
         return None
 
     if isinstance(value, bool):
-        return value
+        return [value]
 
     if isinstance(value, list):
-        if len(value) == 1:
-            # Single item list, return just the bool
-            if isinstance(value[0], bool):
-                return value[0]
-            if isinstance(value[0], str):
-                return bool(strtobool(value[0]))
-
         # Handle list of bools or list of strings that can be converted to bools
         try:
             result = []
@@ -259,8 +252,6 @@ def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -
     if isinstance(value, str):
         try:
             values = value.split()
-            if len(values) == 1:
-                return bool(strtobool(values[0]))
             return [bool(strtobool(v)) for v in values]
         except Exception:  # noqa: BLE001
             pass
