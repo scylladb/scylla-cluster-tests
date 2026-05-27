@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 import pytest
 from invoke import Result
 
-from sdcm.cluster import BaseMonitorSet, BaseNode
+from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode
 from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.filters import DbEventsFilter
@@ -977,3 +977,61 @@ def test_base_node_subclass_constructs_with_forwarded_kwargs(cls, monkeypatch):
         monkeypatch.setattr(target, unittest.mock.MagicMock())
 
     cls(**_build_init_kwargs(cls))
+
+
+def _cluster_classes_overriding_create_node() -> list[type]:
+    """Return all `BaseCluster` subclasses from the `sdcm` package that override `_create_node`."""
+    for module_name in _BACKEND_MODULES:
+        importlib.import_module(module_name)
+
+    all_subclasses = set()
+    stack = list(BaseCluster.__subclasses__())
+    while stack:
+        cls = stack.pop()
+        if cls not in all_subclasses:
+            all_subclasses.add(cls)
+            stack.extend(cls.__subclasses__())
+
+    production = [
+        cls for cls in all_subclasses if cls.__module__.startswith("sdcm.") and "_create_node" in cls.__dict__
+    ]
+    return sorted(production, key=lambda c: c.__name__)
+
+
+def _parent_create_node_kwargs(cls: type) -> dict | None:
+    """Build kwargs from the closest ancestor's `_create_node` signature, or None if no ancestor defines it."""
+    for ancestor in cls.__mro__[1:]:
+        if "_create_node" not in ancestor.__dict__:
+            continue
+
+        signature = inspect.signature(ancestor._create_node)
+        return {
+            name: (
+                param.default if param.default is not inspect.Parameter.empty else unittest.mock.MagicMock(name=name)
+            )
+            for name, param in signature.parameters.items()
+            if name != "self"
+        }
+    return None
+
+
+@pytest.mark.parametrize("cls", _cluster_classes_overriding_create_node(), ids=lambda cls: cls.__name__)
+def test_cluster_create_node_accepts_parent_kwargs(cls):
+    """Verify every `_create_node` override accepts the kwargs its parent's `add_nodes` forwards.
+
+    Bypasses cluster `__init__` via `__new__` — Python validates kwargs at the call
+    boundary before the body runs, so any TypeError about unexpected/missing/duplicate
+    kwargs surfaces a signature mismatch. Other exceptions come from the body running
+    against the bare cluster, which is unrelated to what we're checking.
+    """
+    kwargs = _parent_create_node_kwargs(cls)
+    if kwargs is None:
+        pytest.skip(f"{cls.__name__} has no ancestor with `_create_node`")
+
+    try:
+        cls._create_node(cls.__new__(cls), **kwargs)
+    except TypeError as exc:
+        if any(phrase in str(exc) for phrase in ("unexpected keyword argument", "got multiple values", "missing ")):
+            raise
+    except Exception:  # noqa: BLE001
+        pass

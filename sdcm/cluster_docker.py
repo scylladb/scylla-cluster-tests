@@ -597,7 +597,7 @@ class CassandraDockerCluster(BaseCassandraCluster, DockerCluster):
             params=params,
         )
 
-    def _create_node(self, node_index, container=None):
+    def _create_node(self, node_index, container=None, after_config=None):
         node = CassandraDockerNode(
             parent_cluster=self,
             container=container,
@@ -605,6 +605,7 @@ class CassandraDockerCluster(BaseCassandraCluster, DockerCluster):
             base_logdir=self.logdir,
             node_prefix=self.node_prefix,
             node_index=node_index,
+            after_config=after_config,
         )
 
         if container is None:
