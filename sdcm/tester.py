@@ -3729,10 +3729,8 @@ class ClusterTester(unittest.TestCase):
         with silence(parent=self, name="Kill Stress Threads"):
             self.kill_stress_thread()
 
-        # Stopping nemesis, using timeout of 30 minutes, since replace/decommission node can take time
         if self.db_cluster:
             self.get_nemesis_report(self.db_cluster)
-            self.stop_nemesis(self.db_cluster)
             self.stop_resources_stop_tasks_threads(self.db_cluster)
             self.get_backtraces(self.db_cluster)
 
@@ -3975,6 +3973,10 @@ class ClusterTester(unittest.TestCase):
 
     def tearDown(self):
         self.teardown_started = True
+        # Stop nemesis first — if still running, it keeps disrupting nodes and
+        # diagnostic commands (gather_failure_statistics, validators) hang indefinitely.
+        if self.db_cluster:
+            self.stop_nemesis(self.db_cluster)
         with silence(parent=self, name="Enabling teardown filters"):
             enable_teardown_filters()
         with silence(parent=self, name="Sending test end event"):
