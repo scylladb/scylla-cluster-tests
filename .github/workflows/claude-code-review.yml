@@ -1,11 +1,24 @@
 name: Claude Code Review
 
 on:
+  pull_request:
+    # Runs from the PR branch — secrets available for same-repo PRs.
+    # This is the testable path: workflow changes take effect immediately
+    # without needing to merge to master first.
+    types: [opened, synchronize, ready_for_review, reopened]
   pull_request_target:
+    # Runs from master — secrets available even for fork PRs.
+    # Used only for fork PRs; same-repo PRs are handled by pull_request above.
     types: [opened, synchronize, ready_for_review, reopened]
 
 jobs:
   claude-review:
+    # Deduplicate: pull_request_target fires for every PR including same-repo ones.
+    # Skip it when pull_request already covers the same PR (same-repo only).
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request_target' &&
+       github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: ubuntu-latest
     permissions:
       contents: read
