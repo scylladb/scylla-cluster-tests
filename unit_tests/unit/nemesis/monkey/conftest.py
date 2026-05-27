@@ -41,4 +41,6 @@ def base_runner():
     runner.cluster.data_nodes = [node1, node2]
     runner.target_node = node1
 
+    runner.cluster.cql_session = runner.cluster.cql_connection_patient.return_value.__enter__.return_value
+
     return runner
