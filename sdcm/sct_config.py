@@ -24,6 +24,7 @@ import logging
 import getpass
 import pathlib
 import tempfile
+import dataclasses
 from textwrap import dedent
 
 import yaml
@@ -101,6 +102,26 @@ class IgnoredType:
     pass
 
 
+@dataclasses.dataclass(frozen=True)
+class InputType:
+    """Metadata for Annotated type aliases that describes the accepted input format.
+
+    Attach this to a type alias so the doc generator can show what values users
+    may write in YAML / environment variables, which is often wider than the
+    normalised Python output type.
+
+    Example::
+
+        IntOrList = Annotated[
+            list[int],
+            BeforeValidator(int_or_space_separated_ints),
+            InputType("int | list[int] | space-separated ints"),
+        ]
+    """
+
+    description: str
+
+
 def is_ignored_field(field) -> bool:
     """Check if a field is annotated with IgnoredType and should be skipped."""
     return any(isinstance(m, type) and issubclass(m, IgnoredType) for m in getattr(field, "metadata", []))
@@ -159,8 +180,12 @@ def str_or_list_or_eval(value: Union[str, List[str], None]) -> List[str] | None:
     raise ValueError(f"{value} isn't a string or a list")
 
 
+#: Config type that accepts str or list[str]. Accepts str, list[str], or evaluable expressions.
 StringOrList = Annotated[
-    str | list[str], BeforeValidator(str_or_list_or_eval), Field(json_schema_extra={"appendable": True})
+    str | list[str],
+    BeforeValidator(str_or_list_or_eval),
+    InputType("str | list[str]"),
+    Field(json_schema_extra={"appendable": True}),
 ]
 
 
@@ -190,7 +215,11 @@ def int_or_space_separated_ints(value: str | int | list[int]) -> int | list[int]
     raise ValueError(f"{value} isn't int or list")
 
 
-IntOrList = Annotated[int | list[int], BeforeValidator(int_or_space_separated_ints)]
+IntOrList = Annotated[
+    int | list[int],
+    BeforeValidator(int_or_space_separated_ints),
+    InputType("int | list[int] | space-separated ints"),
+]
 
 
 def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -> bool | list[bool] | None:  # noqa: PLR0911
@@ -241,7 +270,11 @@ def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -
     raise ValueError(f"{value} isn't bool or list")
 
 
-BooleanOrList = Annotated[bool | list[bool], BeforeValidator(boolean_or_space_separated_booleans)]
+BooleanOrList = Annotated[
+    bool | list[bool],
+    BeforeValidator(boolean_or_space_separated_booleans),
+    InputType("bool | list[bool] | space-separated booleans"),
+]
 
 
 def dict_or_str(value: dict | str | None) -> dict | None:
@@ -266,7 +299,11 @@ def dict_or_str(value: dict | str | None) -> dict | None:
     raise ValueError(f'"{value}" isn\'t a dict')
 
 
-DictOrStr = Annotated[dict | str, BeforeValidator(dict_or_str)]
+DictOrStr = Annotated[
+    dict | str,
+    BeforeValidator(dict_or_str),
+    InputType("dict | YAML/JSON string"),
+]
 
 
 class AdaptiveTimeoutMultipliers(RootModel):
@@ -4545,6 +4582,9 @@ class SCTConfiguration(BaseModel):
             backend_overrides = cls._get_backend_overrides_for_docs(field_name, defaults, backend_defaults)
 
             field_metadata = getattr(field, "metadata", None)
+            input_type_meta = next((m for m in (field_metadata or []) if isinstance(m, InputType)), None)
+            output_type = cls.get_annotations_as_strings(field.annotation, field_metadata=field_metadata)
+            type_str = f"{input_type_meta.description} → {output_type}" if input_type_meta else output_type
             ret += dedent(f"""
                 ## **{field_name}** / SCT_{field_name.upper()}
 
