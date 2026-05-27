@@ -1,0 +1,81 @@
+# Cluster:
+#   6 DB nodes (i8g.xlarge, ARM64), 3 simulated racks, 2 loaders
+#   RF=3, ICS compaction, server + client TLS
+#
+# Dataset:
+#   ~50% disk utilization on i8g.xlarge
+#   2x write streams, 120M rows each (seq 1..120M and 120M+1..240M)
+#   512B x 5 columns
+#
+# Stress (stress_cmd, 240m mixed):
+#   Reused across all three migration phases:
+#     - Pre-migration benchmark: run for 60m by vnode_to_tablet_migration_test
+#     - Migration:               run for full 240m concurrently with migration
+#     - Post-migration benchmark: run for 60m by vnode_to_tablet_migration_test
+
+test_duration: 600
+
+n_db_nodes: 6
+n_loaders: 2
+seeds_num: 3
+simulated_racks: 3
+
+round_robin: true
+
+instance_type_db: 'i8g.xlarge'
+append_scylla_setup_args: ' --no-ec2-check '
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_interval: 15
+
+user_prefix: 'longevity-50-percent-utilization-4h'
+space_node_threshold: 64424
+
+pre_create_schema: true
+sstable_size: 100
+
+server_encrypt: true
+client_encrypt: true
+
+hinted_handoff: 'enabled'
+parallel_node_operations: true
+
+nemesis_during_prepare: false
+
+prepare_write_cmd:
+  - >-
+    cassandra-stress write cl=QUORUM n=120000000
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=1..120000000
+    -col 'n=FIXED(5) size=FIXED(512)'
+    -log interval=5
+  - >-
+    cassandra-stress write cl=QUORUM n=120000000
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=120000001..240000000
+    -col 'n=FIXED(5) size=FIXED(512)'
+    -log interval=5
+
+stress_cmd:
+  - >-
+    cassandra-stress mixed cl=QUORUM duration=240m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=1..120000000
+    -col 'n=FIXED(5) size=FIXED(512)'
+    -log interval=5
+  - >-
+    cassandra-stress mixed cl=QUORUM duration=240m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)'
+    -mode cql3 native
+    -rate threads=80
+    -pop seq=120000001..240000000
+    -col 'n=FIXED(5) size=FIXED(512)'
+    -log interval=5
+
+use_hdrhistogram: true
