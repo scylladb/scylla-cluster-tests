@@ -126,7 +126,7 @@ class OperationThread:
         self.log = logging.getLogger(self.__class__.__name__)
         self.log.debug("Thread params: %s", thread_params)
         nemesis_seed = self.thread_params.db_cluster.params.get("nemesis_seed")
-        self.generator = random.Random(nemesis_seed[0]) if nemesis_seed is not None else random.Random()
+        self.generator = random.Random(nemesis_seed[0]) if nemesis_seed else random.Random()
         self._thread = threading.Thread(daemon=True, name=f"{self.__class__.__name__}_{thread_name}", target=self.run)
         self.termination_event = thread_params.termination_event
 

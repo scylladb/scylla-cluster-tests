@@ -259,8 +259,9 @@ def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -
     raise ValueError(f"{value} isn't bool or list")
 
 
+#: Config type that always returns list[bool]. Accepts bool, list[bool], or space-separated boolean strings.
 BooleanOrList = Annotated[
-    bool | list[bool],
+    list[bool],
     BeforeValidator(boolean_or_space_separated_booleans),
     InputType("bool | list[bool] | space-separated booleans"),
 ]
@@ -271,16 +272,22 @@ def dict_or_str(value: dict | str | None) -> dict | None:
         return None
     elif isinstance(value, str):
         try:
-            return ast.literal_eval(value)
+            result = ast.literal_eval(value)
+            if isinstance(result, dict):
+                return result
         except Exception:  # noqa: BLE001
             pass
 
         # ast.literal_eval() can fail on some strings (e.g. which contain lowercased booleans), try parsing such strings
         # using yaml.safe_load()
         try:
-            return yaml.safe_load(value)
+            result = yaml.safe_load(value)
+            if isinstance(result, dict):
+                return result
         except Exception:  # noqa: BLE001
             pass
+
+        raise ValueError(f'"{value}" isn\'t a dict')
 
     if isinstance(value, dict):
         return value
@@ -288,8 +295,9 @@ def dict_or_str(value: dict | str | None) -> dict | None:
     raise ValueError(f'"{value}" isn\'t a dict')
 
 
+#: Config type that always returns dict. Accepts dict or string parseable as dict (via literal_eval or yaml).
 DictOrStr = Annotated[
-    dict | str,
+    dict,
     BeforeValidator(dict_or_str),
     InputType("dict | YAML/JSON string"),
 ]
