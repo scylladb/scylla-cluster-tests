@@ -54,6 +54,8 @@ jobs:
           # Always checkout the BASE branch, never the fork's HEAD.
           # pull_request_target runs with base-repo secrets; executing untrusted
           # fork code here would expose them ("pwn request" attack vector).
+          # The code-review plugin fetches the PR diff via `gh pr diff` (Bash)
+          # rather than relying on a local checkout of the PR branch.
           ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 1
 
@@ -70,10 +72,11 @@ jobs:
           # rather than claude[bot], but review content is identical.
           # Ref: https://github.com/anthropics/claude-code-action/issues/1348
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_args: '--model claude-sonnet-4-6'
+          claude_args: '--model claude-sonnet-4-6 --allowedTools Bash,Read'
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
           allowed_bots: 'claude,renovate[bot]'
+          show_full_output: 'true'
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
