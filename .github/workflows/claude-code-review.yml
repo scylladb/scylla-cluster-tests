@@ -47,17 +47,17 @@ jobs:
               ;;
           esac
 
-      - name: Checkout base repository
+      - name: Checkout PR branch for review
         if: steps.membership.outputs.is_member == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
-          # Always checkout the BASE branch, never the fork's HEAD.
-          # pull_request_target runs with base-repo secrets; executing untrusted
-          # fork code here would expose them ("pwn request" attack vector).
-          # The code-review plugin fetches the PR diff via `gh pr diff` (Bash)
-          # rather than relying on a local checkout of the PR branch.
-          ref: ${{ github.event.pull_request.base.sha }}
-          fetch-depth: 1
+          # Check out the PR's actual code so Claude can read the files being
+          # reviewed. The security risk of pull_request_target (secrets exposed
+          # to fork code) applies only when untrusted code is *executed* — we
+          # prevent that by restricting Claude to read-only tools (Read + safe
+          # git/gh subcommands only; no Write, Edit, or arbitrary Bash).
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Run Claude Code Review
         if: steps.membership.outputs.is_member == 'true'
@@ -72,7 +72,9 @@ jobs:
           # rather than claude[bot], but review content is identical.
           # Ref: https://github.com/anthropics/claude-code-action/issues/1348
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_args: '--model claude-sonnet-4-6 --allowedTools Bash,Read'
+          claude_args: >-
+            --model claude-sonnet-4-6
+            --allowedTools Read,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git blame:*),Bash(gh pr view:*),Bash(gh pr diff:*)
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
