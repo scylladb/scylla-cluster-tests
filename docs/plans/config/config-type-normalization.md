@@ -262,13 +262,13 @@ Each phase covers one type end-to-end: validator fix, type alias update, all con
 - `"abc"` → raises `ValueError`
 
 **Definition of Done**:
-- [ ] `int_or_space_separated_ints` always returns `list[int] | None`
-- [ ] `IntOrList` declared as `list[int]`
-- [ ] No consumer performs scalar arithmetic/comparison on IntOrList params
-- [ ] No `isinstance` guards remain for `n_db_nodes`, `n_loaders`, `nemesis_seed`, `n_monitor_nodes`, `n_test_oracle_db_nodes`, `cluster_target_size`, `n_db_zero_token_nodes`
-- [ ] Unit tests for `int_or_space_separated_ints` edge cases added and passing
-- [ ] `uv run sct.py unit-tests` passes
-- [ ] `uv run sct.py pre-commit` passes
+- [x] `int_or_space_separated_ints` always returns `list[int] | None`
+- [x] `IntOrList` declared as `list[int]`
+- [x] No consumer performs scalar arithmetic/comparison on IntOrList params
+- [x] No `isinstance` guards remain for `n_db_nodes`, `n_loaders`, `nemesis_seed`, `n_monitor_nodes`, `n_test_oracle_db_nodes`, `cluster_target_size`, `n_db_zero_token_nodes`
+- [x] Unit tests for `int_or_space_separated_ints` edge cases added and passing
+- [x] `uv run sct.py unit-tests` passes
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -305,12 +305,12 @@ Each phase covers one type end-to-end: validator fix, type alias update, all con
 - `["a", "b"]` → `["a", "b"]`
 
 **Definition of Done**:
-- [ ] `str_or_list_or_eval` always returns `list[str] | None`; `ast.literal_eval` result is wrapped if not a list
-- [ ] `StringOrList` declared as `list[str]`
-- [ ] No `isinstance` guards remain for `stress_cmd`, `prepare_write_cmd`, or other `StringOrList` params
-- [ ] Unit tests for `str_or_list_or_eval` edge cases added and passing
-- [ ] `uv run sct.py unit-tests` passes
-- [ ] `uv run sct.py pre-commit` passes
+- [x] `str_or_list_or_eval` always returns `list[str] | None`; `ast.literal_eval` result is wrapped if not a list
+- [x] `StringOrList` declared as `list[str]`
+- [x] No `isinstance` guards remain for `stress_cmd`, `prepare_write_cmd`, or other `StringOrList` params
+- [x] Unit tests for `str_or_list_or_eval` edge cases added and passing
+- [x] `uv run sct.py unit-tests` passes
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -341,11 +341,11 @@ Each phase covers one type end-to-end: validator fix, type alias update, all con
 - `None` → `None`
 
 **Definition of Done**:
-- [ ] `boolean_or_space_separated_booleans` always returns `list[bool] | None`
-- [ ] `BooleanOrList` declared as `list[bool]`
-- [ ] Unit tests for `boolean_or_space_separated_booleans` edge cases added and passing
-- [ ] `uv run sct.py unit-tests` passes
-- [ ] `uv run sct.py pre-commit` passes
+- [x] `boolean_or_space_separated_booleans` always returns `list[bool] | None`
+- [x] `BooleanOrList` declared as `list[bool]`
+- [x] Unit tests for `boolean_or_space_separated_booleans` edge cases added and passing
+- [x] `uv run sct.py unit-tests` passes
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -373,11 +373,11 @@ Each phase covers one type end-to-end: validator fix, type alias update, all con
 - `None` → `None`
 
 **Definition of Done**:
-- [ ] `dict_or_str` always returns `dict | None`; non-dict eval/yaml results are rejected
-- [ ] `DictOrStr` declared as `dict`
-- [ ] Unit tests for `dict_or_str` edge cases added and passing
-- [ ] `uv run sct.py unit-tests` passes
-- [ ] `uv run sct.py pre-commit` passes
+- [x] `dict_or_str` always returns `dict | None`; non-dict eval/yaml results are rejected
+- [x] `DictOrStr` declared as `dict`
+- [x] Unit tests for `dict_or_str` edge cases added and passing
+- [x] `uv run sct.py unit-tests` passes
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -389,8 +389,8 @@ Each phase covers one type end-to-end: validator fix, type alias update, all con
 **Dependencies**: Phases 1-4
 
 **Definition of Done**:
-- [ ] Type alias docstrings explain canonical output type
-- [ ] Configuration docs updated if they reference these types
+- [x] Type alias docstrings explain canonical output type
+- [x] Configuration docs updated if they reference these types
 
 ## Testing Requirements
 
@@ -446,8 +446,8 @@ All Definition of Done items across phases are met. Additionally:
 
 | Phase | PR | Status |
 |-------|-----|--------|
-| Phase 1: IntOrList | — | Not started |
-| Phase 2: StringOrList | — | Not started |
-| Phase 3: BooleanOrList | — | Not started |
-| Phase 4: DictOrStr | — | Not started |
-| Phase 5: Docs | — | Not started |
+| Phase 1: IntOrList | — | Done (branch: config-type-normalization-phase1) |
+| Phase 2: StringOrList | — | Done (branch: config-type-normalization-phase1) |
+| Phase 3: BooleanOrList | — | Done (branch: config-type-normalization-phase1) |
+| Phase 4: DictOrStr | — | Done (branch: config-type-normalization-phase1) |
+| Phase 5: Docs | — | Done (included in each phase commit) |

@@ -463,7 +463,7 @@ Configuration for SCT agent - a lightweight service for remote command execution
 
 **default:** {'enabled': False, 'port': 16000, 'binary_url': '', 'max_concurrent_jobs': 10, 'log_level': 'info', 'tls': False}
 
-**type:** dict | YAML/JSON string → dict | str
+**type:** dict | YAML/JSON string → dict
 
 
 ## **manager_prometheus_port** / SCT_MANAGER_PROMETHEUS_PORT
@@ -937,7 +937,7 @@ Dictionary of a test alternator table features:<br>name: str - the name of the t
 
 **default:** N/A
 
-**type:** dict | YAML/JSON string → dict | str
+**type:** dict | YAML/JSON string → dict
 
 
 ## **alternator_enforce_authorization** / SCT_ALTERNATOR_ENFORCE_AUTHORIZATION
@@ -1746,7 +1746,7 @@ Validators to use during teardown phase
 
 **default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}, 'rackaware': {'enabled': False}}
 
-**type:** dict | YAML/JSON string → dict | str
+**type:** dict | YAML/JSON string → dict
 
 
 ## **use_capacity_reservation** / SCT_USE_CAPACITY_RESERVATION
@@ -2094,7 +2094,7 @@ Skip selected stages of a test scenario
 
 **default:** {}
 
-**type:** dict | YAML/JSON string → dict | str
+**type:** dict | YAML/JSON string → dict
 
 
 ## **use_zero_nodes** / SCT_USE_ZERO_NODES
@@ -2139,7 +2139,7 @@ Error thresholds for latency decorator. Defined by dict: {<write, read, mixed>: 
 
 **default:** {'write': {'default': {'P90 write': {'fixed_limit': None}, 'P99 write': {'fixed_limit': 10}}}, 'read': {'default': {'P90 read': {'fixed_limit': None}, 'P99 read': {'fixed_limit': 10}}}, 'read_disk_only': {'default': {'P90 read': {'fixed_limit': None}, 'P99 read': {'fixed_limit': 10}}}, 'mixed': {'default': {'P90 write': {'fixed_limit': None}, 'P90 read': {'fixed_limit': None}, 'P99 write': {'fixed_limit': 10}, 'P99 read': {'fixed_limit': 10}}}}
 
-**type:** dict | YAML/JSON string → dict | str
+**type:** dict | YAML/JSON string → dict
 
 
 ## **workload_name** / SCT_WORKLOAD_NAME
@@ -3415,7 +3415,7 @@ Custom parameters of c-s write operation used in snapshots preparer
 
 **default:** {'cs_cmd_template': "cassandra-stress {operation} cl={cl} n={num_of_rows} -schema 'keyspace={ks_name} replication(strategy={replication},replication_factor={rf}) compaction(strategy={compaction})' -mode cql3 native -rate threads={threads_num} -col 'size=FIXED({col_size}) n=FIXED({col_n})' -pop seq={sequence_start}..{sequence_end}", 'operation': 'write', 'cl': 'QUORUM', 'replication': 'NetworkTopologyStrategy', 'rf': 3, 'compaction': 'IncrementalCompactionStrategy', 'threads_num': 500, 'col_size': 1024, 'col_n': 1, 'ks_name': '', 'num_of_rows': '', 'sequence_start': '', 'sequence_end': ''}
 
-**type:** dict | YAML/JSON string → dict | str
+**type:** dict | YAML/JSON string → dict
 
 
 ## **stress_cmd_w** / SCT_STRESS_CMD_W
@@ -3577,7 +3577,7 @@ Threads amount of stress load for gradual performance test per sub-test. Example
 
 **default:** N/A
 
-**type:** dict | YAML/JSON string → dict | str
+**type:** dict | YAML/JSON string → dict
 
 
 ## **perf_gradual_throttle_steps** / SCT_PERF_GRADUAL_THROTTLE_STEPS
@@ -3586,7 +3586,7 @@ Used for gradual performance test. Define throttle for load step in ops. Support
 
 **default:** N/A
 
-**type:** dict | YAML/JSON string → dict | str
+**type:** dict | YAML/JSON string → dict
 
 
 ## **perf_gradual_step_duration** / SCT_PERF_GRADUAL_STEP_DURATION
@@ -3595,7 +3595,7 @@ Step duration of c-s load for gradual performance test per sub-test. Example: {'
 
 **default:** N/A
 
-**type:** dict | YAML/JSON string → dict | str
+**type:** dict | YAML/JSON string → dict
 
 
 ## **stress_cmd_lwt_i** / SCT_STRESS_CMD_LWT_I
@@ -4450,7 +4450,7 @@ Dict of the images to use for the stress tools
 
 **default:** {}
 
-**type:** dict | YAML/JSON string → dict | str
+**type:** dict | YAML/JSON string → dict
 
 
 ## **enable_argus** / SCT_ENABLE_ARGUS
@@ -4486,7 +4486,7 @@ Optional. Allows to pass through custom rune script parameters to the 'latte sch
 
 **default:** {}
 
-**type:** dict | YAML/JSON string → dict | str
+**type:** dict | YAML/JSON string → dict
 
 
 ## **perf_stress_keyspace** / SCT_PERF_STRESS_KEYSPACE
