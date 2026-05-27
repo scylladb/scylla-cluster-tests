@@ -66,7 +66,14 @@ reviews:
         Provisioning changes may require backend-specific provision test labels.
         Verify PR has appropriate test-provision-* labels (see AGENTS.md "Backend-Specific Provision Tests").
 
-    - path: "sdcm/utils/curl.py|sdcm/rest/**"
+    - path: "sdcm/utils/curl.py"
+      instructions: |
+        HTTP/Curl conventions (AGENTS.md "HTTP/Curl Conventions"):
+        - All remoter.run("curl ...") must use curl_with_retry()
+        - All requests calls must use a session with retry adapter
+        - Exceptions must have "# no-retry: <reason>" comments
+
+    - path: "sdcm/rest/**"
       instructions: |
         HTTP/Curl conventions (AGENTS.md "HTTP/Curl Conventions"):
         - All remoter.run("curl ...") must use curl_with_retry()
@@ -87,7 +94,13 @@ reviews:
         - Exception only for cyclic dependencies (must have explanatory comment)
         - Group: stdlib, third-party, internal (separated by blank lines)
 
-    - path: "sdcm/sct_config.py|defaults/**"
+    - path: "sdcm/sct_config.py"
+      instructions: |
+        Configuration changes (AGENTS.md "Configuration Changes"):
+        - Every new config option MUST have a default in defaults/*.yaml
+        - Include type, default, valid range in parameter definition
+
+    - path: "defaults/**"
       instructions: |
         Configuration changes (AGENTS.md "Configuration Changes"):
         - Every new config option MUST have a default in defaults/*.yaml
@@ -130,6 +143,3 @@ knowledge_base:
       - "skills/writing-nemesis/SKILL.md"
 
 tone_instructions: "Be extremely concise. No pleasantries, no summaries, no follow-up suggestions. Only report actionable issues found in the code."
-
-pull_request_summary:
-  enabled: false
