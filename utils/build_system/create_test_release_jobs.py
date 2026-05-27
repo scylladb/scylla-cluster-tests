@@ -28,6 +28,9 @@ DIR_TEMPLATE = Path(__file__).parent.joinpath("folder-template.xml").read_text(e
 JOB_TEMPLATE = Path(__file__).parent.joinpath("template.xml").read_text(encoding="utf-8")
 LOGGER = logging.getLogger(__name__)
 
+_TEST_CONFIG_SINGLE_RE = re.compile(r"test_config:\s*['\"]([^'\"]+\.yaml)")
+_TEST_CONFIG_LIST_RE = re.compile(r'test_config:\s*"""?\[([^\]]+)\]')
+
 
 class JenkinsPipelines:
     def __init__(self, base_job_dir, sct_branch_name, sct_repo, username=None, password=None):
@@ -112,7 +115,11 @@ class JenkinsPipelines:
         if defines:
             description = f"{text_description}\n\n### JobDefinitions\n{yaml.safe_dump(defines)}"
         else:
-            description = sct_jenkinsfile
+            description = str(sct_jenkinsfile)
+
+        metadata_block = self.get_metadata_description(jenkins_file)
+        if metadata_block:
+            description = f"{description}\n\n{metadata_block}"
 
         xml_data = JOB_TEMPLATE % dict(
             sct_display_name=f"{base_name}{job_name_suffix}",
@@ -121,6 +128,7 @@ class JenkinsPipelines:
             sct_branch_name=self.sct_branch_name,
             sct_jenkinsfile=sct_jenkinsfile,
         )
+        xml_data = self._inject_test_metadata_xml(xml_data, jenkins_file)
         if group_name and self.base_job_dir:
             group_name = "/" + str(group_name)
         _job_name = f"{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}"
@@ -352,6 +360,85 @@ class JenkinsPipelines:
 
                 full_job_name = str(jenkins_path / job_name) if str(jenkins_path) else job_name
                 self.disable_job(full_job_name, reason=reason)
+
+    @staticmethod
+    def _extract_test_config_path(jenkins_file: Path) -> str | None:
+        """Extract the first test_config YAML path from a Jenkinsfile."""
+        content = jenkins_file.read_text(encoding="utf-8")
+        match = _TEST_CONFIG_SINGLE_RE.search(content)
+        if match:
+            return match.group(1)
+        list_match = _TEST_CONFIG_LIST_RE.search(content)
+        if list_match:
+            first = list_match.group(1).split(",")[0].strip().strip("'\"")
+            if first.endswith(".yaml"):
+                return first
+        return None
+
+    @classmethod
+    def _load_test_metadata(cls, jenkins_file: Path) -> dict | None:
+        """Load test_metadata dict from the test-case YAML referenced by a Jenkinsfile."""
+        config_path = cls._extract_test_config_path(jenkins_file)
+        if not config_path:
+            return None
+        yaml_path = get_sct_root_path() / config_path
+        if not yaml_path.exists():
+            return None
+        with yaml_path.open() as fh:
+            config = yaml.safe_load(fh)
+        if not config or "test_metadata" not in config:
+            return None
+        meta = config["test_metadata"]
+        if not isinstance(meta, dict):
+            return None
+        return meta
+
+    @classmethod
+    def get_metadata_description(cls, jenkins_file: Path) -> str:
+        """Read test_metadata from the test-case YAML and format for job description."""
+        try:
+            meta = cls._load_test_metadata(jenkins_file)
+            if not meta:
+                return ""
+            description = meta.get("description", "")
+            tier = meta.get("tier", "n/a")
+            test_type = meta.get("test_type", "n/a")
+            duration_class = meta.get("duration_class", "n/a")
+            backends = meta.get("supported_backends", [])
+            lines = []
+            if description:
+                lines.append(description.strip())
+                lines.append("")
+            lines.append("### TestMetadata")
+            lines.append(f"tier: {tier}")
+            lines.append(f"test_type: {test_type}")
+            lines.append(f"duration_class: {duration_class}")
+            lines.append(f"supported_backends: {backends}")
+            return "\n".join(lines)
+        except (OSError, KeyError, ValueError, TypeError, yaml.YAMLError):
+            LOGGER.debug("Could not read test_metadata from %s", jenkins_file, exc_info=True)
+            return ""
+
+    def _inject_test_metadata_xml(self, xml_data: str, jenkins_file: Path) -> str:
+        try:
+            meta = self._load_test_metadata(jenkins_file)
+            if not meta:
+                return xml_data
+            root = ET.fromstring(xml_data)
+            for existing in root.findall("testMetadata"):
+                root.remove(existing)
+            elem = ET.SubElement(root, "testMetadata")
+            for key in ("tier", "test_type", "duration_class"):
+                if key in meta:
+                    ET.SubElement(elem, key).text = str(meta[key])
+            if "supported_backends" in meta:
+                backends_elem = ET.SubElement(elem, "supported_backends")
+                for backend in meta["supported_backends"]:
+                    ET.SubElement(backends_elem, "backend").text = str(backend)
+            return ET.tostring(root, encoding="unicode", xml_declaration=True)
+        except (OSError, KeyError, ValueError, TypeError):
+            LOGGER.debug("Could not inject testMetadata XML from %s", jenkins_file, exc_info=True)
+            return xml_data
 
     def create_job_tree(
         self,

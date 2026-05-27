@@ -4769,3 +4769,12 @@ cassandra-stress driver version to use: 3|4|random
 **default:** 3
 
 **type:** Literal['3', '4', 'random']
+
+
+## **test_metadata** / SCT_TEST_METADATA
+
+Structured metadata for test documentation and labeling. Validated by pydantic model. Flows to Argus.
+
+**default:** N/A
+
+**type:** sdcm.test_metadata.TestMetadata

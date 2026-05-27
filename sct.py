@@ -92,6 +92,7 @@ from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
 from sdcm.utils.lint.env_builder import build_env
 from sdcm.utils.lint.jenkins_parser import parse_jenkinsfile, discover_pipeline_files
+from sdcm.utils.lint.docs_linter import lint_test_metadata
 from sdcm.utils.oci_utils import get_scylla_images_by_branch, get_scylla_images_by_version, list_instances_oci
 from sdcm.utils.common import (
     S3Storage,
@@ -1725,6 +1726,109 @@ def lint_pipelines(pipeline_dir, pipeline_file, workers, include_filter, exclude
         _write_junit_xml(junit_xml_path, tasks, failures, total, failed_count, skipped)
 
     sys.exit(1 if failed_count else 0)
+
+
+@cli.command("lint-test-docs", help="Validate test_metadata sections in test-case YAML files")
+@click.option("--test-case-dir", default="test-cases", help="Root directory of test cases")
+@click.option("--missing-only", is_flag=True, help="Only report test cases missing test_metadata")
+@click.option("--test-case-file", default=None, type=click.Path(exists=True), help="Validate a single file")
+def lint_test_docs(test_case_dir, missing_only, test_case_file):
+    taxonomy_path = Path("docs/pipeline-labels/taxonomy.yaml")
+
+    if test_case_file:
+        files = [Path(test_case_file)]
+    else:
+        files = sorted(Path(test_case_dir).rglob("*.yaml"))
+
+    if not files:
+        click.echo("No test-case YAML files found.")
+        sys.exit(0)
+
+    failed_count = 0
+    passed_count = 0
+    missing_count = 0
+
+    for path in files:
+        result = lint_test_metadata(path, taxonomy_path if taxonomy_path.exists() else None)
+
+        if missing_only:
+            if result.errors and any("TD-001" in e for e in result.errors):
+                missing_count += 1
+                click.secho(str(path), fg="yellow")
+            continue
+
+        if not result.passed:
+            failed_count += 1
+            click.secho(f"FAIL: {path}", fg="red", bold=True)
+            for err in result.errors:
+                click.secho(f"  ERROR: {err}", fg="red")
+            for warn in result.warnings:
+                click.secho(f"  WARN:  {warn}", fg="yellow")
+            click.echo()
+        else:
+            passed_count += 1
+            if result.warnings:
+                click.secho(f"WARN: {path}", fg="yellow")
+                for warn in result.warnings:
+                    click.secho(f"  WARN:  {warn}", fg="yellow")
+                click.echo()
+
+    if missing_only:
+        click.echo(f"{missing_count} test cases missing test_metadata (out of {len(files)} total)")
+        sys.exit(0)
+
+    total = passed_count + failed_count
+    click.echo("---")
+    summary = f"{passed_count}/{total} test cases passed"
+    if failed_count:
+        summary += f" ({failed_count} failed)"
+    click.secho(summary, fg="green" if failed_count == 0 else "red")
+    sys.exit(1 if failed_count else 0)
+
+
+@cli.command(
+    "preview-job-description", help="Preview the Jenkins job description that would be generated for a pipeline file"
+)
+@click.argument("jenkinsfile", type=click.Path(exists=True))
+def preview_job_description(jenkinsfile):
+    jenkins_file = Path(jenkinsfile)
+    text_description = JenkinsPipelines.get_job_description(jenkins_file)
+
+    content = jenkins_file.read_text()
+    pipeline_params = {}
+    for key in ("backend", "test_name", "test_config", "region"):
+        match = re.search(rf"{key}:\s*['\"]([^'\"]+)['\"]", content)
+        if match:
+            pipeline_params[key] = match.group(1)
+
+    if text_description:
+        description = text_description
+    elif pipeline_params:
+        parts = []
+        if "test_name" in pipeline_params:
+            parts.append(f"test: {pipeline_params['test_name']}")
+        if "backend" in pipeline_params:
+            parts.append(f"backend: {pipeline_params['backend']}")
+        if "region" in pipeline_params:
+            parts.append(f"region: {pipeline_params['region']}")
+        if "test_config" in pipeline_params:
+            parts.append(f"config: {pipeline_params['test_config']}")
+        description = " | ".join(parts)
+    else:
+        sct_jenkinsfile = (
+            jenkins_file.relative_to(Path(__file__).resolve().parent) if jenkins_file.is_absolute() else jenkins_file
+        )
+        description = str(sct_jenkinsfile)
+
+    metadata_block = JenkinsPipelines.get_metadata_description(jenkins_file)
+    if metadata_block:
+        description = f"{description}\n\n{metadata_block}"
+
+    if not description.strip():
+        click.secho("No description content found.", fg="yellow")
+        sys.exit(1)
+
+    click.echo(description)
 
 
 @cli.command(help="Check test configuration file")

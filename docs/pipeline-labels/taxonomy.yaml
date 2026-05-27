@@ -1,0 +1,104 @@
+# SCT Test-Case Label Taxonomy
+# Authorized values for test_metadata fields in test-case YAML files.
+# This file is the human-readable reference. Pydantic validation in
+# sdcm/test_metadata.py is the enforcement layer.
+
+test_type:
+  description: "Primary test category — matches the test-cases/ subdirectory"
+  values:
+    - longevity
+    - performance
+    - upgrade
+    - artifacts
+    - manager
+    - functional
+    - scale
+    - jepsen
+    - gemini
+    - features
+    - platform-migration
+    - vector-search
+    - cdc
+
+tier:
+  description: "Test priority tier"
+  values:
+    sanity: "Basic smoke tests, run on every commit. Duration typically <1h."
+    tier1: "Core regression suite, run weekly. Duration typically 3-24h."
+    tier2: "Extended regression suite, run less frequently. Duration typically 12-48h."
+    artifacts: "Package/image deployment verification tests."
+    release: "Mandatory during release qualification/gate. Any duration."
+    ondemand: "Run on-demand for investigation or niche scenarios."
+
+duration_class:
+  description: "Test duration bucket (test_duration is in minutes)"
+  values:
+    short: "test_duration < 360 (under 6 hours)"
+    medium: "360 <= test_duration <= 1440 (6-24 hours)"
+    long: "test_duration > 1440 (over 24 hours)"
+
+supported_backends:
+  description: "Backends the test supports. Omit (null) to indicate all backends."
+  values:
+    - aws
+    - aws-siren
+    - gce
+    - gce-siren
+    - azure
+    - docker
+    - k8s-eks
+    - k8s-gke
+    - k8s-local-kind
+    - k8s-local-kind-aws
+    - k8s-local-kind-gce
+    - baremetal
+    - oci
+    - xcloud
+
+stress_tools:
+  description: "Stress/load generation tools used in the test"
+  values:
+    - cassandra-stress
+    - cql-stress-cassandra-stress
+    - scylla-bench
+    - ycsb
+    - latte
+    - gemini
+    - ndbench
+    - nosqlbench
+    - cdcreader
+
+workload:
+  description: "Primary workload type"
+  values:
+    - write
+    - read
+    - mixed
+    - counter
+    - lwt
+    - cdc
+    - mv
+    - si
+    - alternator
+    - user-profile
+
+features:
+  description: "Scylla features specifically tested"
+  values:
+    - encryption-at-rest
+    - tls-ssl
+    - authorization
+    - cdc
+    - tablets
+    - vnodes
+    - multi-dc
+    - rack-aware
+    - ipv6
+    - kms
+    - large-partitions
+    - large-collections
+    - sla
+    - tombstone-gc
+    - twcs
+    - zero-token-nodes
+    - alternator-streams
