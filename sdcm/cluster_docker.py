@@ -15,6 +15,8 @@ import os
 import re
 import logging
 import shutil
+import tempfile
+from pathlib import Path
 from typing import Optional, Union, Dict
 from functools import cached_property
 
@@ -331,15 +333,29 @@ class VectorStoreDockerNode(VectorStoreNodeMixin, DockerNode):
 
         if (threads := self.parent_cluster.params.get("vector_store_threads")) > 0:
             environment["VECTOR_STORE_THREADS"] = str(threads)
+
+        volumes = {}
+        if username := self.parent_cluster.params.get("vector_store_scylla_username"):
+            environment["VECTOR_STORE_SCYLLADB_USERNAME"] = username
+        if password := self.parent_cluster.params.get("vector_store_scylla_password"):
+            password_file = Path(tempfile.mkdtemp()) / "vs_scylla_password"
+            password_file.write_text(password)
+            container_password_path = "/run/secrets/scylla_password"
+            volumes[str(password_file)] = {"bind": container_password_path, "mode": "ro"}
+            environment["VECTOR_STORE_SCYLLADB_PASSWORD_FILE"] = container_password_path
+
         ports = {f"{self.parent_cluster.params.get('vector_store_port')}/tcp": None}
 
-        return dict(
+        run_args = dict(
             name=self.name,
             image=self.node_container_image_tag,
             environment=environment,
             ports=ports,
             network=self.parent_cluster.params.get("docker_network"),
         )
+        if volumes:
+            run_args["volumes"] = volumes
+        return run_args
 
 
 class DockerCluster(cluster.BaseCluster):

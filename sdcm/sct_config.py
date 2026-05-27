@@ -2226,6 +2226,16 @@ class SCTConfiguration(BaseModel):
     vector_store_threads: int = SctField(
         description="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)",
     )
+    vector_store_scylla_username: String = SctField(
+        description="Username for Vector Store to authenticate with ScyllaDB. "
+        "When set, a role and service level are auto-created on the ScyllaDB cluster.",
+    )
+    vector_store_scylla_password: String = SctField(
+        description="Password for the Vector Store ScyllaDB user",
+    )
+    vector_store_service_level_shares: int = SctField(
+        description="Shares for the Vector Store service level (default: 1000)",
+    )
     download_from_s3: list = SctField(
         description="Destination-source map of dirs/buckets to download from S3 before starting the test",
     )
@@ -2950,6 +2960,17 @@ class SCTConfiguration(BaseModel):
                     "When enabling `alternator_enforce_authorization` both `authenticator` and `authorizer` should be defined"
                 )
 
+        # 12.1) validate vector_store_scylla_username requirements
+        if self.get("vector_store_scylla_username"):
+            if self.get("authenticator") != "PasswordAuthenticator":
+                raise ValueError("vector_store_scylla_username requires authenticator=PasswordAuthenticator")
+            if not self.get("authenticator_user") or not self.get("authenticator_password"):
+                raise ValueError(
+                    "vector_store_scylla_username requires authenticator_user and authenticator_password to be set "
+                    "(needed to create roles and service levels via CQL)"
+                )
+            if not self.get("vector_store_scylla_password"):
+                raise ValueError("vector_store_scylla_password must be set when vector_store_scylla_username is set")
         # 13) validate stress and prepare duration:
         if stress_duration := self.get("stress_duration"):
             try:

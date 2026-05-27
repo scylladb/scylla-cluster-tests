@@ -350,6 +350,9 @@ vector_store_scylla_port: 9042
 vector_store_threads: 0  # 0 = defaults to number of cores on a node
 vector_store_docker_image: 'scylladb/vector-store'
 vector_store_version: ''
+vector_store_scylla_username: ''
+vector_store_scylla_password: ''
+vector_store_service_level_shares: 1000
 docker_image_cassandra: 'cassandra'
 cassandra_version: '4.1'
 cassandra_num_tokens: 16
