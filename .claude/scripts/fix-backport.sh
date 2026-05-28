@@ -7,6 +7,8 @@
 
 set -euo pipefail
 
+SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+
 usage() {
     cat <<'EOF'
 Usage: fix-backport.sh <command> [args...]
@@ -52,6 +54,11 @@ cmd_checkout() {
 
     # Print metadata for the caller to parse
     echo "$metadata"
+    echo ""
+    echo "=== PUSH INSTRUCTIONS ==="
+    echo "Remote: ${head_repo_owner}"
+    echo "Branch: ${head_ref}"
+    echo "Command: .claude/scripts/fix-backport.sh push ${head_repo_owner} ${head_ref}"
 }
 
 cmd_rebase() {
@@ -69,6 +76,24 @@ cmd_rebase() {
     # Count commits ahead of base — these are the backported commits
     local commit_count
     commit_count="$(git rev-list --count "$base_ref"..HEAD)"
+
+    # Sanity check: backport PRs should have very few commits (typically 1-5).
+    # If we see >50, the branch likely doesn't share recent ancestry with the base,
+    # meaning the rebase would replay thousands of commits incorrectly.
+    if [ "$commit_count" -gt 50 ]; then
+        echo "ERROR: Found ${commit_count} commits ahead of ${base_ref}."
+        echo "This likely means the branch doesn't share recent ancestry with the base."
+        echo "Expected: 1-10 commits for a backport PR."
+        echo ""
+        echo "Debug info:"
+        echo "  HEAD:     $(git rev-parse --short HEAD)"
+        echo "  Base ref: $(git rev-parse --short "$base_ref" 2>/dev/null || echo 'NOT FOUND')"
+        echo "  Merge base: $(git merge-base HEAD "$base_ref" 2>/dev/null | head -c 12 || echo 'NONE')"
+        echo ""
+        echo "Try: git log --oneline ${base_ref}..HEAD | tail -5"
+        exit 1
+    fi
+
     echo "Rebasing ${commit_count} commit(s) onto ${base_ref}..."
 
     # Rebase onto the base branch. Use --no-verify because pre-commit hooks
@@ -82,7 +107,7 @@ cmd_rebase() {
         echo "REBASE_CONFLICTS"
         echo "Resolve the conflicts, then run:"
         echo "  git add <resolved-files>"
-        echo "  .claude/scripts/fix-backport.sh rebase-continue"
+        echo "  $SCRIPT rebase-continue"
     fi
 }
 
@@ -91,7 +116,7 @@ cmd_rebase_continue() {
 }
 
 cmd_resolve_commit() {
-    git add -A
+    git add -u
     git commit --no-verify -m "TEMP: resolved conflicts"
 }
 
