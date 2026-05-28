@@ -75,12 +75,50 @@ Step-by-step process for reviewing a pull request on the SCT repository.
 
 **Entry criteria**: All checks complete.
 
-1. **Group findings by severity**:
-   - 🔴 **Blocking**: Override breaks, runtime errors, data loss risks
-   - 🟡 **Should fix**: Convention violations, missing tests, missing defaults
-   - 🟢 **Suggestion**: Style improvements, optional optimizations
-2. **Be specific**: Include file names, line numbers, and concrete fix suggestions
-3. **Be concise**: One sentence per issue, with a code suggestion when applicable
-4. **Acknowledge good patterns**: Note well-structured code, good test coverage, or clever solutions
+### Output Format
 
-**Exit criteria**: Review feedback posted with clear severity levels and actionable suggestions.
+Post a **single top-level PR comment** using `gh pr comment`. Do NOT post inline review comments or use the GitHub review API.
+
+**Comment structure:**
+
+```markdown
+## 🤖 Claude Code Review
+
+**PR**: #<number> — <title>
+**Status**: <LGTM ✅ | Issues Found ⚠️ | Blocking Issues 🚫>
+
+### Summary
+
+<1-2 sentence summary of what the PR does>
+
+### Findings
+
+<If no issues: "No issues found. The change looks correct and follows SCT conventions.">
+
+<If issues found, group by severity:>
+
+#### 🔴 Blocking
+- **<file>:<line>** — <description>. Fix: <suggestion>
+
+#### 🟡 Should Fix
+- **<file>:<line>** — <description>. Fix: <suggestion>
+
+#### 🟢 Suggestions
+- **<file>:<line>** — <description>
+
+### Good Patterns
+<Note any well-structured code, good test coverage, or clever solutions. Omit section if nothing notable.>
+
+---
+<sub>🔗 [Action run](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) · Automated review by Claude Code</sub>
+```
+
+### Posting Rules
+
+1. **Never post inline comments** — all findings go in the single top-level comment
+2. **Never use `gh api` to create review comments** — only use `gh pr comment`
+3. **Always include the action run link** using `$GITHUB_REPOSITORY` and `$GITHUB_RUN_ID` env vars
+4. **Use the exact command**: `gh pr comment <PR_NUMBER> --body "<body>"`
+5. **If the PR has no issues**, still post the comment with "LGTM ✅" status
+
+**Exit criteria**: Single top-level comment posted with all findings, attribution header, and action link footer.
