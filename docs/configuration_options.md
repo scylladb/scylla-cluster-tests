@@ -17,7 +17,7 @@ a list of config files that would be used
 
 ## **cluster_backend** / SCT_CLUSTER_BACKEND
 
-backend that will be used, aws/gce/docker
+backend that will be used, aws/gce/azure/docker/xcloud
 
 **default:** N/A
 
@@ -54,6 +54,24 @@ Time in minutes, which is required to run prepare stress commands<br>defined in 
 ## **stress_duration** / SCT_STRESS_DURATION
 
 Time in minutes, Time of execution for stress commands from stress_cmd parameters<br>and is used in test duration calculation
+
+**default:** N/A
+
+**type:** int
+
+
+## **alternator_stress_rate** / SCT_ALTERNATOR_STRESS_RATE
+
+Number of operations per second to achieve in stress commands for alternator testing.
+
+**default:** N/A
+
+**type:** int
+
+
+## **alternator_write_always_lwt_stress_rate** / SCT_ALTERNATOR_WRITE_ALWAYS_LWT_STRESS_RATE
+
+Number of operations per second to achieve in stress commands for alternator testing, in write test with isolation set to always LWT. If non-zero, overwrites alternator_stress_rate.
 
 **default:** N/A
 
@@ -139,6 +157,15 @@ scylla cloud cluster id
 **default:** N/A
 
 **type:** int
+
+
+## **cloud_cluster_name** / SCT_CLOUD_CLUSTER_NAME
+
+scylla cloud cluster name
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 ## **cloud_prom_bearer_token** / SCT_CLOUD_PROM_BEARER_TOKEN
@@ -253,7 +280,7 @@ Format version of the user-data to use for scylla images,<br>default to what tag
 
 Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'<br>Automatically lookup AMIs for formal versions.<br>WARNING: can't be used together with 'ami_id_db_oracle'
 
-**default:** 2026.1
+**default:** 2025.4
 
 **type:** str
 
@@ -514,7 +541,7 @@ When define true, will install scylla management
 
 When defined true, will run node operations in parallel. Supported operations: startup
 
-**default:** N/A
+**default:** True
 
 **type:** boolean
 
@@ -559,7 +586,7 @@ A local directory of rpms to install a custom version on top of<br>the scylla in
 
 The port of scylla management
 
-**default:** branch-4.8
+**default:** branch-4.11
 
 **type:** str (appendable)
 
@@ -656,7 +683,7 @@ If reuse_cluster is set it should hold test_id of the cluster that will be reuse
 
 ## **test_id** / SCT_TEST_ID
 
-test id to filter by
+Set the test_id of the run manually. Use only from the env before running Hydra
 
 **default:** N/A
 
@@ -888,6 +915,15 @@ If true, spawn a docker with a dns server for the ycsb loader to point to
 **type:** boolean
 
 
+## **alternator_test_table** / SCT_ALTERNATOR_TEST_TABLE
+
+Dictionary of a test alternator table features:<br>name: str - the name of the table<br>lsi_name: str - the name of the local secondary index to create with a table<br>gsi_name: str - the name of the global secondary index to create with a table<br>tags: dict - the tags to apply to the created table<br>items: int - expected number of items in the table after prepare
+
+**default:** N/A
+
+**type:** dict
+
+
 ## **alternator_enforce_authorization** / SCT_ALTERNATOR_ENFORCE_AUTHORIZATION
 
 If true, enable the authorization check in dynamodb api (alternator)
@@ -913,6 +949,33 @@ the aws_secret_access_key that would be used for alternator
 **default:** N/A
 
 **type:** str (appendable)
+
+
+## **alternator_loadbalancing** / SCT_ALTERNATOR_LOADBALANCING
+
+If true, enable client-side load balancing across alternator nodes
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **alternator_trust_all_certificates** / SCT_ALTERNATOR_TRUST_ALL_CERTIFICATES
+
+If true, trust all TLS certificates when connecting to alternator (useful for self-signed certs)
+
+**default:** True
+
+**type:** boolean
+
+
+## **alternator_trust_all_certificates** / SCT_ALTERNATOR_TRUST_ALL_CERTIFICATES
+
+If true, trust all TLS certificates for alternator connections (for testing with self-signed certs)
+
+**default:** True
+
+**type:** boolean
 
 
 ## **region_aware_loader** / SCT_REGION_AWARE_LOADER
@@ -946,7 +1009,7 @@ More arguments to append to oracle command line
 
 More configuration to append to /etc/scylla/scylla.yaml
 
-**default:** {'tablets_initial_scale_factor': 10}
+**default:** {'rf_rack_valid_keyspaces': True}
 
 **type:** dict_or_str
 
@@ -1009,7 +1072,7 @@ A seed number in order to repeat nemesis sequence as part of SisyphusMonkey.<br>
 
 Add/remove nodes during GrowShrinkCluster nemesis
 
-**default:** 1
+**default:** 3
 
 **type:** int
 
@@ -1061,7 +1124,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 ## **gemini_schema_url** / SCT_GEMINI_SCHEMA_URL
 
-Path to a local schema JSON file or a remote URL (http/https) that Gemini will use.<br>Local files are uploaded to the loader via send_files and mounted into the Gemini Docker<br>container via --schema.<br>Remote URLs are downloaded on the loader node with curl and then mounted the same way.
+Url of the schema/configuration the gemini tool would use
 
 **default:** N/A
 
@@ -1182,7 +1245,7 @@ if true, create 'cluster' placement group for test case for low-latency network 
 
 **default:** N/A
 
-**type:** str (appendable)
+**type:** boolean
 
 
 ## **subnet_id** / SCT_SUBNET_ID
@@ -1233,6 +1296,24 @@ AMS AMI id to use for cassandra node
 ## **ami_id_db_oracle** / SCT_AMI_ID_DB_ORACLE
 
 AMS AMI id to use for oracle node
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **ami_id_vector_store** / SCT_AMI_ID_VECTOR_STORE
+
+AMI ID for Vector Store nodes
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **instance_type_vector_store** / SCT_INSTANCE_TYPE_VECTOR_STORE
+
+AWS/GCP cloud provider instance type for Vector Store nodes
 
 **default:** N/A
 
@@ -1303,6 +1384,15 @@ root disk size in Gb for sct-runner
 
 
 ## **ami_db_cassandra_user** / SCT_AMI_DB_CASSANDRA_USER
+
+
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **ami_vector_store_user** / SCT_AMI_VECTOR_STORE_USER
 
 
 
@@ -2058,6 +2148,24 @@ local docker network to use, if there's need to have db cluster connect to other
 **type:** str (appendable)
 
 
+## **vector_store_docker_image** / SCT_VECTOR_STORE_DOCKER_IMAGE
+
+Vector Store docker image repo
+
+**default:** scylladb/vector-store
+
+**type:** str (appendable)
+
+
+## **vector_store_version** / SCT_VECTOR_STORE_VERSION
+
+Vector Store version / docker image tag
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **s3_baremetal_config** / SCT_S3_BAREMETAL_CONFIG
 
 
@@ -2278,7 +2386,7 @@ At the end of prepare stage, run major compaction and wait for this time (in min
 
 Choose a specific compaction strategy to pre-create schema with.
 
-**default:** SizeTieredCompactionStrategy
+**default:** IncrementalCompactionStrategy
 
 **type:** str (appendable)
 
@@ -2337,6 +2445,15 @@ number of tables to create for template user c-s
 **type:** int
 
 
+## **add_cs_user_profiles_extra_tables** / SCT_ADD_CS_USER_PROFILES_EXTRA_TABLES
+
+extra tables to create for template user c-s, in addition to pre-created tables
+
+**default:** N/A
+
+**type:** boolean
+
+
 ## **scylla_mgmt_upgrade_to_repo** / SCT_SCYLLA_MGMT_UPGRADE_TO_REPO
 
 Url to the repo of scylla manager version to upgrade to for management tests
@@ -2393,7 +2510,25 @@ Nodetool refresh extra options like --load-and-stream or --primary-replica-only
 
 ## **mgmt_prepare_snapshot_size** / SCT_MGMT_PREPARE_SNAPSHOT_SIZE
 
-Size of backup snapshot in Gb to be prepared to be prepared for backup
+Size of backup snapshot in Gb to be prepared for backup
+
+**default:** N/A
+
+**type:** int
+
+
+## **mgmt_snapshots_preparer_params** / SCT_MGMT_SNAPSHOTS_PREPARER_PARAMS
+
+Custom parameters of c-s write operation used in snapshots preparer
+
+**default:** {'cs_cmd_template': "cassandra-stress {operation} cl={cl} n={num_of_rows} -schema 'keyspace={ks_name} replication(strategy={replication},replication_factor={rf}) compaction(strategy={compaction})' -mode cql3 native -rate threads={threads_num} -col 'size=FIXED({col_size}) n=FIXED({col_n})' -pop seq={sequence_start}..{sequence_end}", 'operation': 'write', 'cl': 'QUORUM', 'replication': 'NetworkTopologyStrategy', 'rf': 3, 'compaction': 'IncrementalCompactionStrategy', 'threads_num': 500, 'col_size': 1024, 'col_n': 1, 'ks_name': '', 'num_of_rows': '', 'sequence_start': '', 'sequence_end': ''}
+
+**type:** dict_or_str
+
+
+## **one_one_restore_cluster_bootstrap_duration** / SCT_ONE_ONE_RESTORE_CLUSTER_BOOTSTRAP_DURATION
+
+Time in seconds it took Siren to bootstrap 1-1-restore cluster
 
 **default:** N/A
 
@@ -2472,6 +2607,15 @@ jobs to compare performance results with, for example if running in staging, we 
 **type:** str_or_list_or_eval (appendable)
 
 
+## **perf_simple_query_extra_command** / SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND
+
+extra command line options to pass to perf_simple_query
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **cs_user_profiles** / SCT_CS_USER_PROFILES
 
 cassandra-stress user-profiles list. Executed in test step
@@ -2528,11 +2672,11 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 ## **perf_gradual_threads** / SCT_PERF_GRADUAL_THREADS
 
-Threads amount of c-s load for gradual performance test per sub-test. Example: {'read': 100, 'write': 200, 'mixed': 300}
+Threads amount of stress load for gradual performance test per sub-test. Example: {'read': 100, 'write': [200, 300], 'mixed': 300}
 
 **default:** N/A
 
-**type:** dict
+**type:** dict_or_str
 
 
 ## **perf_gradual_throttle_steps** / SCT_PERF_GRADUAL_THROTTLE_STEPS
@@ -2541,7 +2685,16 @@ Used for gradual performance test. Define throttle for load step in ops. Example
 
 **default:** N/A
 
-**type:** dict
+**type:** dict_or_str
+
+
+## **perf_gradual_step_duration** / SCT_PERF_GRADUAL_STEP_DURATION
+
+Step duration of c-s load for gradual performance test per sub-test. Example: {'read': '30m', 'write': None, 'mixed': '30m'}
+
+**default:** N/A
+
+**type:** dict_or_str
 
 
 ## **skip_download** / SCT_SKIP_DOWNLOAD
@@ -2798,11 +2951,20 @@ options will be used for enable encryption at-rest for tables
 
 ## **kms_key_rotation_interval** / SCT_KMS_KEY_ROTATION_INTERVAL
 
-The time interval in minutes which gets waited before the KMS key rotation happens. Applied when the AWS KMS service is configured to be used.
+The time interval in minutes which gets waited before the KMS key rotation happens. Applied when AWS KMS or Azure KMS service is configured to be used. NOTE: Be aware that Azure Key rotations cost $1/rotation.
 
 **default:** N/A
 
 **type:** int
+
+
+## **enable_kms_key_rotation** / SCT_ENABLE_KMS_KEY_ROTATION
+
+Allows to disable KMS keys rotation. Applicable only to Azure backend. In case of AWS backend its KMS keys will always be rotated as of now.
+
+**default:** N/A
+
+**type:** boolean
 
 
 ## **enterprise_disable_kms** / SCT_ENTERPRISE_DISABLE_KMS
@@ -2818,7 +2980,7 @@ An escape hatch to disable KMS for enterprise run, when needed, we enable kms by
 
 How to transport logs: syslog-ng, ssh or docker
 
-**default:** syslog-ng
+**default:** vector
 
 **type:** str (appendable)
 
@@ -3021,13 +3183,31 @@ Whether to upgrade sstables as part of upgrade_node or not
 **type:** boolean
 
 
+## **enable_truncate_checks_on_node_upgrade** / SCT_ENABLE_TRUNCATE_CHECKS_ON_NODE_UPGRADE
+
+Enables or disables truncate checks on each node upgrade and rollback
+
+**default:** True
+
+**type:** boolean
+
+
 ## **stress_before_upgrade** / SCT_STRESS_BEFORE_UPGRADE
 
-Stress command to be run before upgrade (preapre stage)
+Stress command to be run before upgrade starts (preload/validation stage). This workload runs before any nodes are upgraded and can use CL=ALL for data validation.
 
 **default:** N/A
 
-**type:** str (appendable)
+**type:** str_or_list (appendable)
+
+
+## **large_partition_stress_during_upgrade** / SCT_LARGE_PARTITION_STRESS_DURING_UPGRADE
+
+Stress command to be run during rolling upgrade while nodes are being upgraded. This workload cannot use CL=ALL as not all nodes may be available during the upgrade.
+
+**default:** N/A
+
+**type:** str_or_list (appendable)
 
 
 ## **stress_during_entire_upgrade** / SCT_STRESS_DURING_ENTIRE_UPGRADE
@@ -3381,6 +3561,15 @@ When enabled, loaders will look for nodes on the same rack.
 **type:** boolean
 
 
+## **capacity_errors_check_mode** / SCT_CAPACITY_ERRORS_CHECK_MODE
+
+how to check if to continue test execution when capacity errors are detected.<br>per-initial_config - check if cluster layout is same as initial configuration, if not stop test execution<br>disabled - continue test execution even if capacity errors are detected
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **use_dns_names** / SCT_USE_DNS_NAMES
 
 Use dns names instead of ip addresses for nodes in cluster
@@ -3424,6 +3613,33 @@ reserves instances capacity for whole duration of the test run (AWS only).<br>Fa
 **default:** N/A
 
 **type:** boolean
+
+
+## **use_dedicated_host** / SCT_USE_DEDICATED_HOST
+
+Allocates dedicated hosts for the instances for the entire duration of the test run (AWS only)
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **aws_dedicated_host_ids** / SCT_AWS_DEDICATED_HOST_IDS
+
+list of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)
+
+**default:** N/A
+
+**type:** str_or_list_or_eval (appendable)
+
+
+## **post_behavior_dedicated_host** / SCT_POST_BEHAVIOR_DEDICATED_HOST
+
+Failure/post test behavior, i.e. what to do with the dedicate hosts at the end of the test.<br><br>'destroy' - Destroy hosts (default)<br>'keep' - Keep hosts allocated
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 ## **bisect_start_date** / SCT_BISECT_START_DATE
@@ -3475,7 +3691,7 @@ Run scylla-doctor in artifact tests
 
 Scylla Doctor version to use for artifact tests. Set to specific version (e.g., '1.7')<br>to hardcode the version, or leave empty to use the latest available version. For stability,<br>artifact tests should use a hardcoded version to avoid issues from newer scylla-doctor releases.
 
-**default:** 1.7
+**default:** 1.10
 
 **type:** str (appendable)
 
@@ -3550,6 +3766,88 @@ Store adaptive timeout metrics in Argus. Disabled for performance tests only.
 **default:** True
 
 **type:** boolean
+
+
+## **xcloud_credentials_path** / SCT_XCLOUD_CREDENTIALS_PATH
+
+Path to Scylla Cloud credentials file, if stored locally
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **xcloud_env** / SCT_XCLOUD_ENV
+
+Scylla Cloud environment (e.g., lab).
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **xcloud_provider** / SCT_XCLOUD_PROVIDER
+
+Cloud provider for Scylla Cloud deployment (aws, gce)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **xcloud_replication_factor** / SCT_XCLOUD_REPLICATION_FACTOR
+
+Replication factor for Scylla Cloud cluster
+
+**default:** N/A
+
+**type:** int
+
+
+## **xcloud_vpc_peering** / SCT_XCLOUD_VPC_PEERING
+
+Dictionary of VPC peering parameters for private connectivity between<br>SCT infrastructure and Scylla Cloud. The following parameters are used:<br>enabled: bool - indicates whether VPC peering is to be used<br>cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)<br>cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)
+
+**default:** N/A
+
+**type:** dict_or_str
+
+
+## **n_vector_store_nodes** / SCT_N_VECTOR_STORE_NODES
+
+Number of vector store nodes (0 = VS is disabled)
+
+**default:** N/A
+
+**type:** int
+
+
+## **vector_store_port** / SCT_VECTOR_STORE_PORT
+
+Vector Store API port
+
+**default:** 6080
+
+**type:** int
+
+
+## **vector_store_scylla_port** / SCT_VECTOR_STORE_SCYLLA_PORT
+
+ScyllaDB connection port for Vector Store
+
+**default:** 9042
+
+**type:** int
+
+
+## **vector_store_threads** / SCT_VECTOR_STORE_THREADS
+
+Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)
+
+**default:** N/A
+
+**type:** int
+
 
 ## **argus_email_report_template** / SCT_ARGUS_EMAIL_REPORT_TEMPLATE
 
