@@ -79,7 +79,7 @@ region=us-east-1</properties>
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>scylla_version=%(sct_branch)s:latest
-availability_zone=c
+availability_zone=a,b,c
 provision_type=on_demand
 post_behavior_db_nodes=destroy
 post_behavior_monitor_nodes=destroy
