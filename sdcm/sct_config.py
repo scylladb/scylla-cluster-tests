@@ -932,6 +932,12 @@ class SCTConfiguration(dict):
             help="If true, trust all TLS certificates when connecting to alternator (useful for self-signed certs)",
         ),
         dict(
+            name="alternator_trust_all_certificates",
+            env="SCT_ALTERNATOR_TRUST_ALL_CERTIFICATES",
+            type=boolean,
+            help="If true, trust all TLS certificates for alternator connections (for testing with self-signed certs)",
+        ),
+        dict(
             name="region_aware_loader",
             env="SCT_REGION_AWARE_LOADER",
             type=boolean,

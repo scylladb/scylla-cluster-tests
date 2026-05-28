@@ -1240,6 +1240,8 @@ class FileFollowerThread:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
+        if self.future:
+            self.future.result(timeout=30)
 
     def run(self):
         raise NotImplementedError()
