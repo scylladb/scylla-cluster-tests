@@ -969,15 +969,6 @@ If true, trust all TLS certificates when connecting to alternator (useful for se
 **type:** boolean
 
 
-## **alternator_trust_all_certificates** / SCT_ALTERNATOR_TRUST_ALL_CERTIFICATES
-
-If true, trust all TLS certificates for alternator connections (for testing with self-signed certs)
-
-**default:** True
-
-**type:** boolean
-
-
 ## **region_aware_loader** / SCT_REGION_AWARE_LOADER
 
 When in multi region mode, run stress on loader that is located in the same region as db node
