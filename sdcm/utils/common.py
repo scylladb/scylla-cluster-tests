@@ -3043,3 +3043,31 @@ def get_node_disk_usage(node: "BaseNode") -> float:
     """Returns disk usage percentage for a node"""
     result = node.remoter.run("df --output=pcent /var/lib/scylla | sed 1d | sed 's/%//'")
     return float(result.stdout.strip())
+
+
+def get_cluster_disk_usage_summary(cluster) -> dict:
+    """Returns disk usage summary across all nodes in a cluster.
+
+    Args:
+        cluster: BaseCluster instance
+
+    Returns:
+        Dictionary with min, max, avg disk usage percentages
+    """
+    import statistics  # noqa: PLC0415 - inline import for convenience
+
+    usages = []
+    for node in cluster.nodes:
+        try:
+            usages.append(get_node_disk_usage(node))
+        except:
+            pass
+
+    if not usages:
+        return {"min": 0, "max": 0, "avg": 0}
+
+    return {
+        "min": min(usages),
+        "max": max(usages),
+        "avg": statistics.mean(usages),
+    }
