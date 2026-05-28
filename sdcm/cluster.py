@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import uuid
 import queue
 import logging
 import os
@@ -2062,14 +2063,79 @@ class BaseNode(AutoSshContainerMixin):
         self.remoter.sudo(f"chmod 644 {repo_path}")
 
         if self.distro.is_debian_like:
-            self.remoter.sudo("mkdir -p /etc/apt/keyrings")
-            for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
-                self.remoter.sudo(
-                    f"gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
-                    f"--keyserver hkp://keyserver.ubuntu.com:80 --recv-keys {apt_key}",
-                    retry=3,
-                )
+            self.fetch_apt_keys()
             self.remoter.sudo("apt-get update", ignore_status=True)
+
+    def fetch_apt_keys(self):
+        """
+        Fetch and install GPG keys for ScyllaDB's APT repository.
+
+        Uses a temporary keyring in /tmp to fetch and export the keys, then installs them
+        into /etc/apt/keyrings/scylladb.gpg. This approach is required for compatibility
+        with Debian 13 and newer, which have changed how APT keys are managed and require
+        keys to be stored in /etc/apt/keyrings rather than the legacy /etc/apt/trusted.gpg.
+        The temporary keyring avoids polluting the system keyring and ensures the correct
+        format for APT to use.
+
+        Tries multiple HKP keyservers in order, and falls back to HTTPS if all HKP attempts fail.
+        """
+        self.remoter.sudo("mkdir -m 0755 -p /etc/apt/keyrings")
+        temp_keyring = f"/tmp/temp-{uuid.uuid4()}.gpg"
+        try:
+            # Import all keys into a temporary keyring
+            for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
+                # List of HKP keyservers to try in order
+                hkp_keyservers = [
+                    "hkp://keyserver.ubuntu.com:80",
+                    "hkp://keys.openpgp.org",
+                    "hkp://pgp.mit.edu",
+                ]
+
+                key_fetched = False
+
+                # Try each HKP keyserver
+                for keyserver in hkp_keyservers:
+                    result = self.remoter.sudo(
+                        f"gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --keyserver {keyserver} --keyserver-options timeout=10 --recv-keys {apt_key}",
+                        retry=1,
+                        ignore_status=True,
+                    )
+                    if result.ok:
+                        LOGGER.debug("Fetched GPG key %s from %s", apt_key, keyserver)
+                        key_fetched = True
+                        break
+
+                # If all HKP keyservers failed, try HTTPS fallback
+                if not key_fetched:
+                    https_url = f"https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x{apt_key}&options=mr"
+                    result = self.remoter.sudo(
+                        shell_script_cmd(
+                            f"curl --retry 3 --retry-max-time 60 --connect-timeout 10 -fsSL '{https_url}' | gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --import"
+                        ),
+                        retry=1,
+                        ignore_status=True,
+                    )
+                    if result.ok:
+                        LOGGER.debug("Fetched GPG key %s from HTTPS fallback", apt_key)
+                        key_fetched = True
+
+                # If all sources failed, raise an error
+                if not key_fetched:
+                    raise NodeSetupFailed(
+                        node=self,
+                        error_msg=f"Failed to fetch GPG key {apt_key} from all keyservers and HTTPS fallback",
+                    )
+
+            # Export all keys at once to the keyring file
+            self.remoter.sudo(
+                shell_script_cmd(
+                    f"gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --export --armor | gpg --dearmor > /etc/apt/keyrings/scylladb.gpg"
+                ),
+                retry=3,
+            )
+        finally:
+            # Ensure cleanup
+            self.remoter.sudo(f"rm -f {temp_keyring}", ignore_status=True)
 
     @retrying(
         n=30,
