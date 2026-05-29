@@ -5273,7 +5273,7 @@ class BaseScyllaCluster:
             r"(?P<tokens>[\d]+)\s+"
             r"(?P<owns>[\w?]+)\s+"
             r"(?P<host_id>[\w-]+)\s+"
-            r"(?P<rack>[\w]+|$)"
+            r"(?P<rack>[\w-]+|$)"
         )
 
         for dc in data_centers:
