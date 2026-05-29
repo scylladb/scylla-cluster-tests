@@ -3963,14 +3963,19 @@ class ClusterTester(unittest.TestCase):
                         doctor.install_scylla_doctor()
                         doctor.run_scylla_doctor_and_collect_results()
 
+                        download_with_sudo = not node.is_nonroot_install
                         if doctor.json_result_file:
                             local_json_path = os.path.join(self.logdir, f"scylla_doctor_{node.name}_vitals.json")
-                            node.remoter.receive_files(src=doctor.json_result_file, dst=local_json_path)
+                            node.remoter.receive_files(
+                                src=doctor.json_result_file, dst=local_json_path, sudo=download_with_sudo
+                            )
                             self.log.debug("Downloaded scylla-doctor vitals from %s to %s", node.name, local_json_path)
 
                         if doctor.scylla_logs_file:
                             local_logs_path = os.path.join(self.logdir, f"scylla_doctor_{node.name}_logs.tar.gz")
-                            node.remoter.receive_files(src=doctor.scylla_logs_file, dst=local_logs_path)
+                            node.remoter.receive_files(
+                                src=doctor.scylla_logs_file, dst=local_logs_path, sudo=download_with_sudo
+                            )
                             self.log.debug("Downloaded scylla-doctor logs from %s to %s", node.name, local_logs_path)
 
                         self.log.info("Scylla-doctor completed for node %s", node.name)
