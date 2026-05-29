@@ -737,6 +737,54 @@ class TestNodetoolStatus:
             }
         }
 
+    def test_can_get_nodetool_status_oci_hyphenated_rack(self):
+        """OCI rack names contain hyphens (e.g., iad-ad-1). Verify they are parsed fully."""
+        resp = "\n".join(
+            [
+                "Datacenter: iad",
+                "===============",
+                "Status=Up/Down",
+                "|/ State=Normal/Leaving/Joining/Moving",
+                "--  Address      Load       Tokens  Owns    Host ID                               Rack",
+                "UN  10.0.3.109   77.79 GB   256     ?       6367305e-5b28-464c-8f0f-c18094822bbf  iad-ad-1",
+                "UN  10.0.3.112   65.23 GB   256     ?       a1b2c3d4-e5f6-7890-abcd-ef1234567890  iad-ad-2",
+                "UN  10.0.3.130   70.11 GB   256     ?       deadbeef-cafe-babe-dead-beefcafebabe  iad-ad-3",
+            ]
+        )
+        node = NodetoolDummyNode(resp=resp)
+        db_cluster = DummyScyllaCluster([node])
+
+        status = db_cluster.get_nodetool_status()
+
+        assert status == {
+            "iad": {
+                "10.0.3.109": {
+                    "state": "UN",
+                    "load": "77.79GB",
+                    "tokens": "256",
+                    "owns": "?",
+                    "host_id": "6367305e-5b28-464c-8f0f-c18094822bbf",
+                    "rack": "iad-ad-1",
+                },
+                "10.0.3.112": {
+                    "state": "UN",
+                    "load": "65.23GB",
+                    "tokens": "256",
+                    "owns": "?",
+                    "host_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                    "rack": "iad-ad-2",
+                },
+                "10.0.3.130": {
+                    "state": "UN",
+                    "load": "70.11GB",
+                    "tokens": "256",
+                    "owns": "?",
+                    "host_id": "deadbeef-cafe-babe-dead-beefcafebabe",
+                    "rack": "iad-ad-3",
+                },
+            }
+        }
+
 
 @pytest.mark.parametrize(
     "cat_results,expected_core_number",
