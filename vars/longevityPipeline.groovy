@@ -344,7 +344,7 @@ def call(Map pipelineParams) {
                     script {
                         wrap([$class: 'BuildUser']) {
                             dir('scylla-cluster-tests') {
-                                timeout(time: 30, unit: 'MINUTES') {
+                                timeout(time: params.backend == 'azure' ? 60 : 30, unit: 'MINUTES') {
                                     provisionResources(params, builder.region)
                                     completed_stages['provision_resources'] = true
                                 }
