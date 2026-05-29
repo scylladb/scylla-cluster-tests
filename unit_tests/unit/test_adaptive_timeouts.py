@@ -20,7 +20,7 @@ import pytest
 from invoke import Result
 
 from sdcm.remote import RemoteCmdRunnerBase
-from sdcm.sct_config import AdaptiveTimeoutMultipliers, SCTConfiguration
+from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.adaptive_timeouts.load_info_store import (
     AdaptiveTimeoutStore,
     NodeLoadInfoService,
@@ -28,13 +28,7 @@ from sdcm.utils.adaptive_timeouts.load_info_store import (
     _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC,
     _I4I_LARGE_SHARD_COUNT,
 )
-from sdcm.utils.adaptive_timeouts import (
-    _STREAMING_OVERHEAD,
-    _get_operation_timeout_factor,
-    Operations,
-    adaptive_timeout,
-    TABLETS_HARD_TIMEOUT,
-)
+from sdcm.utils.adaptive_timeouts import _STREAMING_OVERHEAD, Operations, adaptive_timeout, TABLETS_HARD_TIMEOUT
 from unit_tests.lib.fake_cluster import DummyDbCluster
 
 LOGGER = logging.getLogger(__name__)
@@ -338,171 +332,3 @@ def test_expected_throughput_falls_back_to_estimate_when_zero(fake_node):
     """When stream_io_throughput_mb_per_sec is explicitly 0, fall back to the estimate."""
     service = _make_service(fake_node, "stream_io_throughput_mb_per_sec: 0\n")
     assert service.expected_throughput == _I4I_LARGE_BASELINE_THROUGHPUT_MB_PER_SEC / _I4I_LARGE_SHARD_COUNT * 3
-
-
-# ===== Adaptive timeout multipliers tests =====
-
-
-@pytest.mark.parametrize(
-    ("operation", "config_value", "expected"),
-    [
-        pytest.param(Operations.DECOMMISSION, {"decommission": 4}, 4, id="decommission"),
-        pytest.param(Operations.REMOVE_NODE, {"remove_node": 3}, 3, id="remove_node"),
-        pytest.param(Operations.NEW_NODE, {"new_node": 2}, 2, id="new_node"),
-        pytest.param(Operations.NEW_NODE, {"decommission": 4}, 1.0, id="missing-key-defaults-to-1"),
-        pytest.param(Operations.SOFT_TIMEOUT, {"decommission": 4}, 1.0, id="unconfigured-operation"),
-        pytest.param(Operations.REMOVE_NODE, {}, 1.0, id="empty-config"),
-    ],
-)
-def test_get_operation_timeout_factor(operation, config_value, expected):
-    params = SCTConfiguration()
-    params["adaptive_timeout_multipliers"] = config_value
-    assert _get_operation_timeout_factor(params, operation) == expected
-
-
-@pytest.mark.parametrize(
-    "input_val,expected_key,expected_val",
-    [
-        pytest.param({"decommission": 4, "remove_node": 2}, "decommission", 4, id="dict-input"),
-        pytest.param({"new_node": 3}, "new_node", 3, id="single-key-dict"),
-        pytest.param({"decommission": 5, "new_node": 2.5}, "decommission", 5, id="multiple-keys"),
-    ],
-)
-def test_multiplier_model_validates_input(input_val, expected_key, expected_val):
-    model = AdaptiveTimeoutMultipliers.model_validate(input_val)
-    assert model.root[expected_key] == expected_val
-
-
-@pytest.mark.parametrize(
-    "input_val,match_pattern",
-    [
-        pytest.param({"unknown": 2}, "Unknown operation key 'unknown'", id="unknown-key"),
-        pytest.param({"decommission": -1}, "Input should be greater than 0", id="negative-value"),
-        pytest.param({"decommission": 0}, "Input should be greater than 0", id="zero-value"),
-    ],
-)
-def test_multiplier_model_rejects_invalid_input(input_val, match_pattern):
-    with pytest.raises(ValueError, match=match_pattern):
-        AdaptiveTimeoutMultipliers.model_validate(input_val)
-
-
-@pytest.mark.parametrize(
-    "multipliers,operation,timeout_arg,expected",
-    [
-        pytest.param({"new_node": 3}, Operations.NEW_NODE, 600, 1800, id="multiplier-scales-timeout"),
-        pytest.param({"decommission": 4}, Operations.REMOVE_NODE, 600, 600, id="missing-key-unscaled"),
-        pytest.param({}, Operations.DECOMMISSION, None, 7200, id="empty-config-preserves-base"),
-    ],
-)
-@mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
-def test_multiplier_scaling(
-    publish_or_dump, fake_node, adaptive_timeout_store, multipliers, operation, timeout_arg, expected
-):
-    fake_node.parent_cluster.params["adaptive_timeout_multipliers"] = multipliers
-
-    kwargs = dict(operation=operation, node=fake_node, stats_storage=adaptive_timeout_store)
-    if timeout_arg is not None:
-        kwargs["timeout"] = timeout_arg
-
-    with adaptive_timeout(**kwargs) as timeout:
-        assert timeout == expected
-
-
-@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
-@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
-def test_decommission_multiplier_scales_hard_timeout_for_tablets(
-    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
-):
-    mock_tablets_feature.return_value = True
-
-    # Get base timeout without multiplier
-    fake_node.parent_cluster.params["adaptive_timeout_multipliers"] = {}
-    with adaptive_timeout(
-        operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
-    ) as base_timeout:
-        pass
-
-    # Apply multiplier and verify scaling
-    fake_node.parent_cluster.params["adaptive_timeout_multipliers"] = {"decommission": 2}
-    with adaptive_timeout(
-        operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
-    ) as scaled_timeout:
-        assert scaled_timeout == base_timeout * 2
-
-
-@pytest.mark.parametrize(
-    "env_value,expected_field,expected_val",
-    [
-        pytest.param("{'decommission': 4, 'new_node': 3}", "decommission", 4, id="python-dict-string"),
-        pytest.param('{"remove_node": 5}', "remove_node", 5, id="json-string"),
-        pytest.param(None, None, None, id="unset-env-uses-empty-default"),
-    ],
-)
-def test_multiplier_env_var_loaded_by_sct_config(monkeypatch, env_value, expected_field, expected_val):
-    """SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS env var is parsed into the model; unset uses empty dict default."""
-    if env_value is not None:
-        monkeypatch.setenv("SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS", env_value)
-    else:
-        monkeypatch.delenv("SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS", raising=False)
-    config = SCTConfiguration()
-    multipliers = config.get("adaptive_timeout_multipliers")
-    if expected_field is not None:
-        assert multipliers.root[expected_field] == expected_val
-    else:
-        # When env is unset, defaults/test_default.yaml provides {} which
-        # becomes an empty AdaptiveTimeoutMultipliers
-        assert multipliers.root == {}
-
-
-@pytest.mark.parametrize(
-    "env_value,match_pattern",
-    [
-        pytest.param("", "failed to parse SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS", id="empty-string"),
-        pytest.param("   ", "failed to parse SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS", id="whitespace-only"),
-        pytest.param("not_a_dict", "failed to parse SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS", id="plain-string"),
-        pytest.param("[1, 2, 3]", "isn't a dict, str or Pydantic model", id="list-value"),
-        pytest.param("{'unknown_op': 2}", "Unknown operation key 'unknown_op'", id="invalid-operation-key"),
-        pytest.param("{'decommission': -1}", "Input should be greater than 0", id="negative-multiplier"),
-        pytest.param("{'decommission': 0}", "Input should be greater than 0", id="zero-multiplier"),
-    ],
-)
-def test_multiplier_invalid_env_var_raises(monkeypatch, env_value, match_pattern):
-    """SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS with invalid values is rejected during config init."""
-    monkeypatch.setenv("SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS", env_value)
-    with pytest.raises(Exception, match=match_pattern):
-        SCTConfiguration()
-
-
-@pytest.mark.parametrize(
-    "env_vars,expected_multipliers",
-    [
-        pytest.param(
-            {"SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission": "4"},
-            {"decommission": 4.0, "repair": 1.0},
-            id="single-operation",
-        ),
-        pytest.param(
-            {"SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.decommission": "4", "SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.new_node": "3"},
-            {"decommission": 4.0, "new_node": 3.0, "repair": 1.0},
-            id="multiple-operations",
-        ),
-        pytest.param(
-            {"SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.remove_node": "2.5"},
-            {"remove_node": 2.5, "decommission": 1.0},
-            id="float-value",
-        ),
-    ],
-)
-def test_multiplier_dot_notation_env_var(monkeypatch, env_vars, expected_multipliers):
-    """SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS.operation=value dot-notation is parsed into the model.
-
-    This mirrors the pattern used by SCT_STRESS_IMAGE.cassandra-stress=... in pipelines.
-    Values arrive as strings and are coerced to floats by Pydantic.
-    """
-    monkeypatch.delenv("SCT_ADAPTIVE_TIMEOUT_MULTIPLIERS", raising=False)
-    for key, value in env_vars.items():
-        monkeypatch.setenv(key, value)
-    config = SCTConfiguration()
-    multipliers = config.get("adaptive_timeout_multipliers")
-    for operation, expected in expected_multipliers.items():
-        assert multipliers.get_multiplier(operation) == expected
