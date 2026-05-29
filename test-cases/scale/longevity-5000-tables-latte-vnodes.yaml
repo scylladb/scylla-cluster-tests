@@ -1,4 +1,7 @@
-test_duration: 1080 # ~5h prepare + 10h mixed + 3h margin
+test_duration: 1200 # 20h = ~8h prepare + 10h mixed + 2h margin
+# NOTE: the data population latte command defined at 'prepare_verify_cmd' takes about 8h using vnodes
+#       So, set the timeout for this phase appropriately.
+prepare_stress_duration: 540
 
 n_db_nodes: 6
 instance_type_db: 'i4i.4xlarge'
