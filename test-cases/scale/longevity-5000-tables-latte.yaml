@@ -1,7 +1,3 @@
-# NOTE: data population for 5000 tables using tablets is much slower than with vnodes:
-#         https://github.com/scylladb/scylladb/issues/27621
-#       And fails because of the following bug:
-#         https://github.com/scylladb/scylladb/issues/27620
 test_duration: 900 # 1h prepare + 10h mixed + 4h margin
 
 n_db_nodes: 6
