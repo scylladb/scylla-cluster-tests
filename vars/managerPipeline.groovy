@@ -269,7 +269,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    timeout(time: 30, unit: 'MINUTES') {
+                                    timeout(time: params.backend == 'azure' ? 60 : 30, unit: 'MINUTES') {
                                         if (params.backend == 'aws' || params.backend == 'azure' || params.backend == 'oci') {
                                             provisionResources(params, builder.region)
                                         } else if (params.backend.contains('docker')) {
