@@ -337,7 +337,7 @@ def call(Map pipelineParams) {
                     script {
                         wrap([$class: 'BuildUser']) {
                             dir('scylla-cluster-tests') {
-                                timeout(time: 30, unit: 'MINUTES') {
+                                timeout(time: params.backend == 'azure' ? 60 : 30, unit: 'MINUTES') {
                                     if (params.backend == 'xcloud') {
                                         echo "Scylla Cloud backend selected: provisioning loader nodes only on ${params.xcloud_provider} cloud provider"
                                     }
