@@ -1,4 +1,0 @@
-adaptive_timeout_multipliers:
-  decommission: 4
-  new_node: 4
-  remove_node: 4
