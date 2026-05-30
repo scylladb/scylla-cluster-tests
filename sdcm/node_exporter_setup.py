@@ -1,4 +1,5 @@
 from sdcm.remote import shell_script_cmd
+from sdcm.utils.curl import curl_with_retry
 
 
 NODE_EXPORTER_VERSION = "1.8.2"
@@ -10,13 +11,18 @@ class NodeExporterSetup:
         assert node or remoter, "node or remoter much be pass to this function"
         if node:
             remoter = node.remoter
+        tarball = f"node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+        download_url = (
+            f"https://github.com/prometheus/node_exporter/releases/download/v{NODE_EXPORTER_VERSION}/{tarball}"
+        )
+        download_cmd = curl_with_retry(download_url, retry=8, follow_redirects=True, fail_early=True, output=tarball)
         remoter.sudo(
             shell_script_cmd(f"""
             if ! id node_exporter > /dev/null 2>&1; then
                 useradd -rs /bin/false node_exporter
             fi
-            curl -L --retry 5 --retry-max-time 300 -O https://github.com/prometheus/node_exporter/releases/download/v{NODE_EXPORTER_VERSION}/node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
-            tar -xzvf node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
+            {download_cmd}
+            tar -xzvf {tarball}
             mv node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin
             # Restore SELinux context so the binary can be executed as a service on RHEL-based systems
             if command -v restorecon > /dev/null 2>&1; then
