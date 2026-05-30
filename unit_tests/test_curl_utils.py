@@ -37,6 +37,11 @@ from sdcm.utils.curl import curl_with_retry
             "curl --connect-timeout 10 --retry 5 --retry-max-time 300 -H 'Accept: json' https://x.com",
         ),
         (
+            "https://x.com",
+            {"fail_early": True},
+            "curl -f --connect-timeout 10 --retry 5 --retry-max-time 300 https://x.com",
+        ),
+        (
             "http://localhost:9180/metrics",
             {"retry": 0},
             "curl --connect-timeout 10 http://localhost:9180/metrics",
