@@ -265,7 +265,6 @@ pipeline {
                         RUNNER_IP=\$(cat sct_runner_ip||echo "")
                         if [ -n "\${RUNNER_IP}" ]; then
                             eval \$(ssh-agent)
-                            ssh-add ~/.ssh/scylla-test 2>/dev/null || true
                             ssh-add ~/.ssh/scylla_test_id_ed25519 2>/dev/null || true
                             scp -o StrictHostKeyChecking=no ubuntu@\${RUNNER_IP}:/home/ubuntu/scylla-cluster-tests/integration-tests-junit.xml integration-tests-junit.xml || echo "WARNING: Failed to fetch JUnit XML report"
                             eval \$(ssh-agent -k)

@@ -2235,6 +2235,12 @@ class SCTConfiguration(BaseModel):
     c_s_driver_version: Literal["3", "4", "random"] = SctField(
         description="cassandra-stress driver version to use: 3|4|random",
     )
+    keystore_backend: Literal["s3", "secretsmanager"] = SctField(
+        description="Credential storage backend for KeyStore: 'secretsmanager' (default) or 's3'",
+    )
+    keystore_sm_prefix: String = SctField(
+        description="AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager",
+    )
 
     required_params: Annotated[list, IgnoredType] = [
         "cluster_backend",
@@ -3079,6 +3085,16 @@ class SCTConfiguration(BaseModel):
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
             self.log.debug("Using random cassandra-stress driver version: %s", self["c_s_driver_version"])
+
+        # Propagate keystore settings to env vars so KeyStore instances created
+        # later (including from utility code that doesn't hold an SCTConfiguration
+        # reference) pick up the config-file / CLI-overridden values.  An
+        # explicit SCT_KEYSTORE_* env var always wins since we don't overwrite.
+        for _param in ("keystore_backend", "keystore_sm_prefix"):
+            _env_name = f"SCT_{_param.upper()}"
+            _value = self.get(_param)
+            if _value and _env_name not in os.environ:
+                os.environ[_env_name] = str(_value)
 
     def load_docker_images_defaults(self):
         stress_image = _load_docker_images_defaults_cached()
