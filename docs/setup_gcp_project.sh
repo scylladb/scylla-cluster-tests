@@ -6,7 +6,7 @@
 #   - aws CLI configured (for uploading credentials to S3 keystore)
 #
 # Usage:
-#   ./docs/setup_gcp_project.sh <project-id> [billing-account-id]
+#   ./docs/setup_gcp_project.sh <project-id> <billing-account-id>
 #
 # Example:
 #   ./docs/setup_gcp_project.sh gcp-sct-project-2 01ABCD-234567-FEDCBA
@@ -20,21 +20,25 @@ NETWORK_NAME="qa-vpc"
 KMS_KEYRING="demo-keyring"
 KMS_LOCATION="us-east1"
 
-if [[ $# -lt 1 ]]; then
-    echo "Usage: $0 <project-id> [billing-account-id]"
+if [[ $# -lt 2 ]]; then
+    echo "Usage: $0 <project-id> <billing-account-id>"
     echo ""
     echo "Arguments:"
     echo "  project-id         The GCP project ID to create (e.g., gcp-sct-project-2)"
-    echo "  billing-account-id Optional billing account to link (required for resource creation)"
+    echo "  billing-account-id The billing account to link (required)"
     exit 1
 fi
 
 PROJECT_ID="$1"
-BILLING_ACCOUNT="${2:-}"
+BILLING_ACCOUNT="$2"
 SA_NAME="sct-automation"
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 BACKUP_SA_NAME="sct-manager-backup"
 BACKUP_SA_EMAIL="${BACKUP_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+KEY_FILE="/tmp/${PROJECT_ID}.json"
+SCOPES_FILE="/tmp/${PROJECT_ID}_service_accounts.json"
+
+trap 'rm -f "$KEY_FILE" "$SCOPES_FILE"' EXIT
 
 echo "=== Setting up GCP project: ${PROJECT_ID} ==="
 echo ""
@@ -49,15 +53,10 @@ else
     echo "  Project created."
 fi
 
-if [[ -n "$BILLING_ACCOUNT" ]]; then
-    echo "[2/12] Linking billing account..."
-    gcloud billing projects link "$PROJECT_ID" \
-        --billing-account="$BILLING_ACCOUNT"
-    echo "  Billing linked."
-else
-    echo "[2/12] SKIPPING billing link (no billing account provided)."
-    echo "  WARNING: APIs cannot be enabled without billing. Provide billing account ID."
-fi
+echo "[2/12] Linking billing account..."
+gcloud billing projects link "$PROJECT_ID" \
+    --billing-account="$BILLING_ACCOUNT"
+echo "  Billing linked."
 
 echo "[3/12] Enabling required APIs..."
 gcloud services enable \
@@ -92,14 +91,17 @@ else
 fi
 
 echo "[5/12] Creating service account key..."
-KEY_FILE="/tmp/${PROJECT_ID}.json"
-gcloud iam service-accounts keys create "$KEY_FILE" \
-    --iam-account="$SA_EMAIL" \
-    --project="$PROJECT_ID"
-
-echo "  Uploading key to S3 keystore..."
-aws s3 cp "$KEY_FILE" "s3://${KEYSTORE_BUCKET}/${PROJECT_ID}.json"
-rm -f "$KEY_FILE"
+if aws s3 ls "s3://${KEYSTORE_BUCKET}/${PROJECT_ID}.json" &>/dev/null; then
+    echo "  Key already exists in keystore, skipping creation."
+else
+    gcloud iam service-accounts keys create "$KEY_FILE" \
+        --iam-account="$SA_EMAIL" \
+        --project="$PROJECT_ID"
+    echo "  Uploading key to S3 keystore..."
+    aws s3 cp "$KEY_FILE" "s3://${KEYSTORE_BUCKET}/${PROJECT_ID}.json"
+    rm -f "$KEY_FILE"
+    echo "  Key uploaded."
+fi
 echo "  Key uploaded and local copy removed."
 
 echo "[6/12] Assigning IAM roles to service account..."
@@ -145,7 +147,6 @@ echo "  Backup SA roles assigned."
 
 echo "[8/12] Creating service account scopes configuration..."
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
-SCOPES_FILE="/tmp/${PROJECT_ID}_service_accounts.json"
 
 cat > "$SCOPES_FILE" << EOF
 [

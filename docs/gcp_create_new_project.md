@@ -449,12 +449,13 @@ export SCT_GCE_PROJECT="<new-project-id>"
 # Create a Jenkins worker instance
 ./sct.py create-runner-instance -c gce -r us-east1 -d 9999 --test-id 1234
 
-# Rename worker to a permanent name
-gcloud beta compute instances stop sct-runner-1-5-instance-1234 --project="$NEW_PROJECT_ID"
+# Rename worker to a permanent name (replace ZONE with actual zone, e.g., us-east1-c)
+export ZONE="us-east1-c"
+gcloud beta compute instances stop sct-runner-1-5-instance-1234 --project="$NEW_PROJECT_ID" --zone="$ZONE"
 gcloud beta compute instances set-name sct-runner-1-5-instance-1234 \
-    --project="$NEW_PROJECT_ID" \
+    --project="$NEW_PROJECT_ID" --zone="$ZONE" \
     --new-name="${NEW_PROJECT_ID}-builder1-us-east1"
-gcloud beta compute instances start "${NEW_PROJECT_ID}-builder1-us-east1" --project="$NEW_PROJECT_ID"
+gcloud beta compute instances start "${NEW_PROJECT_ID}-builder1-us-east1" --project="$NEW_PROJECT_ID" --zone="$ZONE"
 
 # Reserve a static IP for the builder
 gcloud compute addresses create "${NEW_PROJECT_ID}-builder1-us-east1" \
