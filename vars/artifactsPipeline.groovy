@@ -70,7 +70,7 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'a Scylla version to run against (mostly for docker backend)',
                    name: 'scylla_version')
-            string(defaultValue: "${pipelineParams.get('test_config', 'test-cases/artifacts/centos7.yaml')}",
+            string(defaultValue: "${pipelineParams.get('test_config', 'test-cases/artifacts/centos9.yaml')}",
                    description: 'a config file for the artifacts test',
                    name: 'test_config')
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')

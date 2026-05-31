@@ -145,7 +145,8 @@ def test_12_scylla_version_repo_ubuntu(monkeypatch):
     monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO_LOADER", "ubuntu-xenial")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "3.0.3")
     monkeypatch.setenv(
-        "SCT_GCE_IMAGE_DB", "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7"
+        "SCT_GCE_IMAGE_DB",
+        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
     )
     expected_repo = "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list"
     with (
@@ -164,7 +165,8 @@ def test_12_scylla_version_repo_ubuntu_loader_centos(monkeypatch):
     monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO_LOADER", "centos")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "3.0.3")
     monkeypatch.setenv(
-        "SCT_GCE_IMAGE_DB", "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7"
+        "SCT_GCE_IMAGE_DB",
+        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
     )
     expected_repo = "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list"
     with (
@@ -354,7 +356,8 @@ def test_15_new_scylla_repo(monkeypatch):
     monkeypatch.setenv("SCT_NEW_SCYLLA_REPO", centos_repo)
     monkeypatch.setenv("SCT_USER_PREFIX", "testing")
     monkeypatch.setenv(
-        "SCT_GCE_IMAGE_DB", "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7"
+        "SCT_GCE_IMAGE_DB",
+        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
     )
 
     with unittest.mock.patch.object(sct_config, "get_branch_version", return_value="2019.1.1", clear=True):
@@ -370,7 +373,8 @@ def test_15a_new_scylla_repo_by_scylla_version(monkeypatch):
     monkeypatch.setenv("SCT_NEW_VERSION", "master:latest")
     monkeypatch.setenv("SCT_USER_PREFIX", "testing")
     monkeypatch.setenv(
-        "SCT_GCE_IMAGE_DB", "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7"
+        "SCT_GCE_IMAGE_DB",
+        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
     )
 
     resolved_repo_link = "https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/master/rpm\

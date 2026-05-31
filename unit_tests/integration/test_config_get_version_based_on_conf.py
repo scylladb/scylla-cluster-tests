@@ -96,7 +96,8 @@ def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, d
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", scylla_version)
     monkeypatch.setenv(
-        "SCT_GCE_IMAGE_DB", "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7"
+        "SCT_GCE_IMAGE_DB",
+        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
     )
     monkeypatch.setenv("SCT_USE_PREINSTALLED_SCYLLA", "false")
     monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO", distro)
@@ -163,7 +164,8 @@ def test_unified_package(monkeypatch):
         ),
     )
     monkeypatch.setenv(
-        "SCT_GCE_IMAGE_DB", "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7"
+        "SCT_GCE_IMAGE_DB",
+        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
     )
 
     conf = sct_config.SCTConfiguration()
@@ -229,7 +231,7 @@ def test_relocatable_version_resolves_unified_package(scylla_version, backend, e
     if backend == "gce":
         monkeypatch.setenv(
             "SCT_GCE_IMAGE_DB",
-            "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7",
+            "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
         )
 
     fake_url = (
