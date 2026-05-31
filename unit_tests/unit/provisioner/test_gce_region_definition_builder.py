@@ -58,23 +58,23 @@ def build_region_defs():
 
 
 @pytest.mark.parametrize(
-    "extra_env,name_filter,expected_disk_type",
+    "extra_env,node_type,expected_disk_type",
     [
         ({"SCT_GCE_ROOT_DISK_TYPE_LOADER": "pd-ssd"}, "loader", "pd-ssd"),
-        ({"SCT_GCE_ROOT_DISK_TYPE_DB": "pd-ssd"}, "db", "pd-ssd"),
+        ({"SCT_GCE_ROOT_DISK_TYPE_DB": "pd-ssd"}, "scylla-db", "pd-ssd"),
         ({"SCT_GCE_ROOT_DISK_TYPE_MONITOR": "pd-standard"}, "monitor", "pd-standard"),
     ],
 )
 def test_root_disk_type_flows_into_instance_definition(
-    make_config, build_region_defs, extra_env, name_filter, expected_disk_type
+    make_config, build_region_defs, extra_env, node_type, expected_disk_type
 ):
     """root_disk_type config must appear in the InstanceDefinition for the corresponding node type."""
     config, test_config = make_config(extra_env)
     region_defs = build_region_defs(config, test_config)
 
-    defs = [d for d in region_defs[0].definitions if d.name and name_filter in d.name]
-    assert defs, f"No {name_filter} definitions found"
+    defs = [d for d in region_defs[0].definitions if d.tags.get("NodeType") == node_type]
+    assert defs, f"No definitions with NodeType='{node_type}' found"
     for defn in defs:
         assert defn.root_disk_type == expected_disk_type, (
-            f"Expected root_disk_type='{expected_disk_type}' for {name_filter}, got '{defn.root_disk_type}'"
+            f"Expected root_disk_type='{expected_disk_type}' for NodeType='{node_type}', got '{defn.root_disk_type}'"
         )
