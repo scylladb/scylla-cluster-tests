@@ -837,7 +837,7 @@ class SCTConfiguration(BaseModel):
         description="""Email subject postfix""",
     )
     ssh_transport: Literal["libssh2", "fabric"] = SctField(
-        description="""Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'""",
+        description="""Set type of ssh library to use. Could be 'libssh2' (default) or 'fabric'""",
         default="libssh2",
     )
 
