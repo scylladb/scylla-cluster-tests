@@ -32,7 +32,7 @@ from .base import RetryableNetworkException
 from .remote_base import RemoteCmdRunnerBase
 
 
-class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport="libssh2"):
+class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport="libssh2", default=True):
     """Remoter that mimic RemoteCmdRunner, under the hood it runs libssh2 client, instead of paramiko
     Main problem in libssh2 - is that it is not thread safe, we mitigate this problem by having
       _connection_thread_map - a dictionary in which we bind thread to the libssh2 session.
