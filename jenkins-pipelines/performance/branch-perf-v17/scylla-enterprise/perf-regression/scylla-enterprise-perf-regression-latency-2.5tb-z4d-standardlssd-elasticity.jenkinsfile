@@ -1,0 +1,15 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+perfRegressionParallelPipeline(
+    backend: "gce",
+    gce_datacenter: "us-east4",
+    availability_zone: "c",
+    provision_type: 'on_demand',
+    gce_project: 'gcp-local-ssd-latency',
+    test_name: "performance_regression_test.PerformanceRegressionTest",
+    test_config: """["test-cases/performance/perf-regression-latency-650gb-elasticity.yaml", "configurations/disable_kms.yaml", "configurations/performance/elasticity-2.5Tb.yaml", "configurations/gce/z4d-highmem-16-standardlssd.yaml", "configurations/performance/latency-decorator-error-thresholds-nemesis-ent-tablets.yaml"]""",
+    sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"],
+)
