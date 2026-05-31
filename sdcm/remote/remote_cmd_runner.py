@@ -25,7 +25,7 @@ from .base import RetryableNetworkException, SSHConnectTimeoutError
 from .remote_base import RemoteCmdRunnerBase
 
 
-class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport="fabric", default=True):
+class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport="fabric"):
     connection: Connection
     ssh_config: Config = None
     ssh_is_up: threading.Event = None
