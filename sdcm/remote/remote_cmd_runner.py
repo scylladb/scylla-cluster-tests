@@ -44,7 +44,7 @@ def open_none_auth(self):
     self.transport = self.client._transport = transport
 
 
-class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport="fabric", default=True):
+class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport="fabric"):
     connection: Connection
     ssh_config: Config = None
     ssh_is_up: threading.Event = None
