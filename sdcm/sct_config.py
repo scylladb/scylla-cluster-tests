@@ -821,7 +821,7 @@ class SCTConfiguration(dict):
             name="ssh_transport",
             env="SSH_TRANSPORT",
             type=str,
-            help="""Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'""",
+            help="""Set type of ssh library to use. Could be 'libssh2' (default) or 'fabric'""",
         ),
         # Scylla command line arguments options
         dict(
