@@ -4323,9 +4323,12 @@ class NemesisRunner:
     @latency_calculator_decorator(legend="Doubling cluster load")
     def _double_cluster_load(self, duration: int) -> None:
         duration = 30
+        stress_cmd = self.tester.stress_cmd
+        if isinstance(stress_cmd, list):
+            stress_cmd = stress_cmd[0]
         self.log.info("Doubling the load on the cluster for %s minutes", duration)
         stress_queue = self.tester.run_stress_thread(
-            stress_cmd=self.tester.stress_cmd, stress_num=1, stats_aggregate_cmds=False, duration=duration
+            stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False, duration=duration
         )
         results = self.tester.verify_stress_thread(
             thread_pool=stress_queue, error_handler=self._nemesis_stress_failure_handler
