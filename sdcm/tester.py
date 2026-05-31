@@ -2149,10 +2149,6 @@ class ClusterTester(unittest.TestCase):
                 node_key_file=self.credentials[0].key_file,
             )
 
-        # TODO: for Docker backend, loaders are Scylla containers used only as a Docker host
-        # to launch stress tool containers (RemoteDocker) via docker-in-docker.
-        # This is wasteful — stress containers could run directly on the host via LOCALRUNNER.
-        # See docs/plans/infrastructure/cassandra-cluster-support.md for refactor notes.
         self.loaders = cluster_docker.LoaderSetDocker(
             n_nodes=self.params.get("n_loaders"), **container_node_params, **common_params
         )

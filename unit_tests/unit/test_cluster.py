@@ -980,6 +980,7 @@ _NARROWED_KWARGS: dict[str, frozenset[str]] = {
     "LoaderPodContainer": _NO_SSH,
     "OciNode": _NO_SSH,
     "VectorStoreAWSNode": _NO_SSH,
+    "DockerLoaderNode": _NO_DC_RACK,
     "DockerMonitoringNode": _NO_DC_RACK,
     "DockerNode": _NO_DC_RACK,
     "VectorStoreDockerNode": _NO_DC_RACK,
