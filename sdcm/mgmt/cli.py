@@ -1584,3 +1584,50 @@ class SCTool:
         date_obj = datetime.datetime.strptime(date_str, "%Y%m%d")
         timestamp = int(date_obj.timestamp())
         return timestamp
+
+
+class SCToolDocker(SCTool):
+    def __init__(self, manager_node, container_name):
+        super().__init__(manager_node=manager_node)
+        self.container_name = container_name
+
+    def run(
+        self,
+        cmd,
+        is_verify_errorless_result=False,
+        parse_table_res=True,
+        is_multiple_tables=False,
+        replace_broken_unicode_values=True,
+    ):
+        LOGGER.debug("Issuing: 'sctool %s' in container %s", cmd, self.container_name)
+        try:
+            res = self.manager_node.remoter.run(f"docker exec {self.container_name} sctool {cmd}")
+            LOGGER.debug("sctool output: %s", res.stdout)
+        except (InvokeFailure, Libssh2Failure) as ex:
+            raise ScyllaManagerError(f"Encountered an error on sctool command: {cmd}: {ex}") from ex
+
+        if replace_broken_unicode_values:
+            res.stdout = self.replace_broken_unicode_values(res.stdout)
+
+        if is_verify_errorless_result:
+            verify_errorless_result(cmd=cmd, res=res)
+        if parse_table_res:
+            res = self.parse_result_table(res=res)
+            if is_multiple_tables:
+                dict_res_tables = self.parse_result_multiple_tables(res=res)
+                return dict_res_tables
+        LOGGER.debug("sctool res after parsing: %s", res)
+        return res
+
+
+class ScyllaManagerToolDocker(ScyllaManagerTool):
+    def __init__(self, manager_node, manager_container_name):
+        self.manager_container_name = manager_container_name
+        ScyllaManagerBase.__init__(self, id="MANAGER", manager_node=manager_node)
+        self.sctool = SCToolDocker(manager_node=manager_node, container_name=manager_container_name)
+        self._initial_wait(20)
+        LOGGER.info("Initiating Scylla-Manager (Docker), version: {}".format(self.sctool.version))
+        self.default_user = "root"
+
+    def rollback_upgrade(self, scylla_mgmt_address):
+        raise NotImplementedError("Rollback not supported for Docker manager")
