@@ -346,6 +346,8 @@ class KeyStore:
         if os.environ.get("JOB_NAME"):  # we are in Jenkins
             try:
                 return self.get_json(f"argus_rest_credentials_sct_{cloud_provider}.json")
+            except SecretsManagerEntryMissing:
+                pass
             except ClientError as e:
                 if not e.response["Error"]["Code"] == "NoSuchKey":
                     raise
