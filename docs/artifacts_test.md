@@ -15,7 +15,6 @@ vars
 `-- artifactsPipeline.groovy
 jenkins-pipelines
 |-- artifacts-ami.jenkinsfile
-|-- artifacts-centos7.jenkinsfile
 |-- artifacts-debian10.jenkinsfile
 |-- artifacts-debian11.jenkinsfile
 |-- artifacts-docker.jenkinsfile
@@ -51,10 +50,6 @@ export SCT_IP_SSH_CONNECTIONS=public
 
 and run one of the following commands:
 
-## CentOS 7
-```sh
-hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos7.yaml
-```
 
 ## CentOS 8
 ```sh

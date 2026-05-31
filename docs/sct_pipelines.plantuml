@@ -9,7 +9,7 @@ scale 2
  ++++ longevity-10gb-3h.jenkinsfile
  ++++ longevity-200GB-48h-verifier-LimitedMonkey-tls.jenkinsfile
  +++ rolling-upgrade
- ++++ rolling-upgrade-centos7.jenkinsfile
+ ++++ rolling-upgrade-rocky10.jenkinsfile
  ++++ ...
  +++ gemini
  ++++
