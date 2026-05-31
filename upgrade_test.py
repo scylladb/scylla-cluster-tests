@@ -313,13 +313,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
             orig_is_enterprise = node.is_product_enterprise
             if node.distro.is_rhel_like:
-                result = node.remoter.run("sudo yum search scylla-enterprise 2>&1", ignore_status=True)
-                new_is_enterprise = bool(
-                    "scylla-enterprise.x86_64" in result.stdout or "No matches found" not in result.stdout
-                )
+                result = node.remoter.run("sudo yum search scylla-enterprise-server 2>&1", ignore_status=True)
+                new_is_enterprise = "scylla-enterprise-server" in result.stdout
             else:
-                result = node.remoter.run("sudo apt-cache search scylla-enterprise", ignore_status=True)
-                new_is_enterprise = "scylla-enterprise" in result.stdout
+                result = node.remoter.run("sudo apt-cache search scylla-enterprise-server", ignore_status=True)
+                new_is_enterprise = "scylla-enterprise-server" in result.stdout
 
             scylla_pkg = "scylla-enterprise" if new_is_enterprise else "scylla"
             ver_suffix = r"\*{}".format(new_version) if new_version else ""
