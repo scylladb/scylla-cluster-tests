@@ -244,14 +244,6 @@ class RefreshBigMonkey(NemesisBaseClass):
         self.runner.disrupt_nodetool_refresh(big_sstable=True)
 
 
-class RemoveServiceLevelMonkey(NemesisBaseClass):
-    disruptive = True
-    sla = True
-
-    def disrupt(self):
-        self.runner.disrupt_remove_service_level_while_load()
-
-
 @target_all_nodes
 class EnospcMonkey(NemesisBaseClass):
     disruptive = True
@@ -705,93 +697,6 @@ class StartStopValidationCompaction(NemesisBaseClass):
 
     def disrupt(self):
         self.runner.disrupt_start_stop_validation_compaction()
-
-
-class SlaIncreaseSharesDuringLoad(NemesisBaseClass):
-    disruptive = False
-    sla = True
-
-    additional_configs = [
-        "configurations/nemesis/additional_configs/sla_config.yaml",
-        "configurations/auth_cassandra.yaml",
-    ]
-
-    def disrupt(self):
-        self.runner.disrupt_sla_increase_shares_during_load()
-
-
-class SlaDecreaseSharesDuringLoad(NemesisBaseClass):
-    disruptive = False
-    sla = True
-
-    additional_configs = [
-        "configurations/nemesis/additional_configs/sla_config.yaml",
-        "configurations/auth_cassandra.yaml",
-    ]
-
-    def disrupt(self):
-        self.runner.disrupt_sla_decrease_shares_during_load()
-
-
-class SlaReplaceUsingDetachDuringLoad(NemesisBaseClass):
-    # TODO: This SLA nemesis uses binary disable/enable workaround that in a test with parallel nemeses can cause to the errors and
-    #  failures that is not a problem of Scylla. The option "disruptive" was set to True to prevent irrelevant failures. Should be changed
-    #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
-    disruptive = True
-    sla = True
-
-    additional_configs = [
-        "configurations/nemesis/additional_configs/sla_config.yaml",
-        "configurations/auth_cassandra.yaml",
-    ]
-
-    def disrupt(self):
-        self.runner.disrupt_replace_service_level_using_detach_during_load()
-
-
-class SlaReplaceUsingDropDuringLoad(NemesisBaseClass):
-    # TODO: This SLA nemesis uses binary disable/enable workaround that in a test with parallel nemeses can cause to the errors and
-    #  failures that is not a problem of Scylla. The option "disruptive" was set to True to prevent irrelevant failures. Should be changed
-    #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
-    disruptive = True
-    sla = True
-
-    additional_configs = [
-        "configurations/nemesis/additional_configs/sla_config.yaml",
-        "configurations/auth_cassandra.yaml",
-    ]
-
-    def disrupt(self):
-        self.runner.disrupt_replace_service_level_using_drop_during_load()
-
-
-class SlaIncreaseSharesByAttachAnotherSlDuringLoad(NemesisBaseClass):
-    # TODO: This SLA nemesis uses binary disable/enable workaround that in a test with parallel nemeses can cause to the errors and
-    #  failures that is not a problem of Scylla. The option "disruptive" was set to True to prevent irrelevant failures. Should be changed
-    #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
-    disruptive = True
-    sla = True
-
-    additional_configs = [
-        "configurations/nemesis/additional_configs/sla_config.yaml",
-        "configurations/auth_cassandra.yaml",
-    ]
-
-    def disrupt(self):
-        self.runner.disrupt_increase_shares_by_attach_another_sl_during_load()
-
-
-class SlaMaximumAllowedSlsWithMaxSharesDuringLoad(NemesisBaseClass):
-    disruptive = False
-    sla = True
-
-    additional_configs = [
-        "configurations/nemesis/additional_configs/sla_config.yaml",
-        "configurations/auth_cassandra.yaml",
-    ]
-
-    def disrupt(self):
-        self.runner.disrupt_maximum_allowed_sls_with_max_shares_during_load()
 
 
 @target_data_nodes
