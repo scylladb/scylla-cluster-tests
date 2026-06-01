@@ -855,7 +855,7 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
         assert instance_type is None, "docker can provision different instance types"
         return self._create_nodes(count, enable_auto_bootstrap)
 
-    def node_setup(self, node: DockerLoaderNode, verbose=False, **kwargs):
+    def node_setup(self, node: DockerLoaderNode, verbose=False, timeout=3600, **kwargs):
         # No container setup needed - stress tools run directly on the host via LOCALRUNNER.
         # Docker is already available on the host machine.
         if self.params.get("client_encrypt"):
