@@ -4605,7 +4605,21 @@ class BaseCluster:
             connect_timeout=connect_timeout,
             **kwargs,
         )
-        session = cluster_driver.connect()
+        try:
+            session = cluster_driver.connect()
+        except Exception as exc:
+            # Shutdown the broken driver to release internal connection managers, executor threads,
+            # and broken async loop file descriptors. Without this cleanup, the driver leaks resources
+            # and subsequent retries may hit "Bad file descriptor" errors on stale sockets.
+            # See: https://github.com/scylladb/python-driver/issues/614
+            self.log.error(
+                "Failed to connect CQL session due to %s: %s. Shutting down broken driver...", type(exc).__name__, exc
+            )
+            try:
+                cluster_driver.shutdown()
+            except Exception as shutdown_err:  # noqa: BLE001
+                self.log.debug("Ignoring error during broken driver shutdown: %s", shutdown_err)
+            raise
 
         # temporarily increase client-side timeout to 1m to determine
         # if the cluster is simply responding slowly to requests
