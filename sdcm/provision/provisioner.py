@@ -87,6 +87,13 @@ class ZoneResourcesExhaustedError(ProvisionUnrecoverableError):
     """Raised when the target availability zone has no capacity for the requested resources."""
 
 
+class InstanceConfigurationError(ProvisionUnrecoverableError):
+    """Raised when the requested instance configuration itself is invalid (e.g. a disk type the
+    machine type does not support). Deliberately *not* a `ProvisionError`, so the provisioning
+    retry in `sdcm.sct_provision.instances_provider` does not re-issue a request that can only
+    fail again, in this or any other zone/region."""
+
+
 class ProvisionerError(Exception):
     pass
 

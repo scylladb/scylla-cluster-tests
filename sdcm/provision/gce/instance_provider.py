@@ -21,11 +21,14 @@ import google.api_core.exceptions
 from google.cloud import compute_v1
 
 from sdcm.provision.provisioner import (
+    InstanceConfigurationError,
     InstanceDefinition,
     PricingModel,
     ProvisionError,
+    ProvisionUnrecoverableError,
     ZoneResourcesExhaustedError,
 )
+from sdcm.provision.gce.capacity_errors import is_config_error
 from sdcm.provision.gce.disk_provider import DiskProvider
 from sdcm.provision.gce.network_provider import NetworkProvider
 from sdcm.provision.gce.constants import (
@@ -51,6 +54,16 @@ ZONE_EXHAUSTED_MARKER = "ZONE_RESOURCE_POOL_EXHAUSTED"
 
 
 def _is_zone_exhausted(error: BaseException) -> bool:
+    """True only for a genuine zone capacity shortage.
+
+    A configuration error (e.g. a disk type the machine type does not support) carries the same
+    ZONE_RESOURCE_POOL_EXHAUSTED code, so it is vetoed here - and, identically, in
+    :func:`sdcm.provision.gce.capacity_errors.is_zone_capacity_error`, which the region-level
+    fallback classifies with. Both must agree, otherwise the region loop would relocate the whole
+    cluster on an error that fails the same way everywhere.
+    """
+    if is_config_error(error):
+        return False
     return ZONE_EXHAUSTED_MARKER in str(error)
 
 
@@ -172,6 +185,10 @@ class VirtualMachineProvider:
                 )
                 pending_instance_creations.append((definition, operation, normalized_name, user_data, startup_script))
             except google.api_core.exceptions.GoogleAPIError as err:
+                if is_config_error(err):
+                    raise InstanceConfigurationError(
+                        f"Failed to create instance {normalized_name} due to configuration error: {err}"
+                    ) from err
                 if _is_zone_exhausted(err):
                     LOGGER.error(
                         "Zone %s resource pool exhausted during insert request for %s",
@@ -189,9 +206,9 @@ class VirtualMachineProvider:
                     definition, operation, normalized_name, pricing_model, user_data, startup_script
                 )
                 instances.append(instance)
-            except ZoneResourcesExhaustedError:
-                # Zone exhaustion is unrecoverable; let it propagate immediately.
-                # Successfully-created instances remain in self._cache so callers
+            except ProvisionUnrecoverableError:
+                # Zone exhaustion and configuration errors are unrecoverable; let them propagate
+                # immediately. Successfully-created instances remain in self._cache so callers
                 # can clean them up before retrying in a different zone.
                 raise
             except google.api_core.exceptions.GoogleAPIError as err:
@@ -199,6 +216,10 @@ class VirtualMachineProvider:
                 error_to_raise = err
 
         if error_to_raise:
+            if is_config_error(error_to_raise):
+                raise InstanceConfigurationError(
+                    f"Failed to create instances due to configuration error: {error_to_raise}"
+                ) from error_to_raise
             if _is_zone_exhausted(error_to_raise):
                 raise ZoneResourcesExhaustedError(
                     f"Zone {self.zone} resource pool exhausted: {error_to_raise}"
@@ -229,6 +250,18 @@ class VirtualMachineProvider:
             self._cache[normalized_name] = instance
             return instance
         except google.api_core.exceptions.GoogleAPIError as gce_error:
+            # Config first, then capacity: a config error carries the capacity code too, so the order
+            # matches the other two classification sites even though _is_zone_exhausted vetoes it.
+            if is_config_error(gce_error):
+                LOGGER.error(
+                    "Instance %s creation failed due to configuration error (not retryable): %s",
+                    normalized_name,
+                    gce_error,
+                )
+                self._cleanup_failed_instance(normalized_name, str(gce_error))
+                raise InstanceConfigurationError(
+                    f"Failed to create instance {normalized_name} due to configuration error: {gce_error}"
+                ) from gce_error
             if _is_zone_exhausted(gce_error):
                 LOGGER.error(
                     "Zone %s resource pool exhausted while creating %s; failing fast without retry",
@@ -273,6 +306,10 @@ class VirtualMachineProvider:
         except google.api_core.exceptions.GoogleAPIError as gce_error:
             LOGGER.warning("Instance %s creation failed: %s", normalized_name, gce_error)
             self._cleanup_failed_instance(normalized_name, str(gce_error))
+            if is_config_error(gce_error):
+                raise InstanceConfigurationError(
+                    f"Failed to create instance {normalized_name} due to configuration error: {gce_error}"
+                ) from gce_error
             if _is_zone_exhausted(gce_error):
                 raise ZoneResourcesExhaustedError(
                     f"Zone {self.zone} resource pool exhausted: {gce_error}"

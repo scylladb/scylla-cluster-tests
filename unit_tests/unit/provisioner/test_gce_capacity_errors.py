@@ -14,6 +14,7 @@
 import pytest
 
 from sdcm.provision.gce.capacity_errors import (
+    is_config_error,
     is_zone_capacity_error,
     is_quota_error,
     is_type_unavailable_error,
@@ -35,10 +36,33 @@ class _FakeError(Exception):
         ("PERMISSION_DENIED: cannot access", False),
         ("QUOTA_EXCEEDED", False),
         ("", False),
+        # GCE returns the capacity code for an unsupported machine-type/disk-type combination too;
+        # it must not be classified as capacity, or the region loop relocates the cluster for nothing.
+        (
+            "ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS: Error 400: "
+            "[pd-standard, pd-ssd, n4-standard-16] features are not compatible for creating instance., badRequest",
+            False,
+        ),
     ],
 )
 def test_is_zone_capacity_error(message, expected):
     assert is_zone_capacity_error(_FakeError(message)) is expected
+
+
+@pytest.mark.parametrize(
+    "message,expected",
+    [
+        # Verbatim GCE wording - "are ... for", not "is ... with".
+        ("Error 400: [pd-standard, pd-ssd, n4-standard-16] features are not compatible for creating instance.", True),
+        ("[e2-medium, local-ssd] features are not compatible for creating instance.", True),
+        ("Requested boot disk architecture (X86_64) is not compatible with machine type architecture (ARM64).", True),
+        ("ZONE_RESOURCE_POOL_EXHAUSTED", False),
+        ("QUOTA_EXCEEDED", False),
+        ("", False),
+    ],
+)
+def test_is_config_error(message, expected):
+    assert is_config_error(_FakeError(message)) is expected
 
 
 @pytest.mark.parametrize(
@@ -71,6 +95,11 @@ def test_is_type_unavailable_error(message, expected):
     "message,expected_class",
     [
         ("ZONE_RESOURCE_POOL_EXHAUSTED", "capacity"),
+        (
+            "ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS: [pd-standard, n4-standard-16] "
+            "features are not compatible for creating instance.",
+            "config",
+        ),
         ("QUOTA_EXCEEDED", "quota"),
         ("RESOURCE_NOT_FOUND", "type_unavailable"),
         ("PERMISSION_DENIED", "unknown"),
