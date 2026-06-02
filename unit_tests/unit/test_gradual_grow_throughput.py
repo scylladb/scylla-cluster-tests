@@ -15,52 +15,20 @@
 Unit tests for the dynamic keyspace/table resolution logic in the gradual
 performance testing framework (PerformanceRegressionPredefinedStepsTest).
 
-These tests validate the get_test_table_name() behaviour without importing
-the full heavy module stack by duplicating only the helper methods under test.
-This mirrors the pattern used in other lightweight unit tests in this
-repository (e.g. test_dns_readiness.py).
+Tests import the production code directly to ensure we're validating real behaviour.
 """
+
+from types import SimpleNamespace
 
 import pytest
 
-
-# ---------------------------------------------------------------------------
-# Minimal re-implementation of the methods under test.
-# These are copied from performance_regression_gradual_grow_throughput.py
-# so they can be exercised without importing the full module tree.
-# ---------------------------------------------------------------------------
-
-
-def _is_latte_command(stress_cmd):
-    cmd = stress_cmd[0]
-    return "latte " in cmd and " run " in cmd
+import performance_regression_gradual_grow_throughput as gradual_grow_module
 
 
 def _get_test_table_name(params, stress_cmds):
-    stress_cmd = stress_cmds[0]
-    stress_tool = stress_cmd.split(" ")[0]
-
-    keyspace = params.get("perf_stress_keyspace") or ""
-    table = params.get("perf_stress_table") or ""
-
-    if _is_latte_command(stress_cmds) and (not keyspace or not table):
-        if latte_schema_parameters := params.get("latte_schema_parameters"):
-            if not keyspace:
-                keyspace = latte_schema_parameters.get("keyspace", "")
-            if not table:
-                table = latte_schema_parameters.get("table", "")
-
-    if not keyspace:
-        raise ValueError(
-            f"'perf_stress_keyspace' (or 'latte_schema_parameters.keyspace' for latte) is required for "
-            f"'{stress_tool}' gradual performance tests. Please add it to your test YAML configuration."
-        )
-    if not table:
-        raise ValueError(
-            f"'perf_stress_table' (or 'latte_schema_parameters.table' for latte) is required for "
-            f"'{stress_tool}' gradual performance tests. Please add it to your test YAML configuration."
-        )
-    return keyspace, table
+    """Call the production get_test_table_name with a minimal mock instance."""
+    instance = SimpleNamespace(params=params)
+    return gradual_grow_module.PerformanceRegressionPredefinedStepsTest.get_test_table_name(instance, stress_cmds)
 
 
 # ---------------------------------------------------------------------------
