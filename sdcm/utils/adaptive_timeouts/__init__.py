@@ -16,6 +16,20 @@ from sdcm.utils.features import is_tablets_feature_enabled
 
 LOGGER = logging.getLogger(__name__)
 
+
+def _get_operation_timeout_factor(params, operation: "Operations") -> float:
+    """Return timeout multiplier for the current operation.
+
+    Looks up operation.value[0] in the configured multipliers dict.
+    Missing config or missing operation key returns 1.0.
+    """
+    multipliers = params.get("adaptive_timeout_multipliers")
+    if multipliers is None:
+        return 1.0
+
+    return multipliers.get_multiplier(operation.value[0])
+
+
 TABLETS_SOFT_TIMEOUT = 1 * 60 * 60
 TABLETS_HARD_TIMEOUT = 3 * 60 * 60
 _STREAMING_OVERHEAD = 600  # add 10 minutes overhead for operations other than streaming
@@ -260,6 +274,11 @@ def adaptive_timeout(  # noqa: PLR0914
         hard_timeout = None
     if store_metrics:
         load_metrics.update(TestInfoServices.get(node))
+
+    # Apply operation-based timeout scaling (opt-in via config)
+    operation_factor = _get_operation_timeout_factor(node.parent_cluster.params, operation)
+    soft_timeout = soft_timeout * operation_factor if soft_timeout else None
+    hard_timeout = hard_timeout * operation_factor if hard_timeout else None
 
     start_time = time.monotonic()
     timeout_occurred = False
