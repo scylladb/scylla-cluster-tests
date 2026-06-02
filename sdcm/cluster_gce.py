@@ -485,9 +485,22 @@ class GCECluster(cluster.BaseCluster):
                 raise
             exhausted_zone = self.provisioners[dc_idx].availability_zone
             self.log.warning("Zone %s exhausted, trying alternative zones in region %s", exhausted_zone, region)
-            alternative_zones = get_alternative_zones(region, exhausted_zone)
+            machine_types = sorted({d.type for d in definitions if d.type})
+            alternative_zones = get_alternative_zones(region, exhausted_zone, machine_types=machine_types)
             if not alternative_zones:
+                self.log.error(
+                    "No alternative zones found in region %s supporting machine types %s",
+                    region,
+                    machine_types,
+                )
                 raise
+            self.log.info(
+                "%s | %s: Attempting zone fallback; candidates: %s",
+                self,
+                self._gce_instance_type,
+                [f"{region}-{z}" for z in alternative_zones],
+            )
+            last_fallback_exc = None
             for alt_zone in alternative_zones:
                 self.log.info("Attempting zone %s-%s as fallback", region, alt_zone)
                 try:
@@ -509,14 +522,21 @@ class GCECluster(cluster.BaseCluster):
                     self.log.info("Successfully provisioned instances in fallback zone %s-%s", region, alt_zone)
                     return result
                 except (ZoneResourcesExhaustedError, ProvisionError) as fallback_exc:
+                    last_fallback_exc = fallback_exc
                     if isinstance(fallback_exc, ProvisionError) and not _is_zone_exhausted(fallback_exc):
+                        # Non-capacity error (auth/quota/misconfig) — don't retry other zones, re-raise immediately
+                        self.log.error(
+                            "Fallback zone %s-%s failed with non-capacity error: %s", region, alt_zone, fallback_exc
+                        )
                         raise
-                    self.log.warning("Fallback zone %s-%s also exhausted, trying next", region, alt_zone)
+                    self.log.warning("Fallback zone %s-%s exhausted: %s, trying next", region, alt_zone, fallback_exc)
                     continue
+            # All fallback zones were capacity-exhausted
+            cause = last_fallback_exc or exc
             raise ZoneResourcesExhaustedError(
-                f"All zones in region {region} are exhausted: tried {exhausted_zone} and "
+                f"All zones in region {region} exhausted: tried {exhausted_zone} and "
                 f"{[f'{region}-{z}' for z in alternative_zones]}"
-            ) from exc
+            ) from cause
 
     def _destroy_instance(self, name: str, dc_idx: int):
         target_node = self._get_instances_by_name(dc_idx=dc_idx, name=name)
