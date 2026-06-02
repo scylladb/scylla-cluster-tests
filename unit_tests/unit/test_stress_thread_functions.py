@@ -13,7 +13,12 @@
 
 import pytest
 
-from sdcm.stress_thread import CassandraStressThread, get_timeout_from_stress_cmd
+from sdcm.stress_thread import (
+    CassandraStressThread,
+    apply_gemini_stress_duration,
+    extract_gemini_seed,
+    get_timeout_from_stress_cmd,
+)
 from sdcm.utils.common import time_period_str_to_seconds
 
 
@@ -232,3 +237,87 @@ def test_set_hdr_tags_user_profile_no_known_ops_raises():
     stub = _make_hdr_tag_stub()
     with pytest.raises(ValueError, match="Cannot detect stress operation type"):
         stub.set_hdr_tags("cassandra-stress user profile=/tmp/test.yaml -mode cql3 native -rate threads=50")
+
+
+@pytest.mark.parametrize(
+    "original_cmd, stress_duration, expected_cmd",
+    [
+        # The core bug: YAML block scalar puts --duration at start with no leading space
+        pytest.param(
+            "--duration 3h\n--concurrency 50\n--mode mixed",
+            60,
+            "--duration 60m\n--concurrency 50\n--mode mixed",
+            id="yaml-block-scalar-no-leading-space",
+        ),
+        # Space-delimited format (inline command)
+        pytest.param(
+            " --duration 3h --concurrency 50",
+            60,
+            " --duration 60m --concurrency 50",
+            id="leading-space-before-duration",
+        ),
+        # warmup must be left completely untouched
+        pytest.param(
+            "--duration 8h\n--warmup 30m\n--concurrency 50",
+            120,
+            "--duration 120m\n--warmup 30m\n--concurrency 50",
+            id="warmup-left-untouched",
+        ),
+        # --duration at end of string (no trailing whitespace)
+        pytest.param(
+            "--concurrency 50\n--duration 3h",
+            45,
+            "--concurrency 50\n--duration 45m",
+            id="duration-at-end-of-command",
+        ),
+        # No --duration present → must be appended
+        pytest.param(
+            "--concurrency 50\n--mode mixed",
+            90,
+            "--concurrency 50\n--mode mixed --duration 90m",
+            id="no-duration-injected",
+        ),
+        # Equals-form must also be rewritten, not silently kept
+        pytest.param(
+            "--duration=3h --concurrency=50 --mode=mixed",
+            75,
+            "--duration 75m --concurrency=50 --mode=mixed",
+            id="equals-form-rewritten",
+        ),
+        pytest.param(
+            "--duration=24h\n--warmup=10m\n--concurrency=200",
+            45,
+            "--duration 45m\n--warmup=10m\n--concurrency=200",
+            id="equals-form-yaml-block-scalar",
+        ),
+    ],
+)
+def test_apply_gemini_stress_duration(original_cmd, stress_duration, expected_cmd):
+    assert apply_gemini_stress_duration(original_cmd, stress_duration) == expected_cmd
+
+
+@pytest.mark.parametrize(
+    "gemini_cmd, expected_seed",
+    [
+        # The bug: gemini generates --seed=VALUE (equals), old regex required space-delimited
+        pytest.param(
+            "--duration 3h --seed=12345 --concurrency 50",
+            12345,
+            id="equals-sign-format",
+        ),
+        # Space-delimited format should also work
+        pytest.param(
+            "--duration 3h --seed 99999 --concurrency 50",
+            99999,
+            id="space-delimited-format",
+        ),
+        # No --seed present → should return -1
+        pytest.param(
+            "--duration 3h --concurrency 50",
+            -1,
+            id="no-seed-returns-minus-one",
+        ),
+    ],
+)
+def test_extract_gemini_seed(gemini_cmd, expected_seed):
+    assert extract_gemini_seed(gemini_cmd) == expected_seed
