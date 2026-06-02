@@ -1105,15 +1105,15 @@ def get_vector_store_ami_versions(
     )
 
 
-@lru_cache
-def get_scylla_gce_images_versions(
-    project: str = SCYLLA_GCE_IMAGES_PROJECT, version: str = None, arch: VmArch = None
-) -> list[GceImage]:
-    # Server-side resource filtering described in Google SDK reference docs:
-    #   API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
-    #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
-    # or you can see brief explanation here:
-    #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
+def build_gce_image_filter(version: str = None, arch: VmArch = None) -> str:
+    """Build the server-side filter string for GCE image listing.
+
+    Server-side resource filtering described in Google SDK reference docs:
+      API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
+      RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
+    or you can see brief explanation here:
+      https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
+    """
     filters = "(family eq 'scylla(-enterprise)?')(labels.environment eq 'production')"
     if version and version != "all":
         # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
@@ -1136,6 +1136,14 @@ def get_scylla_gce_images_versions(
             LOGGER.warning("--arch option not implemented currently for GCE machine images.")
         filters += f" (architecture eq {vmarch_to_gcp(arch)})"
 
+    return filters
+
+
+@lru_cache
+def get_scylla_gce_images_versions(
+    project: str = SCYLLA_GCE_IMAGES_PROJECT, version: str = None, arch: VmArch = None
+) -> list[GceImage]:
+    filters = build_gce_image_filter(version=version, arch=arch)
     images_client, _ = get_gce_compute_images_client()
     return sorted(
         images_client.list(ListImagesRequest(filter=filters, project=project)),

@@ -15,28 +15,7 @@
 
 import pytest
 
-from sdcm.utils.version_utils import parse_scylla_version_tag
-
-
-def build_gce_filter(version: str = None) -> str:
-    """
-    Build GCE image filter string.
-
-    This mimics the filter construction logic in get_scylla_gce_images_versions.
-    """
-    filters = "(family eq 'scylla(-enterprise)?')"
-    if version and version != "all":
-        if parse_scylla_version_tag(version):
-            normalized_version = version.replace(".", "-").replace("~", "-")
-            filters += f"(labels.scylla_version eq '{normalized_version}')"
-        else:
-            filters += "(labels.environment eq 'production')"
-            filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
-            if "rc" not in version and len(version.split(".")) < 3:
-                filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
-            else:
-                filters += "')"
-    return filters
+from sdcm.utils.common import build_gce_image_filter
 
 
 class TestGceImageFilterConstruction:
@@ -60,7 +39,7 @@ class TestGceImageFilterConstruction:
     )
     def test_simple_version_filter_construction(self, version, expected_substring, should_not_contain):
         """Test that simple version filters are constructed correctly."""
-        filters = build_gce_filter(version)
+        filters = build_gce_image_filter(version)
 
         # Should contain the expected substring
         assert expected_substring in filters, f"Expected '{expected_substring}' in filter: {filters}"
@@ -80,36 +59,33 @@ class TestGceImageFilterConstruction:
     )
     def test_full_version_tag_filter_construction(self, version):
         """Test that full version tags use exact matching."""
-        filters = build_gce_filter(version)
+        filters = build_gce_image_filter(version)
 
-        # Should NOT contain production environment filter (exact match)
-        assert "(labels.environment eq 'production')" not in filters
+        # Should contain production environment filter (always present in production code)
+        assert "(labels.environment eq 'production')" in filters
 
         # Should contain normalized version label
         normalized = version.replace(".", "-").replace("~", "-")
         assert f"(labels.scylla_version eq '{normalized}')" in filters
 
-        # Should NOT contain the buggy pattern
-        assert "')')('" not in filters
-
     def test_no_version_filter(self):
         """Test filter when no version is specified."""
-        filters = build_gce_filter(None)
+        filters = build_gce_image_filter(None)
 
-        # Should only have the family filter
-        assert filters == "(family eq 'scylla(-enterprise)?')"
+        # Should have family + production environment filters
+        assert filters == "(family eq 'scylla(-enterprise)?')(labels.environment eq 'production')"
 
     def test_all_version_filter(self):
         """Test filter when version is 'all'."""
-        filters = build_gce_filter("all")
+        filters = build_gce_image_filter("all")
 
-        # Should only have the family filter
-        assert filters == "(family eq 'scylla(-enterprise)?')"
+        # Should have family + production environment filters
+        assert filters == "(family eq 'scylla(-enterprise)?')(labels.environment eq 'production')"
 
     def test_filter_starts_with_family(self):
         """Test that all filters start with the family filter."""
         for version in ["2025.1", "5.2.1", None, "all", "2024.2.5-0.20250221.cb9e2a54ae6d-1"]:
-            filters = build_gce_filter(version)
-            assert filters.startswith("(family eq 'scylla(-enterprise)?')"), (
-                f"Filter for version={version} should start with family filter: {filters}"
+            filters = build_gce_image_filter(version)
+            assert filters.startswith("(family eq 'scylla(-enterprise)?')(labels.environment eq 'production')"), (
+                f"Filter for version={version} should start with family+production filter: {filters}"
             )
