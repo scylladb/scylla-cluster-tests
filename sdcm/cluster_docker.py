@@ -32,7 +32,13 @@ from sdcm.remote.docker_cmd_runner import DockerCmdRunner
 from sdcm.reporting.tooling_reporter import VectorStoreVersionReporter
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
-from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
+from sdcm.utils.docker_utils import (
+    get_docker_bridge_gateway,
+    Container,
+    ContainerManager,
+    DockerException,
+    _default_docker_client,
+)
 from sdcm.utils.health_checker import check_nodes_status
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import get_my_public_ip
@@ -203,6 +209,8 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
 
+        self._restart_manager_agent_if_needed()
+
     @cluster.log_run_info
     def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
         self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
@@ -243,6 +251,17 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
     @cluster.log_run_info
     def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=1800) -> None:
         self.restart_scylla_server(verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
+
+    def _restart_manager_agent_if_needed(self):
+        """Restart the manager agent process if it was previously installed (e.g. after container restart by nemesis)."""
+        exit_code, _ = ContainerManager.get_container(self, "node").exec_run("test -x /usr/bin/scylla-manager-agent")
+        if exit_code != 0:
+            return
+        # Agent binary exists but process may be dead after container restart — re-launch it
+        self.remoter.run(
+            "sudo bash -c 'nohup /usr/bin/scylla-manager-agent > /var/log/scylla-manager-agent.log 2>&1 &'",
+        )
+        self.log.info("Scylla Manager agent restarted after container start")
 
     @property
     def image(self) -> str:
@@ -498,8 +517,6 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
         )
 
         container = ContainerManager.get_container(node, "node")
-
-        from sdcm.utils.docker_utils import _default_docker_client  # noqa: PLC0415 - avoid circular import
 
         docker_client = _default_docker_client()
 
@@ -1007,8 +1024,6 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
 
     def install_scylla_manager(self, node):
         """Start manager server + manager-db as Docker containers."""
-        from sdcm.utils.docker_utils import _default_docker_client  # noqa: PLC0415 - avoid circular import
-
         docker_client = _default_docker_client()
         docker_network = self.params.get("docker_network")
         user_prefix = self.params.get("user_prefix") or "sct"
@@ -1020,7 +1035,7 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
         except Exception:  # noqa: BLE001
             pass
 
-        mgr_db_image = self.params.get("scylla_docker_image") or "scylladb/scylla:latest"
+        mgr_db_image = self.params.get("docker_image") or "scylladb/scylla:latest"
         docker_client.images.pull(*mgr_db_image.split(":", maxsplit=1))
         self._manager_db_container = docker_client.containers.run(
             image=mgr_db_image,
@@ -1048,12 +1063,17 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
 
         mgmt_image = self.params.get("mgmt_docker_image") or "scylladb/scylla-manager:latest"
         docker_client.images.pull(*mgmt_image.split(":", maxsplit=1))
+        self._manager_db_container.reload()
+        mgr_db_ip = self._manager_db_container.attrs["NetworkSettings"]["Networks"][docker_network or "bridge"][
+            "IPAddress"
+        ]
+
         self._manager_container = docker_client.containers.run(
             image=mgmt_image,
             name=mgr_name,
             network=docker_network,
             environment={
-                "SCYLLA_MANAGER_DB_HOSTS": mgr_db_name,
+                "SCYLLA_MANAGER_DB_HOSTS": mgr_db_ip,
             },
             detach=True,
         )
