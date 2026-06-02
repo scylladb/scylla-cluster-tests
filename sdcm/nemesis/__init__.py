@@ -1240,8 +1240,13 @@ class NemesisRunner:
             new_node.replacement_host_id = host_id
         else:
             new_node.replacement_node_ip = old_node_ip
+        # With RBNO, the new node will also stream data during init
+        if verification_node.get_scylla_config_param("enable_repair_based_node_ops") == "false":
+            operation = Operations.NEW_NODE
+        else:
+            operation = Operations.TABLET_MIGRATION
         try:
-            with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.data_nodes[0], timeout=timeout):
+            with adaptive_timeout(operation, node=self.cluster.data_nodes[0], timeout=timeout):
                 self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, check_node_health=False)
             self.actions_log.info(f"New node initialized: {new_node.name}")
             self.cluster.clean_replacement_node_options(new_node)
