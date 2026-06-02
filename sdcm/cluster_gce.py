@@ -547,11 +547,23 @@ class GCECluster(cluster.BaseCluster):
                 zone_name = self._gce_zone_names[dc_idx]
                 region = zone_name.rsplit("-", 1)[0]
                 self.log.warning("Zone %s exhausted, trying alternative zones in region %s", zone_name, region)
-                alternative_zones = get_alternative_zones(region, zone_name)
+                machine_type = instance_type or self._gce_instance_type
+                alternative_zones = get_alternative_zones(region, zone_name, machine_types=[machine_type])
                 if not alternative_zones:
+                    self.log.error(
+                        "No alternative zones found in region %s supporting machine type %s",
+                        region,
+                        machine_type,
+                    )
                     raise google.api_core.exceptions.GoogleAPIError(
-                        f"No alternative zones available in region {region}"
+                        f"No alternative zones available in region {region} for machine type {machine_type}"
                     ) from exc.__cause__
+                self.log.info(
+                    "%s | %s: Attempting zone fallback; candidates: %s",
+                    self,
+                    machine_type,
+                    [f"{region}-{z}" for z in alternative_zones],
+                )
                 instance = self._try_alternative_zones(
                     node_index, dc_idx, spot, enable_auto_bootstrap, instance_type, region, alternative_zones, exc
                 )
