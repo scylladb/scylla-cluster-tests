@@ -26,6 +26,7 @@ from google.cloud import compute_v1
 from google.cloud.compute_v1 import Image
 from google.cloud import storage
 from google.api_core.extended_operation import ExtendedOperation
+import google.api_core.exceptions
 from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
@@ -81,16 +82,30 @@ def random_zone(region: str) -> str:
     return f"{random.choice(availability_zones)}"
 
 
-def get_alternative_zones(region: str, exhausted_zone: str) -> list[str]:
+def get_alternative_zones(region: str, exhausted_zone: str, machine_types: list[str] | None = None) -> list[str]:
     """Return alternative zone letters for a region, excluding the exhausted zone.
 
     Used by runtime fallback when provisioning fails with ZoneResourcesExhaustedError.
+    If machine_types are provided, only zones supporting ALL of them are returned.
     """
-    zone_letters = SUPPORTED_REGIONS.get(region, "")
-    if not zone_letters:
-        return []
     exhausted_letter = exhausted_zone[-1] if len(exhausted_zone) > 1 else exhausted_zone
-    alternatives = [z for z in zone_letters if z != exhausted_letter]
+
+    if machine_types:
+        resolver = GceZoneResolver()
+        common_zones = resolver.get_common_zones(
+            region=region,
+            machine_types=machine_types,
+            preferred_zones=resolver.get_zones_for_region(region),
+        )
+        # Extract letters from full zone names (e.g., "us-east4-a" -> "a")
+        valid_letters = [zone.split("-")[-1] for zone in common_zones]
+        alternatives = [z for z in valid_letters if z != exhausted_letter]
+    else:
+        zone_letters = SUPPORTED_REGIONS.get(region, "")
+        if not zone_letters:
+            return []
+        alternatives = [z for z in zone_letters if z != exhausted_letter]
+
     return alternatives
 
 
@@ -134,6 +149,70 @@ def get_gce_compute_machine_types_client() -> tuple[compute_v1.MachineTypesClien
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
     return compute_v1.MachineTypesClient(credentials=credentials), info
+
+
+class GceZoneResolver:
+    """Resolves available zones for machine types in a GCE project/region."""
+
+    def __init__(self, project: str | None = None):
+        if project:
+            self._project = project
+        else:
+            info = KeyStore().get_gcp_credentials()
+            self._project = info["project_id"]
+        self._machine_types_client, _ = get_gce_compute_machine_types_client()
+
+    def get_zones_for_region(self, region: str) -> list[str]:
+        try:
+            regions_client, _ = get_gce_compute_regions_client()
+            region_info = regions_client.get(project=self._project, region=region)
+            return [z.rsplit("/", 1)[-1] for z in region_info.zones]
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Failed to get zones from GCE API for region %s", region)
+            return []
+
+    def get_zones_for_machine_type(self, region: str, machine_type: str) -> list[str]:
+        """Return zones in a region where the given machine type is available."""
+        all_zones = self.get_zones_for_region(region)
+        available = []
+        for zone in all_zones:
+            try:
+                self._machine_types_client.get(project=self._project, zone=zone, machine_type=machine_type)
+                available.append(zone)
+            except google.api_core.exceptions.NotFound:
+                continue
+            except Exception:  # noqa: BLE001
+                LOGGER.warning("Error checking machine type %s in zone %s; skipping", machine_type, zone)
+                continue
+        return available
+
+    def get_common_zones(
+        self,
+        region: str,
+        machine_types: list[str],
+        preferred_zones: list[str] | None = None,
+    ) -> list[str]:
+        """Return zones in the region that support ALL given machine types."""
+        if not machine_types:
+            return []
+
+        zones_per_type = [set(self.get_zones_for_machine_type(region, mt)) for mt in machine_types]
+        common_zones = set.intersection(*zones_per_type) if zones_per_type else set()
+
+        preferred_zones = preferred_zones or []
+        missing = [z for z in preferred_zones if z not in common_zones]
+        if missing:
+            LOGGER.warning("Preferred zones %s do not support all required machine types %s", missing, machine_types)
+
+        ordered = [z for z in preferred_zones if z in common_zones]
+        ordered += [z for z in sorted(common_zones) if z not in ordered]
+
+        LOGGER.info("Zones in %s supporting %s: %s", region, machine_types, ordered)
+        return ordered
+
+    def get_per_type_zones(self, region: str, machine_types: list[str]) -> dict[str, list[str]]:
+        """Return a mapping of machine_type -> available zones in the region."""
+        return {mt: self.get_zones_for_machine_type(region, mt) for mt in machine_types}
 
 
 def gce_public_addresses(instance: compute_v1.Instance) -> list[str]:
