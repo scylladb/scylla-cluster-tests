@@ -118,16 +118,30 @@ def random_zone(region: str) -> str:
     return random.choice(zone_letters)
 
 
-def get_alternative_zones(region: str, exhausted_zone: str) -> list[str]:
+def get_alternative_zones(region: str, exhausted_zone: str, machine_types: list[str] | None = None) -> list[str]:
     """Return alternative zone letters for a region, excluding the exhausted zone.
 
     Used by runtime fallback when provisioning fails with ZoneResourcesExhaustedError.
+    If machine_types are provided, only zones supporting ALL of them are returned.
     """
-    zone_letters = _get_zone_letters_for_region(region)
-    if not zone_letters:
-        return []
     exhausted_letter = exhausted_zone[-1] if len(exhausted_zone) > 1 else exhausted_zone
-    alternatives = [z for z in zone_letters if z != exhausted_letter]
+
+    if machine_types:
+        resolver = GceZoneResolver()
+        common_zones = resolver.get_common_zones(
+            region=region,
+            machine_types=machine_types,
+            preferred_zones=resolver.get_zones_for_region(region),
+        )
+        # Extract letters from full zone names (e.g., "us-east4-a" -> "a")
+        valid_letters = [zone.split("-")[-1] for zone in common_zones]
+        alternatives = [z for z in valid_letters if z != exhausted_letter]
+    else:
+        zone_letters = _get_zone_letters_for_region(region)
+        if not zone_letters:
+            return []
+        alternatives = [z for z in zone_letters if z != exhausted_letter]
+
     return alternatives
 
 
