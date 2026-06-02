@@ -34,7 +34,6 @@ from uuid import uuid4
 from functools import partial, wraps, cache
 import threading
 import signal
-import json
 import botocore
 import yaml
 import pytest
@@ -438,7 +437,7 @@ class ClusterTester(unittest.TestCase):
                 backend=self.params.get("cluster_backend"),
             )
             self.log.info("sct_runner info in Argus TestRun is updated")
-            self.test_config.argus_client().sct_submit_config(name="sct_config", content=json.dumps(dict(self.params)))
+            self.test_config.argus_client().sct_submit_config(name="sct_config", content=self.params.model_dump_json())
             self.log.info("Submitted SCTConfiguration to Argus.")
         except ArgusClientError:
             self.log.error("Failed to submit data to Argus", exc_info=True)
