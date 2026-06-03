@@ -65,12 +65,12 @@ def call(Map pipelineParams) {
         triggers {
             parameterizedCron (
                 '''
-                    0 8 * * * %scylla_version=master:latest;labels_selector=alternator-daily;requested_by_user=radoslawcybulski
-                    0 8 * * 6 %scylla_version=master:latest;labels_selector=alternator-weekly;requested_by_user=radoslawcybulski
-                    00 6 * * 0 %scylla_version=master:latest;labels_selector=master-weekly;requested_by_user=juliayakovlev
-                    0 23 */21 * * %scylla_version=master:latest;labels_selector=master-3weeks;requested_by_user=juliayakovlev
-                    0 6 1 * * %scylla_version=master:latest;labels_selector=master-monthly;requested_by_user=juliayakovlev
-                    13 6 8-14 * 2 %scylla_version=master:latest;labels_selector=gce-custom-monthly;requested_by_user=valerii.ponomarov
+                    0 8 * * * %scylla_version=master:latest;labels_selector=alternator-daily;requested_by_user=radoslawcybulski;billing_project=weekly performance regression
+                    0 8 * * 6 %scylla_version=master:latest;labels_selector=alternator-weekly;requested_by_user=radoslawcybulski;billing_project=weekly performance regression
+                    00 6 * * 0 %scylla_version=master:latest;labels_selector=master-weekly;requested_by_user=juliayakovlev;billing_project=weekly performance regression
+                    0 23 */21 * * %scylla_version=master:latest;labels_selector=master-3weeks;requested_by_user=juliayakovlev;billing_project=weekly performance regression
+                    0 6 1 * * %scylla_version=master:latest;labels_selector=master-monthly;requested_by_user=juliayakovlev;billing_project=weekly performance regression
+                    13 6 8-14 * 2 %scylla_version=master:latest;labels_selector=gce-custom-monthly;requested_by_user=valerii.ponomarov;billing_project=weekly performance regression
                 '''
             )
         }
