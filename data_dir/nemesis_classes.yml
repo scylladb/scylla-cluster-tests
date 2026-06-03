@@ -61,7 +61,6 @@
 - RejectThriftNetworkMonkey
 - RemoveServiceLevelMonkey
 - RepairStreamingErrMonkey
-- ResetLocalSchemaMonkey
 - RestartThenRepairNodeMonkey
 - RollingRestartConfigChangeInternodeCompression
 - ScyllaKillMonkey
