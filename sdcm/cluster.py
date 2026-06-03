@@ -6604,7 +6604,7 @@ class BaseLoaderSet:
         if not self._gemini_version:
             try:
                 result = self.nodes[0].remoter.run(
-                    f"docker run --rm {self.params.get('stress_image.gemini')} gemini --version", ignore_status=True
+                    f"docker run --rm {self.params.get('stress_image.gemini')} --version-json", ignore_status=True
                 )
                 if result.ok:
                     self._gemini_version = get_gemini_version(result.stdout)
