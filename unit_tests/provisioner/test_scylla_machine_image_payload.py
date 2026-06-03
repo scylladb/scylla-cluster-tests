@@ -19,6 +19,7 @@ def test_can_generate_valid_scylla_machine_image_payload():
             "start_scylla_on_first_boot": False,
             "data_device": "attached",
             "raid_level": 0,
+            "device_wait_seconds": 60,
             "scylla_yaml": {"cluster_name": f"unit-test-{test_id_short}"},
         }
     )
@@ -37,6 +38,7 @@ def test_can_generate_valid_scylla_machine_image_payload_with_minimum_params():
             "start_scylla_on_first_boot": False,
             "data_device": "instance_store",
             "raid_level": 0,
+            "device_wait_seconds": 60,
             "scylla_yaml": {"cluster_name": f"test_user-{test_id_short}"},
         }
     )
