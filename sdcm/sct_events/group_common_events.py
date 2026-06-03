@@ -710,3 +710,22 @@ def decorate_with_context_if_issues_open(
         return wrapper
 
     return decorator
+
+
+@contextmanager
+def ignore_audit_errors():
+    """Suppress audit unavailable_exception errors by lowering their severity to WARNING.
+
+    After network disruptions (e.g. interface down/up, node restart), there is a brief
+    period where a node may fail to write to the audit table because it still considers
+    other nodes as down. This is expected behavior and should not fail the test.
+
+    See: https://scylladb.atlassian.net/browse/SCYLLADB-706
+    """
+    with EventsSeverityChangerFilter(
+        new_severity=Severity.WARNING,
+        event_class=DatabaseLogEvent,
+        regex=r".*audit - Unexpected exception when writing.*unavailable_exception.*",
+        extra_time_to_expiration=30,
+    ):
+        yield
