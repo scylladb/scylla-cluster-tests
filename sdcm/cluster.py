@@ -4158,7 +4158,12 @@ class BaseCluster:
                     for idx in range(num):
                         nodes_per_az[idx % azs] += 1
                     for az_index in range(azs):
-                        rack = None if self.params.get("simulated_racks") else az_index
+                        # NOTE: OCI pre-provisioner places VMs using per-node round-robin
+                        #       so rack must be 'None' to let the 'add_nodes' derive it from the 'node_index'.
+                        if self.params.get("simulated_racks") or self.params.get("cluster_backend") == "oci":
+                            rack = None
+                        else:
+                            rack = az_index
                         self.add_nodes(
                             nodes_per_az[az_index], dc_idx=dc_idx, rack=rack, enable_auto_bootstrap=self.auto_bootstrap
                         )
@@ -4168,7 +4173,10 @@ class BaseCluster:
                 for idx in range(n_nodes):
                     nodes_per_az[idx % azs] += 1
                 for az_index in range(azs):
-                    rack = None if self.params.get("simulated_racks") else az_index
+                    if self.params.get("simulated_racks") or self.params.get("cluster_backend") == "oci":
+                        rack = None
+                    else:
+                        rack = az_index
                     self.add_nodes(nodes_per_az[az_index], rack=rack, enable_auto_bootstrap=self.auto_bootstrap)
             else:
                 raise ValueError("Unsupported type: {}".format(type(n_nodes)))
