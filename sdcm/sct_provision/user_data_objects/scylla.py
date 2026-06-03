@@ -36,6 +36,9 @@ class ScyllaUserDataObject(SctUserDataObject):
             "start_scylla_on_first_boot": False,
             "data_device": data_device,
             "raid_level": self.params.get("raid_level") or 0,
+            # NOTE: the 'device_wait_seconds' is needed for the OCI backend
+            # TODO: take out the 'device_wait_seconds' option when it gets proper per-backend defaults in the SMI
+            "device_wait_seconds": 60,
             "scylla_yaml": scylla_yaml.model_dump(exclude_defaults=True, exclude_none=True, exclude_unset=True),
         }
         return json.dumps(smi_payload)
