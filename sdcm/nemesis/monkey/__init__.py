@@ -762,16 +762,6 @@ class MemoryStressMonkey(NemesisBaseClass):
         self.runner.disrupt_memory_stress()
 
 
-@target_all_nodes
-class ResetLocalSchemaMonkey(NemesisBaseClass):
-    disruptive = False
-    config_changes = True
-    free_tier_set = True
-
-    def disrupt(self):
-        self.runner.disrupt_resetlocalschema()
-
-
 class StartStopMajorCompaction(NemesisBaseClass):
     disruptive = False
 

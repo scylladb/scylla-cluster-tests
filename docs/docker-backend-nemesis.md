@@ -57,7 +57,6 @@
 | RejectThriftNetworkMonkey | Fail | [scylla-cluster-tests/issues/7329](https://github.com/scylladb/scylla-cluster-tests/issues/7329)
 | RemoveServiceLevelMonkey | Pass |
 | RepairStreamingErrMonkey | Skipped | Backend doesn't support hard reboot
-| ResetLocalSchemaMonkey | Pass |
 | RollingRestartConfigChangeInternodeCompression | Pass |
 | ScyllaKillMonkey | Pass |
 | SlaDecreaseSharesDuringLoad | Pass |

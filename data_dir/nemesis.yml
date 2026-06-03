@@ -1307,23 +1307,6 @@ RepairStreamingErrMonkey:
   topology_changes: false
   xcloud: false
   zero_node_changes: false
-ResetLocalSchemaMonkey:
-  config_changes: true
-  delete_rows: false
-  disruptive: false
-  enospc: false
-  free_tier_set: true
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  modify_table: false
-  networking: false
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  xcloud: false
-  zero_node_changes: false
 RestartThenRepairNodeMonkey:
   config_changes: false
   delete_rows: false
