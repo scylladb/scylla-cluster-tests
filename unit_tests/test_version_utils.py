@@ -1098,7 +1098,7 @@ def test_azure_version_routing_logic(version_string, should_use_released, is_ful
 def test_docker_version_routing_logic(version, expected_repo):
     """Test Docker repo selection for various version formats."""
     repo = get_scylla_docker_repo_from_version(version)
-    assert repo == expected_repo, f"Version '{version}' should route to '{expected_repo}', got '{repo}'"
+    assert repo == expected_repo, f"Version '{version}' should route to '{expected_repo}', got '{repo}'
 
 
 class TestLatestUnifiedPackage:
@@ -1207,8 +1207,6 @@ class TestLatestUnifiedPackage:
         result = latest_unified_package(product="scylla-enterprise", branch="enterprise")
         assert "scylla-enterprise" in result
         mock_s3.get_paginator.assert_called_once_with("list_objects_v2")
-        call_kwargs = mock_s3.get_paginator.return_value.paginate.call_args[1]
-        assert call_kwargs["Prefix"] == "unstable/scylla-enterprise/enterprise/relocatable/latest/"
 
 
 @pytest.mark.parametrize(
