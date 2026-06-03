@@ -38,6 +38,8 @@ backup_bucket_backend: 'gcs'
 
 use_preinstalled_scylla: true
 
+fallback_to_next_availability_zone: true
+
 kms_key_rotation_interval: 60
 
 scylla_network_config:
