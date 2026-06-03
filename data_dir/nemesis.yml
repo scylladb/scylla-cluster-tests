@@ -1006,22 +1006,6 @@ disrupt_replace_service_level_using_drop_during_load:
   topology_changes: false
   xcloud: false
   zero_node_changes: false
-disrupt_resetlocalschema:
-  config_changes: true
-  delete_rows: false
-  disruptive: false
-  free_tier_set: true
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  run_with_gemini: true
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: false
-  xcloud: false
-  zero_node_changes: false
 disrupt_restart_then_repair_node:
   config_changes: false
   delete_rows: false
