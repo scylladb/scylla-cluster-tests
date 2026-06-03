@@ -787,24 +787,6 @@ class NemesisRunner:
         self.target_node.wait_node_fully_start(timeout=28800)  # 8 hours
         self.run_repair()
 
-    def disrupt_resetlocalschema(self):
-        rlocal_schema_res = self.target_node.follow_system_log(patterns=["schema_tables - Schema version changed to"])
-        with self.action_log_scope(f"Reset local schema on {self.target_node.name}"):
-            self.target_node.run_nodetool("resetlocalschema")
-
-        assert wait_for(
-            func=lambda: list(rlocal_schema_res),
-            timeout=30,
-            text="Waiting for schema version being recalculated",
-            throw_exc=False,
-        ), "Schema version has not been recalculated"
-
-        self.actions_log.info("Schema version has been recalculated")
-        # Check schema version on the nodes will be preformed after nemesis by ClusterHealthChecker
-        # Waiting 60 sec: this time is defined by Tomasz
-        self.log.debug("Sleep for 60 sec: the other nodes should pull new version")
-        time.sleep(60)
-
     def disrupt_hard_reboot_node(self):
         with suppress_expected_unavailability_errors():
             self.reboot_node(target_node=self.target_node, hard=True)
