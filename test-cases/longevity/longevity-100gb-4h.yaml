@@ -10,7 +10,7 @@ n_db_nodes: 6
 n_loaders: 2
 seeds_num: 3
 
-instance_type_db: 'i4i.4xlarge'
+instance_type_db: 'i7i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '032'
