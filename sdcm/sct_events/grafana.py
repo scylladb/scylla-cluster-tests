@@ -31,12 +31,13 @@ from sdcm.sct_events.events_processes import (
     get_events_process,
     verbose_suppress,
 )
+from sdcm.utils.grafana_api import GRAFANA_ANNOTATIONS_API_PATH
 
 
 GRAFANA_EVENT_AGGREGATOR_TIME_WINDOW: float = 90  # seconds
 GRAFANA_EVENT_AGGREGATOR_MAX_DUPLICATES: int = 5
 GRAFANA_EVENT_AGGREGATOR_QUEUE_WAIT_TIMEOUT: float = 1  # seconds
-GRAFANA_ANNOTATIONS_API_ENDPOINT: str = "/api/annotations"
+GRAFANA_ANNOTATIONS_API_ENDPOINT: str = GRAFANA_ANNOTATIONS_API_PATH
 GRAFANA_ANNOTATIONS_API_AUTH: Tuple[str, str] = (
     "admin",
     "admin",

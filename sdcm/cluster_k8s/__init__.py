@@ -68,6 +68,7 @@ from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.common import download_from_github, shorten_cluster_name, walk_thru_data
 from sdcm.utils.docker_utils import get_docker_hub_credentials
+from sdcm.utils.grafana_api import GRAFANA_DASHBOARD_API_PATH, convert_dashboard_payload_to_new_api
 from sdcm.utils.k8s import (
     add_pool_node_affinity,
     convert_cpu_units_to_k8s_value,
@@ -1500,7 +1501,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             dashboard_config["dashboard"]["title"] = dashboard_config["dashboard"]["title"].replace(
                 "$test_name", f"{get_test_name()}--{cluster_name}"
             )
-            sct_dashboard_file_data_str = json.dumps(dashboard_config)
+            sct_dashboard_file_data_str = json.dumps(convert_dashboard_payload_to_new_api(dashboard_config))
         grafana_dn = f"{cluster_name}-grafana.{namespace}.svc.cluster.local"
         grafana_ip = self.get_grafana_ip(cluster_name=cluster_name, namespace=namespace)
         grafana_user = base64.b64decode(
@@ -1528,7 +1529,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             sct_dashboard_obj.flush()
             upload_result = LOCALRUNNER.run(
                 f"curl --fail -o /dev/null -w '%{{http_code}}'"
-                f" -L 'https://{grafana_dn}:{self.grafana_port}/api/dashboards/db'"
+                f" -L 'https://{grafana_dn}:{self.grafana_port}{GRAFANA_DASHBOARD_API_PATH}'"
                 f" --resolve '{grafana_dn}:{self.grafana_port}:{grafana_ip}'"
                 f" --cacert {grafana_cert_obj.name}"
                 f" --user '{grafana_user}:{grafana_password}'"
