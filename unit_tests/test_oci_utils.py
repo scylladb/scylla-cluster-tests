@@ -182,7 +182,7 @@ def test_get_ubuntu_image_ocid_not_found(mock_page_iterator, mock_get_client):
     mock_client = MagicMock()
     mock_page_iterator.return_value = iter([])
     mock_get_client.return_value = mock_client
-    with pytest.raises(ValueError, match="No Ubuntu"):
+    with pytest.raises(ValueError, match="No Canonical Ubuntu"):
         get_ubuntu_image_ocid("compartment-id")
     mock_page_iterator.assert_called_once()
 

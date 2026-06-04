@@ -4313,7 +4313,7 @@ class SCTConfiguration(dict):
     def _validate_zero_token_backend_support(backend: str):
         assert backend == "aws", "Only AWS supports zero nodes configuration"
 
-    def verify_configuration_urls_validity(self):
+    def verify_configuration_urls_validity(self):  # noqa: PLR0914
         """
         Check if ami_id and repo urls are valid
         """
@@ -4369,15 +4369,41 @@ class SCTConfiguration(dict):
                 self["user_data_format_version"] = tags.get("user_data_format_version", "2")
 
         if backend == "oci":
-            oci_image_db = self.get("oci_image_db").split()
-            oci_region_names = self.get("oci_region_name") or []
-            if not isinstance(oci_region_names, list):
-                oci_region_names = [oci_region_names]
-            for image, region in zip(oci_image_db, oci_region_names):
-                tags = oci_utils.get_image_tags(region, image, "scylla")
-                if "user_data_format_version" not in tags.keys():
-                    logging.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
-                self["user_data_format_version"] = tags.get("user_data_format_version", "3")
+            oci_image_db = self.get("oci_image_db")
+            if oci_image_db.startswith("resolve:platform:"):
+                # NOTE: Resolve platform image to actual OCID
+                parts = oci_image_db.replace("resolve:platform:", "").split(":")
+                os_name = parts[0]
+                os_version = parts[1] if len(parts) > 1 else "n/a"
+                oci_region_names = self.get("oci_region_name") or []
+                if not isinstance(oci_region_names, list):
+                    oci_region_names = [oci_region_names]
+                shape_name = (self.get("oci_instance_type_db") or "").split(":")[0] or None
+                resolved_images = []
+                for region in oci_region_names:
+                    resolved_images.append(
+                        oci_utils.get_platform_image_ocid(
+                            compartment_id=oci_utils.get_oci_compartment_id(),
+                            region=region,
+                            operating_system=os_name,
+                            version=os_version,
+                            shape=shape_name,
+                        )
+                    )
+                self["oci_image_db"] = " ".join(resolved_images)
+                # NOTE: use default format version because platform images don't have scylla tags
+                self["user_data_format_version"] = "3"
+            else:
+                oci_region_names = self.get("oci_region_name") or []
+                if not isinstance(oci_region_names, list):
+                    oci_region_names = [oci_region_names]
+                for image, region in zip(oci_image_db.split(), oci_region_names):
+                    tags = oci_utils.get_image_tags(region, image, "scylla")
+                    if "user_data_format_version" not in tags.keys():
+                        logging.warning(
+                            "'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags
+                        )
+                    self["user_data_format_version"] = tags.get("user_data_format_version", "3")
 
         # For each Scylla repo file we will check that there is at least one valid URL through which to download a
         # version of SCYLLA, otherwise we will get an error.
