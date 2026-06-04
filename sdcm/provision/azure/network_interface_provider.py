@@ -84,6 +84,12 @@ class NetworkInterfaceProvider:
             poller.wait()
             nic = self._azure_service.network.network_interfaces.get(self._resource_group_name, nic_name)
             LOGGER.info("Provisioned nic %s in the %s resource group", nic.name, self._resource_group_name)
+            if nic.provisioning_state != "Succeeded":
+                LOGGER.warning(
+                    "NIC %s provisioning_state is '%s' (expected 'Succeeded') - VM creation may fail",
+                    nic.name,
+                    nic.provisioning_state,
+                )
             self._cache[nic_name] = nic
             nics.append(nic)
         if pollers:
