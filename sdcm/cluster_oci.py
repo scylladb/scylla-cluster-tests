@@ -447,7 +447,40 @@ class ScyllaOciCluster(cluster.BaseScyllaCluster, OciCluster):
 
     @staticmethod
     def _wait_for_preinstalled_scylla(node):
-        node.wait_for_machine_image_configured()
+        try:
+            node.wait_for_machine_image_configured()
+        except Exception:
+            node.log.error("Scylla Machine Image setup failed — collecting NVMe diagnostics")
+            ScyllaOciCluster._collect_nvme_diagnostics(node)
+            raise
+
+    @staticmethod
+    def _collect_nvme_diagnostics(node):
+        """Collect NVMe controller/namespace diagnostics when disk setup fails.
+
+        This helps diagnose OCI DenseIO instances where the NVMe controller
+        is present but no namespace (block device) is attached.
+        """
+        diag_commands = [
+            ("nvme list", "sudo nvme list 2>&1"),
+            ("nvme list-subsys", "sudo nvme list-subsys 2>&1"),
+            ("nvme list-ns (all)", "sudo nvme list-ns /dev/nvme0 --all 2>&1"),
+            ("nvme id-ctrl", "sudo nvme id-ctrl /dev/nvme0 2>&1 | head -40"),
+            ("sysfs nvme0 contents", "ls -la /sys/class/nvme/nvme0/ 2>&1"),
+            ("nvme0 state", "cat /sys/class/nvme/nvme0/state 2>&1"),
+            ("nvme0 model", "cat /sys/class/nvme/nvme0/model 2>&1"),
+            ("nvme0 serial", "cat /sys/class/nvme/nvme0/serial 2>&1"),
+            ("nvme0 firmware_rev", "cat /sys/class/nvme/nvme0/firmware_rev 2>&1"),
+            ("lspci NVMe device", "sudo lspci -vvv -s 00:0a.0 2>&1"),
+            ("lsblk", "lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,MODEL,SERIAL 2>&1"),
+            ("dmesg nvme", "dmesg | grep -i 'nvme\\|blk\\|namespace' 2>&1"),
+            ("nvme interrupts", "grep nvme /proc/interrupts 2>&1"),
+            ("scylla-image-setup status", "systemctl status scylla-image-setup.service 2>&1"),
+            ("scylla-image-setup journal", "journalctl -u scylla-image-setup.service --no-pager 2>&1 | tail -50"),
+        ]
+        for label, cmd in diag_commands:
+            result = node.remoter.run(cmd, ignore_status=True, verbose=False)
+            node.log.error("NVMe diagnostics [%s]:\n%s", label, result.stdout + result.stderr)
 
     def _reuse_cluster_setup(self, node: OciNode) -> None:
         super()._reuse_cluster_setup(node)
