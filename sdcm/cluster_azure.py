@@ -103,6 +103,11 @@ class AzureNode(cluster.BaseNode):
                 self.log.error(
                     "Azure serial console output for %s (last 2000 chars): ...%s", self.name, console_output[-2000:]
                 )
+            activity_log = self.collect_azure_activity_log()
+            if activity_log:
+                self.log.error(
+                    "Azure Activity Log errors/warnings for %s: %s", self.name, json.dumps(activity_log, indent=2)
+                )
         except Exception as exc:  # noqa: BLE001
             self.log.warning("Failed to collect diagnostics on failure for %s: %s", self.name, exc)
 
@@ -303,6 +308,52 @@ class AzureNode(cluster.BaseNode):
             self.log.warning("Failed to collect Azure VM diagnostics for %s: %s", self.name, exc)
             diagnostics["error"] = str(exc)
         return diagnostics
+
+    def collect_azure_activity_log(self, minutes_back: int = 30) -> list:
+        """Collect Azure Activity Log entries for the resource group.
+
+        Queries the Azure Monitor Activity Log for recent operations that may explain
+        provisioning failures (e.g. quota exceeded, deployment failures, throttling).
+        """
+        entries = []
+        try:
+            from sdcm.utils.azure_utils import AzureService  # noqa: PLC0415 - cyclic import avoidance
+            from datetime import datetime, timedelta, timezone  # noqa: PLC0415
+
+            azure_service = AzureService()
+            resource_group = self._instance._provisioner.resource_group_name
+            subscription_id = azure_service.subscription_id
+
+            end_time = datetime.now(timezone.utc)
+            start_time = end_time - timedelta(minutes=minutes_back)
+            filter_str = (
+                f"eventTimestamp ge '{start_time.isoformat()}' and "
+                f"eventTimestamp le '{end_time.isoformat()}' and "
+                f"resourceGroupName eq '{resource_group}'"
+            )
+
+            from azure.mgmt.monitor import MonitorManagementClient  # noqa: PLC0415
+
+            monitor_client = MonitorManagementClient(
+                credential=azure_service.credential, subscription_id=subscription_id
+            )
+            activity_logs = monitor_client.activity_logs.list(filter=filter_str)
+            for log_entry in activity_logs:
+                if log_entry.level and log_entry.level.value in ("Error", "Warning", "Critical"):
+                    entries.append(
+                        {
+                            "timestamp": str(log_entry.event_timestamp),
+                            "operation": log_entry.operation_name.value if log_entry.operation_name else None,
+                            "status": log_entry.status.value if log_entry.status else None,
+                            "level": log_entry.level.value,
+                            "description": getattr(log_entry, "description", None),
+                            "resource_id": log_entry.resource_id,
+                        }
+                    )
+            self.log.info("Collected %d activity log entries (errors/warnings) for %s", len(entries), resource_group)
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to collect activity log for %s: %s", self.name, exc)
+        return entries
 
     def query_azure_metadata(self, path: str, api_version: str = "2024-07-17") -> str:
         url = f"{self.METADATA_BASE_URL}{path}?api-version={api_version}"
