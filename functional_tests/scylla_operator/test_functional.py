@@ -394,7 +394,8 @@ def _scylla_cluster_monitoring_ckecks(db_cluster: ScyllaPodCluster, monitoring_t
         api_call_return_code = k8s_cluster.register_sct_grafana_dashboard(
             cluster_name=cluster_name, namespace=namespace
         )
-        assert api_call_return_code == "200", "SCT dashboard upload failed"
+        # the /apis dashboard endpoint answers 201 Created on first upload, 200 OK on update
+        assert api_call_return_code.startswith("2"), "SCT dashboard upload failed"
 
         is_passed = db_cluster.check_kubernetes_monitoring_health()
         assert is_passed, "K8S monitoring health checks have failed"

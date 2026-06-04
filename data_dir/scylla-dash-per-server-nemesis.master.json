@@ -8422,7 +8422,9 @@
     },
     "timezone": "utc",
     "title": "[$test_name] Scylla Per Server Metrics Nemesis Master",
+    "uid": "sct-per-server-nemesis",
     "version": 1,
     "weekStart": ""
-  }
+  },
+  "overwrite": true
 }
