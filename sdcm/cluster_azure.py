@@ -19,7 +19,6 @@ from sdcm import cluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
 from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.kernel_panic_checker import AzureKernelPanicChecker
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
@@ -111,18 +110,11 @@ class AzureNode(cluster.BaseNode):
             nsg_rules = self.collect_effective_nsg_rules()
             if nsg_rules:
                 self.log.error("Azure effective NSG rules for %s: %s", self.name, json.dumps(nsg_rules, indent=2))
+            resource_health = self.check_azure_resource_health()
+            if resource_health:
+                self.log.error("Azure Resource Health for %s: %s", self.name, json.dumps(resource_health, indent=2))
         except Exception as exc:  # noqa: BLE001
             self.log.warning("Failed to collect diagnostics on failure for %s: %s", self.name, exc)
-
-    def _create_kernel_panic_checker(self):
-        return AzureKernelPanicChecker(
-            node_name=self.name,
-            vm_name=self._instance.name,
-            region=self.region,
-            resource_group=self._instance._provisioner.resource_group_name,
-            host=self.external_address,
-            logdir=self.logdir,
-        )
 
     def wait_for_cloud_init(self):
         pass  # azure for it, on resources creation
@@ -397,6 +389,44 @@ class AzureNode(cluster.BaseNode):
         except Exception as exc:  # noqa: BLE001
             self.log.warning("Failed to collect activity log for %s: %s", self.name, exc)
         return entries
+
+    def check_azure_resource_health(self) -> dict | None:
+        """Query Azure Resource Health API for the VM to detect platform-level issues.
+
+        Returns availability status (Available, Unavailable, Degraded, Unknown) and
+        any reported platform events (host crashes, unplanned maintenance, etc.).
+        """
+        try:
+            from sdcm.utils.azure_utils import AzureService  # noqa: PLC0415 - cyclic import avoidance
+
+            azure_service = AzureService()
+            resource_group = self._instance._provisioner.resource_group_name
+            vm_name = self._instance.name
+            subscription_id = azure_service.subscription_id
+
+            resource_uri = (
+                f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
+                f"/providers/Microsoft.Compute/virtualMachines/{vm_name}"
+            )
+
+            from azure.mgmt.resourcehealth import ResourceHealthMgmtClient  # noqa: PLC0415
+
+            health_client = ResourceHealthMgmtClient(
+                credential=azure_service.credential, subscription_id=subscription_id
+            )
+            status = health_client.availability_statuses.get_by_resource(resource_uri=resource_uri)
+            if status:
+                result = {
+                    "availability_state": status.properties.availability_state if status.properties else None,
+                    "summary": status.properties.summary if status.properties else None,
+                    "reason_type": status.properties.reason_type if status.properties else None,
+                    "occurred_time": str(status.properties.occurred_time) if status.properties else None,
+                }
+                self.log.info("Resource Health for %s: %s", vm_name, result)
+                return result
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to query Resource Health for %s: %s", self.name, exc)
+        return None
 
     def query_azure_metadata(self, path: str, api_version: str = "2024-07-17") -> str:
         url = f"{self.METADATA_BASE_URL}{path}?api-version={api_version}"
