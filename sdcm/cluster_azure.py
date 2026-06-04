@@ -108,6 +108,9 @@ class AzureNode(cluster.BaseNode):
                 self.log.error(
                     "Azure Activity Log errors/warnings for %s: %s", self.name, json.dumps(activity_log, indent=2)
                 )
+            nsg_rules = self.collect_effective_nsg_rules()
+            if nsg_rules:
+                self.log.error("Azure effective NSG rules for %s: %s", self.name, json.dumps(nsg_rules, indent=2))
         except Exception as exc:  # noqa: BLE001
             self.log.warning("Failed to collect diagnostics on failure for %s: %s", self.name, exc)
 
@@ -308,6 +311,46 @@ class AzureNode(cluster.BaseNode):
             self.log.warning("Failed to collect Azure VM diagnostics for %s: %s", self.name, exc)
             diagnostics["error"] = str(exc)
         return diagnostics
+
+    def collect_effective_nsg_rules(self) -> list:
+        """Collect effective NSG (Network Security Group) rules for the VM's NIC.
+
+        Returns the effective security rules applied to the network interface,
+        which helps diagnose SSH connectivity issues caused by blocked ports.
+        """
+        rules = []
+        try:
+            from sdcm.utils.azure_utils import AzureService  # noqa: PLC0415 - cyclic import avoidance
+
+            azure_service = AzureService()
+            resource_group = self._instance._provisioner.resource_group_name
+            vm_name = self._instance.name
+            nic_name = f"{vm_name}-nic"
+
+            poller = azure_service.network.network_interfaces.begin_list_effective_network_security_groups(
+                resource_group_name=resource_group, network_interface_name=nic_name
+            )
+            result = poller.result(timeout=60)
+            if result and result.value:
+                for nsg in result.value:
+                    for rule in nsg.effective_security_rules or []:
+                        rules.append(
+                            {
+                                "name": rule.name,
+                                "direction": rule.direction,
+                                "access": rule.access,
+                                "protocol": rule.protocol,
+                                "source_port_range": rule.source_port_range,
+                                "destination_port_range": rule.destination_port_range,
+                                "source_address_prefix": rule.source_address_prefix,
+                                "destination_address_prefix": rule.destination_address_prefix,
+                                "priority": rule.priority,
+                            }
+                        )
+            self.log.info("Collected %d effective NSG rules for %s", len(rules), nic_name)
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to collect effective NSG rules for %s: %s", self.name, exc)
+        return rules
 
     def collect_azure_activity_log(self, minutes_back: int = 30) -> list:
         """Collect Azure Activity Log entries for the resource group.
