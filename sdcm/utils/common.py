@@ -2573,7 +2573,7 @@ def shorten_cluster_name(name: str, max_string_len: int):
         shorten name - lon-scy-ope-3h-gke-je-k8s-gke-cd86ad2b
     """
     max_alpha_chunk_size = _string_max_chunk_size(name)
-    last_chunk = name.rsplit("-", maxsplit=1)[-1]
+    last_chunk = name.split("-")[-1]
     current = "-".join(name.split("-")[0:-1])
     last_chunk_len = len(last_chunk)
     while len(current) + last_chunk_len + 1 > max_string_len and max_alpha_chunk_size > 0:
