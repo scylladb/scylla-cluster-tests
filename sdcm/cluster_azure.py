@@ -120,6 +120,17 @@ class AzureNode(cluster.BaseNode):
     def wait_for_cloud_init(self):
         pass  # azure for it, on resources creation
 
+    def wait_ssh_up(self, verbose=True, timeout=500):
+        """Override with extended timeout for Azure VMs.
+
+        Azure v4 instance types (Standard_L8s_v4, etc.) require longer NIC
+        propagation time and can take significantly longer to become SSH-reachable
+        than the default timeout allows (SCT-434).
+        """
+        azure_timeout = max(timeout, 720)  # minimum 12 minutes for Azure
+        self.log.debug("Azure wait_ssh_up with timeout=%d (base was %d)", azure_timeout, timeout)
+        super().wait_ssh_up(verbose=verbose, timeout=azure_timeout)
+
     @cached_property
     def tags(self) -> Dict[str, str]:
         return {
