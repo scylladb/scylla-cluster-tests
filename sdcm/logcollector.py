@@ -63,6 +63,7 @@ from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.context_managers import environment
 from sdcm.utils.distro import Distro
 from sdcm.utils.decorators import retrying
+from sdcm.utils.grafana_api import GRAFANA_ANNOTATIONS_API_PATH, GRAFANA_SEARCH_API_PATH
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
@@ -487,7 +488,7 @@ class MonitoringStack(BaseMonitoringEntity):
 
     def get_grafana_annotations(self, grafana_ip: str) -> str:
         try:
-            res = requests.get(f"http://{grafana_ip}:{self.grafana_port}/api/annotations")
+            res = requests.get(f"http://{grafana_ip}:{self.grafana_port}" + GRAFANA_ANNOTATIONS_API_PATH)
             if res.ok:
                 return res.text
         except Exception as details:  # noqa: BLE001
@@ -497,7 +498,7 @@ class MonitoringStack(BaseMonitoringEntity):
     @staticmethod
     @retrying(n=3, sleep_time=3, message="Search dashboard...", raise_on_exceeded=False)
     def search_dashboard(grafana_ip: str, port: int, query: str) -> list:
-        search_api_url = f"http://{grafana_ip}:{port}/api/search?query={query}"
+        search_api_url = f"http://{grafana_ip}:{port}" + GRAFANA_SEARCH_API_PATH + f"?query={query}"
         resp = requests.get(search_api_url)
         if not resp.ok:
             LOGGER.error("Search dashboards by query '%s' failed: %s %s", query, resp.status_code, resp.content)

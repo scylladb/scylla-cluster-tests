@@ -68,6 +68,11 @@ from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.common import download_from_github, shorten_cluster_name, walk_thru_data
 from sdcm.utils.docker_utils import get_docker_hub_credentials
+from sdcm.utils.grafana_api import (
+    convert_dashboard_payload_to_new_api,
+    dashboard_uid_from_payload,
+    dashboard_upsert_url,
+)
 from sdcm.utils.k8s import (
     add_pool_node_affinity,
     convert_cpu_units_to_k8s_value,
@@ -1494,7 +1499,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             dashboard_config["dashboard"]["title"] = dashboard_config["dashboard"]["title"].replace(
                 "$test_name", f"{get_test_name()}--{cluster_name}"
             )
-            sct_dashboard_file_data_str = json.dumps(dashboard_config)
+            dashboard_uid = dashboard_uid_from_payload(dashboard_config)
+            sct_dashboard_file_data_str = json.dumps(
+                convert_dashboard_payload_to_new_api(dashboard_config, uid=dashboard_uid)
+            )
         grafana_dn = f"{cluster_name}-grafana.{namespace}.svc.cluster.local"
         grafana_ip = self.get_grafana_ip(cluster_name=cluster_name, namespace=namespace)
         grafana_user = base64.b64decode(
@@ -1520,15 +1528,19 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             grafana_cert_obj.flush()
             sct_dashboard_obj.write(sct_dashboard_file_data_str)
             sct_dashboard_obj.flush()
+            # PUT on the named resource, so re-registering the same dashboard updates it in
+            # place instead of failing with 409 Conflict the way a POST to the collection would
             upload_result = LOCALRUNNER.run(
-                f"curl --fail -o /dev/null -w '%{{http_code}}'"
-                f" -L 'https://{grafana_dn}:{self.grafana_port}/api/dashboards/db'"
+                f"curl --fail -o /dev/null -w '%{{http_code}}' -X PUT"
+                f" -L 'https://{grafana_dn}:{self.grafana_port}"
+                f"{dashboard_upsert_url('', dashboard_uid)}'"
                 f" --resolve '{grafana_dn}:{self.grafana_port}:{grafana_ip}'"
                 f" --cacert {grafana_cert_obj.name}"
                 f" --user '{grafana_user}:{grafana_password}'"
                 f" -d @{sct_dashboard_obj.name} -H 'Content-Type: application/json'"
             ).stdout.strip()
-        if upload_result != "200":
+        # the new API answers 201 Created on first upload and 200 OK on an update
+        if not upload_result.startswith("2"):
             self.log.warning(
                 "Error uploading SCT dashboard '%s' to the grafana in the '%s' namespace: %s",
                 sct_dashboard_file,
