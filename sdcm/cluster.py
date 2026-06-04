@@ -1624,7 +1624,9 @@ class BaseNode(AutoSshContainerMixin):
             time.sleep(1)
 
         if self._coredump_thread:
-            self._coredump_thread.join(60 * 60)
+            self._coredump_thread.join(300)
+            if self._coredump_thread.is_alive():
+                self.log.warning("Coredump thread still alive after 300s, abandoning")
         if self._journal_thread:
             self._journal_thread.stop(timeout // 10)
         if self._scylla_manager_journal_thread:
