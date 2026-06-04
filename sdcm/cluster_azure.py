@@ -81,12 +81,30 @@ class AzureNode(cluster.BaseNode):
 
     @cluster.terminate_on_failure
     def init(self) -> None:
-        super().init()
-        # disable auditd service
+        try:
+            super().init()
+        except Exception:
+            self.log.error("Node %s init failed, collecting Azure VM diagnostics...", self.name)
+            self._collect_diagnostics_on_failure()
+            raise
         self.remoter.sudo("systemctl stop auditd", ignore_status=True)
         self.remoter.sudo("systemctl disable auditd", ignore_status=True)
         self.remoter.sudo("systemctl mask auditd", ignore_status=True)
         self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
+
+    def _collect_diagnostics_on_failure(self):
+        """Collect and log Azure diagnostics when node initialization fails (e.g. SSH timeout)."""
+        try:
+            diagnostics = self.collect_azure_vm_diagnostics()
+            if diagnostics:
+                self.log.error("Azure VM diagnostics for %s: %s", self.name, json.dumps(diagnostics, indent=2))
+            console_output = self.get_console_output()
+            if console_output:
+                self.log.error(
+                    "Azure serial console output for %s (last 2000 chars): ...%s", self.name, console_output[-2000:]
+                )
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to collect diagnostics on failure for %s: %s", self.name, exc)
 
     def _create_kernel_panic_checker(self):
         return AzureKernelPanicChecker(
@@ -198,6 +216,93 @@ class AzureNode(cluster.BaseNode):
     def configure_remote_logging(self) -> None:
         """Remote logging configured upon vm provisioning using UserDataObject"""
         return
+
+    def get_console_output(self):
+        """Retrieve boot diagnostics serial console log from Azure VM.
+
+        This is critical for diagnosing provisioning failures where SSH never connects,
+        since without this the node's log directory remains completely empty (SCT-434).
+        """
+        try:
+            from sdcm.utils.azure_utils import AzureService  # noqa: PLC0415 - cyclic import avoidance
+
+            azure_service = AzureService()
+            resource_group = self._instance._provisioner.resource_group_name
+            vm_name = self._instance.name
+            boot_diagnostics = azure_service.compute.virtual_machines.retrieve_boot_diagnostics_data(
+                resource_group_name=resource_group, vm_name=vm_name
+            )
+            serial_log_uri = getattr(boot_diagnostics, "serial_console_log_blob_uri", None)
+            if not serial_log_uri:
+                self.log.warning("No serial console log URI available for VM %s", vm_name)
+                return ""
+            import requests  # noqa: PLC0415
+
+            response = requests.get(serial_log_uri, timeout=30)
+            response.raise_for_status()
+            return response.text
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to retrieve console output for %s: %s", self.name, exc)
+            return ""
+
+    def collect_azure_vm_diagnostics(self) -> dict:
+        """Collect Azure VM instance view and NIC effective routes for post-mortem analysis.
+
+        Returns a dict with instance_view statuses, power_state, provisioning_state,
+        and NIC effective routes. Useful when SSH connection fails during provisioning.
+        """
+        diagnostics = {}
+        try:
+            from sdcm.utils.azure_utils import AzureService  # noqa: PLC0415 - cyclic import avoidance
+
+            azure_service = AzureService()
+            resource_group = self._instance._provisioner.resource_group_name
+            vm_name = self._instance.name
+
+            # Collect VM instance view (power state, provisioning state, statuses)
+            instance_view = azure_service.compute.virtual_machines.instance_view(resource_group, vm_name)
+            if instance_view:
+                diagnostics["statuses"] = [
+                    {"code": s.code, "display_status": s.display_status, "time": str(s.time)}
+                    for s in (instance_view.statuses or [])
+                ]
+                diagnostics["vm_agent"] = {
+                    "statuses": [
+                        {"code": s.code, "display_status": s.display_status}
+                        for s in (instance_view.vm_agent.statuses if instance_view.vm_agent else [])
+                    ]
+                }
+                diagnostics["boot_diagnostics"] = (
+                    {"status": getattr(instance_view.boot_diagnostics, "status", None)}
+                    if instance_view.boot_diagnostics
+                    else None
+                )
+
+            # Collect NIC effective routes to diagnose networking issues
+            nic_name = f"{vm_name}-nic"
+            try:
+                poller = azure_service.network.network_interfaces.begin_get_effective_route_table(
+                    resource_group_name=resource_group, network_interface_name=nic_name
+                )
+                # Wait max 60s for effective routes
+                effective_routes = poller.result(timeout=60)
+                if effective_routes and effective_routes.value:
+                    diagnostics["effective_routes"] = [
+                        {
+                            "address_prefix": r.address_prefix,
+                            "next_hop_type": r.next_hop_type,
+                            "next_hop_ip": r.next_hop_ip_address,
+                            "state": r.state,
+                        }
+                        for r in effective_routes.value[:20]  # limit to 20 routes
+                    ]
+            except Exception as route_exc:  # noqa: BLE001
+                diagnostics["effective_routes_error"] = str(route_exc)
+
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to collect Azure VM diagnostics for %s: %s", self.name, exc)
+            diagnostics["error"] = str(exc)
+        return diagnostics
 
     def query_azure_metadata(self, path: str, api_version: str = "2024-07-17") -> str:
         url = f"{self.METADATA_BASE_URL}{path}?api-version={api_version}"

@@ -87,7 +87,7 @@ class NetworkInterfaceProvider:
             self._cache[nic_name] = nic
             nics.append(nic)
         if pollers:
-            time.sleep(5)  # wait for nic to be fully propagated before returning (SCT-373)
+            time.sleep(10)  # wait for nic to be fully propagated before returning (SCT-373, SCT-434)
         return nics
 
     def delete(self, nic: NetworkInterface):
