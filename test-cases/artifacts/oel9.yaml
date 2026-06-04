@@ -1,17 +1,21 @@
-ami_db_scylla_user: 'ec2-user'
-ami_id_db_scylla: 'resolve:owner:131827586825/x86_64/OL9.*'
+user_prefix: "artifacts-oel9-oci"
+
+cluster_backend: "oci"
+instance_provision: "on_demand" # NOTE: DenseIO shapes cannot be 'spot'
+oci_instance_type_db: "VM.DenseIO.E5.Flex:8"
+oci_image_db: "resolve:platform:Oracle Linux:9"
+oci_image_username: "opc"
+oci_region_name:
+  - us-ashburn-1
+
+ami_db_scylla_user: "opc"
+scylla_linux_distro: "centos"
+
 root_disk_size_db: 50
 backtrace_decoding: false
-cluster_backend: 'aws'
-instance_type_db: 'i4i.large'
-instance_provision: "spot"
-instance_provision_fallback_on_demand: true
 n_db_nodes: 1
 n_loaders: 0
 n_monitor_nodes: 0
 nemesis_class_name: 'NoOpMonkey'
-region_name: 'eu-west-1'
-scylla_linux_distro: 'centos'
 test_duration: 60
 use_preinstalled_scylla: false
-user_prefix: 'artifacts-oel9'

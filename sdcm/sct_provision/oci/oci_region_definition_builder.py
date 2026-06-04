@@ -71,7 +71,7 @@ class OciDefinitionBuilder(DefinitionBuilder):
             LOGGER.info("Image ID for the '%s' was not provided, using latest ubuntu-%s", node_type, ubuntu_version)
             definition.image_id = get_ubuntu_image_ocid(
                 compartment_id=get_oci_compartment_id(),
-                region=(self.regions[0] if self.regions else ""),
+                region=region,
                 version=ubuntu_version,
             )
 
