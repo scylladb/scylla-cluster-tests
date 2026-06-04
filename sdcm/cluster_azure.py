@@ -113,6 +113,7 @@ class AzureNode(cluster.BaseNode):
             resource_health = self.check_azure_resource_health()
             if resource_health:
                 self.log.error("Azure Resource Health for %s: %s", self.name, json.dumps(resource_health, indent=2))
+            self.save_boot_diagnostics_screenshot()
         except Exception as exc:  # noqa: BLE001
             self.log.warning("Failed to collect diagnostics on failure for %s: %s", self.name, exc)
 
@@ -427,6 +428,39 @@ class AzureNode(cluster.BaseNode):
         except Exception as exc:  # noqa: BLE001
             self.log.warning("Failed to query Resource Health for %s: %s", self.name, exc)
         return None
+
+    def save_boot_diagnostics_screenshot(self) -> str | None:
+        """Save VM boot diagnostics screenshot to the node's log directory.
+
+        Azure provides a screenshot of the VM console as a BMP via boot diagnostics.
+        Useful for diagnosing kernel panics or boot hangs that prevent SSH connectivity.
+        """
+        try:
+            import os  # noqa: PLC0415
+            from sdcm.utils.azure_utils import AzureService  # noqa: PLC0415 - cyclic import avoidance
+
+            azure_service = AzureService()
+            resource_group = self._instance._provisioner.resource_group_name
+            vm_name = self._instance.name
+            boot_diagnostics = azure_service.compute.virtual_machines.retrieve_boot_diagnostics_data(
+                resource_group_name=resource_group, vm_name=vm_name
+            )
+            screenshot_uri = getattr(boot_diagnostics, "console_screenshot_blob_uri", None)
+            if not screenshot_uri:
+                self.log.warning("No screenshot URI available for VM %s", vm_name)
+                return None
+            import requests  # noqa: PLC0415
+
+            response = requests.get(screenshot_uri, timeout=30)
+            response.raise_for_status()
+            screenshot_path = os.path.join(self.logdir, f"{vm_name}-boot-screenshot.bmp")
+            with open(screenshot_path, "wb") as fh:
+                fh.write(response.content)
+            self.log.info("Saved boot diagnostics screenshot to %s", screenshot_path)
+            return screenshot_path
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to save boot screenshot for %s: %s", self.name, exc)
+            return None
 
     def query_azure_metadata(self, path: str, api_version: str = "2024-07-17") -> str:
         url = f"{self.METADATA_BASE_URL}{path}?api-version={api_version}"
