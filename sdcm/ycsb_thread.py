@@ -60,10 +60,7 @@ class YcsbStatsPublisher(FileFollowerThread):
     def handle_verify_metric(self, line):
         verify_status_regex = re.compile(r"Return\((?P<status>.*?)\)=(?P<value>\d*)")
         verify_regex = re.compile(r"\[VERIFY:(.*?)\]")
-        found = verify_regex.findall(line)
-        if not found:
-            return
-        verify_content = found[0]
+        verify_content = verify_regex.findall(line)[0]
 
         for status_match in verify_status_regex.finditer(verify_content):
             stat = status_match.groupdict()
@@ -109,13 +106,6 @@ class YcsbStatsPublisher(FileFollowerThread):
                                         value = float(0)  # noqa: PLW2901
                                 self.set_metric(operation, key, float(value))
 
-                    # [VERIFY: Return(OK/UNEXPECTED_STATE/ERROR)=N] lines are final summary lines
-                    # that do NOT match the stats regex (no Count/Max/Min/Avg fields), so
-                    # handle_verify_metric would never be called for them from inside the
-                    # stats regex loop above. Handle them separately here.
-                    if "[VERIFY:" in line and "Return(" in line:
-                        self.handle_verify_metric(line)
-
                 except Exception:
                     LOGGER.exception("fail to send metric")
 
@@ -123,7 +113,7 @@ class YcsbStatsPublisher(FileFollowerThread):
 class YcsbStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.ycsb"
 
-    def copy_template(self, cmd_runner, loader_name, loader=None, memo={}):  # noqa: B006
+    def copy_template(self, cmd_runner, loader_name, memo={}):  # noqa: B006
         if loader_name in memo:
             return None
         web_protocol = "http"
@@ -179,32 +169,6 @@ class YcsbStressThread(DockerBasedStressThread):
 
             with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as tmp_file:
                 tmp_file.write(dynamodb_teample)
-                alternator_port = self.params.get("alternator_port")
-                native_loading = self.params.get("alternator_loadbalancing")
-                trustAllCerts = self.params.get("alternator_trust_all_certificates")  # noqa: N806
-                access_key = self.params.get("alternator_access_key_id")
-                secret_key = self.params.get("alternator_secret_access_key")
-                tmp_file.write(
-                    dedent(f"""
-                    dynamodb.debug = false
-                    dynamodb.alternator.port = {alternator_port}
-                    dynamodb.alternator.loadbalancing = {native_loading}
-                    dynamodb.virtualThreads = true
-                    dynamodb.alternator.trustAllCertificates = {trustAllCerts}
-                    dynamodb.awsAccessKey = {access_key}
-                    dynamodb.awsSecretKey = {secret_key}
-                """)
-                )
-                # Only write datacenter/rack when non-empty. Java's Properties.getProperty()
-                # returns "" for empty values (not null), so `datacenter != null` would be
-                # true for "", creating DatacenterScope.of("") which routes to a non-existent
-                # datacenter and causes all operations to fail.
-                loader_datacenter = getattr(loader, "datacenter", "")
-                loader_rack = getattr(loader, "rack", "")
-                if loader_datacenter:
-                    tmp_file.write(f"dynamodb.alternator.datacenter = {loader_datacenter}\n")
-                if loader_rack:
-                    tmp_file.write(f"dynamodb.alternator.rack = {loader_rack}\n")
                 tmp_file.flush()
                 cmd_runner.send_files(tmp_file.name, os.path.join("/tmp", "dynamodb.properties"))
 
@@ -321,9 +285,8 @@ class YcsbStressThread(DockerBasedStressThread):
             )
             cmd_runner_name = str(loader)
 
-        self.copy_template(cmd_runner, loader.name, loader=loader)
-        stress_cmd = self.build_stress_cmd(loader_idx, cpu_idx)
->>>>>>> 04480339c (fix(ycsb): fix integration tests and race contidtion)
+        self.copy_template(cmd_runner, loader.name)
+        stress_cmd = self.build_stress_cmd()
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
