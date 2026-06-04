@@ -210,6 +210,69 @@ def resolve_availability_domain(compartment_id: str, short_name: str, region: st
     raise ValueError(f"Could not resolve availability domain '{short_name}' in region. Available: {ads}")
 
 
+def get_platform_image_ocid(
+    compartment_id: str,
+    region: str | None = None,
+    operating_system: str = "Oracle Linux",
+    version: str = "8",
+    shape: str | None = None,
+) -> str:
+    """Get the latest platform image OCID for the specified OS and version.
+
+    Args:
+        compartment_id: The compartment OCID (used for API call context)
+        region: OCI region name
+        operating_system: OS name as recognized by OCI (e.g. "Oracle Linux", "Canonical Ubuntu")
+        version: OS version string (e.g. "8", "9", "24.04")
+        shape: OCI shape name to filter compatible images (e.g. "VM.DenseIO.E5.Flex")
+
+    Returns:
+        OCID of the latest matching platform image
+
+    Raises:
+        ValueError: If no matching image is found
+    """
+    compute_client = OciService().get_compute_client(region=region)
+
+    kwargs = {
+        "compartment_id": compartment_id,
+        "operating_system": operating_system,
+        "operating_system_version": version,
+        "sort_by": "TIMECREATED",
+        "sort_order": "DESC",
+        "lifecycle_state": "AVAILABLE",
+    }
+    if shape:
+        kwargs["shape"] = shape
+
+    images = oci.pagination.list_call_get_all_results_generator(
+        compute_client.list_images,
+        yield_mode="record",
+        **kwargs,
+    )
+
+    amd64_images = []
+    while current_image := next(images, None):
+        current_image_name = current_image.display_name.lower()
+        # Filter for amd64/x86_64 images (exclude ARM)
+        if "aarch64" not in current_image_name and "arm" not in current_image_name:
+            amd64_images.append(current_image)
+    if not amd64_images:
+        shape_msg = f" compatible with shape {shape}" if shape else ""
+        raise ValueError(f"No {operating_system} {version} amd64 image{shape_msg} found in region {region}")
+
+    latest_image = amd64_images[0]
+    LOGGER.info(
+        "Found %d images. Pick latest %s %s image: %s (OCID: %s)",
+        len(amd64_images),
+        operating_system,
+        version,
+        latest_image.display_name,
+        latest_image.id,
+    )
+    return latest_image.id
+
+
 def get_ubuntu_image_ocid(compartment_id: str, region: str | None = None, version: str = "24.04") -> str:
     """Get the latest Ubuntu image OCID for the specified region.
 
@@ -224,39 +287,12 @@ def get_ubuntu_image_ocid(compartment_id: str, region: str | None = None, versio
     Raises:
         ValueError: If no matching image is found
     """
-    compute_client = OciService().get_compute_client(region=region)
-
-    # List images with Ubuntu filter
-    # OCI provides official Ubuntu images from Canonical
-    images = oci.pagination.list_call_get_all_results_generator(
-        compute_client.list_images,
-        yield_mode="record",
+    return get_platform_image_ocid(
         compartment_id=compartment_id,
+        region=region,
         operating_system="Canonical Ubuntu",
-        operating_system_version=version,
-        sort_by="TIMECREATED",
-        sort_order="DESC",
-        lifecycle_state="AVAILABLE",
+        version=version,
     )
-
-    amd64_images = []
-    while current_image := next(images, None):
-        current_image_name = current_image.display_name.lower()
-        # Filter for amd64/x86_64 images (exclude ARM)
-        if "aarch64" not in current_image_name and "arm" not in current_image_name:
-            amd64_images.append(current_image)
-    if not amd64_images:
-        raise ValueError(f"No Ubuntu {version} amd64 image found in region {region}")
-
-    latest_image = amd64_images[0]
-    LOGGER.info(
-        "Found total images: %s. Pick latest Ubuntu %s image: %s (OCID: %s)",
-        len(amd64_images),
-        version,
-        latest_image.display_name,
-        latest_image.id,
-    )
-    return latest_image.id
 
 
 def list_instances_oci(
