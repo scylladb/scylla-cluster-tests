@@ -1,5 +1,6 @@
 #!groovy
 
+def completed_stages = [:]
 
 def call() {
 
@@ -17,7 +18,7 @@ def call() {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID = UUID.randomUUID().toString()
-		}
+        }
 
          parameters {
             separator(name: 'SCT_CONFIG', sectionHeader: 'SCT Repository Configuration')
@@ -125,6 +126,7 @@ def call() {
             stage('Checkout') {
                steps {
                   script {
+                      completed_stages = [:]
                       loadEnvFromString(params.extra_environment_variables)
                       tagBuilder()
                   }
@@ -137,6 +139,21 @@ def call() {
                   }
                   dockerLogin(params)
                }
+            }
+            stage('Create Argus Test Run') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        createArgusTestRun(params)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             stage('Create SCT Runner') {
                 steps {
@@ -158,6 +175,7 @@ def call() {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     runSctTest(params, builder.region)
+                                    completed_stages['run_tests'] = true
                                 }
                             }
                         }
@@ -171,6 +189,7 @@ def call() {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     runCollectLogs(params, builder.region)
+                                    completed_stages['collect_logs'] = true
                                 }
                             }
                         }
@@ -184,6 +203,23 @@ def call() {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     runCleanupResource(params, builder.region)
+                                    completed_stages['clean_resources'] = true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Finish Argus Test Run') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        finishArgusTestRun(params, currentBuild)
+                                        completed_stages['report_to_argus'] = true
+                                    }
                                 }
                             }
                         }
@@ -197,6 +233,7 @@ def call() {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     runSendEmail(params, currentBuild)
+                                    completed_stages['send_email'] = true
                                 }
                             }
                         }
@@ -210,6 +247,82 @@ def call() {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     cleanSctRunners(params, currentBuild)
+                                    completed_stages['clean_sct_runner'] = true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        post {
+            always {
+                script {
+                    def run_tests = completed_stages['run_tests']
+                    def collect_logs = completed_stages['collect_logs']
+                    def clean_resources = completed_stages['clean_resources']
+                    def send_email = completed_stages['send_email']
+                    def clean_sct_runner = completed_stages['clean_sct_runner']
+                    sh """
+                        echo "'run_tests' stage is completed: $run_tests"
+                        echo "'collect_logs' stage is completed: $collect_logs"
+                        echo "'clean_resources' stage is completed: $clean_resources"
+                        echo "'send_email' stage is completed: $send_email"
+                        echo "'clean_sct_runner' stage is completed: $clean_sct_runner"
+                    """
+                    if (!completed_stages['collect_logs']) {
+                        catchError {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        runCollectLogs(params, builder.region)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!completed_stages['clean_resources']) {
+                        catchError {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        runCleanupResource(params, builder.region)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!completed_stages['report_to_argus']) {
+                        catchError {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        timeout(time: 5, unit: 'MINUTES') {
+                                            finishArgusTestRun(params, currentBuild)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!completed_stages['send_email']) {
+                        catchError {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        runSendEmail(params, currentBuild)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!completed_stages['clean_sct_runner']) {
+                        catchError {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        cleanSctRunners(params, currentBuild)
+                                    }
                                 }
                             }
                         }
