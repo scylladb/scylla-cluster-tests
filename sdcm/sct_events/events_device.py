@@ -112,7 +112,13 @@ class EventsDevice(multiprocessing.Process):
 
                 time.sleep(self.start_delay)
 
-                while self._running.is_set() or not self._queue.empty():
+                drain_deadline = None
+                while True:
+                    if not self._running.is_set():
+                        if drain_deadline is None:
+                            drain_deadline = time.monotonic() + 5.0
+                        if time.monotonic() >= drain_deadline:
+                            break
                     try:
                         event = self._queue.get(timeout=self.pub_queue_wait_timeout)
                         try:
@@ -128,7 +134,9 @@ class EventsDevice(multiprocessing.Process):
                             LOGGER.error("EventsDevice failed to verify delivery of %s", pickle.loads(event))
                         time.sleep(self.pub_queue_events_rate)
                     except queue.Empty:
-                        pass
+                        if not self._running.is_set():
+                            break
+                        continue
 
     def publish_event(self, event, timeout=PUBLISH_EVENT_TIMEOUT) -> None:
         with verbose_suppress("%s: failed to write %s to %s", self, event, self.raw_events_log):
