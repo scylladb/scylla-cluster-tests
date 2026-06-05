@@ -1103,7 +1103,7 @@ class BaseSCTLogCollector(LogCollector):
         FileLog(name="argus.log", search_locally=True),
         FileLog(name="actions.log", search_locally=True),
         FileLog(name=r"*debug.json", search_locally=True),
-        FileLog(name="result_gradual_increase.log"),
+        FileLog(name="result_gradual_increase.log", search_locally=True),
         FileLog(name="partition_range_scan_diff_*.log", search_locally=True),
         FileLog(name="junit.xml", search_locally=True),
         FileLog(name="cdc-replicator.log", search_locally=True),
