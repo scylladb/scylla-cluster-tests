@@ -280,7 +280,8 @@ class YcsbStressThread(DockerBasedStressThread):
             cmd_runner = RemoteDocker(
                 loader,
                 self.docker_image_name,
-                extra_docker_opts=f"{dns_options} {cpu_options} --label shell_marker={self.shell_marker}",
+                command_line="-c 'tail -f /dev/null'",
+                extra_docker_opts=f"{dns_options} {cpu_options} --entrypoint /bin/bash --label shell_marker={self.shell_marker}",
                 docker_network=self.params.get("docker_network"),
             )
             cmd_runner_name = str(loader)
@@ -304,8 +305,8 @@ class YcsbStressThread(DockerBasedStressThread):
                 ).publish()
 
         LOGGER.debug("running: %s", stress_cmd)
-
-        node_cmd = "cd /YCSB && {}".format(stress_cmd)
+        stress_cmd = stress_cmd.replace("bin/ycsb", "bin/ycsb.sh")
+        node_cmd = "cd /usr/local/share/scylla-ycsb && {}".format(stress_cmd)
 
         YcsbStressEvent.start(node=cmd_runner_name, stress_cmd=stress_cmd).publish()
 
