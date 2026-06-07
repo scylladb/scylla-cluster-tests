@@ -101,7 +101,7 @@ class BaseEventsProcess(Generic[T_inbound_event, T_outbound_event], abc.ABC):
         self.join(timeout)
         if self.is_alive():
             LOGGER.error("Events process %s is still alive after %s timeout", events_process_class_name, timeout)
-            if hasattr(self, "kill"):
+            if hasattr(self, "kill"):  # threading.Thread has no kill(); only escalate for Process-backed subclasses
                 self.kill()
                 self.join(2)
         else:
