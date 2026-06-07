@@ -91,6 +91,8 @@ class EventsDevice(multiprocessing.Process):
     def stop(self, timeout: Optional[float] = None) -> None:
         self._running.clear()
         self.join(timeout)
+        # self.is_alive() returns self._running.is_set(), which is already False here
+        # (cleared above). Call super() to check the actual OS-level process liveness.
         if super().is_alive():
             LOGGER.warning("EventsDevice did not stop within timeout, killing")
             self.kill()
