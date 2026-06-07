@@ -69,7 +69,8 @@ def upload_remote_files_directly_to_s3(
         if not out:
             raise FileNotFoundError(f"Could not get the size of {files}. Possibly it does not exist.")
         total = out.split(b"\n")[-2]
-        return int(total.split(b"G")[0].decode())
+        size_str = total.split(b"\t")[0].decode().rstrip("G")
+        return int(size_str)
 
     LOGGER.info("Uploading %s directly to S3 bucket %s with key %s", files, s3_bucket, s3_key)
     extra_args = {}
