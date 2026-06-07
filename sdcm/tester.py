@@ -3770,10 +3770,24 @@ class ClusterTester(unittest.TestCase):
     def show_alive_processes(self):
         return gather_live_processes_and_dump_to_file(self.left_processes_log)
 
+    def _stop_all_node_task_threads(self):
+        """Stop DbLogReader and other task threads on all nodes.
+
+        Prevents daemon threads from feeding events into a dead queue
+        after event consumers are stopped, which would cause the process
+        to hang on exit (QueueFeederThread blocked on write to dead pipe).
+        """
+        for cluster in [self.db_cluster, self.loaders, self.monitors]:
+            if not cluster:
+                continue
+            for node in cluster.nodes:
+                node.stop_task_threads()
+
     @silence()
     def clean_resources(self):
         if not self.params.get("execute_post_behavior"):
             self.log.info("Resources will continue to run")
+            self._stop_all_node_task_threads()
             return
 
         actions_per_cluster_type = get_post_behavior_actions(self.params)
