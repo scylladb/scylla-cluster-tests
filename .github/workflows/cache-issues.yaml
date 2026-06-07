@@ -39,7 +39,7 @@ jobs:
                       nodes {
                         number
                         state
-                        labels(first: 10) { nodes { name } }
+                        labels(first: 100) { nodes { name } }
                         title
                       }
                     }
@@ -75,7 +75,7 @@ jobs:
                       nodes {
                         number
                         state
-                        labels(first: 10) { nodes { name } }
+                        labels(first: 100) { nodes { name } }
                         title
                       }
                     }
