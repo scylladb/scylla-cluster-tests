@@ -1,0 +1,50 @@
+# Minicloud Provision Test Configuration
+#
+# Backend-agnostic test config for local provision testing via minicloud.
+# Used with both AWS and GCE backends — minicloud emulates the cloud APIs locally
+# using QEMU/KVM VMs, so tests run without real cloud credentials or costs.
+#
+# Usage:
+#   scripts/run-minicloud-provision-test.sh          (AWS backend)
+#   scripts/run-minicloud-gce-provision-test.sh      (GCE backend, future)
+
+test_duration: 60
+
+# Lightweight workload to verify the cluster is functional after provisioning.
+# Not a stress test — just confirms nodes accept writes and reads end-to-end.
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5",
+             ]
+
+# Pre-test data load: write small dataset then verify reads work.
+# Exercises scylla-bench to confirm loader → DB connectivity and basic I/O.
+prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -max-rate=300 -replication-factor=3 -partition-count=10 -clustering-row-count=100 -clustering-row-size=5120 -concurrency=7 -rows-per-request=10",
+                     "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=10 -clustering-row-count=100 -clustering-row-size=5120 -rows-per-request=10 -concurrency=7 -max-rate=32000 -duration=1m"
+                    ]
+
+# Data validation: confirm written partitions are readable and consistent.
+data_validation: |
+  validate_partitions: false
+  table_name: "scylla_bench.test"
+  primary_key_column: "pk"
+  max_partitions_in_test_table: 10
+  partition_range_with_data_validation: 0-5
+
+# Cluster topology — minimal but realistic (3 DB for quorum, 1 loader, 1 monitor).
+n_loaders: 1
+n_db_nodes: 3
+instance_type_db: 'i4i.large'
+
+# Light nemesis to verify disruption framework works, without destroying the short test.
+nemesis_class_name: SisyphusMonkey
+nemesis_selector: "not disruptive"
+nemesis_interval: 1
+
+user_prefix: 'minicloud-provision-test'
+instance_provision: 'spot'
+
+use_preinstalled_scylla: true
+
+# KMS must be disabled — minicloud doesn't implement AWS KMS / GCP KMS endpoints,
+# and the QEMU VMs have no valid cloud IAM credentials for real KMS calls.
+enterprise_disable_kms: true
+enable_kms_key_rotation: false
