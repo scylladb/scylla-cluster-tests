@@ -179,6 +179,7 @@ class MinicloudManager:
         health check and reuse it instead of attempting to start a new container.
         """
         self._setup_gcp_credentials()
+        self._setup_host_networking()
 
         if self._is_endpoint_healthy():
             endpoint = f"http://localhost:{self.config.port}"
@@ -191,8 +192,10 @@ class MinicloudManager:
         container_name = self.MINICLOUD_CONTAINER_NAME
         image = self.config.docker_image
 
-        subprocess.run(["docker", "stop", container_name], capture_output=True, check=False)
-        subprocess.run(["docker", "rm", container_name], capture_output=True, check=False)
+        subprocess.run(["docker", "rm", "-f", container_name], capture_output=True, check=False)
+        subprocess.run(
+            ["docker", "network", "disconnect", "-f", "host", container_name], capture_output=True, check=False
+        )
 
         docker_cmd = [
             "docker",
@@ -280,8 +283,10 @@ class MinicloudManager:
             self._container_log_process.terminate()
             self._container_log_process = None
         LOGGER.info("Stopping minicloud container '%s'...", container_name)
-        subprocess.run(["docker", "stop", container_name], capture_output=True, check=False)
-        subprocess.run(["docker", "rm", container_name], capture_output=True, check=False)
+        subprocess.run(["docker", "rm", "-f", container_name], capture_output=True, check=False)
+        subprocess.run(
+            ["docker", "network", "disconnect", "-f", "host", container_name], capture_output=True, check=False
+        )
         os.environ.pop("AWS_ENDPOINT_URL", None)
         os.environ.pop("GCE_ENDPOINT_URL", None)
         self._stopped = True
@@ -341,6 +346,55 @@ class MinicloudManager:
             os.environ[key] = value
             LOGGER.debug("Set %s=%s", key, value)
         LOGGER.info("minicloud env overrides applied")
+
+    def _setup_host_networking(self) -> None:
+        """Extract and run minicloud-setup.sh on the host to configure TUN device and routes.
+
+        minicloud requires a persistent TUN device (minicloud0) with IP 10.127.0.1/24 on the host
+        for VM networking (IMDS, DNS, and host↔VM connectivity). The setup script is bundled inside
+        the container image and must be run with sudo on the host before the container starts.
+        """
+        tun_name = "minicloud0"
+        result = subprocess.run(
+            ["ip", "addr", "show", tun_name],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0 and b"10.127.0.1" in result.stdout:
+            LOGGER.info("Host networking already configured (%s has 10.127.0.1)", tun_name)
+            return
+
+        LOGGER.info("Configuring host networking for minicloud...")
+        image = self.config.docker_image
+        setup_script_path = os.path.join(self.config.state_dir, "minicloud-setup.sh")
+        os.makedirs(self.config.state_dir, exist_ok=True)
+
+        extract = subprocess.run(
+            ["docker", "run", "--rm", "--entrypoint", "cat", image, "/usr/local/bin/minicloud-setup.sh"],
+            capture_output=True,
+            check=False,
+        )
+        if extract.returncode != 0:
+            LOGGER.warning("Could not extract minicloud-setup.sh from image %s: %s", image, extract.stderr.decode())
+            return
+
+        with open(setup_script_path, "wb") as fh:
+            fh.write(extract.stdout)
+        os.chmod(setup_script_path, 0o755)
+
+        run_result = subprocess.run(
+            ["sudo", setup_script_path],
+            capture_output=True,
+            check=False,
+        )
+        if run_result.returncode != 0:
+            LOGGER.warning(
+                "minicloud-setup.sh failed (exit %d): %s",
+                run_result.returncode,
+                run_result.stderr.decode().strip(),
+            )
+        else:
+            LOGGER.info("Host networking configured successfully")
 
     def _setup_gcp_credentials(self) -> None:
         """Download GCP service account JSON from KeyStore and set GOOGLE_APPLICATION_CREDENTIALS.
