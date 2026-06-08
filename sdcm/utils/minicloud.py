@@ -41,6 +41,7 @@ class MinicloudConfig:
         default_factory=lambda: ["scylla-qa-keystore", "cloudius-jenkins-test", "downloads.scylladb.com"]
     )
     region: str = "us-east-1"
+    gcp_project: str = "sct-project-1"
     gcs_bucket: str = ""
     state_dir: str = dataclasses.field(default_factory=lambda: os.path.expanduser("~/.cache/minicloud"))
     log_file: str = dataclasses.field(default_factory=lambda: os.path.join(TestConfig().logdir(), "minicloud.log"))
@@ -57,6 +58,7 @@ class MinicloudConfig:
                 "S3_PASSTHROUGH_BUCKETS", "scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com"
             ).split(","),
             region=os.environ.get("MINICLOUD_AWS_REGION", "us-east-1"),
+            gcp_project=os.environ.get("SCT_GCE_PROJECT", "sct-project-1"),
             gcs_bucket=os.environ.get("MINICLOUD_GCS_BUCKET", ""),
             state_dir=os.path.expanduser("~/.cache/minicloud"),
             log_file=os.path.join(TestConfig().logdir(), "minicloud.log"),
@@ -231,6 +233,8 @@ class MinicloudManager:
                 f"{gcs_key}:/etc/minicloud/gcs-key.json:ro",
                 "-e",
                 "GOOGLE_APPLICATION_CREDENTIALS=/etc/minicloud/gcs-key.json",
+                "-e",
+                f"GOOGLE_CLOUD_PROJECT={self.config.gcp_project}",
             ]
 
         docker_cmd.append(image)
@@ -245,6 +249,7 @@ class MinicloudManager:
         ]
         if self.config.gcs_bucket:
             minicloud_args += ["--gcs-bucket", self.config.gcs_bucket]
+        minicloud_args += ["--gcp-project", self.config.gcp_project]
         if self.config.lightweight:
             minicloud_args += ["--lightweight", "--lightweight-memory", self.config.lightweight_memory]
 
@@ -377,7 +382,7 @@ class MinicloudManager:
         from google.cloud import storage  # noqa: PLC0415 - optional GCE dependency
         from google.oauth2 import service_account  # noqa: PLC0415
 
-        project_id = creds.get("project_id", "gcp-sct-project-1")
+        project_id = os.environ.get("SCT_GCE_PROJECT", "sct-project-1")
         bucket_name = f"{project_id}-minicloud-staging"
         credentials = service_account.Credentials.from_service_account_info(creds)
         client = storage.Client(credentials=credentials, project=project_id)
