@@ -47,3 +47,8 @@ use_preinstalled_scylla: true
 # KMS must be disabled — minicloud doesn't implement AWS KMS / GCP KMS endpoints,
 # and the QEMU VMs have no valid cloud IAM credentials for real KMS calls.
 enterprise_disable_kms: true
+enable_kms_key_rotation: false
+
+# sct-runner needs nested virtualization (KVM) for minicloud QEMU VMs.
+# Only c8i/m8i/r8i instance families support NestedVirtualization on AWS.
+instance_type_runner: 'm8i.large'
