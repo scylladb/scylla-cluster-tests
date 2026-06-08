@@ -5,7 +5,9 @@ set -euo pipefail
 # Runs all available minicloud test scenarios and reports results.
 #
 # Usage:
-#   MINICLOUD_DOCKER=scylladb/minicloud:dev bash scripts/run-minicloud-tests.sh [--aws-only|--gce-only]
+#   MINICLOUD_BINARY=/path/to/minicloud \
+#   MINICLOUD_SETUP_SCRIPT=/path/to/minicloud-setup.sh \
+#   bash scripts/run-minicloud-tests.sh [--aws-only|--gce-only]
 
 MODE="${1:-all}"
 RESULTS=()

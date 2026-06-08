@@ -13,7 +13,8 @@ set -euo pipefail
 #   - time sync service presence
 #
 # Required env vars:
-#   MINICLOUD_DOCKER        - Docker image for minicloud (e.g. scylladb/minicloud:dev)
+#   MINICLOUD_BINARY        - path to minicloud binary
+#   MINICLOUD_SETUP_SCRIPT  - path to minicloud-setup.sh
 #   SCT_SCYLLA_VERSION      - e.g. 2025.3.0  (OR SCT_AMI_ID_DB_SCYLLA for specific AMI)
 #
 # Optional env vars:
@@ -24,10 +25,10 @@ set -euo pipefail
 
 BACKEND="${1:-aws}"
 
-export MINICLOUD_DOCKER="${MINICLOUD_DOCKER:?ERROR: MINICLOUD_DOCKER not set. Set to minicloud image (e.g. scylladb/minicloud:dev)}"
+export MINICLOUD_BINARY="${MINICLOUD_BINARY:?ERROR: MINICLOUD_BINARY not set}"
+export MINICLOUD_SETUP_SCRIPT="${MINICLOUD_SETUP_SCRIPT:-}"
 
 export SCT_USE_MGMT=false
-export SCT_ENABLE_ARGUS=false
 export SCT_N_DB_NODES="${SCT_N_DB_NODES:-1}"
 export SCT_N_LOADERS=0
 export SCT_N_MONITOR_NODES=0
