@@ -37,6 +37,10 @@ def call(String backend, String region=null, String datacenter=null, String loca
     def gcp_project = params.gce_project?.trim() ?: 'gcp-sct-project-1'
     gcp_project = gcp_project == 'gcp' ? 'gcp-skilled-adapter-452' : gcp_project
 
+    // NOTE: 'aws', 'gce' and 'oci' labels (without region) are useful for cases
+    //       when backend-specific region param has no value.
+    //       Even if test-case config has, it won't be accessible from here.
+    //       So, apply default value for such cases.
     def jenkins_labels = ['aws-eu-west-1': 'aws-sct-builders-eu-west-1-v3-asg',
                           'aws-eu-west-2': 'aws-sct-builders-eu-west-2-v3-asg',
                           'aws-eu-north-1': 'aws-sct-builders-eu-north-1-v3-asg',
@@ -53,6 +57,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'aws': 'aws-sct-builders-eu-west-1-v3-asg',
                           'azure-eastus': 'aws-sct-builders-us-east-1-v3-asg',
                           'aws-fips': 'aws-sct-builders-us-east-1-v4-fibs-CI-FIPS',
+                          'oci': 'oci-sct-builders-us-ashburn-1-v1',
                           'oci-us-ashburn-1': 'oci-sct-builders-us-ashburn-1-v1',
                           'oci-us-phoenix-1': 'oci-sct-builders-us-phoenix-1-v1',
                           ]
