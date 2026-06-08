@@ -372,22 +372,26 @@ def test_download_and_extract_tarball_rejects_non_gzip(mock_node, mock_test_conf
     """When downloaded file is not a gzip tarball, ScyllaDoctorException should be raised."""
     test_config, _params = mock_test_config
 
-    # Make the file check return non-gzip
+    # Magic byte check returns non-gzip (e.g. "3c45" for XML error page)
     check_result = MagicMock()
     check_result.ok = True
-    check_result.stdout = "ASCII text"
+    check_result.stdout = "3c45"
 
-    head_result = MagicMock()
-    head_result.stdout = "<Error><Code>AccessDenied</Code></Error>"
+    hexdump_result = MagicMock()
+    hexdump_result.stdout = "00000000: 3c45 7272 6f72 3e3c  <Error><"
+
+    dns_result = MagicMock()
+    dns_result.stdout = "93.184.216.34  example.com"
 
     rm_result = MagicMock()
     rm_result.ok = True
 
-    # First call: curl download (succeeds), second: file check, third: head, fourth: rm
+    # Flow: curl download, magic byte check (fails), xxd hexdump, getent hosts, rm -f
     mock_node.remoter.run.side_effect = [
         MagicMock(ok=True),  # curl download
-        check_result,  # file check
-        head_result,  # head -c 500
+        check_result,  # head -c 2 | od (non-gzip magic bytes)
+        hexdump_result,  # xxd | head -20
+        dns_result,  # getent hosts
         rm_result,  # rm -f
     ]
 
