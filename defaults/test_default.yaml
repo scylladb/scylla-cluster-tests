@@ -52,6 +52,8 @@ seeds_num: 1
 
 instance_provision: "spot"
 
+minicloud_endpoint_url: ""
+
 execute_post_behavior: false
 post_behavior_db_nodes: "destroy"
 post_behavior_loader_nodes: "destroy"
@@ -374,6 +376,11 @@ download_from_s3: []
 manager_backup_restore_method: ''
 
 argus_email_report_template: email_report_template_basic.yaml
+
+# minicloud params
+minicloud_lightweight: true
+minicloud_lightweight_memory: '1.5GiB'
+minicloud_s3_passthrough_buckets: 'scylla-qa-keystore,cloudius-jenkins-test'
 
 # SCT agent defaults
 agent:

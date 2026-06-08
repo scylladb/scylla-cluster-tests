@@ -47,4 +47,3 @@ use_preinstalled_scylla: true
 # KMS must be disabled — minicloud doesn't implement AWS KMS / GCP KMS endpoints,
 # and the QEMU VMs have no valid cloud IAM credentials for real KMS calls.
 enterprise_disable_kms: true
-enable_kms_key_rotation: false

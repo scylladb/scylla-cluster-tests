@@ -311,7 +311,7 @@ class S3Storage:
     def set_public_access(self, key):
         acl_obj: S3ServiceResource = boto3.resource("s3").ObjectAcl(self.bucket_name, key)
 
-        grants = copy.deepcopy(acl_obj.grants)
+        grants = copy.deepcopy(acl_obj.grants or [])
         grantees = {
             "Grantee": {"Type": "Group", "URI": "http://acs.amazonaws.com/groups/global/AllUsers"},
             "Permission": "READ",

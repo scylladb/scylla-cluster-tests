@@ -1,0 +1,1 @@
+/home/fruch/projects/scylla-cluster-tests/.sisyphus/plans/minicloud-gce-support.md
