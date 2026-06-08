@@ -62,7 +62,7 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: 'AMI ID for ScyllaDB', name: 'scylla_ami_id')
             string(defaultValue: '', description: 'GCE image for ScyllaDB', name: 'gce_image_db')
             string(defaultValue: "${pipelineParams.get('scylla_version', '')}",
-                   description: 'Version of ScyllaDB to run against (e.g. 2025.3.0, master:latest)',
+                   description: 'Version of ScyllaDB to run against (e.g. 2026.2, master:latest)',
                    name: 'scylla_version')
 
             // Stress Test Configuration
