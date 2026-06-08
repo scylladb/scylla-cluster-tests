@@ -8,7 +8,7 @@
   Ref: https://scylladb.atlassian.net/browse/QAINFRA-38
   </description>
   <scm class="hudson.scm.NullSCM"/>
-  <disabled>false</disabled>
+  <disabled>true</disabled>
   <triggers>
     <hudson.triggers.TimerTrigger>
       <spec>0 1 * * 0</spec>
