@@ -222,7 +222,7 @@ class EventsDevice(multiprocessing.Process):
                 yield obj.base, obj
 
     def is_alive(self) -> bool:
-        return self._running.is_set()
+        return self._running.is_set() and super().is_alive()
 
 
 start_events_main_device = partial(start_events_process, EVENTS_MAIN_DEVICE_ID, EventsDevice)

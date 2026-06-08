@@ -3785,9 +3785,9 @@ class ClusterTester(unittest.TestCase):
 
     @silence()
     def clean_resources(self):
+        self._stop_all_node_task_threads()
         if not self.params.get("execute_post_behavior"):
             self.log.info("Resources will continue to run")
-            self._stop_all_node_task_threads()
             return
 
         actions_per_cluster_type = get_post_behavior_actions(self.params)
