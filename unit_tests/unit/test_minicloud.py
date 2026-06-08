@@ -255,8 +255,9 @@ def test_start_runs_docker_container(tmp_path, monkeypatch):
     with patch("sdcm.utils.minicloud.MinicloudManager._is_endpoint_healthy", return_value=False):
         with patch("sdcm.utils.minicloud.MinicloudManager._wait_for_health"):
             with patch("sdcm.utils.minicloud.MinicloudManager._start_log_streaming"):
-                with patch("sdcm.utils.minicloud.subprocess.run") as mock_run:
-                    manager.start()
+                with patch("sdcm.utils.minicloud.MinicloudManager._setup_host_networking"):
+                    with patch("sdcm.utils.minicloud.subprocess.run") as mock_run:
+                        manager.start()
 
     run_calls = mock_run.call_args_list
     docker_run_call = run_calls[2]
@@ -276,8 +277,9 @@ def test_start_reuses_healthy_endpoint(tmp_path, monkeypatch):
 
     with patch("sdcm.utils.minicloud.MinicloudManager._is_endpoint_healthy", return_value=True):
         with patch("sdcm.utils.minicloud.MinicloudManager._start_log_streaming"):
-            with patch("sdcm.utils.minicloud.subprocess.run") as mock_run:
-                manager.start()
+            with patch("sdcm.utils.minicloud.MinicloudManager._setup_host_networking"):
+                with patch("sdcm.utils.minicloud.subprocess.run") as mock_run:
+                    manager.start()
 
     for call in mock_run.call_args_list:
         cmd = call[0][0]
@@ -292,13 +294,14 @@ def test_start_sets_aws_endpoint_url(tmp_path, monkeypatch):
     with patch("sdcm.utils.minicloud.MinicloudManager._is_endpoint_healthy", return_value=False):
         with patch("sdcm.utils.minicloud.MinicloudManager._wait_for_health"):
             with patch("sdcm.utils.minicloud.MinicloudManager._start_log_streaming"):
-                with patch("sdcm.utils.minicloud.subprocess.run"):
-                    manager.start()
+                with patch("sdcm.utils.minicloud.MinicloudManager._setup_host_networking"):
+                    with patch("sdcm.utils.minicloud.subprocess.run"):
+                        manager.start()
 
     assert os.environ["AWS_ENDPOINT_URL"] == "http://localhost:5000"
 
 
-def test_stop_calls_docker_stop_and_rm(tmp_path):
+def test_stop_calls_docker_rm_force(tmp_path):
     config = MinicloudConfig(state_dir=str(tmp_path))
     manager = MinicloudManager(config=config)
 
@@ -306,8 +309,8 @@ def test_stop_calls_docker_stop_and_rm(tmp_path):
         manager.stop()
 
     cmds = [c[0][0] for c in mock_run.call_args_list]
-    assert ["docker", "stop", "minicloud"] in cmds
-    assert ["docker", "rm", "minicloud"] in cmds
+    assert ["docker", "rm", "-f", "minicloud"] in cmds
+    assert ["docker", "network", "disconnect", "-f", "host", "minicloud"] in cmds
 
 
 def test_stop_clears_env_vars(tmp_path, monkeypatch):

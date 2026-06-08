@@ -1205,6 +1205,7 @@ class BaseSCTLogCollector(LogCollector):
         FileLog(name="partition_range_scan_diff_*.log", search_locally=True),
         FileLog(name="junit.xml", search_locally=True),
         FileLog(name="cdc-replicator.log", search_locally=True),
+        FileLog(name="minicloud.log", search_locally=True),
     ]
     cluster_log_type = "sct-runner-events"
     cluster_dir_prefix = "sct-runner-events"
@@ -1271,7 +1272,6 @@ class BaseSCTLogCollector(LogCollector):
 class PythonSCTLogCollector(BaseSCTLogCollector):
     log_entities = [
         FileLog(name="sct.log", search_locally=True),
-        FileLog(name="minicloud.log", search_locally=True),
     ]
     cluster_log_type = "sct-runner-python-log"
     cluster_dir_prefix = "sct-runner-python-log"
