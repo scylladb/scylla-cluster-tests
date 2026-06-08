@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import json
 import os
 import time
 import logging
@@ -19,12 +20,13 @@ from functools import cached_property, cache
 from collections.abc import Callable
 
 import tenacity
+import yaml
 import google.api_core.exceptions
 from google.cloud import compute_v1
 
 from sdcm import cluster
 from sdcm.provision.gce.provisioner import GceProvisioner
-from sdcm.provision.network_configuration import ssh_connection_ip_type
+from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration, ssh_connection_ip_type
 from sdcm.provision.provisioner import PricingModel
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.sct_provision import region_definition_builder
@@ -109,12 +111,46 @@ class GCENode(cluster.BaseNode):
             after_config=after_config,
         )
 
+    @cached_property
+    def network_configuration(self):
+        """Query MAC→device name mapping from the node, same pattern as AWS."""
+        network_devices = {}
+        if self.remoter:
+            if network_config_json := self.remoter.run("ip -j link", ignore_status=True).stdout.strip():
+                interfaces = json.loads(network_config_json)
+                network_devices = {
+                    interface["address"]: interface["ifname"]
+                    for interface in interfaces
+                    if interface.get("ifname") != "lo" and interface.get("address")
+                }
+            if not network_devices:
+                ip_link_cmd = """ip -o link | awk '$2 != "lo:" {gsub(/:/,"",$2);print $17": " $2}'"""
+                network_config = self.remoter.run(ip_link_cmd).stdout.strip()
+                network_devices = yaml.safe_load(network_config)
+            self.log.debug("Node %s ethernets: %s", self.name, network_devices)
+        return network_devices
+
     def refresh_network_interfaces_info(self):
-        pass
+        if "network_configuration" in self.__dict__:
+            del self.__dict__["network_configuration"]
+        if self.scylla_network_configuration:
+            self.scylla_network_configuration.network_interfaces = self.network_interfaces
 
     @staticmethod
     def is_gce() -> bool:
         return True
+
+    @cached_property
+    def cql_address(self):
+        if self.scylla_network_configuration:
+            address = (
+                self.scylla_network_configuration.test_communication
+                if self.test_config.IP_SSH_CONNECTIONS == "public"
+                else self.scylla_network_configuration.broadcast_rpc_address
+            )
+            self.log.debug("cql_address is: %s", address)
+            return address
+        return super().cql_address
 
     @cluster.terminate_on_failure
     def init(self):
@@ -125,6 +161,19 @@ class GCENode(cluster.BaseNode):
         time.sleep(10)
 
         super().init()
+
+        if self.parent_cluster.params.get("scylla_network_config"):
+            self.scylla_network_configuration = ScyllaNetworkConfiguration(
+                network_interfaces=self.network_interfaces,
+                scylla_network_config=self.parent_cluster.params["scylla_network_config"],
+            )
+            self.log.debug(
+                "Node %s scylla_network_config: %s", self.name, self.parent_cluster.params["scylla_network_config"]
+            )
+            self.log.debug(
+                "Node %s network_interfaces: %s", self.name, self.scylla_network_configuration.network_interfaces
+            )
+            self.refresh_network_interfaces_info()
 
     def _create_kernel_panic_checker(self):
         return GCPKernelPanicChecker(
@@ -189,7 +238,28 @@ class GCENode(cluster.BaseNode):
 
     @property
     def network_interfaces(self):
-        pass
+        interfaces = []
+        devices = self.network_configuration if self.remoter else {}
+        device_names = list(devices.values()) if devices else []
+        for idx, iface in enumerate(self._instance.network_interfaces):
+            public_ip = None
+            if iface.access_configs:
+                public_ip = iface.access_configs[0].nat_i_p or None
+            interfaces.append(
+                NetworkInterface(
+                    ipv4_public_address=public_ip,
+                    ipv6_public_addresses=[],
+                    ipv4_private_addresses=[iface.network_i_p],
+                    ipv6_private_address="",
+                    dns_private_name=self.private_dns_name if self.remoter else "",
+                    dns_public_name=self.public_dns_name if self.remoter else "",
+                    device_index=idx,
+                    device_name=device_names[idx] if idx < len(device_names) else "",
+                    mac_address=None,
+                    use_dns_names=self.use_dns_names,
+                )
+            )
+        return interfaces
 
     @property
     def vm_region(self):
