@@ -15,6 +15,7 @@ import time
 import queue
 import ctypes
 import pickle
+import signal
 import logging
 import multiprocessing
 from typing import Optional, Generator, Any, Tuple, Callable, cast, Dict
@@ -91,10 +92,12 @@ class EventsDevice(multiprocessing.Process):
     def stop(self, timeout: Optional[float] = None) -> None:
         self._running.clear()
         self.join(timeout)
-        # self.is_alive() returns self._running.is_set(), which is already False here
-        # (cleared above). Call super() to check the actual OS-level process liveness.
         if super().is_alive():
-            LOGGER.warning("EventsDevice did not stop within timeout, killing")
+            LOGGER.warning("EventsDevice did not stop within timeout, sending SIGTERM")
+            self.terminate()
+            self.join(5)
+        if super().is_alive():
+            LOGGER.warning("EventsDevice still alive after SIGTERM, sending SIGKILL")
             self.kill()
             self.join(5)
         self._queue.cancel_join_thread()
@@ -107,7 +110,10 @@ class EventsDevice(multiprocessing.Process):
         raise RuntimeError("EventsDevice is not ready to send events.")
 
     def run(self):
-        with suppress_interrupt(), verbose_suppress("EventsDevice failed"):
+        # SIGTERM handler enables cooperative shutdown: terminate() sends SIGTERM which
+        # triggers _running.clear(), letting the loop drain and exit gracefully.
+        signal.signal(signal.SIGTERM, lambda *_: self._running.clear())
+        with verbose_suppress("EventsDevice failed"):
             with zmq.Context() as ctx, ctx.socket(zmq.PUB) as pub, ctx.socket(zmq.SUB) as sub:
                 self._sub_port.value = pub.bind_to_random_port("tcp://*")
                 self._running.set()
@@ -222,7 +228,14 @@ class EventsDevice(multiprocessing.Process):
                 yield obj.base, obj
 
     def is_alive(self) -> bool:
-        return self._running.is_set() and super().is_alive()
+        if not self._running.is_set():
+            return False
+        try:
+            return super().is_alive()
+        except AssertionError:
+            # CPython's BaseProcess.is_alive() asserts self._parent_pid == os.getpid().
+            # If called from a forked child, fall back to the shared event flag.
+            return True
 
 
 start_events_main_device = partial(start_events_process, EVENTS_MAIN_DEVICE_ID, EventsDevice)
