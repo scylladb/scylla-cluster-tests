@@ -17,7 +17,7 @@
 #                               (default: scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com)
 #   MINICLOUD_GCS_BUCKET      - GCS bucket for image staging (optional)
 #   MINICLOUD_LIGHTWEIGHT     - Run in lightweight mode (default: true)
-#   MINICLOUD_LIGHTWEIGHT_MEMORY - Memory per VM in lightweight mode (default: 1.5GiB)
+#   MINICLOUD_LIGHTWEIGHT_MEMORY - Memory per VM in lightweight mode (default: 2.5GiB)
 #   GCS_KEY_FILE              - Path to GCS service account JSON key (optional)
 #   MINICLOUD_CONTAINER_NAME  - Container name (default: minicloud)
 
@@ -29,7 +29,7 @@ MINICLOUD_AWS_REGION="${MINICLOUD_AWS_REGION:-us-east-1}"
 S3_PASSTHROUGH_BUCKETS="${S3_PASSTHROUGH_BUCKETS:-scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com}"
 MINICLOUD_GCS_BUCKET="${MINICLOUD_GCS_BUCKET:-}"
 MINICLOUD_LIGHTWEIGHT="${MINICLOUD_LIGHTWEIGHT:-true}"
-MINICLOUD_LIGHTWEIGHT_MEMORY="${MINICLOUD_LIGHTWEIGHT_MEMORY:-1.5GiB}"
+MINICLOUD_LIGHTWEIGHT_MEMORY="${MINICLOUD_LIGHTWEIGHT_MEMORY:-2.5GiB}"
 GCS_KEY_FILE="${GCS_KEY_FILE:-}"
 MINICLOUD_CONTAINER_NAME="${MINICLOUD_CONTAINER_NAME:-minicloud}"
 MINICLOUD_CACHE_DIR="${MINICLOUD_CACHE_DIR:-${HOME}/.cache/minicloud}"

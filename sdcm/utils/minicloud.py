@@ -36,7 +36,7 @@ class MinicloudConfig:
     docker_image: str = MINICLOUD_DOCKER_IMAGE_DEFAULT
     port: int = 5000
     lightweight: bool = True
-    lightweight_memory: str = "1.5GiB"
+    lightweight_memory: str = "2.5GiB"
     s3_passthrough_buckets: List[str] = dataclasses.field(
         default_factory=lambda: ["scylla-qa-keystore", "cloudius-jenkins-test", "downloads.scylladb.com"]
     )
@@ -52,7 +52,7 @@ class MinicloudConfig:
             docker_image=os.environ.get("MINICLOUD_DOCKER", MINICLOUD_DOCKER_IMAGE_DEFAULT),
             port=int(os.environ.get("MINICLOUD_PORT", "5000")),
             lightweight=True,
-            lightweight_memory=os.environ.get("MINICLOUD_LIGHTWEIGHT_MEMORY", "1.5GiB"),
+            lightweight_memory=os.environ.get("MINICLOUD_LIGHTWEIGHT_MEMORY", "2.5GiB"),
             s3_passthrough_buckets=os.environ.get(
                 "S3_PASSTHROUGH_BUCKETS", "scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com"
             ).split(","),

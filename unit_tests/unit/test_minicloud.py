@@ -86,7 +86,7 @@ def test_minicloud_config_defaults():
     config = MinicloudConfig()
     assert config.port == 5000
     assert config.lightweight is True
-    assert config.lightweight_memory == "1.5GiB"
+    assert config.lightweight_memory == "2.5GiB"
     assert config.s3_passthrough_buckets == ["scylla-qa-keystore", "cloudius-jenkins-test", "downloads.scylladb.com"]
     assert config.region == "us-east-1"
     assert config.docker_image == "scylladb/minicloud:dev"
@@ -106,7 +106,7 @@ def test_minicloud_config_from_env_defaults(monkeypatch):
     assert config.docker_image == "scylladb/minicloud:dev"
     assert config.port == 5000
     assert config.lightweight is True
-    assert config.lightweight_memory == "1.5GiB"
+    assert config.lightweight_memory == "2.5GiB"
     assert config.s3_passthrough_buckets == ["scylla-qa-keystore", "cloudius-jenkins-test", "downloads.scylladb.com"]
     assert config.region == "us-east-1"
 
