@@ -176,6 +176,8 @@ class MinicloudManager:
         If minicloud is already running (e.g., started externally), detect it via
         health check and reuse it instead of attempting to start a new container.
         """
+        self._setup_gcp_credentials()
+
         if self._is_endpoint_healthy():
             endpoint = f"http://localhost:{self.config.port}"
             LOGGER.info("minicloud already running at %s, reusing", endpoint)
@@ -222,7 +224,7 @@ class MinicloudManager:
 
         docker_cmd += ["-e", f"AWS_REGION={self.config.region}"]
 
-        gcs_key = os.environ.get("GCS_KEY_FILE", "")
+        gcs_key = os.environ.get("GCS_KEY_FILE") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
         if gcs_key and Path(gcs_key).is_file():
             docker_cmd += [
                 "-v",
@@ -344,22 +346,29 @@ class MinicloudManager:
         """
         if os.environ.get("SCT_CLUSTER_BACKEND") != "gce":
             return
-        if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
-            LOGGER.info("GOOGLE_APPLICATION_CREDENTIALS already set, skipping download")
-            return
 
-        try:
-            creds = KeyStore().get_gcp_credentials()
-            creds_path = os.path.join(self.config.state_dir, "gcp-credentials.json")
-            os.makedirs(self.config.state_dir, exist_ok=True)
-            with open(creds_path, "w") as fh:
-                json.dump(creds, fh)
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_path
-            LOGGER.info("Set GOOGLE_APPLICATION_CREDENTIALS=%s", creds_path)
-        except Exception:  # noqa: BLE001
-            LOGGER.warning("Failed to download GCP credentials from KeyStore; minicloud GCE passthrough may not work")
+        creds = None
+        creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
 
-        if not self.config.gcs_bucket:
+        if creds_path and Path(creds_path).is_file():
+            LOGGER.info("GOOGLE_APPLICATION_CREDENTIALS already set to %s", creds_path)
+            with open(creds_path) as fh:
+                creds = json.load(fh)
+        else:
+            try:
+                creds = KeyStore().get_gcp_credentials()
+                creds_path = os.path.join(self.config.state_dir, "gcp-credentials.json")
+                os.makedirs(self.config.state_dir, exist_ok=True)
+                with open(creds_path, "w") as fh:
+                    json.dump(creds, fh)
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_path
+                LOGGER.info("Set GOOGLE_APPLICATION_CREDENTIALS=%s", creds_path)
+            except Exception:  # noqa: BLE001
+                LOGGER.warning(
+                    "Failed to download GCP credentials from KeyStore; minicloud GCE passthrough may not work"
+                )
+
+        if not self.config.gcs_bucket and creds:
             self.config.gcs_bucket = self._ensure_gcs_bucket(creds)
 
     @staticmethod

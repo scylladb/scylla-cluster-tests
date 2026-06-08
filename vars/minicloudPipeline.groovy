@@ -1,8 +1,9 @@
 #!groovy
 
 // Consolidated minicloud pipeline for artifact and longevity/provision tests.
-// Based on longevityPipeline — uses sct-runners, launches minicloud as a
-// Docker container, forces KMS off, and sets MINICLOUD_* environment variables.
+// Based on longevityPipeline — uses sct-runners with KVM-enabled instances.
+// MinicloudManager in tester.py handles the full minicloud lifecycle on the
+// sct-runner: preflight, container start, health checks, region prep, cleanup.
 //
 // Minicloud is NOT a separate backend — it emulates AWS/GCE compute APIs
 // via QEMU/KVM VMs running inside the minicloud container on the sct-runner.
@@ -31,6 +32,8 @@ def call(Map pipelineParams) {
             // KMS must be disabled for minicloud (no real cloud KMS available)
             SCT_ENTERPRISE_DISABLE_KMS = 'true'
             SCT_ENABLE_KMS_KEY_ROTATION = 'false'
+            // Minicloud Docker image — forwarded to sct-runner via hydra env
+            MINICLOUD_DOCKER = "${params.minicloud_docker}"
         }
         parameters {
             // Cloud Provider Configuration
@@ -207,27 +210,6 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage('Setup Minicloud') {
-                steps {
-                    script {
-                        wrap([$class: 'BuildUser']) {
-                            dir('scylla-cluster-tests') {
-                                timeout(time: 15, unit: 'MINUTES') {
-                                    sh """#!/bin/bash
-                                    set -xe
-                                    export MINICLOUD_DOCKER="${params.minicloud_docker}"
-                                    export MINICLOUD_AWS_REGION="${params.region}"
-                                    bash scripts/start-minicloud.sh
-                                    export AWS_ENDPOINT_URL=http://localhost:\${MINICLOUD_PORT:-5000}
-                                    export SCT_MINICLOUD_ENDPOINT_URL=http://localhost:\${MINICLOUD_PORT:-5000}
-                                    """
-                                    completed_stages['setup_minicloud'] = true
-                                }
-                            }
-                        }
-                    }
-                }
-            }
             stage('Provision Resources') {
                 steps {
                     script {
@@ -336,18 +318,6 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage('Stop Minicloud') {
-                steps {
-                    catchError(stageResult: 'FAILURE') {
-                        script {
-                            timeout(time: 2, unit: 'MINUTES') {
-                                sh 'docker stop minicloud 2>/dev/null && docker rm minicloud 2>/dev/null || true'
-                                completed_stages['stop_minicloud'] = true
-                            }
-                        }
-                    }
-                }
-            }
         }
         post {
             always {
@@ -427,11 +397,6 @@ def call(Map pipelineParams) {
                                     }
                                 }
                             }
-                        }
-                    }
-                    if (!completed_stages['stop_minicloud']) {
-                        catchError {
-                            sh 'docker stop minicloud 2>/dev/null && docker rm minicloud 2>/dev/null || true'
                         }
                     }
                 }

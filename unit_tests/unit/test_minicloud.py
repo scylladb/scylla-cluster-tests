@@ -89,7 +89,7 @@ def test_minicloud_config_defaults():
     assert config.lightweight_memory == "1.5GiB"
     assert config.s3_passthrough_buckets == ["scylla-qa-keystore", "cloudius-jenkins-test", "downloads.scylladb.com"]
     assert config.region == "us-east-1"
-    assert config.docker_image == "minicloud:dev"
+    assert config.docker_image == "scylladb/minicloud:dev"
 
 
 def test_minicloud_config_from_env_defaults(monkeypatch):
@@ -103,7 +103,7 @@ def test_minicloud_config_from_env_defaults(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
     config = MinicloudConfig.from_env()
-    assert config.docker_image == "minicloud:dev"
+    assert config.docker_image == "scylladb/minicloud:dev"
     assert config.port == 5000
     assert config.lightweight is True
     assert config.lightweight_memory == "1.5GiB"
@@ -163,7 +163,8 @@ def test_preflight_check_fails_no_kvm(tmp_path):
         def path_side_effect(arg):
             if str(arg) == "/dev/kvm":
                 return mock_kvm
-            from pathlib import Path as RealPath
+            from pathlib import Path as RealPath  # noqa: PLC0415
+
             return RealPath(arg)
 
         mock_path_cls.side_effect = path_side_effect
@@ -182,7 +183,8 @@ def test_preflight_check_fails_docker_not_found(tmp_path):
         def path_side_effect(arg):
             if str(arg) == "/dev/kvm":
                 return mock_kvm
-            from pathlib import Path as RealPath
+            from pathlib import Path as RealPath  # noqa: PLC0415
+
             return RealPath(arg)
 
         mock_path_cls.side_effect = path_side_effect
@@ -205,7 +207,8 @@ def test_preflight_check_fails_bad_aws_credentials(tmp_path):
         def path_side_effect(arg):
             if str(arg) == "/dev/kvm":
                 return mock_kvm
-            from pathlib import Path as RealPath
+            from pathlib import Path as RealPath  # noqa: PLC0415
+
             return RealPath(arg)
 
         mock_path_cls.side_effect = path_side_effect
@@ -226,7 +229,8 @@ def test_preflight_check_fails_aws_cli_not_found(tmp_path):
         def path_side_effect(arg):
             if str(arg) == "/dev/kvm":
                 return mock_kvm
-            from pathlib import Path as RealPath
+            from pathlib import Path as RealPath  # noqa: PLC0415
+
             return RealPath(arg)
 
         mock_path_cls.side_effect = path_side_effect
@@ -490,7 +494,7 @@ def test_set_env_overrides_does_not_set_gce_endpoint_url_when_no_backend(tmp_pat
 
 
 def test_gce_client_options_returns_client_options_when_endpoint_set(monkeypatch):
-    from google.api_core.client_options import ClientOptions
+    from google.api_core.client_options import ClientOptions  # noqa: PLC0415
 
     monkeypatch.setenv("GCE_ENDPOINT_URL", "http://localhost:9099")
     result = _gce_client_options()

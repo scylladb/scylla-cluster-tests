@@ -371,7 +371,7 @@ Wave FINAL (After ALL tasks):
 
 ## Final Verification Wave
 
-- [ ] F1. **Unit Tests**
+- [x] F1. **Unit Tests**
   ```
   Scenario: All unit tests pass after shutdown fixes
     Tool: Bash
@@ -383,7 +383,7 @@ Wave FINAL (After ALL tasks):
     Evidence: .sisyphus/evidence/F1-unit-tests.txt
   ```
 
-- [ ] F2. **Docker Backend Teardown Timing**
+- [x] F2. **Docker Backend Teardown Timing**
   ```
   Scenario: Docker backend test teardown completes within 30s
     Tool: Bash
@@ -409,7 +409,7 @@ Wave FINAL (After ALL tasks):
     Evidence: .sisyphus/evidence/F2-docker-teardown.txt
   ```
 
-- [ ] F3. **No Zombie Processes**
+- [x] F3. **No Zombie Processes**
   ```
   Scenario: No SCT processes remain after test completion
     Tool: Bash

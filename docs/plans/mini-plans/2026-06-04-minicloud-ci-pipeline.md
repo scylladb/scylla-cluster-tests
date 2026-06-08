@@ -1,8 +1,4 @@
-# Minicloud CI Pipeline (SUPERSEDED)
-
-> **NOTE**: This plan is partially superseded by `2026-06-07-minicloud-container-architecture.md`.
-> The binary-download + runner-setup approach is replaced by running minicloud in its own
-> Docker container. The run scripts (section 1) remain valid. Sections 2-5 are obsolete.
+# Minicloud CI Pipeline
 
 ## Problem
 
