@@ -1985,16 +1985,6 @@ Scylla Doctor edition to use. Allowed values: 'basic', 'full'.<br>'basic' fetche
 **type:** Literal['basic', 'full']
 
 
-## **skip_analyzers** / SCT_SKIP_ANALYZERS
-
-List of Scylla Doctor Analyzer names to skip via --skip-test flag.<br>Each entry is passed as a separate --skip-test argument to the scylla-doctor command.<br>Configured via configurations/scylla-doctor/skip_tests.yaml in test_config.<br>Example: ['CPUScalingAnalyzer']
-
-**default:** N/A
-
-**type:** str | list[str]
-* appendable
-
-
 ## **skip_test_stages** / SCT_SKIP_TEST_STAGES
 
 Skip selected stages of a test scenario

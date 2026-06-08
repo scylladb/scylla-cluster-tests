@@ -246,7 +246,7 @@ def call(Map pipelineParams = [:]) {
         ],
         [
             os_label: 'ami',
-            job_path: 'aoss/artifacts/artifacts-ami-test',
+            job_path: 'oss/artifacts/artifacts-ami-test',
             backend: 'aws',
         ],
         [

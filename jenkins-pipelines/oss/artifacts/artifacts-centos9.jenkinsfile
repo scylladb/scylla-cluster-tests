@@ -4,7 +4,7 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 artifactsPipeline(
-    test_config: '''["test-cases/artifacts/centos9.yaml", "configurations/scylla-doctor/skip_tests.yaml"]''',
+    test_config: '''["test-cases/artifacts/centos9.yaml"]''',
     backend: 'gce',
     provision_type: 'spot',
 

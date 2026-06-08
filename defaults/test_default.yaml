@@ -278,7 +278,6 @@ scylla_doctor_version: "1.10"
 scylla_doctor_full_tarball_url: null
 run_scylla_doctor_only: false
 scylla_doctor_edition: "basic"
-skip_analyzers: []
 nemesis_double_load_during_grow_shrink_duration: 0
 
 enterprise_disable_kms: false

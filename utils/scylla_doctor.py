@@ -164,21 +164,6 @@ class ScyllaDoctor:
     def configured_edition(self):
         return self.test_config.tester_obj().params.get("scylla_doctor_edition")
 
-    @cached_property
-    def configured_skip_analyzers(self) -> list[str]:
-        """Get the list of analyzer names to skip from test config (skip_analyzers parameter)."""
-        skip_analyzers = self.test_config.tester_obj().params.get("skip_analyzers")
-        if not skip_analyzers:
-            return []
-        if isinstance(skip_analyzers, str):
-            return [t.strip() for t in skip_analyzers.split() if t.strip()]
-        return list(skip_analyzers)
-
-    @property
-    def skip_analyzer_args(self) -> str:
-        """Build --skip-test CLI arguments string for scylla-doctor commands."""
-        return " ".join(f"--skip-test {test}" for test in self.configured_skip_analyzers)
-
     def locate_scylla_doctor_package(self, version: str = None):
         """
         Locate scylla-doctor package in S3.
@@ -638,12 +623,8 @@ class ScyllaDoctor:
         json_report_name = f"{self.node.public_dns_name}.analysis.json"
         LOGGER.info("Running Scylla Doctor analysis phase (full edition)...")
 
-        # skip_args = f" {self.skip_analyzer_args}" if self.skip_analyzer_args else ""
-        # sd_cmd = f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file}{skip_args} --output json"
         sd_cmd = f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file} --output json"
         LOGGER.info("Run scylla-doctor command: %s", sd_cmd)
-        # if self.skip_analyzer_args:
-        #     sd_cmd += f" {self.skip_analyzer_args}"
         stdout_content = self.run(sd_command=sd_cmd)
 
         # Save the JSON output from stdout to a file
@@ -663,13 +644,6 @@ class ScyllaDoctor:
                 f"Analysis report file {json_report_name} has not been created. Scylla doctor version: {self.version}"
             )
         LOGGER.info("Analysis JSON report saved to: %s", self.analysis_report_file)
-
-    def filter_out_failed_analyzers(self, analyzer):
-        """Return True if the failed analyzer should be ignored (known issue or configured skip)."""
-        if analyzer in self.configured_skip_analyzers:
-            LOGGER.info("Skipping failed analyzer %s (configured in scylla_doctor_skip_analyzers)", analyzer)
-            return True
-        return False
 
     @staticmethod
     def _extract_json_from_output(content: str) -> dict:

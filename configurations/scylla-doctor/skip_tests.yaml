@@ -1,6 +1,0 @@
-skip_analyzers:
-  - 'CPUScalingAnalyzer'  # @Vladislav Zolotarov request
-  - 'RsyslogAnalyzer' # do not need to configure it, SD check that /etc/rsyslog.d/scylla.conf file exists only
-  - 'ScyllaInternodeCompressionAnalyzer' # not relevant for this test
-  - 'ScyllaSnitchAnalyzer' #  It’s default snitch, not relevant to change for this test. Scylla issue https://github.com/scylladb/scylladb/issues/2370
-  - 'ScyllaUpdateAnalyzer' # not relevant for this test

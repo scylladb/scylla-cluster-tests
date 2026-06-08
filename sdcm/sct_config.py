@@ -1294,12 +1294,7 @@ class SCTConfiguration(BaseModel):
                 'basic' fetches the free/open-source edition via HTTP.
                 'full' fetches the full/enterprise edition from a private S3 bucket.""",
     )
-    skip_analyzers: StringOrList = SctField(
-        description="""List of Scylla Doctor Analyzer names to skip via --skip-test flag.
-                Each entry is passed as a separate --skip-test argument to the scylla-doctor command.
-                Configured via configurations/scylla-doctor/skip_tests.yaml in test_config.
-                Example: ['CPUScalingAnalyzer']""",
-    )
+
     skip_test_stages: DictOrStr = SctField(
         description="Skip selected stages of a test scenario",
     )
