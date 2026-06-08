@@ -133,7 +133,10 @@ class AwsRegion:
 
     @cached_property
     def vpc_ipv6_cidr(self):
-        return ip_network(self.sct_vpc.ipv6_cidr_block_association_set[0]["Ipv6CidrBlock"])
+        ipv6_associations = self.sct_vpc.ipv6_cidr_block_association_set
+        if not ipv6_associations:
+            return None
+        return ip_network(ipv6_associations[0]["Ipv6CidrBlock"])
 
     def az_subnet_name(self, region_az, subnet_index):
         # To support existing VPC/subnet names convention, ignore the index number for first subnet
@@ -168,24 +171,26 @@ class AwsRegion:
             LOGGER.warning("Subnet '%s' already exists!  Id: '%s'.", subnet_name, subnet_id)
             return
 
-        result = self.client.create_subnet(
-            CidrBlock=str(ipv4_cidr),
-            Ipv6CidrBlock=str(ipv6_cidr),
-            VpcId=self.sct_vpc.vpc_id,
-            AvailabilityZone=region_az,
-        )
+        create_subnet_kwargs = {
+            "CidrBlock": str(ipv4_cidr),
+            "VpcId": self.sct_vpc.vpc_id,
+            "AvailabilityZone": region_az,
+        }
+        if ipv6_cidr:
+            create_subnet_kwargs["Ipv6CidrBlock"] = str(ipv6_cidr)
+
+        result = self.client.create_subnet(**create_subnet_kwargs)
         subnet_id = result["Subnet"]["SubnetId"]
         subnet = self.resource.Subnet(subnet_id)
         subnet.create_tags(Tags=[{"Key": "Name", "Value": subnet_name}])
-        LOGGER.info("Configuring to automatically assign public IPv4 and IPv6 addresses...")
         self.client.modify_subnet_attribute(MapPublicIpOnLaunch={"Value": True}, SubnetId=subnet_id)
-        # for some reason boto3 throws error when both AssignIpv6AddressOnCreation and MapPublicIpOnLaunch are used
-        self.client.modify_subnet_attribute(AssignIpv6AddressOnCreation={"Value": True}, SubnetId=subnet_id)
+        if ipv6_cidr:
+            self.client.modify_subnet_attribute(AssignIpv6AddressOnCreation={"Value": True}, SubnetId=subnet_id)
         LOGGER.info("'%s' with id '%s' created.", subnet_name, subnet_id)
 
     def create_sct_subnets(self):
         ipv4_cidrs_iter = self.vpc_ipv4_cidr.subnets(6)
-        ipv6_cidrs_iter = self.vpc_ipv6_cidr.subnets(8)
+        ipv6_cidrs_iter = self.vpc_ipv6_cidr.subnets(8) if self.vpc_ipv6_cidr else iter(lambda: None, 1)
         # First subnet in each availability zone already exists.
         # It means that first range of CIDRs are in used.
         # For example:
@@ -229,9 +234,20 @@ class AwsRegion:
         associated_route_table_id = associated_route_table[0].get("RouteTableId")
         # If subnet is associated with route table but not that was created for this subnet
         if associated_route_table_id != sct_route_table.route_table_id:
-            self.client.replace_route_table_association(
-                AssociationId=associated_route_table_id, RouteTableId=sct_route_table.route_table_id
-            )
+            associations = associated_route_table[0].get("Associations", [])
+            association_id = None
+            for assoc in associations:
+                if assoc.get("SubnetId") == subnet.subnet_id:
+                    association_id = assoc.get("RouteTableAssociationId")
+                    break
+            if association_id:
+                self.client.replace_route_table_association(
+                    AssociationId=association_id, RouteTableId=sct_route_table.route_table_id
+                )
+            else:
+                self.client.associate_route_table(
+                    RouteTableId=sct_route_table.route_table_id, SubnetId=subnet.subnet_id
+                )
             LOGGER.info(
                 "Subnet '%s' has been associated with '%s' route table.",
                 subnet.subnet_id,
@@ -349,12 +365,23 @@ class AwsRegion:
             )
         else:
             route_tables = list(self.sct_vpc.route_tables.all())
-            assert len(route_tables) == 1, (
-                f"Only one main route table should exist for {self.SCT_VPC_NAME}. Found {len(route_tables)}!"
-            )
-            route_table: EC2ServiceResource.RouteTable = route_tables[0]
-
-            route_table.create_tags(Tags=[{"Key": "Name", "Value": self.sct_route_table_name(index=index)}])
+            if len(route_tables) == 0:
+                result = self.client.create_route_table(
+                    VpcId=self.sct_vpc.vpc_id,
+                    TagSpecifications=[
+                        {
+                            "ResourceType": "route-table",
+                            "Tags": [{"Key": "Name", "Value": self.sct_route_table_name(index=index)}],
+                        }
+                    ],
+                )
+                route_table = self.resource.RouteTable(result["RouteTable"]["RouteTableId"])
+            else:
+                assert len(route_tables) == 1, (
+                    f"Only one main route table should exist for {self.SCT_VPC_NAME}. Found {len(route_tables)}!"
+                )
+                route_table: EC2ServiceResource.RouteTable = route_tables[0]
+                route_table.create_tags(Tags=[{"Key": "Name", "Value": self.sct_route_table_name(index=index)}])
             LOGGER.info("Setting routing of all outbound traffic via Internet Gateway...")
             route_table.create_route(
                 DestinationCidrBlock="0.0.0.0/0", GatewayId=self.sct_internet_gateway.internet_gateway_id
@@ -704,7 +731,7 @@ class AwsRegion:
         try:
             key_pairs = self.client.describe_key_pairs(KeyNames=[self.SCT_KEY_PAIR_NAME])
         except botocore.exceptions.ClientError as ex:
-            if "InvalidKeyPair.NotFound" in str(ex):
+            if "InvalidKeyPair.NotFound" in str(ex) or "does not exist" in str(ex):
                 return None
             raise
         existing = key_pairs.get("KeyPairs", [])
@@ -752,7 +779,13 @@ class AwsRegion:
         if ec2_fingerprint is not None:
             self.client.delete_key_pair(KeyName=self.SCT_KEY_PAIR_NAME)
             LOGGER.info("Deleted old key pair in '%s'.", self.region_name)
-        self.resource.import_key_pair(KeyName=self.SCT_KEY_PAIR_NAME, PublicKeyMaterial=sct_key_pair.public_key)
+        try:
+            self.resource.import_key_pair(KeyName=self.SCT_KEY_PAIR_NAME, PublicKeyMaterial=sct_key_pair.public_key)
+        except botocore.exceptions.ClientError as ex:
+            if "InvalidKeyPair.Duplicate" not in str(ex):
+                raise
+            LOGGER.info("Key pair already exists in '%s', skipping import.", self.region_name)
+            return
         LOGGER.info("SCT Key Pair updated in '%s'.", self.region_name)
 
     def get_vpc_peering_routes(self) -> list[str]:

@@ -486,6 +486,11 @@ class SCTConfiguration(BaseModel):
         description="backend that will be used, aws/gce/azure/oci/docker/xcloud",
         appendable=False,
     )
+    minicloud_endpoint_url: String = SctField(
+        description="EC2 API endpoint URL for minicloud. When set, SCT adapts for minicloud "
+        "limitations (no spot, no EIP, graceful TerminateInstances). Example: http://localhost:5000",
+        appendable=False,
+    )
     test_method: String = SctField(
         description="class.method used to run the test. Filled automatically with run-test sct command.",
         appendable=False,
@@ -1880,6 +1885,16 @@ class SCTConfiguration(BaseModel):
     )
     enterprise_disable_kms: Boolean = SctField(
         description="An escape hatch to disable KMS for enterprise run, when needed. We enable KMS by default since if we use Scylla 2023.1.3 and up",
+    )
+    # minicloud params
+    minicloud_lightweight: Boolean = SctField(
+        description="Enable lightweight mode for minicloud deployments",
+    )
+    minicloud_lightweight_memory: String = SctField(
+        description="Memory allocation for lightweight minicloud deployments",
+    )
+    minicloud_s3_passthrough_buckets: StringOrList = SctField(
+        description="S3 buckets to pass through in minicloud deployments",
     )
     logs_transport: Literal["ssh", "docker", "syslog-ng", "vector"] = SctField(
         description="How to transport logs: syslog-ng, ssh or docker",

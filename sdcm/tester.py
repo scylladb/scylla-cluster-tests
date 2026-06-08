@@ -3837,26 +3837,12 @@ class ClusterTester(unittest.TestCase):
             for node in cluster.nodes:
                 node._stop_kernel_panic_checker()  # noqa: SLF001
 
-    def _stop_all_node_task_threads(self):
-        """Stop DbLogReader and other task threads on all nodes.
-
-        Prevents daemon threads from feeding events into a dead queue
-        after event consumers are stopped, which would cause the process
-        to hang on exit (QueueFeederThread blocked on write to dead pipe).
-        """
-        for cluster in [self.db_cluster, self.loaders, self.monitors]:
-            if not cluster:
-                continue
-            for node in cluster.nodes:
-                node.stop_task_threads()
-
     @silence()
     def clean_resources(self):
         if not self.params.get("execute_post_behavior"):
             self.log.info("Resources will continue to run")
-            self._stop_all_kernel_panic_checkers()
-            self._stop_all_node_task_threads()
             if getattr(self, "minicloud", None) is not None:
+                self._stop_all_kernel_panic_checkers()
                 self.minicloud.keep_alive = True
                 self.log.info("minicloud keep_alive set (execute_post_behavior=false)")
             return
@@ -3924,7 +3910,6 @@ class ClusterTester(unittest.TestCase):
 
         if getattr(self, "minicloud", None) is not None:
             self._stop_all_kernel_panic_checkers()
-            self._stop_all_node_task_threads()
             if not self.minicloud.keep_alive:
                 self.minicloud.stop()
                 self.minicloud = None

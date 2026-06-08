@@ -12,7 +12,9 @@
 # Copyright (c) 2025 ScyllaDB
 
 import logging
+import os
 
+from google.api_core.client_options import ClientOptions
 from google.cloud import kms
 from google.cloud.exceptions import GoogleCloudError
 from google.oauth2 import service_account
@@ -34,7 +36,10 @@ class GcpKms:
 
         # Create credentials from service account info
         credentials = service_account.Credentials.from_service_account_info(KeyStore().get_gcp_credentials())
-        self.client = kms.KeyManagementServiceClient(credentials=credentials)
+        kwargs = {}
+        if endpoint := os.environ.get("GCE_ENDPOINT_URL"):
+            kwargs["client_options"] = ClientOptions(api_endpoint=endpoint)
+        self.client = kms.KeyManagementServiceClient(credentials=credentials, **kwargs)
 
     def create_test_key(self):
         self.client.create_crypto_key(

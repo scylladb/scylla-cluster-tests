@@ -1271,6 +1271,7 @@ class BaseSCTLogCollector(LogCollector):
 class PythonSCTLogCollector(BaseSCTLogCollector):
     log_entities = [
         FileLog(name="sct.log", search_locally=True),
+        FileLog(name="minicloud.log", search_locally=True),
     ]
     cluster_log_type = "sct-runner-python-log"
     cluster_dir_prefix = "sct-runner-python-log"

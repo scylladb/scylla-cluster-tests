@@ -350,6 +350,8 @@ class GCENode(cluster.BaseNode):
 
     @cached_property
     def image(self):
+        if not self._instance.disks:
+            return self.parent_cluster.params.get("gce_image_db") or "unknown"
         disk_client, _ = get_gce_compute_disks_client()
         disk = disk_client.get(disk=self._instance.disks[0].source.split("/")[-1], project=self.project, zone=self.zone)
         return disk.source_image
@@ -363,7 +365,10 @@ class GCENode(cluster.BaseNode):
 
     @cached_property
     def public_dns_name(self) -> str:
-        return resolve_ip_to_dns(self.public_ip_address)
+        try:
+            return resolve_ip_to_dns(self.public_ip_address)
+        except ValueError:
+            return self.public_ip_address
 
 
 class GCECluster(cluster.BaseCluster):

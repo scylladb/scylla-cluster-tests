@@ -91,9 +91,12 @@ class EventsDevice(multiprocessing.Process):
     def stop(self, timeout: Optional[float] = None) -> None:
         self._running.clear()
         self.join(timeout)
-        self._queue._reader.close()  # noqa: SLF001
+        if super().is_alive():
+            LOGGER.warning("EventsDevice did not stop within timeout, killing")
+            self.kill()
+            self.join(5)
+        self._queue.cancel_join_thread()
         self._queue.close()
-        self._queue.join_thread()
 
     @property
     def subscribe_address(self) -> str:
