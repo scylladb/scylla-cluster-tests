@@ -697,6 +697,7 @@ def create_instance(  # noqa: PLR0913
     network_tags: list = None,
     metadata: dict = None,
     service_accounts: list = None,
+    enable_nested_virtualization: bool = False,
 ) -> compute_v1.Instance:
     """
     Send an instance creation request to the Compute Engine API and wait for it to complete.
@@ -736,6 +737,8 @@ def create_instance(  # noqa: PLR0913
         network_tags: List of tags to apply to network labels
         metadata: dict of key values to add to metadata
         service_accounts: list of service account to attach to the instance
+        enable_nested_virtualization: enable nested virtualization (KVM passthrough) on the instance.
+            Supported on Haswell+ CPUs (N1, N2, N2D, C2, C2D families). Not supported on E2/T2D.
     Returns:
         Instance object.
     """
@@ -797,6 +800,11 @@ def create_instance(  # noqa: PLR0913
     if custom_hostname is not None:
         # Set the custom hostname for the instance
         instance.hostname = custom_hostname
+
+    if enable_nested_virtualization:
+        instance.advanced_machine_features = compute_v1.AdvancedMachineFeatures(
+            enable_nested_virtualization=True,
+        )
 
     if delete_protection:
         # Set the delete protection bit

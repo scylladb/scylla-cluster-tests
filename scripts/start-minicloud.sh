@@ -34,6 +34,17 @@ GCS_KEY_FILE="${GCS_KEY_FILE:-}"
 MINICLOUD_CONTAINER_NAME="${MINICLOUD_CONTAINER_NAME:-minicloud}"
 MINICLOUD_CACHE_DIR="${MINICLOUD_CACHE_DIR:-${HOME}/.cache/minicloud}"
 
+# Ensure KVM kernel module is loaded (required for nested virtualization on c8i/m8i/r8i instances)
+if [ ! -e /dev/kvm ]; then
+    echo "Loading KVM kernel module..."
+    sudo modprobe kvm_intel 2>/dev/null || sudo modprobe kvm_amd 2>/dev/null || true
+    if [ ! -e /dev/kvm ]; then
+        echo "ERROR: /dev/kvm not available after modprobe. Instance may not support nested virtualization." >&2
+        echo "Supported instance families: c8i, m8i, r8i (with NestedVirtualization=enabled at launch)" >&2
+        exit 1
+    fi
+fi
+
 # Stop existing container if running
 docker stop "${MINICLOUD_CONTAINER_NAME}" 2>/dev/null && docker rm "${MINICLOUD_CONTAINER_NAME}" 2>/dev/null || true
 
