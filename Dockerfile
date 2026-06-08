@@ -71,7 +71,12 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
         docker-ce-cli \
         docker-compose-plugin \
         libev4 \
-        libev-dev && \
+        libev-dev \
+        qemu-system-x86 \
+        qemu-utils \
+        bridge-utils \
+        dnsmasq \
+        cloud-image-utils && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 RUN curl -fsSLo /usr/local/bin/kubectl https://dl.k8s.io/release/v$KUBECTL_VERSION/bin/linux/amd64/kubectl && \
