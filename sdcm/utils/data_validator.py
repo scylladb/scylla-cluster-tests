@@ -487,9 +487,7 @@ class LongevityDataValidator:
         elif not during_nemesis:
             assert len(actual_result) == len(expected_result), (
                 "One or more rows are not as expected, suspected LWT wrong update. "
-                "Actual dataset length: {}, Expected dataset length: {}".format(
-                    len(actual_result), len(expected_result)
-                )
+                f"Actual dataset length: {len(actual_result)}, Expected dataset length: {len(expected_result)}"
             )
 
             assert actual_result == expected_result, "One or more rows are not as expected, suspected LWT wrong update"
@@ -852,7 +850,5 @@ class LongevityDataValidator:
         else:
             LOGGER.warning(
                 "Deleted row were not found. May be issue #6181. "
-                "Actual dataset length: {}, Expected dataset length: {}".format(
-                    len(actual_result), self.rows_before_deletion
-                )
+                f"Actual dataset length: {len(actual_result)}, Expected dataset length: {self.rows_before_deletion}"
             )

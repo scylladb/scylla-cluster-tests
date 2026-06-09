@@ -580,7 +580,9 @@ class LocalKindCluster(LocalMinimalClusterBase):
             if not target_route_regex.match(route_line):
                 continue
             route_parts = route_line.split()
-            route_cmd = "ip ro add {0} via {1} || ip ro change {0} via {1}".format(route_parts[0], route_parts[2])
+            route_cmd = (
+                f"ip ro add {route_parts[0]} via {route_parts[2]} || ip ro change {route_parts[0]} via {route_parts[2]}"
+            )
             self.host_node.remoter.run(f"sudo bash -c '{route_cmd}'")
 
     def stop_k8s_software(self):

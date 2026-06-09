@@ -65,13 +65,9 @@ class ParallelObject:
                 fun_args = args
                 fun_kwargs = kwargs
                 fun_name = fun.__name__
-                LOGGER.debug(
-                    "[{thread_name}] {fun_name}({fun_args}, {fun_kwargs})".format(
-                        thread_name=thread_name, fun_name=fun_name, fun_args=fun_args, fun_kwargs=fun_kwargs
-                    )
-                )
+                LOGGER.debug(f"[{thread_name}] {fun_name}({fun_args}, {fun_kwargs})")
                 return_val = fun(*args, **kwargs)
-                LOGGER.debug("[{thread_name}] Done.".format(thread_name=thread_name))
+                LOGGER.debug(f"[{thread_name}] Done.")
                 return return_val
 
             return inner
@@ -79,7 +75,7 @@ class ParallelObject:
         results = []
 
         if not self.disable_logging:
-            LOGGER.debug("Executing in parallel: '{}' on {}".format(func.__name__, self.objects))
+            LOGGER.debug(f"Executing in parallel: '{func.__name__}' on {self.objects}")
             func = func_wrap(func)
 
         futures = []

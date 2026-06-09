@@ -142,26 +142,7 @@ class TabletSplitMergeTest(LongevityTest):
 
         Redirect stdout and stderr to cdc-replicator.log file.
         """
-        replicator_cmd = " ".join(
-            [
-                "java",
-                "-cp",
-                REPLICATOR_JAR,
-                "com.scylladb.cdc.replicator.Main",
-                "-k",
-                self.ks_name,
-                "-t",
-                self.table_name,
-                "-s",
-                self.db_cluster.nodes[0].external_address,
-                "-d",
-                self.cs_db_cluster.nodes[0].external_address,
-                "-cl",
-                "one",
-                "-m",
-                mode,
-            ]
-        )
+        replicator_cmd = f"java -cp {REPLICATOR_JAR} com.scylladb.cdc.replicator.Main -k {self.ks_name} -t {self.table_name} -s {self.db_cluster.nodes[0].external_address} -d {self.cs_db_cluster.nodes[0].external_address} -cl one -m {mode}"
         replicator_script = dedent(f"""\
             tmux new-session -d -s replicator
             tmux pipe-pane -t replicator -o 'cat >> {REPLICATOR_LOG}'

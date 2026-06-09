@@ -183,7 +183,7 @@ def int_or_space_separated_ints(value: str | int | list[int]) -> int | list[int]
         except Exception:  # noqa: BLE001
             pass
 
-    raise ValueError("{} isn't int or list".format(value))
+    raise ValueError(f"{value} isn't int or list")
 
 
 IntOrList = Annotated[int | list[int], BeforeValidator(int_or_space_separated_ints)]
@@ -234,7 +234,7 @@ def boolean_or_space_separated_booleans(value: bool | list[bool] | str | None) -
         except Exception:  # noqa: BLE001
             pass
 
-    raise ValueError("{} isn't bool or list".format(value))
+    raise ValueError(f"{value} isn't bool or list")
 
 
 BooleanOrList = Annotated[bool | list[bool], BeforeValidator(boolean_or_space_separated_booleans)]
@@ -259,7 +259,7 @@ def dict_or_str(value: dict | str | None) -> dict | None:
     if isinstance(value, dict):
         return value
 
-    raise ValueError('"{}" isn\'t a dict'.format(value))
+    raise ValueError(f'"{value}" isn\'t a dict')
 
 
 DictOrStr = Annotated[dict | str, BeforeValidator(dict_or_str)]
@@ -323,7 +323,7 @@ def dict_or_str_or_pydantic(value: dict | str | BaseModel | None) -> dict | Base
     if isinstance(value, (dict, BaseModel)):
         return value
 
-    raise ValueError('"{}" isn\'t a dict, str or Pydantic model'.format(value))
+    raise ValueError(f'"{value}" isn\'t a dict, str or Pydantic model')
 
 
 DictOrStrOrPydantic = Annotated[dict | str | BaseModel, BeforeValidator(dict_or_str_or_pydantic)]
@@ -337,7 +337,7 @@ def _boolean(value):
     elif isinstance(value, str):
         return bool(strtobool(value))
     else:
-        raise ValueError("{} isn't a boolean".format(type(value)))
+        raise ValueError(f"{type(value)} isn't a boolean")
 
 
 def is_config_option_appendable(option_name: str) -> bool:
@@ -2651,7 +2651,7 @@ class SCTConfiguration(BaseModel):
                         if key not in self.keys():
                             self[key] = value
                         elif len(self[key].split()) < len(region_names):
-                            self[key] += " {}".format(value)
+                            self[key] += f" {value}"
             else:
                 for region in region_names:
                     if region not in self.aws_supported_regions:
@@ -2986,7 +2986,7 @@ class SCTConfiguration(BaseModel):
         user_prefix = self.get("user_prefix") or getpass.getuser()
         prefix_max_len = 35
         if version_tag != user_prefix:
-            user_prefix = "{}-{}".format(user_prefix, version_tag)
+            user_prefix = f"{user_prefix}-{version_tag}"
         if self.get("cluster_backend") == "azure":
             # for Azure need to shorten it more due longer region names
             prefix_max_len -= 2
@@ -3047,10 +3047,10 @@ class SCTConfiguration(BaseModel):
                 except json.decoder.JSONDecodeError as exp:
                     raise ValueError(
                         f"each item of run_fullscan list: {run_fullscan_params}, "
-                        f"item {param}, must be JSON but got error: {repr(exp)}"
+                        f"item {param}, must be JSON but got error: {exp!r}"
                     ) from exp
                 except TypeError as exp:
-                    raise ValueError(f" Got error: {repr(exp)}, on item '{param}'") from exp
+                    raise ValueError(f" Got error: {exp!r}, on item '{param}'") from exp
 
         # 15 Force endpoint_snitch to GossipingPropertyFileSnitch if using simulated_regions or simulated_racks
         n_db_nodes = self.get("n_db_nodes") or 0
@@ -3286,7 +3286,7 @@ class SCTConfiguration(BaseModel):
                             raw_value = raw_value.strip()
                         environment_vars[field_name] = from_env_func(raw_value)
                     except Exception as ex:  # noqa: BLE001
-                        raise ValueError("failed to parse {} from environment variable".format(field_env)) from ex
+                        raise ValueError(f"failed to parse {field_env} from environment variable") from ex
                 nested_keys = [key for key in os.environ if key.startswith(field_env + ".")]
                 if nested_keys:
                     list_value = []
@@ -3357,7 +3357,7 @@ class SCTConfiguration(BaseModel):
                 try:
                     from_env_func(list_element)
                 except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
-                    raise ValueError("failed to validate {}".format(field_name)) from ex
+                    raise ValueError(f"failed to validate {field_name}") from ex
             return
 
         # Regular single-value validation
@@ -3656,7 +3656,7 @@ class SCTConfiguration(BaseModel):
         env_keys = {o.split(".")[0] for o in os.environ if o.startswith("SCT_")}
         unknown_env_keys = env_keys.difference(config_keys)
         if unknown_env_keys:
-            output = ["{}={}".format(key, os.environ.get(key)) for key in unknown_env_keys]
+            output = [f"{key}={os.environ.get(key)}" for key in unknown_env_keys]
             raise ValueError("Unsupported environment variables were used:\n\t - {}".format("\n\t - ".join(output)))
 
     def _validate_sct_variable_values(self):
@@ -3683,7 +3683,7 @@ class SCTConfiguration(BaseModel):
             else:
                 region_count[opt] = 1
         if not all(region_count[current_region_param_name] == x for x in region_count.values()):
-            raise ValueError("not all multi region values are equal: \n\t{}".format(region_count))
+            raise ValueError(f"not all multi region values are equal: \n\t{region_count}")
 
     def _validate_seeds_number(self):
         seeds_num = self.get("seeds_num")
@@ -3791,7 +3791,7 @@ class SCTConfiguration(BaseModel):
                 )
             self._check_backend_defaults(backend, self.backend_required_params[backend])
         else:
-            raise ValueError("Unsupported backend [{}]".format(backend))
+            raise ValueError(f"Unsupported backend [{backend}]")
 
     def _check_backend_defaults(self, backend, required_params):
         fields = [
@@ -3800,7 +3800,7 @@ class SCTConfiguration(BaseModel):
             if field_name in required_params and not is_ignored_field(field)
         ]
         for field in fields:
-            assert self.get(field) is not None, "{} missing from config for {}".format(field, backend)
+            assert self.get(field) is not None, f"{field} missing from config for {backend}"
 
     def _instance_type_validation(self):
         if instance_type := self.get("nemesis_grow_shrink_instance_type"):
@@ -4333,12 +4333,12 @@ class SCTConfiguration(BaseModel):
                 continue
 
             if description := field.description:
-                help_text = "\n".join("# {}".format(l.strip()) for l in description.splitlines() if l.strip()) + "\n"
+                help_text = "\n".join(f"# {l.strip()}" for l in description.splitlines() if l.strip()) + "\n"
             else:
                 help_text = ""
             default = defaults.get(field_name, None)
             default = default if default else "N/A"
-            ret += "{help_text}{name}: {default}\n\n".format(help_text=help_text, default=default, name=field_name)
+            ret += f"{help_text}{field_name}: {default}\n\n"
 
         return ret
 

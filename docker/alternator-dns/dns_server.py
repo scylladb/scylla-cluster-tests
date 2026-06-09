@@ -27,8 +27,8 @@ def livenodes_update():
         # Contact one of the already known nodes by random, to fetch a new
         # list of known nodes.
         ip = random.choice(livenodes)
-        url = "http://{}:{}/localnodes".format(ip, alternator_port)
-        print("updating livenodes from {}".format(url))
+        url = f"http://{ip}:{alternator_port}/localnodes"
+        print(f"updating livenodes from {url}")
         try:
             nodes = urllib.request.urlopen(url, None, 1.0).read().decode("ascii")
             a = json.loads(nodes)
@@ -60,9 +60,9 @@ class Resolver:
         if qname == "alternator":
             ip = random.choice(livenodes)
             try:
-                reply.add_answer(*dnslib.RR.fromZone("{} 4 A {}".format(qname, ip)))
+                reply.add_answer(*dnslib.RR.fromZone(f"{qname} 4 A {ip}"))
             except Exception:  # noqa: BLE001
-                print("Invalid IP in livenodes, skipping: {!r}".format(ip))
+                print(f"Invalid IP in livenodes, skipping: {ip!r}")
                 reply.header.rcode = getattr(RCODE, "SERVFAIL")
 
         # Otherwise proxy

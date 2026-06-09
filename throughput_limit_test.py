@@ -140,7 +140,7 @@ class ThroughputLimitFunctionalTest(ClusterTester):
             self._set_compaction_limit(limit_mb=round(disk_write_throughput * limit))
 
             limited_write_result = self._measure_latency_and_ops(
-                stress_cmd=stress_write_cmd, conditions=f"limited {str(limit)} write"
+                stress_cmd=stress_write_cmd, conditions=f"limited {limit!s} write"
             )
             if limited_write_result.latency_99 > base_write_result.latency_99:
                 InfoEvent(

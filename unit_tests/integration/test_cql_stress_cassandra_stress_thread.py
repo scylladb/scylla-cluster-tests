@@ -48,7 +48,7 @@ def test_01_cql_stress_cassandra_stress(request, docker_scylla, prom_address, pa
 
     @timeout(timeout=60)
     def check_metrics():
-        output = requests.get("http://{}/metrics".format(prom_address)).text
+        output = requests.get(f"http://{prom_address}/metrics").text
         regex = re.compile(r"^sct_cql_stress_cassandra_stress_write_gauge.*?([0-9\.]*?)$", re.MULTILINE)
         assert "sct_cql_stress_cassandra_stress_write_gauge" in output
 
@@ -133,7 +133,7 @@ def test_03_cql_stress_cassandra_stress_mixed(request, docker_scylla, prom_addre
 
     @timeout(timeout=60)
     def check_metrics():
-        output = requests.get("http://{}/metrics".format(prom_address)).text
+        output = requests.get(f"http://{prom_address}/metrics").text
         regex = re.compile(r"^sct_cql_stress_cassandra_stress_mixed_gauge.*?([0-9\.]*?)$", re.MULTILINE)
         assert "sct_cql_stress_cassandra_stress_mixed_gauge" in output
 

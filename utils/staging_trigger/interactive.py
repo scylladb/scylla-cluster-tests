@@ -511,7 +511,7 @@ def generate_python_code(
             constructor += f', folder="{folder}"'
 
         if non_empty_overrides:
-            constructor += f", param_overrides={repr(non_empty_overrides)}"
+            constructor += f", param_overrides={non_empty_overrides!r}"
 
         constructor += ")"
         lines.append(constructor)
@@ -536,13 +536,13 @@ def generate_python_code(
             constructor += f', folder="{folder}"'
 
         if non_empty_overrides:
-            constructor += f", param_overrides={repr(non_empty_overrides)}"
+            constructor += f", param_overrides={non_empty_overrides!r}"
 
         constructor += ")"
         lines.append(constructor)
 
         topos = dtest_topologies or ["no-tablets", "tablets"]
-        lines.append(f'trigger.run_dtest_variants("{job_name}", topologies={repr(topos)})')
+        lines.append(f'trigger.run_dtest_variants("{job_name}", topologies={topos!r})')
         lines.append("")
 
     code = "\n".join(lines).rstrip() + "\n"
