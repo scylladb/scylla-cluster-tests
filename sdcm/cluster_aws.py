@@ -51,6 +51,7 @@ from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
 from sdcm.utils.common import list_instances_aws
+from sdcm.utils.minicloud import is_minicloud_active
 from sdcm.kernel_panic_checker import AWSKernelPanicChecker
 from sdcm.utils.decorators import retrying
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
@@ -727,7 +728,11 @@ class AWSNode(cluster.BaseNode):
                 resources_to_tag.append(self.eip_allocation_id)
             self._ec2_service.create_tags(Resources=resources_to_tag, Tags=tags_as_ec2_tags(self.tags))
 
-        self._wait_public_ip()
+        if not is_minicloud_active():
+            self._wait_public_ip()
+        else:
+            LOGGER.debug("Minicloud mode: skipping _wait_public_ip for instance %s", self._instance.id)
+            self._instance.reload()
         self.scylla_network_configuration = ScyllaNetworkConfiguration(
             network_interfaces=self.network_interfaces,
             scylla_network_config=self.parent_cluster.params["scylla_network_config"],
@@ -739,7 +744,11 @@ class AWSNode(cluster.BaseNode):
         self.log.debug(
             "Node %s network_interfaces: %s", self.name, self.scylla_network_configuration.network_interfaces
         )
-        super().init()
+        if is_minicloud_active():
+            # Minicloud: skip SSH-dependent super().init() — do minimal logging init only
+            LOGGER.debug("Minicloud mode: skipping SSH-based init for node %s", self.name)
+        else:
+            super().init()
         # Refresh network interfaces info after node remoter init
         self.refresh_network_interfaces_info()
         for tag in self._instance.tags:
