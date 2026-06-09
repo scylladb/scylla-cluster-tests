@@ -595,33 +595,15 @@ def list_instances_aws(
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
         client: EC2Client = boto3.client("ec2", region_name=region)
-        # Minicloud doesn't support tag-based filtering in DescribeInstances.
-        # When minicloud is active, fetch all instances and filter by tags client-side.
-        minicloud_mode = bool(
-            os.environ.get("MINICLOUD_DOCKER") or "localhost" in os.environ.get("AWS_ENDPOINT_URL", "")
-        )
         custom_filter = []
-        if tags_dict and not minicloud_mode:
+        if tags_dict:
             custom_filter = [
                 {"Name": f"tag:{key}", "Values": value if isinstance(value, list) else [value]}
                 for key, value in tags_dict.items()
             ]
         response = client.describe_instances(Filters=custom_filter)
         all_instances = [instance for reservation in response["Reservations"] for instance in reservation["Instances"]]
-        if tags_dict and minicloud_mode:
-            filtered = []
-            for instance in all_instances:
-                instance_tags = {tag["Key"]: tag["Value"] for tag in instance.get("Tags", [])}
-                if all(
-                    instance_tags.get(key) in (value if isinstance(value, list) else [value])
-                    for key, value in tags_dict.items()
-                ):
-                    filtered.append(instance)
-            instances[region] = filtered
-            if verbose:
-                LOGGER.info("Minicloud: filtered %d/%d instances by tags", len(filtered), len(all_instances))
-        else:
-            instances[region] = all_instances
+        instances[region] = all_instances
 
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(instances.keys())), len(aws_regions))

@@ -2787,9 +2787,6 @@ class ClusterTester(unittest.TestCase):
             manager = MinicloudManager(cfg)
             manager.keep_alive = os.environ.get("MINICLOUD_KEEP_ALIVE", "").lower() in ("1", "true", "yes")
             manager.preflight_check()
-            manager.start()
-            if cluster_backend in ("aws", "aws-siren"):
-                manager.prepare_region()
             self.minicloud = manager
 
         self.get_cluster_kafka()
