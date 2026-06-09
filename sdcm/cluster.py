@@ -103,6 +103,7 @@ from sdcm.utils import properties
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout, AdaptiveTimeoutStore
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.rpm import rpm_cmd
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from sdcm.utils.gcp_kms import GcpKms
@@ -2229,7 +2230,7 @@ class BaseNode(AutoSshContainerMixin):
 
         if debug_install:
             if self.distro.is_rhel_like:
-                self.remoter.sudo("yum install -y scylla-gdb", verbose=True, ignore_status=True)
+                self.remoter.sudo(rpm_cmd("yum", "install -y scylla-gdb"), verbose=True, ignore_status=True)
             elif self.distro.is_sles:
                 self.remoter.sudo("zypper install -y scylla-gdb", verbose=True, ignore_status=True)
 
@@ -2431,15 +2432,23 @@ class BaseNode(AutoSshContainerMixin):
     )
     def install_package(self, package_name: str, package_version: str = None, ignore_status: bool = False) -> None:
         if self.distro.is_rhel_like:
-            pkg_cmd = next(
+            pkg_mgr = next(
                 mgr
                 for mgr in ["microdnf", "yum", "dnf"]
                 if self.remoter.run(f"test -e /usr/bin/{mgr}", ignore_status=True).ok
             )
+            if not pkg_mgr:
+                raise NodeSetupFailed(
+                    node=self,
+                    error_msg="No supported RPM package manager found (expected one of: microdnf, yum, dnf)",
+                )
             package_name = f"{package_name}-{package_version}*" if package_version else package_name
+            install_cmd = rpm_cmd(pkg_mgr, f"install -y {package_name}")
+            update_cmd = rpm_cmd(pkg_mgr, "update -y")
         elif self.distro.is_sles:
-            pkg_cmd = "zypper"
             package_name = f"{package_name}-{package_version}" if package_version else package_name
+            install_cmd = f"zypper install -y {package_name}"
+            update_cmd = "zypper update -y"
         else:
             pkg_cmd = (
                 "DEBIAN_FRONTEND=noninteractive apt-get "
@@ -2456,11 +2465,13 @@ class BaseNode(AutoSshContainerMixin):
                     f"{pkg}{version_prefix}" for pkg in [package_name] + list(set(result.stdout.splitlines()))
                 ]
                 package_name = " ".join(packages_to_install)
+            install_cmd = f"{pkg_cmd} install -y {package_name}"
+            update_cmd = f"{pkg_cmd} update"
         if self.is_kubernetes():
             # NOTE: run "update" command because on K8S after each pod recreation we lose previous "update" results.
             #       And running some old Scylla docker images we may get errors refering to old/removed mirrors.
-            self.remoter.sudo(f"{pkg_cmd} update", ignore_status=ignore_status)
-        self.remoter.sudo(f"{pkg_cmd} install -y {package_name}", ignore_status=ignore_status)
+            self.remoter.sudo(update_cmd, ignore_status=ignore_status)
+        self.remoter.sudo(install_cmd, ignore_status=ignore_status)
 
     def install_manager_agent(self, package_path: Optional[str] = None) -> None:
         package_name = "scylla-manager-agent"
@@ -2629,7 +2640,7 @@ class BaseNode(AutoSshContainerMixin):
                 self.install_epel()
             self.remoter.run("sudo yum remove -y abrt")  # https://docs.scylladb.com/operating-scylla/admin/#core-dumps
             version = f"-{scylla_version}*" if scylla_version else ""
-            self.remoter.run("sudo yum install -y {}{}".format(self.scylla_pkg(), version))
+            self.remoter.run(f"sudo {rpm_cmd('yum', f'install -y {self.scylla_pkg()}{version}')}", retry=3, timeout=600)
         elif self.distro.is_sles15:
             self.remoter.sudo("SUSEConnect --product sle-module-legacy/15.3/x86_64")
             self.remoter.sudo("SUSEConnect --product sle-module-python2/15.3/x86_64")
@@ -3736,12 +3747,13 @@ class BaseNode(AutoSshContainerMixin):
 
         if self.distro.is_rhel8:
             self.remoter.run(
-                "sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm"
+                f"sudo {rpm_cmd('yum', 'install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm')}",
+                retry=3,
             )
         elif self.distro.is_oel8:
-            self.remoter.run("sudo yum install -y oracle-epel-release-el8")
+            self.remoter.run(f"sudo {rpm_cmd('yum', 'install -y oracle-epel-release-el8')}", retry=3)
         else:
-            self.remoter.run("sudo yum install -y epel-release", retry=3)
+            self.remoter.run(f"sudo {rpm_cmd('yum', 'install -y epel-release')}", retry=3)
 
     def is_machine_image_configured(self):
         smi_configured_path = "/etc/scylla/machine_image_configured"
