@@ -103,8 +103,10 @@ def test_comment_monkey(runner):
     assert monkey.runner.executed[-1] == "ALTER TABLE ks1.tbl1 WITH comment = 'abc123';"
 
 
-def test_compaction_twcs_sets_ttl_before_compaction(runner):
-    """When TimeWindowCompactionStrategy is chosen, default_time_to_live must be set first."""
+def test_compaction_twcs_sets_compaction_before_ttl(runner):
+    """When TimeWindowCompactionStrategy is chosen, compaction must be set before
+    default_time_to_live so that the new DAYS-based window is active when ScyllaDB
+    validates the TTL against twcs_max_window_count."""
     monkey = ModifyTableCompactionMonkey(runner)
     # Force the TWCS lambda to be picked
     monkey.random.choice = lambda seq: seq[2] if callable(seq[0]) else seq[0]
@@ -113,8 +115,8 @@ def test_compaction_twcs_sets_ttl_before_compaction(runner):
 
     stmts = monkey.runner.executed
     assert len(stmts) == 2
-    assert "default_time_to_live = 4300000" in stmts[0]
-    assert "'class': 'TimeWindowCompactionStrategy'" in stmts[1]
+    assert "'class': 'TimeWindowCompactionStrategy'" in stmts[0]
+    assert "default_time_to_live = 4300000" in stmts[1]
 
 
 def test_default_ttl_non_twcs(runner):
