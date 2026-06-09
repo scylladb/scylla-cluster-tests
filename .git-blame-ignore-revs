@@ -5,3 +5,6 @@
 
 # reformat using ruff (https://github.com/scylladb/scylla-cluster-tests/pull/11291)
 e298929269e4a73a270ad453820c1325c2b04b07
+
+# PR #13547: Enable ruff f-string modernization rules and apply auto-fixes
+65378b079b26ab2d42d7a41e586ccf9289b4da9e # format(lint): apply ruff f-string auto-fixes (UP032, FLY002, RUF010)
