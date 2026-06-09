@@ -14,6 +14,11 @@ import yaml
 from sdcm.remote import LocalCmdRunner
 from sdcm.utils.common import get_free_port, list_logs_by_test_id, S3Storage, remove_files
 from sdcm.utils.decorators import retrying
+from sdcm.utils.grafana_api import (
+    GRAFANA_ANNOTATIONS_API_PATH,
+    GRAFANA_DASHBOARD_API_PATH,
+    convert_dashboard_payload_to_new_api,
+)
 
 from sdcm.monitorstack.constants import (
     ALERT_DOCKER_NAME,
@@ -368,18 +373,17 @@ def restore_sct_dashboards(grafana_docker_port, sct_dashboard_file):
         sct_dashboard_file_name = "scylla-dash-per-server-nemesis.master.json"
         sct_dashboard_file = [Path(__file__).parent.parent.parent / "data_dir" / sct_dashboard_file_name]
 
-    dashboard_url = f"http://localhost:{grafana_docker_port}/api/dashboards/db"
+    dashboard_url = f"http://localhost:{grafana_docker_port}" + GRAFANA_DASHBOARD_API_PATH
     with open(sct_dashboard_file, encoding="utf-8") as f:
         dashboard_config = json.load(f)
         if dashboard_config.get("dashboard", {}).get("id"):
             dashboard_config["dashboard"]["id"] = None
 
+    payload = convert_dashboard_payload_to_new_api(dashboard_config)
     try:
-        res = requests.post(
-            dashboard_url, data=json.dumps(dashboard_config), headers={"Content-Type": "application/json"}
-        )
+        res = requests.post(dashboard_url, data=json.dumps(payload), headers={"Content-Type": "application/json"})
 
-        if res.status_code != 200:
+        if not res.ok:
             LOGGER.info("Error uploading dashboard %s. Error message %s", sct_dashboard_file, res.text)
             raise ErrorUploadSCTDashboard(
                 "Error uploading dashboard {}. Error message {}".format(sct_dashboard_file, res.text)
@@ -402,7 +406,7 @@ def restore_annotations_data(monitoring_stack_dir, grafana_docker_port):
         with open(annotations_file, encoding="utf-8") as f:
             annotations = json.load(f)
 
-        annotations_url = f"http://localhost:{grafana_docker_port}/api/annotations"
+        annotations_url = f"http://localhost:{grafana_docker_port}" + GRAFANA_ANNOTATIONS_API_PATH
         for an in annotations:
             res = requests.post(annotations_url, data=json.dumps(an), headers={"Content-Type": "application/json"})
             if res.status_code != 200:

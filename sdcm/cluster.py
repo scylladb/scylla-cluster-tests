@@ -110,6 +110,11 @@ from sdcm.utils.gcp_kms import GcpKms
 from sdcm.provision.gce.kms_provider import GcpKmsProvider
 from google.cloud.exceptions import GoogleCloudError
 from sdcm.utils.cql_utils import cql_quote_if_needed
+from sdcm.utils.grafana_api import (
+    GRAFANA_ANNOTATIONS_API_PATH,
+    GRAFANA_DASHBOARD_API_PATH,
+    convert_dashboard_payload_to_new_api,
+)
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.common import (
     S3Storage,
@@ -7520,13 +7525,16 @@ class BaseMonitorSet:
 
     def add_sct_dashboards_to_grafana(self, node):
         def _register_grafana_json(json_filename):
-            url = "'http://{0}:{1.grafana_port}/api/dashboards/db'".format(
-                normalize_ipv6_url(node.external_address), self
-            )
-            result = LOCALRUNNER.run(
-                'curl -g -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' % (url, json_filename)
-            )
-            return result.exited == 0
+            grafana_base_url = "http://{}:{}".format(normalize_ipv6_url(node.external_address), self.grafana_port)
+            url = grafana_base_url + GRAFANA_DASHBOARD_API_PATH
+            with open(json_filename, encoding="utf-8") as f:
+                legacy_payload = json.load(f)
+            payload = convert_dashboard_payload_to_new_api(legacy_payload)
+            try:
+                result = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
+            except requests.ConnectionError:
+                return False
+            return result.ok
 
         wait.wait_for(
             _register_grafana_json,
@@ -7602,7 +7610,7 @@ class BaseMonitorSet:
             self.download_scylla_monitoring(node)
 
     def get_grafana_annotations(self, node):
-        annotations_url = "http://{node_ip}:{grafana_port}/api/annotations?limit=10000"
+        annotations_url = "http://{node_ip}:{grafana_port}" + GRAFANA_ANNOTATIONS_API_PATH + "?limit=10000"
         try:
             res = requests.get(
                 url=annotations_url.format(
@@ -7616,7 +7624,7 @@ class BaseMonitorSet:
         return ""
 
     def set_grafana_annotations(self, node, annotations_data):
-        annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
+        annotations_url = "http://{node_ip}:{grafana_port}" + GRAFANA_ANNOTATIONS_API_PATH
         res = requests.post(
             url=annotations_url.format(
                 node_ip=normalize_ipv6_url(node.grafana_address), grafana_port=self.grafana_port
