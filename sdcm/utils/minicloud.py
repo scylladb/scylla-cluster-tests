@@ -85,6 +85,9 @@ def is_minicloud_active() -> bool:
 
 def get_minicloud_endpoint() -> str:
     """Get the minicloud endpoint URL."""
+    endpoint = os.environ.get("SCT_MINICLOUD_ENDPOINT_URL", "")
+    if endpoint:
+        return endpoint
     endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
     if endpoint:
         return endpoint

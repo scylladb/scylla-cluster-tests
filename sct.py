@@ -1963,6 +1963,9 @@ def run_test(argv, backend, config, logdir):
     if backend:
         os.environ["SCT_CLUSTER_BACKEND"] = backend
 
+    if is_minicloud_active():
+        ensure_minicloud_ready(backend=backend or "aws")
+
     if logdir:
         os.environ["_SCT_LOGDIR"] = logdir
 

@@ -26,6 +26,7 @@ export SCT_ENABLE_KMS_KEY_ROTATION="false"
 export SCT_FORCE_RUN_IOTUNE="false"
 export SCT_COLLECT_LOGS="false"
 export SCT_ENABLE_ARGUS="false"
+export SCT_MINICLOUD_ENDPOINT_URL="http://localhost:5000"
 
 STAGE_RESULTS=()
 FAILED=0
