@@ -1,3 +1,9 @@
+"""Baremetal backend for SCT (experimental).
+
+Provides cluster management for pre-provisioned physical machines.
+This backend is experimental and not regularly tested in CI.
+"""
+
 import logging
 from typing import Optional, TypedDict
 
