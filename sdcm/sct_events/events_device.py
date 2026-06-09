@@ -93,11 +93,7 @@ class EventsDevice(multiprocessing.Process):
         self._running.clear()
         self.join(timeout)
         if super().is_alive():
-            LOGGER.warning("EventsDevice did not stop within timeout, sending SIGTERM")
-            self.terminate()
-            self.join(5)
-        if super().is_alive():
-            LOGGER.warning("EventsDevice still alive after SIGTERM, sending SIGKILL")
+            LOGGER.warning("EventsDevice still alive after timeout, sending SIGKILL")
             self.kill()
             self.join(5)
         self._queue.cancel_join_thread()
