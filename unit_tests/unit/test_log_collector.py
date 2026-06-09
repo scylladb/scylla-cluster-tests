@@ -12,7 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 
 import pytest
 
@@ -22,6 +22,9 @@ from sdcm.logcollector import (
     PythonSCTLogCollector,
     SchemaLogCollector,
     FailureStatisticsCollector,
+    PrometheusSnapshots,
+    MonitoringStack,
+    GrafanaScreenShot,
 )
 from sdcm.provision import provisioner_factory
 from unit_tests.lib.fake_resources import prepare_fake_region
@@ -286,3 +289,26 @@ def test_get_running_cluster_sets_baremetal(test_id, tmp_path_factory, baremetal
     assert len(collector.db_cluster) == 3
     assert len(collector.loader_set) == 2
     assert len(collector.monitor_set) == 1
+
+
+def test_monitoring_entities_skip_when_no_monitor_nodes(tmp_path):
+    """Test that monitoring entities skip collection when n_monitor_nodes=0."""
+    for backend in ["aws", "gce", "azure", "docker"]:
+        params = {"cluster_backend": backend, "n_monitor_nodes": 0}
+        mock_node = Mock()
+        test_dir = str(tmp_path / backend)
+
+        prometheus_entity = PrometheusSnapshots(name="test_prometheus")
+        prometheus_entity.set_params(params)
+        result = prometheus_entity.collect(mock_node, test_dir, None, None)
+        assert result is None, f"PrometheusSnapshots should skip for {backend} with n_monitor_nodes=0"
+
+        monitoring_entity = MonitoringStack(name="test_monitoring")
+        monitoring_entity.set_params(params)
+        result = monitoring_entity.collect(mock_node, test_dir, None, None)
+        assert result is None, f"MonitoringStack should skip for {backend} with n_monitor_nodes=0"
+
+        grafana_entity = GrafanaScreenShot(name="test_grafana")
+        grafana_entity.set_params(params)
+        result = grafana_entity.collect(mock_node, test_dir, None, None)
+        assert result == [], f"GrafanaScreenShot should skip for {backend} with n_monitor_nodes=0"
