@@ -195,12 +195,26 @@ class ModifyTableCompactionMonkey(ModifyTableBaseMonkey):
         prop_val = self.random.choice(strategies)()
 
         if prop_val["class"] == "TimeWindowCompactionStrategy":
-            # Max allowed TTL - 49 days (4300000) (to be compatible with default TWCS settings)
-            self.modify_table_property(
-                name="default_time_to_live", val=str(4300000), filter_out_table_with_counter=True
+            # Pick the table upfront so both the compaction and TTL changes target the same table.
+            ks_cfs = self.runner.cluster.get_non_system_ks_cf_list(
+                db_node=self.runner.target_node,
+                filter_out_table_with_counter=True,
+                filter_out_mv=True,
             )
+            if not ks_cfs:
+                raise UnsupportedNemesis("No non-system user tables found")
+            keyspace_table = self.random.choice(ks_cfs)
 
-        self.modify_table_property(name="compaction", val=str(prop_val))
+            # Max allowed TTL - 49 days (4300000) (to be compatible with default TWCS settings)
+            # Set compaction BEFORE default_time_to_live.  The table may currently have TWCS
+            # with a smaller window (e.g. 1 h from a previous nemesis run).  Setting
+            # TTL=4_300_000 against a 1-hour window would exceed twcs_max_window_count=50
+            # (4_300_000 / 3_600 ≈ 1194).  After switching to a DAYS-based window the TTL
+            # is always within the limit (4_300_000 / 86_400 ≈ 49.8 < 50).
+            self.modify_table_property(name="compaction", val=str(prop_val), keyspace_table=keyspace_table)
+            self.modify_table_property(name="default_time_to_live", val=4_300_000, keyspace_table=keyspace_table)
+        else:
+            self.modify_table_property(name="compaction", val=str(prop_val))
 
 
 class ModifyTableCompressionMonkey(ModifyTableBaseMonkey):
