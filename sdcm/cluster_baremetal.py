@@ -45,7 +45,10 @@ class PhysicalMachineNode(cluster.BaseNode):
         base_logdir=None,
         node_prefix=None,
         after_config=None,
+        dc_idx=0,
+        node_index=0,
     ):
+        self.node_index = node_index
         ssh_login_info = {
             "hostname": None,
             "user": getattr(parent_cluster, "ssh_username", credentials.name),
@@ -60,12 +63,12 @@ class PhysicalMachineNode(cluster.BaseNode):
             ssh_login_info=ssh_login_info,
             node_prefix=node_prefix,
             after_config=after_config,
+            dc_idx=dc_idx,
         )
 
     def init(self):
         super().init()
         self.set_hostname()
-        self.run_startup_script()
 
     def wait_for_cloud_init(self):
         pass
@@ -95,10 +98,13 @@ class PhysicalMachineNode(cluster.BaseNode):
     def _get_private_ip_address(self) -> Optional[str]:
         return self._private_ip
 
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
+        self.log.warning(
+            "_set_keep_duration is not implemented for PhysicalMachineNode, since there's no tagging for baremetal nodes."
+        )
+
     def set_hostname(self):
-        # disabling for now, since doesn't working with Fabric from within docker, and not needed for scylla-cloud,
-        # since not using hostname anywhere
-        # self.remoter.run('sudo hostnamectl set-hostname {}'.format(self.name))
+        # disabling since for baremetal we aren't going to fuss with their names, they are preconfigured
         pass
 
     def reboot(self, hard=True, verify_ssh=True):
@@ -129,7 +135,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):
     def ssh_username(self) -> str:
         return self._ssh_username
 
-    def _create_node(self, name, public_ip, private_ip, after_config=None):
+    def _create_node(self, name, public_ip, private_ip, dc_idx, node_index=0, after_config=None):
         node = PhysicalMachineNode(
             name,
             parent_cluster=self,
@@ -138,9 +144,14 @@ class PhysicalMachineCluster(cluster.BaseCluster):
             credentials=self.credentials[0],
             base_logdir=self.logdir,
             node_prefix=self.node_prefix,
+            dc_idx=dc_idx,
+            node_index=node_index,
         )
         node.init()
         return node
+
+    def _reuse_cluster_setup(self, node):
+        node.run_startup_script()  # Reconfigure syslog-ng.
 
     def add_nodes(
         self,
@@ -152,15 +163,24 @@ class PhysicalMachineCluster(cluster.BaseCluster):
         instance_type=None,
         after_config=None,
     ):
-        assert instance_type is None, "baremetal can provision diffrent types"
+        assert instance_type is None, "baremetal can't provision different types"
         for node_index in range(count):
             node_name = "%s-%s" % (self.node_prefix, node_index)
             self.nodes.append(
-                self._create_node(node_name, self._node_public_ips[node_index], self._node_private_ips[node_index])
+                self._create_node(
+                    node_name,
+                    self._node_public_ips[node_index],
+                    self._node_private_ips[node_index],
+                    dc_idx=dc_idx,
+                    node_index=node_index,
+                )
             )
 
 
 class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
+    def _reuse_cluster_setup(self, node):
+        PhysicalMachineCluster._reuse_cluster_setup(self, node)
+
     def __init__(self, **kwargs):
         user_prefix = kwargs.pop("user_prefix")
         if username := kwargs.pop("ssh_username", None):
