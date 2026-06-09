@@ -197,7 +197,7 @@ SCT_CLUSTER_BACKEND= hydra clean-resources --test-id `cat ~/sct-results/latest/t
 * `gce` - most of the artifacts and rolling upgrades run on top of this backend
 * `azure` -
 * `docker` - should be used for local development
-* `baremetal` - can be used to run with already setup cluster
+* `baremetal` - **experimental** — can be used to run with an already-provisioned cluster
 * `xcloud` - ScyllaDB Cloud managed clusters
 
 * `k8s-eks` -
