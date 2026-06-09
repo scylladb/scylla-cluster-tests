@@ -39,17 +39,19 @@ stress_read_cmd: [
 n_db_nodes: 6
 n_loaders: 3
 
-instance_type_db: 'i8g.xlarge'
+instance_type_db: 'i4i.xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 # exclude ModifyTableCompactionMonkey because it will change TWCS
-nemesis_selector: 'not ModifyTableCompactionMonkey'
+nemesis_selector: 'DecommissionMonkey'
 nemesis_seed: '025'
 nemesis_interval: 15
 nemesis_during_prepare: false
 space_node_threshold: 64424
 
 user_prefix: 'longevity-twcs-48h'
+
+pre_create_keyspace: "CREATE KEYSPACE IF NOT EXISTS scylla_bench WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'initial': 1024};"
 
 post_prepare_cql_cmds: >-
     ALTER TABLE scylla_bench.test
