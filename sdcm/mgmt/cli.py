@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+from functools import cached_property
 import time
 import logging
 import datetime
@@ -40,6 +41,7 @@ from sdcm.provision.helpers.certificate import TLSAssets
 from sdcm.utils.context_managers import DbNodeLogger
 from sdcm.utils.database_query_utils import is_system_keyspace
 from sdcm.utils.replication_strategy_utils import ReplicationStrategy
+from sdcm.utils.version_utils import ComparableScyllaVersion
 from sdcm.wait import WaitForTimeoutError
 
 LOGGER = logging.getLogger(__name__)
@@ -674,6 +676,44 @@ class ManagerCluster(ScyllaManagerBase):
     def set_cluster_id(self, value: str):
         self.id = value
 
+    # Temporary workaround for https://scylladb.atlassian.net/browse/SCT-363
+    # In Scylla >= 2026.2, system_distributed_everywhere.cdc_generation_descriptions_v2 was removed
+    # (https://github.com/scylladb/scylladb/pull/29482), but it may still be present in backup snapshots
+    # taken from older versions. Excluding it prevents SM from failing on restore.
+    # Remove this once Scylla Manager excludes CDC tables from backup/restore automatically
+    # (https://scylladb.atlassian.net/browse/CLOUD-1519).
+    CDC_LEGACY_TABLE_EXCLUSION = ["*", "!system_distributed_everywhere.cdc_generation_descriptions_v2"]
+
+    @cached_property
+    def scylla_version(self) -> str | None:
+        """Get the Scylla version from 'sctool status' output.
+
+        Parses the 'Scylla' column from the status table. Returns the version
+        of the first node found, or None if the column is not present (older SM versions).
+
+        Example 'sctool status' output:
+        # ╭────┬──────────┬──────────┬──────────────┬─────────┬──────┬───────────┬───────────┬───────┬─────────────────────╮
+        # │    │ CQL      │ REST     │ Address      │ Uptime  │ CPUs │ Memory    │ Scylla    │ Agent │ Host ID             │
+        # ├────┼──────────┼──────────┼──────────────┼─────────┼──────┼───────────┼───────────┼───────┼─────────────────────┤
+        # │ UN │ UP (0ms) │ UP (1ms) │ 10.12.10.234 │ 5h3m44s │ 4    │ 30.750GiB │ 2025.4.10 │ 3.8.1 │ 5debe5b1-a823-...   │
+        # │ UN │ UP (2ms) │ UP (2ms) │ 10.12.11.9   │ 5h3m43s │ 4    │ 30.750GiB │ 2025.4.10 │ 3.8.1 │ b33de7c9-3d00-...   │
+        # ╰────┴──────────┴──────────┴──────────────┴─────────┴──────┴───────────┴───────────┴───────┴─────────────────────╯
+        """
+        try:
+            dict_status_tables = self.sctool.run(
+                cmd=f"status -c {self.id}", is_verify_errorless_result=True, is_multiple_tables=True
+            )
+            for _dc_name, hosts_table in dict_status_tables.items():
+                if len(hosts_table) < 2:
+                    continue
+                if "Scylla" not in hosts_table[0]:
+                    return None
+                versions = self.sctool.get_all_column_values_from_table(hosts_table, "Scylla")
+                return versions[0].strip() if versions else None
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Failed to get Scylla version from sctool status: %s", exc)
+        return None
+
     def create_restore_task(
         self,
         restore_schema=False,
@@ -682,6 +722,7 @@ class ManagerCluster(ScyllaManagerBase):
         snapshot_tag=None,
         dc_mapping=None,
         manager_backup_restore_method=None,
+        keyspace_list=None,
         extra_params=None,
     ):
         cmd = f"restore -c {self.id}"
@@ -689,6 +730,14 @@ class ManagerCluster(ScyllaManagerBase):
             cmd += " --restore-schema"
         if restore_data:
             cmd += " --restore-tables"
+            # Apply version-aware CDC table exclusion if no explicit keyspace filter provided
+            if keyspace_list is None and self.scylla_version:
+                if ComparableScyllaVersion(self.scylla_version) >= "2026.2.0~dev":
+                    keyspace_list = self.CDC_LEGACY_TABLE_EXCLUSION
+            # --keyspace flag is only applicable for --restore-tables mode
+            if keyspace_list:
+                keyspaces_names = ",".join(keyspace_list)
+                cmd += f" --keyspace '{keyspaces_names}'"
         if location_list:
             locations_names = ",".join(location_list)
             cmd += f" --location {locations_names} "
