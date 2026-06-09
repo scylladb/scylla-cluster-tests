@@ -3814,9 +3814,17 @@ class NemesisRunner:
 
         # full cluster repair
         # Repairing will result in a best effort repair due to the terminated node,
-        # and as a result requires ignoring repair errors
-        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to repair"):
-            self.run_repair(ignore_down_hosts=True)
+        # and as a result requires ignoring repair errors.
+        # Even if repair fails, we must still add a replacement node so the
+        # cluster is left with the original number of nodes.
+        try:
+            with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to repair"):
+                self.run_repair(ignore_down_hosts=True)
+        except Exception as exc:  # noqa: BLE001
+            InfoEvent(
+                message=f"Repair failed after removing node {node_to_remove.name}: {exc}",
+                severity=Severity.ERROR,
+            ).publish()
 
         # add new node with same type (data node / zero token node)
         new_node_args = {"count": 1, "rack": self.target_node.rack}
