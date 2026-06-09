@@ -1005,5 +1005,5 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
                 self.stop_scylla_monitoring(node)
                 self.log.error("Stopping scylla monitoring succeeded")
             except Exception as exc:  # noqa: BLE001
-                self.log.error(f"Stopping scylla monitoring failed with {str(exc)}")
+                self.log.error(f"Stopping scylla monitoring failed with {exc!s}")
             node.destroy()

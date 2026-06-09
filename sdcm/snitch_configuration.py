@@ -36,7 +36,7 @@ class SnitchConfig:
         if self._is_multi_dc:
             ret = re.findall("-([a-z]+).*-", self._datacenter)
             if ret:
-                dc_suffix = "scylla_node_{}".format(ret[0])
+                dc_suffix = f"scylla_node_{ret[0]}"
             else:
                 dc_suffix = self._dc_prefix.replace("-", "_")
             return dc_suffix

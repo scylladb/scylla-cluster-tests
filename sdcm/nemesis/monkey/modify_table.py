@@ -63,9 +63,7 @@ class ModifyTableBaseMonkey(NemesisBaseClass, abc.ABC):
                 "Non-system keyspace and table are not found. ModifyTableProperties nemesis can't be run"
             )
 
-        cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(
-            keyspace_table=keyspace_table, name=name, val=val
-        )
+        cmd = f"ALTER TABLE {keyspace_table} WITH {name} = {val};"
         self.runner.actions_log.info(f"Modify table property on {keyspace_table}: {name} = {val}")
         with self.runner.cluster.cql_connection_patient(self.runner.target_node) as session:
             session.execute(cmd)

@@ -75,7 +75,7 @@ class CQLColumnType:
 
     def __init_subclass__(cls, **__):
         if cls.self_type is None:
-            raise ValueError(f"<{str(cls)}> self_type should be defined")
+            raise ValueError(f"<{cls!s}> self_type should be defined")
         CQLTypeBuilder._register_class(cls)
 
     def __init__(self, self_type=None):

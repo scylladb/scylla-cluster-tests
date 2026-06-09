@@ -156,7 +156,7 @@ class Steps(SlaUtils):
                         )
 
                         connections_map = result.stdout.strip()
-                        LOGGER.debug("[NODE {}] {}".format(node.private_ip_address, connections_map))
+                        LOGGER.debug(f"[NODE {node.private_ip_address}] {connections_map}")
                 # End fix
 
                 start_time = time.time() + 60

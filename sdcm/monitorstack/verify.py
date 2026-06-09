@@ -49,7 +49,7 @@ def verify_grafana_is_available(grafana_docker_port=GRAFANA_DOCKER_PORT):
                 grafana_ip="localhost", port=grafana_docker_port, title=dashboard.title
             )
             grafana_statuses.append(result)
-            LOGGER.info("Dashboard {} is available".format(dashboard.title))
+            LOGGER.info(f"Dashboard {dashboard.title} is available")
         except Exception as details:  # noqa: BLE001
             LOGGER.error("Dashboard %s is not available. Error: %s", dashboard.title, details)
             grafana_statuses.append(False)

@@ -29,7 +29,7 @@ class CompactionStrategy(Enum):
         try:
             return CompactionStrategy[CompactionStrategy(output_str).name]
         except AttributeError as attr_err:
-            err_msg = "Could not recognize compaction strategy value: {} - {}".format(output_str, attr_err)
+            err_msg = f"Could not recognize compaction strategy value: {output_str} - {attr_err}"
             raise ValueError(err_msg) from attr_err
 
 
@@ -100,7 +100,7 @@ def get_compaction_strategy(node, keyspace, table):
             compaction = CompactionStrategy.from_str(output_str=dict_compaction_values["class"])
             break
 
-    LOGGER.debug("Query result for {}.{} compaction is: {}".format(keyspace, table, compaction))
+    LOGGER.debug(f"Query result for {keyspace}.{table} compaction is: {compaction}")
     return compaction
 
 

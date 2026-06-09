@@ -48,9 +48,9 @@ class CassandraStressCmdParseError(Exception):
 
     def __str__(self):
         return dedent(
-            """
-            Stress command: '{0.command}'
-            Error: {0.exception}""".format(self)
+            f"""
+            Stress command: '{self.command}'
+            Error: {self.exception}"""
         )
 
     def __repr__(self):
@@ -199,7 +199,7 @@ class PrometheusDBStats:
         self.host = host
         self.port = port
         self.protocol = protocol
-        self.range_query_url = "{}://{}:{}/api/v1/query_range?query=".format(protocol, normalize_ipv6_url(host), port)
+        self.range_query_url = f"{protocol}://{normalize_ipv6_url(host)}:{port}/api/v1/query_range?query="
         self._session = self._create_session()
         self.config = self.get_configuration()
         self.alternator = alternator
@@ -232,9 +232,7 @@ class PrometheusDBStats:
         return None
 
     def get_configuration(self):
-        result = self.request(
-            url="{}://{}:{}/api/v1/status/config".format(self.protocol, normalize_ipv6_url(self.host), self.port)
-        )
+        result = self.request(url=f"{self.protocol}://{normalize_ipv6_url(self.host)}:{self.port}/api/v1/status/config")
         configs = yaml.safe_load(result["data"]["yaml"])
         LOGGER.debug("Parsed Prometheus configs: %s", configs)
         new_scrape_configs = {}
@@ -254,12 +252,10 @@ class PrometheusDBStats:
                   values: [[linux_timestamp1, value1], [linux_timestamp2, value2]...[linux_timestampN, valueN]]
                  }
         """
-        url = "{}://{}:{}/api/v1/query_range?query=".format(self.protocol, normalize_ipv6_url(self.host), self.port)
+        url = f"{self.protocol}://{normalize_ipv6_url(self.host)}:{self.port}/api/v1/query_range?query="
         if not scrap_metrics_step:
             scrap_metrics_step = self.scylla_scrape_interval
-        _query = "{url}{query}&start={start}&end={end}&step={scrap_metrics_step}".format(
-            url=url, query=query, start=start, end=end, scrap_metrics_step=scrap_metrics_step
-        )
+        _query = f"{url}{query}&start={start}&end={end}&step={scrap_metrics_step}"
         LOGGER.debug("Query to PrometheusDB: %s", _query)
         result = self.request(url=_query)
         if result:
@@ -365,9 +361,9 @@ class PrometheusDBStats:
         return self.get_latency(start_time, end_time, latency_type="write", scrap_metrics_step=scrap_metrics_step)
 
     def create_snapshot(self):
-        url = "http://{}:{}/api/v1/admin/tsdb/snapshot".format(normalize_ipv6_url(self.host), self.port)
+        url = f"http://{normalize_ipv6_url(self.host)}:{self.port}/api/v1/admin/tsdb/snapshot"
         result = self.request(url, True)
-        LOGGER.debug("Request result: {}".format(result))
+        LOGGER.debug(f"Request result: {result}")
         return result
 
     @staticmethod

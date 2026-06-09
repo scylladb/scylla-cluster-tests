@@ -75,7 +75,7 @@ class HostRestStatus(Enum):
                 return cls.DOWN
             return getattr(cls, output_str)
         except AttributeError as err:
-            raise ScyllaManagerError("Could not recognize returned host rest status: {}".format(output_str)) from err
+            raise ScyllaManagerError(f"Could not recognize returned host rest status: {output_str}") from err
 
 
 class HostSsl(Enum):
@@ -102,7 +102,7 @@ class HostStatus(Enum):
                 return cls.DOWN
             return getattr(cls, output_str)
         except AttributeError as err:
-            raise ScyllaManagerError("Could not recognize returned host status: {}".format(output_str)) from err
+            raise ScyllaManagerError(f"Could not recognize returned host status: {output_str}") from err
 
 
 class ObjectStorageUploadMode(str, Enum):
@@ -131,7 +131,7 @@ class TaskStatus:
             output_str = output_str.upper()
             return getattr(cls, output_str)
         except AttributeError as err:
-            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str)) from err
+            raise ScyllaManagerError(f"Could not recognize returned task status: {output_str}") from err
 
     @classmethod
     def all_statuses(cls):

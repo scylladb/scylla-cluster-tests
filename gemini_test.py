@@ -78,7 +78,7 @@ class GeminiTest(ClusterTester):
         )
         # sleep before run nemesis test_duration * .1
         sleep_before_start = float(self.params.get("test_duration")) * 60 * 0.1
-        self.log.info("Sleep interval {}".format(sleep_before_start))
+        self.log.info(f"Sleep interval {sleep_before_start}")
         time.sleep(sleep_before_start)
 
         self.db_cluster.start_nemesis()

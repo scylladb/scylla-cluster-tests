@@ -109,7 +109,7 @@ class NdBenchStatsPublisher(FileFollowerThread):
                             self.set_metric(operation, name, float(value))
 
                 except Exception as exc:  # noqa: BLE001
-                    LOGGER.warning("Failed to send metric. Failed with exception {exc}".format(exc=exc))
+                    LOGGER.warning(f"Failed to send metric. Failed with exception {exc}")
 
 
 class NdBenchStressThread(DockerBasedStressThread):
