@@ -12,6 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 import uuid
+from unittest.mock import patch, MagicMock, Mock
 
 import pytest
 
@@ -21,6 +22,9 @@ from sdcm.logcollector import (
     PythonSCTLogCollector,
     SchemaLogCollector,
     FailureStatisticsCollector,
+    PrometheusSnapshots,
+    MonitoringStack,
+    GrafanaScreenShot,
 )
 from sdcm.provision import provisioner_factory
 from unit_tests.lib.fake_resources import prepare_fake_region
@@ -148,3 +152,135 @@ def test_failure_statistics_collector_does_not_raise_when_no_files(tmp_path):
     # collect_logs should return empty list when no files exist, NOT raise an exception
     result = collector.collect_logs(local_search_path=str(tmp_path))
     assert result == []
+
+
+def test_get_baremetal_instances_by_testid(test_id, tmp_path_factory, baremetal_config):
+    """Test that baremetal instances are correctly collected from config."""
+    test_dir = tmp_path_factory.mktemp("log-collector-baremetal")
+
+    mock_keystore = MagicMock()
+    mock_keystore.get_baremetal_config.return_value = baremetal_config
+
+    params = {
+        "cluster_backend": "baremetal",
+        "use_cloud_manager": False,
+        "s3_baremetal_config": "test_baremetal_config",
+        "user_credentials_path": "~/.ssh/test_key",
+        "ip_ssh_connections": "public",
+    }
+
+    with patch("sdcm.logcollector.KeyStore", return_value=mock_keystore):
+        collector = Collector(test_id=test_id, test_dir=test_dir, params=params)
+        collector.get_baremetal_instances_by_testid()
+
+    # Verify db_cluster nodes
+    assert len(collector.db_cluster) == 3
+    for idx, node in enumerate(collector.db_cluster):
+        assert node.ssh_login_info["user"] == "scylla"
+        assert node.ssh_login_info["hostname"] == f"10.0.0.{idx + 1}"
+        assert node.tags["NodeType"] == "scylla-db"
+
+    # Verify loader_set nodes
+    assert len(collector.loader_set) == 2
+    for idx, node in enumerate(collector.loader_set):
+        assert node.ssh_login_info["user"] == "loader_user"
+        assert node.ssh_login_info["hostname"] == f"10.0.1.{idx + 1}"
+        assert node.tags["NodeType"] == "loader"
+
+    # Verify monitor_set nodes
+    assert len(collector.monitor_set) == 1
+    assert collector.monitor_set[0].ssh_login_info["user"] == "monitor_user"
+    assert collector.monitor_set[0].ssh_login_info["hostname"] == "10.0.2.1"
+    assert collector.monitor_set[0].tags["NodeType"] == "monitor"
+
+
+def test_get_baremetal_instances_uses_private_ip(test_id, tmp_path_factory, baremetal_config):
+    """Test that baremetal uses private IPs when configured."""
+    test_dir = tmp_path_factory.mktemp("log-collector-baremetal-private")
+
+    mock_keystore = MagicMock()
+    mock_keystore.get_baremetal_config.return_value = baremetal_config
+
+    params = {
+        "cluster_backend": "baremetal",
+        "use_cloud_manager": False,
+        "s3_baremetal_config": "test_baremetal_config",
+        "user_credentials_path": "~/.ssh/test_key",
+        "ip_ssh_connections": "private",
+    }
+
+    with patch("sdcm.logcollector.KeyStore", return_value=mock_keystore):
+        collector = Collector(test_id=test_id, test_dir=test_dir, params=params)
+        collector.get_baremetal_instances_by_testid()
+
+    # Verify db_cluster nodes use private IPs
+    assert len(collector.db_cluster) == 3
+    for idx, node in enumerate(collector.db_cluster):
+        assert node.ssh_login_info["hostname"] == f"192.168.1.{idx + 1}"
+
+
+def test_get_baremetal_instances_no_config(test_id, tmp_path_factory):
+    """Test graceful handling when s3_baremetal_config is not set."""
+    test_dir = tmp_path_factory.mktemp("log-collector-baremetal-noconfig")
+
+    params = {
+        "cluster_backend": "baremetal",
+        "use_cloud_manager": False,
+        "s3_baremetal_config": None,
+        "user_credentials_path": "~/.ssh/test_key",
+    }
+
+    collector = Collector(test_id=test_id, test_dir=test_dir, params=params)
+    collector.get_baremetal_instances_by_testid()
+
+    # Should not raise, but also should not populate any nodes
+    assert len(collector.db_cluster) == 0
+    assert len(collector.loader_set) == 0
+    assert len(collector.monitor_set) == 0
+
+
+def test_get_running_cluster_sets_baremetal(test_id, tmp_path_factory, baremetal_config):
+    """Test that get_running_cluster_sets dispatches to baremetal correctly."""
+    test_dir = tmp_path_factory.mktemp("log-collector-baremetal-dispatch")
+
+    mock_keystore = MagicMock()
+    mock_keystore.get_baremetal_config.return_value = baremetal_config
+
+    params = {
+        "cluster_backend": "baremetal",
+        "use_cloud_manager": False,
+        "s3_baremetal_config": "test_baremetal_config",
+        "user_credentials_path": "~/.ssh/test_key",
+    }
+
+    with patch("sdcm.logcollector.KeyStore", return_value=mock_keystore):
+        collector = Collector(test_id=test_id, test_dir=test_dir, params=params)
+        collector.get_running_cluster_sets("baremetal")
+
+    # Verify nodes were collected via the baremetal method
+    assert len(collector.db_cluster) == 3
+    assert len(collector.loader_set) == 2
+    assert len(collector.monitor_set) == 1
+
+
+def test_monitoring_entities_skip_when_no_monitor_nodes(tmp_path):
+    """Test that monitoring entities skip collection when n_monitor_nodes=0."""
+    for backend in ["aws", "gce", "azure", "docker"]:
+        params = {"cluster_backend": backend, "n_monitor_nodes": 0}
+        mock_node = Mock()
+        test_dir = str(tmp_path / backend)
+
+        prometheus_entity = PrometheusSnapshots(name="test_prometheus")
+        prometheus_entity.set_params(params)
+        result = prometheus_entity.collect(mock_node, test_dir, None, None)
+        assert result is None, f"PrometheusSnapshots should skip for {backend} with n_monitor_nodes=0"
+
+        monitoring_entity = MonitoringStack(name="test_monitoring")
+        monitoring_entity.set_params(params)
+        result = monitoring_entity.collect(mock_node, test_dir, None, None)
+        assert result is None, f"MonitoringStack should skip for {backend} with n_monitor_nodes=0"
+
+        grafana_entity = GrafanaScreenShot(name="test_grafana")
+        grafana_entity.set_params(params)
+        result = grafana_entity.collect(mock_node, test_dir, None, None)
+        assert result == [], f"GrafanaScreenShot should skip for {backend} with n_monitor_nodes=0"
