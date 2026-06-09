@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import time
+import traceback
 from pathlib import Path
 from typing import List
 
@@ -13,7 +14,6 @@ import json
 import requests
 
 from sdcm.keystore import KeyStore
-from sdcm.test_config import TestConfig
 from sdcm.utils.aws_region import AwsRegion
 
 LOGGER = logging.getLogger(__name__)
@@ -44,11 +44,12 @@ class MinicloudConfig:
     gcp_project: str = "sct-project-1"
     gcs_bucket: str = ""
     state_dir: str = dataclasses.field(default_factory=lambda: os.path.expanduser("~/.cache/minicloud"))
-    log_file: str = dataclasses.field(default_factory=lambda: os.path.join(TestConfig().logdir(), "minicloud.log"))
+    log_file: str = ""
 
     @classmethod
     def from_env(cls) -> "MinicloudConfig":
         """Build MinicloudConfig from environment variables."""
+        state_dir = os.path.expanduser("~/.cache/minicloud")
         return cls(
             docker_image=os.environ.get("MINICLOUD_DOCKER", MINICLOUD_DOCKER_IMAGE_DEFAULT),
             port=int(os.environ.get("MINICLOUD_PORT", "5000")),
@@ -60,8 +61,8 @@ class MinicloudConfig:
             region=os.environ.get("MINICLOUD_AWS_REGION", "us-east-1"),
             gcp_project=os.environ.get("SCT_GCE_PROJECT", "sct-project-1"),
             gcs_bucket=os.environ.get("MINICLOUD_GCS_BUCKET", ""),
-            state_dir=os.path.expanduser("~/.cache/minicloud"),
-            log_file=os.path.join(TestConfig().logdir(), "minicloud.log"),
+            state_dir=state_dir,
+            log_file=os.path.join(state_dir, "minicloud.log"),
         )
 
 
@@ -113,6 +114,50 @@ def check_minicloud_reachability(endpoint: str | None = None, timeout: int = 5) 
         raise RuntimeError(
             f"minicloud at {endpoint} timed out after {timeout}s. Is it overloaded or starting up?"
         ) from exc
+
+
+def ensure_minicloud_ready(backend: str = "aws") -> None:
+    """Ensure minicloud is running and AWS_ENDPOINT_URL is set.
+
+    If minicloud is already running, validates reachability and sets env vars.
+    If not running, auto-starts it with keep_alive=True.
+    """
+    endpoint = get_minicloud_endpoint()
+    try:
+        check_minicloud_reachability(endpoint, timeout=3)
+        os.environ.setdefault("AWS_ENDPOINT_URL", endpoint)
+        return
+    except RuntimeError:
+        pass
+
+    LOGGER.info("Minicloud not reachable — auto-starting")
+    cfg = MinicloudConfig.from_env()
+    manager = MinicloudManager(cfg)
+    manager.keep_alive = True
+    manager.preflight_check()
+    manager.start()
+    if backend in ("aws", "aws-siren"):
+        manager.prepare_region()
+
+
+def collect_minicloud_logs(logdir: str) -> None:
+    """Dump minicloud container logs into the test logdir for CI collection."""
+    container_name = MinicloudManager.MINICLOUD_CONTAINER_NAME
+    result = subprocess.run(
+        ["docker", "logs", container_name],
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        LOGGER.warning("Failed to collect minicloud logs (container not running?)")
+        return
+
+    os.makedirs(logdir, exist_ok=True)
+    log_path = os.path.join(logdir, "minicloud.log")
+    with open(log_path, "wb") as fh:
+        fh.write(result.stdout)
+        fh.write(result.stderr)
+    LOGGER.info("Collected minicloud logs to %s", log_path)
 
 
 class MinicloudManager:
@@ -282,6 +327,13 @@ class MinicloudManager:
         if self._container_log_process:
             self._container_log_process.terminate()
             self._container_log_process = None
+        LOGGER.warning(
+            "DEBUG: docker rm -f %s called from stop(), pid=%s, owner_pid=%s\n%s",
+            container_name,
+            os.getpid(),
+            self._owner_pid,
+            "".join(traceback.format_stack()),
+        )
         LOGGER.info("Stopping minicloud container '%s'...", container_name)
         subprocess.run(["docker", "rm", "-f", container_name], capture_output=True, check=False)
         subprocess.run(
@@ -294,6 +346,9 @@ class MinicloudManager:
 
     def _atexit_stop(self) -> None:
         """Atexit handler — only stops if we own the process and haven't stopped yet."""
+        LOGGER.warning(
+            "DEBUG: _atexit_stop called, pid=%s, owner_pid=%s, stopped=%s", os.getpid(), self._owner_pid, self._stopped
+        )
         if os.getpid() != self._owner_pid:
             return
         if not self._stopped:

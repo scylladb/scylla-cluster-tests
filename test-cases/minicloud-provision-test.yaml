@@ -51,4 +51,5 @@ enable_kms_key_rotation: false
 
 # sct-runner needs nested virtualization (KVM) for minicloud QEMU VMs.
 # Only c8i/m8i/r8i instance families support NestedVirtualization on AWS.
-instance_type_runner: 'm8i.large'
+# m8i.xlarge (16GiB) fits: 3 DB × 2.5GiB + 1 loader + 1 monitor + host overhead.
+instance_type_runner: 'm8i.xlarge'

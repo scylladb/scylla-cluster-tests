@@ -34,6 +34,8 @@ def call(Map pipelineParams) {
             SCT_ENABLE_KMS_KEY_ROTATION = 'false'
             // Minicloud Docker image — forwarded to sct-runner via hydra env
             MINICLOUD_DOCKER = "${params.minicloud_docker}"
+            // Region must match between minicloud and SCT
+            MINICLOUD_AWS_REGION = "${params.region}"
         }
         parameters {
             // Cloud Provider Configuration
@@ -204,6 +206,36 @@ def call(Map pipelineParams) {
                             dir('scylla-cluster-tests') {
                                 timeout(time: 5, unit: 'MINUTES') {
                                     createSctRunner(params, runnerTimeout, builder.region)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Start Minicloud') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 10, unit: 'MINUTES') {
+                                        sh """#!/bin/bash
+                                        set -xe
+                                        env
+
+                                        export SCT_CLUSTER_BACKEND="${params.backend}"
+                                        export SCT_CONFIG_FILES=${groovy.json.JsonOutput.toJson(params.test_config)}
+                                        export MINICLOUD_AWS_REGION="${params.region}"
+
+                                        RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                        if [[ -n "\${RUNNER_IP}" ]] ; then
+                                            ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} start-minicloud -b "${params.backend}"
+                                        else
+                                            ./docker/env/hydra.sh start-minicloud -b "${params.backend}"
+                                        fi
+                                        """
+                                        completed_stages['start_minicloud'] = true
+                                    }
                                 }
                             }
                         }
