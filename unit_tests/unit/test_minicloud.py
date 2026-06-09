@@ -11,6 +11,7 @@ from sdcm.utils.minicloud import (
     MinicloudError,
     MinicloudManager,
     check_minicloud_reachability,
+    ensure_minicloud_ready,
     get_minicloud_endpoint,
     is_minicloud_active,
 )
@@ -239,6 +240,28 @@ def test_preflight_check_fails_aws_cli_not_found(tmp_path):
             with patch("sdcm.utils.minicloud.subprocess.run", side_effect=FileNotFoundError("aws not found")):
                 with pytest.raises(MinicloudError, match="AWS CLI not found"):
                     manager.preflight_check()
+
+
+def test_preflight_check_skip_aws_creds(tmp_path):
+    manager = MinicloudManager(config=MinicloudConfig(state_dir=str(tmp_path)))
+
+    with patch("sdcm.utils.minicloud.Path") as mock_path_cls:
+        mock_kvm = MagicMock()
+        mock_kvm.exists.return_value = True
+
+        def path_side_effect(arg):
+            if str(arg) == "/dev/kvm":
+                return mock_kvm
+            from pathlib import Path as RealPath  # noqa: PLC0415
+
+            return RealPath(arg)
+
+        mock_path_cls.side_effect = path_side_effect
+
+        with patch("sdcm.utils.minicloud.shutil.which", return_value="/usr/bin/docker"):
+            with patch("sdcm.utils.minicloud.subprocess.run") as mock_run:
+                manager.preflight_check(skip_aws_creds=True)
+                mock_run.assert_not_called()
 
 
 def test_start_runs_docker_container(tmp_path, monkeypatch):
@@ -564,3 +587,41 @@ def test_gce_region_is_minicloud_false_when_no_endpoint(monkeypatch):
                                 with patch("sdcm.utils.gce_region.storage.Client"):
                                     region = GceRegion("us-central1")
                                     assert region._is_minicloud is False
+
+
+def test_ensure_minicloud_ready_retries_then_succeeds(monkeypatch):
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+
+    call_count = {"n": 0}
+
+    def mock_check(endpoint=None, timeout=5):
+        call_count["n"] += 1
+        if call_count["n"] < 3:
+            raise RuntimeError("not reachable")
+        return True
+
+    with patch("sdcm.utils.minicloud.check_minicloud_reachability", side_effect=mock_check):
+        with patch("sdcm.utils.minicloud.time.sleep"):
+            ensure_minicloud_ready()
+
+    assert call_count["n"] == 3
+    assert os.environ.get("AWS_ENDPOINT_URL") == "http://localhost:5000"
+
+
+def test_ensure_minicloud_ready_falls_through_to_auto_start(monkeypatch):
+    monkeypatch.setenv("SCT_MINICLOUD_ENDPOINT_URL", "http://localhost:5000")
+
+    def mock_check_always_fails(endpoint=None, timeout=5):
+        raise RuntimeError("not reachable")
+
+    mock_manager = MagicMock()
+
+    with patch("sdcm.utils.minicloud.check_minicloud_reachability", side_effect=mock_check_always_fails):
+        with patch("sdcm.utils.minicloud.time.sleep"):
+            with patch("sdcm.utils.minicloud.MinicloudConfig.from_env"):
+                with patch("sdcm.utils.minicloud.MinicloudManager", return_value=mock_manager):
+                    ensure_minicloud_ready(backend="aws")
+
+    mock_manager.preflight_check.assert_called_once_with(skip_aws_creds=True)
+    mock_manager.start.assert_called_once()
+    mock_manager.prepare_region.assert_called_once()

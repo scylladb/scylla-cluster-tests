@@ -2786,7 +2786,7 @@ class ClusterTester(unittest.TestCase):
             cfg.log_file = os.path.join(self.logdir, "minicloud.log")
             manager = MinicloudManager(cfg)
             manager.keep_alive = os.environ.get("MINICLOUD_KEEP_ALIVE", "").lower() in ("1", "true", "yes")
-            manager.preflight_check()
+            manager.preflight_check(skip_aws_creds=True)
             self.minicloud = manager
 
         self.get_cluster_kafka()

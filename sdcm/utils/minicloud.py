@@ -123,44 +123,106 @@ def ensure_minicloud_ready(backend: str = "aws") -> None:
     """Ensure minicloud is running and AWS_ENDPOINT_URL is set.
 
     If minicloud is already running, validates reachability and sets env vars.
-    If not running, auto-starts it with keep_alive=True.
+    If not running after retries, auto-starts it with keep_alive=True.
+
+    Retries reachability with exponential backoff to handle transient
+    unavailability (e.g., minicloud briefly overloaded or restarting).
     """
     endpoint = get_minicloud_endpoint()
-    try:
-        check_minicloud_reachability(endpoint, timeout=3)
-        os.environ.setdefault("AWS_ENDPOINT_URL", endpoint)
-        return
-    except RuntimeError:
-        pass
+    max_retries = 4
+    for attempt in range(max_retries):
+        try:
+            check_minicloud_reachability(endpoint, timeout=5)
+            os.environ.setdefault("AWS_ENDPOINT_URL", endpoint)
+            return
+        except RuntimeError:
+            if attempt < max_retries - 1:
+                wait = 2**attempt
+                LOGGER.warning(
+                    "Minicloud not reachable at %s (attempt %d/%d), retrying in %ds...",
+                    endpoint,
+                    attempt + 1,
+                    max_retries,
+                    wait,
+                )
+                time.sleep(wait)
 
-    LOGGER.info("Minicloud not reachable — auto-starting")
+    LOGGER.info("Minicloud not reachable after %d attempts — auto-starting", max_retries)
     cfg = MinicloudConfig.from_env()
     manager = MinicloudManager(cfg)
     manager.keep_alive = True
-    manager.preflight_check()
+    # Skip AWS credentials validation on restart — credentials are already
+    # mounted in the container from the initial start-minicloud stage.
+    manager.preflight_check(skip_aws_creds=True)
     manager.start()
     if backend in ("aws", "aws-siren"):
         manager.prepare_region()
 
 
 def collect_minicloud_logs(logdir: str) -> None:
-    """Dump minicloud container logs into the test logdir for CI collection."""
+    """Dump minicloud container logs and inspect state into the test logdir.
+
+    Produces: minicloud.log, minicloud-stderr.log, minicloud-inspect.json.
+    Never raises — each collector runs independently.
+    """
     container_name = MinicloudManager.MINICLOUD_CONTAINER_NAME
+    os.makedirs(logdir, exist_ok=True)
+
+    # 1. Collect container logs (works on stopped/exited containers, fails only if removed)
     result = subprocess.run(
         ["docker", "logs", container_name],
         capture_output=True,
         check=False,
     )
-    if result.returncode != 0:
-        LOGGER.warning("Failed to collect minicloud logs (container not running?)")
-        return
+    if result.returncode == 0:
+        log_path = os.path.join(logdir, "minicloud.log")
+        with open(log_path, "wb") as fh:
+            fh.write(result.stdout)
+            fh.write(result.stderr)
+        LOGGER.info("Collected minicloud logs to %s (%d bytes)", log_path, len(result.stdout) + len(result.stderr))
 
-    os.makedirs(logdir, exist_ok=True)
-    log_path = os.path.join(logdir, "minicloud.log")
-    with open(log_path, "wb") as fh:
-        fh.write(result.stdout)
-        fh.write(result.stderr)
-    LOGGER.info("Collected minicloud logs to %s", log_path)
+        # Write stderr separately for crash diagnostics
+        if result.stderr:
+            stderr_path = os.path.join(logdir, "minicloud-stderr.log")
+            with open(stderr_path, "wb") as fh:
+                fh.write(result.stderr)
+            LOGGER.info("Collected minicloud stderr to %s (%d bytes)", stderr_path, len(result.stderr))
+    else:
+        LOGGER.warning(
+            "Failed to collect minicloud container logs (container removed?): %s",
+            result.stderr.decode(errors="replace").strip(),
+        )
+
+    # 2. Collect container inspect (state, exit code, health, config)
+    inspect_result = subprocess.run(
+        ["docker", "inspect", container_name],
+        capture_output=True,
+        check=False,
+    )
+    if inspect_result.returncode == 0:
+        inspect_path = os.path.join(logdir, "minicloud-inspect.json")
+        with open(inspect_path, "wb") as fh:
+            fh.write(inspect_result.stdout)
+        LOGGER.info("Collected minicloud inspect to %s", inspect_path)
+
+        # Log key state info for quick debugging
+        try:
+            inspect_data = json.loads(inspect_result.stdout)
+            if inspect_data:
+                state = inspect_data[0].get("State", {})
+                LOGGER.info(
+                    "Minicloud container state: Status=%s, ExitCode=%s, OOMKilled=%s",
+                    state.get("Status"),
+                    state.get("ExitCode"),
+                    state.get("OOMKilled"),
+                )
+        except (json.JSONDecodeError, IndexError, KeyError):
+            pass
+    else:
+        LOGGER.warning(
+            "Failed to collect minicloud inspect (container removed?): %s",
+            inspect_result.stderr.decode(errors="replace").strip(),
+        )
 
 
 class MinicloudManager:
@@ -184,7 +246,7 @@ class MinicloudManager:
         self._owner_pid = os.getpid()
         self.keep_alive = False
 
-    def preflight_check(self) -> None:
+    def preflight_check(self, skip_aws_creds: bool = False) -> None:
         """Verify prerequisites before starting minicloud container."""
         if not Path("/dev/kvm").exists():
             raise MinicloudError(
@@ -193,7 +255,8 @@ class MinicloudManager:
             )
         if not shutil.which("docker"):
             raise MinicloudError("docker is not available on PATH. Install Docker to run minicloud in container mode.")
-        self._check_aws_credentials()
+        if not skip_aws_creds:
+            self._check_aws_credentials()
 
     def _check_aws_credentials(self) -> None:
         """Verify AWS credentials are configured and valid."""
