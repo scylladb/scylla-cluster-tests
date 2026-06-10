@@ -2367,6 +2367,30 @@ The username for the Azure image.
 - `scyllaadm`: azure
 
 
+## **azure_provision_stuck_vm_timeout** / SCT_AZURE_PROVISION_STUCK_VM_TIMEOUT
+
+Seconds to wait for an Azure VM to reach the 'Succeeded' provisioning state before<br>treating it as stuck (accepted by Azure but never started by the host - SCT-434) and<br>recreating it. Detection is gated on the polled instanceView provisioning state.
+
+**default:** N/A
+
+**type:** int
+
+**backend overrides:**
+- `900`: azure
+
+
+## **azure_provision_stuck_vm_recreate_attempts** / SCT_AZURE_PROVISION_STUCK_VM_RECREATE_ATTEMPTS
+
+How many times to recreate a stuck Azure VM (full node: VM, NIC and public IP) onto<br>fresh capacity before giving up with a non-retryable error.
+
+**default:** N/A
+
+**type:** int
+
+**backend overrides:**
+- `3`: azure
+
+
 ## **oci_region_name** / SCT_OCI_REGION_NAME
 
 OCI region where the resources will be deployed

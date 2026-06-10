@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-from typing import Dict
+from typing import Any, Dict
 
 from sdcm.sct_provision.common.types import NodeTypeType
 from sdcm.sct_provision.region_definition_builder import ConfigParamsMap, DefinitionBuilder
@@ -52,3 +52,10 @@ class AzureDefinitionBuilder(DefinitionBuilder):
         """
         node_prefix = f"{user_prefix}-{node_type_short}-node-{short_test_id}"
         return f"{node_prefix}-{region}-{index}".lower()
+
+    def get_provisioner_config(self) -> Dict[str, Any]:
+        """Pass Azure stuck-VM timeout and recreate-attempt settings to the provisioner."""
+        return {
+            "azure_provision_stuck_vm_timeout": self.params.get("azure_provision_stuck_vm_timeout"),
+            "azure_provision_stuck_vm_recreate_attempts": self.params.get("azure_provision_stuck_vm_recreate_attempts"),
+        }
