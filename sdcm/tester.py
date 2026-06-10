@@ -3828,6 +3828,19 @@ class ClusterTester(unittest.TestCase):
             for node in cluster.nodes:
                 node._stop_kernel_panic_checker()  # noqa: SLF001
 
+    def _stop_all_node_task_threads(self):
+        """Stop DbLogReader and other task threads on all nodes.
+
+        Prevents daemon threads from feeding events into a dead queue
+        after event consumers are stopped, which would cause the process
+        to hang on exit (QueueFeederThread blocked on write to dead pipe).
+        """
+        for cluster in [self.db_cluster, self.loaders, self.monitors]:
+            if not cluster:
+                continue
+            for node in cluster.nodes:
+                node.stop_task_threads()
+
     @silence()
     def clean_resources(self):
         self._stop_all_node_task_threads()
