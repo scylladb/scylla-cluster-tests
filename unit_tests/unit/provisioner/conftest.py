@@ -21,7 +21,15 @@ from sdcm.utils.sct_cmd_helpers import get_test_config
 from sdcm.sct_config import SCTConfiguration
 from sdcm.test_config import TestConfig
 from sdcm.utils.azure_utils import AzureService
-from unit_tests.unit.provisioner.fake_azure_service import FakeAzureService
+from unit_tests.unit.provisioner.fake_azure_service import FakeAzureService, FakeVirtualMachines
+
+
+@pytest.fixture(autouse=True)
+def _reset_fake_vm_simulation():
+    """Reset fake VM scripts before and after each test."""
+    FakeVirtualMachines.clear_scripts()
+    yield
+    FakeVirtualMachines.clear_scripts()
 
 
 @pytest.fixture(scope="session")

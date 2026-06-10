@@ -1727,6 +1727,10 @@ class ClusterTester(unittest.TestCase):
                     test_id=test_id,
                     region=region,
                     availability_zone=self.params.get("availability_zone"),
+                    azure_provision_stuck_vm_timeout=self.params.get("azure_provision_stuck_vm_timeout"),
+                    azure_provision_stuck_vm_recreate_attempts=self.params.get(
+                        "azure_provision_stuck_vm_recreate_attempts"
+                    ),
                 )
             )
         if db_info["n_nodes"] is None:
