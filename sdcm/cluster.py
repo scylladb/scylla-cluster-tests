@@ -7044,7 +7044,7 @@ class BaseMonitorSet:
                 echo "Detected CentOS/RHEL system..."
 
                 # 1. Install basic python
-                yum install -y python3 python3-pip curl unzip
+                yum install -y python3 python3-pip curl unzip wget
             }
 
             # Function to manage Pip and install libraries
@@ -7083,6 +7083,13 @@ class BaseMonitorSet:
                     echo "Docker installation failed, retrying in 10 seconds..."
                     sleep 10
                 done
+                # Fallback for Rocky Linux: use CentOS repo (Rocky repo has no packages)
+                # See: https://github.com/docker/docker-install/pull/557
+                if . /etc/os-release && [ "$ID" = "rocky" ]; then
+                    echo "Falling back to CentOS Docker repo for Rocky Linux..."
+                    curl -fsSL https://download.docker.com/linux/centos/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo
+                    dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin && return 0
+                fi
                 echo "Docker installation failed after $max_retries attempts."
                 exit 1
             }
