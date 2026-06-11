@@ -5,8 +5,9 @@ method delegation, and the pure arithmetic in set_new_twcs_settings.
 Randomly-generated values are not asserted on.
 """
 
-from unittest.mock import patch
+from unittest.mock import call, patch
 
+from cassandra import OperationTimedOut
 import pytest
 
 from sdcm.exceptions import UnsupportedNemesis
@@ -86,6 +87,29 @@ def test_modify_table_property_forwards_filter_out_counter(runner):
         filter_out_table_with_counter=True,
         filter_out_mv=True,
     )
+
+
+def test_modify_table_property_retries_operation_timed_out_and_sets_session_timeout(runner):
+    """Retry ALTER TABLE after CQL timeout and use a longer per-request timeout."""
+    monkey = ModifyTableCommentMonkey(runner)
+    # Grab the mocked CQL session returned by the patient connection context manager.
+    session = runner.cluster.cql_connection_patient.return_value.__enter__.return_value
+    # First execute() raises OperationTimedOut (simulating a CQL timeout), the second succeeds.
+    session.execute.side_effect = [OperationTimedOut(errors={}, last_host="127.0.0.1"), None]
+
+    # Patch the retry decorator's sleep so the 30s backoff between attempts is skipped in the test.
+    with patch("sdcm.utils.decorators.time.sleep", return_value=None):
+        # Trigger the ALTER TABLE; the first attempt times out and the retry logic re-runs it.
+        monkey.modify_table_property(name="comment", val="'retry-test'", keyspace_table="ks1.tbl1")
+
+    expected_cmd = "ALTER TABLE ks1.tbl1 WITH comment = 'retry-test';"
+    # The same ALTER must be executed exactly twice: the timed-out attempt and the successful retry.
+    assert session.execute.call_args_list == [
+        call(expected_cmd),
+        call(expected_cmd),
+    ], "ALTER TABLE should be retried once after OperationTimedOut, yielding exactly two identical executes"
+    # The retry path must raise the per-request timeout to 300s to give schema changes more headroom.
+    assert session.default_timeout == 300, "session.default_timeout should be increased to 300s for schema changes"
 
 
 # ---------------------------------------------------------------------------
