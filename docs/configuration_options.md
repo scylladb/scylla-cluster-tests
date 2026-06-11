@@ -2067,15 +2067,14 @@ Direct URL to a full edition Scylla Doctor tarball in S3. When set, bypasses the
 
 **default:** N/A
 
-**type:** str
-* appendable
+**type:** str (appendable)
 
 
 ## **run_scylla_doctor_only** / SCT_RUN_SCYLLA_DOCTOR_ONLY
 
 When true, the artifact test runs only the Scylla Doctor validation<br>(install, collect vitals, analyze, verify) and skips all other artifact checks<br>such as stop/start, cassandra-stress, housekeeping, etc. Useful for fast SD<br>release gating. Implies run_scylla_doctor=true.
 
-**default:** N/A
+**default:** False
 
 **type:** bool
 
