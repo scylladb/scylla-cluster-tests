@@ -64,14 +64,6 @@ def test_02_verify_config(conf):
     conf.check_required_files()
 
 
-def test_03_dump_help_config_yaml(conf):
-    logging.debug(conf.dump_help_config_yaml())
-
-
-def test_03_dump_help_config_markdown(conf):
-    logging.debug(conf.dump_help_config_markdown())
-
-
 def test_05_docker(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
