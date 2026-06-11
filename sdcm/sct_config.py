@@ -3269,6 +3269,46 @@ class SCTConfiguration(BaseModel):
 
         return anyconfig.load(list(default_config_files)).get(key, None)
 
+    @staticmethod
+    def _format_default_value_for_docs(value):
+        if value in ("", None):
+            return "N/A"
+        return value
+
+    @classmethod
+    def _get_defaults_for_docs(cls):
+        test_default_path = sct_abs_path("defaults/test_default.yaml")
+        base_defaults = anyconfig.load(test_default_path)
+        defaults_config_files = cls.model_fields["defaults_config_files"].default
+        backend_defaults = {
+            backend: anyconfig.load([test_default_path, *config_files])
+            for backend, config_files in defaults_config_files.items()
+        }
+        return base_defaults, backend_defaults
+
+    @classmethod
+    def _get_backend_overrides_for_docs(cls, field_name, base_defaults, backend_defaults):
+        if field_name in base_defaults:
+            base_value = str(cls._format_default_value_for_docs(base_defaults[field_name]))
+        else:
+            base_value = "N/A"
+        grouped_values = {}
+
+        for backend, defaults in backend_defaults.items():
+            if field_name not in defaults:
+                continue
+
+            backend_value = str(cls._format_default_value_for_docs(defaults[field_name]))
+            if backend_value == base_value:
+                continue
+
+            grouped_values.setdefault(backend_value, []).append(backend)
+
+        if not grouped_values:
+            return ""
+
+        return "\n".join(f"- `{value}`: {', '.join(backends)}" for value, backends in grouped_values.items())
+
     def _load_environment_variables(self):
         """Load configuration from environment variables.
 
@@ -4418,7 +4458,7 @@ class SCTConfiguration(BaseModel):
             * **list:** can be appended by adding `++` as the first item of the list
                    `export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
         """
-        defaults = anyconfig.load(sct_abs_path("defaults/test_default.yaml"))
+        defaults, backend_defaults = cls._get_defaults_for_docs()
 
         def strip_help_text(text):
             """
@@ -4438,9 +4478,12 @@ class SCTConfiguration(BaseModel):
             else:
                 help_text = ""
 
-            appendable = "\n* appendable" if is_config_option_appendable(field_name) else ""
-            default = defaults.get(field_name, None)
-            default_text = default if default else "N/A"
+            appendable = " (appendable)" if is_config_option_appendable(field_name) else ""
+            if field_name in defaults:
+                default_text = cls._format_default_value_for_docs(defaults[field_name])
+            else:
+                default_text = "N/A"
+            backend_overrides = cls._get_backend_overrides_for_docs(field_name, defaults, backend_defaults)
 
             field_metadata = getattr(field, "metadata", None)
             ret += dedent(f"""
@@ -4450,10 +4493,10 @@ class SCTConfiguration(BaseModel):
 
                 **default:** {default_text}
 
-                **type:** {cls.get_annotations_as_strings(field.annotation, field_metadata=field_metadata)}
+                **type:** {cls.get_annotations_as_strings(field.annotation, field_metadata=field_metadata)}{appendable}
                 """).strip()
-            if appendable:
-                ret += appendable
+            if backend_overrides:
+                ret += f"\n\n**backend overrides:**\n{backend_overrides}"
             ret += "\n"
         return ret
 
@@ -4475,8 +4518,10 @@ class SCTConfiguration(BaseModel):
                 help_text = "\n".join(f"# {l.strip()}" for l in description.splitlines() if l.strip()) + "\n"
             else:
                 help_text = ""
-            default = defaults.get(field_name, None)
-            default = default if default else "N/A"
+            if field_name in defaults:
+                default = cls._format_default_value_for_docs(defaults[field_name])
+            else:
+                default = "N/A"
             ret += f"{help_text}{field_name}: {default}\n\n"
 
         return ret
