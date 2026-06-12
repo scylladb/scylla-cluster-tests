@@ -76,6 +76,7 @@ from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
+from sdcm.utils.decorators import retrying
 from sdcm.utils.oci_utils import get_scylla_images_by_branch, get_scylla_images_by_version, list_instances_oci
 from sdcm.utils.common import (
     S3Storage,
@@ -2346,11 +2347,17 @@ def create_runner_instance(
     LOGGER.info("Verifying SSH connectivity...")
     runner_public_ip = sct_runner.get_instance_public_ip(instance=instance)
     remoter = sct_runner.get_remoter(host=runner_public_ip, connect_timeout=240)
-    if remoter.run("true", timeout=200, verbose=False, ignore_status=True).ok:
+
+    @retrying(n=3, sleep_time=30, message=f"Retrying SSH connection to {runner_public_ip}")
+    def verify_ssh():
+        assert remoter.run("true", timeout=200, verbose=False, ignore_status=True).ok
+
+    try:
+        verify_ssh()
         LOGGER.info("Successfully connected the SCT Runner. Public IP: %s", runner_public_ip)
         with sct_runner_ip_path.open(mode="w", encoding="utf-8") as sct_runner_ip_file:
             sct_runner_ip_file.write(runner_public_ip)
-    else:
+    except Exception:  # noqa: BLE001
         LOGGER.error("Unable to SSH to %s! Exiting...", runner_public_ip)
         sys.exit(1)
 
