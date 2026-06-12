@@ -71,6 +71,7 @@ from sdcm.sct_runner import (
 )
 
 from sdcm.utils.ci_tools import get_job_name, get_job_url
+from sdcm.utils.decorators import retrying
 from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
 from sdcm.utils.argus import (
     argus_offline_collect_events,
@@ -2445,11 +2446,17 @@ def create_runner_instance(
     LOGGER.info("Verifying SSH connectivity...")
     runner_public_ip = sct_runner.get_instance_public_ip(instance=instance)
     remoter = sct_runner.get_remoter(host=runner_public_ip, connect_timeout=240)
-    if remoter.run("true", timeout=200, verbose=False, ignore_status=True).ok:
+
+    @retrying(n=3, sleep_time=30, message=f"Retrying SSH connection to {runner_public_ip}")
+    def verify_ssh():
+        assert remoter.run("true", timeout=200, verbose=False, ignore_status=True).ok
+
+    try:
+        verify_ssh()
         LOGGER.info("Successfully connected the SCT Runner. Public IP: %s", runner_public_ip)
         with sct_runner_ip_path.open(mode="w", encoding="utf-8") as sct_runner_ip_file:
             sct_runner_ip_file.write(runner_public_ip)
-    else:
+    except Exception:  # noqa: BLE001
         LOGGER.error("Unable to SSH to %s! Exiting...", runner_public_ip)
         sys.exit(1)
 
