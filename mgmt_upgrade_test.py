@@ -167,7 +167,6 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
         with self.subTest("Creating a backup task and stopping it"):
             self.generate_load_and_wait_for_results(keyspace_name="keyspace2")
             stopped_backup_task = mgr_cluster.create_backup_task(
-                cron=create_cron_list_from_timedelta(minutes=1),
                 location_list=self.locations,
                 keyspace_list=["keyspace2"],
                 method=self.backup_method,
