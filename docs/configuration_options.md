@@ -1190,7 +1190,7 @@ Cloud-agnostic instance sizing constraints for db nodes
 
 Cloud-agnostic instance sizing constraints for db_oracle nodes
 
-**default:** N/A
+**default:** {'vcpu': 8, 'memory': '>=60'}
 
 **type:** dict
 
