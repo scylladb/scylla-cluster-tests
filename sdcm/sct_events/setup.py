@@ -197,7 +197,7 @@ def enable_default_filters(sct_config: SCTConfiguration):
         db_event=DatabaseLogEvent.RUNTIME_ERROR,
         line=r".*raft_topology - topology change coordinator fiber got error std::runtime_error"
         r" \(raft topology: exec_global_command\(barrier(?:_and_drain)?\) failed with seastar::rpc::closed_error"
-        r" \(connection is closed\)\)",
+        r" \(.*connection is closed\)\)",
     ).publish()
 
 
