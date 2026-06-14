@@ -113,7 +113,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
       - name: Upload folder to bucket
-        uses: a-sync/s3-uploader@2.0.1
+        uses: a-sync/s3-uploader@1b1020511c685aeb5be20f23190d2d1b63ab19a6 # 2.0.1
         with:
           args: --recursive --grants full=id=${{ secrets.CLOUDIUS_SYSTEMS_CANONICAL_ID }} read=id=${{ secrets.DBAAS_DATA_QA_CANONICAL_ID }}
         env:
