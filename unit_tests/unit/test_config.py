@@ -26,6 +26,11 @@ def _get_latest_scylla_release(product="scylla"):
     return get_latest_scylla_release(product=product, verify=False)
 
 
+def _set_gce_instance_types(monkeypatch):
+    """gce_instance_type_db defaults to empty and is now required; set it for gce-backend tests."""
+    monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_DB", "n2-highmem-2")
+
+
 @pytest.fixture(scope="module")
 def monkeymodule():
     """Fixture that provides a monkeypatching with module scope."""
@@ -133,6 +138,7 @@ def test_09_unknown_env(monkeypatch):
 
 def test_12_scylla_version_repo_ubuntu(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    _set_gce_instance_types(monkeypatch)
     monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO", "ubuntu-xenial")
     monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO_LOADER", "ubuntu-xenial")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "3.0.3")
@@ -153,6 +159,7 @@ def test_12_scylla_version_repo_ubuntu(monkeypatch):
 
 def test_12_scylla_version_repo_ubuntu_loader_centos(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    _set_gce_instance_types(monkeypatch)
     monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO", "ubuntu-xenial")
     monkeypatch.setenv("SCT_SCYLLA_LINUX_DISTRO_LOADER", "centos")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "3.0.3")
@@ -344,6 +351,7 @@ def test_15_new_scylla_repo(monkeypatch):
 
     monkeypatch.delenv("SCT_SCYLLA_VERSION", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    _set_gce_instance_types(monkeypatch)
     monkeypatch.setenv("SCT_SCYLLA_REPO", centos_repo)
     monkeypatch.setenv("SCT_NEW_SCYLLA_REPO", centos_repo)
     monkeypatch.setenv("SCT_USER_PREFIX", "testing")
@@ -361,6 +369,7 @@ def test_15_new_scylla_repo(monkeypatch):
 
 def test_15a_new_scylla_repo_by_scylla_version(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    _set_gce_instance_types(monkeypatch)
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "master:latest")
     monkeypatch.setenv("SCT_NEW_VERSION", "master:latest")
     monkeypatch.setenv("SCT_USER_PREFIX", "testing")
@@ -387,6 +396,7 @@ def test_15a_new_scylla_repo_by_scylla_version(monkeypatch):
 
 def test_15b_image_id_by_scylla_version(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    _set_gce_instance_types(monkeypatch)
     monkeypatch.setenv("SCT_SCYLLA_VERSION", "master:latest")
     monkeypatch.setenv("SCT_USER_PREFIX", "testing")
     monkeypatch.setenv("SCT_GCE_IMAGE_DB", "")
@@ -659,6 +669,8 @@ def test_37_raises_error_for_invalid_thread_count_type(monkeypatch):
 def test_38_verify_scylla_version_lookup_k8s(monkeypatch, backend, version, expected_repo):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
     monkeypatch.setenv("SCT_SCYLLA_VERSION", version)
+    # k8s-eks requires the operator docker image (a Jenkins runtime param); set it explicitly.
+    monkeypatch.setenv("SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE", "scylladb/scylla-operator:latest")
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
     assert "docker_image" in conf.dump_config()
