@@ -103,6 +103,7 @@ def mock_cloud_services(tmp_path_factory):
         patch("sdcm.utils.version_utils.get_s3_scylla_repos_mapping", return_value={}),
         patch("sdcm.utils.aws_utils.get_arch_from_instance_type", return_value="x86_64"),
         patch("sdcm.sct_config.get_arch_from_instance_type", return_value="x86_64"),
+        patch("sdcm.sct_config.aws_check_instance_type_supported", return_value=True),
         patch.object(KeyStore, "get_file_contents", fake_get_file_contents),
         patch.object(KeyStore, "get_json", fake_get_json),
         patch.object(KeyStore, "get_ssh_key_pair", return_value=mock_ssh_key),
