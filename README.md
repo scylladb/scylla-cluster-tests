@@ -191,6 +191,12 @@ SCT_CLUSTER_BACKEND= hydra clean-resources --test-id `cat ~/sct-results/latest/t
 ## [Frequently Asked Questions (FAQ)](docs/faq.md)
 ## [Contribution instructions](docs/contrib.md)
 
+## AI code review on PRs
+
+Claude code review is **on-demand**. To get a review, comment `@claude please review this PR`
+on the pull request. Available to scylladb org members and collaborators.
+See [How does the Claude AI code review work?](docs/faq.md#how-does-the-claude-ai-code-review-work) for details.
+
 ## Supported backends
 
 * `aws` - the mostly used backed, most longevity run on top of this backend
