@@ -150,6 +150,17 @@ class ScyllaDoctor:
         return sd_dir
 
     @cached_property
+    def scylla_install_home(self) -> str:
+        """Return the user's home directory where Scylla is installed.
+
+        For nonroot offline installs Scylla lives under ``$HOME/scylladb``.
+        This property returns ``$HOME`` so that searches for bundled binaries
+        and scylla-doctor config paths point at the correct location, rather
+        than the temporary working directory used for tarball extraction.
+        """
+        return self.node.remoter.run("echo $HOME", verbose=False).stdout.strip()
+
+    @cached_property
     def version(self):
         version = self.run(f"{self.scylla_doctor_exec} --version")
         LOGGER.info("Scylla doctor version: %s", version)
@@ -489,7 +500,7 @@ class ScyllaDoctor:
         # Always download from S3 — package repos are not updated at the same
         # time as S3 releases, and specific versions may not be available via repo.
         self.download_scylla_doctor()
-        self.python3_path = self.find_scylla_bundled_python3(self.current_dir)
+        self.python3_path = self.find_scylla_bundled_python3(self.scylla_install_home)
 
         additional_config = ""
         if self.node.is_nonroot_install:
@@ -498,7 +509,7 @@ class ScyllaDoctor:
             additional_config += self.SCYLLA_DOCTOR_ANALYZER_CONFIG
 
         if additional_config:
-            self.update_scylla_doctor_config(self.current_dir, additional_config=additional_config)
+            self.update_scylla_doctor_config(self.scylla_install_home, additional_config=additional_config)
 
         # TODO: optionally install via package manager (apt/yum/dnf) instead of S3
         #  download. Needs an SCT configuration toggle to enable this path.
