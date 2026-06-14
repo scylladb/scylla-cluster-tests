@@ -3818,8 +3818,11 @@ class SCTConfiguration(BaseModel):
             for field_name, field in self.__class__.model_fields.items()
             if field_name in required_params and not is_ignored_field(field)
         ]
-        for field in fields:
-            assert self.get(field) is not None, "{} missing from config for {}".format(field, backend)
+        for field_name in fields:
+            value = self.get(field_name)
+            assert value is not None and not (isinstance(value, str) and not value.strip()), (
+                f"{field_name} missing from config for {backend}"
+            )
 
     def _instance_type_validation(self):
         if instance_type := self.get("nemesis_grow_shrink_instance_type"):
