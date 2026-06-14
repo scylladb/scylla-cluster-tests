@@ -502,6 +502,37 @@ def test_find_scylla_bundled_python3_raises_when_not_found(doctor, is_nonroot, r
         doctor.find_scylla_bundled_python3("/home/user")
 
 
+# --- scylla_install_home tests ---
+
+
+def test_scylla_install_home_returns_remote_home(doctor):
+    """scylla_install_home should return $HOME from the remote node."""
+    home_result = MagicMock(stdout="/home/ubuntu\n")
+    doctor.node.remoter.run.return_value = home_result
+
+    assert doctor.scylla_install_home == "/home/ubuntu"
+    doctor.node.remoter.run.assert_called_with("echo $HOME", verbose=False)
+
+
+def test_install_scylla_doctor_uses_scylla_install_home_for_python3(mock_node, mock_test_config):
+    """install_scylla_doctor should search for python3 under $HOME, not /tmp/scylla_doctor."""
+    test_config, _params = mock_test_config
+    mock_node.is_nonroot_install = True
+    doc = ScyllaDoctor(node=mock_node, test_config=test_config, offline_install=True)
+
+    with (
+        patch.object(doc, "download_scylla_doctor"),
+        patch.object(
+            doc, "find_scylla_bundled_python3", return_value="/home/ubuntu/scylladb/python3/bin/python3"
+        ) as mock_find,
+        patch.object(doc, "update_scylla_doctor_config"),
+        patch.object(type(doc), "scylla_install_home", new_callable=lambda: property(lambda self: "/home/ubuntu")),
+    ):
+        doc.install_scylla_doctor()
+
+    mock_find.assert_called_once_with("/home/ubuntu")
+
+
 # --- run_analysis_phase tests ---
 
 
