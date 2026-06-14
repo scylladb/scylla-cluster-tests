@@ -275,6 +275,53 @@ def test_build_env_xcloud_params():
     env = build_env(config)
     assert env["SCT_XCLOUD_PROVIDER"] == "aws"
     assert env["SCT_XCLOUD_ENV"] == "staging"
+    # xcloud requires scylla_version (injected by Jenkins at runtime) — lint fills a placeholder
+    assert env["SCT_SCYLLA_VERSION"] == "0.0.0-lint-placeholder"
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.param("docker", id="docker"),
+        pytest.param("k8s-eks", id="k8s-eks"),
+        pytest.param("k8s-gke", id="k8s-gke"),
+        pytest.param("k8s-local-kind", id="k8s-local-kind"),
+        pytest.param("xcloud", id="xcloud"),
+    ],
+)
+def test_build_env_injects_scylla_version_placeholder(backend):
+    """Backends that require scylla_version get a working placeholder for linting."""
+    config = _make_config(params={"backend": backend})
+    env = build_env(config)
+    assert env["SCT_SCYLLA_VERSION"] == "0.0.0-lint-placeholder"
+
+
+def test_build_env_injects_operator_docker_image_for_eks():
+    """k8s-eks requires k8s_scylla_operator_docker_image (Jenkins runtime param) — lint fills it."""
+    config = _make_config(params={"backend": "k8s-eks"})
+    env = build_env(config)
+    assert env["SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE"] == "scylladb/scylla-operator:lint-placeholder"
+
+
+def test_build_env_no_operator_docker_image_for_gke():
+    """k8s-gke requires a helm repo, not the operator docker image — no placeholder injected."""
+    config = _make_config(params={"backend": "k8s-gke"})
+    env = build_env(config)
+    assert "SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE" not in env
+
+
+def test_build_env_keeps_pipeline_scylla_version():
+    """An explicit scylla_version in the pipeline is not overwritten by the placeholder."""
+    config = _make_config(params={"backend": "docker", "scylla_version": "2024.2.0"})
+    env = build_env(config)
+    assert env["SCT_SCYLLA_VERSION"] == "2024.2.0"
+
+
+def test_build_env_no_scylla_version_placeholder_for_aws():
+    """AWS resolves scylla from an AMI/repo, so no scylla_version placeholder is injected."""
+    config = _make_config(params={"backend": "aws", "region": "eu-west-1"})
+    env = build_env(config)
+    assert "SCT_SCYLLA_VERSION" not in env
 
 
 def test_build_env_pytest_addopts():

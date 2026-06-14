@@ -7,11 +7,37 @@ SCTConfiguration expects, mirroring the logic in vars/runSctTest.groovy.
 import json
 import logging
 
-from sdcm.sct_config import BACKEND_IMAGE_FIELD
+from sdcm.sct_config import BACKEND_IMAGE_FIELD, SCTConfiguration
 from sdcm.sct_config import count_regions as count_regions_from_string
 from sdcm.utils.lint.jenkins_parser import PipelineConfig
 
 logger = logging.getLogger(__name__)
+
+# Required params that Jenkins injects at runtime (their default in the pipeline
+# definition is empty), so they are never pinned in the pipeline file itself.
+# During linting we fill a working placeholder for any backend that lists them as
+# required, so the check validates config structure instead of failing on a
+# runtime-only param. Keyed by param name -> (SCT_* env var, placeholder value).
+#   - scylla_version: chosen so resolution stays offline —
+#     get_scylla_docker_repo_from_version() maps it to a nightly repo and
+#     _replace_docker_image_latest_tag() only hits the network for "latest".
+#   - k8s_scylla_operator_docker_image: only k8s-eks requires it; a plain image
+#     reference is enough for the structural check.
+_RUNTIME_REQUIRED_PARAM_PLACEHOLDERS: dict[str, tuple[str, str]] = {
+    "scylla_version": ("SCT_SCYLLA_VERSION", "0.0.0-lint-placeholder"),
+    "k8s_scylla_operator_docker_image": (
+        "SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE",
+        "scylladb/scylla-operator:lint-placeholder",
+    ),
+}
+
+# Precompute, per backend, the placeholder env vars to inject — derived from
+# backend_required_params so it stays in sync as required params change.
+_BACKEND_RUNTIME_PLACEHOLDERS: dict[str, dict[str, str]] = {}
+for _param, (_env_var, _value) in _RUNTIME_REQUIRED_PARAM_PLACEHOLDERS.items():
+    for _backend, _required in SCTConfiguration.model_fields["backend_required_params"].default.items():
+        if _param in _required:
+            _BACKEND_RUNTIME_PLACEHOLDERS.setdefault(_backend, {})[_env_var] = _value
 
 # Mapping from pipeline parameter names to SCT_* environment variable names.
 # "Direct" means the env var name follows the SCT_ + UPPER(param) convention.
@@ -265,6 +291,9 @@ def _add_image_placeholders(env: dict[str, str], backend: str, num_regions: int)
     ):
         env["SCT_SCYLLA_REPO"] = _SCYLLA_REPO_PLACEHOLDER
 
-    # xcloud backend requires scylla_version at runtime — provide obviously invalid placeholder
-    if backend == "xcloud" and "SCT_SCYLLA_VERSION" not in env:
-        env["SCT_SCYLLA_VERSION"] = "0.0.0-lint-placeholder"
+    # Some required params (scylla_version, k8s_scylla_operator_docker_image, ...)
+    # are supplied by Jenkins at runtime and never pinned in the pipeline file.
+    # Inject placeholders for those so linting validates config structure instead
+    # of failing on a runtime-only param — they stay mandatory for the actual check.
+    for env_var, value in _BACKEND_RUNTIME_PLACEHOLDERS.get(backend, {}).items():
+        env.setdefault(env_var, value)
