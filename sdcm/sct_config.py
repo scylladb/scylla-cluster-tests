@@ -4000,8 +4000,28 @@ class SCTConfiguration(BaseModel):
             )
 
     def _instance_type_validation(self):
+        backend = self.get("cluster_backend")
+
+        # Validate main instance types (db, loader, monitor) are available in the target region
+        if backend == "aws":
+            instance_type_params = [
+                "instance_type_db",
+                "instance_type_loader",
+                "instance_type_monitor",
+                "instance_type_db_target",
+            ]
+            if self.get("db_type") in ("mixed_scylla", "mixed_cassandra"):
+                instance_type_params.append("instance_type_db_oracle")
+            for param_name in instance_type_params:
+                if instance_type := self.get(param_name):
+                    for region in self.region_names:
+                        assert aws_check_instance_type_supported(instance_type, region), (
+                            f"Instance type '{instance_type}' (param: {param_name}) "
+                            f"is not supported in region '{region}'"
+                        )
+
+        # Validate nemesis_grow_shrink_instance_type
         if instance_type := self.get("nemesis_grow_shrink_instance_type"):
-            backend = self.get("cluster_backend")
             match backend:
                 case "aws":
                     for region in self.region_names:

@@ -508,7 +508,15 @@ def get_arch_from_instance_type(instance_type: str, region_name: str) -> AwsArch
     arch = "x86_64"
     if instance_type:
         client: EC2Client = boto3.client("ec2", region_name=region_name)
-        instance_type_info = client.describe_instance_types(InstanceTypes=[instance_type])
+        try:
+            instance_type_info = client.describe_instance_types(InstanceTypes=[instance_type])
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] == "InvalidInstanceType":
+                raise ValueError(
+                    f"Instance type '{instance_type}' is not available in region '{region_name}'. "
+                    f"Please verify the instance type exists in this region or use a different one."
+                ) from exc
+            raise
 
         try:
             arch = instance_type_info["InstanceTypes"][0].get("ProcessorInfo", {}).get("SupportedArchitectures")[0]

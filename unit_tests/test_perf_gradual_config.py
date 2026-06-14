@@ -1,5 +1,7 @@
 """Unit tests for perf_gradual_throttle_steps dict format validation."""
 
+from unittest.mock import patch
+
 import pytest
 
 from sdcm.sct_config import SCTConfiguration
@@ -10,6 +12,8 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-1234")
     monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
+    with patch("sdcm.sct_config.aws_check_instance_type_supported", return_value=True):
+        yield
 
 
 def test_string_format_backward_compatibility():
