@@ -47,6 +47,10 @@ def latest_release():
 @pytest.fixture(scope="function", autouse=True)
 def function_setup(monkeypatch):
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    # gce/azure instance_type_db default to empty and are now required; set them so
+    # gce/azure backends pass the per-backend required-params check.
+    monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_DB", "n2-highmem-2")
+    monkeypatch.setenv("SCT_AZURE_INSTANCE_TYPE_DB", "Standard_L8s_v3")
 
 
 @pytest.mark.parametrize(

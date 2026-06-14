@@ -41,6 +41,10 @@ def fixture_env(monkeypatch):
     monkeypatch.setenv("SCT_USE_MGMT", "false")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", _get_latest_scylla_release())
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    # gce/azure instance_type_db default to empty and are now required; set them so
+    # gce/azure/gce-siren backends pass the per-backend required-params check.
+    monkeypatch.setenv("SCT_GCE_INSTANCE_TYPE_DB", "n2-highmem-2")
+    monkeypatch.setenv("SCT_AZURE_INSTANCE_TYPE_DB", "Standard_L8s_v3")
 
 
 @pytest.mark.integration
