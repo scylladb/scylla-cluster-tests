@@ -1504,8 +1504,9 @@ class ClusterTester(unittest.TestCase):
             # Enable tablets with Alternator TTL requires (#16567).
             tablets_support_ttl = not SkipPerIssues(issues="scylladb/scylladb#16567", params=self.params)
 
-            # Enable tablets for Alternator with LWT requires issue: "[Epic] tablets: support LWT #18068"
-            tablets_support_lwt = not SkipPerIssues(issues="scylladb/scylladb#18068", params=self.params)
+            # LWT with tablets is supported starting from 2025.4 (scylladb/scylladb#18068 resolved).
+            # Check the *running* node version to avoid enabling it on older base versions in upgrade tests.
+            tablets_support_lwt = ComparableScyllaVersion(node.scylla_version) >= "2025.4.0~dev"
 
             tablets_supported_alternator_workload = not is_ttl_in_workload or tablets_support_ttl
             schema = self.params.get("dynamodb_primarykey_type")
