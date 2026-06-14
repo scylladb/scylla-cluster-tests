@@ -174,20 +174,25 @@ SCT_PERF_GRADUAL_THROTTLE_STEPS={"read": ['700000', 'unthrottled', 'unthrottled'
 
 ## How does the Claude AI code review work?
 
-The Claude Code Review workflow runs automatically on every PR opened by a scylladb org member.
-It uses the `pull_request_target` trigger, which means:
+Claude code review is **on-demand**, not automatic. To request a review, mention
+`@claude` in a comment on the PR (or in a review comment / issue) with what you
+want it to do, for example:
 
-- The workflow always executes code from the **base branch (master)**, not the PR branch — this is a GitHub security requirement that prevents secrets from being exposed to fork code
-- Because of this, changes to the workflow file only take effect **after they are merged to master**
-- The review is restricted to scylladb org members and collaborators; PRs from external contributors are silently skipped
-
-To re-run the review on an existing PR, push an empty commit to the PR branch:
-
-```bash
-git commit --allow-empty -m "re-trigger Claude review" && git push
+```text
+@claude please review this PR
 ```
 
-The review comment is posted directly on the PR by the `claude[bot]` user.
+This triggers the `Claude Code` workflow (`.github/workflows/claude.yml`), which:
+
+- Is restricted to scylladb org members and collaborators; requests from external
+  contributors are denied with an explanatory comment
+- Reads the PR diff and CI results, then posts its review as a comment on the PR
+- Can also be asked to do more than review (answer questions, suggest fixes, etc.)
+  — Claude follows whatever instructions you include alongside the `@claude` mention
+
+> The previous workflow that ran a review automatically on every PR
+> (`claude-code-review.yml`) has been removed in favor of this opt-in `@claude`
+> flow, so reviews run only when explicitly requested.
 
 ## How to find equivalent AMIs across regions or architectures?
 
