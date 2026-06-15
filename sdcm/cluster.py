@@ -6911,6 +6911,7 @@ class BaseMonitorSet:
             -D "--label-file {labels_file} --env RENDERING_VIEWPORT_MAX_HEIGHT=15000 --env RENDERING_VIEWPORT_DEVICE_SCALE_FACTOR=4" \
             -s `realpath "{self.monitoring_conf_dir}/scylla_servers.yml"` \
             -n `realpath "{self.monitoring_conf_dir}/node_exporter_servers.yml"` \
+            $(grep -q -- --no-loki ./start-all.sh && echo "--no-loki")  \
             {scylla_manager_servers_arg} \
             -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} \
             -b "--web.enable-admin-api --storage.tsdb.retention.time={self.prometheus_retention}" \
