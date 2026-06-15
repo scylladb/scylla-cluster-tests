@@ -17,6 +17,7 @@ Module containing logic for running disruptions on a test cluster
 """
 
 import contextlib
+import copy
 import datetime
 import importlib
 import inspect
@@ -4464,6 +4465,7 @@ class NemesisRunner:
         scylla_encryption_options = {"cipher_algorithm": "AES/ECB/PKCS5Padding", "secret_key_strength": 128}
         scylla_encryption_options |= additional_scylla_encryption_options or {}
         aws_kms, kms_key_alias_name = None, None
+        original_kms_hosts = None  # Track original kms_hosts to restore on cleanup
 
         # Handle AWS KMS specific parts
         if (
@@ -4479,6 +4481,9 @@ class NemesisRunner:
             for node in self.cluster.nodes:
                 is_restart_needed = False
                 with node.remote_scylla_yaml() as scylla_yml:
+                    if original_kms_hosts is None:
+                        # Save original kms_hosts from the first node (all nodes share same config)
+                        original_kms_hosts = copy.deepcopy(scylla_yml.kms_hosts)
                     if not scylla_yml.kms_hosts:
                         scylla_yml.kms_hosts = {}
                     if kms_host_name not in scylla_yml.kms_hosts:
@@ -4613,6 +4618,14 @@ class NemesisRunner:
             self.actions_log.info(f"Delete encrypted table {keyspace_name}.{table_name}")
             with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_name) as session:
                 session.execute(f"DROP TABLE {table_name};")
+
+            # Restore original kms_hosts configuration to avoid breaking other operations
+            # (e.g., backup restore) that may rely on the pre-existing KMS host entries
+            if original_kms_hosts is not None:
+                self.actions_log.info("Restoring original kms_hosts configuration on all nodes")
+                for node in self.cluster.nodes:
+                    with node.remote_scylla_yaml() as scylla_yml:
+                        scylla_yml.kms_hosts = copy.deepcopy(original_kms_hosts)
 
     def disrupt_hot_reloading_internode_certificate(self):
         """
