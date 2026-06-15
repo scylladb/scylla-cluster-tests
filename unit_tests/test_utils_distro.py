@@ -149,6 +149,46 @@ ORACLE_BUGZILLA_PRODUCT_VERSION=8.1
 ORACLE_SUPPORT_PRODUCT="Oracle Linux"
 ORACLE_SUPPORT_PRODUCT_VERSION=8.1
 """,
+    "OEL 9.3": """\
+NAME="Oracle Linux Server"
+VERSION="9.3"
+ID="ol"
+ID_LIKE="fedora"
+VARIANT="Server"
+VARIANT_ID="server"
+VERSION_ID="9.3"
+PLATFORM_ID="platform:el9"
+PRETTY_NAME="Oracle Linux Server 9.3"
+ANSI_COLOR="0;31"
+CPE_NAME="cpe:/o:oracle:linux:9:3:server"
+HOME_URL="https://linux.oracle.com/"
+BUG_REPORT_URL="https://bugzilla.oracle.com/"
+
+ORACLE_BUGZILLA_PRODUCT="Oracle Linux 9"
+ORACLE_BUGZILLA_PRODUCT_VERSION=9.3
+ORACLE_SUPPORT_PRODUCT="Oracle Linux"
+ORACLE_SUPPORT_PRODUCT_VERSION=9.3
+""",
+    "OEL 10": """\
+NAME="Oracle Linux Server"
+VERSION="10.0"
+ID="ol"
+ID_LIKE="fedora"
+VARIANT="Server"
+VARIANT_ID="server"
+VERSION_ID="10"
+PLATFORM_ID="platform:el10"
+PRETTY_NAME="Oracle Linux Server 10.0"
+ANSI_COLOR="0;31"
+CPE_NAME="cpe:/o:oracle:linux:10:0:server"
+HOME_URL="https://linux.oracle.com/"
+BUG_REPORT_URL="https://bugzilla.oracle.com/"
+
+ORACLE_BUGZILLA_PRODUCT="Oracle Linux 10"
+ORACLE_BUGZILLA_PRODUCT_VERSION=10.0
+ORACLE_SUPPORT_PRODUCT="Oracle Linux"
+ORACLE_SUPPORT_PRODUCT_VERSION=10.0
+""",
     "SLES 15": """\
 NAME="SLES"
 VERSION="15-SP3"
@@ -314,6 +354,18 @@ class TestDistro(unittest.TestCase):
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["OEL 8.1"])
         self.assertTrue(distro.is_oel8)
         self.assertTrue(distro.is_rhel_like)
+
+    def test_oel9(self):
+        assert Distro.OEL9.is_oel9
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["OEL 9.3"])
+        assert distro.is_oel9
+        assert distro.is_rhel_like
+
+    def test_oel10(self):
+        assert Distro.OEL10.is_oel10
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["OEL 10"])
+        assert distro.is_oel10
+        assert distro.is_rhel_like
 
     def test_sles15(self):
         self.assertTrue(Distro.SLES15.is_sles15)
