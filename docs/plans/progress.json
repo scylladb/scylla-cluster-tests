@@ -92,6 +92,16 @@
       "phases_done": 0
     },
     {
+      "id": "pipeline-labeling-and-documentation",
+      "title": "Pipeline Labeling and Documentation",
+      "file": "jenkins/pipeline-labeling-and-documentation.md",
+      "domain": "ci-cd",
+      "status": "draft",
+      "created": "2026-03-19",
+      "phases_total": 8,
+      "phases_done": 0
+    },
+    {
       "id": "jenkins-uno-choice-billing-project",
       "title": "Jenkins Uno-Choice Billing Project",
       "file": "jenkins/jenkins-uno-choice-billing-project.md",
