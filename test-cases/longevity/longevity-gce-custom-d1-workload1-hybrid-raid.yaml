@@ -25,6 +25,7 @@ gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/gl
 use_preinstalled_scylla: false
 force_run_iotune: true
 
+gce_root_disk_type_db: 'hyperdisk-balanced'
 
 #scylla_d_overrides_files: [
 #  'scylla-qa-internal/custom_d1/workload1/scylla.d/cpuset.conf',
