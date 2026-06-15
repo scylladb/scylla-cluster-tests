@@ -205,6 +205,60 @@ class JenkinsPipelines:
 
         return description
 
+    def process_symlinks(self, local_path: Path, jenkins_path: str | Path, job_name_suffix: str, defines: dict):
+        """Process _symlinks.yaml to create Jenkins jobs that reference pipeline files from other locations.
+
+        This avoids duplicating .jenkinsfile files when the same pipeline needs to appear
+        in multiple Jenkins folders (e.g., scylla-doctor needing copies of artifact tests).
+
+        The _symlinks.yaml format:
+
+            symlinks:
+              - name: "artifacts-docker"
+                target: "jenkins-pipelines/oss/artifacts/artifacts-docker.jenkinsfile"
+              - name: "artifacts-ami"
+                target: "jenkins-pipelines/oss/artifacts/artifacts-ami.jenkinsfile"
+                job_name_suffix: "-test"  # optional, overrides the default suffix
+
+        Each entry creates a Jenkins pipeline job in the current directory that points
+        to the target .jenkinsfile's scriptPath.
+        """
+        symlinks_file = local_path / "_symlinks.yaml"
+        if not symlinks_file.exists():
+            return
+
+        try:
+            with open(symlinks_file, encoding="utf-8") as fobj:
+                data = yaml.safe_load(fobj)
+        except (yaml.YAMLError, OSError) as exc:
+            LOGGER.error("Failed to load %s: %s", symlinks_file, exc)
+            return
+
+        if not data or "symlinks" not in data:
+            return
+
+        for entry in data["symlinks"]:
+            name = entry.get("name")
+            target = entry.get("target")
+            if not name or not target:
+                LOGGER.warning("Invalid symlink entry in %s: missing 'name' or 'target': %s", symlinks_file, entry)
+                continue
+
+            target_path = self.base_sct_dir / target
+            if not target_path.exists():
+                LOGGER.error("Symlink target does not exist: %s (referenced from %s)", target_path, symlinks_file)
+                continue
+
+            entry_suffix = entry.get("job_name_suffix", job_name_suffix)
+            LOGGER.info("Creating symlink job '%s%s' -> %s", name, entry_suffix, target)
+            self.create_pipeline_job(
+                target_path,
+                group_name=jenkins_path,
+                job_name=name,
+                job_name_suffix=entry_suffix,
+                defines=defines,
+            )
+
     def create_job_tree(
         self,
         local_path: str | Path,
@@ -242,3 +296,6 @@ class JenkinsPipelines:
                     )
                 if (job_file.suffix == ".xml") and create_freestyle_jobs:
                     self.create_freestyle_job(job_file, group_name=jenkins_path, template_context=template_context)
+
+            if create_pipelines_jobs:
+                self.process_symlinks(Path(root), jenkins_path, job_name_suffix, defines)
