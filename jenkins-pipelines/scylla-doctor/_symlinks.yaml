@@ -1,0 +1,13 @@
+# Pipeline symlinks for scylla-doctor release gating.
+# These create Jenkins jobs in the scylla-doctor folder that reference
+# artifact test pipelines from oss/artifacts/, avoiding file duplication.
+#
+# See utils/build_system/create_test_release_jobs.py::process_symlinks for details.
+
+symlinks:
+  - name: "artifacts-ami"
+    target: "jenkins-pipelines/oss/artifacts/artifacts-ami.jenkinsfile"
+  - name: "artifacts-ami-arm"
+    target: "jenkins-pipelines/oss/artifacts/artifacts-ami-arm.jenkinsfile"
+  - name: "artifacts-docker"
+    target: "jenkins-pipelines/oss/artifacts/artifacts-docker.jenkinsfile"
