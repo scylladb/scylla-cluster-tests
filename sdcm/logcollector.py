@@ -67,6 +67,7 @@ from sdcm.utils.distro import Distro
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
 from sdcm.utils.k8s import KubernetesOps
+from sdcm.utils.minicloud import is_minicloud_active
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
 from sdcm.localhost import LocalHost
@@ -1216,6 +1217,7 @@ class BaseSCTLogCollector(LogCollector):
         FileLog(name="partition_range_scan_diff_*.log", search_locally=True),
         FileLog(name="junit.xml", search_locally=True),
         FileLog(name="cdc-replicator.log", search_locally=True),
+        FileLog(name="minicloud.log", search_locally=True),
     ]
     cluster_log_type = "sct-runner-events"
     cluster_dir_prefix = "sct-runner-events"
@@ -2083,6 +2085,26 @@ class Collector:
             LOGGER.warning("No test_id provided or found")
             return results, None
         self.get_running_cluster_sets(self.backend)
+
+        # Minicloud instances don't have SSH daemons — skip collectors that require SSH
+        # to avoid 60s timeout × N collectors = 20+ minutes of wasted time.
+        if is_minicloud_active():
+            ssh_dependent = (
+                ScyllaLogCollector,
+                CassandraLogCollector,
+                MonitorLogCollector,
+                LoaderLogCollector,
+                SirenManagerLogCollector,
+                VectorStoreLogCollector,
+                SSTablesCollector,
+                JepsenLogCollector,
+            )
+            skipped = [c.__name__ for c in self.cluster_log_collectors if c in ssh_dependent]
+            self.cluster_log_collectors = {
+                c: nodes for c, nodes in self.cluster_log_collectors.items() if c not in ssh_dependent
+            }
+            if skipped:
+                LOGGER.info("Minicloud active: skipping SSH-dependent collectors: %s", skipped)
 
         local_dir_with_logs = get_testrun_dir(self.sct_result_dir, self.test_id)
         LOGGER.info("Found sct result directory with logs: %s", local_dir_with_logs)

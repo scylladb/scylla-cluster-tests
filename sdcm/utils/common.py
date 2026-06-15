@@ -311,7 +311,7 @@ class S3Storage:
     def set_public_access(self, key):
         acl_obj: S3ServiceResource = boto3.resource("s3").ObjectAcl(self.bucket_name, key)
 
-        grants = copy.deepcopy(acl_obj.grants)
+        grants = copy.deepcopy(acl_obj.grants or [])
         grantees = {
             "Grantee": {"Type": "Group", "URI": "http://acs.amazonaws.com/groups/global/AllUsers"},
             "Permission": "READ",
@@ -602,17 +602,23 @@ def list_instances_aws(
                 for key, value in tags_dict.items()
             ]
         response = client.describe_instances(Filters=custom_filter)
-        instances[region] = [
-            instance for reservation in response["Reservations"] for instance in reservation["Instances"]
-        ]
+        all_instances = [instance for reservation in response["Reservations"] for instance in reservation["Instances"]]
+        instances[region] = all_instances
 
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(instances.keys())), len(aws_regions))
 
     ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(get_instances, ignore_exceptions=True)
 
+    minicloud_mode = bool(os.environ.get("MINICLOUD_DOCKER") or "localhost" in os.environ.get("AWS_ENDPOINT_URL", ""))
     for curr_region_name, per_region_instances in instances.items():
         if running:
+            if minicloud_mode:
+                # Minicloud instances are immediately available; skip state filtering/waiting
+                instances[curr_region_name] = [
+                    i for i in per_region_instances if i.get("State", {}).get("Name") != "terminated"
+                ]
+                continue
             # Filter for running and pending instances
             pending_instances = [i for i in per_region_instances if i["State"]["Name"] == "pending"]
             running_instances = [i for i in per_region_instances if i["State"]["Name"] == "running"]

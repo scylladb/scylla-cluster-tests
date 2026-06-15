@@ -122,6 +122,7 @@ from sdcm.utils.aws_utils import (
     ec2_ami_get_root_device_name,
 )
 from sdcm.utils.ci_tools import get_job_name, get_job_url
+from sdcm.utils.minicloud import MinicloudConfig, MinicloudManager, is_minicloud_active
 from sdcm.utils.common import (
     format_timestamp,
     wait_ami_available,
@@ -406,6 +407,7 @@ class ClusterTester(unittest.TestCase):
         super().__init__(methodName=methodName)
         # Initialize test_config (was previously done in TestStatsMixin which was removed)
         self.test_config = TestConfig()
+        self.minicloud: MinicloudManager | None = None
 
     def _init_test_duration(self):
         self._stress_duration: int = self.params.get("stress_duration")
@@ -2779,6 +2781,14 @@ class ClusterTester(unittest.TestCase):
         if cluster_backend is None:
             cluster_backend = "aws"
 
+        if is_minicloud_active() and self.minicloud is None:
+            cfg = MinicloudConfig.from_env()
+            cfg.log_file = os.path.join(self.logdir, "minicloud.log")
+            manager = MinicloudManager(cfg)
+            manager.keep_alive = os.environ.get("MINICLOUD_KEEP_ALIVE", "").lower() in ("1", "true", "yes")
+            manager.preflight_check(skip_aws_creds=True)
+            self.minicloud = manager
+
         self.get_cluster_kafka()
         self.get_cluster_emr()
 
@@ -3806,6 +3816,18 @@ class ClusterTester(unittest.TestCase):
     def show_alive_processes(self):
         return gather_live_processes_and_dump_to_file(self.left_processes_log)
 
+    def _stop_all_kernel_panic_checkers(self):
+        """Stop kernel panic checkers on all nodes across all clusters.
+
+        Must be called before minicloud stops, otherwise the checker threads
+        will spam connection errors trying to reach the dead endpoint.
+        """
+        for cluster in [self.db_cluster, self.loaders, self.monitors]:
+            if not cluster:
+                continue
+            for node in cluster.nodes:
+                node._stop_kernel_panic_checker()  # noqa: SLF001
+
     def _stop_all_node_task_threads(self):
         """Stop DbLogReader and other task threads on all nodes.
 
@@ -3824,6 +3846,10 @@ class ClusterTester(unittest.TestCase):
         self._stop_all_node_task_threads()
         if not self.params.get("execute_post_behavior"):
             self.log.info("Resources will continue to run")
+            if getattr(self, "minicloud", None) is not None:
+                self._stop_all_kernel_panic_checkers()
+                self.minicloud.keep_alive = True
+                self.log.info("minicloud keep_alive set (execute_post_behavior=false)")
             return
 
         actions_per_cluster_type = get_post_behavior_actions(self.params)
@@ -3886,6 +3912,14 @@ class ClusterTester(unittest.TestCase):
             elif action == "keep-on-failure" and critical_events:
                 self.log.info("Critical errors found. Keeping EMR cluster %s", self.emr_cluster.cluster_id)
                 self.test_config.keep_cluster(node_type="emr_cluster", val="keep")
+
+        if getattr(self, "minicloud", None) is not None:
+            self._stop_all_kernel_panic_checkers()
+            if not self.minicloud.keep_alive:
+                self.minicloud.stop()
+                self.minicloud = None
+            else:
+                self.log.info("minicloud keep_alive is set, leaving it running")
 
         self.destroy_credentials()
 
