@@ -37,6 +37,12 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 |------|--------|-----------|
 | Nemesis Rework (Nemesis 2.0) | `in_progress` | [nemesis-rework.md](nemesis/nemesis-rework.md) |
 | Nemesis Extraction Phase 3 | `in_progress` | [nemesis-extraction.md](nemesis/nemesis-extraction.md) |
+<<<<<<< HEAD
+||||||| parent of 964eceb6c (docs(nemesis): document precheck() contract and pruning behavior)
+| Nemesis Pre-Execution Skip Check (`precheck`) | `draft` | [nemesis-precheck.md](nemesis/nemesis-precheck.md) |
+=======
+| Nemesis Pre-Execution Skip Check (`precheck`) | `in_progress` | [nemesis-precheck.md](nemesis/nemesis-precheck.md) |
+>>>>>>> 964eceb6c (docs(nemesis): document precheck() contract and pruning behavior)
 
 ### Stress Tools — Load generators
 

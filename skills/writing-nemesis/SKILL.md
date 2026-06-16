@@ -92,7 +92,43 @@ class DiskCorruptionMonkey(NemesisBaseClass):
 
 If your nemesis is part of a logical group, create a new module (e.g., `monkey/disk_operations.py`). The auto-discovery will find it.
 
-### Step 2: Implement disruption logic in disrupt()
+### Step 2: Add a `precheck()` for static skip conditions (optional)
+
+If your nemesis should never run on certain backends, configs, or Scylla
+versions, implement `precheck(node)`. It is called **once** before the execution
+loop — before any health checks or target-node selection — so an excluded nemesis
+costs nothing per cycle. The `node` argument is a representative live node for
+static version, feature-flag, and cluster-uniform attribute checks.
+
+```python
+def precheck(self, node) -> str | None:
+    # Static config / backend condition — known before the test starts
+    if not self.runner.cluster.params.get("use_ldap_auth"):
+        return "LDAP not configured"
+
+    # Version / feature flag — uniform across the cluster, checked via a representative node
+    if not node.is_tablets_feature_enabled():
+        return "tablets feature not enabled"
+
+    return None  # runnable — keep in the rotation
+```
+
+**What belongs in `precheck()` vs `disrupt()`:**
+
+| Condition type | Where to check |
+|---|---|
+| Test config / backend / product edition | `precheck()` |
+| Scylla version / feature flags / cluster-uniform node attribute (e.g. OS distro) | `precheck()` |
+| Dynamic state (data presence, live node counts, target-node busy state) | **`disrupt()` only** |
+
+Use the provided `node` for cluster-wide probes — `target_node` is not selected
+yet. A non-`None` return permanently removes the nemesis from the rotation and
+emits one `SKIPPED` Argus row. If every selected nemesis is excluded, one
+`CRITICAL` event is published and the test fails loudly.
+
+See [docs/nemesis.md](../../docs/nemesis.md#step-2-add-a-precheck-for-static-skip-conditions-optional) for a full before/after example.
+
+### Step 3: Implement disruption logic in disrupt()
 
 Write self-contained logic. Access the target node via `self.runner.target_node`:
 
@@ -109,7 +145,7 @@ def disrupt(self):
 
 Do NOT write: `self.runner.disrupt_corrupt_disk()` — that adds to legacy debt.
 
-### Step 3: Configure target node pool (optional)
+### Step 4: Configure target node pool (optional)
 
 By default, nemesis target data nodes. Use decorators to change this:
 
@@ -122,7 +158,7 @@ class MyAllNodesMonkey(NemesisBaseClass):
         ...
 ```
 
-### Step 4: Add CI configuration (optional)
+### Step 5: Add CI configuration (optional)
 
 If your nemesis needs extra YAML configs or Jenkins parameters for CI jobs:
 
@@ -139,7 +175,7 @@ class DiskCorruptionMonkey(NemesisBaseClass):
 
 These are consumed by `NemesisJobGenerator` to create per-nemesis Jenkins pipelines.
 
-### Step 5: Write unit tests
+### Step 6: Write unit tests
 
 Add tests in `unit_tests/nemesis/`. The existing test infrastructure provides reusable fakes and patterns:
 
@@ -225,6 +261,8 @@ All flags are on `NemesisFlags` in `sdcm/nemesis/__init__.py`. Each defaults to 
 - [ ] Class inherits from `NemesisBaseClass`
 - [ ] File is under `sdcm/nemesis/monkey/`
 - [ ] Boolean flags accurately describe the nemesis behavior
+- [ ] Static skip conditions (config, backend, version, feature flags) placed in `precheck()`, not `raise UnsupportedNemesis` in `disrupt()`
+- [ ] Dynamic skip conditions (data presence, live node counts, target-node state) remain in `disrupt()` as `raise UnsupportedNemesis`
 - [ ] Disruption logic is self-contained in `disrupt()` — no `self.runner.disrupt_*()` delegation
 - [ ] Unit tests in `unit_tests/nemesis/` covering disruption logic
 - [ ] No inline imports (SCT convention)
