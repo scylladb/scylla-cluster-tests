@@ -55,6 +55,43 @@ def _get_service_level_propagation_timeout(
     return timeout, stats
 
 
+def _get_compaction_timeout(
+    node_info_service: NodeLoadInfoService, timeout: int | float = None
+) -> tuple[int | float, dict[str, Any]]:
+    """
+    Experimentally got these timings
+    Using the estimate = (MB / shards) / 25 + 120
+    we ensure we always overshoot the actual duration
+
+    Shards | MB     | Time     | Actual(s) | Est(s) | Diff(s) | Diff(%)
+    -------+--------+----------+-----------+--------+---------+--------
+    2      | 53084  | 00:18:05 |      1085 |   1182 |      97 |   8.9%
+    4      | 51814  | 00:08:47 |       527 |    638 |     111 |  21.1%
+    7      | 50698  | 00:04:25 |       265 |    410 |     145 |  54.7%
+
+    2      | 217528 | 00:59:36 |      3576 |   4471 |     895 |  25.0%
+    4      | 204093 | 00:30:53 |      1853 |   2161 |     308 |  16.6%
+    7      | 187566 | 00:14:27 |       867 |   1192 |     325 |  37.5%
+
+    2      | 340346 | 01:43:14 |      6194 |   6927 |     733 |  11.8%
+    4      | 335093 | 00:49:18 |      2958 |   3471 |     513 |  17.3%
+    7      | 272496 | 00:21:07 |      1267 |   1677 |     410 |  32.4%
+    """
+    COMPACTION_SPEED = 25  # MB/s per shard
+    FIXED_OVERHEAD = 120  # seconds
+    SAFETY_FACTOR = 2  # timeout is doubled to account for load, instance type, etc. variations
+    try:
+        data_size = node_info_service.node_data_size_mb  # MB
+        shards = node_info_service.shards_count
+        if data_size and shards:
+            estimated = int((data_size / shards) / COMPACTION_SPEED) + FIXED_OVERHEAD
+            timeout = estimated * SAFETY_FACTOR
+        return timeout, node_info_service.as_dict()
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Failed to get node info for timeout: \n%s", exc)
+        return timeout, {}
+
+
 class Operations(Enum):
     """Available operations for adaptive timeouts. Each operation maps to a function to calculate timeout based on node load info.
 
@@ -66,7 +103,7 @@ class Operations(Enum):
     START_SCYLLA = ("start_scylla", _get_soft_timeout, ("timeout",))
     RESTART_SCYLLA = ("restart_scylla", _get_soft_timeout, ("timeout",))
     CREATE_MV = ("create_mv", _get_soft_timeout, ("timeout",))
-    MAJOR_COMPACT = ("major_compact", _get_soft_timeout, ("timeout",))
+    MAJOR_COMPACT = ("major_compact", _get_compaction_timeout, ("timeout",))
     REPAIR = ("repair", _get_soft_timeout, ("timeout",))
     MGMT_REPAIR = ("mgmt_repair", _get_soft_timeout, ("timeout",))
     BACKUP = ("backup", _get_soft_timeout, ("timeout",))
