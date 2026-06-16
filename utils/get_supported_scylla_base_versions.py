@@ -42,6 +42,13 @@ unsupported_versions = [
     "2024.2",
 ]
 
+# Versions that must not be returned as upgrade base versions, but are intentionally kept in the
+# supported list so they don't shift the version indexing used while selecting the base versions.
+# These are filtered out only at the very last stage, right before returning the result.
+excluded_base_versions = [
+    "2023.1",
+]
+
 
 class UpgradeBaseVersion:
     oss_start_support_version = None
@@ -155,7 +162,13 @@ class UpgradeBaseVersion:
         oss_base_version = self.filter_rc_only_version(oss_base_version)
         ent_base_version = self.filter_rc_only_version(ent_base_version)
         LOGGER.info("Supported scylla base versions for: oss=%s enterprise=%s", oss_base_version, ent_base_version)
-        return list(set(oss_base_version + ent_base_version))
+        # Drop versions that should not be used as upgrade base versions, while keeping the
+        # selection logic above operating on the full supported list (preserves version indexing).
+        base_versions = [v for v in set(oss_base_version + ent_base_version) if v not in excluded_base_versions]
+        LOGGER.info(
+            "Final supported scylla base versions after excluding %s: %s", excluded_base_versions, base_versions
+        )
+        return base_versions
 
     def filter_rc_only_version(self, base_version_list: list) -> list:
         LOGGER.info("Filtering rc versions from base version list...")
