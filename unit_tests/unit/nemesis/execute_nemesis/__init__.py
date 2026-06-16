@@ -17,6 +17,10 @@ class TestExecuteBaseClass(ABC):
     def __init__(self, runner):
         self.runner = runner
 
+    def precheck(self, node) -> str | None:
+        """Stub matching NemesisBaseClass.precheck(node) contract; always runnable."""
+        return None
+
     @abstractmethod
     def disrupt(self):
         """Disrupt method"""
@@ -55,6 +59,26 @@ class VersionNotFoundTestNemesis(TestExecuteBaseClass):
 
     def disrupt(self):
         raise MethodVersionNotFound("Intentional version skip")
+
+
+class PrecheckSkipNemesis(TestExecuteBaseClass):
+    """A nemesis whose precheck() returns a skip reason."""
+
+    def precheck(self, node) -> str | None:
+        return "static condition not met"
+
+    def disrupt(self):
+        print("Disrupting cluster")
+
+
+class PrecheckErrorNemesis(TestExecuteBaseClass):
+    """A nemesis whose precheck() raises an exception."""
+
+    def precheck(self, node) -> str | None:
+        raise RuntimeError("precheck blew up")
+
+    def disrupt(self):
+        print("Disrupting cluster")
 
 
 class TestNemesisRunner(NemesisRunner):
