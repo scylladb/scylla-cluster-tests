@@ -254,6 +254,29 @@ class NemesisBaseClass(NemesisFlags, ABC):
         super().__init__()
         self.runner: "NemesisRunner" = runner
 
+    def precheck(self, node: BaseNode) -> str | None:
+        """
+        Static feasibility check evaluated ONCE before the nemesis is scheduled.
+
+        Return None  -> nemesis is runnable and kept in the rotation.
+        Return a str -> human-readable skip reason; nemesis is permanently excluded
+                        from the disruption list and will not run during this test.
+
+        Use ONLY for conditions that do not change during the test run:
+          - Test config, backend, or product edition
+            (e.g. cluster.params.get(...), _is_it_on_kubernetes(), node.is_enterprise)
+          - Scylla version, feature flags, or cluster-uniform node attributes
+            (e.g. ComparableScyllaVersion checks, is_tablets_feature_enabled(), node.distro)
+
+        No target node is selected yet — use the provided representative live
+        node for any cluster-wide probes.
+
+        Do NOT check dynamic state (data presence, live node counts, whether a
+        specific target node is busy or alone in its rack) — those belong in
+        disrupt().
+        """
+        return None
+
     @abstractmethod
     def disrupt(self):
         """
