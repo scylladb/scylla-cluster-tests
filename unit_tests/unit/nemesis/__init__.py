@@ -58,6 +58,10 @@ class TestBaseClass(ABC):
     def __init__(self, runner):
         self.runner = runner
 
+    def precheck(self, node) -> str | None:
+        """Stub matching NemesisBaseClass.precheck(node) contract; always runnable."""
+        return None
+
     @abstractmethod
     def disrupt(self):
         """Disrupt method"""
