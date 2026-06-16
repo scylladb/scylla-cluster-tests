@@ -221,7 +221,82 @@ class MyNewMonkey(NemesisBaseClass):
 ```
 
 
-### Step 2: Implement the disruption logic
+### Step 2: Add a `precheck()` for static skip conditions (optional)
+
+If your nemesis has conditions that make it permanently infeasible on certain
+backends, configs, or Scylla versions, implement `precheck()` instead of
+raising `UnsupportedNemesis` inside `disrupt()`.
+
+`precheck(node)` is called **once** before the execution loop starts, so a
+nemesis excluded here costs zero health-check, node-selection, or Argus overhead
+on every subsequent cycle. The `node` argument is a representative live node for
+static version, feature-flag, and cluster-uniform attribute checks.
+
+```python
+class MyTabletNemesis(NemesisBaseClass):
+    def precheck(self, node) -> str | None:
+        # Static config / backend condition — known before the test starts
+        if self.runner.cluster.params.get("cluster_backend") == "docker":
+            return "MyTabletNemesis requires a cloud backend"
+
+        # Version / feature flag — uniform across the cluster, checked via a representative node
+        if not node.is_tablets_feature_enabled():
+            return "tablets feature not enabled on this cluster"
+
+        return None  # runnable — keep in the rotation
+
+    def disrupt(self):
+        ...
+```
+
+#### What belongs in `precheck()` vs `disrupt()`
+
+| Condition type | Where to check |
+|---|---|
+| Test config / backend / product edition | `precheck()` |
+| Scylla version / feature flags / cluster-uniform node attribute (e.g. OS distro) | `precheck()` |
+| Dynamic cluster state (data presence, live node counts, target-node busy state) | **`disrupt()` only** |
+
+> **Representative node rule:** `precheck(node)` receives a representative node
+> for any cluster-wide probe (version, feature flags, OS distro). It is not the
+> selected `target_node`. Do **not** check per-node dynamic state in `precheck()`.
+
+#### What happens when `precheck()` returns a reason
+
+1. The nemesis is permanently removed from `disruptions_list` — it never enters
+   the execution cycle.
+2. Exactly one `DisruptionEvent` marked `SKIPPED` is published at precheck time
+   (one `NemesisStatus.SKIPPED` row in Argus per excluded nemesis, not per cycle).
+3. A warning is logged: `"Nemesis <Name> excluded by precheck: <reason>"`.
+4. If **every** selected nemesis is excluded, one `Severity.CRITICAL` `InfoEvent`
+   is published naming each exclusion reason, and the nemesis thread stops
+   cleanly. A misconfigured selector that produces an empty rotation fails the
+   test loudly.
+
+#### Before / after example
+
+**Before** — static guard inside `disrupt()`, evaluated every cycle:
+
+```python
+def disrupt(self):
+    if not self.runner.cluster.params.get("use_ldap_auth"):
+        raise UnsupportedNemesis("LDAP not configured")
+    # ... actual disruption
+```
+
+**After** — evaluated once before the execution loop via `precheck(node)`:
+
+```python
+def precheck(self, node) -> str | None:
+    if not self.runner.cluster.params.get("use_ldap_auth"):
+        return "LDAP not configured"
+    return None
+
+def disrupt(self):
+    # ... actual disruption (no static guard needed here)
+```
+
+### Step 3: Implement the disruption logic
 
 If your nemesis reuses existing logic, just call the appropriate runner method.
 You can reuse method from NemesisRunner, but it is discouraged and you should make the nemesis self-contained
@@ -309,7 +384,8 @@ from sdcm.nemesis import NemesisRunner
 class MyCustomRunner(NemesisRunner):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Select all non-disruptive nemesis
+        # Select all non-disruptive nemesis. precheck(node) is called by run()
+        # before the execution loop — excluded nemesis are reported and logged once.
         self.disruptions_list = self.build_disruptions_by_selector("not disruptive")
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 ```
