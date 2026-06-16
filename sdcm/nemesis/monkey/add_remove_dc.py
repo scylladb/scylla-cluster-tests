@@ -123,7 +123,6 @@ class AddRemoveDcNemesis(NemesisBaseClass):
             node: New datacenter node to configure.
         """
         with node.remote_scylla_yaml() as scylla_yml:
-            scylla_yml.rpc_address = node.ip_address
             scylla_yml.seed_provider = [
                 SeedProvider(
                     class_name="org.apache.cassandra.locator.SimpleSeedProvider",
