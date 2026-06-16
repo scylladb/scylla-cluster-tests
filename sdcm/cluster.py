@@ -7550,6 +7550,7 @@ class BaseMonitorSet:
         screenshot_collector = GrafanaScreenShot(
             name="grafana-screenshot", test_start_time=test_start_time, extra_entities=grafana_extra_dashboards
         )
+        screenshot_collector.set_params(self.params)
         screenshot_files = screenshot_collector.collect(node, self.logdir)
         for screenshot in screenshot_files:
             s3_path = "{test_id}/{date}".format(test_id=self.test_config.test_id(), date=date_time)
@@ -7580,7 +7581,9 @@ class BaseMonitorSet:
         if not self.nodes:
             return ""
         try:
-            if snapshot_archive := PrometheusSnapshots(name="prometheus_snapshot").collect(self.nodes[0], self.logdir):
+            prometheus = PrometheusSnapshots(name="prometheus_snapshot")
+            prometheus.set_params(self.params)
+            if snapshot_archive := prometheus.collect(self.nodes[0], self.logdir):
                 self.log.debug("Snapshot local path: %s", snapshot_archive)
                 return upload_archive_to_s3(snapshot_archive, self.monitor_id)
         except Exception as details:  # noqa: BLE001
