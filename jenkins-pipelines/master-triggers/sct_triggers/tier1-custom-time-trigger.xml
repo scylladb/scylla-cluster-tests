@@ -30,7 +30,26 @@ stress_duration=1440</properties>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
           <projects>
-            ../tier1/gemini-1tb-10h,../tier1/longevity-1tb-5days-azure-test,../tier1/longevity-large-partition-200k-pks-4days-gce-test,../tier1/longevity-mv-si-4days-streaming-test,../tier1/longevity-schema-topology-changes-12h-test,../tier1/longevity-twcs-48h-test,../tier1/longevity-multidc-schema-topology-changes-12h-test,../tier1/longevity-50gb-3days-test,../tier1/longevity-150gb-asymmetric-cluster-12h-test</projects>
+            ../tier1/gemini-1tb-10h,../tier1/longevity-1tb-5days-azure-test,../tier1/longevity-large-partition-200k-pks-4days-gce-test,../tier1/longevity-mv-si-4days-streaming-test,../tier1/longevity-schema-topology-changes-12h-test,../tier1/longevity-twcs-48h-test,../tier1/longevity-multidc-schema-topology-changes-12h-test,../tier1/longevity-150gb-asymmetric-cluster-12h-test</projects>
+          <condition>SUCCESS</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+          <triggerFromChildProjects>false</triggerFromChildProjects>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+              <properties>scylla_version=%(sct_branch)s:latest
+availability_zone=a,b,c
+provision_type=on_demand
+post_behavior_db_nodes=destroy
+post_behavior_monitor_nodes=destroy
+stress_duration=1440
+requested_by_user=pehala
+region=us-east-1</properties>
+              <textParamValueOnNewLine>false</textParamValueOnNewLine>
+            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+          </configs>
+          <projects>../tier1/longevity-50gb-3days-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
