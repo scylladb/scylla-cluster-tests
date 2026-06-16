@@ -19,3 +19,4 @@ append_scylla_setup_args: '--no-selinux-setup'
 
 user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
 use_preinstalled_scylla: false
+fallback_to_next_availability_zone: true
