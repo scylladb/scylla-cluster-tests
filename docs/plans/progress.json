@@ -1,0 +1,302 @@
+{
+  "generated": "2026-05-14",
+  "plans": [
+    {
+      "id": "ai-skills-framework",
+      "title": "AI Skills Framework",
+      "file": "ai-tooling/ai-skills-framework.md",
+      "domain": "ai-tooling",
+      "status": "complete",
+      "created": "2025-02-25",
+      "phases_total": 7,
+      "phases_done": 7
+    },
+    {
+      "id": "docker-cleanup-all-backends",
+      "title": "Docker Cleanup for All Backends",
+      "file": "infrastructure/docker-cleanup-all-backends.md",
+      "domain": "cluster",
+      "status": "draft",
+      "created": "2026-02-19",
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "full-version-tag-lookup",
+      "title": "Full Version Tag Lookup",
+      "file": "config/full-version-tag-lookup.md",
+      "domain": "framework",
+      "status": "draft",
+      "created": "2026-01-12",
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "gce-provisioning",
+      "title": "GCE Provisioning",
+      "file": "infrastructure/gce-provisioning.md",
+      "domain": "cluster",
+      "status": "draft",
+      "created": "2026-01-05",
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "health-check-optimization",
+      "title": "Health Check Optimization",
+      "file": "infrastructure/health-check-optimization.md",
+      "domain": "framework",
+      "status": "draft",
+      "created": "2026-01-11",
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "feature-aware-adaptive-topology-timeouts",
+      "title": "Feature-Aware Adaptive Timeouts for Topology Operations",
+      "file": "infrastructure/feature-aware-adaptive-topology-timeouts.md",
+      "domain": "framework",
+      "status": "draft",
+      "created": "2026-05-14",
+      "phases_total": 5,
+      "phases_done": 0
+    },
+    {
+      "id": "jenkins-reuse-cluster",
+      "title": "Jenkins Pipeline Cluster Reuse",
+      "file": "jenkins/jenkins-reuse-cluster.md",
+      "domain": "ci-cd",
+      "status": "draft",
+      "created": "2026-03-18",
+      "phases_total": 5,
+      "phases_done": 0
+    },
+    {
+      "id": "constraint-based-sizing",
+      "title": "Constraint-Based Instance Sizing",
+      "file": "config/constraint-based-sizing.md",
+      "domain": "config",
+      "status": "complete",
+      "created": "2026-05-13",
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "config-type-normalization",
+      "title": "Config Type Normalization",
+      "file": "config/config-type-normalization.md",
+      "domain": "config",
+      "status": "complete",
+      "created": "2026-04-17",
+      "phases_total": 5,
+      "phases_done": 5
+    },
+    {
+      "id": "jenkins-pipeline-config-linter",
+      "title": "Jenkins Pipeline Config Linter",
+      "file": "jenkins/jenkins-pipeline-config-linter.md",
+      "domain": "ci-cd",
+      "status": "draft",
+      "created": "2026-03-09",
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "jenkins-uno-choice-billing-project",
+      "title": "Jenkins Uno-Choice Billing Project",
+      "file": "jenkins/jenkins-uno-choice-billing-project.md",
+      "domain": "ci-cd",
+      "status": "draft",
+      "created": "2026-02-11",
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "perf-simple-query-offline-installer-trigger",
+      "title": "Perf-Simple-Query Offline Installer Trigger",
+      "file": "jenkins/perf-simple-query-offline-installer-trigger.md",
+      "domain": "ci-cd",
+      "status": "complete",
+      "created": "2026-04-06",
+      "phases_total": 3,
+      "phases_done": 3
+    },
+    {
+      "id": "pipeline-labeling-and-documentation",
+      "title": "Pipeline Labeling and Documentation",
+      "file": "jenkins/pipeline-labeling-and-documentation.md",
+      "domain": "ci-cd",
+      "status": "draft",
+      "created": "2026-03-19",
+      "phases_total": 8,
+      "phases_done": 0
+    },
+    {
+      "id": "nemesis-rework",
+      "title": "Nemesis Rework (Nemesis 2.0)",
+      "file": "nemesis/nemesis-rework.md",
+      "domain": "nemesis",
+      "status": "in_progress",
+      "created": "2026-01-30",
+      "phases_total": 3,
+      "phases_done": 1
+    },
+    {
+      "id": "nemesis-extraction-phase3",
+      "title": "Nemesis Extraction Phase 3",
+      "file": "nemesis/nemesis-extraction.md",
+      "domain": "nemesis",
+      "status": "in_progress",
+      "created": "2026-03-30",
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "nemesis-precheck",
+      "title": "Nemesis Pre-Execution Skip Check (precheck)",
+      "file": "nemesis/nemesis-precheck.md",
+      "domain": "nemesis",
+      "status": "in_progress",
+      "created": "2026-06-11",
+      "phases_total": 5,
+      "phases_done": 3
+    },
+    {
+      "id": "k8s-multitenancy-dict-config",
+      "title": "K8s Multitenancy Dict Config",
+      "file": "config/k8s-multitenancy-dict-config.md",
+      "domain": "k8s",
+      "status": "draft",
+      "created": "2026-01-24",
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "keystore-improvements",
+      "title": "Keystore Improvements",
+      "domain": "framework",
+      "status": "pending_pr",
+      "pr": 14055,
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "minicloud-local-testing",
+      "title": "MiniCloud Local Testing",
+      "domain": "testing",
+      "status": "pending_pr",
+      "pr": 14009,
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "unit-integration-test-separation",
+      "title": "Unit/Integration Test Separation",
+      "file": "testing/unit-integration-test-separation.md",
+      "domain": "testing",
+      "status": "complete",
+      "created": "2026-03-23",
+      "phases_total": 5,
+      "phases_done": 5
+    },
+    {
+      "id": "resilient-test-config-dependencies",
+      "title": "Resilient Test Config Dependencies",
+      "domain": "config",
+      "status": "pending_pr",
+      "pr": 13982,
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "cassandra-oracle-cluster",
+      "title": "Cassandra Oracle Cluster",
+      "domain": "stress-tools",
+      "status": "pending_pr",
+      "pr": 13916,
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "amazon-emr-spark-migrator",
+      "title": "Amazon EMR Spark Migrator",
+      "domain": "cluster",
+      "status": "pending_pr",
+      "pr": 13909,
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "source-destination-clusters",
+      "title": "Source-Destination Clusters",
+      "domain": "cluster",
+      "status": "pending_pr",
+      "pr": 13908,
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "centralized-trigger-matrix",
+      "title": "Centralized Trigger Matrix",
+      "domain": "ci-cd",
+      "status": "pending_pr",
+      "pr": 13887,
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "typed-config-access-migration",
+      "title": "Typed Config Access Migration",
+      "domain": "config",
+      "status": "pending_pr",
+      "pr": 13878,
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "sct-config-validation-and-lazy-images",
+      "title": "SCT Config Validation and Lazy Images",
+      "domain": "config",
+      "status": "pending_pr",
+      "pr": 13877,
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "sct-config-followup-refactoring",
+      "title": "SCT Config Follow-up Refactoring",
+      "domain": "config",
+      "status": "pending_pr",
+      "pr": 13845,
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "nemesis-extraction-phase3",
+      "title": "Nemesis Extraction Phase 3",
+      "domain": "nemesis",
+      "status": "pending_pr",
+      "pr": 13769,
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "i8g-performance-jobs-migration",
+      "title": "i8g Performance Jobs Migration",
+      "domain": "ci-cd",
+      "status": "pending_pr",
+      "pr": 13629,
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "curl-retry-timeout-linting",
+      "title": "curl Retry/Timeout Linting",
+      "domain": "ci-cd",
+      "status": "pending_pr",
+      "pr": 13509,
+      "phases_total": null,
+      "phases_done": 0
+    }
+  ]
+}
