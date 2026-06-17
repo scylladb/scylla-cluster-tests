@@ -2290,6 +2290,9 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
     base_path = f"{server.base_sct_dir}/jenkins-pipelines/oss"
     server.create_job_tree(base_path)
 
+    scylla_doctor_path = f"{server.base_sct_dir}/jenkins-pipelines/scylla-doctor"
+    server.create_job_tree(scylla_doctor_path)
+
     if branch == "scylla-master":
         base_path = f"{server.base_sct_dir}/jenkins-pipelines/master-triggers"
         server.create_job_tree(base_path)
