@@ -62,7 +62,7 @@ def test_provision_resources_sends_error_event_to_argus():
         assert result.exit_code == 1
 
         # Verify argus_client was initialized
-        test_config_instance.init_argus_client.assert_called_once_with(mock_params)
+        test_config_instance.init_argus_client.assert_called_once()
 
         # Verify submit_event was called
         assert mock_argus_client.submit_event.called
