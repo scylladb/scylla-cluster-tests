@@ -99,6 +99,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                    description: 'Gce project to use',
                    name: 'gce_project')
+            text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
+                   description: 'Extra environment variables to inject (format: KEY1=VAL1\nKEY2=VAL2)',
+                   name: 'extra_environment_variables')
 
             // NOTE: Optional parameters for BYO ScyllaDB stage
             separator(name: 'BYO_SCYLLA', sectionHeader: 'BYO ScyllaDB Configuration')
@@ -120,9 +123,9 @@ def call(Map pipelineParams) {
             string(defaultValue: 'next',
                    description: 'Default branch to be used for scylla and other repositories. Default is "next".',
                    name: 'byo_default_branch')
-            text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
-                   description: 'Extra environment variables to inject (format: KEY1=VAL1\nKEY2=VAL2)',
-                   name: 'extra_environment_variables')
+            booleanParam(defaultValue: false,
+                   description: 'Build images for both architectures (ARM and x86). Useful for reusing BYO artifacts across multiple test runs.',
+                   name: 'byo_build_both_arch')
         }
         options {
             timestamps()
