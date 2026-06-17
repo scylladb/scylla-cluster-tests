@@ -566,6 +566,14 @@ def ignore_raft_topology_cmd_failing():
                 extra_time_to_expiration=30,
             )
         )
+        stack.enter_context(
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent,
+                regex=r".*raft_topology\s+-\s+raft_topology_cmd stream_ranges failed with:\s+seastar::gate_closed_exception \(gate closed\).*",
+                extra_time_to_expiration=30,
+            )
+        )
         yield
 
 
@@ -641,6 +649,22 @@ def ignore_ipv6_failure_to_assign():
                 extra_time_to_expiration=60,
             )
         )
+        yield
+
+
+@contextmanager
+def ignore_raft_applier_gate_closed_errors():
+    with EventsSeverityChangerFilter(
+        new_severity=Severity.WARNING,
+        event_class=DatabaseLogEvent,
+        regex=(
+            r".*raft\s+-\s+\[[0-9a-f-]+\]\s+"
+            r"applier fiber stopped because of the error:\s*"
+            r".*?raft::state_machine_error"
+            r".*?seastar::gate_closed_exception\s+\(gate closed\).*"
+        ),
+        extra_time_to_expiration=30,
+    ):
         yield
 
 
