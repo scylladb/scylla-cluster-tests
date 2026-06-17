@@ -35,19 +35,21 @@ const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
 const COMPRESSION = latte::param!("compression", "");
 const COMPACTION_STRATEGY = latte::param!("compaction_strategy", "");
 const SPECULATIVE_RETRY = latte::param!("speculative_retry", "");
-const KEYSPACE = latte::param!("keyspace", "keyspace1");
-const TABLE = latte::param!("table", "standard1");
+const STORAGE_ENGINE = latte::param!("storage_engine", "");
+const MIN_PER_SHARD_TABLET_COUNT = latte::param!("min_per_shard_tablet_count", 0);
+pub const KEYSPACE = latte::param!("keyspace", "keyspace1");
+pub const TABLE = latte::param!("table", "standard1");
 const COUNTER_TABLE = latte::param!("counter_table", "");
-const KEY_SIZE = latte::param!("key_size", 10);
-const COLUMN_SIZE = latte::param!("column_size", 128);
-const COLUMN_COUNT = latte::param!("column_count", 8);
-const ROW_COUNT = latte::param!("row_count", 1_000_000);
-const OFFSET = latte::param!("offset", 0);
+pub const KEY_SIZE = latte::param!("key_size", 10);
+pub const COLUMN_SIZE = latte::param!("column_size", 128);
+pub const COLUMN_COUNT = latte::param!("column_count", 8);
+pub const ROW_COUNT = latte::param!("row_count", 1_000_000);
+pub const OFFSET = latte::param!("offset", 0);
 const GAUSS_MEAN = latte::param!("gauss_mean", 0);
 const GAUSS_STDDEV = latte::param!("gauss_stddev", 0);
 
-const P_STMT_WRITE = "latte_prep_stmt__write";
-const P_STMT_READ = "latte_prep_stmt__read";
+pub const P_STMT_WRITE = "latte_prep_stmt__write";
+pub const P_STMT_READ = "latte_prep_stmt__read";
 const P_STMT_COUNTER_WRITE = "latte_prep_stmt__counter_write";
 const P_STMT_COUNTER_READ = "latte_prep_stmt__counter_read";
 
@@ -90,12 +92,22 @@ pub async fn schema(db) {
         // Result: WITH speculative_retry = "NONE"
         speculative_retry += " AND speculative_retry = '" + SPECULATIVE_RETRY + "' "
     }
+    let storage_engine = "";
+    if !STORAGE_ENGINE.is_empty() {
+        // Result: AND storage_engine = 'logstor'
+        storage_engine += " AND storage_engine = '" + STORAGE_ENGINE + "'"
+    }
+    let tablets = "";
+    if MIN_PER_SHARD_TABLET_COUNT > 0 {
+        // Result: AND tablets = {'min_per_shard_tablet_count': '32'}
+        tablets += ` AND tablets = {'min_per_shard_tablet_count': '${MIN_PER_SHARD_TABLET_COUNT}'}`
+    }
     let comment = " AND comment='Created by latte'";
 
     // Create blob table
     db.execute(
         `CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE}` +
-        `(key blob PRIMARY KEY${columns_def}${compression}${compaction}${speculative_retry}${comment}`
+        `(key blob PRIMARY KEY${columns_def}${compression}${compaction}${speculative_retry}${storage_engine}${tablets}${comment}`
     ).await?;
 
     if !COUNTER_TABLE.is_empty() {
@@ -193,7 +205,7 @@ async fn get_partition_idx(db, i) {
 }
 
 /// Utility function to be used by the 'write' public function
-async fn get_blob_columns_data(key, idx) {
+pub async fn get_blob_columns_data(key, idx) {
     let columns = [key];
     for current_column_idx in 0..=COLUMN_COUNT-1 {
         columns.push(blob(idx + current_column_idx * ROW_COUNT, COLUMN_SIZE));

@@ -1,0 +1,19 @@
+experimental_features:
+  - logstor
+
+append_scylla_yaml:
+  logstor_disk_size_in_mb: 80000
+  logstor_separator_max_memory_in_mb: 256
+  logstor_format_on_startup: true
+
+# Append --task-quota-ms 0.2 to existing append_scylla_args (++ prefix appends instead of replacing)
+append_scylla_args: '++ --task-quota-ms 0.2'
+
+n_db_nodes: 4
+n_loaders: 1
+# Nodes used to replicate the Aerospike test to be able to compare the results
+instance_type_db: 'i4i.4xlarge'
+instance_type_loader: 'c6i.16xlarge'
+
+simulated_racks: 2
+rack_aware_loader: true
