@@ -512,10 +512,14 @@ def get_arch_from_instance_type(instance_type: str, region_name: str) -> AwsArch
             instance_type_info = client.describe_instance_types(InstanceTypes=[instance_type])
         except ClientError as exc:
             if exc.response["Error"]["Code"] == "InvalidInstanceType":
-                raise ValueError(
-                    f"Instance type '{instance_type}' is not available in region '{region_name}'. "
-                    f"Please verify the instance type exists in this region or use a different one."
-                ) from exc
+                LOGGER.warning(
+                    "Instance type '%s' is not available in region '%s'. "
+                    "Defaulting to arch '%s'. Validation will report this error later.",
+                    instance_type,
+                    region_name,
+                    arch,
+                )
+                return arch
             raise
 
         try:

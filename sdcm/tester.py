@@ -262,6 +262,18 @@ def teardown_on_exception(method):
                 source=args[0].__class__.__name__, source_method="SetUp", exception=exc
             ).publish_or_dump()
             TEST_LOG.exception("Exception in %s. Will call tearDown", method.__name__)
+            # Try to initialize Argus if it hasn't been done yet, so the failure
+            # is reported with proper TEST_ERROR status.
+            tester = args[0]
+            if hasattr(tester, "params") and tester.params and not hasattr(tester, "argus_heartbeat_stop_signal"):
+                try:
+                    if not tester.test_config.test_id():
+                        reuse_id = tester.params.get("reuse_cluster")
+                        tester.test_config.set_test_id(reuse_id or tester.params.get("test_id") or uuid4())
+                    tester.init_argus_run()
+                    tester.argus_heartbeat_stop_signal = tester.start_argus_heartbeat_thread()
+                except Exception:  # noqa: BLE001
+                    TEST_LOG.warning("Failed to initialize Argus for error reporting", exc_info=True)
             args[0].tearDown()
             raise
 
@@ -674,6 +686,10 @@ class ClusterTester(unittest.TestCase):
                     r"source=[\w]+.SetUp\(\).+exception=403 FORBIDDEN QUOTA_EXCEEDED", re.IGNORECASE | re.DOTALL
                 ),
                 re.compile(r"source=[\w]+.SetUp\(\).+InsufficientInstanceCapacity", re.IGNORECASE | re.DOTALL),
+                re.compile(r"source=[\w]+.SetUp\(\).+InvalidInstanceType", re.IGNORECASE | re.DOTALL),
+                re.compile(
+                    r"source=[\w]+.SetUp\(\).+is not (supported|available) in region", re.IGNORECASE | re.DOTALL
+                ),
             ]
             for error in errors:
                 if error.search(event):
@@ -4223,7 +4239,8 @@ class ClusterTester(unittest.TestCase):
         """
         yield
         self.argus_finalize_test_run()
-        self.argus_heartbeat_stop_signal.set()
+        if hasattr(self, "argus_heartbeat_stop_signal"):
+            self.argus_heartbeat_stop_signal.set()
 
     @silence()
     def destroy_localhost(self):
