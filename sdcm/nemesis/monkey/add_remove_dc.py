@@ -1,127 +1,28 @@
-from collections.abc import Iterator
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack
+from typing import List
 
 from sdcm.cluster import BaseNode
 from sdcm.exceptions import KillNemesis, UnsupportedNemesis
 from sdcm.nemesis import NemesisBaseClass
 from sdcm.provision.scylla_yaml import SeedProvider
-from sdcm.utils.decorators import retrying, skip_on_capacity_issues
-from sdcm.utils.features import is_tablets_feature_enabled
+from sdcm.sct_events.system import InfoEvent
+from sdcm.utils.decorators import skip_on_capacity_issues
 from sdcm.utils.replication_strategy_utils import (
     NetworkTopologyReplicationStrategy,
     ReplicationStrategy,
+    SimpleReplicationStrategy,
     temporary_replication_strategy_setter,
 )
 from sdcm.wait import wait_for_log_lines
 
 
 class AddRemoveDcNemesis(NemesisBaseClass):
-    """
-    https://docs.scylladb.com/manual/stable/operating-scylla/procedures/cluster-management/add-dc-to-existing-dc.html
-    https://docs.scylladb.com/manual/stable/operating-scylla/procedures/cluster-management/decommissioning-data-center.html
-
-    1. Create and populate a new keyspace
-    2. Add some new nodes in a new datacenter
-    3. Ensure relevant keyspaces are using NetworkTopologyStrategy
-    4. Alter the keyspaces to add the new datacenter with the appropriate replication factor
-    5. Run rebuild on the new datacenter nodes, if vnodes
-    6. Run a full cluster repair
-    7. Run some writes and reads to verify the new datacenter is working
-    8. Alter the keyspaces to set replication factor to 0 for the new datacenter
-    9. Decommission the new datacenter nodes
-    10. Verify the keyspace is healthy after decommissioning the new datacenter
-    """
-
     disruptive = True
     limited = True
     topology_changes = True
 
-    def __init__(self, *args, **kwargs):
-        """Initialize new-datacenter state and keyspace defaults."""
-        super().__init__(*args, **kwargs)
-        self.new_nodes: list[BaseNode] = []
-        self.initial_dc_name: str = self.datacenters[0]
-        self.new_ks_name: str = "keyspace_new_dc"
-        self.new_ks_rf: int = len(self.runner.cluster.racks)
-
-    @property
-    def num_nodes_in_new_dc(self) -> int:
-        """Return new datacenter size based on supported RF change size."""
-        if self.runner.cluster.is_features_enabled_on_node(
-            node=self.runner.target_node, feature_list=["KEYSPACE_MULTI_RF_CHANGE"]
-        ):
-            return 2
-        return 1
-
-    @property
-    def system_keyspaces(self) -> list[str]:
-        """Return system keyspaces"""
-        system_keyspaces = ["system_distributed", "system_traces"]
-        if (
-            not self.runner.target_node.raft.is_consistent_topology_changes_enabled
-        ):  # auth-v2 is used when consistent topology is enabled
-            system_keyspaces.append("system_auth")
-        return system_keyspaces
-
-    @contextmanager
-    def temporary_system_keyspaces_network_topology_strategy(self) -> Iterator[None]:
-        """Temporarily switch system keyspaces to NetworkTopologyStrategy."""
-        with (
-            temporary_replication_strategy_setter(self.runner.target_node) as ntrs_setter,
-            self.runner.action_log_scope("Temporarily switch system keyspaces to NetworkTopologyStrategy"),
-        ):
-            for keyspace in self.system_keyspaces:
-                old_rs = ReplicationStrategy.get(self.runner.target_node, keyspace)
-                if not isinstance(old_rs, NetworkTopologyReplicationStrategy):
-                    new_rs = NetworkTopologyReplicationStrategy(**{self.initial_dc_name: old_rs.replication_factors[0]})
-                    ntrs_setter(**{keyspace: new_rs})
-            yield
-
-    @contextmanager
-    def temporary_new_dc_replication_factors(self) -> Iterator[None]:
-        """Temporarily update replication factors for the new datacenter."""
-        with (
-            temporary_replication_strategy_setter(self.runner.target_node) as new_dc_setter,
-            self.runner.action_log_scope("Temporarily update replication factors for new datacenter"),
-        ):
-            for keyspace in self.system_keyspaces + [self.new_ks_name]:
-                strategy = ReplicationStrategy.get(self.runner.target_node, keyspace)
-                strategy.replication_factors_per_dc.update({self.new_dc_name: self.num_nodes_in_new_dc})
-                new_dc_setter(**{keyspace: strategy})
-
-            # when context exits, set RF=0 for the new DC
-            for _, preserved_strategy in new_dc_setter.preserved.items():
-                preserved_strategy.replication_factors_per_dc[self.new_dc_name] = 0
-            yield
-
-    @property
-    def datacenters(self) -> list[str]:
-        """Return datacenter names currently reported by nodetool status."""
-        return list(self.runner.tester.db_cluster.get_nodetool_status().keys())
-
-    @property
-    def new_dc_name(self) -> str | None:
-        """Return the temporary nemesis datacenter name if it is registered."""
-        if has_suffix := [dc for dc in self.datacenters if dc.endswith("_nemesis_dc")]:
-            return has_suffix[0]
-        return None
-
-    @retrying(n=3, sleep_time=30, allowed_exceptions=(AssertionError,))
-    def assert_new_dc_registered(self) -> None:
-        """Assert that the temporary datacenter is visible in cluster status."""
-        assert self.new_dc_name, "new datacenter was not registered"
-
-    @retrying(n=3, sleep_time=30, allowed_exceptions=(AssertionError,))
-    def assert_new_dc_unregistered(self) -> None:
-        """Assert that the temporary datacenter is no longer visible in cluster status."""
-        assert not self.new_dc_name, "new datacenter was not unregistered"
-
-    def configure_new_dc(self, node: BaseNode) -> None:
-        """Configure node for new datacenter before Scylla starts.
-
-        Args:
-            node: New datacenter node to configure.
-        """
+    def _configure_new_dc(self, node: BaseNode):
+        """Configure node for new datacenter before Scylla starts."""
         with node.remote_scylla_yaml() as scylla_yml:
             scylla_yml.rpc_address = node.ip_address
             scylla_yml.seed_provider = [
@@ -140,55 +41,31 @@ class AddRemoveDcNemesis(NemesisBaseClass):
         with node.remote_cassandra_rackdc_properties() as properties_file:
             properties_file.update(**rackdc_value)
 
-    def add_nodes_in_new_dc(self) -> None:
-        """Add and initialize temporary nodes configured to join a new datacenter."""
+    def _add_new_node_in_new_dc(self, is_zero_node=False) -> BaseNode:
         add_node_func_args = {
-            "count": self.num_nodes_in_new_dc,
+            "count": 2,
             "dc_idx": 0,
             "rack": None,
             "enable_auto_bootstrap": True,
             "disruption_name": self.runner.current_disruption,
-            "after_config": self.configure_new_dc,
+            "after_config": self._configure_new_dc,
+            **({"is_zero_node": is_zero_node} if is_zero_node else {}),
         }
-        with self.runner.action_log_scope("Add nodes in new DC"):
-            self.new_nodes = skip_on_capacity_issues(db_cluster=self.runner.tester.db_cluster)(
-                self.runner.cluster.add_nodes
-            )(**add_node_func_args)
+        new_nodes = skip_on_capacity_issues(db_cluster=self.runner.tester.db_cluster)(self.runner.cluster.add_nodes)(
+            **add_node_func_args
+        )
         # wait_for_init() will call node_setup(), which executes the callback after config_setup()
-        self.runner.cluster.wait_for_init(node_list=self.new_nodes, check_node_health=False)
-        for new_node in self.new_nodes:
+        self.runner.cluster.wait_for_init(node_list=new_nodes, timeout=900, check_node_health=False)
+        for new_node in new_nodes:
             new_node.wait_node_fully_start()
         self.runner.monitoring_set.reconfigure_scylla_monitoring()
+        return new_nodes
 
-    def rebuild_node(self, new_node: BaseNode) -> None:
-        """Run nodetool rebuild on a node in the new datacenter.
-
-        Args:
-            new_node: New datacenter node to rebuild from the initial datacenter.
-        """
-        cmd = f"rebuild -- {self.initial_dc_name}"
-        with (
-            wait_for_log_lines(
-                node=new_node,
-                start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
-                end_line_patterns=["rebuild.*finished with keyspaces=", "Rebuild succeeded"],
-                start_timeout=60,
-                end_timeout=600,
-            ),
-            self.runner.action_log_scope(f"Run rebuild on {new_node.name} with cmd: {cmd}"),
-        ):
-            new_node.run_nodetool(sub_cmd=cmd, long_running=True, retry=0)
-
-    def rebuild_nodes_in_new_dc(self) -> None:
-        """Run nodetool rebuild on all new datacenter nodes."""
-        for new_node in self.new_nodes:
-            self.rebuild_node(new_node)
-
-    def create_new_dc_keyspace(self) -> None:
-        """Create and populate the keyspace used to validate add/remove DC flow."""
+    def _create_new_keyspace(self, dc_rf3: str) -> None:
+        InfoEvent(message="Writing to new keyspace").publish()
         write_cmd = (
-            f"cassandra-stress write no-warmup cl=ALL n=100000 -schema 'keyspace={self.new_ks_name} "
-            f"replication(strategy=NetworkTopologyStrategy,{self.initial_dc_name}={self.new_ks_rf}) "
+            f"cassandra-stress write no-warmup cl=ALL n=100000 -schema 'keyspace=keyspace_new_dc "
+            f"replication(strategy=NetworkTopologyStrategy,{dc_rf3}=3) "
             f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' "
             f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..100000 -log interval=5"
         )
@@ -198,89 +75,139 @@ class AddRemoveDcNemesis(NemesisBaseClass):
         self.runner.tester.verify_stress_thread(write_thread, error_handler=self.runner._nemesis_stress_failure_handler)
         # flush data to ensure it is seen in monitoring
         for node in self.runner.cluster.nodes:
-            with self.runner.action_log_scope(f"Flush data in {self.new_ks_name} on {node.name} node"):
-                node.run_nodetool(f"flush {self.new_ks_name}")
+            with self.runner.action_log_scope(f"Flush data in keyspace_new_dc on {node.name} node"):
+                node.run_nodetool("flush keyspace_new_dc")
 
-    def write_to_multi_dc_keyspace(self) -> None:
-        """Write data to the validation keyspace after it is replicated to both datacenters."""
+    def _write_read_data_to_multi_dc_keyspace(self, dc_rf3: str, dc_rf2: str) -> None:
+        InfoEvent(message="Writing and reading data with new dc").publish()
         write_cmd = (
-            f"cassandra-stress write no-warmup cl=ALL n=100000 -schema 'keyspace={self.new_ks_name} "
-            f"replication(strategy=NetworkTopologyStrategy,{self.initial_dc_name}={self.new_ks_rf},{self.new_dc_name}={self.num_nodes_in_new_dc}) "
+            f"cassandra-stress write no-warmup cl=ALL n=100000 -schema 'keyspace=keyspace_new_dc "
+            f"replication(strategy=NetworkTopologyStrategy,{dc_rf3}=3,{dc_rf2}=2) "
             f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' "
             f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=100001..200000 -log interval=5"
         )
         write_thread = self.runner.tester.run_stress_thread(
             stress_cmd=write_cmd, round_robin=True, stop_test_on_failure=False
         )
-        with self.runner.action_log_scope("Run write data to multiDC keyspace"):
-            self.runner.tester.verify_stress_thread(
-                write_thread, error_handler=self.runner._nemesis_stress_failure_handler
-            )
+        self.runner.tester.verify_stress_thread(write_thread, error_handler=self.runner._nemesis_stress_failure_handler)
+        with self.runner.action_log_scope("Verify multi DC keyspace data"):
+            self._verify_multi_dc_keyspace_data(consistency_level="ALL")
         # flush data to ensure it is seen in monitoring
         for node in self.runner.cluster.nodes:
-            node.run_nodetool(f"flush {self.new_ks_name}")
+            with self.runner.action_log_scope(f"Flush data in keyspace_new_dc on {node.name} node"):
+                node.run_nodetool("flush keyspace_new_dc")
 
-    def verify_multi_dc_keyspace(self, consistency_level: str = "ALL") -> None:
-        """Read validation data from the multi-DC keyspace at the requested consistency level.
-
-        Args:
-            consistency_level: Consistency level to use for the cassandra-stress read.
-        """
+    def _verify_multi_dc_keyspace_data(self, consistency_level: str = "ALL"):
         read_cmd = (
-            f"cassandra-stress read no-warmup cl={consistency_level} n=100000 -schema 'keyspace={self.new_ks_name} "
+            f"cassandra-stress read no-warmup cl={consistency_level} n=100000 -schema 'keyspace=keyspace_new_dc "
             f"compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=5 "
-            f"-pop seq=1..200000 -log interval=5"
+            f"-pop seq=100001..200000 -log interval=5"
         )
         read_thread = self.runner.tester.run_stress_thread(
             stress_cmd=read_cmd, round_robin=True, stop_test_on_failure=False
         )
-        with self.runner.action_log_scope("Verify keyspace data"):
-            self.runner.tester.verify_stress_thread(
-                read_thread, error_handler=self.runner._nemesis_stress_failure_handler
-            )
+        self.runner.tester.verify_stress_thread(read_thread, error_handler=self.runner._nemesis_stress_failure_handler)
 
-    def decommission_new_nodes(self) -> None:
-        """Decommission temporary datacenter nodes and clear local node tracking."""
-        with self.runner.action_log_scope(f"Decommission nodes in the new datacenter {self.new_dc_name}"):
-            self.runner.decommission_nodes(self.new_nodes)
-        self.new_nodes = []
-
-    def finalizer(self, exc_type, *_):
-        """Clean up the validation keyspace and temporary nodes on regular exits.
-
-        Args:
-            exc_type: Exception type received from the ExitStack callback, if any.
-            *_: Additional exception callback arguments ignored by this finalizer.
-        """
-        # in case of test end/killed, leave the cleanup alone
-        if exc_type is not KillNemesis:
-            with self.runner.cluster.cql_connection_patient(self.runner.target_node) as session:
-                session.execute(f"DROP KEYSPACE IF EXISTS {self.new_ks_name}")
-            if self.new_nodes:
-                self.decommission_new_nodes()
+    def _switch_to_network_replication_strategy(self, keyspaces: List[str]) -> None:
+        """Switches replication strategy to NetworkTopology for given keyspaces."""
+        node = self.runner.cluster.data_nodes[0]
+        nodes_by_region = self.runner.tester.db_cluster.nodes_by_region(nodes=self.runner.tester.db_cluster.data_nodes)
+        region = list(nodes_by_region.keys())[0]
+        dc_name = self.runner.tester.db_cluster.get_nodetool_info(nodes_by_region[region][0])["Data Center"]
+        for keyspace in keyspaces:
+            replication_strategy = ReplicationStrategy.get(node, keyspace)
+            if not isinstance(replication_strategy, SimpleReplicationStrategy):
+                # no need to switch as already is NetworkTopology
+                continue
+            self.runner.log.info(f"Switching replication strategy to Network for '{keyspace}' keyspace")
+            if keyspace == "system_auth" and replication_strategy.replication_factors[0] != len(
+                nodes_by_region[region]
+            ):
+                self.runner.log.warning(
+                    f"system_auth keyspace is not replicated on all nodes "
+                    f"({replication_strategy.replication_factors[0]}/{len(nodes_by_region[region])})."
+                )
+            with self.runner.action_log_scope(f"Switching {keyspace} replication strategy to Network"):
+                network_replication = NetworkTopologyReplicationStrategy(
+                    **{dc_name: replication_strategy.replication_factors[0]}
+                )
+                network_replication.apply(node, keyspace)
 
     def disrupt(self) -> None:
-        """Execute the add/remove datacenter nemesis workflow."""
         if self.runner.cluster.test_config.MULTI_REGION:
             raise UnsupportedNemesis(
-                "Skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)"
+                "add_remove_dc skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)"
             )
-
+        InfoEvent(message="Starting New DC Nemesis").publish()
+        node = self.runner.cluster.data_nodes[0]
+        system_keyspaces = ["system_distributed", "system_traces"]
+        if not node.raft.is_consistent_topology_changes_enabled:  # auth-v2 is used when consistent topology is enabled
+            system_keyspaces.insert(0, "system_auth")
+        self._switch_to_network_replication_strategy(self.runner.cluster.get_test_keyspaces() + system_keyspaces)
+        datacenters = list(self.runner.tester.db_cluster.get_nodetool_status().keys())
+        initial_dc_name = datacenters[0]
+        self._create_new_keyspace(dc_rf3=initial_dc_name)
+        node_added = False
         with ExitStack() as context_manager:
-            context_manager.push(self.finalizer)
-            self.create_new_dc_keyspace()
-            self.add_nodes_in_new_dc()
-            self.assert_new_dc_registered()
 
-            with self.temporary_system_keyspaces_network_topology_strategy():
-                with self.temporary_new_dc_replication_factors():
-                    if not is_tablets_feature_enabled(self.runner.target_node):
-                        self.rebuild_nodes_in_new_dc()
-                    self.runner.run_repair()
+            def finalizer(exc_type, *_):
+                # in case of test end/killed, leave the cleanup alone
+                if exc_type is not KillNemesis:
+                    with self.runner.cluster.cql_connection_patient(node) as session:
+                        session.execute("DROP KEYSPACE IF EXISTS keyspace_new_dc")
+                    if node_added:
+                        self.runner.decommission_nodes(new_nodes)
 
-                    self.write_to_multi_dc_keyspace()
-                    self.verify_multi_dc_keyspace(consistency_level="ALL")
+            context_manager.push(finalizer)
 
-                self.decommission_new_nodes()
-                self.assert_new_dc_unregistered()
-                self.verify_multi_dc_keyspace(consistency_level="QUORUM")
+            with temporary_replication_strategy_setter(node) as replication_strategy_setter:
+                with self.runner.action_log_scope("Add new node in new DC"):
+                    new_nodes = self._add_new_node_in_new_dc()
+                node_added = True
+                status = self.runner.tester.db_cluster.get_nodetool_status()
+                new_dc_list = [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")]
+                assert new_dc_list, "new datacenter was not registered"
+                new_dc_name = new_dc_list[0]
+                for keyspace in system_keyspaces + ["keyspace_new_dc"]:
+                    strategy = ReplicationStrategy.get(node, keyspace)
+                    assert isinstance(strategy, NetworkTopologyReplicationStrategy), (
+                        "Should have been already switched to NetworkStrategy"
+                    )
+                    strategy.replication_factors_per_dc.update({new_dc_name: 2})
+                    replication_strategy_setter(**{keyspace: strategy})
+
+                for key, preserved_strategy in replication_strategy_setter.preserved.items():
+                    preserved_strategy.replication_factors_per_dc[new_dc_name] = 0
+
+                InfoEvent(message="execute rebuild on new datacenter").publish()
+                cmd = f"rebuild -- {initial_dc_name}"
+                for new_node in new_nodes:
+                    with (
+                        wait_for_log_lines(
+                            node=new_node,
+                            start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
+                            end_line_patterns=["rebuild.*finished with keyspaces=", "Rebuild succeeded"],
+                            start_timeout=60,
+                            end_timeout=600,
+                        ),
+                        self.runner.action_log_scope(f"Run rebuild on the new datacenter with cmd: {cmd}"),
+                    ):
+                        new_node.run_nodetool(sub_cmd=cmd, long_running=True, retry=0)
+                InfoEvent(message="Running full cluster repair on each data node").publish()
+                cmd = "repair -pr"
+                for cluster_node in self.runner.cluster.data_nodes:
+                    with self.runner.action_log_scope(f"Run repair on {cluster_node.name} node with cmd: {cmd}"):
+                        cluster_node.run_nodetool(sub_cmd=cmd, publish_event=True)
+                with self.runner.action_log_scope("Run write and then read data to multiDC keyspace"):
+                    self._write_read_data_to_multi_dc_keyspace(dc_rf3=initial_dc_name, dc_rf2=new_dc_name)
+
+            for new_node in new_nodes:
+                with self.runner.action_log_scope(f"Decommission of the new node {new_node.name}"):
+                    self.runner.cluster.decommission(new_node)
+                node_added = False
+                self.runner.node_allocator.unset_running_nemesis(new_node, self.runner.current_disruption)
+
+            datacenters = list(self.runner.tester.db_cluster.get_nodetool_status().keys())
+            assert not [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not unregistered"
+            with self.runner.action_log_scope("Verify keyspace data after decommissioning"):
+                self._verify_multi_dc_keyspace_data(consistency_level="QUORUM")
