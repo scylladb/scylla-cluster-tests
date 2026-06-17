@@ -12,6 +12,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+import platform
 from textwrap import dedent
 
 from collections import defaultdict
@@ -125,7 +126,7 @@ from sdcm.send_email import (
     send_perf_email,
 )
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
-from sdcm.utils.aws_utils import is_using_aws_mock
+from sdcm.utils.aws_utils import get_arch_from_instance_type, is_using_aws_mock
 from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
@@ -995,6 +996,64 @@ def output_conf(config_files, backend):
         os.environ["SCT_CONFIG_FILES"] = config_files
     config = SCTConfiguration()
     click.secho(config.dump_config(), fg="green")
+    sys.exit(0)
+
+
+@cli.command("get-db-arch", help="Detect CPU architecture (x86_64 or arm64) for the DB instance type from config")
+@click.argument("config_files", type=str, default="")
+@click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends))
+def get_db_arch(config_files, backend):
+    """Print the CPU architecture for the configured DB instance type.
+
+    Uses backend-specific detection for AWS (EC2 API) and Azure (naming convention).
+    Other backends (GCE, OCI) always return x86_64 as ARM image support is not
+    yet wired through their config resolution.
+    Prints 'arm64' or 'x86_64' to stdout.
+    """
+    add_file_logger()
+
+    if backend:
+        os.environ["SCT_CLUSTER_BACKEND"] = backend
+    if config_files:
+        os.environ["SCT_CONFIG_FILES"] = config_files
+    config = SCTConfiguration()
+
+    backend = backend or config.get("cluster_backend")
+
+    if backend == "docker":
+        host_arch = "arm64" if platform.machine() == "aarch64" else "x86_64"
+        click.echo(host_arch)
+        sys.exit(0)
+
+    # Determine the instance type parameter for this backend
+    instance_type_key = {
+        "aws": "instance_type_db",
+        # "gce": "gce_instance_type_db",
+        # "azure": "azure_instance_type_db",
+        # "oci": "oci_instance_type_db",
+        "k8s-eks": "instance_type_db",
+        # "k8s-gke": "gce_instance_type_db",
+    }.get(backend)
+
+    if not instance_type_key:
+        # GCE and OCI backends don't support ARM images in SCT yet
+        click.echo("x86_64")
+        sys.exit(0)
+
+    instance_type = config.get(instance_type_key)
+    if not instance_type:
+        click.echo("x86_64")
+        sys.exit(0)
+
+    # TODO: add handlers for Azure, GCE and OCI when available
+    if backend in ("aws", "k8s-eks"):
+        region_names = config.get("region_names")
+        region = region_names[0] if region_names else "us-east-1"
+        arch = get_arch_from_instance_type(instance_type, region_name=region)
+        click.echo(arch)
+        sys.exit(0)
+
+    click.echo("x86_64")
     sys.exit(0)
 
 
