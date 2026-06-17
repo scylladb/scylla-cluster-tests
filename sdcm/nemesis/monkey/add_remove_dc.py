@@ -88,11 +88,17 @@ class AddRemoveDcNemesis(NemesisBaseClass):
             for keyspace in self.system_keyspaces + [self.new_ks_name]:
                 strategy = ReplicationStrategy.get(self.runner.target_node, keyspace)
                 strategy.replication_factors_per_dc.update({self.new_dc_name: self.num_nodes_in_new_dc})
-                new_dc_setter(**{keyspace: strategy})
+                try:
+                    new_dc_setter(**{keyspace: strategy})
+                finally:
+                    # If the ALTER command times out, the RF is still updated, just didn't finish streaming
+                    # When context exits, set RF=0 for the new DC.
+                    # Create a separate strategy object so the applied (RF>0) record is not mutated.
+                    rollback_strategy = NetworkTopologyReplicationStrategy(
+                        **{**strategy.replication_factors_per_dc, self.new_dc_name: 0}
+                    )
+                    new_dc_setter.preserved[keyspace] = rollback_strategy
 
-            # when context exits, set RF=0 for the new DC
-            for _, preserved_strategy in new_dc_setter.preserved.items():
-                preserved_strategy.replication_factors_per_dc[self.new_dc_name] = 0
             yield
 
     @property
