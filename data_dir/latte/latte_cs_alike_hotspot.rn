@@ -1,0 +1,93 @@
+// This rune script extends latte_cs_alike.rn with hotspot distribution.
+//
+// Hotspot means HOTSET_CHANCE% of operations target HOTSET_ITEMS keys (the "hot set"),
+// while the remaining operations are spread uniformly across the rest of the keyspace.
+//
+// Run populate (write all rows using hotspot distribution):
+// $ latte run /path/to/latte_cs_alike_hotspot.rn %IP% -q \
+//     -f hotspot_write \
+//     --consistency ALL \
+//     --threads 64 --concurrency 128 --rate 200000 \
+//     --start-cycle 1 --end-cycle 500000000 \
+//     -P row_count=500_000_000 -P offset=0 \
+//     -P column_count=10 -P column_size=200 -P key_size=48 \
+//     -P hotset_items=5000000 -P hotset_chance=55
+//
+// Run mixed hotspot workload:
+// $ latte run /path/to/latte_cs_alike_hotspot.rn %IP% -q \
+//     -f hotspot_write:30,hotspot_read:70 \
+//     --consistency QUORUM --duration 60m \
+//     --threads 16 --concurrency 128 --rate 750000 \
+//     -P row_count=500_000_000 -P offset=0 \
+//     -P column_count=10 -P column_size=200 -P key_size=48 \
+//     -P hotset_items=5000000 -P hotset_chance=55
+
+mod latte_cs_alike;
+
+use latte_cs_alike::{
+    KEYSPACE, TABLE, KEY_SIZE, COLUMN_SIZE, COLUMN_COUNT, ROW_COUNT, OFFSET,
+    P_STMT_WRITE, P_STMT_READ,
+    get_blob_columns_data,
+};
+use latte::*;
+
+const HOTSET_ITEMS = latte::param!("hotset_items", 5000000);
+const HOTSET_CHANCE = latte::param!("hotset_chance", 55);
+
+pub async fn schema(db) {
+    latte_cs_alike::schema(db).await;
+}
+
+pub async fn prepare(db) {
+    if HOTSET_ITEMS < 1 {
+        return Err("'hotset_items' must be greater than 0")
+    }
+    if HOTSET_ITEMS >= ROW_COUNT {
+        return Err(format!(
+            "'hotset_items' ({hotset_items}) must be less than 'row_count' ({row_count})",
+            hotset_items=HOTSET_ITEMS, row_count=ROW_COUNT));
+    }
+    if HOTSET_CHANCE < 1 || HOTSET_CHANCE > 99 {
+        return Err(format!(
+            "'hotset_chance' ({chance}) must be between 1 and 99",
+            chance=HOTSET_CHANCE));
+    }
+    println!(
+        "debug: Hotspot distribution enabled: hotset_items={items}, hotset_chance={chance}%",
+        items=HOTSET_ITEMS, chance=HOTSET_CHANCE);
+    latte_cs_alike::prepare(db).await;
+}
+
+///////////////////////
+// UTILITY FUNCTIONS //
+///////////////////////
+
+/// Hotspot index: HOTSET_CHANCE% of ops target HOTSET_ITEMS keys, rest spread across remaining
+fn get_hotspot_idx(i) {
+    if i % 100 < HOTSET_CHANCE {
+        OFFSET + (i % HOTSET_ITEMS)
+    } else {
+        OFFSET + HOTSET_ITEMS + (i % (ROW_COUNT - HOTSET_ITEMS))
+    }
+}
+
+///////////////////////////
+// USER-FACING FUNCTIONS //
+///////////////////////////
+
+pub async fn hotspot_write(db, i) {
+    let partition_idx = get_hotspot_idx(i);
+    let key = blob(partition_idx, KEY_SIZE);
+    db.execute_prepared(P_STMT_WRITE, get_blob_columns_data(key, partition_idx).await).await?
+}
+
+pub async fn hotspot_read(db, i) {
+    let partition_idx = get_hotspot_idx(i);
+    let key = blob(partition_idx, KEY_SIZE);
+    db.execute_prepared(P_STMT_READ, [key]).await?
+}
+
+/// Delegate plain read to base module (useful for cache warmup)
+pub async fn read(db, i) {
+    latte_cs_alike::read(db, i).await
+}

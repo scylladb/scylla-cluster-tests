@@ -1,0 +1,54 @@
+# Logstor uniform distribution workload configuration
+# Uses latte_cs_alike.rn with write/read functions (uniform: i % ROW_COUNT + OFFSET)
+# Schema: 10 columns x 200 bytes each (matching kv_uniform.rn reference)
+# Only mixed (write:30,read:70) workload at 600k ops/s for 60m
+# This test is a part of the benchmark done by Aerospike
+# https://aerospike.com/files/benchmarks/aerospike-vs-scylladb-performance-and-cost-at-multi-terabyte-scale.pdf
+
+perf_gradual_throttle_steps:
+  mixed:
+    - {threads: 12, concurrency: 128, rate: '600000'}
+
+perf_gradual_step_duration: {"mixed": '60m'}
+
+# No cache warmup for uniform workload (data is uniformly distributed, no hot set)
+stress_cmd_cache_warmup: []
+
+prepare_stress_cmd: >-
+  latte schema -P column_count=10 -P column_size=200 -P key_size=48
+  -P speculative_retry="\"NONE\"" -P replication_factor=2
+  data_dir/latte/latte_cs_alike.rn
+
+# Populate 500M rows with uniform distribution
+prepare_write_cmd:
+  - >-
+    latte run --function write --consistency ALL --duration 500000000
+    --threads 32 --concurrency 32 --rate 93750
+    --start-cycle 1 --end-cycle 500000000
+    -P row_count=500000000 -P offset=0
+    -P column_count=10 -P column_size=200 -P key_size=48
+    data_dir/latte/latte_cs_alike.rn
+
+# Mixed workload: uniform write:30,read:70 for $duration
+stress_cmd_m:
+  - >-
+    latte run --function write:30,read:70 --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency $throttle
+    --start-cycle 1 --end-cycle 500000000
+    -P row_count=500000000 -P offset=0
+    -P column_count=10 -P column_size=200 -P key_size=48
+    data_dir/latte/latte_cs_alike.rn
+
+latte_schema_parameters:
+  keyspace: 'keyspace1'
+  table: 'standard1'
+  replication_factor: 2
+  column_count: 10
+  column_size: 200
+  key_size: 48
+  speculative_retry: 'NONE'
+  storage_engine: 'logstor'
+  min_per_shard_tablet_count: 32
+
+perf_stress_keyspace: keyspace1
+perf_stress_table: standard1
