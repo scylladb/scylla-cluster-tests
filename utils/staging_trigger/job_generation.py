@@ -1,5 +1,6 @@
 """Jenkins job generation from jenkinsfiles."""
 
+import os
 from pathlib import Path
 
 import click
@@ -246,50 +247,66 @@ def generate_from_path(
         else []
     )
 
-    symlinked = _resolve_symlinks(full_path, sct_root)
-    if symlinked:
-        click.echo(f"Found {len(symlinked)} symlinked pipeline(s) in {pipeline_path}")
-        created.extend(
-            _generate_symlinked_jobs(
-                symlinked,
-                pipeline_path=pipeline_path,
-                folder=folder,
-                branch=branch,
-                repo=repo,
-                job_name_suffix=job_name_suffix,
-                dry_run=dry_run,
+    symlinked_jobs = []
+    for root, _, _ in os.walk(full_path):
+        rel_dir = str(Path(root).relative_to(full_path))
+        symlinked = _resolve_symlinks(Path(root), sct_root)
+        if symlinked:
+            click.echo(f"Found {len(symlinked)} symlinked pipeline(s) in {pipeline_path}/{rel_dir}")
+            symlinked_jobs.extend(
+                _generate_symlinked_jobs(
+                    symlinked,
+                    pipeline_path=pipeline_path,
+                    symlinks_rel_dir=rel_dir,
+                    folder=folder,
+                    branch=branch,
+                    repo=repo,
+                    job_name_suffix=job_name_suffix,
+                    dry_run=dry_run,
+                )
             )
-        )
 
+    created.extend(symlinked_jobs)
     return created
 
 
 def _generate_symlinked_jobs(
     symlinks: list[tuple[str, Path, str]],
     pipeline_path: str,
+    symlinks_rel_dir: str,
     folder: str,
     branch: str,
     repo: str,
     job_name_suffix: str,
     dry_run: bool,
 ) -> list[str]:
-    """Create Jenkins jobs for symlinked pipelines, placed in the symlink's directory."""
+    """Create Jenkins jobs for symlinked pipelines, placed in the symlink file's directory."""
+    group_name = f"{pipeline_path}/{symlinks_rel_dir}" if symlinks_rel_dir != "." else pipeline_path
     created = []
+
+    if not dry_run:
+        from utils.build_system.create_test_release_jobs import JenkinsPipelines  # noqa: PLC0415
+
+        server = JenkinsPipelines(base_job_dir=folder, sct_branch_name=branch, sct_repo=repo)
+        parts = Path(group_name).parts
+        for i in range(1, len(parts) + 1):
+            intermediate = str(Path(*parts[:i]))
+            server.create_directory(intermediate, display_name=parts[i - 1])
+    else:
+        server = None
+
     for name, target_path, suffix_override in symlinks:
         suffix = suffix_override or job_name_suffix
-        full_job_name = f"{folder}/{pipeline_path}/{name}{suffix}"
+        full_job_name = f"{folder}/{group_name}/{name}{suffix}"
 
         if dry_run:
             click.echo(f"  [symlink] {full_job_name} -> {target_path.name}")
             created.append(full_job_name)
             continue
 
-        from utils.build_system.create_test_release_jobs import JenkinsPipelines  # noqa: PLC0415
-
-        server = JenkinsPipelines(base_job_dir=folder, sct_branch_name=branch, sct_repo=repo)
         server.create_pipeline_job(
             jenkins_file=target_path,
-            group_name=pipeline_path,
+            group_name=group_name,
             job_name=name,
             job_name_suffix=suffix,
         )
