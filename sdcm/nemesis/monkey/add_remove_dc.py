@@ -157,13 +157,13 @@ class AddRemoveDcNemesis(NemesisBaseClass):
             "rack": None,
             "enable_auto_bootstrap": True,
             "disruption_name": self.runner.current_disruption,
-            "after_config": self.configure_new_dc,
         }
         with self.runner.action_log_scope("Add nodes in new DC"):
             self.new_nodes = skip_on_capacity_issues(db_cluster=self.runner.tester.db_cluster)(
                 self.runner.cluster.add_nodes
             )(**add_node_func_args)
-        # wait_for_init() will call node_setup(), which executes the callback after config_setup()
+        for new_node in self.new_nodes:
+            self.configure_new_dc(new_node)
         self.runner.cluster.wait_for_init(node_list=self.new_nodes, check_node_health=False)
         for new_node in self.new_nodes:
             new_node.wait_node_fully_start()
