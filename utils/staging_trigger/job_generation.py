@@ -188,6 +188,28 @@ def generate_jobs(
     return created
 
 
+def _resolve_symlinks(directory: Path, sct_root: Path) -> list[tuple[str, Path, str]]:
+    """Resolve _symlinks.yaml in a directory, returning (job_name, target_path, job_name_suffix) tuples."""
+    symlinks_file = directory / "_symlinks.yaml"
+    if not symlinks_file.exists():
+        return []
+
+    data = yaml.safe_load(symlinks_file.read_text(encoding="utf-8")) or {}
+    results = []
+    for entry in data.get("symlinks", []):
+        name = entry.get("name")
+        target = entry.get("target")
+        if not name or not target:
+            continue
+        target_path = sct_root / target
+        suffix = entry.get("job_name_suffix")
+        if target_path.exists():
+            results.append((name, target_path, suffix))
+        else:
+            click.secho(f"  Symlink target not found: {target}", fg="red")
+    return results
+
+
 def generate_from_path(
     pipeline_path: str,
     folder: str = "",
@@ -199,6 +221,7 @@ def generate_from_path(
     """Generate all Jenkins jobs from a pipeline directory.
 
     Uses generate_jobs to create the full folder tree and all pipeline jobs.
+    Also resolves _symlinks.yaml to create jobs referencing pipelines from other locations.
     """
     folder = folder or _default_folder()
     sct_root = get_sct_root_path()
@@ -209,11 +232,68 @@ def generate_from_path(
         return []
 
     jenkinsfiles = sorted(full_path.rglob("*.jenkinsfile"))
-    if not jenkinsfiles:
+
+    if not jenkinsfiles and not (full_path / "_symlinks.yaml").exists():
         click.secho(f"No .jenkinsfile files in {full_path}", fg="yellow")
         return []
 
     click.echo(f"Found {len(jenkinsfiles)} jenkinsfile(s) in {pipeline_path}")
-    return generate_jobs(
-        jenkinsfiles, folder=folder, branch=branch, repo=repo, job_name_suffix=job_name_suffix, dry_run=dry_run
+    created = (
+        generate_jobs(
+            jenkinsfiles, folder=folder, branch=branch, repo=repo, job_name_suffix=job_name_suffix, dry_run=dry_run
+        )
+        if jenkinsfiles
+        else []
     )
+
+    symlinked = _resolve_symlinks(full_path, sct_root)
+    if symlinked:
+        click.echo(f"Found {len(symlinked)} symlinked pipeline(s) in {pipeline_path}")
+        created.extend(
+            _generate_symlinked_jobs(
+                symlinked,
+                pipeline_path=pipeline_path,
+                folder=folder,
+                branch=branch,
+                repo=repo,
+                job_name_suffix=job_name_suffix,
+                dry_run=dry_run,
+            )
+        )
+
+    return created
+
+
+def _generate_symlinked_jobs(
+    symlinks: list[tuple[str, Path, str]],
+    pipeline_path: str,
+    folder: str,
+    branch: str,
+    repo: str,
+    job_name_suffix: str,
+    dry_run: bool,
+) -> list[str]:
+    """Create Jenkins jobs for symlinked pipelines, placed in the symlink's directory."""
+    created = []
+    for name, target_path, suffix_override in symlinks:
+        suffix = suffix_override or job_name_suffix
+        full_job_name = f"{folder}/{pipeline_path}/{name}{suffix}"
+
+        if dry_run:
+            click.echo(f"  [symlink] {full_job_name} -> {target_path.name}")
+            created.append(full_job_name)
+            continue
+
+        from utils.build_system.create_test_release_jobs import JenkinsPipelines  # noqa: PLC0415
+
+        server = JenkinsPipelines(base_job_dir=folder, sct_branch_name=branch, sct_repo=repo)
+        server.create_pipeline_job(
+            jenkins_file=target_path,
+            group_name=pipeline_path,
+            job_name=name,
+            job_name_suffix=suffix,
+        )
+        click.echo(f"  [symlink] {full_job_name}")
+        created.append(full_job_name)
+
+    return created
