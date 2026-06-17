@@ -43,48 +43,29 @@ class AddRemoveDcNemesis(NemesisBaseClass):
 
     def _add_new_node_in_new_dc(self, is_zero_node=False) -> BaseNode:
         add_node_func_args = {
-            "count": 2,
+            "count": 1,
             "dc_idx": 0,
-            "rack": None,
             "enable_auto_bootstrap": True,
             "disruption_name": self.runner.current_disruption,
             "after_config": self._configure_new_dc,
             **({"is_zero_node": is_zero_node} if is_zero_node else {}),
         }
-        new_nodes = skip_on_capacity_issues(db_cluster=self.runner.tester.db_cluster)(self.runner.cluster.add_nodes)(
+        new_node = skip_on_capacity_issues(db_cluster=self.runner.tester.db_cluster)(self.runner.cluster.add_nodes)(
             **add_node_func_args
-        )
+        )[0]
         # wait_for_init() will call node_setup(), which executes the callback after config_setup()
-        self.runner.cluster.wait_for_init(node_list=new_nodes, timeout=900, check_node_health=False)
-        for new_node in new_nodes:
-            new_node.wait_node_fully_start()
+        self.runner.cluster.wait_for_init(node_list=[new_node], timeout=900, check_node_health=False)
+        new_node.wait_node_fully_start()
         self.runner.monitoring_set.reconfigure_scylla_monitoring()
-        return new_nodes
+        return new_node
 
-    def _create_new_keyspace(self, dc_rf3: str) -> None:
-        InfoEvent(message="Writing to new keyspace").publish()
-        write_cmd = (
-            f"cassandra-stress write no-warmup cl=ALL n=100000 -schema 'keyspace=keyspace_new_dc "
-            f"replication(strategy=NetworkTopologyStrategy,{dc_rf3}=3) "
-            f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' "
-            f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..100000 -log interval=5"
-        )
-        write_thread = self.runner.tester.run_stress_thread(
-            stress_cmd=write_cmd, round_robin=True, stop_test_on_failure=False
-        )
-        self.runner.tester.verify_stress_thread(write_thread, error_handler=self.runner._nemesis_stress_failure_handler)
-        # flush data to ensure it is seen in monitoring
-        for node in self.runner.cluster.nodes:
-            with self.runner.action_log_scope(f"Flush data in keyspace_new_dc on {node.name} node"):
-                node.run_nodetool("flush keyspace_new_dc")
-
-    def _write_read_data_to_multi_dc_keyspace(self, dc_rf3: str, dc_rf2: str) -> None:
+    def _write_read_data_to_multi_dc_keyspace(self, dc_rf3: str, dc_rf1: str) -> None:
         InfoEvent(message="Writing and reading data with new dc").publish()
         write_cmd = (
             f"cassandra-stress write no-warmup cl=ALL n=100000 -schema 'keyspace=keyspace_new_dc "
-            f"replication(strategy=NetworkTopologyStrategy,{dc_rf3}=3,{dc_rf2}=2) "
+            f"replication(strategy=NetworkTopologyStrategy,{dc_rf3}=3,{dc_rf1}=1) "
             f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' "
-            f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=100001..200000 -log interval=5"
+            f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..100000 -log interval=5"
         )
         write_thread = self.runner.tester.run_stress_thread(
             stress_cmd=write_cmd, round_robin=True, stop_test_on_failure=False
@@ -101,7 +82,7 @@ class AddRemoveDcNemesis(NemesisBaseClass):
         read_cmd = (
             f"cassandra-stress read no-warmup cl={consistency_level} n=100000 -schema 'keyspace=keyspace_new_dc "
             f"compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=5 "
-            f"-pop seq=100001..200000 -log interval=5"
+            f"-pop seq=1..100000 -log interval=5"
         )
         read_thread = self.runner.tester.run_stress_thread(
             stress_cmd=read_cmd, round_robin=True, stop_test_on_failure=False
@@ -146,7 +127,9 @@ class AddRemoveDcNemesis(NemesisBaseClass):
         self._switch_to_network_replication_strategy(self.runner.cluster.get_test_keyspaces() + system_keyspaces)
         datacenters = list(self.runner.tester.db_cluster.get_nodetool_status().keys())
         initial_dc_name = datacenters[0]
-        self._create_new_keyspace(dc_rf3=initial_dc_name)
+        self.runner.tester.create_keyspace(
+            "keyspace_new_dc", replication_factor={initial_dc_name: min(3, len(self.runner.cluster.data_nodes))}
+        )
         node_added = False
         with ExitStack() as context_manager:
 
@@ -156,13 +139,13 @@ class AddRemoveDcNemesis(NemesisBaseClass):
                     with self.runner.cluster.cql_connection_patient(node) as session:
                         session.execute("DROP KEYSPACE IF EXISTS keyspace_new_dc")
                     if node_added:
-                        self.runner.decommission_nodes(new_nodes)
+                        self.runner.cluster.decommission(new_node)
 
             context_manager.push(finalizer)
 
             with temporary_replication_strategy_setter(node) as replication_strategy_setter:
                 with self.runner.action_log_scope("Add new node in new DC"):
-                    new_nodes = self._add_new_node_in_new_dc()
+                    new_node = self._add_new_node_in_new_dc()
                 node_added = True
                 status = self.runner.tester.db_cluster.get_nodetool_status()
                 new_dc_list = [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")]
@@ -173,7 +156,7 @@ class AddRemoveDcNemesis(NemesisBaseClass):
                     assert isinstance(strategy, NetworkTopologyReplicationStrategy), (
                         "Should have been already switched to NetworkStrategy"
                     )
-                    strategy.replication_factors_per_dc.update({new_dc_name: 2})
+                    strategy.replication_factors_per_dc.update({new_dc_name: 1})
                     replication_strategy_setter(**{keyspace: strategy})
 
                 for key, preserved_strategy in replication_strategy_setter.preserved.items():
@@ -181,31 +164,29 @@ class AddRemoveDcNemesis(NemesisBaseClass):
 
                 InfoEvent(message="execute rebuild on new datacenter").publish()
                 cmd = f"rebuild -- {initial_dc_name}"
-                for new_node in new_nodes:
-                    with (
-                        wait_for_log_lines(
-                            node=new_node,
-                            start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
-                            end_line_patterns=["rebuild.*finished with keyspaces=", "Rebuild succeeded"],
-                            start_timeout=60,
-                            end_timeout=600,
-                        ),
-                        self.runner.action_log_scope(f"Run rebuild on the new datacenter with cmd: {cmd}"),
-                    ):
-                        new_node.run_nodetool(sub_cmd=cmd, long_running=True, retry=0)
+                with (
+                    wait_for_log_lines(
+                        node=new_node,
+                        start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
+                        end_line_patterns=["rebuild.*finished with keyspaces=", "Rebuild succeeded"],
+                        start_timeout=60,
+                        end_timeout=600,
+                    ),
+                    self.runner.action_log_scope(f"Run rebuild on the new datacenter with cmd: {cmd}"),
+                ):
+                    new_node.run_nodetool(sub_cmd=cmd, long_running=True, retry=0)
                 InfoEvent(message="Running full cluster repair on each data node").publish()
                 cmd = "repair -pr"
                 for cluster_node in self.runner.cluster.data_nodes:
                     with self.runner.action_log_scope(f"Run repair on {cluster_node.name} node with cmd: {cmd}"):
                         cluster_node.run_nodetool(sub_cmd=cmd, publish_event=True)
                 with self.runner.action_log_scope("Run write and then read data to multiDC keyspace"):
-                    self._write_read_data_to_multi_dc_keyspace(dc_rf3=initial_dc_name, dc_rf2=new_dc_name)
+                    self._write_read_data_to_multi_dc_keyspace(dc_rf3=initial_dc_name, dc_rf1=new_dc_name)
 
-            for new_node in new_nodes:
-                with self.runner.action_log_scope(f"Decommission of the new node {new_node.name}"):
-                    self.runner.cluster.decommission(new_node)
-                node_added = False
-                self.runner.node_allocator.unset_running_nemesis(new_node, self.runner.current_disruption)
+            with self.runner.action_log_scope(f"Decommission of the new node {new_node.name}"):
+                self.runner.cluster.decommission(new_node)
+            node_added = False
+            self.runner.node_allocator.unset_running_nemesis(new_node, self.runner.current_disruption)
 
             datacenters = list(self.runner.tester.db_cluster.get_nodetool_status().keys())
             assert not [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not unregistered"
