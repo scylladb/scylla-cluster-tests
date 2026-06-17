@@ -8,5 +8,5 @@ longevityPipeline(
     backend: 'aws',
     region: '''["eu-north-1", "eu-west-1", "us-east-1"]''',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-aws-custom-d2-workload1-3dcs.yaml',
+    test_config: '''["test-cases/longevity/longevity-aws-custom-d2-workload1-3dcs.yaml", "configurations/auth_cassandra.yaml"]''',
 )
