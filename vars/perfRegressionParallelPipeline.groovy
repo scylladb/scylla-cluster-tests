@@ -200,6 +200,9 @@ def call(Map pipelineParams) {
             string(defaultValue: 'next',
                    description: 'Default branch to be used for scylla and other repositories. Default is "next".',
                    name: 'byo_default_branch')
+            booleanParam(defaultValue: false,
+                   description: 'Build images for both architectures (ARM and x86). Useful for reusing BYO artifacts across multiple test runs.',
+                   name: 'byo_build_both_arch')
         }
         options {
             timestamps()
