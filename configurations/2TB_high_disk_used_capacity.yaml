@@ -24,3 +24,4 @@ sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
   memory: '>=64'
 
 user_prefix: 'longevity-2tb-high-disk-used'
+nemesis_selector: 'supports_high_disk_utilization'
