@@ -41,6 +41,7 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+          allow-unsafe-pr-checkout: true
 
       - name: Check if docker image is already built
         id: check_image
