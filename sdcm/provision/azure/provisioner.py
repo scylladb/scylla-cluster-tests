@@ -16,6 +16,7 @@ import string
 from datetime import datetime, timezone
 from typing import Dict, List
 
+from azure.core.exceptions import AzureError, ResourceNotFoundError
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
 from azure.mgmt.resource.resources.models import ResourceGroup
 from invoke import Result
@@ -25,7 +26,11 @@ from sdcm.provision.azure.network_interface_provider import NetworkInterfaceProv
 from sdcm.provision.azure.network_security_group_provider import NetworkSecurityGroupProvider
 from sdcm.provision.azure.resource_group_provider import ResourceGroupProvider
 from sdcm.provision.azure.subnet_provider import SubnetProvider
-from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
+from sdcm.provision.azure.virtual_machine_provider import (
+    VirtualMachineProvider,
+    DEFAULT_STUCK_VM_TIMEOUT,
+    DEFAULT_STUCK_VM_POLL_INTERVAL,
+)
 from sdcm.provision.azure.virtual_network_provider import VirtualNetworkProvider
 from sdcm.provision.provisioner import (
     Provisioner,
@@ -33,11 +38,18 @@ from sdcm.provision.provisioner import (
     VmInstance,
     PricingModel,
     OperationPreemptedError,
+    StuckVMProvisioningError,
+    ProvisionUnrecoverableError,
 )
 from sdcm.provision.security import ScyllaOpenPorts
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import InstanceProvisionStuckEvent
 from sdcm.utils.azure_utils import AzureService
 
 LOGGER = logging.getLogger(__name__)
+
+DEFAULT_STUCK_VM_RECREATE_ATTEMPTS = 3
+DEFAULT_REDEPLOY_TIMEOUT = 300
 
 
 class AzureProvisioner(Provisioner):
@@ -50,6 +62,12 @@ class AzureProvisioner(Provisioner):
         super().__init__(test_id, region, availability_zone)
         # NOTE: Enable Azure KMS by default, disable only if configured explicitly
         self._enable_azure_kms = not config.get("enterprise_disable_kms")
+        stuck_vm_timeout = config.get("azure_provision_stuck_vm_timeout")
+        self._stuck_vm_timeout = stuck_vm_timeout if stuck_vm_timeout is not None else DEFAULT_STUCK_VM_TIMEOUT
+        stuck_vm_recreate_attempts = config.get("azure_provision_stuck_vm_recreate_attempts")
+        self._stuck_vm_recreate_attempts = (
+            stuck_vm_recreate_attempts if stuck_vm_recreate_attempts is not None else DEFAULT_STUCK_VM_RECREATE_ATTEMPTS
+        )
         self._azure_service: AzureService = azure_service
         self._cache: Dict[str, VmInstance] = {}
         LOGGER.debug("getting resources for %s...", self._resource_group_name)
@@ -65,9 +83,7 @@ class AzureProvisioner(Provisioner):
         self._subnet_provider = SubnetProvider(self._resource_group_name, self._azure_service)
         self._ip_provider = IpAddressProvider(self._resource_group_name, self._region, self._az, self._azure_service)
         self._nic_provider = NetworkInterfaceProvider(self._resource_group_name, self._region, self._azure_service)
-        self._vm_provider = VirtualMachineProvider(
-            self._resource_group_name, self._region, self._az, self._enable_azure_kms, self._azure_service
-        )
+        self._vm_provider = self._make_vm_provider()
         for v_m in self._vm_provider.list():
             try:
                 self._cache[v_m.name] = self._vm_to_instance(v_m)
@@ -76,6 +92,17 @@ class AzureProvisioner(Provisioner):
 
     def __str__(self):
         return f"{self.__class__.__name__}(region={self.region}, az={self.availability_zone})"
+
+    def _make_vm_provider(self) -> VirtualMachineProvider:
+        return VirtualMachineProvider(
+            self._resource_group_name,
+            self._region,
+            self._az,
+            self._enable_azure_kms,
+            self._azure_service,
+            _stuck_vm_timeout=self._stuck_vm_timeout,
+            _stuck_vm_poll_interval=DEFAULT_STUCK_VM_POLL_INTERVAL,
+        )
 
     @staticmethod
     def _convert_az_to_zone(availability_zone: str) -> str:
@@ -139,45 +166,123 @@ class AzureProvisioner(Provisioner):
     ) -> List[VmInstance]:
         """Create a set of instances specified by a list of InstanceDefinition.
         If instances already exist, returns them."""
-        provisioned_vm_instances = []
-        definitions_to_provision = []
-        for definition in definitions:
-            if definition.name in self._cache:
-                provisioned_vm_instances.append(self._cache[definition.name])
-            else:
-                definitions_to_provision.append(definition)
-        if not definitions_to_provision:
-            return provisioned_vm_instances
+        definitions_to_provision = [definition for definition in definitions if definition.name not in self._cache]
+        if definitions_to_provision:
+            v_ms = self._provision_with_stuck_recreate(definitions_to_provision, pricing_model)
+            v_ms_by_name = {v_m.name: v_m for v_m in v_ms}
+            for definition in definitions_to_provision:
+                self._cache[definition.name] = self._vm_to_instance(v_ms_by_name[definition.name])
+        return [self._cache[definition.name] for definition in definitions]
 
+    def _provision_with_stuck_recreate(
+        self, definitions: List[InstanceDefinition], pricing_model: PricingModel
+    ) -> List[VirtualMachine]:
+        """Provision VMs and recover any that get stuck until retries are exhausted.
+
+        A stuck VM is first redeployed to a new node (move of the VM onto another host that keeps,
+        its NIC and public IP). If redeploy does not succeed, the VM is deleted and provisioned
+        again from scratch.
+        """
+        attempt = 0
+        while True:
+            try:
+                return self._provision_resources(definitions, pricing_model)
+            except OperationPreemptedError:
+                self._reset_resource_providers()
+                raise
+            except StuckVMProvisioningError as exc:
+                if attempt >= self._stuck_vm_recreate_attempts:
+                    for vm_name in exc.vm_names:
+                        InstanceProvisionStuckEvent(
+                            vm_name=vm_name,
+                            attempt=attempt,
+                            provisioning_state="Creating",
+                            message=f"giving up after {self._stuck_vm_recreate_attempts} recovery attempts",
+                            severity=Severity.WARNING,
+                        ).publish_or_dump(default_logger=LOGGER)
+                    raise ProvisionUnrecoverableError(
+                        f"Azure VM(s) {', '.join(exc.vm_names)} stuck in provisioning after "
+                        f"{self._stuck_vm_recreate_attempts} recovery attempts"
+                    ) from exc
+                attempt += 1
+                for vm_name in exc.vm_names:
+                    InstanceProvisionStuckEvent(
+                        vm_name=vm_name,
+                        attempt=attempt,
+                        provisioning_state="Creating",
+                        message="recovering stuck VM (redeploy, recreate on failure)",
+                        severity=Severity.NORMAL,
+                    ).publish_or_dump(default_logger=LOGGER)
+                    if not self._redeploy_stuck_node(vm_name):
+                        LOGGER.warning(
+                            "Redeploy did not rescue VM %s; deleting it to recreate on fresh capacity", vm_name
+                        )
+                        self._delete_stuck_node(vm_name)
+
+    def _redeploy_stuck_node(self, name: str) -> bool:
+        """Redeploy VM to a new node.
+
+        Returns True if the VM reached the 'Succeeded' provisioning state; False if the redeploy
+        failed or did not complete within the timeout.
+        """
+        try:
+            LOGGER.info("Redeploying stuck VM %s to a new node", name)
+            poller = self._azure_service.compute.virtual_machines.begin_redeploy(self._resource_group_name, name)
+            poller.wait(timeout=DEFAULT_REDEPLOY_TIMEOUT)
+        except AzureError as err:
+            LOGGER.warning("Redeploy of stuck VM %s failed: %s", name, err)
+            return False
+        if not poller.done():
+            LOGGER.warning("Redeploy of stuck VM %s did not complete within %ss", name, DEFAULT_REDEPLOY_TIMEOUT)
+            return False
+        return self._vm_provider.recheck_provisioned(name) is not None
+
+    def _delete_stuck_node(self, name: str) -> None:
+        """Delete a stuck VM and its network resources."""
+        self._vm_provider.delete(name, wait=True)
+        self._cache.pop(name, None)
+
+        try:
+            nic = self._nic_provider.get(name)
+        except KeyError:
+            nic = None
+        if nic is not None:
+            self._azure_service.network.network_interfaces.begin_delete(self._resource_group_name, nic.name).wait()
+            self._nic_provider.delete(nic)
+
+        ip_address = self._ip_provider.get(name)
+        if getattr(ip_address, "id", None):
+            try:
+                self._azure_service.network.public_ip_addresses.begin_delete(
+                    self._resource_group_name, ip_address.name
+                ).wait()
+            except ResourceNotFoundError:
+                pass
+        self._ip_provider.delete(ip_address)
+
+    def _provision_resources(
+        self, definitions: List[InstanceDefinition], pricing_model: PricingModel
+    ) -> List[VirtualMachine]:
+        """Provision all Azure resources needed for the given VM definitions."""
         self._rg_provider.get_or_create()
         sec_group_id = self._network_sec_group_provider.get_or_create(security_rules=ScyllaOpenPorts).id
         vnet_name = self._vnet_provider.get_or_create().name
         subnet_id = self._subnet_provider.get_or_create(vnet_name, sec_group_id).id
-        ip_addresses = self._ip_provider.get_or_create(instance_definitions=definitions_to_provision, version="IPV4")
-        nics = self._nic_provider.get_or_create(
+        self._ip_provider.get_or_create(instance_definitions=definitions, version="IPV4")
+        ip_addresses_ids = [self._ip_provider.get(definition.name).id for definition in definitions]
+        self._nic_provider.get_or_create(
             subnet_id,
-            ip_addresses_ids=[address.id for address in ip_addresses],
-            names=[definition.name for definition in definitions_to_provision],
+            ip_addresses_ids=ip_addresses_ids,
+            names=[definition.name for definition in definitions],
         )
-        try:
-            v_ms = self._vm_provider.get_or_create(
-                definitions=definitions_to_provision, nics_ids=[nic.id for nic in nics], pricing_model=pricing_model
-            )
-        except OperationPreemptedError:
-            # upon preemption error, need to recreate providers to rediscover resources as cache might be invalid.
-            self._ip_provider = IpAddressProvider(
-                self._resource_group_name, self._region, self._az, self._azure_service
-            )
-            self._nic_provider = NetworkInterfaceProvider(self._resource_group_name, self._region, self._azure_service)
-            self._vm_provider = VirtualMachineProvider(
-                self._resource_group_name, self._region, self._az, self._enable_azure_kms, self._azure_service
-            )
-            raise
-        for definition, v_m in zip(definitions, v_ms):
-            instance = self._vm_to_instance(v_m)
-            self._cache[definition.name] = instance
-            provisioned_vm_instances.append(instance)
-        return provisioned_vm_instances
+        nics_ids = [self._nic_provider.get(definition.name).id for definition in definitions]
+        return self._vm_provider.get_or_create(definitions=definitions, nics_ids=nics_ids, pricing_model=pricing_model)
+
+    def _reset_resource_providers(self) -> None:
+        """Rebuild IP/NIC/VM providers so they rediscover live resources (caches may be stale)."""
+        self._ip_provider = IpAddressProvider(self._resource_group_name, self._region, self._az, self._azure_service)
+        self._nic_provider = NetworkInterfaceProvider(self._resource_group_name, self._region, self._azure_service)
+        self._vm_provider = self._make_vm_provider()
 
     def terminate_instance(self, name: str, wait: bool = True) -> None:
         """Terminates virtual machine, cleaning attached ip address and network interface."""
