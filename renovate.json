@@ -33,7 +33,10 @@
   "customDatasources": {
     "scylla-doctor": {
       "defaultRegistryUrlTemplate": "https://s3.amazonaws.com/downloads.scylladb.com?prefix=downloads/scylla-doctor/tar/&delimiter=/",
-      "format": "plain"
+      "format": "plain",
+      "transformTemplates": [
+        "{ \"releases\": releases[$contains(version, \"scylla-doctor-\") and $contains(version, \".tar.gz\")].{ \"version\": $match(version, /scylla-doctor-([0-9.]+)\\.tar\\.gz/).groups[0] } }"
+      ]
     }
   },
   "customManagers": [
@@ -48,7 +51,6 @@
       ],
       "depNameTemplate": "scylla-doctor",
       "datasourceTemplate": "custom.scylla-doctor",
-      "extractVersionTemplate": "scylla-doctor-(?<version>[\\d.]+)\\.tar\\.gz",
       "versioningTemplate": "semver-coerced"
     }
   ],
