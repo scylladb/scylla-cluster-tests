@@ -80,9 +80,20 @@ from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.cluster_cloud import ScyllaCloudCluster
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
 from sdcm.mgmt import get_scylla_manager_tool
-from sdcm.provision.aws.az_resolver import AZResolver, is_az_fallback_enabled, run_pre_flight_capacity_probe
-from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, is_capacity_error
+from sdcm.provision.aws.az_resolver import (
+    AZResolver,
+    is_az_fallback_enabled,
+    is_region_fallback_enabled,
+    run_pre_flight_capacity_probe,
+)
+from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, RegionAMINotFoundError, is_capacity_error
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
+from sdcm.provision.aws.region_fallback import (
+    cleanup_region,
+    enforce_single_region_gate,
+    restore_region,
+    switch_region,
+)
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.provision.aws.emr_provisioner import EmrClusterProvisioner, ensure_emr_roles
 from sdcm.spark_migrator import build_spark4_bootstrap_actions
@@ -218,7 +229,7 @@ from sdcm.utils.raft.common import validate_raft_on_nodes
 from sdcm.commit_log_check_thread import CommitLogCheckThread
 from sdcm.kafka.kafka_consumer import KafkaCDCReaderThread
 from test_lib.compaction import CompactionStrategy
-from sdcm.exceptions import TestFailedByEvents
+from sdcm.exceptions import TestFailedByEvents, CapacityReservationError
 from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
@@ -1860,6 +1871,23 @@ class ClusterTester(unittest.TestCase):
             self.monitors = NoMonitorSet()
 
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
+        """Provision AWS cluster with optional region fallback."""
+        if is_region_fallback_enabled(self.params):
+            self._get_cluster_aws_with_region_fallback(loader_info, db_info, monitor_info)
+            return
+        self._get_cluster_aws_once(loader_info, db_info, monitor_info)
+
+    def _get_cluster_aws_once(self, loader_info, db_info, monitor_info):
+        """Provision AWS clusters in the configured region with AZ fallback only."""
+        region_exhausted, last_error, candidates = self._attempt_region_legacy(loader_info, db_info, monitor_info)
+        if region_exhausted:
+            attempted_azs = ", ".join("+".join(candidate) for candidate in candidates)
+            raise CriticalTestFailure(
+                f"Failed creating AWS clusters in all {len(candidates)} AZ candidate(s) [{attempted_azs}]: {last_error}"
+            ) from last_error
+
+    def _attempt_region_legacy(self, loader_info, db_info, monitor_info):
+        """Provision the entire cluster in the currently configured region."""
         AZResolver(self.params).resolve()
 
         # capacity reservation handles its own AZ fallback internally
@@ -1877,14 +1905,87 @@ class ClusterTester(unittest.TestCase):
         region_exhausted, last_error = self._provision_legacy_with_az_fallback(
             loader_info, db_info, monitor_info, candidates, last_error=None
         )
-        if not region_exhausted:
-            return
 
-        self.params["availability_zone"] = original_az
-        tried = ", ".join("+".join(c) for c in candidates)
+        if region_exhausted:
+            self.params["availability_zone"] = original_az
+        return region_exhausted, last_error, candidates
+
+    def _get_cluster_aws_with_region_fallback(self, loader_info, db_info, monitor_info):
+        """Provision in the configured AWS region, then relocate to fallback regions on capacity exhaustion."""
+        self._enforce_single_region_gate()
+
+        original_region = self.params.region_names[0] if self.params.region_names else None
+        original_az = self.params.get("availability_zone")
+        original_env_region = os.environ.get("SCT_REGION_NAME")
+
+        source_region = original_region
+        region_candidates = AZResolver(self.params).get_region_fallback_candidates()
+        last_error = None
+
+        for attempt_idx, candidate in enumerate([None, *region_candidates]):
+            if attempt_idx > 0:
+                target_region, az_letters = candidate
+                self.log.warning(
+                    "Region '%s' exhausted; relocating whole cluster to '%s' (region attempt %d/%d)",
+                    source_region,
+                    target_region,
+                    attempt_idx + 1,
+                    len(region_candidates) + 1,
+                )
+                try:
+                    self._switch_region_legacy(
+                        target_region, az_letters, source_region, loader_info, db_info, monitor_info
+                    )
+                except RegionAMINotFoundError as exc:
+                    last_error = exc
+                    self.log.warning("Region '%s' ineligible (no equivalent AMI): %s", target_region, exc)
+                    continue
+                source_region = target_region
+
+            try:
+                region_exhausted, attempt_error, _ = self._attempt_region_legacy(loader_info, db_info, monitor_info)
+            except CapacityReservationError as exc:
+                region_exhausted, attempt_error = True, exc
+            except Exception:
+                self._restore_region_legacy(original_region, original_az, original_env_region)
+                raise
+
+            if not region_exhausted:
+                current_region = self.params.region_names[0] if self.params.region_names else None
+                self.test_config.persist_resolved_placement_if_changed(
+                    self.test_config.test_id(),
+                    original_region=original_region,
+                    region_name=current_region,
+                    availability_zone=self.params.get("availability_zone"),
+                )
+                return
+
+            last_error = attempt_error or last_error
+            self._cleanup_region_legacy(source_region)
+
+        self._restore_region_legacy(original_region, original_az, original_env_region)
+        tried_regions = ", ".join(region for region, _ in region_candidates) or "(no eligible candidates)"
         raise CriticalTestFailure(
-            f"Failed creating AWS clusters in all {len(candidates)} AZ candidate(s) [{tried}]: {last_error}"
+            f"Failed creating AWS clusters in region '{original_region}' and all fallback candidates [{tried_regions}]: "
+            f"{last_error}"
         ) from last_error
+
+    def _enforce_single_region_gate(self) -> None:
+        enforce_single_region_gate(self.params)
+
+    def _switch_region_legacy(self, region, az_letters, source_region, loader_info, db_info, monitor_info):
+        def reset_info_device_mappings():
+            # recompute AMI-root-based mappings after region switch
+            for info in (loader_info, db_info, monitor_info):
+                info["device_mappings"] = None
+
+        switch_region(self.params, region, az_letters, source_region, invalidate_caches=reset_info_device_mappings)
+
+    def _restore_region_legacy(self, region, availability_zone, env_region):
+        restore_region(self.params, region, availability_zone, env_region)
+
+    def _cleanup_region_legacy(self, region):
+        cleanup_region(self.test_config.test_id(), region, partial_cleanup=self._cleanup_legacy_partial_aws_clusters)
 
     def _populate_aws_info_dicts(self, loader_info: dict, db_info: dict, monitor_info: dict) -> None:
         """Fill missing AWS info values for the current region."""

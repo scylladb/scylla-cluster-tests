@@ -47,6 +47,7 @@ from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.keystore import KeyStore
 from sdcm.utils.cloud_api_utils import get_cloud_rest_credentials_from_file
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
+from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
@@ -58,6 +59,7 @@ from sdcm.utils.common import (
     get_scylla_ami_versions,
     get_scylla_gce_images_versions,
     convert_name_to_ami_if_needed,
+    find_equivalent_ami,
     get_sct_root_path,
     get_vector_store_ami_versions,
 )
@@ -2143,6 +2145,11 @@ class SCTConfiguration(BaseModel):
         "(`instance_type_db_target`, `nemesis_grow_shrink_instance_type`) in the chosen AZ. On capacity errors, raise to "
         "trigger AZ/region fallback. Costs ~1 min per type. AWS-only.",
     )
+    fallback_to_next_region: Boolean = SctField(
+        description="On capacity errors, after all AZs in the configured region are exhausted, relocate the entire cluster "
+        "to the next eligible region (should be VPC-peered with the runner region with infra-prepared and AMI available). "
+        "Only applies during initial setup, to single region tests. AWS-only.",
+    )
     num_nodes_to_rollback: int = SctField(
         description="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade",
     )
@@ -2768,6 +2775,12 @@ class SCTConfiguration(BaseModel):
         add_severity_limit_rules(self.get("max_events_severities"))
         print_critical_events()
 
+        self._apply_resolved_placement()
+
+        # snapshot the original AMI params before resolution, so AWS region fallback can
+        # re-resolve them for a relocated region
+        self._ami_params_snapshot = {key: self.get(key) for key in self.ami_id_params}
+
         # 5) overwrite AMIs
         for key in self.ami_id_params:
             if param := self.get(key):
@@ -3051,6 +3064,10 @@ class SCTConfiguration(BaseModel):
                     ami_list.append(ami)
                 self["ami_id_vector_store"] = " ".join(ami.image_id for ami in ami_list)
 
+        # 6.3) if a region-fallback relocated the cluster, re-resolve region-bound AWS AMIs for the new region
+        if self._resolved_placement_source_region:
+            self.resolve_amis(self.region_names, source_region=self._resolved_placement_source_region)
+
         # 7) support lookup of repos for upgrade test
         new_scylla_version = self.get("new_version")
         if new_scylla_version and not "k8s" in cluster_backend:
@@ -3242,6 +3259,83 @@ class SCTConfiguration(BaseModel):
 
         self.log.debug("Total nodes: %s", total_nodes)
         return total_nodes
+
+    def _apply_resolved_placement(self) -> None:
+        """Apply region/AZ selected in a previous provisioning step.
+
+        Provisioning and test execution can run in separate `hydra` invocations, so a region selected
+        by the 'region fallback' procedure at provisioning can be lost when config is reloaded during
+        test execution.
+        The provisioner writes the selected region to a test_id-keyed file, and this method applies
+        it in the loaded config.
+
+        The behavior can be disabled with `SCT_IGNORE_RESOLVED_PLACEMENT`.
+        """
+        self._resolved_placement_source_region = None
+        if os.environ.get("SCT_IGNORE_RESOLVED_PLACEMENT"):
+            return
+
+        test_id = self.get("reuse_cluster") or self.get("test_id")
+        if not test_id or test_id == "None":
+            return
+
+        placement = TestConfig.read_resolved_placement(test_id)
+        if not placement:
+            return
+
+        original_region = self.region_names[0] if self.region_names else None
+        region_name = placement.get("region_name")
+        availability_zone = placement.get("availability_zone")
+        if region_name:
+            os.environ["SCT_REGION_NAME"] = region_name
+            self["region_name"] = region_name
+            if original_region and region_name != original_region:
+                self._resolved_placement_source_region = original_region
+        if availability_zone:
+            os.environ["SCT_AVAILABILITY_ZONE"] = availability_zone
+            self["availability_zone"] = availability_zone
+
+        self.log.info(
+            "Applied resolved placement for test_id=%s: region_name=%s availability_zone=%s",
+            test_id,
+            region_name,
+            availability_zone,
+        )
+
+    def resolve_amis(self, region_names: List[str], source_region: str | None = None) -> None:
+        """Re-resolve region-bound AWS AMI IDs for the given regions `region_names`."""
+        if self.get("cluster_backend") != "aws":
+            return
+
+        target_regions = list(region_names)
+        intent = getattr(self, "_ami_params_snapshot", None) or {}
+        for key in self.ami_id_params:
+            original = intent.get(key)
+            current = self.get(key)
+            if original and not original.split()[0].startswith("ami-"):
+                self[key] = convert_name_to_ami_if_needed(original, tuple(target_regions))
+            elif current and source_region:
+                self[key] = self._remap_amis_to_regions(current, source_region, target_regions, key)
+
+        if getattr(self, "target_db_image_ids", None) and source_region:
+            self.target_db_image_ids = [
+                self._remap_amis_to_regions(ami, source_region, target_regions, "instance_type_db_target")
+                for ami in self.target_db_image_ids
+            ]
+
+    @staticmethod
+    def _remap_amis_to_regions(value: str, source_region: str, region_names: List[str], key: str) -> str:
+        """Remap AMI IDs from `source_region` into each target region."""
+        remapped = []
+        for region in region_names:
+            for ami_id in value.split():
+                matches = find_equivalent_ami(ami_id, source_region, target_regions=[region])
+                if not matches:
+                    raise RegionAMINotFoundError(
+                        f"No equivalent AMI for {key}={ami_id} (from {source_region}) in {region}; region ineligible for fallback"
+                    )
+                remapped.append(matches[0]["ami_id"])
+        return " ".join(remapped)
 
     @property
     def region_names(self) -> List[str]:

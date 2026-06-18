@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional, Dict, TYPE_CHECKING
 from unittest.mock import MagicMock
 
+import yaml
 from argus.client.sct.client import ArgusSCTClient
 
 
@@ -59,6 +60,7 @@ class TestConfig(metaclass=Singleton):
     LDAP_ADDRESS = None
     LDAP_USERS_ON_SCYLLA: bool = False
     DECODING_QUEUE = None
+    RESOLVED_PLACEMENT_FILENAME = "resolved_placement.yaml"
 
     _test_id = None
     _test_name = None
@@ -153,6 +155,71 @@ class TestConfig(metaclass=Singleton):
             cls._logdir = cls.make_new_logdir(update_latest_symlink=True)
             os.environ["_SCT_TEST_LOGDIR"] = cls._logdir
         return cls._logdir
+
+    @classmethod
+    def resolved_placement_file_path(cls, test_id: str) -> str:
+        """Return the file path for resolved placement of the given test id."""
+        return os.path.join(cls.base_logdir(), f"{test_id}", cls.RESOLVED_PLACEMENT_FILENAME)
+
+    @classmethod
+    def write_resolved_placement(cls, test_id: str, region_name: str, availability_zone: str) -> str:
+        """Save the resolved region/AZ placement."""
+        file_path = cls.resolved_placement_file_path(test_id)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+        payload = {
+            "test_id": f"{test_id}",
+            "region_name": region_name,
+            "availability_zone": availability_zone,
+        }
+        with open(file_path, "w", encoding="utf-8") as handle:
+            yaml.safe_dump(payload, handle)
+        LOGGER.info("Wrote resolved placement handoff to %s: %s", file_path, payload)
+
+        return file_path
+
+    @classmethod
+    def read_resolved_placement(cls, test_id: str) -> Optional[Dict[str, str]]:
+        """Read resolved placement for a test id."""
+        file_path = cls.resolved_placement_file_path(test_id)
+        if not os.path.exists(file_path):
+            return None
+
+        try:
+            with open(file_path, encoding="utf-8") as handle:
+                data = yaml.safe_load(handle)
+        except (OSError, yaml.YAMLError) as exc:
+            LOGGER.warning("Failed to read resolved placement handoff %s: %s", file_path, exc)
+            return None
+
+        test_id_value = data.get("test_id") if isinstance(data, dict) else data
+        if not isinstance(data, dict) or str(test_id_value) != str(test_id):
+            LOGGER.warning(
+                "Ignoring resolved placement handoff %s: test_id guard failed (got %s, expected %s)",
+                file_path,
+                test_id_value,
+                test_id,
+            )
+            return None
+        return data
+
+    @classmethod
+    def persist_resolved_placement_if_changed(
+        cls, test_id: str, original_region: Optional[str], region_name: Optional[str], availability_zone: Optional[str]
+    ) -> None:
+        """Save the resolved placement only when the cluster was relocated to a different region."""
+        if region_name and original_region and region_name != original_region:
+            cls.write_resolved_placement(test_id, region_name=region_name, availability_zone=availability_zone)
+
+    @classmethod
+    def delete_resolved_placement(cls, test_id: str) -> None:
+        """Remove the resolved placement file after test completion."""
+        try:
+            file_path = cls.resolved_placement_file_path(test_id)
+            os.remove(file_path)
+        except FileNotFoundError:
+            return
+        LOGGER.info("Deleted resolved placement handoff %s", file_path)
 
     @classmethod
     def latency_results_file(cls):

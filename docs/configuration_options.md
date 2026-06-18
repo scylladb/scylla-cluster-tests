@@ -4227,6 +4227,15 @@ Before provisioning, probe capacity by launching and terminating one on-demand i
 **type:** bool
 
 
+## **fallback_to_next_region** / SCT_FALLBACK_TO_NEXT_REGION
+
+On capacity errors, after all AZs in the configured region are exhausted, relocate the entire cluster to the next eligible region (should be VPC-peered with the runner region with infra-prepared and AMI available). Only applies during initial setup, to single region tests. AWS-only.
+
+**default:** False
+
+**type:** bool
+
+
 ## **num_nodes_to_rollback** / SCT_NUM_NODES_TO_ROLLBACK
 
 Number of nodes to upgrade and rollback in test_generic_cluster_upgrade

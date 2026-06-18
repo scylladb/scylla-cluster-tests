@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+import os
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -19,7 +20,11 @@ from botocore.exceptions import ClientError
 
 from sdcm.cluster import NoMonitorSet
 from sdcm.cluster_aws import AWSCluster
-from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted
+from sdcm.exceptions import CapacityReservationError
+from sdcm.provision.aws import utils as aws_utils
+from sdcm.provision.aws.az_resolver import AZResolver
+from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, RegionAMINotFoundError
+from sdcm.provision.aws.region_fallback import switch_region
 from sdcm.sct_provision.aws.layout import SCTProvisionAWSLayout
 from sdcm.tester import ClusterTester
 
@@ -336,3 +341,250 @@ def test_provision_legacy_with_az_fallback_non_capacity_error_propagates():
             stub, loader_info={}, db_info={}, monitor_info={}, candidates=[["a"], ["b"]], last_error=None
         )
     assert stub._provision_legacy_aws_clusters.call_count == 1
+
+
+class _RegionParams(_DotDict):
+    """Params stub that derives `region_names` from `region_name` like `SCTConfiguration`."""
+
+    @property
+    def region_names(self):
+        return (self.get("region_name") or "").split()
+
+    def resolve_amis(self, region_names, source_region=None):
+        calls = self.setdefault("resolve_amis_calls", [])
+        calls.append((list(region_names), source_region))
+
+
+def _make_region_params(**overrides):
+    return _RegionParams(
+        {
+            "cluster_backend": "aws",
+            "region_name": "us-east-1",
+            "availability_zone": "a",
+            "instance_type_db": "i4i.large",
+            "instance_type_loader": "t3.small",
+            "instance_type_monitor": "t3.small",
+            "fallback_to_next_region": True,
+            "fallback_to_next_availability_zone": False,
+            "use_capacity_reservation": False,
+            "instance_provision": "on_demand",
+            "test_id": "test-id-123",
+            "n_db_nodes": 1,
+            **overrides,
+        }
+    )
+
+
+@pytest.fixture(name="restore_region_env")
+def restore_region_env_fixture():
+    saved = {k: os.environ.get(k) for k in ("SCT_REGION_NAME", "SCT_AVAILABILITY_ZONE")}
+
+    yield
+
+    for key, value in saved.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
+
+
+def test_region_fallback_relocates_on_capacity_exhaustion(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+    params = _make_region_params()
+    layout = SCTProvisionAWSLayout(params)
+    seen_regions = []
+
+    def fake_do_provision():
+        seen_regions.append(params["region_name"])
+        if len(seen_regions) == 1:
+            raise _capacity_error()
+
+    with (
+        patch.object(AZResolver, "resolve"),
+        patch.object(AZResolver, "get_region_fallback_candidates", return_value=[("eu-west-1", ["a"])]),
+        patch.object(layout, "_do_provision", side_effect=fake_do_provision),
+        patch.object(layout, "_cleanup_region") as mock_cleanup,
+    ):
+        layout.provision()
+
+    assert seen_regions == ["us-east-1", "eu-west-1"]
+    assert params["region_name"] == "eu-west-1"
+    assert os.environ["SCT_REGION_NAME"] == "eu-west-1"
+    assert params.get("resolve_amis_calls") == [(["eu-west-1"], "us-east-1")]
+    mock_cleanup.assert_called_once()
+
+
+def test_region_fallback_non_capacity_error_propagates_and_restores(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+    params = _make_region_params()
+    layout = SCTProvisionAWSLayout(params)
+    auth_error = ClientError({"Error": {"Code": "AuthFailure", "Message": "denied"}}, "RunInstances")
+
+    with (
+        patch.object(AZResolver, "resolve"),
+        patch.object(AZResolver, "get_region_fallback_candidates", return_value=[("eu-west-1", ["a"])]),
+        patch.object(layout, "_do_provision", side_effect=auth_error),
+        patch.object(layout, "_cleanup_region") as mock_cleanup,
+    ):
+        with pytest.raises(ClientError):
+            layout.provision()
+
+    mock_cleanup.assert_not_called()
+    assert params["region_name"] == "us-east-1"  # original region restored
+
+
+def test_region_fallback_gate_rejects_multi_region(restore_region_env):  # noqa: ARG001
+    layout = SCTProvisionAWSLayout(_make_region_params(region_name="us-east-1 eu-west-1"))
+    with pytest.raises(ValueError, match="single configured region"):
+        layout.provision()
+
+
+def test_region_fallback_all_regions_exhausted_raises_and_restores(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+    params = _make_region_params()
+    layout = SCTProvisionAWSLayout(params)
+
+    with (
+        patch.object(AZResolver, "resolve"),
+        patch.object(AZResolver, "get_region_fallback_candidates", return_value=[("eu-west-1", ["a"])]),
+        patch.object(layout, "_do_provision", side_effect=_capacity_error()),
+        patch.object(layout, "_cleanup_region"),
+    ):
+        with pytest.raises(RuntimeError, match="all fallback candidates"):
+            layout.provision()
+
+    assert params["region_name"] == "us-east-1"
+    assert os.environ.get("SCT_REGION_NAME") is None
+
+
+def test_region_fallback_capacity_reservation_exhaustion_relocates(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+    patched_capacity_reservation.is_capacity_reservation_enabled.return_value = True
+    params = _make_region_params(use_capacity_reservation=True)
+    layout = SCTProvisionAWSLayout(params)
+    seen_regions = []
+
+    def fake_do_provision():
+        seen_regions.append(params["region_name"])
+        if len(seen_regions) == 1:
+            raise CapacityReservationError("no CR capacity in any AZ")
+
+    with (
+        patch.object(AZResolver, "resolve"),
+        patch.object(AZResolver, "get_region_fallback_candidates", return_value=[("eu-west-1", ["a"])]),
+        patch.object(layout, "_do_provision", side_effect=fake_do_provision),
+        patch.object(layout, "_cleanup_region"),
+    ):
+        layout.provision()
+
+    assert seen_regions == ["us-east-1", "eu-west-1"]
+    assert params["region_name"] == "eu-west-1"
+
+
+def test_region_fallback_skips_region_without_equivalent_ami(patched_capacity_reservation, restore_region_env):  # noqa: ARG001
+    params = _make_region_params()
+    layout = SCTProvisionAWSLayout(params)
+
+    def raise_no_ami(region_names, source_region=None):  # noqa: ARG001
+        raise RegionAMINotFoundError("no equivalent AMI in eu-west-1")
+
+    params.resolve_amis = raise_no_ami
+    with (
+        patch.object(AZResolver, "resolve"),
+        patch.object(AZResolver, "get_region_fallback_candidates", return_value=[("eu-west-1", ["a"])]),
+        patch.object(layout, "_do_provision", side_effect=_capacity_error()),
+        patch.object(layout, "_cleanup_region"),
+    ):
+        with pytest.raises(RuntimeError, match="all fallback candidates"):
+            layout.provision()
+    assert params["region_name"] == "us-east-1"
+
+
+def _make_region_tester_stub(**param_overrides):
+    params = _RegionParams(
+        {
+            "region_name": "us-east-1",
+            "availability_zone": "a",
+            "fallback_to_next_region": True,
+            "cluster_backend": "aws",
+            "test_id": "t-1",
+            **param_overrides,
+        }
+    )
+    stub = SimpleNamespace(params=params, log=MagicMock(), test_config=MagicMock())
+
+    def bind(method):
+        return lambda *args, **kwargs: method(stub, *args, **kwargs)
+
+    stub._enforce_single_region_gate = bind(ClusterTester._enforce_single_region_gate)
+    stub._switch_region_legacy = bind(ClusterTester._switch_region_legacy)
+    stub._restore_region_legacy = bind(ClusterTester._restore_region_legacy)
+    stub._cleanup_region_legacy = MagicMock()
+    return stub
+
+
+def test_legacy_region_fallback_relocates_on_exhaustion(restore_region_env):  # noqa: ARG001
+    stub = _make_region_tester_stub()
+    seen_regions = []
+
+    def fake_attempt(loader_info, db_info, monitor_info):  # noqa: ARG001
+        seen_regions.append(stub.params["region_name"])
+        if len(seen_regions) == 1:
+            return True, _capacity_error(), [["a"]]
+        return False, None, [["a"]]
+
+    stub._attempt_region_legacy = fake_attempt
+    with patch.object(AZResolver, "get_region_fallback_candidates", return_value=[("eu-west-1", ["a"])]):
+        ClusterTester._get_cluster_aws_with_region_fallback(stub, {}, {}, {})
+
+    assert seen_regions == ["us-east-1", "eu-west-1"]
+    assert stub.params["region_name"] == "eu-west-1"
+    assert stub.params.get("resolve_amis_calls") == [(["eu-west-1"], "us-east-1")]
+    stub._cleanup_region_legacy.assert_called_once()
+    stub.test_config.persist_resolved_placement_if_changed.assert_called_once()
+
+
+def test_switch_region_sets_placement_resolves_amis_and_invalidates(restore_region_env):  # noqa: ARG001
+    params = _DotDict({"region_name": "us-east-1", "availability_zone": "a"})
+    params.region_names = ["us-east-1"]
+    params.resolve_amis = MagicMock()
+    invalidate = MagicMock()
+
+    with patch("sdcm.provision.aws.region_fallback.SCTCapacityReservation") as mock_cr:
+        mock_cr.reservations = {"stale": 1}
+        switch_region(params, "eu-west-1", ["b", "c"], source_region="us-east-1", invalidate_caches=invalidate)
+        assert mock_cr.reservations == {}
+
+    assert os.environ["SCT_REGION_NAME"] == "eu-west-1"
+    assert params["region_name"] == "eu-west-1"
+    assert params["availability_zone"] == "b,c"
+    params.resolve_amis.assert_called_once_with(["eu-west-1"], source_region="us-east-1")
+    invalidate.assert_called_once_with()
+
+
+def test_cleanup_abandoned_region_cancels_crs_and_terminates_non_runner_instances():
+    region = "us-east-1"
+    instances = [
+        {"InstanceId": "i-runner", "Tags": [{"Key": "NodeType", "Value": "sct-runner"}]},
+        {"InstanceId": "i-db", "Tags": [{"Key": "NodeType", "Value": "scylla-db"}]},
+    ]
+    client = MagicMock()
+
+    with (
+        patch(
+            "sdcm.provision.aws.capacity_reservation.SCTCapacityReservation.cancel_all_regions"
+        ) as cancel_all_regions,
+        patch("sdcm.provision.aws.utils.list_instances_aws", return_value={region: instances}),
+        patch.dict(aws_utils.ec2_clients, {region: client}, clear=False),
+    ):
+        aws_utils.cleanup_abandoned_region("t-1", region)
+
+    cancel_all_regions.assert_called_once_with("t-1")
+    client.terminate_instances.assert_called_once_with(InstanceIds=["i-db"])
+
+
+def test_cleanup_abandoned_region_never_raises_on_failure():
+    with (
+        patch(
+            "sdcm.provision.aws.capacity_reservation.SCTCapacityReservation.cancel_all_regions",
+            side_effect=RuntimeError("boom"),
+        ),
+        patch("sdcm.provision.aws.utils.list_instances_aws", side_effect=RuntimeError("boom")),
+    ):
+        aws_utils.cleanup_abandoned_region("t-1", "us-east-1")  # must not raise

@@ -231,6 +231,8 @@ pre_filter_unavailable_availability_zones: true
 
 pre_flight_capacity_probe: false
 
+fallback_to_next_region: false
+
 enable_argus: true
 argus_use_ssh_tunnel: true
 

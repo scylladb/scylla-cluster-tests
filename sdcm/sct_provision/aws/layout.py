@@ -12,14 +12,27 @@
 # Copyright (c) 2021 ScyllaDB
 
 import logging
+import os
 from functools import cached_property
 
 from botocore.exceptions import ClientError
 
-from sdcm.provision.aws.az_resolver import AZResolver, is_az_fallback_enabled, run_pre_flight_capacity_probe
-from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, is_capacity_error
+from sdcm.exceptions import CapacityReservationError
+from sdcm.provision.aws.az_resolver import (
+    AZResolver,
+    is_az_fallback_enabled,
+    is_region_fallback_enabled,
+    run_pre_flight_capacity_probe,
+)
+from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, RegionAMINotFoundError, is_capacity_error
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
+from sdcm.provision.aws.region_fallback import (
+    cleanup_region,
+    enforce_single_region_gate,
+    restore_region,
+    switch_region,
+)
 from sdcm.provision.aws.utils import ec2_clients
 from sdcm.sct_provision.aws.cluster import OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
@@ -43,6 +56,13 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
         return TestConfig()
 
     def provision(self):
+        if is_region_fallback_enabled(self._params):
+            self._provision_with_region_fallback()
+            return
+        self._provision_once()
+
+    def _provision_once(self) -> None:
+        """Provision the whole cluster in the configured region, with AZ fallback. (No region fallback.)"""
         AZResolver(self._params).resolve()
 
         # capacity reservation handles its own AZ fallback internally
@@ -59,6 +79,13 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
             self._do_provision()
             return
 
+        region_exhausted, last_error = self._provision_az_loop(candidates)
+        if region_exhausted:
+            tried = ", ".join("+".join(c) for c in candidates)
+            raise RuntimeError(f"Provisioning failed in all {len(candidates)} AZ candidate(s): {tried}") from last_error
+
+    def _provision_az_loop(self, candidates: list[list[str]]) -> tuple[bool, Exception | None]:
+        """Try each AZ candidate in the current region."""
         original_az = self._params.get("availability_zone")
         last_error: Exception | None = None
         for attempt_idx, candidate in enumerate(candidates):
@@ -75,7 +102,7 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
 
             try:
                 self._do_provision()
-                return
+                return False, last_error
             except (ClientError, ProvisioningCapacityExhausted) as exc:
                 # ClientError is the on-demand path (raised by ec2.create_instances);
                 # ProvisioningCapacityExhausted is the spot path.
@@ -88,8 +115,105 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
                 self._cleanup_partial_provision()
 
         self._params["availability_zone"] = original_az
-        tried = ", ".join("+".join(c) for c in candidates)
-        raise RuntimeError(f"Provisioning failed in all {len(candidates)} AZ candidate(s): {tried}") from last_error
+        return True, last_error
+
+    def _attempt_region(self) -> tuple[bool, Exception | None]:
+        """Provision the whole cluster in the currently-configured region."""
+        AZResolver(self._params).resolve()
+
+        if SCTCapacityReservation.is_capacity_reservation_enabled(self._params):
+            try:
+                self._do_provision()
+                return False, None
+            except (CapacityReservationError, ProvisioningCapacityExhausted) as exc:
+                return True, exc
+            except ClientError as exc:
+                if is_capacity_error(exc):
+                    return True, exc
+                raise
+
+        if not is_az_fallback_enabled(self._params):
+            return self._provision_capacity_aware()
+
+        candidates = AZResolver(self._params).get_fallback_candidates()
+        if not candidates:
+            return self._provision_capacity_aware()
+
+        return self._provision_az_loop(candidates)
+
+    def _provision_capacity_aware(self) -> tuple[bool, Exception | None]:
+        """Provision once; report capacity errors as region exhaustion and re-raise any other error."""
+        try:
+            self._do_provision()
+        except (ClientError, ProvisioningCapacityExhausted) as exc:
+            if isinstance(exc, ClientError) and not is_capacity_error(exc):
+                raise
+            return True, exc
+        return False, None
+
+    def _provision_with_region_fallback(self) -> None:
+        """Provision in the current region, then relocate to fallback regions on capacity exhaustion.
+
+        On success, keeps `os.environ["SCT_REGION_NAME"]` set to the resolved region.
+        On failure, restores the original region/AZ in both env and params before raising.
+        """
+        self._enforce_single_region_gate()
+
+        original_region = self._params.region_names[0] if self._params.region_names else None
+        original_az = self._params.get("availability_zone")
+        original_env_region = os.environ.get("SCT_REGION_NAME")
+
+        source_region = original_region
+        region_candidates = AZResolver(self._params).get_region_fallback_candidates()
+        last_error: Exception | None = None
+
+        for attempt_idx, candidate in enumerate([None, *region_candidates]):
+            if attempt_idx > 0:
+                target_region, az_letters = candidate
+                LOGGER.warning(
+                    "Region '%s' exhausted; relocating whole cluster to '%s' (region attempt %d/%d)",
+                    source_region,
+                    target_region,
+                    attempt_idx + 1,
+                    len(region_candidates) + 1,
+                )
+                try:
+                    self._switch_region(target_region, az_letters, source_region)
+                except RegionAMINotFoundError as exc:
+                    last_error = exc
+                    LOGGER.warning("Region '%s' ineligible (no equivalent AMI): %s", target_region, exc)
+                    continue
+                source_region = target_region
+
+            try:
+                region_exhausted, attempt_error = self._attempt_region()
+            except Exception:
+                self._restore_region(original_region, original_az, original_env_region)
+                raise
+
+            if not region_exhausted:
+                return
+
+            last_error = attempt_error or last_error
+            self._cleanup_region(source_region)
+
+        self._restore_region(original_region, original_az, original_env_region)
+        tried = ", ".join(region for region, _ in region_candidates) or "(no eligible candidates)"
+        raise RuntimeError(
+            f"Provisioning failed in region '{original_region}' and all fallback candidates [{tried}]"
+        ) from last_error
+
+    def _enforce_single_region_gate(self) -> None:
+        enforce_single_region_gate(self._params)
+
+    def _switch_region(self, region: str, az_letters: list[str], source_region: str | None) -> None:
+        switch_region(self._params, region, az_letters, source_region, invalidate_caches=self._clear_cluster_caches)
+
+    def _restore_region(self, region: str | None, availability_zone: str, env_region: str | None) -> None:
+        restore_region(self._params, region, availability_zone, env_region)
+
+    def _cleanup_region(self, region: str | None) -> None:
+        cleanup_region(self._test_config.test_id(), region, partial_cleanup=self._cleanup_partial_provision)
 
     def _do_provision(self):
         use_scylla_cloud = self._params.get("cluster_backend") == "xcloud" or self._params.get("xcloud_provider")

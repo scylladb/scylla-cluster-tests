@@ -41,3 +41,8 @@ class ProvisioningCapacityExhausted(Exception):
     raises this exception in that case so the AZ-fallback layer can treat it the same
     as an on-demand capacity ``ClientError``.
     """
+
+
+class RegionAMINotFoundError(Exception):
+    """Raised when no equivalent AMI exists in a target region, making that region ineligible
+    for AWS region fallback."""

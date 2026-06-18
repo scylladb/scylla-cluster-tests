@@ -18,7 +18,9 @@ import boto3
 from botocore.exceptions import ClientError
 
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, is_capacity_error
+from sdcm.sct_config import AWS_SUPPORTED_REGIONS
 from sdcm.test_config import TestConfig
+from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.aws_region import AwsRegion
 
 LOGGER = logging.getLogger(__name__)
@@ -100,6 +102,11 @@ def is_az_fallback_enabled(params) -> bool:
     if (value := params.get("fallback_to_next_availability_zone")) is not None:
         return bool(value)
     return bool(params.get("aws_fallback_to_next_availability_zone"))
+
+
+def is_region_fallback_enabled(params) -> bool:
+    """Return True when whole-cluster region fallback on capacity errors is enabled."""
+    return bool(params.get("fallback_to_next_region")) and params.get("cluster_backend") == "aws"
 
 
 class AZResolver:
@@ -216,6 +223,54 @@ class AZResolver:
                     seen.add(tuple(candidate))
 
         return candidates
+
+    def get_region_fallback_candidates(self) -> list[tuple[str, list[str]]]:
+        """Collects ordered ``(region, az_letters)`` candidates for cluster region fallback.
+
+        A region is eligible only if it is:
+            - VPC-peered with the runner region
+            - able to supply the configured number of AZs that support the required instance types.
+        The current region is excluded (as the starting point).
+        """
+        region_names = self._region_names()
+        if not region_names:
+            return []
+        current_region = region_names[0]
+        configured_letters = self._configured_az_letters()
+        cardinality = len(configured_letters) or 1
+        instance_types = self.required_instance_types()
+
+        candidates = []
+        for region in AWS_SUPPORTED_REGIONS:
+            if region == current_region:
+                continue
+            if not self._is_region_peered(current_region, region):
+                LOGGER.info("Region fallback: skipping %s (no active VPC peering with %s)", region, current_region)
+                continue
+            letters = self._common_supported_letters([region], configured_letters, instance_types)
+            if len(letters) < cardinality:
+                LOGGER.info(
+                    "Region fallback: skipping %s (only %d AZ letter(s) support %s, need %d)",
+                    region,
+                    len(letters),
+                    instance_types,
+                    cardinality,
+                )
+                continue
+            candidates.append((region, letters[:cardinality]))
+        return candidates
+
+    @staticmethod
+    def _is_region_peered(current_region: str, candidate_region: str) -> bool:
+        """Return True only when an ACTIVE VPC peering exists between the two regions."""
+        try:
+            peering, _ = AwsVpcPeering._find_existing_peering(
+                AwsRegion(region_name=current_region), AwsRegion(region_name=candidate_region)
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Region fallback: peering check %s<->%s failed: %s", current_region, candidate_region, exc)
+            return False
+        return peering is not None and peering.get("Status", {}).get("Code") == "active"
 
     def _supported_az_letters(self) -> list[str]:
         """Return AZ letters supported in EVERY configured region for the required types.
