@@ -35,7 +35,7 @@
       "defaultRegistryUrlTemplate": "https://s3.amazonaws.com/downloads.scylladb.com?prefix=downloads/scylla-doctor/tar/&delimiter=/",
       "format": "plain",
       "transformTemplates": [
-        "{ \"releases\": [ releases[$contains(version, /scylla-doctor-[0-9.]+\\.tar\\.gz/)].{ \"version\": $match(version, /scylla-doctor-([0-9.]+)\\.tar\\.gz/).groups[0] } ] }"
+        "{ \"releases\": [ releases[$contains(version, /scylla-doctor-[0-9.]+\\.tar\\.gz/)].{ \"version\": $string($match(version, /scylla-doctor-([0-9.]+)\\.tar\\.gz/).groups[0]) } ] }"
       ]
     }
   },
