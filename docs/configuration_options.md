@@ -1770,6 +1770,24 @@ Supported: eastus
 **type:** str (appendable)
 
 
+## **azure_provision_stuck_vm_timeout** / SCT_AZURE_PROVISION_STUCK_VM_TIMEOUT
+
+Seconds to wait for an Azure VM to reach the 'Succeeded' provisioning state before treating it as stuck (accepted by Azure but never started by the host - SCT-434) and recreating it.
+
+**default:** N/A
+
+**type:** int
+
+
+## **azure_provision_stuck_vm_recreate_attempts** / SCT_AZURE_PROVISION_STUCK_VM_RECREATE_ATTEMPTS
+
+How many times to recreate a stuck Azure VM (full node: VM, NIC and public IP) onto fresh capacity before giving up with a non-retryable error.
+
+**default:** N/A
+
+**type:** int
+
+
 ## **oci_region_name** / SCT_OCI_REGION_NAME
 
 OCI region where the resources will be deployed

@@ -10,6 +10,9 @@ azure_instance_type_loader: 'Standard_F4s_v2'
 azure_instance_type_monitor: 'Standard_D2_v4'
 # base on version 24.04 LTS documented here:
 # https://documentation.ubuntu.com/azure/azure-how-to/instances/find-ubuntu-images/#free-long-term-support-offers
+
+azure_provision_stuck_vm_timeout: 900  # seconds before VM in 'creating' status is treated as stuck
+azure_provision_stuck_vm_recreate_attempts: 3
 azure_image_loader: 'Canonical:ubuntu-24_04-lts:server:latest'
 azure_image_monitor: 'Canonical:ubuntu-24_04-lts:server:latest'
 

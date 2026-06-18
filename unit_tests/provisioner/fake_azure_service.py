@@ -16,6 +16,7 @@ import os
 import shutil
 import subprocess
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Any, Dict
 
@@ -46,6 +47,9 @@ class WaitableObject:
     def wait(self, timeout=None):
         if self.error:
             raise self.error
+
+    def done(self) -> bool:
+        return True
 
 
 class ResultableObject:
@@ -337,7 +341,10 @@ class FakeIpAddress:
             raise ResourceNotFoundError("Public IP address not found") from None
 
     def begin_delete(self, resource_group_name: str, public_ip_address_name: str) -> WaitableObject:
-        os.remove(self.path / resource_group_name / f"ip-{public_ip_address_name}.json")
+        try:
+            os.remove(self.path / resource_group_name / f"ip-{public_ip_address_name}.json")
+        except FileNotFoundError:
+            pass
         return WaitableObject()
 
 
@@ -440,7 +447,10 @@ class FakeNetworkInterface:
             raise ResourceNotFoundError("NIC not found") from None
 
     def begin_delete(self, resource_group_name: str, network_interface_name: str) -> WaitableObject:
-        os.remove(self.path / resource_group_name / f"nic-{network_interface_name}.json")
+        try:
+            os.remove(self.path / resource_group_name / f"nic-{network_interface_name}.json")
+        except FileNotFoundError:
+            pass
         return WaitableObject()
 
 
@@ -454,9 +464,126 @@ class FakeNetwork:
         self.network_interfaces = FakeNetworkInterface(self.path)
 
 
+@dataclass
+class VMCreateBehavior:
+    """Describe how a fake VM creation should behave in tests.
+
+    If ``stuck`` is True, the VM stays in the Azure stuck state instead of succeeding.
+    If ``recover_after_polls`` is set, the VM recovers after that many instance-view polls.
+    If it is ``None``, the VM stays stuck until it is deleted and recreated.
+    If ``redeploy_fails`` is True, a redeploy of this VM raises an error.
+    """
+
+    stuck: bool = False
+    recover_after_polls: int | None = None
+    redeploy_fails: bool = False
+
+
 class FakeVirtualMachines:
+    _scripts: Dict[str, Dict[str, Any]] = {}
+
     def __init__(self, path: Path) -> None:
         self.path = path
+
+    @classmethod
+    def set_provision_script(
+        cls, vm_name: str, behaviors: List[VMCreateBehavior] | None = None, default: VMCreateBehavior | None = None
+    ) -> None:
+        """Store the scripted create behavior for a VM name."""
+        cls._scripts[vm_name] = {
+            "queue": list(behaviors or []),
+            "default": default,
+        }
+
+    @classmethod
+    def clear_scripts(cls) -> None:
+        """Remove all scripted VM behaviors."""
+        cls._scripts = {}
+
+    @classmethod
+    def _next_behavior(cls, vm_name: str) -> VMCreateBehavior:
+        """Return the next scripted behavior for a VM, or the default healthy one."""
+        script = cls._scripts.get(vm_name)
+        if not script:
+            return VMCreateBehavior()
+        if script["queue"]:
+            return script["queue"].pop(0)
+        return script["default"] or VMCreateBehavior()
+
+    def _vm_path(self, resource_group_name: str, vm_name: str) -> Path:
+        """Build the JSON file path for a fake VM."""
+        return self.path / resource_group_name / f"vm-{vm_name}.json"
+
+    def _read_raw(self, resource_group_name: str, vm_name: str) -> Dict[str, Any]:
+        """Load raw fake VM data from disk."""
+        try:
+            with open(self._vm_path(resource_group_name, vm_name), "r", encoding="utf-8") as file:
+                return json.load(file)
+        except FileNotFoundError:
+            raise ResourceNotFoundError("Virtual Machine not found") from None
+
+    def _write_raw(self, resource_group_name: str, vm_name: str, data: Dict[str, Any]) -> None:
+        """Write raw fake VM data to disk."""
+        with open(self._vm_path(resource_group_name, vm_name), "w", encoding="utf-8") as file:
+            json.dump(data, fp=file, indent=2)
+
+    @staticmethod
+    def _build_instance_view(provisioning_state: str) -> Dict[str, Any]:
+        """Build the fake Azure instance view for the VM state."""
+        if provisioning_state == "Succeeded":
+            return {
+                "vmAgent": {
+                    "vmAgentVersion": "2.9.1.1",
+                    "statuses": [
+                        {
+                            "code": "ProvisioningState/succeeded",
+                            "level": "Info",
+                            "displayStatus": "Ready",
+                            "message": "Guest Agent is running",
+                        }
+                    ],
+                },
+                "statuses": [
+                    {
+                        "code": "ProvisioningState/succeeded",
+                        "level": "Info",
+                        "displayStatus": "Provisioning succeeded",
+                    },
+                    {
+                        "code": "PowerState/running",
+                        "level": "Info",
+                        "displayStatus": "VM running",
+                    },
+                ],
+            }
+        return {
+            "statuses": [
+                {
+                    "code": "ProvisioningState/creating",
+                    "level": "Info",
+                    "displayStatus": "Creating",
+                },
+                {
+                    "code": "PowerState/starting",
+                    "level": "Info",
+                    "displayStatus": "VM starting",
+                },
+            ],
+        }
+
+    def _advance_simulation(self, resource_group_name: str, vm_name: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+        """Advance stuck-VM simulation by one poll and mark it succeeded when ready."""
+        sim = raw.get("_simulation")
+        if not sim or not sim.get("stuck"):
+            return raw
+
+        sim["polls_seen"] += 1
+        recover_after = sim.get("recover_after_polls")
+        if recover_after is not None and sim["polls_seen"] >= recover_after:
+            sim["stuck"] = False
+            raw["properties"]["provisioningState"] = "Succeeded"
+        self._write_raw(resource_group_name, vm_name, raw)
+        return raw
 
     def list(self, resource_group_name: str) -> List[VirtualMachine]:
         try:
@@ -466,7 +593,9 @@ class FakeVirtualMachines:
         elements = []
         for fle in files:
             with open(self.path / resource_group_name / fle, "r", encoding="utf-8") as file:
-                elements.append(VirtualMachine.deserialize(json.load(file)))
+                raw = json.load(file)
+            raw.pop("_simulation", None)
+            elements.append(VirtualMachine.deserialize(raw))
         return elements
 
     def begin_create_or_update(
@@ -559,45 +688,80 @@ class FakeVirtualMachines:
         }
         base["properties"].update(**parameters)
         base["tags"] = tags
+        behavior = self._next_behavior(vm_name)
+        if behavior.stuck:
+            base["properties"]["provisioningState"] = "Creating"
+            base["_simulation"] = {
+                "stuck": True,
+                "recover_after_polls": behavior.recover_after_polls,
+                "polls_seen": 0,
+            }
         with open(self.path / resource_group_name / f"vm-{vm_name}.json", "w", encoding="utf-8") as file:
             json.dump(base, fp=file, indent=2)
         return WaitableObject()
 
     def begin_update(self, resource_group_name: str, vm_name: str, parameters: Dict[str, Any]) -> WaitableObject:
-        try:
-            with open(self.path / resource_group_name / f"vm-{vm_name}.json", "r", encoding="utf-8") as file:
-                v_m = json.loads(file.read())
-        except FileNotFoundError:
-            raise ResourceNotFoundError("Virtual Machine not found") from None
-
+        v_m = self._read_raw(resource_group_name, vm_name)
         tags = parameters.pop("tags") if "tags" in parameters else {}
         v_m["properties"].update(**dict_keys_to_camel_case(parameters))
-        v_m["tags"].update(**tags)
+        v_m.setdefault("tags", {}).update(**tags)
+        sim = v_m.pop("_simulation", None)
         VirtualMachine.deserialize(v_m)
-        with open(self.path / resource_group_name / f"vm-{vm_name}.json", "w", encoding="utf-8") as file:
-            json.dump(v_m, fp=file, indent=2)
+        if sim is not None:
+            v_m["_simulation"] = sim
+        self._write_raw(resource_group_name, vm_name, v_m)
         return WaitableObject()
 
     def begin_delete(self, resource_group_name: str, vm_name: str) -> WaitableObject:
-        network_svc = FakeNetwork(self.path)
-        v_m = self.get(resource_group_name, vm_name)
-        os.remove(self.path / resource_group_name / f"vm-{vm_name}.json")
-        nic_name = v_m.network_profile.network_interfaces[0].id.split("/", -1)[-1]
-        nic = network_svc.network_interfaces.get(resource_group_name, nic_name)
-        network_svc.network_interfaces.begin_delete(resource_group_name, nic_name)
-        network_svc.public_ip_addresses.begin_delete(
-            resource_group_name, nic.ip_configurations[0].public_ip_address.name
-        )
+        raw = self._read_raw(resource_group_name, vm_name)
+        os.remove(self._vm_path(resource_group_name, vm_name))
+        nic_ref = (raw["properties"].get("networkProfile") or {}).get("networkInterfaces") or [{}]
+        delete_option = (nic_ref[0].get("properties") or {}).get("deleteOption", "Detach")
+        if delete_option == "Delete" and nic_ref[0].get("id"):
+            network_svc = FakeNetwork(self.path)
+            nic_name = nic_ref[0]["id"].split("/")[-1]
+            try:
+                nic = network_svc.network_interfaces.get(resource_group_name, nic_name)
+                network_svc.network_interfaces.begin_delete(resource_group_name, nic_name)
+                public_ip = nic.ip_configurations[0].public_ip_address
+                if public_ip is not None and getattr(public_ip, "name", None):
+                    network_svc.public_ip_addresses.begin_delete(resource_group_name, public_ip.name)
+            except ResourceNotFoundError:
+                pass
         return WaitableObject()
 
     def get(self, resource_group_name: str, vm_name: str, expand: str = "") -> VirtualMachine:
-        try:
-            with open(self.path / resource_group_name / f"vm-{vm_name}.json", "r", encoding="utf-8") as file:
-                return VirtualMachine.deserialize(json.load(file))
-        except FileNotFoundError:
-            raise ResourceNotFoundError("Virtual Machine not found") from None
+        raw = self._read_raw(resource_group_name, vm_name)
+        if expand and "instanceview" in expand.lower():
+            raw = self._advance_simulation(resource_group_name, vm_name, raw)
+            raw = {**raw, "properties": {**raw["properties"]}}
+            raw["properties"]["instanceView"] = self._build_instance_view(raw["properties"]["provisioningState"])
+        raw.pop("_simulation", None)
+        return VirtualMachine.deserialize(raw)
+
+    def instance_view(self, resource_group_name: str, vm_name: str):
+        return self.get(resource_group_name, vm_name, expand="instanceView").instance_view
 
     def begin_restart(self, resource_group_name, vm_name) -> WaitableObject:
+        return WaitableObject()
+
+    def begin_redeploy(self, resource_group_name, vm_name) -> WaitableObject:
+        behavior = self._next_behavior(vm_name)
+        if behavior.redeploy_fails:
+            return WaitableObject(
+                error=AzureError("VMRedeploymentFailed: redeployment failed due to an internal error")
+            )
+        raw = self._read_raw(resource_group_name, vm_name)
+        raw["properties"]["provisioningState"] = "Creating" if behavior.stuck else "Succeeded"
+        if behavior.stuck:
+            raw["_simulation"] = {
+                "stuck": True,
+                "recover_after_polls": behavior.recover_after_polls,
+                "polls_seen": 0,
+            }
+        else:
+            raw.pop("_simulation", None)
+        self._write_raw(resource_group_name, vm_name, raw)
         return WaitableObject()
 
     def begin_run_command(self, resource_group_name, vm_name, parameters) -> ResultableObject:

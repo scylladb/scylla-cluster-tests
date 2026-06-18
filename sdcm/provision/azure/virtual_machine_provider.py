@@ -25,13 +25,24 @@ from azure.mgmt.compute.models import VirtualMachine, RunCommandInput
 from invoke import Result
 
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
-from sdcm.provision.provisioner import InstanceDefinition, PricingModel, ProvisionError, OperationPreemptedError
+from sdcm.provision.provisioner import (
+    InstanceDefinition,
+    PricingModel,
+    ProvisionError,
+    OperationPreemptedError,
+    StuckVMProvisioningError,
+)
 from sdcm.provision.user_data import UserDataBuilder
 from sdcm.utils.azure_utils import AzureService
+from sdcm.wait import wait_for
+from sdcm.exceptions import WaitForTimeoutError
 
 LOGGER = logging.getLogger(__name__)
 
 SCT_RESOURCE_GROUP_PREFIX = "SCT-"
+
+DEFAULT_STUCK_VM_TIMEOUT = 900
+DEFAULT_STUCK_VM_POLL_INTERVAL = 30
 
 
 @dataclass
@@ -42,6 +53,8 @@ class VirtualMachineProvider:
     _enable_azure_kms: bool = False
     _azure_service: AzureService = AzureService()
     _cache: Dict[str, VirtualMachine] = field(default_factory=dict)
+    _stuck_vm_timeout: int = DEFAULT_STUCK_VM_TIMEOUT
+    _stuck_vm_poll_interval: int = DEFAULT_STUCK_VM_POLL_INTERVAL
 
     def __post_init__(self):
         """Discover existing virtual machines for resource group."""
@@ -49,8 +62,14 @@ class VirtualMachineProvider:
             v_ms = self._azure_service.compute.virtual_machines.list(self._resource_group_name)
             for _v_m in v_ms:
                 v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, _v_m.name)
-                if v_m.provisioning_state != "Deleting":
+                if v_m.provisioning_state == "Succeeded":
                     self._cache[v_m.name] = v_m
+                elif v_m.provisioning_state != "Deleting":
+                    LOGGER.warning(
+                        "Discovered VM %s in non-final provisioning state '%s'; not caching it as ready",
+                        v_m.name,
+                        v_m.provisioning_state,
+                    )
         except ResourceNotFoundError:
             pass
 
@@ -141,31 +160,74 @@ class VirtualMachineProvider:
             except AzureError as err:
                 LOGGER.error("Error when sending create vm request for VM %s: %s", definition.name, str(err))
                 error_to_raise = err
+        stuck_vm_names = []
         for definition, poller in pollers:
             try:
-                poller.wait(timeout=900)
-                v_m = self._azure_service.compute.virtual_machines.get(
-                    self._resource_group_name, definition.name, expand="instanceView"
-                )
-                if v_m.instance_view and v_m.instance_view.statuses:
-                    statuses = ", ".join(
-                        f"{status.code}: {status.display_status}" for status in v_m.instance_view.statuses
-                    )
-                    LOGGER.debug("Provisioned VM %s instance state: %s", v_m.name, statuses)
-                else:
-                    LOGGER.warning("Instance view is not available for VM %s", v_m.name)
-                self._cache[v_m.name] = v_m
-                v_ms.append(v_m)
+                # check for create-time errors quickly
+                poller.wait(timeout=self._stuck_vm_poll_interval)
             except ODataV4Error as err:
                 LOGGER.error("Error when waiting for VM %s: %s", definition.name, str(err))
                 if err.code == "OperationPreempted":
                     raise OperationPreemptedError(err)  # spot instance preemption, abort provision immediately
+                error_to_raise = err
+                continue
             except AzureError as err:
                 LOGGER.error("Error when waiting for creation of VM %s: %s", definition.name, str(err))
                 error_to_raise = err
+                continue
+            v_m = self._wait_until_provisioned(definition.name)
+            if v_m is None:
+                # accepted by Azure but never reached Succeeded within the timeout (i.e. stuck);
+                # do NOT cache or return it; the provisioner will redeploy it to a new node
+                LOGGER.warning("VM %s is stuck in provisioning, will be redeployed to a new node", definition.name)
+                stuck_vm_names.append(definition.name)
+                continue
+            self._cache[v_m.name] = v_m
+            v_ms.append(v_m)
         if error_to_raise:
             raise ProvisionError(error_to_raise)
+        if stuck_vm_names:
+            raise StuckVMProvisioningError(stuck_vm_names)
         return v_ms
+
+    def _wait_until_provisioned(self, name: str) -> Optional[VirtualMachine]:
+        """Wait until the VM reaches ProvisioningState=Succeeded.
+
+        Returns the VM on success, or None if the stuck-VM timeout expires first.
+        """
+
+        def get_provisioned_vm() -> Optional[VirtualMachine]:
+            vm = self._azure_service.compute.virtual_machines.get(
+                self._resource_group_name,
+                name,
+                expand="instanceView",
+            )
+            if vm.instance_view and vm.instance_view.statuses:
+                status_summary = ", ".join(
+                    f"{status.code}: {status.display_status}" for status in vm.instance_view.statuses
+                )
+                LOGGER.debug("VM %s instance state: %s", name, status_summary)
+            if vm.provisioning_state == "Succeeded":
+                return vm
+            return None
+
+        try:
+            return wait_for(
+                get_provisioned_vm,
+                step=self._stuck_vm_poll_interval,
+                timeout=self._stuck_vm_timeout,
+                throw_exc=True,
+                text=f"Waiting for VM {name} to reach Succeeded provisioning state",
+            )
+        except WaitForTimeoutError:
+            return None
+
+    def recheck_provisioned(self, name: str) -> Optional[VirtualMachine]:
+        """Re-poll a VM after an unplanned action (e.g. redeploy); cache and return it if it reaches 'Succeeded'."""
+        v_m = self._wait_until_provisioned(name)
+        if v_m is not None:
+            self._cache[v_m.name] = v_m
+        return v_m
 
     def list(self):
         return list(self._cache.values())
@@ -183,7 +245,7 @@ class VirtualMachineProvider:
             LOGGER.info("Waiting for termination of instance: %s...", name)
             task.wait()
             LOGGER.info("Instance %s has been terminated.", name)
-        del self._cache[name]
+        self._cache.pop(name, None)
 
     def reboot(self, name: str, wait: bool = True, hard: bool = False) -> None:
         LOGGER.info("Triggering reboot of instance: %s", name)

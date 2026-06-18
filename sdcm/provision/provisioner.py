@@ -64,6 +64,26 @@ class OperationPreemptedError(Exception):
     pass
 
 
+class StuckVMProvisioningError(Exception):
+    """Raised when one or more accepted VMs never finish provisioning.
+
+    Stores the names of the stuck VMs so the provisioner can recreate only those
+    nodes. It intentionally does not inherit from ``ProvisionError``.
+    """
+
+    def __init__(self, vm_names: List[str]):
+        self.vm_names = vm_names
+        super().__init__(f"VMs stuck during provisioning: {', '.join(vm_names)}")
+
+
+class ProvisionUnrecoverableError(Exception):
+    """Base class for provisioning failures that retrying cannot fix (e.g. zone capacity)."""
+
+
+class ZoneResourcesExhaustedError(ProvisionUnrecoverableError):
+    """Raised when the target availability zone has no capacity for the requested resources."""
+
+
 class ProvisionerError(Exception):
     pass
 

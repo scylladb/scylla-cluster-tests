@@ -1309,6 +1309,20 @@ class SCTConfiguration(dict):
         dict(name="azure_image_monitor", env="SCT_AZURE_IMAGE_MONITOR", type=str, help=""),
         dict(name="azure_image_loader", env="SCT_AZURE_IMAGE_LOADER", type=str, help=""),
         dict(name="azure_image_username", env="SCT_AZURE_IMAGE_USERNAME", type=str, help=""),
+        dict(
+            name="azure_provision_stuck_vm_timeout",
+            env="SCT_AZURE_PROVISION_STUCK_VM_TIMEOUT",
+            type=int,
+            help="Seconds to wait for an Azure VM to reach the 'Succeeded' provisioning state before treating it "
+            "as stuck (accepted by Azure but never started by the host - SCT-434) and recreating it.",
+        ),
+        dict(
+            name="azure_provision_stuck_vm_recreate_attempts",
+            env="SCT_AZURE_PROVISION_STUCK_VM_RECREATE_ATTEMPTS",
+            type=int,
+            help="How many times to recreate a stuck Azure VM (full node: VM, NIC and public IP) onto fresh "
+            "capacity before giving up with a non-retryable error.",
+        ),
         # Oracle Cloud (OCI) options
         dict(
             name="oci_region_name",
