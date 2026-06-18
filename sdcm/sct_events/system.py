@@ -126,6 +126,29 @@ class SpotTerminationEvent(InformationalEvent):
         return super().msgfmt + ": node={0.node} message={0.message}"
 
 
+class InstanceProvisionStuckEvent(InformationalEvent):
+    """Published when a VM is accepted by the cloud but stays in a non-Succeeded
+    provisioning state past the configured timeout.
+
+    Uses NORMAL severity while the stuck node is being recreated, and WARNING
+    when recreate attempts are exhausted.
+    """
+
+    def __init__(self, vm_name: str, attempt: int, provisioning_state: str, message: str, severity: Severity):
+        super().__init__(severity=severity)
+        self.vm_name = vm_name
+        self.attempt = attempt
+        self.provisioning_state = provisioning_state
+        self.message = message
+
+    @property
+    def msgfmt(self) -> str:
+        return (
+            f"{super().msgfmt}: vm_name={{0.vm_name}} attempt={{0.attempt}} "
+            f"provisioning_state={{0.provisioning_state}} message={{0.message}}"
+        )
+
+
 class ScyllaRepoEvent(InformationalEvent):
     def __init__(self, url: str, error: str):
         super().__init__(severity=Severity.WARNING)

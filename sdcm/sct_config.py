@@ -1346,6 +1346,21 @@ class SCTConfiguration(BaseModel):
     azure_image_username: String = SctField(
         description="The username for the Azure image.",
     )
+    azure_provision_stuck_vm_timeout: int = SctField(
+        gt=0,
+        description="""
+              Seconds to wait for an Azure VM to reach the 'Succeeded' provisioning state before
+              treating it as stuck (accepted by Azure but never started by the host - SCT-434) and
+              recreating it. Detection is gated on the polled instanceView provisioning state.
+        """,
+    )
+    azure_provision_stuck_vm_recreate_attempts: int = SctField(
+        ge=0,
+        description="""
+              How many times to recreate a stuck Azure VM (full node: VM, NIC and public IP) onto
+              fresh capacity before giving up with a non-retryable error.
+        """,
+    )
 
     # Oracle Cloud (OCI) options
     oci_region_name: StringOrList = SctField(

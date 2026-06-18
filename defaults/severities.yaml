@@ -114,6 +114,7 @@ SoftTimeoutEvent: ERROR
 HardTimeoutEvent: CRITICAL
 ElasticsearchEvent: ERROR
 SpotTerminationEvent: CRITICAL
+InstanceProvisionStuckEvent: WARNING
 AwsKmsEvent: ERROR
 ScyllaRepoEvent: WARNING
 InfoEvent: ERROR
