@@ -129,21 +129,16 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     script {
                         checkoutQaInternal(params)
-<<<<<<< HEAD
-
                         sh './docker/env/hydra.sh unit-tests --junit-xml unit-tests-junit.xml'
-||||||| parent of 3abc838b2 (improvement(Jenkinsfile): Set stage to failure as well)
-
-                        sh './docker/env/hydra.sh unit-tests'
-=======
-                        sh './docker/env/hydra.sh unit-tests'
                     }
                 }
             }
             post {
+                always {
+                    junit testResults: 'unit-tests-junit.xml', allowEmptyResults: true, keepProperties: true
+                }
                 success {
                     script {
->>>>>>> 3abc838b2 (improvement(Jenkinsfile): Set stage to failure as well)
                         pullRequestSetResult('success', 'jenkins/unittests', 'All unit tests are passed')
                     }
                 }
@@ -151,11 +146,6 @@ pipeline {
                     script {
                         pullRequestSetResult('failure', 'jenkins/unittests', 'Some unit tests failed')
                     }
-                }
-            }
-            post {
-                always {
-                    junit testResults: 'unit-tests-junit.xml', allowEmptyResults: true, keepProperties: true
                 }
             }
         }
@@ -224,6 +214,9 @@ pipeline {
                 }
             }
             post {
+                always {
+                    junit testResults: 'integration-tests-junit.xml', allowEmptyResults: true, keepProperties: true
+                }
                 success {
                     script {
                         pullRequestSetResult('success', 'jenkins/integration-tests', 'All integration tests are passed')
@@ -238,11 +231,6 @@ pipeline {
                         echo "fetching junit report from runner ..."
                         scp -o StrictHostKeyChecking=no ubuntu@\${RUNNER_IP}:/home/ubuntu/scylla-cluster-tests/integration-tests-junit.xml integration-tests-junit.xml || echo "WARNING: Failed to fetch JUnit XML report"
                     """
-                }
-            }
-            post {
-                always {
-                    junit testResults: 'integration-tests-junit.xml', allowEmptyResults: true, keepProperties: true
                 }
             }
         }
