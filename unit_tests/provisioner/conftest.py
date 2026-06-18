@@ -21,7 +21,33 @@ from sdcm.utils.sct_cmd_helpers import get_test_config
 from sdcm.sct_config import SCTConfiguration
 from sdcm.test_config import TestConfig
 from sdcm.utils.azure_utils import AzureService
-from unit_tests.provisioner.fake_azure_service import FakeAzureService
+from unit_tests.provisioner.fake_azure_service import FakeAzureService, FakeVirtualMachines
+
+
+@pytest.fixture(autouse=True)
+def _reset_fake_vm_simulation():
+    """Reset fake VM scripts before and after each test."""
+    FakeVirtualMachines.clear_scripts()
+    yield
+    FakeVirtualMachines.clear_scripts()
+
+
+@pytest.fixture(scope="session")
+def test_data_dir() -> Path:
+    """Override root test_data_dir: return provisioner's own test_data/ directory."""
+    return Path(__file__).parent / "test_data"
+
+
+@pytest.fixture(scope="session")
+def provisioner_dir(test_data_dir: Path) -> Path:
+    """Return the path to unit_tests/provisioner/ (for config files co-located with tests)."""
+    return test_data_dir.parent
+
+
+@pytest.fixture(scope="session")
+def defaults_dir(provisioner_dir: Path) -> Path:
+    """Return the path to the top-level defaults/ directory."""
+    return provisioner_dir.parent.parent.parent / "defaults"
 
 
 @pytest.fixture(scope="session")
