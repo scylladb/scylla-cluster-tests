@@ -348,11 +348,19 @@ def provision_resources(backend, test_name: str, config: str):
         click.echo("Generate SCT agent API key")
         test_config.generate_and_save_agent_api_key()
 
+    original_region = params.region_names[0] if params.region_names else None
+    handoff_test_id = params.get("reuse_cluster") or test_id
+
     click.echo(f"Provision {backend} cloud resources")
     try:
         if backend == "aws":
-            layout = SCTProvisionLayout(params=params)
-            layout.provision()
+            SCTProvisionLayout(params=params).provision()
+            test_config.persist_resolved_placement_if_changed(
+                handoff_test_id,
+                original_region=original_region,
+                region_name=params.region_names[0] if params.region_names else None,
+                availability_zone=params.get("availability_zone"),
+            )
         elif backend in ("azure", "gce", "oci"):
             if backend == "gce":
                 from sdcm.provision.gce.zone_resolver import GceAZResolver  # noqa: PLC0415
@@ -369,6 +377,12 @@ def provision_resources(backend, test_name: str, config: str):
                 params.update({"cluster_backend": "aws"})
                 try:
                     SCTProvisionLayout(params=params).provision()
+                    test_config.persist_resolved_placement_if_changed(
+                        handoff_test_id,
+                        original_region=original_region,
+                        region_name=params.region_names[0] if params.region_names else None,
+                        availability_zone=params.get("availability_zone"),
+                    )
                 finally:
                     params.update({"cluster_backend": original_backend})
         else:

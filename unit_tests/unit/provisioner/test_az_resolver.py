@@ -430,3 +430,40 @@ def test_run_pre_flight_capacity_probe_raises_on_capacity_failure(mock_probe_aws
                 test_id="t-1",
             )
         )
+
+
+def test_get_region_fallback_candidates_excludes_current_and_non_peered():
+    """Only actively-peered regions (other than the current one) become candidates."""
+    params = _make_params(region_name="us-east-1", availability_zone="a")
+    resolver = AZResolver(params)
+    peered = {"eu-west-1", "us-west-2"}
+
+    with (
+        patch.object(AZResolver, "_is_region_peered", side_effect=lambda cur, cand: cand in peered),
+        patch.object(AZResolver, "_common_supported_letters", return_value=["a", "b", "c"]),
+    ):
+        candidates = resolver.get_region_fallback_candidates()
+
+    regions = [region for region, _ in candidates]
+    assert "us-east-1" not in regions
+    assert "us-east-2" not in regions
+    assert set(regions) == peered
+
+
+def test_is_region_peered_true_only_for_active_connection():
+    """_is_region_peered must accept only active peering, not pending-acceptance or missing."""
+    region_pair = ("us-east-1", "eu-west-1")
+    peer_name = "peer-name"
+
+    with (
+        patch("sdcm.provision.aws.az_resolver.AwsRegion"),
+        patch("sdcm.utils.aws_peering.AwsVpcPeering._find_existing_peering") as mock_find,
+    ):
+        mock_find.return_value = ({"Status": {"Code": "active"}}, peer_name)
+        assert AZResolver._is_region_peered(*region_pair) is True
+
+        mock_find.return_value = ({"Status": {"Code": "pending-acceptance"}}, peer_name)
+        assert AZResolver._is_region_peered(*region_pair) is False
+
+        mock_find.return_value = (None, peer_name)
+        assert AZResolver._is_region_peered(*region_pair) is False

@@ -36,6 +36,7 @@ from sdcm.utils.argus import ArgusError, get_argus_client, get_argus_use_tunnel_
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_region import GceRegion
+from sdcm.sct_config import AWS_SUPPORTED_REGIONS
 from sdcm.utils.common import (
     all_aws_regions,
     aws_tags_to_dict,
@@ -99,6 +100,13 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
 
     cluster_backend = config.get("cluster_backend") or ""
     aws_regions = config.region_names
+    if config.get("fallback_to_next_region"):
+        # region fallback may have relocated the cluster, so scan the fallback-eligible regions, not
+        # every AWS region (which would hit unreachable opt-in regions e.g. me-south-1 and time out).
+        aws_regions = sorted(set(AWS_SUPPORTED_REGIONS) | set(config.region_names or []))
+        LOGGER.info(
+            "fallback_to_next_region enabled: scanning fallback-eligible AWS regions for cleanup: %s", aws_regions
+        )
     gce_projects = [config.get("gce_project") or "gcp-sct-project-1"]
 
     if cluster_backend.startswith("k8s-local"):
@@ -124,12 +132,19 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
             SCTCapacityReservation.cancel(config)
         else:
             SCTCapacityReservation.cancel_all_regions(config.get("test_id"))
+        # cleanup capacity reservations across all regions as region fallback can leave an idle CR in an abandoned region
+        if not dry_run and (test_id := config.get("test_id")):
+            SCTCapacityReservation.cancel_all_regions(test_id)
         SCTDedicatedHosts.release_by_tags(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_elastic_ips_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_placement_groups_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         if cluster_backend == "aws" and not dry_run:
             clean_aws_kms_alias(tags_dict, aws_regions or all_aws_regions())
+        if not dry_run and (test_id := tags_dict.get("TestId")):
+            from sdcm.test_config import TestConfig  # noqa: PLC0415  # avoid import cycle at module load
+
+            TestConfig.delete_resolved_placement(test_id)
     if cluster_backend in ("gce", "k8s-gke", ""):
         for project in gce_projects:
             with environment(SCT_GCE_PROJECT=project):

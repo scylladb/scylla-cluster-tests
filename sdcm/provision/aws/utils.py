@@ -38,6 +38,7 @@ from mypy_boto3_ec2.type_defs import (
     TagSpecificationTypeDef,
 )
 
+from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.constants import (
     SPOT_REQUEST_TIMEOUT,
     SPOT_REQUEST_WAITING_TIME,
@@ -48,6 +49,7 @@ from sdcm.provision.aws.constants import (
     SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
 )
 from sdcm.provision.common.provisioner import TagsType
+from sdcm.utils.common import aws_tags_to_dict, list_instances_aws
 
 
 LOGGER = logging.getLogger(__name__)
@@ -414,3 +416,40 @@ def create_cluster_placement_groups_aws(name: str, tags: dict, region=None, dry_
         ],
     )
     return result
+
+
+def cleanup_abandoned_region(test_id: str, region: str) -> None:
+    """Cleanup for a region abandoned by region fallback.
+
+    Cancels capacity reservations for `test_id` across all regions and
+    terminates stale instances tagged with `test_id` in `region`.
+    """
+    if not test_id:
+        return
+
+    try:
+        SCTCapacityReservation.cancel_all_regions(test_id)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Abandoned-region belt: failed to cancel capacity reservations for %s: %s", test_id, exc)
+
+    try:
+        instances = list_instances_aws(tags_dict={"TestId": test_id}, region_name=region, group_as_region=True).get(
+            region, []
+        )
+        instance_ids = [
+            inst["InstanceId"]
+            for inst in instances
+            if aws_tags_to_dict(inst.get("Tags")).get("NodeType") != "sct-runner"
+        ]
+
+        if not instance_ids:
+            return
+        LOGGER.info(
+            "Abandoned-region belt: terminating %d stray instance(s) in %s: %s",
+            len(instance_ids),
+            region,
+            instance_ids,
+        )
+        ec2_clients[region].terminate_instances(InstanceIds=instance_ids)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Abandoned-region belt: failed to terminate stray instances in %s: %s", region, exc)
