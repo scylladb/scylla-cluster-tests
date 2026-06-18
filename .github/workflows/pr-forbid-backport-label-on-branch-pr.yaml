@@ -1,0 +1,83 @@
+name: PR forbid backport labels on branch PRs
+
+on:
+  pull_request_target:
+    types: [opened, reopened, labeled, synchronize]
+    branches:
+      - branch-*
+
+jobs:
+  forbid-backport-labels:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Collect invalid backport labels
+        id: collect
+        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0
+        with:
+          result-encoding: string
+          script: |
+            const issue_number = context.payload.pull_request.number;
+            const prAuthor = context.payload.pull_request.user.login;
+            const commentMarker = '<!-- backport-labels-forbidden-on-branch-pr -->';
+
+            const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const invalidLabels = labels
+              .map(label => label.name)
+              .filter(name => name.startsWith('backport/'));
+
+            if (invalidLabels.length === 0) {
+              core.info(`No invalid backport labels found on PR #${issue_number}`);
+              core.setOutput('has-invalid-labels', 'false');
+              core.setOutput('invalid-labels', '');
+              core.setOutput('comment-body', '');
+              return;
+            }
+
+            const labelsList = invalidLabels.map(name => `- \`${name}\``).join('\n');
+            const body = [
+              commentMarker,
+              `@${prAuthor} backport labels were removed from this PR because it already targets a \`branch-*\` branch.`,
+              '',
+              'Apply \`backport/*\` labels only to the original PR that targets \`master\`. The backport automation reads those labels there and creates the release-branch PR automatically.',
+              '',
+              'Removed labels:',
+              labelsList,
+            ].join('\n');
+
+            core.setOutput('has-invalid-labels', 'true');
+            core.setOutput('invalid-labels', invalidLabels.join('\n'));
+            core.setOutput('comment-body', body);
+
+      - name: Remove invalid backport labels
+        if: steps.collect.outputs.has-invalid-labels == 'true'
+        uses: actions-ecosystem/action-remove-labels@2ce5d41b4b6aa8503e285553f75ed56e0a40bae0 # v1
+        with:
+          labels: ${{ steps.collect.outputs.invalid-labels }}
+
+      - name: Find existing explanation comment
+        if: steps.collect.outputs.has-invalid-labels == 'true'
+        id: find-comment
+        uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad # v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: '<!-- backport-labels-forbidden-on-branch-pr -->'
+          direction: last
+
+      - name: Create or update explanation comment
+        if: steps.collect.outputs.has-invalid-labels == 'true'
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          edit-mode: replace
+          body: ${{ steps.collect.outputs.comment-body }}

@@ -6,7 +6,7 @@
 ### PR pre-checks (self review)
 <!--- PR should be created as Draft, when CI finished and relevant checkboxes selected, add reviewers and then click on "Ready for review" button.-->
 <!--- Put an `x` in all the boxes that apply or create PR and then click on all relevant checkboxes: -->
-- [ ] I added the relevant `backport` labels
+- [ ] I added the relevant `backport` labels (Only if targetting `master`)
 - [ ] I didn't leave commented-out/debugging code
 
 ### Reminders
