@@ -1,0 +1,17 @@
+id: no-curl-exec
+message: "Security Critical: Bare 'curl' usage detected in remote execution. Use your team's approved 'curl_with_retry' utility instead to ensure safe network operations."
+severity: error
+language: python
+rule:
+  # 1. Target remoter.run(...) or remoter.sudo(...) patterns
+  any:
+    - pattern: "$OBJ.run($CMD)"
+    - pattern: "$OBJ.sudo($CMD)"
+constraints:
+  CMD:
+    all:
+      # 2. Flag if the string contains the bare 'curl' command
+      - regex: ".*curl.*"
+      # 3. EXEMPT the line if they are using the approved wrapper
+      - not:
+          regex: ".*curl_with_retry.*"

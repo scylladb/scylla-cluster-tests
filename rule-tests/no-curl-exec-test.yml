@@ -1,0 +1,26 @@
+id: no-curl-exec
+invalidSamples:
+  # Should FAIL (Original remoter instance)
+  - code: |
+      remoter.run("curl -sSL https://example.com/install.sh")
+
+  # Should FAIL (Different object name: 'client')
+  - code: |
+      client.sudo("curl -O http://unsafe.local/payload")
+
+  # Should FAIL (Object name: 'self')
+  - code: |
+      self.run("curl -X POST http://endpoint")
+
+validSamples:
+  # Should PASS (Approved wrapper on standard remoter)
+  - code: |
+      remoter.run("curl_with_retry --url https://endpoint.internal")
+
+  # Should PASS (Approved wrapper on custom 'node' object)
+  - code: |
+      node.sudo("curl_with_retry --url https://endpoint.internal")
+
+  # Completely safe unrelated command on an anonymous runner
+  - code: |
+      runner.run("mkdir -p /opt/app/logs")

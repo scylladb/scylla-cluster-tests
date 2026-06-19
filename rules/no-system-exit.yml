@@ -1,0 +1,6 @@
+id: no-system-exit
+message: "Critical Error: Do not use System.exit() inside Jenkins pipelines. This can terminate the underlying Jenkins JVM process."
+severity: error
+language: groovy
+rule:
+  pattern: System.exit($$$ARGS)
