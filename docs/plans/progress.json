@@ -112,6 +112,16 @@
       "phases_done": 0
     },
     {
+      "id": "nemesis-high-disk-utilization",
+      "title": "Nemesis High Disk Utilization Support",
+      "file": "nemesis/nemesis-high-disk-utilization.md",
+      "domain": "nemesis",
+      "status": "draft",
+      "created": "2026-06-18",
+      "phases_total": 7,
+      "phases_done": 0
+    },
+    {
       "id": "k8s-multitenancy-dict-config",
       "title": "K8s Multitenancy Dict Config",
       "file": "config/k8s-multitenancy-dict-config.md",
