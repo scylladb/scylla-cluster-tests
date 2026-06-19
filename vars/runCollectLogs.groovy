@@ -3,8 +3,8 @@
 
 def call(Map params, String region){
     def current_region = initAwsRegionParam(params.region, region)
-    def current_gce_datacenter = params.gce_datacenter ?: ""
-    def current_oci_region = ""
+    def current_gce_datacenter = params.gce_datacenter ?: ''
+    def current_oci_region = ''
     if (params.oci_region_name) {
         current_oci_region = initAwsRegionParam(params.oci_region_name, region)
     }

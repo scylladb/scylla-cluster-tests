@@ -1,6 +1,7 @@
 #!groovy
 import groovy.json.JsonSlurperClassic
 
+
 def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 def base_versions_list = []
 
@@ -110,7 +111,7 @@ def call(Map pipelineParams) {
                    name: 'reuse_cluster')
             // Performance Test Configuration
             separator(name: 'PERF_TEST', sectionHeader: 'Performance Test Configuration')
-            string(defaultValue: "false",
+            string(defaultValue: 'false',
                    description: 'Stop test if perf hardware test values exceed the set limits',
                    name: 'stop_on_hw_perf_failure')
             string(defaultValue: "${pipelineParams.get('sub_tests') ? groovy.json.JsonOutput.toJson(pipelineParams.get('sub_tests')) : ''}",
@@ -207,7 +208,7 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
-            stage("Preparation") {
+            stage('Preparation') {
                 // NOTE: this stage is a workaround for the following Jenkins bug:
                 // https://issues.jenkins-ci.org/browse/JENKINS-41929
                 when { expression { env.BUILD_NUMBER == '1' } }
@@ -239,6 +240,7 @@ def call(Map pipelineParams) {
                                     dir('scylla-cluster-tests') {
                                         checkout scm
                                         dockerLogin(params)
+
                                         (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
                                         ArrayList base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
                                         def new_repo = params.new_scylla_repo
@@ -253,7 +255,7 @@ def call(Map pipelineParams) {
                                                 new_repo,
                                                 params.backend
                                             ).last()
-                                            new_params["scylla_version"] = supportedVersions
+                                            new_params['scylla_version'] = supportedVersions
                                         }
                                         println("the supported version is $supportedVersions")
                                     }
@@ -285,12 +287,12 @@ def call(Map pipelineParams) {
                 post{
                     failure {
                         script{
-                            sh "exit 1"
+                            sh 'exit 1'
                         }
                     }
                     unstable {
                         script{
-                            sh "exit 1"
+                            sh 'exit 1'
                         }
                     }
                 }
@@ -336,7 +338,7 @@ def call(Map pipelineParams) {
                                 node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
-                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",
+                                             "SCT_TEST_ID=${UUID.randomUUID()}",
                                              "SCT_GCE_PROJECT=${env.SCT_GCE_PROJECT ?: ''}",
                                              "SCT_BILLING_PROJECT=${env.SCT_BILLING_PROJECT ?: ''}",]) {
                                         stage("Split for ${sub_test}") {

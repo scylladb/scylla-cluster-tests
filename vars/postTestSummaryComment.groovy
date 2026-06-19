@@ -17,7 +17,7 @@
  */
 def call(Map args) {
     if (!env.CHANGE_ID) {
-        echo "postTestSummaryComment: not a PR build, skipping"
+        echo 'postTestSummaryComment: not a PR build, skipping'
         return
     }
 
@@ -29,14 +29,14 @@ def call(Map args) {
     def hasPrecommitLog = precommitLog && fileExists(precommitLog)
 
     if (!existingXmls && !hasPrecommitLog) {
-        echo "postTestSummaryComment: no result files found, skipping"
+        echo 'postTestSummaryComment: no result files found, skipping'
         return
     }
 
-    def cmdParts = ["./docker/env/hydra.sh python sdcm/utils/junit_summary.py"]
+    def cmdParts = ['./docker/env/hydra.sh python sdcm/utils/junit_summary.py']
 
     if (existingXmls) {
-        def xmlArgs = existingXmls.collect { "\"${it}\"" }.join(" ")
+        def xmlArgs = existingXmls.collect { "\"${it}\"" }.join(' ')
         cmdParts.add("--junit-xml ${xmlArgs}")
     }
 
@@ -48,18 +48,18 @@ def call(Map args) {
     cmdParts.add("--build-url '\"${env.BUILD_URL}\"'")
 
     def rawOutput = sh(
-        script: "#!/bin/bash\nset -o pipefail\n" + cmdParts.join(" \\\n    "),
+        script: '#!/bin/bash\nset -o pipefail\n' + cmdParts.join(" \\\n    "),
         returnStdout: true,
     ).trim()
 
     // Strip hydra.sh noise (Docker pull messages, "Going to run" etc.)
     // by extracting only the content starting from the HTML comment marker.
-    def marker = "<!-- sct-test-summary -->"
+    def marker = '<!-- sct-test-summary -->'
     def markerIdx = rawOutput.indexOf(marker)
     def summary = markerIdx >= 0 ? rawOutput.substring(markerIdx) : rawOutput
 
     if (!summary) {
-        echo "postTestSummaryComment: empty summary output, skipping"
+        echo 'postTestSummaryComment: empty summary output, skipping'
         return
     }
 

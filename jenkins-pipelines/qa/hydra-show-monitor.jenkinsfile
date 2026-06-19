@@ -1,18 +1,18 @@
 #! groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
-def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+def lib = library(identifier: 'sct@snapshot', retriever: legacySCM(scm))
 
 pipeline {
     agent {
         label {
-            label "aws-sct-builders-eu-west-1-v3-CI"
+            label 'aws-sct-builders-eu-west-1-v3-CI'
         }
     }
     environment {
         AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
         AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
-        SCT_TEST_ID = UUID.randomUUID().toString()
+        SCT_TEST_ID = UUID.randomUUID()
     }
     parameters {
         string(defaultValue: 'master',

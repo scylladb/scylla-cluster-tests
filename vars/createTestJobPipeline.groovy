@@ -2,7 +2,7 @@
 
 def call() {
 
-    def builder = getJenkinsLabels("aws", "eu-west-1")
+    def builder = getJenkinsLabels('aws', 'eu-west-1')
 
     pipeline {
         agent {
@@ -15,13 +15,13 @@ def call() {
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
         }
         parameters {
-            string(defaultValue: "",
+            string(defaultValue: '',
                description: 'folder name or path in jenkins jobs structure',
                name: 'jenkins_path')
-            string(defaultValue: "master",
+            string(defaultValue: 'master',
                description: 'sct branch',
                name: 'sct_branch')
-            string(defaultValue: "git@github.com:scylladb/scylla-cluster-tests.git",
+            string(defaultValue: 'git@github.com:scylladb/scylla-cluster-tests.git',
                description: 'sct repo link',
                name: 'sct_repo')
         }

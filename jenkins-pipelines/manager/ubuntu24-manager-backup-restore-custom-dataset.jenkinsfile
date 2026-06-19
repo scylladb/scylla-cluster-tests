@@ -1,7 +1,7 @@
 #!groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
-def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+def lib = library(identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 managerPipeline(
     backend: 'aws',
@@ -9,6 +9,6 @@ managerPipeline(
     test_name: 'mgmt_cli_test.ManagerRestoreBenchmarkTests.test_restore_benchmark',
     test_config: """["test-cases/manager/manager-backup-restore-set-dataset.yaml", "configurations/object_storage_s3.yaml", "configurations/manager/ubuntu24.yaml", "configurations/object_storage_native_method.yaml"]""",
 
-    mgmt_restore_extra_params: "--batch-size 2 --parallel 1",
+    mgmt_restore_extra_params: '--batch-size 2 --parallel 1',
     mgmt_agent_backup_config: "{'checkers': 100, 'transfers': 2, 'low_level_retries': 20}"
 )

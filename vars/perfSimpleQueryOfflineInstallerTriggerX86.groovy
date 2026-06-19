@@ -1,5 +1,5 @@
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels("aws", "eu-west-1")
+    def builder = getJenkinsLabels('aws', 'eu-west-1')
     pipeline {
         agent {
             label {
@@ -29,7 +29,7 @@ def call(Map pipelineParams) {
                     script {
                         def unified_package = params.unified_package?.trim()
                         if (!unified_package) {
-                            error "unified_package parameter is required. Provide a URL to the unified (relocatable) Scylla package."
+                            error 'unified_package parameter is required. Provide a URL to the unified (relocatable) Scylla package.'
                         }
 
                         def testMatrix = [

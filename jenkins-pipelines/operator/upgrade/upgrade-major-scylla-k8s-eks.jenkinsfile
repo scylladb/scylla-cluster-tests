@@ -1,6 +1,6 @@
 #!groovy
 
-def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+def lib = library(identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 rollingOperatorUpgradePipeline(
     backend: 'k8s-eks',

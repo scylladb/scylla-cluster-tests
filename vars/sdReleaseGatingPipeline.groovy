@@ -23,7 +23,7 @@ def buildHtmlReport(Map results, String[] scyllaVersions, String sdVersionDispla
     report.append(buildHtmlResultsTable(results, scyllaVersions, osLabels))
     report.append(buildHtmlFailuresSection(results))
     report.append('</body></html>')
-    return report.toString()
+    return report
 }
 
 /** Returns the HTML doctype, head with styles, and opening body/h1 tags. */
@@ -96,14 +96,17 @@ def buildStatusCell(Map result) {
 def buildHtmlResultsTable(Map results, String[] scyllaVersions, List osLabels) {
     def table = new StringBuilder()
     table.append('<table>\n<tr><th>OS</th>')
+
     for (def ver in scyllaVersions) {
         table.append("<th>${ver}</th>")
     }
     table.append('</tr>\n')
 
+
     for (def os in osLabels) {
         table.append('<tr>')
         table.append("<td>${os}</td>")
+
         for (def ver in scyllaVersions) {
             def result = results["${os}/${ver}"]
             table.append("<td>${buildStatusCell(result)}</td>")
@@ -111,7 +114,7 @@ def buildHtmlResultsTable(Map results, String[] scyllaVersions, List osLabels) {
         table.append('</tr>\n')
     }
     table.append('</table>\n')
-    return table.toString()
+    return table
 }
 
 /** Returns the failures detail section, or an approval banner if all passed. */
@@ -134,7 +137,7 @@ def buildHtmlFailuresSection(Map results) {
         section.append('</div>\n')
     }
     section.append('</div>\n')
-    return section.toString()
+    return section
 }
 
 /**
@@ -149,18 +152,21 @@ def buildTextReport(Map results, String[] scyllaVersions, String sdVersionDispla
     def osColWidth = 20
     def report = new StringBuilder()
     report.append('=' * 80 + '\n')
-    report.append("SCYLLA DOCTOR RELEASE GATING REPORT\n")
+    report.append('SCYLLA DOCTOR RELEASE GATING REPORT\n')
     report.append('=' * 80 + '\n\n')
     report.append("SD Version: ${sdVersionDisplay}\n")
     report.append("Overall Status: ${overallStatus}\n")
     report.append("Scylla Versions Tested: ${scyllaVersions.join(', ')}\n\n")
 
     report.append(String.format("%-${osColWidth}s", 'OS'))
+
+
     for (def ver in scyllaVersions) {
         report.append(String.format("%-${colWidth}s", ver))
     }
     report.append('\n')
     report.append('-' * (osColWidth + colWidth * scyllaVersions.length) + '\n')
+
 
     for (def os in osLabels) {
         def osUrl = scyllaVersions.collect { ver -> results["${os}/${ver}"] }.find { it?.url }?.url ?: ''
@@ -187,7 +193,7 @@ def buildTextReport(Map results, String[] scyllaVersions, String sdVersionDispla
 
     def failedJobs = results.findAll { k, v -> v.status != 'SUCCESS' }
     if (failedJobs) {
-        report.append("FAILURES:\n")
+        report.append('FAILURES:\n')
         report.append('-' * 80 + '\n')
         failedJobs.each { key, result ->
             report.append("  ${result.os} × ${result.version} — ${result.status}\n")
@@ -199,10 +205,10 @@ def buildTextReport(Map results, String[] scyllaVersions, String sdVersionDispla
             }
         }
     } else {
-        report.append("All tests PASSED. SD release is approved.\n")
+        report.append('All tests PASSED. SD release is approved.\n')
     }
     report.append('\n' + '=' * 80 + '\n')
-    return report.toString()
+    return report
 }
 
 /**
@@ -411,7 +417,7 @@ def call(Map pipelineParams = [:]) {
                                 }
 
                                 if (!discoveredVersions) {
-                                    error("No Scylla versions discovered or provided. Cannot proceed.")
+                                    error('No Scylla versions discovered or provided. Cannot proceed.')
                                 }
                             }
                         }
@@ -424,7 +430,7 @@ def call(Map pipelineParams = [:]) {
                     script {
                         def scyllaVersions = discoveredVersions as String[]
                         println("Scheduling artifact tests for Scylla versions: ${scyllaVersions}")
-                        def osFilter = params.os_filter?.trim() ? params.os_filter.trim().split(',').collect { it.trim() } : []
+                        def osFilter = params.os_filter?.trim() ? params.os_filter.trim().split(',').collect({ it.trim() }) : []
 
                         // Filter OS variants if os_filter is specified
                         def jobsToRun = ARTIFACT_TEST_JOBS
@@ -437,7 +443,9 @@ def call(Map pipelineParams = [:]) {
                         def results = Collections.synchronizedMap([:])
                         def parallelJobs = [:]
 
+
                         for (def jobDef in jobsToRun) {
+
                             for (def version in scyllaVersions) {
                                 println("Scheduling job for OS=${jobDef.os_label}, Scylla version=${version}")
                                 def osLabel = jobDef.os_label
@@ -496,7 +504,7 @@ def call(Map pipelineParams = [:]) {
 
                                     // Print errors to trigger console for immediate visibility
                                     if (jobResult.status != 'SUCCESS') {
-                                        println("=" * 60)
+                                        println('=' * 60)
                                         println("FAILED: ${stageKey} — ${jobResult.status}")
                                         if (jobResult.url) {
                                             println("  Job URL: ${jobResult.url}")
@@ -504,7 +512,7 @@ def call(Map pipelineParams = [:]) {
                                         if (jobResult.error) {
                                             println("  Error: ${jobResult.error}")
                                         }
-                                        println("=" * 60)
+                                        println('=' * 60)
                                     }
                                 }
                             }
@@ -557,7 +565,7 @@ def call(Map pipelineParams = [:]) {
                         def status = hasFailures ? 'FAILED' : 'PASSED'
 
                         def sdFileName = params.sd_tarball_url.trim().tokenize('/').last()
-                        def dateTime = new Date().format("yyyy-MM-dd HH:mm", TimeZone.getTimeZone('UTC'))
+                        def dateTime = new Date().format('yyyy-MM-dd HH:mm', TimeZone.getTimeZone('UTC'))
 
                         emailext(
                             subject: "SD Release Gating ${status}: ${sdFileName} (${dateTime} UTC)",

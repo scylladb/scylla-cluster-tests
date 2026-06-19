@@ -1,6 +1,7 @@
 #!groovy
 
 def completed_stages = [:]
+
 def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
@@ -17,7 +18,7 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
-            SCT_TEST_ID = UUID.randomUUID().toString()
+            SCT_TEST_ID = UUID.randomUUID()
             SCT_GCE_PROJECT = "${params.gce_project}"
             SCT_BILLING_PROJECT = "${params.billing_project}"
         }
@@ -53,11 +54,11 @@ def call(Map pipelineParams) {
 
             // Stress Test Configuration
             separator(name: 'STRESS_TEST', sectionHeader: 'Stress Test Configuration')
-            string(defaultValue: "",
+            string(defaultValue: '',
                description: 'Duration in minutes for stress commands(gemini, c-s, s-b)',
                name: 'stress_duration')
 
-            string(defaultValue: "",
+            string(defaultValue: '',
                description: ('Time duration in minutes for preparing dataset with commands prepare_*_cmd, if empty value, default value is 5h = 300 minutes.' +
                              'Prepare commands could finish earlier and have not to run full prepare_stress_duration time'),
                name: 'prepare_stress_duration')
@@ -154,7 +155,7 @@ def call(Map pipelineParams) {
                    name: 'test_name')
 
             string(defaultValue: '', description: 'run gemini job with specific gemini seed number',
-                   name: "gemini_seed")
+                   name: 'gemini_seed')
 
             string(defaultValue: "${pipelineParams.get('pytest_addopts', '')}",
                    description: (
@@ -240,7 +241,7 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
-            stage("Preparation") {
+            stage('Preparation') {
                 // NOTE: this stage is a workaround for the following Jenkins bug:
                 // https://issues.jenkins-ci.org/browse/JENKINS-41929
                 when { expression { env.BUILD_NUMBER == '1' } }
@@ -294,6 +295,7 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
+
                                         (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
                                     }
                                 }
@@ -319,12 +321,12 @@ def call(Map pipelineParams) {
                 post{
                     failure {
                         script{
-                            sh "exit 1"
+                            sh 'exit 1'
                         }
                     }
                     unstable {
                         script{
-                            sh "exit 1"
+                            sh 'exit 1'
                         }
                     }
                 }
@@ -372,7 +374,7 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage("Collect log data") {
+            stage('Collect log data') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
                         script {
@@ -420,7 +422,7 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage("Send email with result") {
+            stage('Send email with result') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
                         script {
@@ -460,14 +462,14 @@ def call(Map pipelineParams) {
                     def clean_resources = completed_stages['clean_resources']
                     def send_email = completed_stages['send_email']
                     def clean_sct_runner = completed_stages['clean_sct_runner']
-                    sh """
+                    println("""
                         echo "'provision_resources' stage is completed: $provision_resources"
                         echo "'run_tests' stage is completed: $run_tests"
                         echo "'collect_logs' stage is completed: $collect_logs"
                         echo "'clean_resources' stage is completed: $clean_resources"
                         echo "'send_email' stage is completed: $send_email"
                         echo "'clean_sct_runner' stage is completed: $clean_sct_runner"
-                    """
+                    """)
                     if (!completed_stages['collect_logs']) {
                         catchError {
                             script {

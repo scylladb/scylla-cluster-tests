@@ -20,19 +20,21 @@ def triggerJob(String jobToTrigger, def parameterList = [], boolean propagate = 
     if (jobEnabled(jobToTrigger)) {
         echo "Triggering '$jobToTrigger'"
         try {
-            jobResults=build job: jobToTrigger,
+            jobResults=build(job: jobToTrigger,
                 parameters: parameterList,
                 propagate: propagate,  // if true, the triggering test will fail/pass based on the status of the triggered/downstream job/s
                 wait: wait  // if true, the triggering job will not end until the triggered/downstream job/s will end
+            )
         } catch(Exception ex) {
             echo "Could not trigger jon $jobToTrigger due to"
-            println(ex.toString())
+            println(ex)
         }
     }
 }
 
 
 def completed_stages = [:]
+
 def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
@@ -48,7 +50,7 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
-            SCT_TEST_ID = UUID.randomUUID().toString()
+            SCT_TEST_ID = UUID.randomUUID()
             SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
@@ -75,7 +77,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
                    description: 'Oracle Cloud location',
                    name: 'oci_region_name')
-            string(defaultValue: "",
+            string(defaultValue: '',
                description: 'Availability zone',
                name: 'availability_zone')
 
@@ -205,7 +207,7 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
-            stage("Preparation") {
+            stage('Preparation') {
                 // NOTE: this stage is a workaround for the following Jenkins bug:
                 // https://issues.jenkins-ci.org/browse/JENKINS-41929
                 when { expression { env.BUILD_NUMBER == '1' } }
@@ -262,6 +264,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
+
                                     (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
                                 }
                             }
@@ -319,8 +322,8 @@ def call(Map pipelineParams) {
 
                                         // handle params which can be a json list
                                         def region = initAwsRegionParam(params.region, builder.region)
-                                        def datacenter = params.gce_datacenter ?: ""
-                                        def oci_region = ""
+                                        def datacenter = params.gce_datacenter ?: ''
+                                        def oci_region = ''
                                         if (params.oci_region_name) {
                                             oci_region = initAwsRegionParam(params.oci_region_name, builder.region)
                                         }
@@ -449,7 +452,7 @@ def call(Map pipelineParams) {
                             for (downstreamJobName in jobNamesToTrigger) {
                                 fullJobPath = currentJobDirectoryPath + '/' + downstreamJobName.trim()
                                 def repoParams = []
-                                if (downstreamJobName.contains("upgrade")) {
+                                if (downstreamJobName.contains('upgrade')) {
                                     repoParams = [
                                         [$class: 'StringParameterValue', name: 'target_scylla_mgmt_server_address', value: params.scylla_mgmt_address],
                                         [$class: 'StringParameterValue', name: 'target_scylla_mgmt_agent_address', value: params.scylla_mgmt_agent_address],
@@ -467,12 +470,12 @@ def call(Map pipelineParams) {
                                 triggerJob(fullJobPath, repoParams)
                             }
                         } else {
-                            echo "Job failed. Will not run downstream jobs."
+                            echo 'Job failed. Will not run downstream jobs.'
                         }
                     }
                 }
             }
-            stage("Collect log data") {
+            stage('Collect log data') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
                         script {
@@ -504,7 +507,7 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage("Send email with result") {
+            stage('Send email with result') {
                 options {
                     timeout(time: 10, unit: 'MINUTES')
                 }

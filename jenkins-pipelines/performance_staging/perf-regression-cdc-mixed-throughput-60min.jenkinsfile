@@ -1,14 +1,14 @@
 #!groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
-def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+def lib = library(identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
-    backend: "aws",
-    region: "us-east-1",
-    test_name: "performance_regression_cdc_test.PerformanceRegressionCDCTest",
-    test_config: "test-cases/performance/perf-regression-throughput-cdc-mixed-poll-batching.yaml",
-    sub_tests: ["test_mixed_throughput"],
+    backend: 'aws',
+    region: 'us-east-1',
+    test_name: 'performance_regression_cdc_test.PerformanceRegressionCDCTest',
+    test_config: 'test-cases/performance/perf-regression-throughput-cdc-mixed-poll-batching.yaml',
+    sub_tests: ['test_mixed_throughput'],
 
-    timeout: [time: 550, unit: "MINUTES"]
+    timeout: [time: 550, unit: 'MINUTES']
 )

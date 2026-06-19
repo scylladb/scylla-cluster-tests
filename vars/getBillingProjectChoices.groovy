@@ -36,7 +36,7 @@ def call() {
         }
 
         if (!response.content) {
-            echo "WARNING: Empty response from GitHub API, using fallback list"
+            echo 'WARNING: Empty response from GitHub API, using fallback list'
             return fallbackProjects
         }
 
@@ -44,7 +44,7 @@ def call() {
         def jsonResponse = readJSON text: response.content
 
         if (!jsonResponse.content) {
-            echo "WARNING: No content field in GitHub API response, using fallback list"
+            echo 'WARNING: No content field in GitHub API response, using fallback list'
             return fallbackProjects
         }
 
@@ -61,7 +61,7 @@ def call() {
             }.findAll { it } // Remove empty strings
 
             if (projectsList.isEmpty()) {
-                echo "WARNING: No valid project names found in YAML file, using fallback list"
+                echo 'WARNING: No valid project names found in YAML file, using fallback list'
                 return fallbackProjects
             }
 
@@ -77,7 +77,7 @@ def call() {
     } catch (Exception e) {
         echo "ERROR: Exception while fetching billing projects: ${e.class.name}: ${e.message}"
         e.printStackTrace()
-        echo "ERROR: Using fallback billing projects list"
+        echo 'ERROR: Using fallback billing projects list'
         return fallbackProjects
     }
 }

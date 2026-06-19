@@ -3,6 +3,7 @@
 List supportedVersions = []
 def params_mapping = [:] // this would hold the params per split of this pipeline
 def completed_stages = [:]
+
 (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
@@ -39,7 +40,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
                    description: 'Oracle Cloud region',
                    name: 'oci_region_name')
-            string(defaultValue: "",
+            string(defaultValue: '',
                description: 'Availability zone',
                name: 'availability_zone')
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
@@ -130,7 +131,7 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
-            stage("Preparation") {
+            stage('Preparation') {
                 // NOTE: this stage is a workaround for the following Jenkins bug:
                 // https://issues.jenkins-ci.org/browse/JENKINS-41929
                 when { expression { env.BUILD_NUMBER == '1' } }
@@ -153,7 +154,7 @@ def call(Map pipelineParams) {
                     }
                 }
                 steps {
-                    catchError(stageResult: "FAILURE") {
+                    catchError(stageResult: 'FAILURE') {
                         timeout(time: 10, unit: 'MINUTES') {
                             script {
                                 wrap([$class: 'BuildUser']) {
@@ -174,6 +175,7 @@ def call(Map pipelineParams) {
                                             params.backend,
                                             params.base_version_all_sts_versions
                                         )
+
                                         (testDuration,
                                          testRunTimeout,
                                          runnerTimeout,
@@ -208,12 +210,12 @@ def call(Map pipelineParams) {
                 post{
                     failure {
                         script{
-                            sh "exit 1"
+                            sh 'exit 1'
                         }
                     }
                     unstable {
                         script{
-                            sh "exit 1"
+                            sh 'exit 1'
                         }
                     }
                 }
@@ -243,7 +245,7 @@ def call(Map pipelineParams) {
                                 node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
-                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
+                                             "SCT_TEST_ID=${UUID.randomUUID()}",]) {
                                         stage("Split for ${base_version}") {
                                             try {
                                                 stage("Checkout for ${base_version}") {
