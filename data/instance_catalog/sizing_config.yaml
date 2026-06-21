@@ -145,6 +145,7 @@ clouds:
       - "^Standard_D\\d+s_v[45]$"
       - "^Standard_D\\d+as_v[56]$"
       - "^Standard_D\\d+_v[45]$"
+      - "^Standard_D\\d+pds_v[56]$"
       - "^Standard_E\\d+s_v[45]$"
       - "^Standard_E\\d+as_v[56]$"
       - "^Standard_F\\d+s_v2$"
@@ -154,6 +155,7 @@ clouds:
     preferred_families:
       db:
         - Standard_L
+        - Standard_D
       db_oracle:
         - Standard_L
       zero_token:
