@@ -619,6 +619,19 @@ _AZURE_FAMILY_SPECS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Azure VM sub-family local NVMe disk specs, keyed by suffix pattern.
+# In Azure naming, "d" before "s" in the suffix (e.g. "pds", "ds", "ads")
+# indicates the VM has local NVMe temp storage.
+# Source: https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/general-purpose/dpdsv6-series
+#         https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/general-purpose/dpdsv5-series
+# Used as fallback when Azure Compute Management API is unavailable.
+_AZURE_LOCAL_DISK_SUFFIX_SPECS: dict[str, dict[str, float]] = {
+    # Dpdsv6: ARM Cobalt 100 + NVMe, 55 GiB per vCPU, 1 disk per 8 vCPUs
+    "pds_v6": {"local_disk_per_vcpu": 55.0, "disk_count_divisor": 8},
+    # Dpdsv5: ARM Ampere Altra + NVMe, 37.5 GiB per vCPU, 1 disk per 24 vCPUs
+    "pds_v5": {"local_disk_per_vcpu": 37.5, "disk_count_divisor": 24},
+}
+
 # Regex to extract vCPU count from Azure SKU names.
 # Examples:
 #   Standard_L8s_v3     → 8
@@ -639,7 +652,8 @@ def _azure_parse_sku_specs(sku_name: str, family_prefix: str) -> dict[str, Any]:
 
     This is a fallback when the Azure Compute Management API is unavailable.
     It extracts vCPU count from the SKU name and infers memory and disk from
-    known family ratios.
+    known family ratios. For sub-families with local NVMe temp storage (suffix
+    containing "d" before "s", e.g. "pds_v6"), applies suffix-specific disk specs.
 
     Args:
         sku_name: Azure ARM SKU name (e.g. "Standard_L8s_v3").
@@ -660,6 +674,14 @@ def _azure_parse_sku_specs(sku_name: str, family_prefix: str) -> dict[str, Any]:
 
     local_disk_per_vcpu = family_specs.get("local_disk_per_vcpu", 0.0)
     disk_divisor = family_specs.get("disk_count_divisor", 0)
+
+    after_digits = re.sub(r"^Standard_[A-Z]+\d+", "", sku_name)
+    for suffix, suffix_specs in _AZURE_LOCAL_DISK_SUFFIX_SPECS.items():
+        if after_digits == suffix:
+            local_disk_per_vcpu = suffix_specs["local_disk_per_vcpu"]
+            disk_divisor = int(suffix_specs["disk_count_divisor"])
+            break
+
     local_disk_gb = round(vcpus * local_disk_per_vcpu, 1) if local_disk_per_vcpu else 0.0
     local_disk_count = max(1, vcpus // disk_divisor) if disk_divisor else 0
 
@@ -755,9 +777,11 @@ def generate_azure_catalog(  # noqa: PLR0914
             credential = DefaultAzureCredential()
             compute_client = ComputeManagementClient(credential, subscription_id)
             for vm_size in compute_client.virtual_machine_sizes.list(location=region):
+                resource_disk_mb = getattr(vm_size, "resource_disk_size_in_mb", 0) or 0
                 vm_specs[vm_size.name] = {
                     "vcpus": vm_size.number_of_cores,
                     "memory_gb": round(vm_size.memory_in_mb / 1024, 2),
+                    "local_disk_gb": round(resource_disk_mb / 1024, 2),
                 }
     except ImportError:
         LOG.debug("azure-mgmt-compute not installed; will use pricing API for specs")
@@ -781,8 +805,9 @@ def generate_azure_catalog(  # noqa: PLR0914
                 if specs:
                     vcpus = specs["vcpus"]
                     memory_gb = specs["memory_gb"]
+                    api_local_disk_gb = specs.get("local_disk_gb", 0.0)
                     parsed = _azure_parse_sku_specs(sku_name, family)
-                    local_disk_gb = parsed["local_disk_gb"]
+                    local_disk_gb = api_local_disk_gb if api_local_disk_gb > 0 else parsed["local_disk_gb"]
                     local_disk_count = parsed["local_disk_count"]
                 else:
                     parsed = _azure_parse_sku_specs(sku_name, family)
