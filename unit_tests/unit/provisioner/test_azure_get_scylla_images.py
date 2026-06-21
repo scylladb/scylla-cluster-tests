@@ -98,7 +98,7 @@ def generate_images_json_file(test_data_dir):
         resource_group_name=resource_group,
     )
     with open(test_data_dir / resource_group / "azure_images_list.json", "w", encoding="utf-8") as images_file:
-        serialized_images = [image.serialize() | {"name": image.name} for image in images]
+        serialized_images = [image.to_dict() | {"name": image.name} for image in images]
         images_file.write(json.dumps(serialized_images, indent=2))
 
 
@@ -115,5 +115,5 @@ def generate_gallery_images_json_file(test_data_dir, gallery_name="scylladb_dev"
         "w",
         encoding="utf-8",
     ) as images_file:
-        serialized_images = [image.serialize() | {"name": image.name} for image in images]
+        serialized_images = [image.to_dict() | {"name": image.name} for image in images]
         images_file.write(json.dumps(serialized_images, indent=2))

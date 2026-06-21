@@ -230,7 +230,7 @@ def get_released_scylla_images(
         public_gallery_name="scylladb-7e8d8a04-23db-487d-87ec-0e175c0615bb",
     )
     community_gallery_images: list[CommunityGalleryImageVersion] = list(community_gallery_images)
-    community_gallery_images.sort(key=lambda x: x.published_date, reverse=True)
+    community_gallery_images.sort(key=lambda x: x.properties.published_date, reverse=True)
 
     # a specific version was asked, return only that version
     if branch_version != scylla_version:
