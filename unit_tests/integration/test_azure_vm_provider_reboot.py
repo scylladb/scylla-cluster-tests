@@ -1,3 +1,4 @@
+import os
 from uuid import uuid4
 
 import pytest
@@ -37,6 +38,10 @@ def azure_vm():
         provisioner[0].cleanup(wait=True)
 
 
+@pytest.mark.skipif(
+    not os.environ.get("SCT_TEST_AZURE_REBOOT"),
+    reason="Set SCT_TEST_AZURE_REBOOT=1 to run azure reboot integration tests",
+)
 @pytest.mark.integration
 @pytest.mark.provisioning
 def test_reboot_integration(azure_vm):
