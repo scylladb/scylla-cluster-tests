@@ -322,71 +322,77 @@ class AzureRegion:
             vm_name=vm_name,
             parameters=self.common_parameters(tags=tags)
             | {
-                "hardware_profile": {
-                    "vm_size": vm_size,
-                },
-                "storage_profile": {
-                    "image_reference": image,
-                    "os_disk": {
-                        "name": vm_name,
-                        "os_type": "linux",
-                        "caching": "ReadWrite",
-                        "create_option": "FromImage",
-                        "managed_disk": {
-                            "storage_account_type": "StandardSSD_LRS",  # SSD
-                        },
-                    }
-                    | (
-                        {}
-                        if disk_size is None
-                        else {
-                            "disk_size_gb": disk_size,
+                "properties": {
+                    "hardwareProfile": {
+                        "vmSize": vm_size,
+                    },
+                    "storageProfile": {
+                        "imageReference": image,
+                        "osDisk": {
+                            "name": vm_name,
+                            "osType": "linux",
+                            "caching": "ReadWrite",
+                            "createOption": "FromImage",
+                            "managedDisk": {
+                                "storageAccountType": "StandardSSD_LRS",  # SSD
+                            },
                         }
-                    ),
-                },
-                "network_profile": {
-                    "network_interfaces": [
-                        {
-                            "id": self.create_network_interface(
-                                network_interface_name=f"{vm_name}-{self.NETWORK_INTERFACE_NAME_SUFFIX}",
-                                tags=tags,
-                                create_public_ip_address=create_public_ip_address,
-                            ).id,
-                        }
-                    ],
-                },
+                        | (
+                            {}
+                            if disk_size is None
+                            else {
+                                "diskSizeGb": disk_size,
+                            }
+                        ),
+                    },
+                    "networkProfile": {
+                        "networkInterfaces": [
+                            {
+                                "id": self.create_network_interface(
+                                    network_interface_name=f"{vm_name}-{self.NETWORK_INTERFACE_NAME_SUFFIX}",
+                                    tags=tags,
+                                    create_public_ip_address=create_public_ip_address,
+                                ).id,
+                            }
+                        ],
+                    },
+                }
             }
             | (
                 {}
                 if os_state is AzureOsState.SPECIALIZED
                 else {
-                    "os_profile": {
-                        "computer_name": computer_name or vm_name.replace(".", "-"),
-                        "admin_username": admin_username,
-                        "admin_password": binascii.hexlify(os.urandom(20)).decode(),
-                        "linux_configuration": {
-                            "disable_password_authentication": True,
-                            "ssh": {
-                                "public_keys": [
-                                    {
-                                        "path": f"/home/{admin_username}/.ssh/authorized_keys",
-                                        "key_data": admin_public_key,
-                                    }
-                                ],
+                    "properties": {
+                        "osProfile": {
+                            "computerName": computer_name or vm_name.replace(".", "-"),
+                            "adminUsername": admin_username,
+                            "adminPassword": binascii.hexlify(os.urandom(20)).decode(),
+                            "linuxConfiguration": {
+                                "disablePasswordAuthentication": True,
+                                "ssh": {
+                                    "publicKeys": [
+                                        {
+                                            "path": f"/home/{admin_username}/.ssh/authorized_keys",
+                                            "keyData": admin_public_key,
+                                        }
+                                    ],
+                                },
                             },
                         },
-                    },
+                    }
                 }
             )
             | (
                 {}
                 if not spot
                 else {
-                    "priority": "Spot",  # possible values are "Regular", "Low", or "Spot"
-                    "eviction_policy": "Deallocate",  # can be "Deallocate" or "Delete"
-                    "billing_profile": {
-                        "max_price": -1,  # -1 indicates the VM shouldn't be evicted for price reasons
-                    },
+                    "properties": {
+                        "priority": "Spot",  # possible values are "Regular", "Low", or "Spot"
+                        "evictionPolicy": "Deallocate",  # can be "Deallocate" or "Delete"
+                        "billingProfile": {
+                            "maxPrice": -1,  # -1 indicates the VM shouldn't be evicted for price reasons
+                        },
+                    }
                 }
             ),
         ).result()

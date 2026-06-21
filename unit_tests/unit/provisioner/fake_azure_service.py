@@ -61,7 +61,6 @@ class ResultableObject:
         self,
     ):
         value = InstanceViewStatus(
-            additional_properties={},
             code="ProvisioningState/succeeded",
             level="Info",
             display_status="Provisioning succeeded",
@@ -86,12 +85,12 @@ class FakeResourceGroups:
         (self.path / resource_group_name).mkdir(exist_ok=True)
         with open(self.path / resource_group_name / "resource_group.json", "w", encoding="utf-8") as file_obj:
             json.dump(res_group, fp=file_obj, indent=2)
-        return ResourceGroup.deserialize(res_group)
+        return ResourceGroup.from_dict(res_group)
 
     def get(self, name) -> ResourceGroup:
         try:
             with open(self.path / name / "resource_group.json", "r", encoding="utf-8") as file:
-                return ResourceGroup.deserialize(json.load(file))
+                return ResourceGroup.from_dict(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Resource group not found") from None
 
@@ -100,7 +99,7 @@ class FakeResourceGroups:
         for name in os.listdir(self.path):
             try:
                 with open(self.path / str(name) / "resource_group.json", "r", encoding="utf-8") as file:
-                    rgs.append(ResourceGroup.deserialize(json.load(file)))
+                    rgs.append(ResourceGroup.from_dict(json.load(file)))
             except FileNotFoundError:
                 raise ResourceNotFoundError("Resource group not found") from None
         return rgs
@@ -122,7 +121,7 @@ class FakeNetworkSecurityGroup:
         elements = []
         for file_name in files:
             with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
-                elements.append(NetworkSecurityGroup.deserialize(json.load(file_obj)))
+                elements.append(NetworkSecurityGroup.from_dict(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(
@@ -179,7 +178,7 @@ class FakeNetworkSecurityGroup:
             with open(
                 self.path / resource_group_name / f"nsg-{network_security_group_name}.json", "r", encoding="utf-8"
             ) as file:
-                return NetworkSecurityGroup.deserialize(json.load(file))
+                return NetworkSecurityGroup.from_dict(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Network security group not found") from None
 
@@ -196,7 +195,7 @@ class FakeVirtualNetwork:
         elements = []
         for file_name in files:
             with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
-                elements.append(VirtualNetwork.deserialize(json.load(file_obj)))
+                elements.append(VirtualNetwork.from_dict(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(
@@ -227,7 +226,7 @@ class FakeVirtualNetwork:
             with open(
                 self.path / resource_group_name / f"vnet-{virtual_network_name}.json", "r", encoding="utf-8"
             ) as file:
-                return VirtualNetwork.deserialize(json.load(file))
+                return VirtualNetwork.from_dict(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Network security group not found") from None
 
@@ -248,7 +247,7 @@ class FakeSubnet:
         elements = []
         for file_name in files:
             with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
-                elements.append(Subnet.deserialize(json.load(file_obj)))
+                elements.append(Subnet.from_dict(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(
@@ -283,7 +282,7 @@ class FakeSubnet:
                 "r",
                 encoding="utf-8",
             ) as file:
-                return Subnet.deserialize(json.load(file))
+                return Subnet.from_dict(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Subnet group not found") from None
 
@@ -300,7 +299,7 @@ class FakeIpAddress:
         elements = []
         for file_name in files:
             with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
-                elements.append(PublicIPAddress.deserialize(json.load(file_obj)))
+                elements.append(PublicIPAddress.from_dict(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(
@@ -336,7 +335,7 @@ class FakeIpAddress:
             with open(
                 self.path / resource_group_name / f"ip-{public_ip_address_name}.json", "r", encoding="utf-8"
             ) as file:
-                return PublicIPAddress.deserialize(json.load(file))
+                return PublicIPAddress.from_dict(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Public IP address not found") from None
 
@@ -360,7 +359,7 @@ class FakeNetworkInterface:
         elements = []
         for file_name in files:
             with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
-                elements.append(NetworkInterface.deserialize(json.load(file_obj)))
+                elements.append(NetworkInterface.from_dict(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(
@@ -442,7 +441,7 @@ class FakeNetworkInterface:
             with open(
                 self.path / resource_group_name / f"nic-{network_interface_name}.json", "r", encoding="utf-8"
             ) as file:
-                return NetworkInterface.deserialize(json.load(file))
+                return NetworkInterface.from_dict(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("NIC not found") from None
 
@@ -595,7 +594,7 @@ class FakeVirtualMachines:
             with open(self.path / resource_group_name / fle, "r", encoding="utf-8") as file:
                 raw = json.load(file)
             raw.pop("_simulation", None)
-            elements.append(VirtualMachine.deserialize(raw))
+            elements.append(VirtualMachine(**raw))
         return elements
 
     def begin_create_or_update(
@@ -604,7 +603,8 @@ class FakeVirtualMachines:
         tags = parameters.pop("tags") if "tags" in parameters else {}
         parameters = dict_keys_to_camel_case(parameters)
         location = parameters.pop("location")
-        priority = parameters.get("priority") or ""
+        properties = parameters.pop("properties", {})
+        priority = properties.get("priority") or parameters.get("priority") or ""
         if (
             tags.get("JenkinsJobTag") == "FailSpotDB"
             and priority.lower() == "spot"
@@ -686,7 +686,7 @@ class FakeVirtualMachines:
                 "vmId": "ce7b8d6c-4204-4262-9504-862189431e5d",
             },
         }
-        base["properties"].update(**parameters)
+        base["properties"].update(**properties)
         base["tags"] = tags
         behavior = self._next_behavior(vm_name)
         if behavior.stuck:
@@ -706,7 +706,7 @@ class FakeVirtualMachines:
         v_m["properties"].update(**dict_keys_to_camel_case(parameters))
         v_m.setdefault("tags", {}).update(**tags)
         sim = v_m.pop("_simulation", None)
-        VirtualMachine.deserialize(v_m)
+        VirtualMachine(**v_m)
         if sim is not None:
             v_m["_simulation"] = sim
         self._write_raw(resource_group_name, vm_name, v_m)
@@ -737,7 +737,7 @@ class FakeVirtualMachines:
             raw = {**raw, "properties": {**raw["properties"]}}
             raw["properties"]["instanceView"] = self._build_instance_view(raw["properties"]["provisioningState"])
         raw.pop("_simulation", None)
-        return VirtualMachine.deserialize(raw)
+        return VirtualMachine(**raw)
 
     def instance_view(self, resource_group_name: str, vm_name: str):
         return self.get(resource_group_name, vm_name, expand="instanceView").instance_view

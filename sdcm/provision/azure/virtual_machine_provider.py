@@ -95,16 +95,18 @@ class VirtualMachineProvider:
                 "location": self._region,
                 "zones": [self._az] if self._az else [],
                 "tags": tags,
-                "hardware_profile": {
-                    "vm_size": definition.type,
-                },
-                "network_profile": {
-                    "network_interfaces": [{"id": nic_id, "properties": {"deleteOption": "Detach"}}],
-                },
-                "diagnostics_profile": {
-                    "boot_diagnostics": {
-                        "enabled": True,
-                    }
+                "properties": {
+                    "hardwareProfile": {
+                        "vmSize": definition.type,
+                    },
+                    "networkProfile": {
+                        "networkInterfaces": [{"id": nic_id, "properties": {"deleteOption": "Detach"}}],
+                    },
+                    "diagnosticsProfile": {
+                        "bootDiagnostics": {
+                            "enabled": True,
+                        }
+                    },
                 },
             }
 
@@ -125,7 +127,7 @@ class VirtualMachineProvider:
                     raise ProvisionError(error_msg)
                 params["identity"] = {
                     "type": "UserAssigned",
-                    "user_assigned_identities": {vault_info["identity_id"]: {}},
+                    "userAssignedIdentities": {vault_info["identity_id"]: {}},
                 }
                 LOGGER.info(f"Azure Key Vault enabled for {definition.name}")
             else:
@@ -144,9 +146,9 @@ class VirtualMachineProvider:
                     ssh_public_key=definition.ssh_key.public_key.decode(),
                     custom_data=custom_data,
                 )
-                params.update(
+                params["properties"].update(
                     {
-                        "user_data": base64.b64encode(builder.get_scylla_machine_image_json().encode("utf-8")).decode(
+                        "userData": base64.b64encode(builder.get_scylla_machine_image_json().encode("utf-8")).decode(
                             "latin-1"
                         )
                     }
@@ -154,9 +156,9 @@ class VirtualMachineProvider:
             storage_profile = self._get_scylla_storage_profile(
                 image_id=definition.image_id, name=definition.name, disk_size=definition.root_disk_size
             )
-            params.update(os_profile)
-            params.update(storage_profile)
-            params.update(self._get_pricing_params(pricing_model))
+            params["properties"].update(os_profile)
+            params["properties"].update(storage_profile)
+            params["properties"].update(self._get_pricing_params(pricing_model))
             try:
                 poller = self._azure_service.compute.virtual_machines.begin_create_or_update(
                     resource_group_name=self._resource_group_name, vm_name=definition.name, parameters=params
@@ -302,18 +304,18 @@ class VirtualMachineProvider:
         computer_name: str, admin_username: str, admin_password: str, ssh_public_key: str, custom_data: str
     ) -> Dict[str, Any]:
         os_profile = {
-            "os_profile": {
-                "computer_name": computer_name,
-                "admin_username": admin_username,
-                "admin_password": admin_password,
-                "custom_data": base64.b64encode(custom_data.encode("utf-8")).decode("latin-1"),
-                "linux_configuration": {
-                    "disable_password_authentication": True,
+            "osProfile": {
+                "computerName": computer_name,
+                "adminUsername": admin_username,
+                "adminPassword": admin_password,
+                "customData": base64.b64encode(custom_data.encode("utf-8")).decode("latin-1"),
+                "linuxConfiguration": {
+                    "disablePasswordAuthentication": True,
                     "ssh": {
-                        "public_keys": [
+                        "publicKeys": [
                             {
                                 "path": f"/home/{admin_username}/.ssh/authorized_keys",
-                                "key_data": ssh_public_key,
+                                "keyData": ssh_public_key,
                             }
                         ],
                     },
@@ -327,31 +329,29 @@ class VirtualMachineProvider:
         """Creates storage profile based on image_id. image_id may refer to scylla-crafted images
         (starting with '/subscription') or to 'Urn' of image (see output of e.g. `az vm image list --output table`)"""
         storage_profile = {
-            "storage_profile": {
-                "os_disk": {
+            "storageProfile": {
+                "osDisk": {
                     "name": f"{name}-os-disk",
-                    "os_type": "linux",
+                    "osType": "linux",
+                    "deleteOption": "Delete",
                     "caching": "ReadWrite",
-                    "create_option": "FromImage",
-                    "deleteOption": "Delete",  # somehow deletion of VM does not delete os_disk anyway...
-                    "managed_disk": {
-                        "storage_account_type": "StandardSSD_LRS",  # SSD
+                    "createOption": "FromImage",
+                    "managedDisk": {
+                        "storageAccountType": "StandardSSD_LRS",  # SSD
                     },
                 }
-                | ({} if disk_size is None else {"disk_size_gb": disk_size}),
+                | ({} if disk_size is None else {"diskSizeGb": disk_size}),
             }
         }
         if image_id.startswith("/subscriptions/"):
-            storage_profile["storage_profile"].update({"image_reference": {"id": image_id}, "deleteOption": "Delete"})
+            storage_profile["storageProfile"].update({"imageReference": {"id": image_id}})
         elif image_id.startswith("/CommunityGalleries/"):
-            storage_profile["storage_profile"].update(
-                {"image_reference": {"community_gallery_image_id": image_id}, "deleteOption": "Delete"}
-            )
+            storage_profile["storageProfile"].update({"imageReference": {"communityGalleryImageId": image_id}})
         else:
             image_reference_values = image_id.split(":")
-            storage_profile["storage_profile"].update(
+            storage_profile["storageProfile"].update(
                 {
-                    "image_reference": {
+                    "imageReference": {
                         "publisher": image_reference_values[0],
                         "offer": image_reference_values[1],
                         "sku": image_reference_values[2],
@@ -383,9 +383,9 @@ class VirtualMachineProvider:
         if pricing_model != PricingModel.ON_DEMAND:
             return {
                 "priority": "Spot",  # possible values are "Regular", "Low", or "Spot"
-                "eviction_policy": "Delete",  # can be "Deallocate" or "Delete", Deallocate leaves disks intact
-                "billing_profile": {
-                    "max_price": -1,  # -1 indicates the VM shouldn't be evicted for price reasons
+                "evictionPolicy": "Delete",  # can be "Deallocate" or "Delete", Deallocate leaves disks intact
+                "billingProfile": {
+                    "maxPrice": -1,  # -1 indicates the VM shouldn't be evicted for price reasons
                 },
             }
         else:

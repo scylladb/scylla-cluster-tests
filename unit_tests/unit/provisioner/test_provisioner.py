@@ -139,7 +139,6 @@ def test_can_run_command(provisioner, definition, backend, provisioner_params):
     )
 
     # validate real tags change
-    provisioner = provisioner_factory.create_provisioner(backend=backend, **provisioner_params)
     assert provisioner.get_or_create_instance(definition).tags.get("tag_key") == "tag_value"
 
 
