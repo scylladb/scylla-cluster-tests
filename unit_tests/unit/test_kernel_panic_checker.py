@@ -231,5 +231,84 @@ def test_initial_state():
     assert checker.logdir == "/tmp/test"
     assert not checker._panic_detected.is_set()
     assert not checker._stop_event.is_set()
+    assert not checker._suspended.is_set()
     assert checker._ssh_was_reachable is False
     assert checker._ssh_consecutive_failures == 0
+
+
+@patch("sdcm.kernel_panic_checker.KernelPanicEvent")
+def test_no_panic_while_suspended(mock_event_cls, logdir):
+    checker = FakeKernelPanicChecker(
+        console_outputs=[PANIC_OUTPUT, PANIC_OUTPUT, PANIC_OUTPUT],
+        node_name="node-1",
+        logdir=logdir,
+    )
+    checker.CHECK_INTERVAL_SECONDS = 0.01
+    checker.suspend()
+
+    def stop_after_delay():
+        time.sleep(0.1)
+        checker.stop()
+
+    helper = threading.Thread(target=stop_after_delay, daemon=True)
+    helper.start()
+    checker.start()
+    checker.join(timeout=5)
+
+    assert not checker._panic_detected.is_set()
+    mock_event_cls.assert_not_called()
+
+
+@patch("sdcm.kernel_panic_checker.KernelPanicEvent")
+def test_panic_detected_after_resume(mock_event_cls, logdir):
+    call_count = 0
+
+    class RebootThenPanicChecker(FakeKernelPanicChecker):
+        def _get_console_output(self) -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 2:
+                return NORMAL_BOOT_OUTPUT
+            return PANIC_OUTPUT
+
+    checker = RebootThenPanicChecker(
+        console_outputs=[],
+        node_name="node-1",
+        logdir=logdir,
+    )
+    checker.CHECK_INTERVAL_SECONDS = 0.01
+    checker.suspend()
+
+    def resume_after_delay():
+        time.sleep(0.05)
+        checker.resume()
+
+    helper = threading.Thread(target=resume_after_delay, daemon=True)
+    helper.start()
+    checker.start()
+    checker.join(timeout=5)
+
+    assert checker._panic_detected.is_set()
+    mock_event_cls.assert_called_once()
+
+
+def test_suspend_resume_idempotent():
+    checker = FakeKernelPanicChecker(node_name="node-1")
+    checker.suspend()
+    checker.suspend()
+    assert checker._suspended.is_set()
+
+    checker.resume()
+    assert not checker._suspended.is_set()
+    checker.resume()
+    assert not checker._suspended.is_set()
+
+
+def test_suspended_context_manager():
+    checker = FakeKernelPanicChecker(node_name="node-1")
+    assert not checker._suspended.is_set()
+
+    with checker.suspended():
+        assert checker._suspended.is_set()
+
+    assert not checker._suspended.is_set()

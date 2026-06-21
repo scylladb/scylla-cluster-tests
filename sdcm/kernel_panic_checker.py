@@ -3,6 +3,7 @@ import os
 import socket
 import threading
 from abc import abstractmethod
+from contextlib import contextmanager
 from typing import List
 
 import boto3
@@ -36,6 +37,7 @@ class BaseKernelPanicChecker(threading.Thread):
         self.logdir = logdir
         self._stop_event = threading.Event()
         self._panic_detected = threading.Event()
+        self._suspended = threading.Event()
         self._ssh_was_reachable = False
         self._ssh_consecutive_failures = 0
         self.daemon = True
@@ -94,6 +96,13 @@ class BaseKernelPanicChecker(threading.Thread):
     def run(self):
         while not self._stop_event.is_set():
             try:
+                # Skip panic detection while suspended — cloud providers
+                # (especially OCI) report the instance as STOPPED during a hard reboot,
+                # which would otherwise trigger a false KernelPanicEvent.
+                if self._suspended.is_set():
+                    self._stop_event.wait(self.CHECK_INTERVAL_SECONDS)
+                    continue
+
                 output = self._get_console_output()
 
                 if output:
@@ -141,6 +150,22 @@ class BaseKernelPanicChecker(threading.Thread):
             self._save_console_output(output)
         except Exception as exc:  # noqa: BLE001
             LOGGER.debug("[%s] Failed to get final console output: %s", self.provider_name, exc)
+
+    def suspend(self):
+        LOGGER.debug("[%s] Suspending kernel panic detection", self.provider_name)
+        self._suspended.set()
+
+    def resume(self):
+        LOGGER.debug("[%s] Resuming kernel panic detection", self.provider_name)
+        self._suspended.clear()
+
+    @contextmanager
+    def suspended(self):
+        self.suspend()
+        try:
+            yield
+        finally:
+            self.resume()
 
     def __enter__(self):
         self.start()
