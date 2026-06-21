@@ -206,7 +206,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
         # picks the tags of the first instance to apply to all instances upfront
         # later those would be updated with individual tags (Name, etc.)
         instance_parameters_dict["TagSpecifications"] = [
-            {"ResourceType": "spot-fleet-request", "Tags": tags_as_ec2_tags(tags[0])}
+            {"ResourceType": "instance", "Tags": tags_as_ec2_tags(tags[0])}
         ]
 
         request_id = create_spot_fleet_instance_request(
