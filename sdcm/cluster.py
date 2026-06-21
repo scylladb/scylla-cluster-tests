@@ -1472,6 +1472,31 @@ class BaseNode(AutoSshContainerMixin):
     def uptime(self):
         return datetime.strptime(self.remoter.run("uptime -s", ignore_status=True).stdout.strip(), "%Y-%m-%d %H:%M:%S")
 
+    def _reboot_inner(self, hard, verify_ssh, uptime_changed):
+        """Execute the reboot sequence: trigger reboot, wait for uptime change, optionally verify SSH.
+
+        Args:
+            hard: If True, perform a hard reboot (power cycle). If False, perform a soft reboot via SSH.
+            verify_ssh: If True, wait for SSH connectivity to be restored after reboot.
+            uptime_changed: Callable returning True once the node's uptime reflects a fresh boot.
+        """
+        if hard:
+            self.log.debug("Hardly rebooting node")
+            with DbNodeLogger([self], "hard reboot node", target_node=self):
+                self.hard_reboot()
+        else:
+            self.log.debug("Softly rebooting node")
+            if not self.remoter.is_up(60):
+                raise RuntimeError("Target host is down")
+            with DbNodeLogger([self], "soft reboot node", target_node=self):
+                self.soft_reboot()
+
+        # wait until the reboot is executed
+        wait.wait_for(func=uptime_changed, step=10, timeout=60 * 45, throw_exc=True)
+
+        if verify_ssh:
+            self.wait_ssh_up()
+
     def reboot(self, hard=True, verify_ssh=True):
         pre_uptime = self.uptime
 
@@ -1500,22 +1525,11 @@ class BaseNode(AutoSshContainerMixin):
                 self.log.debug("Failed to get uptime during reboot, %s" % ex)
                 return False
 
-        if hard:
-            self.log.debug("Hardly rebooting node")
-            with DbNodeLogger([self], "hard reboot node", target_node=self):
-                self.hard_reboot()
+        if self.kernel_panic_checker:
+            with self.kernel_panic_checker.suspended():
+                self._reboot_inner(hard, verify_ssh, uptime_changed)
         else:
-            self.log.debug("Softly rebooting node")
-            if not self.remoter.is_up(60):
-                raise RuntimeError("Target host is down")
-            with DbNodeLogger([self], "soft reboot node", target_node=self):
-                self.soft_reboot()
-
-        # wait until the reboot is executed
-        wait.wait_for(func=uptime_changed, step=10, timeout=60 * 45, throw_exc=True)
-
-        if verify_ssh:
-            self.wait_ssh_up()
+            self._reboot_inner(hard, verify_ssh, uptime_changed)
 
     @cached_property
     def node_type(self) -> "str":
