@@ -301,7 +301,6 @@ def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) 
 def create_spot_fleet_instance_request(
     region_name: str,
     count: int,
-    price: float,
     fleet_role: str,
     instance_parameters: SpotFleetLaunchSpecificationTypeDef,
     valid_until: datetime.datetime = None,
@@ -309,7 +308,6 @@ def create_spot_fleet_instance_request(
     params = SpotFleetRequestConfigDataTypeDef(
         LaunchSpecifications=[instance_parameters],
         IamFleetRole=fleet_role,
-        SpotPrice=str(price),
         TargetCapacity=count,
     )
     if valid_until:
