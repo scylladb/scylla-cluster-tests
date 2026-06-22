@@ -139,7 +139,7 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
     k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
 
     # TODO: add support for different loaders amount in different K8S clusters
-    if params.get("n_loaders"):
+    if sum(params.get("n_loaders")) > 0:
         k8s_cluster.deploy_node_pool(
             wait_till_ready=False,
             pool=EksNodePool(
