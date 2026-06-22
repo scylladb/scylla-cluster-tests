@@ -74,13 +74,13 @@ Example: `predefined-throughput-steps-i8g-tablets (2026.3.0.dev.20260612.91ada55
 
 **Mixed workload throughput**: For the `mixed` workload, throughput is the SUM of `Throughput read` + `Throughput write` (since mixed runs report separate read and write throughput values). For single-operation workloads (read, write, read_disk_only), use the single `Throughput <op>` value directly.
 
-**Show failed results AND max throughput for ALL runs performed in the period.** The detailed table should include data from every run in the time window, not just the latest one.
+**Show failed results AND max throughput for ALL runs performed in the period.** The detailed table should include data from every run in the time window, not just the latest one. However, the Max Throughput table is only shown when unthrottled steps have FAIL/ERROR status -- if throughput is as expected (unthrottled steps pass), the table is omitted.
 
-The detailed results table columns: Workload | Max Throughput (run) | P90 (ms) | P99 (ms) | Status | Link
+The detailed results table columns: Workload | Max Throughput (run) | P99 (ms) | Status | Link
 
 ### Detailed Results: Only Failed Steps
 
-**In the detailed results, show a "Failed Results" table ONLY when there are actual failures (table status `FAIL` or `ERROR`).** This table lists individual failed/error steps across ALL runs in the period with their workload, step name, P90, P99, throughput, version, and Argus link. If there are no failures or errors, this table is omitted entirely.
+**In the detailed results, show a "Failed Results" table ONLY when there are actual failures (table status `FAIL` or `ERROR`).** This table lists individual failed/error steps across ALL runs in the period with their workload, step name, P99, throughput, version, and Argus link. If there are no failures or errors, this table is omitted entirely.
 
 Note: A run may have status `"failed"` but its individual tables may show `ERROR` status (not `FAIL`). Both `FAIL` and `ERROR` table statuses must be included in the failed results.
 
@@ -89,13 +89,14 @@ Note: A run may have status `"failed"` but its individual tables may show `ERROR
 **The entire "Detailed Results" section is ONLY shown when there are actual failures (run status `failed` or `test_error`).** When all tests pass, the Detailed Results section is completely omitted from the report.
 
 When failures exist, the section includes:
-- **Failed Results table**: Lists individual failed/error steps with workload, step name, P90, P99, throughput, version, and Argus link
-- **Max Throughput table** (only for `predefined-throughput-steps` tests with failures): Shows per-workload max throughput from the latest run
+- **Failed Results table**: Lists individual failed/error steps with workload, step name, P99, throughput, version, and Argus link
+- **Max Throughput table** (only for `predefined-throughput-steps` tests where the **unthrottled step itself** has status `FAIL` or `ERROR`): Shows per-workload max throughput from the latest run. If the unthrottled steps all pass (status `PASS`), the Max Throughput table is **omitted** even if other throttled steps failed -- the throughput is as expected.
 
 This means:
 - ✅ All tests passed → No Detailed Results section at all
 - ✅ Some tests failed → Detailed Results section appears with failed steps
-- ✅ Throughput test failed → Show both Failed Results table AND Max Throughput table
+- ✅ Throughput test failed AND unthrottled step failed → Show both Failed Results table AND Max Throughput table
+- ✅ Throughput test failed but unthrottled step passed → Show only Failed Results table (throughput is as expected)
 - ✅ Nemesis/upgrade test failed → Show only Failed Results table (no throughput table)
 
 ### Table Width
@@ -197,16 +198,33 @@ Returns JSON array of result tables. Each table has:
   - `"P99 <op>"` -- 99th percentile latency in ms
   - `"Throughput <op>"` -- Actual throughput in op/s
 
+### Fetch issues for a run
+
+```bash
+argus issue list \
+  --run-id <RUN_UUID> \
+  --url https://argus.scylladb.com
+```
+
+Returns JSON array of issue objects. Key fields:
+- `key` -- Jira issue key (e.g., "SCYLLADB-2794")
+- `title` -- Issue title/summary
+- `state` -- Jira state ("new", "todo", "done", "duplicate")
+- `url` -- Direct Jira link
+
+Note: Does NOT expose Jira creation dates. Agent must ask user to classify new vs reproduced.
+
 ## Report Structure
 
 The output HTML file must contain:
 
 1. **Header** -- Report title, date range, "Master (~dev) builds only" indicator
 2. **Summary** -- Title format: "Summary for Scylla version {full_version}" where full_version includes build date and revision hash (e.g., "2026.3.0.dev.20260612.91ada5517d59"). Body: Total tests run, passed count, failed count, error count. **Counts are per run, not per test group.** Each workload is a separate run, so a test with 4 workloads (mixed, read, write, read_disk_only) counts as 4 runs. Microbenchmark tests count as 1 run each. This ensures that Total = Passed + Failed/Error always holds.
-3. **Conclusion** -- Auto-generated bullet-point lines summarizing weekly results.
-4. **Reproduced Issues** -- Always shown after Conclusion. Lists issues linked to runs (from `argus issue list --run-id`). If no issues, displays "No reproduced issues in this period."
-5. **Overview Table** -- Grouped by category, then test, then workload. Columns: Category | Test | Workload | Status | Link. Microbenchmarks use "-" as workload.
-6. **Detailed Results** -- **ONLY shown when there are actual failures.** When all tests pass, this section is completely omitted. When failures exist, shows per-category breakdown of failed steps with P90/P99/throughput, and optionally a Max Throughput table for failed predefined-throughput-steps tests.
+3. **Conclusion** -- Hierarchical bullet-point lines summarizing weekly results. Structure: top-level items are test names in bold (prefixed with `- `), sub-items are specific observations (prefixed with `&#8226;`). The agent MUST print the generated conclusion text to the user and ask for confirmation or edits BEFORE saving it into the final HTML report file. This ensures the user can review and adjust the conclusion wording.
+4. **New Issues - Regression** -- Shown after Conclusion when new issues exist. Lists Jira issues whose tickets were created during the report period (i.e., newly filed regressions). Since Argus CLI doesn't expose Jira creation dates, the agent MUST present the collected issues to the user and ask them to identify which are new vs reproduced BEFORE saving the report. If no new issues, this section is omitted.
+5. **Reproduced Issues** -- Always shown after New Issues (or after Conclusion if no new issues). Lists issues linked to runs whose Jira tickets were created before the report period. If no reproduced issues, displays "No reproduced issues in this period."
+6. **Overview Table** -- Grouped by category, then test, then workload. Columns: Category | Test | Workload | Status | Link. Microbenchmarks use "-" as workload.
+7. **Detailed Results** -- **ONLY shown when there are actual failures.** When all tests pass, this section is completely omitted. When failures exist, shows per-category breakdown of failed steps with P99/throughput, and optionally a Max Throughput table for failed predefined-throughput-steps tests where the unthrottled step itself has FAIL/ERROR status.
    - **Microbenchmarks**: Shown only when they have failures.
 
 ## Reference Index
@@ -234,10 +252,15 @@ A valid weekly status report:
 - [ ] Detailed results: ONLY shown when there are actual failures (completely omitted when all pass)
 - [ ] Detailed results: test sub-heading has full version, NO status badge
 - [ ] Detailed results: Failed Results table lists all failed steps with metrics
-- [ ] Detailed results: Max Throughput table ONLY for predefined-throughput-steps tests with failures
+- [ ] Detailed results: Max Throughput table ONLY for predefined-throughput-steps tests where unthrottled step has FAIL/ERROR status
+- [ ] Detailed results: Max Throughput table omitted when unthrottled steps pass (throughput as expected)
 - [ ] Argus link format uses `/test/` (singular), not `/tests/` (plural)
 - [ ] Detailed results Argus link points to the specific run for each workload
 - [ ] Groups tests by platform category in detailed results
 - [ ] States the reporting period in the header
 - [ ] Table width is 700px
 - [ ] Output file is NOT saved into the SCT repository (use /tmp/opencode/ or home dir)
+- [ ] Conclusion text is printed to the user for review/editing BEFORE being saved into the HTML report
+- [ ] Conclusion uses hierarchical format: bold test names as top-level items, specific observations as sub-bullets
+- [ ] Issues are split into "New Issues - Regression" (created during period) and "Reproduced Issues" (pre-existing)
+- [ ] Agent asks user to classify issues as new vs reproduced BEFORE saving the report
