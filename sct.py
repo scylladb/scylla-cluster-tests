@@ -74,6 +74,7 @@ from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.decorators import retrying
 from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
 from sdcm.utils.argus import (
+    ReplayOnlyArgusSCTClient,
     argus_offline_collect_events,
     create_proxy_argus_s3_url,
     get_argus_client,
@@ -1722,6 +1723,80 @@ def show_log(test_id, output_format, update_argus: bool):
             LOGGER.error("Error updating logs in argus.", exc_info=True)
 
 
+@investigate.command("download-logs", help="Download logs collected for testrun by test-id")
+@click.argument("test_id")
+@click.option("-d", "--dest-dir", type=click.Path(), default=".", help="Destination directory for downloaded logs")
+@click.option("-t", "--log-type", type=str, multiple=True, help="Filter by log type (can be specified multiple times)")
+@click.option("--list-types", is_flag=True, help="List available log types and exit")
+def download_logs(test_id: str, dest_dir: str, log_type: tuple[str, ...], list_types: bool):
+    """Download logs from S3 for a specific test run.
+
+    Examples:
+        # Download all logs to current directory
+        hydra investigate download-logs abc123
+
+        # Download to specific directory
+        hydra investigate download-logs abc123 -d /tmp/logs
+
+        # Download only specific log types
+        hydra investigate download-logs abc123 -t sct-runner -t db-cluster
+
+        # List available log types
+        hydra investigate download-logs abc123 --list-types
+    """
+    add_file_logger()
+
+    files = list_logs_by_test_id(test_id)
+
+    if not files:
+        click.secho(f"No logs found for test id: {test_id}", fg="yellow")
+        return
+
+    if list_types:
+        available_types = sorted(set(log["type"] for log in files))
+        click.echo("Available log types:")
+        for t in available_types:
+            click.echo(f"  - {t}")
+        return
+
+    # Filter by log type if specified
+    if log_type:
+        files = [f for f in files if f["type"] in log_type]
+        if not files:
+            click.secho(f"No logs found matching types: {', '.join(log_type)}", fg="yellow")
+            return
+
+    # Create destination directory
+    dest_path = os.path.abspath(dest_dir)
+    os.makedirs(dest_path, exist_ok=True)
+
+    click.echo(f"Downloading {len(files)} log file(s) to {dest_path}")
+
+    s3_storage = S3Storage()
+    downloaded = []
+    failed = []
+
+    for log in files:
+        log_name = os.path.basename(log["file_path"])
+        click.echo(f"  Downloading [{log['type']}] {log_name}...")
+        try:
+            downloaded_path = s3_storage.download_file(log["s3_url"], dest_path)
+            downloaded.append({"type": log["type"], "path": downloaded_path})
+            click.secho(f"    -> {downloaded_path}", fg="green")
+        except Exception as exc:  # noqa: BLE001
+            failed.append({"type": log["type"], "name": log_name, "error": str(exc)})
+            click.secho(f"    Failed: {exc}", fg="red")
+
+    click.echo("")
+    click.secho(f"Downloaded: {len(downloaded)}/{len(files)} files", fg="green" if not failed else "yellow")
+
+    if failed:
+        click.secho(f"Failed: {len(failed)} files", fg="red")
+        for f in failed:
+            click.echo(f"  - [{f['type']}] {f['name']}: {f['error']}")
+        sys.exit(1)
+
+
 @investigate.command("show-monitor", help="Run monitoring stack with saved data locally")
 @click.argument("test_id")
 @click.option("--cluster-name", type=str, required=False, help="Cluster name (relevant for multi-tenant test)")
@@ -2630,7 +2705,8 @@ def create_argus_test_run():
             return
         test_config.set_test_id_only(params.get("test_id"))
         test_config.init_argus_client(params)
-        test_config.argus_client().submit_sct_run(
+        argus_client = test_config.argus_client()
+        argus_client.submit_sct_run(
             job_name=get_job_name(),
             job_url=get_job_url(),
             started_by=get_username(),
@@ -2639,7 +2715,16 @@ def create_argus_test_run():
             branch_name=git_status.get("branch.upstream"),
             sct_config=None,
         )
-        LOGGER.info("Initialized Argus TestRun with test id %s", get_test_config().argus_client().run_id)
+        if isinstance(argus_client, ReplayOnlyArgusSCTClient):
+            LOGGER.warning(
+                "Argus is DISABLED (SCT_ENABLE_ARGUS=false) - using replay-only mode. "
+                "Test id: %s. Logs will still be collected and uploaded to S3, "
+                "but no Argus test run exists. Use 'hydra.sh collect-logs' output "
+                "or S3 links in console to download artifacts.",
+                argus_client.run_id,
+            )
+        else:
+            LOGGER.info("Initialized Argus TestRun with test id %s", argus_client.run_id)
     except ArgusClientError:
         LOGGER.error("Failed to submit data to Argus", exc_info=True)
 
@@ -2717,7 +2802,12 @@ def upload_artifact_file(test_id: str, file_path: str, use_argus: bool, public: 
             LOGGER.error("Failed getting status for %s in Argus, aborting...", test_id)
             return
     else:
-        client = get_test_config().argus_client()  # MagicMock
+        # --no-use-argus: no HTTP calls are made, but submissions are still
+        # recorded to the replay log. Set the test id first so those records are
+        # attributed to this run instead of a random fallback uuid.
+        test_config = get_test_config()
+        test_config.set_test_id_only(test_id)
+        client = test_config.argus_client()  # replay-only client when Argus is disabled
 
     image_exts = [".jpg", ".png"]
     file = Path(file_path)

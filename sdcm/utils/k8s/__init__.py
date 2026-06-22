@@ -285,7 +285,7 @@ class KubernetesOps:
         cmd = [KUBECTL_BIN]
         if getattr(kluster, "kube_config_path", None) is not None:
             cmd.append(f"--kubeconfig={kluster.kube_config_path}")
-        if sct_test_logdir := os.environ.get("_SCT_TEST_LOGDIR"):
+        if sct_test_logdir := os.environ.get("SCT_TEST_LOGDIR"):
             cmd.append(f"--cache-dir={Path(sct_test_logdir) / '.kube/http-cache'}--{kluster.short_cluster_name}")
         if not ignore_k8s_server_url and getattr(kluster, "k8s_server_url", None) is not None:
             cmd.append(f"--server={kluster.k8s_server_url}")

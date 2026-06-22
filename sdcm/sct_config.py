@@ -510,7 +510,7 @@ def count_regions(region_string: str) -> int:
         regions = json.loads(region_string.replace("'", '"'))
         if isinstance(regions, list):
             return len(regions)
-    except json.JSONDecodeError, ValueError:
+    except (json.JSONDecodeError, ValueError):
         # Not a JSON array — fall through to treat as a plain string
         pass
     if " " in region_string:
@@ -3875,6 +3875,12 @@ class SCTConfiguration(BaseModel):
             self.scylla_version_upgrade_target = scylla_version
             self.update_argus_with_version(scylla_version, "scylla-server-upgrade-target")
 
+    # Internal SCT_ vars that are NOT config params and must be excluded from the
+    # unknown-variable check.  SCT_TEST_LOGDIR is set by TestConfig.logdir() so
+    # that nested cluster/K8S initialisers can discover the current log directory
+    # without an explicit parameter thread-through.
+    _INTERNAL_SCT_ENV_VARS: frozenset[str] = frozenset({"SCT_TEST_LOGDIR"})
+
     def _check_unexpected_sct_variables(self):
         # check if there are SCT_* environment variable which aren't documented
         config_keys = {
@@ -3883,7 +3889,7 @@ class SCTConfiguration(BaseModel):
             if not is_ignored_field(field)
         }
         env_keys = {o.split(".")[0] for o in os.environ if o.startswith("SCT_")}
-        unknown_env_keys = env_keys.difference(config_keys)
+        unknown_env_keys = env_keys.difference(config_keys).difference(self._INTERNAL_SCT_ENV_VARS)
         if unknown_env_keys:
             output = [f"{key}={os.environ.get(key)}" for key in unknown_env_keys]
             raise ValueError("Unsupported environment variables were used:\n\t - {}".format("\n\t - ".join(output)))
