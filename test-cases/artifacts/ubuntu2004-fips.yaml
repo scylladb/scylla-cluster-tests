@@ -21,3 +21,4 @@ internode_encryption: 'all'
 test_duration: 60
 user_prefix: 'artifacts-ubuntu2004-fips'
 aws_fallback_to_next_availability_zone: true
+fallback_to_next_availability_zone: true
