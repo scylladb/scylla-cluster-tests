@@ -3140,8 +3140,8 @@ class SCTConfiguration(BaseModel):
                     raise ValueError(f" Got error: {exp!r}, on item '{param}'") from exp
 
         # 15 Force endpoint_snitch to GossipingPropertyFileSnitch if using simulated_regions or simulated_racks
-        n_db_nodes = self.get("n_db_nodes") or 0
-        num_of_db_nodes = sum(n_db_nodes if isinstance(n_db_nodes, list) else [n_db_nodes])
+        n_db_nodes = self.get("n_db_nodes")
+        num_of_db_nodes = sum(n_db_nodes or [])
         if (
             (self.get("simulated_regions") or 0) > 1
             or (self.get("simulated_racks") or 0) > 1
@@ -3212,20 +3212,6 @@ class SCTConfiguration(BaseModel):
             data_nodes_num = self.get("n_db_nodes")
             # if number of zero nodes is set for cluster setup, check correctness of settings
             if zero_nodes_num:
-                zero_nodes_num = (
-                    zero_nodes_num
-                    if isinstance(zero_nodes_num, list)
-                    else [zero_nodes_num]
-                    if isinstance(zero_nodes_num, int)
-                    else [int(i) for i in str(zero_nodes_num).split()]
-                )
-                data_nodes_num = (
-                    data_nodes_num
-                    if isinstance(data_nodes_num, list)
-                    else [data_nodes_num]
-                    if isinstance(data_nodes_num, int)
-                    else [int(i) for i in str(data_nodes_num).split()]
-                )
                 assert len(zero_nodes_num) == len(data_nodes_num), (
                     "Config of zero token nodes is not equal config of data nodes for multi dc"
                 )
@@ -4717,8 +4703,7 @@ class SCTConfiguration(BaseModel):
                 )
 
         rf = self.get("xcloud_replication_factor")
-        _n_db_nodes: list[int] | int = self.get("n_db_nodes")
-        n_nodes = _n_db_nodes if isinstance(_n_db_nodes, list) else [_n_db_nodes]
+        n_nodes: list[int] = self.get("n_db_nodes")
         if rf is None:
             self["xcloud_replication_factor"] = min(*n_nodes, 3)
         elif rf > min(n_nodes):
