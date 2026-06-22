@@ -3,7 +3,12 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from sdcm.cluster_cloud import xcloud_super_if_supported, ScyllaCloudCluster, ScyllaCloudError
+from sdcm.cluster_cloud import (
+    xcloud_super_if_supported,
+    ScyllaCloudCluster,
+    ScyllaCloudError,
+    CloudNode,
+)
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.cloud_api_utils import (
     build_cloud_cluster_name,
@@ -405,3 +410,34 @@ class TestCloudServiceInstallationOrdering:
 
         mock_cluster._wait_for_cloud_service_installations()
         mock_cluster._wait_for_cloud_request_completed.assert_not_called()
+
+
+def _make_cloud_node():
+    """Create a CloudNode-like mock for configure_remote_logging tests."""
+    node = MagicMock()
+    node.name = "db-node-test-1"
+    node.xcloud_connect_supported = True
+    node.parent_cluster.params.get.return_value = "vector"
+    node._vector_is_active.return_value = True
+    return node
+
+
+def test_configure_remote_logging_managed_path_does_not_self_install():
+    node = _make_cloud_node()
+    node._managed_vector_ready.return_value = True
+    CloudNode.configure_remote_logging(node)
+
+    node._apply_vector_target_config.assert_called_once()
+    node._self_install_vector.assert_not_called()
+
+
+def test_configure_remote_logging_falls_back_to_self_install():
+    node = _make_cloud_node()
+    node._managed_vector_ready.return_value = False
+    CloudNode.configure_remote_logging(node)
+
+    node._self_install_vector.assert_called_once()
+    node._apply_vector_target_config.assert_called_once()
+
+    ordered = [c[0] for c in node.mock_calls]
+    assert ordered.index("_self_install_vector") < ordered.index("_apply_vector_target_config")
