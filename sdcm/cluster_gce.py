@@ -34,6 +34,7 @@ from sdcm.utils.gce_utils import (
     create_instance,
     disk_from_image,
     get_gce_compute_disks_client,
+    get_alternative_zones,
     wait_for_extended_operation,
     gce_private_addresses,
     gce_public_addresses,
@@ -59,6 +60,10 @@ R = TypeVar("R")
 
 class CreateGCENodeError(Exception):
     pass
+
+
+class _ZoneExhaustedError(Exception):
+    """Internal signal that the GCE zone is exhausted — escapes the @retrying decorator."""
 
 
 class GCENode(cluster.BaseNode):
@@ -352,6 +357,16 @@ class GCECluster(cluster.BaseCluster):
                     identifier += "%s: %s | " % (disk_type, disk_size)
         return identifier
 
+    @property
+    def is_az_fallback_enabled(self) -> bool:
+        """Return True when AZ fallback on capacity errors is enabled.
+
+        Reads `fallback_to_next_availability_zone`.
+        """
+        if (value := self.params.get("fallback_to_next_availability_zone")) is not None:
+            return bool(value)
+        return False
+
     def _get_disk_url(self, disk_type="pd-standard", dc_idx=0):
         return "projects/%s/zones/%s/diskTypes/%s" % (self.project, self._gce_zone_names[dc_idx], disk_type)
 
@@ -492,6 +507,10 @@ class GCECluster(cluster.BaseCluster):
         try:
             return create_instance(**create_node_params)
         except google.api_core.exceptions.GoogleAPIError as gbe:
+            if "ZONE_RESOURCE_POOL_EXHAUSTED" in str(gbe):
+                # Raise a non-retryable error so zone fallback can handle it
+                raise _ZoneExhaustedError(str(gbe)) from gbe
+
             #  attempt to destroy if node did not start due to preemption or quota exceeded
             if "Instance failed to start due to preemption" in str(gbe) or "Quota exceeded" in str(gbe):
                 try:
@@ -513,10 +532,56 @@ class GCECluster(cluster.BaseCluster):
         spot = "spot" in self.instance_provision
         instances = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
-            instances.append(
-                self._create_instance(node_index, dc_idx, spot, enable_auto_bootstrap, instance_type=instance_type)
-            )
+            try:
+                instances.append(
+                    self._create_instance(node_index, dc_idx, spot, enable_auto_bootstrap, instance_type=instance_type)
+                )
+            except _ZoneExhaustedError as exc:
+                if not self.is_az_fallback_enabled:
+                    raise google.api_core.exceptions.GoogleAPIError(str(exc)) from exc.__cause__
+                if count > 1:
+                    self.log.warning(
+                        "AZ fallback is only supported for single-node provisioning (count=%d), not retrying", count
+                    )
+                    raise google.api_core.exceptions.GoogleAPIError(str(exc)) from exc.__cause__
+                zone_name = self._gce_zone_names[dc_idx]
+                region = zone_name.rsplit("-", 1)[0]
+                self.log.warning("Zone %s exhausted, trying alternative zones in region %s", zone_name, region)
+                alternative_zones = get_alternative_zones(region, zone_name)
+                if not alternative_zones:
+                    raise google.api_core.exceptions.GoogleAPIError(
+                        f"No alternative zones available in region {region}"
+                    ) from exc.__cause__
+                instance = self._try_alternative_zones(
+                    node_index, dc_idx, spot, enable_auto_bootstrap, instance_type, region, alternative_zones, exc
+                )
+                instances.append(instance)
         return instances
+
+    def _try_alternative_zones(
+        self, node_index, dc_idx, spot, enable_auto_bootstrap, instance_type, region, alternative_zones, original_exc
+    ):
+        """Try provisioning in alternative zones after the primary zone is exhausted."""
+        original_zone = self._gce_zone_names[dc_idx]
+        for alt_zone_letter in alternative_zones:
+            alt_zone = f"{region}-{alt_zone_letter}"
+            self.log.info("Attempting fallback to zone %s", alt_zone)
+            self._gce_zone_names[dc_idx] = alt_zone
+            try:
+                instance = self._create_instance(
+                    node_index, dc_idx, spot, enable_auto_bootstrap, instance_type=instance_type
+                )
+                self.log.info("Successfully provisioned in fallback zone %s", alt_zone)
+                return instance
+            except _ZoneExhaustedError:
+                self.log.warning("Fallback zone %s also exhausted, trying next", alt_zone)
+                continue
+        # All zones exhausted — restore original zone and raise
+        self._gce_zone_names[dc_idx] = original_zone
+        raise google.api_core.exceptions.GoogleAPIError(
+            f"All zones in region {region} are exhausted: tried {original_zone} and "
+            f"{[f'{region}-{z}' for z in alternative_zones]}"
+        ) from original_exc.__cause__
 
     def _destroy_instance(self, name: str, dc_idx: int):
         target_node = self._get_instances_by_name(dc_idx=dc_idx, name=name)
