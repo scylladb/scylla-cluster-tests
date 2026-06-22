@@ -102,7 +102,7 @@ def deploy_k8s_gke_cluster(k8s_cluster) -> None:
             k8s_cluster.deploy_scylla_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
 
     # TODO: add support for different loaders amount in different K8S clusters
-    if params.get("n_loaders"):
+    if sum(params.get("n_loaders")) > 0:
         loader_pool = GkeNodePool(
             name=k8s_cluster.LOADER_POOL_NAME,
             instance_type=params.get("gce_instance_type_loader"),
