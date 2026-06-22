@@ -934,6 +934,18 @@ class ScyllaLogCollector(LogCollector):
         CommandLog(name="io-properties.yaml", command="cat /etc/scylla.d/io_properties.yaml"),
         CommandLog(name="dmesg.log", command="sudo dmesg -P"),
         CommandLog(name="systemctl.status", command="sudo systemctl status --all --full --no-pager"),
+        # system.log here filters to scylla units only, so capture vector.dev's status/journal/config separately
+        CommandLog(
+            name="vector.log",
+            command=(
+                "( echo '=== systemctl status vector.service ==='; "
+                "sudo systemctl status vector.service --full --no-pager; "
+                "echo '=== journalctl -u vector.service ==='; "
+                "sudo journalctl --no-tail --no-pager -u vector.service -o short-precise; "
+                "echo '=== vector validate /etc/vector/vector.yaml ==='; "
+                "sudo vector validate /etc/vector/vector.yaml )"
+            ),
+        ),
         CommandLog(name="cassandra-rackdc.properties", command=f"cat {SCYLLA_PROPERTIES_PATH}"),
         CommandLog(name="scylla-manager-agent.yaml", command=f"cat {SCYLLA_MANAGER_AGENT_YAML_PATH}"),
         CommandLog(name="setup_scripts_errors.log", command="for i in /var/tmp/scylla/*.log;do echo [$i]; cat $i;done"),
