@@ -19,6 +19,7 @@ def createRunConfiguration(String backend) {
     ]
     if (backend == 'gce') {
         configuration.gce_datacenter = "us-east1"
+        configuration.availability_zone = ''
     } else if (backend == 'azure') {
         configuration.azure_region_name = 'eastus'
         configuration.availability_zone = ''
