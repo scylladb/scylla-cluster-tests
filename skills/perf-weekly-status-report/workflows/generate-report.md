@@ -128,6 +128,53 @@ master_runs = [
 
 **Exit criteria:** Data organized by category > test > workload > step, throughput tracker populated.
 
+## Phase 4a: Collect Issues
+
+**Entry criteria:** Filtered master runs identified (from Phase 2).
+
+1. For each run with status `failed` or `test_error`, fetch linked issues:
+   ```bash
+   argus issue list \
+     --run-id <RUN_ID> \
+     --url https://argus.scylladb.com
+   ```
+
+2. Each issue object contains:
+   ```json
+   {
+     "key": "<PROJECT>-<NUMBER>",
+     "subtype": "jira",
+     "title": "<issue summary text>",
+     "state": "<state>",
+     "url": "https://scylladb.atlassian.net/browse/<PROJECT>-<NUMBER>"
+   }
+   ```
+   The array may contain zero, one, or many issues of any Jira project.
+
+3. De-duplicate issues by `key` (same issue may appear on multiple runs).
+
+4. **Classification: New vs Reproduced**
+
+   Since the Argus CLI does not expose Jira issue creation dates, the agent MUST present the full de-duplicated issue list to the user and ask them to classify each issue:
+   - **New Issues - Regression**: Jira ticket was created during the report period (newly filed regression)
+   - **Reproduced Issues**: Jira ticket existed before the report period but was reproduced this week
+
+   Example interaction:
+   ```
+   I found the following issues linked to failed runs this week:
+
+   1. PROJECT-123: <issue title>
+   2. PROJECT-456: <issue title>
+   3. PROJECT-789: <issue title>
+
+   Which of these are NEW issues (Jira ticket created this week)?
+   Please provide the issue keys that are new (e.g., "PROJECT-789"), or "none" if all are reproduced.
+   ```
+
+5. Store the classification for use in the HTML report generation.
+
+**Exit criteria:** Issues collected and classified as new vs reproduced based on user input.
+
 ## Phase 5: Generate HTML Report
 
 **Entry criteria:** Data grouped and aggregated.
@@ -135,21 +182,33 @@ master_runs = [
 1. Generate the HTML file with these sections:
    - Header (solid navy background `#1a237e`, title, date range)
    - Summary box (total/passed/failed counts per run + Scylla version). **Count individual runs, not test groups.** Each workload is a separate run (e.g., a test with mixed/read/write/read_disk_only = 4 runs). Microbenchmarks = 1 run each. Total must equal Passed + Failed/Error.
-   - Conclusion (auto-generated text summary)
-   - Overview table (grouped by workload, no Argus links, no version column)
+   - Conclusion (auto-generated hierarchical text summary)
+   - New Issues - Regression (issues created during the period, if any)
+   - Reproduced Issues (pre-existing issues seen again this week)
+   - Overview table (grouped by workload, with Argus links in Link column)
    - Detailed results (per-category tables with metrics + Argus links)
 
    **Conclusion section** (between Summary and Overview):
    - Heading "Conclusion" must use same style as "Summary" heading: `font-size:16px;font-weight:bold;padding-bottom:10px;`
-   - Auto-generate bullet-point lines summarizing the week's performance results
-   - Each line starts with "- " and is rendered on its own line (use table rows)
-   - Include: overall pass/fail status, any ERROR/FAIL steps
+   - Auto-generate **hierarchical** bullet-point lines summarizing the week's performance results
+   - Structure uses two levels:
+     - **Top-level items**: Test name in bold, prefixed with `- ` (indented 15px from left)
+     - **Sub-items**: Specific observations, prefixed with `&#8226;` bullet (indented 30px from left)
+   - Each top-level item and sub-item is rendered as its own table row
+   - Include: which workloads failed/passed for each test, specific failure details (metric, value)
    - Do NOT mention registered tests with no runs
-   - Example output:
+   - Example output structure:
      ```
-     - All 5 tests with dev runs passed this week.
+     - predefined-throughput-steps-i8g-tablets:
+       * write workload failed with P99 latency regression at 600K op/s step (225.44ms).
+       * Read workload failed with P99 spike at 1.5M op/s step (8933.87ms).
+       * Mixed and read_disk_only workloads passed.
+     - Microbenchmark:
+       * write tests (arm64 and x86_64) both failed with ERROR on instructions_per_op (~8% regression).
+       * Read tests passed on both architectures.
      ```
    - Render in a white-background box with border
+   - **CRITICAL: Before saving the report, print the generated conclusion text to the user and ask them to confirm or provide edits.** Wait for user response. If the user provides changes, incorporate them. Only then write the final HTML file.
 
 2. **Overview table structure:**
    - Columns: Category | Test | Workload | Status | Link (NO version column, NO Runs column)
@@ -171,12 +230,13 @@ master_runs = [
      - Category heading with blue underline (`#007bff`)
      - For each test with failures: sub-heading with test name and full version, NO status badge
        Example: `predefined-throughput-steps-i8g-tablets (2026.3.0.dev.20260612.91ada5517d59)`
-     - **Failed Results table**:
-       - Columns: Workload | Step | P90 (ms) | P99 (ms) | Throughput (op/s) | Version | Link
-       - Shows all failed steps across ALL runs in the period
-       - P90/P99 values highlighted in red bold
-      - **Max Throughput table** (ONLY for `predefined-throughput-steps` tests that have failures):
-        - Columns: Workload | Max Throughput (run) | P90 (ms) | P99 (ms) | Status | Link
+      - **Failed Results table**:
+        - Columns: Workload | Step | P99 (ms) | Throughput (op/s) | Version | Link
+        - Shows all failed steps across ALL runs in the period
+        - P99 values highlighted in red bold
+      - **Max Throughput table** (ONLY for `predefined-throughput-steps` tests where the **unthrottled step itself** has status `FAIL` or `ERROR`):
+        - If all unthrottled steps pass (status `PASS`), **omit this table entirely** -- the throughput is as expected and does not need to be highlighted
+        - Columns: Workload | Max Throughput (run) | P99 (ms) | Status | Link
         - One row per workload, using latest run's data
         - Each workload has its own Argus link to its specific run
         - Argus link format: `https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}` (singular `/test/`)
@@ -202,7 +262,59 @@ master_runs = [
    - Error: `#fd7e14` (orange)
    - No runs: `#6c757d` (gray)
 
-**Exit criteria:** File `perf-weekly-status-report.html` written to /tmp/opencode/ (NOT in the SCT repo) and renderable in a browser.
+**Exit criteria:** Conclusion text printed to user and confirmed/edited. Issues classified by user. File `perf-weekly-status-report.html` written to /tmp/opencode/ (NOT in the SCT repo) and renderable in a browser.
+
+## Phase 5a: Conclusion and Issues Review (Interactive)
+
+**Entry criteria:** HTML report content is ready to be generated (all data collected and processed, issues collected from Phase 4a).
+
+Before writing the final HTML file, the agent MUST perform TWO interactive steps:
+
+### Step 1: Conclusion Review
+
+1. Print the auto-generated Conclusion bullet points to the user in plain text format (hierarchical structure)
+2. Ask the user to confirm the conclusion or provide edits
+3. Wait for user response
+4. If the user approves: proceed to Step 2
+5. If the user provides changes: incorporate the edits
+
+Example interaction:
+```
+Here is the generated Conclusion for the report:
+
+- predefined-throughput-steps-i8g-tablets:
+  * write workload failed with P99 latency regression at 600K op/s step (225.44ms).
+  * Read workload failed with P99 spike at 1.5M op/s step (8933.87ms).
+  * Mixed and read_disk_only workloads passed.
+- Microbenchmark:
+  * write tests (arm64 and x86_64) both failed with ERROR on instructions_per_op (~8% regression).
+  * Read tests passed on both architectures.
+
+Would you like to use this conclusion as-is, or would you like to edit it?
+```
+
+### Step 2: Issue Classification
+
+1. Present the de-duplicated list of all issues found on failed/errored runs
+2. Ask the user to identify which issues are **new** (Jira ticket created during the report period)
+3. Wait for user response
+4. Classify accordingly:
+   - Issues identified as new → "New Issues - Regression" section
+   - Remaining issues → "Reproduced Issues" section
+
+Example interaction:
+```
+I found the following issues linked to failed runs:
+
+1. PROJECT-123: <issue title>
+2. PROJECT-456: <issue title>
+3. PROJECT-789: <issue title>
+
+Which of these are NEW issues (Jira ticket created this week)?
+Please provide the keys (e.g., "PROJECT-789"), or "none" if all are reproduced.
+```
+
+This ensures the user has final control over both the conclusion wording and issue classification before they appear in the report.
 
 ## Phase 6: Verify Output
 
@@ -222,7 +334,12 @@ master_runs = [
 12. Verify detailed section has per-workload Argus links (format: `/test/` singular)
 13. Verify full version with revision hash appears in Summary title (e.g., `2026.3.0.dev.20260612.91ada5517d59`)
 14. Verify Detailed Results section is completely omitted when all tests pass
-15. Verify report is NOT placed inside the SCT repository
+15. Verify Max Throughput table is omitted when all unthrottled steps pass (throughput as expected)
+16. Verify Conclusion text was shown to user before final save
+17. Verify Conclusion uses hierarchical format (bold test names + indented sub-bullets)
+18. Verify issues are split into "New Issues - Regression" and "Reproduced Issues" sections
+19. Verify user was asked to classify issues before final save
+20. Verify report is NOT placed inside the SCT repository
 
 **Exit criteria:** Report is ready for email distribution.
 
@@ -249,6 +366,13 @@ argus run results \
   --run-id <RUN_ID> \
   --url https://argus.scylladb.com > /tmp/opencode/results.json
 
-# 5. Generate HTML report (output to /tmp/opencode/, NOT to repo)
-# python3 script generates /tmp/opencode/perf-weekly-status-report.html
+# 5. Fetch issues for failed/errored runs
+argus issue list \
+  --run-id <RUN_ID> \
+  --url https://argus.scylladb.com
+
+# 6. Generate HTML report (output to /tmp/opencode/, NOT to repo)
+# - Ask user to confirm conclusion text
+# - Ask user to classify issues as new vs reproduced
+# - Write /tmp/opencode/perf-weekly-status-report.html
 ```

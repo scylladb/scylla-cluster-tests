@@ -90,6 +90,38 @@ Counts are **per run** (each workload = 1 run), not per test group. A test with 
 </tr>
 ```
 
+## Conclusion Box (hierarchical bullet points)
+
+The Conclusion section uses a white-background box with a heading table and a content table.
+Structure: heading in one table, hierarchical bullets in a separate table (both inside the same `<td>`).
+
+The number of top-level items and sub-bullets varies per report -- include one row per test/category that had runs, and one sub-bullet per notable observation.
+
+```html
+<tr><td height="15" style="font-size:1px;line-height:1px;">&nbsp;</td></tr>
+<tr>
+<td bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid #dee2e6;padding:15px;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333333;">
+<tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">Conclusion</td></tr>
+</table>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#555555;">
+<!-- Repeat this block for each test/category with runs -->
+<tr><td style="padding:2px 0 2px 15px;">- <b>{test_or_category_name}:</b></td></tr>
+<!-- Repeat this row for each observation under that test/category -->
+<tr><td style="padding:2px 0 2px 30px;">&#8226; {observation}.</td></tr>
+<!-- ... more observation rows as needed ... -->
+<!-- ... more test/category blocks as needed ... -->
+</table>
+</td>
+</tr>
+```
+
+Key details:
+- Top-level: `padding:2px 0 2px 15px;` with `- <b>test/category name:</b>` format
+- Sub-level: `padding:2px 0 2px 30px;` with `&#8226; observation.` format
+- The heading table and content table are siblings inside the same `<td>` container
+- The outer `<td>` has `bgcolor="#ffffff"` and `border:1px solid #dee2e6;padding:15px;`
+
 ## Section Headings (as table cells, not h-tags)
 
 ```html
@@ -100,12 +132,12 @@ Counts are **per run** (each workload = 1 run), not per test group. A test with 
 
 <!-- Category heading with underline -->
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#333333;padding:15px 0 5px 0;border-bottom:2px solid #007bff;">i8g Tablets (New Platform)</td></tr>
+<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#333333;padding:15px 0 5px 0;border-bottom:2px solid #007bff;">{category_name}</td></tr>
 </table>
 
 <!-- Sub-heading (test name with full version, NO status badge) -->
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#333333;padding:10px 0 5px 0;">predefined-throughput-steps-i8g-tablets (2026.3.0.dev.20260612.91ada5517d59)</td></tr>
+<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#333333;padding:10px 0 5px 0;">{test_name} ({full_version})</td></tr>
 </table>
 ```
 
@@ -127,7 +159,9 @@ Counts are **per run** (each workload = 1 run), not per test group. A test with 
 
 ## Data Tables
 
-### Overview Table (dark header, grouped by category/test/workload, no version column)
+### Overview Table (dark header, grouped by category/test/workload, with Link column)
+
+Number of rows varies: one row per workload per test that had runs. Categories and tests with no runs are omitted.
 
 ```html
 <table width="100%" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12px;border-color:#dee2e6;">
@@ -135,50 +169,55 @@ Counts are **per run** (each workload = 1 run), not per test group. A test with 
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Category</th>
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Test</th>
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Workload</th>
-  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Runs</th>
   <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Status</th>
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:center;color:#ffffff;font-weight:bold;">Link</th>
 </tr>
-<!-- Category shown only on first row of group; Test shown only on first workload row -->
+<!-- First row of a category group: category name shown, test name shown -->
 <tr bgcolor="#ffffff" style="background-color:#ffffff;">
-  <td style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;font-family:Arial,Helvetica,sans-serif;font-size:12px;">i8g Tablets</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">predefined-throughput-steps-i8g-tablets</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;">mixed</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;">4</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="color:#28a745;">passed 3</span> / <span style="color:#dc3545;">failed 1</span></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{category_name}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{test_name}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{workload}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- status badge --></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a></td>
 </tr>
-<!-- Subsequent workload row: category and test cells are empty -->
+<!-- Subsequent workload row within same test: category and test cells are empty -->
 <tr bgcolor="#f8f9fa" style="background-color:#f8f9fa;">
   <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;"></td>
   <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;"></td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;">read</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;">3</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><span style="color:#28a745;">passed 3</span></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{workload}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- status badge --></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a></td>
 </tr>
+<!-- ... repeat rows for each workload, test, and category ... -->
 </table>
 ```
 
-NOTE: No Argus links or version column in the overview table. Version is in the Summary section. Runs column = just the count. Status column = textual breakdown with colored spans.
+NOTE: Each workload row has its own Argus link in the Link column. Version is in the Summary section.
+Argus URL format: `https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}` (singular `/test/`, NOT `/tests/`)
+Status column: just the badge (PASSED/FAILED/ERROR) -- no counts.
 
 ### Results Table (light header) -- Per-Workload with Argus Links
+
+Number of rows varies: one per workload that has results.
 
 ```html
 <table width="100%" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12px;border-color:#dee2e6;margin-bottom:5px;">
 <tr bgcolor="#f8f9fa" style="background-color:#f8f9fa;">
   <th style="border:1px solid #dee2e6;padding:4px 8px;text-align:left;font-weight:bold;">Workload</th>
   <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">Max Throughput (run)</th>
-  <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">P90 (ms)</th>
   <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">P99 (ms)</th>
   <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">Status</th>
   <th style="border:1px solid #dee2e6;padding:4px 8px;font-weight:bold;">Link</th>
 </tr>
+<!-- Repeat for each workload -->
 <tr>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">mixed</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:12px;">968,649</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:12px;">35.16</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:12px;">150.99</td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- PASS badge --></td>
-  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="https://argus.scylladb.com/test/TEST_ID/runs?additionalRuns[]=RUN_ID" style="color:#007bff;text-decoration:none;">Argus</a></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{workload}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{max_throughput}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{p99_value}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><!-- status badge --></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a></td>
 </tr>
+<!-- ... more rows as needed ... -->
 </table>
 ```
 
@@ -187,6 +226,8 @@ Argus URL format: `https://argus.scylladb.com/test/{test_id}/runs?additionalRuns
 
 ## Bullet Lists (as table rows, not ul/li)
 
+### Simple bullet list (single level)
+
 ```html
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#555555;">
 <tr><td style="padding:2px 0 2px 15px;">&#8226; First bullet point</td></tr>
@@ -194,11 +235,99 @@ Argus URL format: `https://argus.scylladb.com/test/{test_id}/runs?additionalRuns
 </table>
 ```
 
+### Hierarchical bullet list (Conclusion format)
+
+Uses two levels: bold test name at 15px indent, sub-bullets at 30px indent.
+Number of top-level items and sub-bullets varies per report.
+
+```html
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#555555;">
+<!-- Repeat for each test/category -->
+<tr><td style="padding:2px 0 2px 15px;">- <b>{test_or_category_name}:</b></td></tr>
+<!-- Repeat for each observation under that test/category -->
+<tr><td style="padding:2px 0 2px 30px;">&#8226; {observation}.</td></tr>
+<!-- ... more rows as needed ... -->
+</table>
+```
+
+Key styling details:
+- Top-level items: `padding:2px 0 2px 15px;` with `- <b>test name:</b>` format
+- Sub-items: `padding:2px 0 2px 30px;` with `&#8226; observation text.` format
+- Both levels are within the same `<table>` (no nested tables)
+- Wrapped in a white-background box with border (same container as the "Conclusion" heading)
+
 ## Links
 
 ```html
-<a href="https://argus.scylladb.com/tests/UUID" style="color:#007bff;text-decoration:none;">Argus</a>
+<a href="https://argus.scylladb.com/test/{test_id}/runs?additionalRuns[]={run_id}" style="color:#007bff;text-decoration:none;">Argus</a>
 ```
+
+## New Issues and Reproduced Issues Sections
+
+Issues are split into two sections based on Jira creation date (user-classified):
+- **New Issues - Regression**: tickets created during the report period
+- **Reproduced Issues**: tickets that existed before the report period
+
+Both sections use the same HTML structure but different headings.
+
+### New Issues - Regression (shown only when new issues exist)
+
+```html
+<tr><td height="15" style="font-size:1px;line-height:1px;">&nbsp;</td></tr>
+<tr>
+<td bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid #dee2e6;padding:15px;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333333;">
+<tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">New Issues - Regression</td></tr>
+</table>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#555555;">
+<!-- Repeat for each new issue -->
+<tr><td style="padding:2px 0 2px 15px;">&#8226; <a href="{issue_url}" style="color:#007bff;text-decoration:none;">{ISSUE_KEY}</a>: {issue title}</td></tr>
+<!-- ... more rows as needed ... -->
+</table>
+</td>
+</tr>
+```
+
+### Reproduced Issues (always shown)
+
+```html
+<tr><td height="15" style="font-size:1px;line-height:1px;">&nbsp;</td></tr>
+<tr>
+<td bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid #dee2e6;padding:15px;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333333;">
+<tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">Reproduced Issues</td></tr>
+</table>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#555555;">
+<!-- Repeat for each reproduced issue -->
+<tr><td style="padding:2px 0 2px 15px;">&#8226; <a href="{issue_url}" style="color:#007bff;text-decoration:none;">{ISSUE_KEY}</a>: {issue title}</td></tr>
+<!-- ... more rows as needed ... -->
+</table>
+</td>
+</tr>
+```
+
+### When no reproduced issues exist
+
+```html
+<tr><td height="15" style="font-size:1px;line-height:1px;">&nbsp;</td></tr>
+<tr>
+<td bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid #dee2e6;padding:15px;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333333;">
+<tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">Reproduced Issues</td></tr>
+</table>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#555555;">
+<tr><td style="padding:2px 0 2px 15px;">No reproduced issues in this period.</td></tr>
+</table>
+</td>
+</tr>
+```
+
+Key details:
+- Each section is in its own white-background box with border
+- Issue links use `color:#007bff;text-decoration:none;` style
+- Format: `&#8226; <a href="URL">KEY</a>: title text`
+- "New Issues - Regression" section is OMITTED entirely if there are no new issues
+- "Reproduced Issues" section is ALWAYS shown (with "No reproduced issues..." fallback text)
 
 ## Key Gmail Rules Summary
 
