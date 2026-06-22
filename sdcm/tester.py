@@ -1696,7 +1696,7 @@ class ClusterTester(unittest.TestCase):
         )
         if monitor_info["n_nodes"] is None:
             monitor_info["n_nodes"] = self.params.get("n_monitor_nodes")
-        if monitor_info["n_nodes"] > 0:
+        if sum(monitor_info["n_nodes"]) > 0:
             gce_image_monitor = self.params.get("gce_image_monitor")
             if not gce_image_monitor:
                 gce_image_monitor = self.params.get("gce_image")
@@ -1766,7 +1766,7 @@ class ClusterTester(unittest.TestCase):
         )
         if monitor_info["n_nodes"] is None:
             monitor_info["n_nodes"] = self.params.get("n_monitor_nodes")
-        if monitor_info["n_nodes"] > 0:
+        if sum(monitor_info["n_nodes"]) > 0:
             azure_image_monitor = self.params.get("azure_image_monitor")
             if not azure_image_monitor:
                 azure_image_monitor = self.params.get("azure_image")
@@ -1834,7 +1834,7 @@ class ClusterTester(unittest.TestCase):
 
         if monitor_info["n_nodes"] is None:
             monitor_info["n_nodes"] = self.params.get("n_monitor_nodes")
-        if monitor_info["n_nodes"] > 0:
+        if sum(monitor_info["n_nodes"]) > 0:
             self.monitors = MonitorSetOci(
                 image_id=self.params.get("oci_image_monitor"),
                 root_disk_size=monitor_info["disk_size"],
@@ -2063,7 +2063,7 @@ class ClusterTester(unittest.TestCase):
             **common_params,
         )
 
-        if monitor_info["n_nodes"] > 0:
+        if sum(monitor_info["n_nodes"]) > 0:
             self.monitors = MonitorSetAWS(
                 ec2_ami_id=self.params.get("ami_id_monitor").split(),
                 ec2_ami_username=self.params.get("ami_monitor_user"),
@@ -2184,7 +2184,7 @@ class ClusterTester(unittest.TestCase):
             k8s_cluster.set_nodeselector_for_deployments(pool_name=k8s_cluster.AUXILIARY_POOL_NAME, namespace=namespace)
 
         loader_pool = None
-        if self.params.get("n_loaders"):
+        if sum(self.params.get("n_loaders")) > 0:
             loader_pool = mini_k8s.MinimalK8SNodePool(
                 k8s_cluster=k8s_cluster,
                 name=k8s_cluster.LOADER_POOL_NAME,
@@ -2236,7 +2236,7 @@ class ClusterTester(unittest.TestCase):
             add_nodes=False,
         )
 
-        if self.params.get("n_loaders"):
+        if sum(self.params.get("n_loaders")) > 0:
             self.loaders = cluster_k8s.LoaderPodCluster(
                 k8s_clusters=[k8s_cluster],
                 loader_cluster_name=self.params.get("k8s_loader_cluster_name"),
@@ -2358,7 +2358,7 @@ class ClusterTester(unittest.TestCase):
             add_nodes=False,
         )
 
-        if self.params.get("n_loaders"):
+        if sum(self.params.get("n_loaders")) > 0:
             self.loaders = cluster_k8s.LoaderPodCluster(
                 k8s_clusters=self.k8s_clusters,
                 loader_cluster_name=self.params.get("k8s_loader_cluster_name"),
@@ -2466,7 +2466,7 @@ class ClusterTester(unittest.TestCase):
                     namespace=self.db_cluster.namespace,
                 )
 
-        if self.params.get("n_loaders"):
+        if sum(self.params.get("n_loaders")) > 0:
             self.loaders = cluster_k8s.LoaderPodCluster(
                 k8s_clusters=self.k8s_clusters,
                 loader_cluster_name=self.params.get("k8s_loader_cluster_name"),
@@ -2498,7 +2498,7 @@ class ClusterTester(unittest.TestCase):
             "device_mappings": None,
         }
         init_monitoring_info_from_params(monitor_info, params=self.params, regions=region_names)
-        if monitor_info["n_nodes"]:
+        if sum(monitor_info["n_nodes"]) > 0:
             common_params = get_common_params(
                 params=self.params,
                 regions=region_names,
@@ -2594,7 +2594,7 @@ class ClusterTester(unittest.TestCase):
                 **common_params,
             )
 
-            if monitor_info["n_nodes"] > 0:
+            if sum(monitor_info["n_nodes"]) > 0:
                 self.monitors = MonitorSetAWS(
                     ec2_ami_id=self.params.get("ami_id_monitor").split(),
                     ec2_ami_username=self.params.get("ami_monitor_user"),
@@ -2663,7 +2663,7 @@ class ClusterTester(unittest.TestCase):
                 **common_params,
             )
 
-            if monitor_info["n_nodes"] > 0:
+            if sum(monitor_info["n_nodes"]) > 0:
                 monitor_additional_disks = {"pd-ssd": self.params.get("gce_pd_ssd_disk_size_monitor")}
                 self.monitors = MonitorSetGCE(
                     gce_image=self.params.get("gce_image_monitor").strip(),
@@ -2699,7 +2699,7 @@ class ClusterTester(unittest.TestCase):
             allowed_ips=loader_ips,
         )
 
-        if monitor_info["n_nodes"] > 0:
+        if sum(monitor_info["n_nodes"]) > 0:
             self.monitors.targets["db_cluster"] = self.db_cluster
             self.monitors.promproxy_config = self.db_cluster.get_promproxy_config()
 
