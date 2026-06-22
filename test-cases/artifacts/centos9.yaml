@@ -17,5 +17,6 @@ test_duration: 60
 user_prefix: 'artifacts-centos9'
 use_preinstalled_scylla: false
 aws_fallback_to_next_availability_zone: true
+fallback_to_next_availability_zone: true
 
 user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
