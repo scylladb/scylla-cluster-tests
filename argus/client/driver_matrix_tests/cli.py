@@ -17,7 +17,7 @@ def cli():
 
 
 def _submit_driver_result_internal(api_key: str, base_url: str, run_id: str, metadata_path: str,
-                                   extra_headers: dict, use_tunnel: bool | None = None):
+                                   extra_headers: dict, log_dir: str, use_tunnel: bool | None = None):
     metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
     LOGGER.info("Submitting results for %s [%s/%s] to Argus...", run_id,
                 metadata["driver_name"], metadata["driver_type"])
@@ -26,6 +26,7 @@ def _submit_driver_result_internal(api_key: str, base_url: str, run_id: str, met
         run_id=run_id,
         auth_token=api_key,
         base_url=base_url,
+        log_dir=log_dir,
         extra_headers=extra_headers,
         use_tunnel=use_tunnel,
     ) as client:
@@ -35,7 +36,7 @@ def _submit_driver_result_internal(api_key: str, base_url: str, run_id: str, met
 
 
 def _submit_driver_failure_internal(api_key: str, base_url: str, run_id: str, metadata_path: str,
-                                    extra_headers: dict, use_tunnel: bool | None = None):
+                                    extra_headers: dict, log_dir: str, use_tunnel: bool | None = None):
     metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
     LOGGER.info("Submitting failure for %s [%s/%s] to Argus...", run_id,
                 metadata["driver_name"], metadata["driver_type"])
@@ -43,6 +44,7 @@ def _submit_driver_failure_internal(api_key: str, base_url: str, run_id: str, me
         run_id=run_id,
         auth_token=api_key,
         base_url=base_url,
+        log_dir=log_dir,
         extra_headers=extra_headers,
         use_tunnel=use_tunnel,
     ) as client:
@@ -56,15 +58,17 @@ def _submit_driver_failure_internal(api_key: str, base_url: str, run_id: str, me
 @click.option("--extra-headers", default={}, type=click.UNPROCESSED, callback=validate_extra_headers, help="extra headers to pass to argus, should be in json format", envvar='ARGUS_EXTRA_HEADERS')
 @click.option("--base-url", default="https://argus.scylladb.com", help="Base URL for argus instance")
 @click.option("--use-tunnel/--no-use-tunnel", default=None, help="Route API calls through SSH tunnel")
+@click.option("--log-dir", default=".", show_default=True, help="Directory for the argus_replay_log JSONL file")
 @click.option("--id", "run_id", required=True, help="UUID (v4 or v1) unique to the job")
 @click.option("--build-id", required=True, help="Unique job identifier in the build system, e.g. scylla-master/group/job for jenkins (The full path)")
 @click.option("--build-url", required=True, help="Job URL in the build system")
-def submit_driver_matrix_run(api_key: str, base_url: str, use_tunnel: bool | None, run_id: str, build_id: str, build_url: str, extra_headers: dict):
+def submit_driver_matrix_run(api_key: str, base_url: str, use_tunnel: bool | None, log_dir: str, run_id: str, build_id: str, build_url: str, extra_headers: dict):
     LOGGER.info("Submitting %s (%s) to Argus...", build_id, run_id)
     with ArgusDriverMatrixClient(
         run_id=run_id,
         auth_token=api_key,
         base_url=base_url,
+        log_dir=log_dir,
         extra_headers=extra_headers,
         use_tunnel=use_tunnel,
     ) as client:
@@ -77,12 +81,13 @@ def submit_driver_matrix_run(api_key: str, base_url: str, use_tunnel: bool | Non
 @click.option("--extra-headers", default={}, type=click.UNPROCESSED, callback=validate_extra_headers, help="extra headers to pass to argus, should be in json format", envvar='ARGUS_EXTRA_HEADERS')
 @click.option("--base-url", default="https://argus.scylladb.com", help="Base URL for argus instance")
 @click.option("--use-tunnel/--no-use-tunnel", default=None, help="Route API calls through SSH tunnel")
+@click.option("--log-dir", default=".", show_default=True, help="Directory for the argus_replay_log JSONL file")
 @click.option("--id", "run_id", required=True, help="UUID (v4 or v1) unique to the job")
 @click.option("--metadata-path", required=True, help="Path to the metadata .json file that contains path to junit xml and other required information")
-def submit_driver_result(api_key: str, base_url: str, use_tunnel: bool | None, run_id: str, metadata_path: str, extra_headers: dict):
+def submit_driver_result(api_key: str, base_url: str, use_tunnel: bool | None, log_dir: str, run_id: str, metadata_path: str, extra_headers: dict):
     _submit_driver_result_internal(api_key=api_key, base_url=base_url, run_id=run_id,
                                    metadata_path=metadata_path, extra_headers=extra_headers,
-                                   use_tunnel=use_tunnel)
+                                   log_dir=log_dir, use_tunnel=use_tunnel)
 
 
 @click.command("fail-driver")
@@ -90,12 +95,13 @@ def submit_driver_result(api_key: str, base_url: str, use_tunnel: bool | None, r
 @click.option("--extra-headers", default={}, type=click.UNPROCESSED, callback=validate_extra_headers, help="extra headers to pass to argus, should be in json format", envvar='ARGUS_EXTRA_HEADERS')
 @click.option("--base-url", default="https://argus.scylladb.com", help="Base URL for argus instance")
 @click.option("--use-tunnel/--no-use-tunnel", default=None, help="Route API calls through SSH tunnel")
+@click.option("--log-dir", default=".", show_default=True, help="Directory for the argus_replay_log JSONL file")
 @click.option("--id", "run_id", required=True, help="UUID (v4 or v1) unique to the job")
 @click.option("--metadata-path", required=True, help="Path to the metadata .json file that contains path to junit xml and other required information")
-def submit_driver_failure(api_key: str, base_url: str, use_tunnel: bool | None, run_id: str, metadata_path: str, extra_headers: dict):
+def submit_driver_failure(api_key: str, base_url: str, use_tunnel: bool | None, log_dir: str, run_id: str, metadata_path: str, extra_headers: dict):
     _submit_driver_failure_internal(api_key=api_key, base_url=base_url, run_id=run_id,
                                     metadata_path=metadata_path, extra_headers=extra_headers,
-                                    use_tunnel=use_tunnel)
+                                    log_dir=log_dir, use_tunnel=use_tunnel)
 
 
 @click.command("submit-or-fail-driver")
@@ -103,18 +109,19 @@ def submit_driver_failure(api_key: str, base_url: str, use_tunnel: bool | None, 
 @click.option("--extra-headers", default={}, type=click.UNPROCESSED, callback=validate_extra_headers, help="extra headers to pass to argus, should be in json format", envvar='ARGUS_EXTRA_HEADERS')
 @click.option("--base-url", default="https://argus.scylladb.com", help="Base URL for argus instance")
 @click.option("--use-tunnel/--no-use-tunnel", default=None, help="Route API calls through SSH tunnel")
+@click.option("--log-dir", default=".", show_default=True, help="Directory for the argus_replay_log JSONL file")
 @click.option("--id", "run_id", required=True, help="UUID (v4 or v1) unique to the job")
 @click.option("--metadata-path", required=True, help="Path to the metadata .json file that contains path to junit xml and other required information")
-def submit_or_fail_driver(api_key: str, base_url: str, use_tunnel: bool | None, run_id: str, metadata_path: str, extra_headers: dict):
+def submit_or_fail_driver(api_key: str, base_url: str, use_tunnel: bool | None, log_dir: str, run_id: str, metadata_path: str, extra_headers: dict):
     metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
     if metadata.get("failure_reason"):
         _submit_driver_failure_internal(api_key=api_key, base_url=base_url, run_id=run_id,
                                         metadata_path=metadata_path, extra_headers=extra_headers,
-                                        use_tunnel=use_tunnel)
+                                        log_dir=log_dir, use_tunnel=use_tunnel)
     else:
         _submit_driver_result_internal(api_key=api_key, base_url=base_url, run_id=run_id,
                                        metadata_path=metadata_path, extra_headers=extra_headers,
-                                       use_tunnel=use_tunnel)
+                                       log_dir=log_dir, use_tunnel=use_tunnel)
 
 
 @click.command("submit-env")
@@ -122,15 +129,17 @@ def submit_or_fail_driver(api_key: str, base_url: str, use_tunnel: bool | None, 
 @click.option("--extra-headers", default={}, type=click.UNPROCESSED, callback=validate_extra_headers, help="extra headers to pass to argus, should be in json format", envvar='ARGUS_EXTRA_HEADERS')
 @click.option("--base-url", default="https://argus.scylladb.com", help="Base URL for argus instance")
 @click.option("--use-tunnel/--no-use-tunnel", default=None, help="Route API calls through SSH tunnel")
+@click.option("--log-dir", default=".", show_default=True, help="Directory for the argus_replay_log JSONL file")
 @click.option("--id", "run_id", required=True, help="UUID (v4 or v1) unique to the job")
 @click.option("--env-path", required=True, help="Path to the Build-00.txt file that contains environment information about Scylla")
-def submit_driver_env(api_key: str, base_url: str, use_tunnel: bool | None, run_id: str, env_path: str, extra_headers: dict):
+def submit_driver_env(api_key: str, base_url: str, use_tunnel: bool | None, log_dir: str, run_id: str, env_path: str, extra_headers: dict):
     LOGGER.info("Submitting environment for run %s to Argus...", run_id)
     raw_env = Path(env_path).read_text()
     with ArgusDriverMatrixClient(
         run_id=run_id,
         auth_token=api_key,
         base_url=base_url,
+        log_dir=log_dir,
         extra_headers=extra_headers,
         use_tunnel=use_tunnel,
     ) as client:
@@ -143,13 +152,15 @@ def submit_driver_env(api_key: str, base_url: str, use_tunnel: bool | None, run_
 @click.option("--extra-headers", default={}, type=click.UNPROCESSED, callback=validate_extra_headers, help="extra headers to pass to argus, should be in json format", envvar='ARGUS_EXTRA_HEADERS')
 @click.option("--base-url", default="https://argus.scylladb.com", help="Base URL for argus instance")
 @click.option("--use-tunnel/--no-use-tunnel", default=None, help="Route API calls through SSH tunnel")
+@click.option("--log-dir", default=".", show_default=True, help="Directory for the argus_replay_log JSONL file")
 @click.option("--id", "run_id", required=True, help="UUID (v4 or v1) unique to the job")
 @click.option("--status", required=True, help="Resulting job status")
-def finish_driver_matrix_run(api_key: str, base_url: str, use_tunnel: bool | None, run_id: str, status: str, extra_headers: dict):
+def finish_driver_matrix_run(api_key: str, base_url: str, use_tunnel: bool | None, log_dir: str, run_id: str, status: str, extra_headers: dict):
     with ArgusDriverMatrixClient(
         run_id=run_id,
         auth_token=api_key,
         base_url=base_url,
+        log_dir=log_dir,
         extra_headers=extra_headers,
         use_tunnel=use_tunnel,
     ) as client:

@@ -29,6 +29,7 @@ def cli():
 @click.option("--api-key", help="Argus API key for authorization", required=True, envvar='ARGUS_AUTH_TOKEN')
 @click.option("--base-url", default="https://argus.scylladb.com", help="Base URL for argus instance")
 @click.option("--use-tunnel/--no-use-tunnel", default=None, help="Route API calls through SSH tunnel")
+@click.option("--log-dir", default=".", show_default=True, help="Directory for the argus_replay_log JSONL file")
 @click.option("--id", required=True, help="UUID (v4 or v1) unique to the job")
 @click.option("--build-id", required=True, help="Unique job identifier in the build system, e.g. scylla-master/group/job for jenkins (The full path)")
 @click.option("--build-url", required=True, help="Job URL in the build system")
@@ -36,12 +37,13 @@ def cli():
 @click.option("--sub-type", required=False, help="Sub-type of the generic test: pytest, dtest")
 @click.option("--scylla-version", required=False, default=None, help="Version of Scylla used for this job")
 @click.option("--extra-headers", default={}, type=click.UNPROCESSED, callback=validate_extra_headers, help="extra headers to pass to argus, should be in json format", envvar='ARGUS_EXTRA_HEADERS')
-def submit_run(api_key: str, base_url: str, use_tunnel: bool | None, id: str, build_id: str, build_url: str, started_by: str,
+def submit_run(api_key: str, base_url: str, use_tunnel: bool | None, log_dir: str, id: str, build_id: str, build_url: str, started_by: str,
                sub_type: str = None, scylla_version: str = None, extra_headers: dict | None = None):
     LOGGER.info("Submitting %s (%s) to Argus...", build_id, id)
     with ArgusGenericClient(
         auth_token=api_key,
         base_url=base_url,
+        log_dir=log_dir,
         extra_headers=extra_headers,
         use_tunnel=use_tunnel,
     ) as client:
@@ -54,15 +56,17 @@ def submit_run(api_key: str, base_url: str, use_tunnel: bool | None, id: str, bu
 @click.option("--api-key", help="Argus API key for authorization", required=True, envvar='ARGUS_AUTH_TOKEN')
 @click.option("--base-url", default="https://argus.scylladb.com", help="Base URL for argus instance")
 @click.option("--use-tunnel/--no-use-tunnel", default=None, help="Route API calls through SSH tunnel")
+@click.option("--log-dir", default=".", show_default=True, help="Directory for the argus_replay_log JSONL file")
 @click.option("--id", required=True, help="UUID (v4 or v1) unique to the job")
 @click.option("--status", required=True, help="Resulting job status")
 @click.option("--scylla-version", required=False, default=None, help="Version of Scylla used for this job")
 @click.option("--extra-headers", default={}, type=click.UNPROCESSED, callback=validate_extra_headers, help="extra headers to pass to argus, should be in json format", envvar='ARGUS_EXTRA_HEADERS')
-def finish_run(api_key: str, base_url: str, use_tunnel: bool | None, id: str, status: str,
+def finish_run(api_key: str, base_url: str, use_tunnel: bool | None, log_dir: str, id: str, status: str,
                scylla_version: str = None, extra_headers: dict | None = None):
     with ArgusGenericClient(
         auth_token=api_key,
         base_url=base_url,
+        log_dir=log_dir,
         extra_headers=extra_headers,
         use_tunnel=use_tunnel,
     ) as client:
@@ -74,12 +78,13 @@ def finish_run(api_key: str, base_url: str, use_tunnel: bool | None, id: str, st
 @click.option("--api-key", help="Argus API key for authorization", required=True, envvar='ARGUS_AUTH_TOKEN')
 @click.option("--base-url", default="https://argus.scylladb.com", help="Base URL for argus instance")
 @click.option("--use-tunnel/--no-use-tunnel", default=None, help="Route API calls through SSH tunnel")
+@click.option("--log-dir", default=".", show_default=True, help="Directory for the argus_replay_log JSONL file")
 @click.option("--version", help="Scylla version to filter plans by", default=None, required=False)
 @click.option("--plan-id", help="Specific plan id for filtering", default=None, required=False)
 @click.option("--release", help="Release name to filter plans by", default=None, required=False)
 @click.option("--job-info-file", required=True, help="JSON file with trigger information (see detailed docs)")
 @click.option("--extra-headers", default={}, type=click.UNPROCESSED, callback=validate_extra_headers, help="extra headers to pass to argus, should be in json format", envvar='ARGUS_EXTRA_HEADERS')
-def trigger_jobs(api_key: str, base_url: str, use_tunnel: bool | None, job_info_file: str, version: str,
+def trigger_jobs(api_key: str, base_url: str, use_tunnel: bool | None, log_dir: str, job_info_file: str, version: str,
                  plan_id: str, release: str, extra_headers: dict | None = None):
     if not os.path.exists(job_info_file):
         LOGGER.error("File not found: %s", job_info_file)
@@ -89,6 +94,7 @@ def trigger_jobs(api_key: str, base_url: str, use_tunnel: bool | None, job_info_
     with ArgusGenericClient(
         auth_token=api_key,
         base_url=base_url,
+        log_dir=log_dir,
         extra_headers=extra_headers,
         use_tunnel=use_tunnel,
     ) as client:

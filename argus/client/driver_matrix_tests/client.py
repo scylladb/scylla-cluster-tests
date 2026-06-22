@@ -12,11 +12,12 @@ class ArgusDriverMatrixClient(ArgusClient):
         SUBMIT_DRIVER_FAILURE = "/driver_matrix/result/fail"
         SUBMIT_ENV = "/driver_matrix/env/submit"
 
-    def __init__(self, run_id: UUID, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None,
-                 timeout: int = 60, max_retries: int = 3, use_tunnel: bool | None = None) -> None:
-        super().__init__(auth_token, base_url, api_version, extra_headers=extra_headers,
-                         timeout=timeout, max_retries=max_retries, use_tunnel=use_tunnel)
-        self.run_id = run_id
+    def __init__(self, run_id: UUID, auth_token: str, base_url: str, log_dir, api_version="v1",
+                 extra_headers: dict | None = None, timeout: int = 60, max_retries: int = 3,
+                 use_tunnel: bool | None = None, replay_log_only: bool = False) -> None:
+        super().__init__(auth_token, base_url, log_dir=log_dir, api_version=api_version,
+                         extra_headers=extra_headers, timeout=timeout, max_retries=max_retries,
+                         use_tunnel=use_tunnel, replay_log_only=replay_log_only, run_id=run_id)
 
     def submit_driver_matrix_run(self, job_name: str, job_url: str) -> None:
         response = super().submit_run(run_type=self.test_type, run_body={
