@@ -20,7 +20,7 @@ cluster_target_size: 25
 n_loaders: 4
 
 # AWS
-instance_type_db: 'i4i.large'
+instance_type_db: 'i7i.large'
 instance_type_loader: 'c6i.xlarge'
 
 # GCP
