@@ -125,6 +125,9 @@ sinks:
         healthcheck: false
 EOF
 
+        chmod 0755 /etc/vector
+        chmod 0644 /etc/vector/vector.yaml
+
         systemctl restart vector || echo "WARNING: vector.service restart failed, will be reconfigured later by configure_remote_logging"
     """).format(host=host, port=port)
 
@@ -417,8 +420,9 @@ def install_vector_from_local_pkg(pkg_path: str) -> str:
             exit 1
         fi
 
+        # vector is intentionally not started — it is started by configure_vector_target_script only
+        # after the SCT target config is written
         systemctl enable vector
-        systemctl start vector
     """)
 
 

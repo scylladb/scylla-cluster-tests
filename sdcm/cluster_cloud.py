@@ -152,6 +152,10 @@ def extract_short_test_id_from_name(name: str) -> str | None:
 
 VECTOR_BASE_URL = "https://packages.timber.io/vector/latest"
 
+# timeouts for detecting the Ansible/devops-managed vector.dev logging service before falling back to self-installing it
+ANSIBLE_VECTOR_PRESENCE_TIMEOUT = 60
+ANSIBLE_VECTOR_ACTIVE_TIMEOUT = 300
+
 
 def download_vector_locally(arch="amd64", dest_dir="downloads"):
     """
@@ -353,25 +357,88 @@ class CloudNode(cluster.BaseNode):
             return super().db_up()
 
     def configure_remote_logging(self):
-        if self.xcloud_connect_supported and self.parent_cluster.params.get("logs_transport") == "vector":
-            ret = self.remoter.run("dpkg --print-architecture", retry=0)
-            arch = ret.stdout.strip() if ret.return_code == 0 else "amd64"
+        """Configure vector logging on Scylla Cloud nodes."""
+        if not (self.xcloud_connect_supported and self.parent_cluster.params.get("logs_transport") == "vector"):
+            self.log.debug("Skip configuring remote logging on scylla-cloud node, for anything but vector transport")
+            return
 
-            package_path = download_vector_locally(arch=arch)
-
-            remote_path = f"/tmp/{os.path.basename(package_path)}"
-
-            LOGGER.debug(f"➡ Copying {package_path}")
-            self.remoter.send_files(str(package_path), remote_path)
-
-            LOGGER.debug("➡ Installing Vector")
-            ssh_cmd = configure_backoff_timeout() + install_vector_from_local_pkg(remote_path)
-            self.remoter.sudo(shell_script_cmd(ssh_cmd, quote="'"), retry=0, verbose=True)
-            host, port = TestConfig().get_logging_service_host_port()
-            ssh_cmd = configure_vector_target_script(host=host, port=port)
-            self.remoter.sudo(shell_script_cmd(ssh_cmd, quote="'"), retry=0, verbose=True)
+        if self._managed_vector_ready():
+            self.log.info("vector.dev is managed by Ansible on node %s — applying SCT target config only", self.name)
         else:
-            self.log.debug("Skip configuring remote logging on scylla-cloud, for anything but vector transport")
+            self.log.info("Ansible-managed vector.dev not ready on node %s — self-installing as fallback", self.name)
+            self._self_install_vector()
+
+        self._apply_vector_target_config()
+
+        if not self._vector_is_active():
+            raise ScyllaCloudError(f"vector.service is not active on node {self.name} after configuring remote logging")
+
+    def _vector_is_active(self) -> bool:
+        result = self.remoter.run("systemctl is-active vector.service", ignore_status=True, verbose=False)
+        return result.stdout.strip() == "active"
+
+    def _vector_unit_present(self) -> bool:
+        result = self.remoter.run("systemctl list-unit-files vector.service", ignore_status=True, verbose=False)
+        return result.return_code == 0 and "vector.service" in result.stdout
+
+    def _managed_vector_ready(self) -> bool:
+        """Two-phase probe for the Ansible/devops-managed vector.dev service.
+
+        Returns True only if the vector.service unit appears (presence phase) and becomes active
+        (readiness phase) within the configured timeouts.
+        """
+        unit_present = wait.wait_for(
+            func=self._vector_unit_present,
+            step=5,
+            text=f"Checking whether vector.dev is managed by Ansible on {self.name}",
+            timeout=ANSIBLE_VECTOR_PRESENCE_TIMEOUT,
+            throw_exc=False,
+        )
+        if not unit_present:
+            self.log.info(
+                "vector.service not present on node %s within %ss — Ansible is not managing it",
+                self.name,
+                ANSIBLE_VECTOR_PRESENCE_TIMEOUT,
+            )
+            return False
+
+        unit_active = wait.wait_for(
+            func=self._vector_is_active,
+            step=10,
+            text=f"Waiting for Ansible-managed vector.service to become active on {self.name}",
+            timeout=ANSIBLE_VECTOR_ACTIVE_TIMEOUT,
+            throw_exc=False,
+        )
+        if not unit_active:
+            self.log.info(
+                "vector.service present but not active on node %s within %ss",
+                self.name,
+                ANSIBLE_VECTOR_ACTIVE_TIMEOUT,
+            )
+            return False
+
+        return True
+
+    def _self_install_vector(self):
+        """Self-install vector.dev from a locally-downloaded .deb."""
+        arch_result = self.remoter.run("dpkg --print-architecture", retry=0)
+        arch = arch_result.stdout.strip() if arch_result.return_code == 0 else "amd64"
+
+        local_package = download_vector_locally(arch=arch)
+        remote_path = f"/tmp/{os.path.basename(local_package)}"
+        LOGGER.debug("Copying %s", local_package)
+        self.remoter.send_files(str(local_package), remote_path)
+
+        LOGGER.debug("Installing vector.dev package")
+        ssh_cmd = configure_backoff_timeout() + install_vector_from_local_pkg(remote_path)
+        self.remoter.sudo(shell_script_cmd(ssh_cmd, quote="'"), retry=0, verbose=True)
+
+    def _apply_vector_target_config(self):
+        """Write the SCT vector target config and (re)start vector against it."""
+        self.remoter.sudo("systemctl reset-failed vector.service", ignore_status=True)
+        host, port = TestConfig().get_logging_service_host_port()
+        ssh_cmd = configure_vector_target_script(host=host, port=port)
+        self.remoter.sudo(shell_script_cmd(ssh_cmd, quote="'"), retry=0, verbose=True)
 
     @xcloud_super_if_supported
     def start_coredump_thread(self):
@@ -439,31 +506,6 @@ class CloudVSNode(VectorStoreNodeMixin, CloudNode):
     @property
     def node_type(self) -> str:
         return "vector-store"
-
-    def configure_remote_logging(self):
-        """Wait for Ansible managed vector.dev service to be ready"""
-        if not (self.xcloud_connect_supported and self.parent_cluster.params.get("logs_transport") == "vector"):
-            self.log.debug("Skip configuring remote logging on VS node, for anything but vector transport")
-            return
-
-        self.log.debug("Waiting for Ansible to install vector.dev on VS node")
-
-        def is_vector_active():
-            result = self.remoter.run("systemctl is-active vector.service", ignore_status=True, verbose=False)
-            return result.stdout.strip() == "active"
-
-        wait.wait_for(
-            func=is_vector_active,
-            step=10,
-            text=f"Waiting for vector.service on {self.name}",
-            timeout=600,
-            throw_exc=True,
-        )
-        self.log.debug("vector.dev is active on VS node")
-
-        host, port = TestConfig().get_logging_service_host_port()
-        ssh_cmd = configure_vector_target_script(host=host, port=port)
-        self.remoter.sudo(shell_script_cmd(ssh_cmd, quote="'"), retry=0, verbose=True)
 
 
 class CloudManagerNode(CloudNode):
