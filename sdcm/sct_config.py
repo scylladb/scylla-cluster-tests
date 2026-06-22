@@ -512,7 +512,7 @@ def count_regions(region_string: str) -> int:
         regions = json.loads(region_string.replace("'", '"'))
         if isinstance(regions, list):
             return len(regions)
-    except json.JSONDecodeError, ValueError:
+    except (json.JSONDecodeError, ValueError):
         # Not a JSON array — fall through to treat as a plain string
         pass
     if " " in region_string:

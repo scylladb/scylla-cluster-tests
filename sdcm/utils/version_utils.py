@@ -486,7 +486,7 @@ def get_gemini_version(output: str) -> str | None:
     """
     try:
         return json.loads(output).get("gemini", {}).get("version")
-    except json.JSONDecodeError, AttributeError:
+    except (json.JSONDecodeError, AttributeError):
         return None
 
 
