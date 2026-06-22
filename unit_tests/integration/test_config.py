@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -372,3 +373,71 @@ def test_20_user_data_format_version_azure(monkeypatch):
     # since azure image listing is still buggy, can be sure which version we'll get
     # I would expect master:latest to be version 3 now, but azure.utils.get_scylla_images
     # returns something from 5 months ago.
+
+
+def _make_xcloud_api_mock():
+    """Return a MagicMock that satisfies _validate_cloud_backend_parameters checks."""
+    mock_api = MagicMock()
+    mock_api.get_scylla_versions.return_value = {"scyllaVersions": [{"version": "2025.1.0"}]}
+    mock_api.get_regions.return_value = {"regions": [{"externalId": "eu-west-1"}, {"externalId": "us-east1"}]}
+    mock_api.get_region_id_by_name.return_value = "region-id-1"
+    mock_api.get_instance_types.return_value = {"instances": [{"externalId": "i4i.large"}]}
+    # cloud_provider_ids is subscripted with a CloudProviderType enum key — MagicMock
+    # handles __getitem__ automatically, returning a MagicMock as the provider id.
+    return mock_api
+
+
+@pytest.mark.integration
+def test_xcloud_replication_factor_valid(monkeypatch):
+    """xcloud_replication_factor <= min(n_db_nodes) must not raise.
+
+    Regression: before the fix, rf > n_nodes raised TypeError ('>' not supported
+    between int and list) because n_nodes was list[int] after IntOrList normalization.
+    """
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "xcloud")
+    monkeypatch.setenv("SCT_XCLOUD_PROVIDER", "aws")
+    monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
+    monkeypatch.setenv("SCT_N_DB_NODES", "3 3")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_XCLOUD_REPLICATION_FACTOR", "2")
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_XCLOUD_ENV", "fake-env")
+
+    with (
+        patch("sdcm.sct_config.ScyllaCloudAPIClient", return_value=_make_xcloud_api_mock()),
+        patch("sdcm.sct_config.KeyStore"),
+        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda v, _: v),
+        patch("sdcm.sct_config.find_scylla_repo", return_value="https://fake-repo/scylla.repo"),
+    ):
+        conf = sct_config.SCTConfiguration()
+        # Must not raise TypeError or ValueError
+        conf.verify_configuration()
+
+
+@pytest.mark.integration
+def test_xcloud_replication_factor_exceeds_min_dc(monkeypatch):
+    """xcloud_replication_factor > min(n_db_nodes) must raise ValueError, not TypeError.
+
+    Regression: before the fix, this raised TypeError: '>' not supported between
+    instances of 'int' and 'list'. After the fix it correctly raises ValueError.
+    """
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "xcloud")
+    monkeypatch.setenv("SCT_XCLOUD_PROVIDER", "aws")
+    monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
+    monkeypatch.setenv("SCT_N_DB_NODES", "3 3")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_XCLOUD_REPLICATION_FACTOR", "4")
+    monkeypatch.setenv("SCT_INSTANCE_TYPE_DB", "i4i.large")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_XCLOUD_ENV", "fake-env")
+
+    with (
+        patch("sdcm.sct_config.ScyllaCloudAPIClient", return_value=_make_xcloud_api_mock()),
+        patch("sdcm.sct_config.KeyStore"),
+        patch("sdcm.sct_config.convert_name_to_ami_if_needed", side_effect=lambda v, _: v),
+        patch("sdcm.sct_config.find_scylla_repo", return_value="https://fake-repo/scylla.repo"),
+    ):
+        conf = sct_config.SCTConfiguration()
+        with pytest.raises(ValueError, match="xcloud_replication_factor .* cannot be greater than n_db_nodes"):
+            conf.verify_configuration()

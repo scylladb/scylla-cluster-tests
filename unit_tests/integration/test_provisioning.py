@@ -276,6 +276,15 @@ XCLOUD_GCE_BASE = COMMON | {
         ),
         pytest.param(XCLOUD_AWS_BASE, "mock_xcloud_backend", id="xcloud-aws"),
         pytest.param(XCLOUD_GCE_BASE, "mock_xcloud_backend", id="xcloud-gce"),
+        # Zero-monitor variants: exercise the NoMonitorSet else-branch and confirm
+        # sum(monitor_info["n_nodes"]) > 0 correctly returns False for [0].
+        pytest.param(GCE_BASE | {"SCT_N_MONITOR_NODES": "0"}, "mock_gce_backend", id="gce-no-monitors"),
+        pytest.param(
+            XCLOUD_AWS_BASE | {"SCT_N_MONITOR_NODES": "0"}, "mock_xcloud_backend", id="xcloud-aws-no-monitors"
+        ),
+        pytest.param(
+            XCLOUD_GCE_BASE | {"SCT_N_MONITOR_NODES": "0"}, "mock_xcloud_backend", id="xcloud-gce-no-monitors"
+        ),
     ],
 )
 def test_init_resources(request, monkeypatch, env, backend_mock):

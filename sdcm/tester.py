@@ -2214,8 +2214,8 @@ class ClusterTester(unittest.TestCase):
         if self.params.get("use_mgmt"):
             k8s_cluster.deploy_scylla_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
 
-        n_monitor_nodes = self.params.get("k8s_n_monitor_nodes") or self.params.get("n_monitor_nodes")
-        if n_monitor_nodes:
+        n_monitor_nodes = self.params.get("k8s_n_monitor_nodes") or sum(self.params.get("n_monitor_nodes"))
+        if n_monitor_nodes > 0:
             monitor_pool = mini_k8s.MinimalK8SNodePool(
                 k8s_cluster=k8s_cluster,
                 name=k8s_cluster.MONITORING_POOL_NAME,

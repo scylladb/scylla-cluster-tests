@@ -444,7 +444,7 @@ class PrometheusSnapshots(BaseMonitoringEntity):
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None) -> Optional[str]:
         # Skip if no monitor nodes configured - no point collecting monitoring data
-        if not self._params.get("n_monitor_nodes"):
+        if not sum(self._params.get("n_monitor_nodes")):
             LOGGER.info("Skipping Prometheus snapshot collection - no monitor nodes configured (n_monitor_nodes=0)")
             return None
         self.setup_monitor_data_dir(node)
@@ -533,7 +533,7 @@ class MonitoringStack(BaseMonitoringEntity):
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         # Skip if no monitor nodes configured - no point collecting monitoring data
-        if not self._params.get("n_monitor_nodes"):
+        if not sum(self._params.get("n_monitor_nodes")):
             LOGGER.info("Skipping monitoring stack collection - no monitor nodes configured (n_monitor_nodes=0)")
             return None
         local_archive = self.get_monitoring_data_stack(node, local_dst)
@@ -649,7 +649,7 @@ class GrafanaScreenShot(GrafanaEntity):
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         # Skip if no monitor nodes configured - no point collecting monitoring data
-        if not self._params.get("n_monitor_nodes"):
+        if not sum(self._params.get("n_monitor_nodes")):
             LOGGER.info("Skipping Grafana screenshot collection - no monitor nodes configured (n_monitor_nodes=0)")
             return []
         node.logdir = local_dst

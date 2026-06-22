@@ -292,9 +292,16 @@ def test_get_running_cluster_sets_baremetal(test_id, tmp_path_factory, baremetal
 
 
 def test_monitoring_entities_skip_when_no_monitor_nodes(tmp_path):
-    """Test that monitoring entities skip collection when n_monitor_nodes=0."""
+    """Test that monitoring entities skip collection when n_monitor_nodes=0.
+
+    Regression: IntOrList normalization means SCTConfiguration.get("n_monitor_nodes")
+    now returns [0] (always a list). The collectors must use sum() not truthiness, because
+    [0] is truthy even though it represents zero monitors.
+    """
     for backend in ["aws", "gce", "azure", "docker"]:
-        params = {"cluster_backend": backend, "n_monitor_nodes": 0}
+        # Use [0] — what SCTConfiguration.get("n_monitor_nodes") returns after normalization.
+        # Previously the raw scalar 0 was falsy; [0] is truthy, exposing the bug.
+        params = {"cluster_backend": backend, "n_monitor_nodes": [0]}
         mock_node = Mock()
         test_dir = str(tmp_path / backend)
 
