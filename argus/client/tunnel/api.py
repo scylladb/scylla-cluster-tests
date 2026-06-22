@@ -5,8 +5,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from argus.client.tunnel_models import DEFAULT_TUNNEL_TIMEOUT, TunnelClientError, TunnelConfig
-from argus.client.tunnel_state import (
+from argus.client.tunnel.models import DEFAULT_TUNNEL_TIMEOUT, TunnelClientError, TunnelConfig
+from argus.client.tunnel.state import (
     generate_keypair_if_needed,
     get_tunnel_state_paths,
     is_key_valid,

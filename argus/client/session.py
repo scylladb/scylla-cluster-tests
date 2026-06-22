@@ -27,6 +27,39 @@ def _resolve_use_tunnel(use_tunnel: bool | None) -> bool:
     return os.environ.get("ARGUS_USE_TUNNEL", "").strip().lower() in ("1", "true", "yes", "on")
 
 
+_MAX_BUILD_ID_LEN = 256
+
+
+def _resolve_build_id() -> str | None:
+    """Resolve a human-identifiable build id for tunnel attribution.
+
+    Combines the Jenkins ``JOB_NAME`` (full folder path) with ``BUILD_NUMBER``
+    when available, formatted as ``job/path#42``. Returns ``None`` outside CI
+    (header omitted) or when the value exceeds ``_MAX_BUILD_ID_LEN``.
+    """
+    job_name = os.environ.get("JOB_NAME", "").strip()
+    if not job_name:
+        return None
+    build_number = os.environ.get("BUILD_NUMBER", "").strip()
+    build_id = f"{job_name}#{build_number}" if build_number else job_name
+    if len(build_id) > _MAX_BUILD_ID_LEN:
+        LOGGER.warning(
+            "Jenkins build id is %d chars (> %d); omitting tunnel attribution header",
+            len(build_id), _MAX_BUILD_ID_LEN,
+        )
+        return None
+    return build_id
+
+
+def _resolve_build_url() -> str | None:
+    """Jenkins ``BUILD_URL`` for the run.
+
+    Carried as ``X-Argus-Build-Url`` so the Grafana ``build_id`` series can link
+    straight back to the originating build. ``None`` when not running in CI.
+    """
+    return os.environ.get("BUILD_URL", "").strip() or None
+
+
 def _resolve_monitor_interval() -> float:
     raw = os.environ.get("ARGUS_TUNNEL_MONITOR_INTERVAL")
     if raw is None:
@@ -82,6 +115,8 @@ class TunneledSession(requests.Session):
 
         self._auth_token = auth_token
         self._original_base_url = original_base_url
+        self._build_id = _resolve_build_id()
+        self._build_url = _resolve_build_url()
 
         self._tunnel: SSHTunnel | None = None
         self._tunnel_config: TunnelConfig | None = None
@@ -252,6 +287,10 @@ class TunneledSession(requests.Session):
         }
         if self._tunnel_config.key_id:
             headers["X-Forwarded-Key-ID"] = self._tunnel_config.key_id
+        if self._build_id:
+            headers["X-Argus-Build-Id"] = self._build_id
+        if self._build_url:
+            headers["X-Argus-Build-Url"] = self._build_url
         return headers
 
     def request(self, method: str, url: str, *args, **kwargs) -> requests.Response:
