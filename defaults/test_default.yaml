@@ -214,6 +214,12 @@ nemesis_exclude_disabled: true
 
 aws_fallback_to_next_availability_zone: false
 
+fallback_to_next_availability_zone: false
+
+pre_filter_unavailable_availability_zones: true
+
+pre_flight_capacity_probe: false
+
 enable_argus: true
 
 # the default stress tools are now defined a separate file for each /default/docker_image/[tool]/values_[tool].yaml
