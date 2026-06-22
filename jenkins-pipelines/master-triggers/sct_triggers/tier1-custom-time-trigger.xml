@@ -34,11 +34,31 @@ requested_by_user=pehala</properties>
           <projects>
               ../tier1/gemini-1tb-10h-test,
               ../tier1/longevity-1tb-5days-azure-test,
-              ../tier1/longevity-large-partition-200k-pks-4days-gce-test,
               ../tier1/longevity-mv-si-4days-streaming-test,
               ../tier1/longevity-schema-topology-changes-12h-test,
               ../tier1/scale-schema-5000-tables-latte-test
           </projects>
+          <condition>SUCCESS</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+          <triggerFromChildProjects>false</triggerFromChildProjects>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+        <!-- Separate config for longevity-large-partition-200k-pks-4days-gce-test:
+             No availability_zone pinned so GceAZResolver auto-selects a valid zone,
+             avoiding ZONE_RESOURCE_POOL_EXHAUSTED failures in a single hardcoded zone.
+             See: https://scylladb.atlassian.net/browse/SCT-140 -->
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+              <properties>scylla_version=%(sct_branch)s:latest
+provision_type=on_demand
+post_behavior_db_nodes=destroy
+post_behavior_monitor_nodes=destroy
+stress_duration=1440
+requested_by_user=pehala</properties>
+              <textParamValueOnNewLine>false</textParamValueOnNewLine>
+            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+          </configs>
+          <projects>../tier1/longevity-large-partition-200k-pks-4days-gce-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
