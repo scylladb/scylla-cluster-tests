@@ -2998,6 +2998,35 @@ Availability zone to use. Specify multiple (comma separated) to deploy resources
 
 Try all availability zones one by one in order to maximize the chances of getting<br>the requested instance capacity.
 
+Deprecated alias of `fallback_to_next_availability_zone`. Kept for backward compatibility.
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **fallback_to_next_availability_zone** / SCT_FALLBACK_TO_NEXT_AVAILABILITY_ZONE
+
+On capacity errors, automatically retry provisioning in the next available AZ in the same region. Backend-agnostic parameter; supersedes `aws_fallback_to_next_availability_zone`.
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **pre_filter_unavailable_availability_zones** / SCT_PRE_FILTER_UNAVAILABLE_AVAILABILITY_ZONES
+
+Before provisioning, query the cloud provider for AZ availability and exclude zones that report no capacity.
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **pre_flight_capacity_probe** / SCT_PRE_FLIGHT_CAPACITY_PROBE
+
+Run a lightweight capacity probe before provisioning to verify sufficient resources in the target AZ.
+
 **default:** N/A
 
 **type:** boolean
