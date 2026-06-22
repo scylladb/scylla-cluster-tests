@@ -2093,8 +2093,31 @@ class SCTConfiguration(dict):
             name="aws_fallback_to_next_availability_zone",
             env="SCT_AWS_FALLBACK_TO_NEXT_AVAILABILITY_ZONE",
             type=boolean,
-            help="""Try all availability zones one by one in order to maximize the chances of getting
-                   the requested instance capacity.""",
+            help="Deprecated alias of `fallback_to_next_availability_zone`. Kept for backward compatibility. "
+            "Try all availability zones one by one in order to maximize the chances of getting "
+            "the requested instance capacity.",
+        ),
+        dict(
+            name="fallback_to_next_availability_zone",
+            env="SCT_FALLBACK_TO_NEXT_AVAILABILITY_ZONE",
+            type=boolean,
+            help="On capacity errors, automatically retry provisioning in the next available AZ in the same region. "
+            "Backend-agnostic parameter; supersedes `aws_fallback_to_next_availability_zone`.",
+        ),
+        dict(
+            name="pre_filter_unavailable_availability_zones",
+            env="SCT_PRE_FILTER_UNAVAILABLE_AVAILABILITY_ZONES",
+            type=boolean,
+            help="Filter availability zones upfront to only those that support all required instance types. "
+            "Replaces invalid AZs with valid alternatives in the same region before any provisioning attempt. AWS only.",
+        ),
+        dict(
+            name="pre_flight_capacity_probe",
+            env="SCT_PRE_FLIGHT_CAPACITY_PROBE",
+            type=boolean,
+            help="Before provisioning, probe capacity by launching and terminating one on-demand instance per dynamic type "
+            "(`instance_type_db_target`, `nemesis_grow_shrink_instance_type`) in the chosen AZ. On capacity errors, raise to "
+            "trigger AZ/region fallback. Costs ~1 min per type. AWS-only.",
         ),
         dict(
             name="num_nodes_to_rollback",
