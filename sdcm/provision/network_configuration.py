@@ -96,6 +96,32 @@ class ScyllaNetworkConfiguration:
         return self.network_interfaces[0].dns_private_name
 
     @property
+    def dns_broadcast_rpc_name(self):
+        """Return the DNS private name of the NIC used for broadcast_rpc_address.
+
+        In split-network topologies, broadcast_rpc_address is on a different NIC
+        than broadcast_address, so the client-facing certificate must include
+        the DNS name of the RPC NIC for TLS hostname verification.
+        """
+        if broadcast_rpc_address_config := [
+            conf for conf in self.scylla_network_config if conf["address"] == "broadcast_rpc_address"
+        ]:
+            if not (
+                interface := [
+                    conf
+                    for conf in self.network_interfaces
+                    if broadcast_rpc_address_config[0]["nic"] == conf.device_index
+                ]
+            ):
+                raise NetworkInterfaceNotFound(
+                    f"Not found network interface with device_index {broadcast_rpc_address_config[0]['nic']}. "
+                    f"Check 'scylla_network_config' definition in the test configuration"
+                )
+            return interface[0].dns_private_name
+
+        return self.dns_private_name
+
+    @property
     def broadcast_address_ip_type(self):
         # If multiple network interface is defined on the node, private address in the `nodetool status` is IP that defined in
         # broadcast_address. Keep this output in correlation with `nodetool status`

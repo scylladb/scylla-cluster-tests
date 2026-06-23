@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import ipaddress
 import queue
 import logging
 import os
@@ -2287,7 +2288,15 @@ class BaseNode(AutoSshContainerMixin):
     def config_client_encrypt(self):
         install_client_certificate(self.remoter, self.ip_address)
 
-    def create_node_certificate(self, cert_file, cert_key, csr_file=None):
+    def create_node_certificate(
+        self, cert_file, cert_key, csr_file=None, extra_ip_addresses=None, extra_dns_names=None
+    ):
+        ip_addresses = [self.ip_address, self.public_ip_address]
+        if extra_ip_addresses:
+            ip_addresses.extend(extra_ip_addresses)
+        dns_names = [self.public_dns_name, self.private_dns_name]
+        if extra_dns_names:
+            dns_names.extend(extra_dns_names)
         create_certificate(
             cert_file,
             cert_key,
@@ -2295,8 +2304,8 @@ class BaseNode(AutoSshContainerMixin):
             ca_cert_file=CA_CERT_FILE,
             ca_key_file=CA_KEY_FILE,
             server_csr_file=csr_file,
-            ip_addresses=[self.ip_address, self.public_ip_address],
-            dns_names=[self.public_dns_name, self.private_dns_name],
+            ip_addresses=ip_addresses,
+            dns_names=dns_names,
         )
 
     @cached_property
@@ -6212,9 +6221,30 @@ class BaseScyllaCluster:
             cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
             csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR,
         )
+        # For the client-facing certificate, include broadcast_rpc_address identities
+        # in the SANs. In split-network topologies (e.g. scylla_addresses_on_different_interfaces),
+        # broadcast_rpc_address is on a different NIC than broadcast_address, and the Java
+        # driver verifies the TLS cert against the RPC endpoint it connects to.
+        extra_ip_addresses = []
+        extra_dns_names = []
+        if node.scylla_network_configuration:
+            broadcast_rpc_addr = node.scylla_network_configuration.broadcast_rpc_address
+            if broadcast_rpc_addr and broadcast_rpc_addr != node.ip_address:
+                # broadcast_rpc_address may be a DNS name (when use_dns_names is enabled)
+                # or an IP address. Route it to the appropriate SAN list.
+                try:
+                    ipaddress.ip_address(broadcast_rpc_addr)
+                    extra_ip_addresses.append(broadcast_rpc_addr)
+                except ValueError:
+                    extra_dns_names.append(broadcast_rpc_addr)
+            dns_rpc_name = node.scylla_network_configuration.dns_broadcast_rpc_name
+            if dns_rpc_name and dns_rpc_name != node.private_dns_name:
+                extra_dns_names.append(dns_rpc_name)
         node.create_node_certificate(
             node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT,
             node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY,
+            extra_ip_addresses=extra_ip_addresses,
+            extra_dns_names=extra_dns_names,
         )
         for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
             shutil.copy(src, node.ssl_conf_dir)
