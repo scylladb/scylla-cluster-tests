@@ -471,11 +471,14 @@ class VMCreateBehavior:
     If ``recover_after_polls`` is set, the VM recovers after that many instance-view polls.
     If it is ``None``, the VM stays stuck until it is deleted and recreated.
     If ``redeploy_fails`` is True, a redeploy of this VM raises an error.
+    If ``disappear_after_polls`` is set, the VM is deleted after that many instance-view polls so
+    subsequent get() calls return 404 - simulating an Azure spot eviction during provisioning.
     """
 
     stuck: bool = False
     recover_after_polls: int | None = None
     redeploy_fails: bool = False
+    disappear_after_polls: int | None = None
 
 
 class FakeVirtualMachines:
@@ -577,6 +580,10 @@ class FakeVirtualMachines:
             return raw
 
         sim["polls_seen"] += 1
+        disappear_after = sim.get("disappear_after_polls")
+        if disappear_after is not None and sim["polls_seen"] >= disappear_after:
+            os.remove(self._vm_path(resource_group_name, vm_name))
+            raise ResourceNotFoundError("Virtual Machine not found")
         recover_after = sim.get("recover_after_polls")
         if recover_after is not None and sim["polls_seen"] >= recover_after:
             sim["stuck"] = False
@@ -694,6 +701,7 @@ class FakeVirtualMachines:
             base["_simulation"] = {
                 "stuck": True,
                 "recover_after_polls": behavior.recover_after_polls,
+                "disappear_after_polls": behavior.disappear_after_polls,
                 "polls_seen": 0,
             }
         with open(self.path / resource_group_name / f"vm-{vm_name}.json", "w", encoding="utf-8") as file:
