@@ -18,11 +18,14 @@ import uuid
 from unittest.mock import patch
 
 import pytest
+from azure.core.exceptions import ResourceNotFoundError
 
 from sdcm.keystore import KeyStore
 from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
 from sdcm.provision.provisioner import (
     InstanceDefinition,
+    OperationPreemptedError,
+    PricingModel,
     ProvisionError,
     ProvisionUnrecoverableError,
     provisioner_factory,
@@ -104,7 +107,7 @@ def test_stuck_vm_is_redeployed_and_succeeds(azure_service, events_function_scop
         instances = provisioner.get_or_create_instances([_definition("node-stuck")])
 
     assert [instance.name for instance in instances] == ["node-stuck"]
-    redeploy_spy.assert_called_once_with("node-stuck")
+    redeploy_spy.assert_called_once_with("node-stuck", PricingModel.SPOT)
     delete_spy.assert_not_called()
     assert len(_stuck_events(events_function_scope, "NORMAL", expected=1)) == 1
     assert _stuck_events(events_function_scope, "WARNING") == []
@@ -124,7 +127,7 @@ def test_stuck_vm_redeploy_fails_then_recreated_and_succeeds(azure_service, even
         instances = provisioner.get_or_create_instances([_definition("node-x")])
 
     assert [instance.name for instance in instances] == ["node-x"]
-    redeploy_spy.assert_called_once_with("node-x")
+    redeploy_spy.assert_called_once_with("node-x", PricingModel.SPOT)
     delete_spy.assert_called_once_with("node-x")
     assert len(_stuck_events(events_function_scope, "NORMAL", expected=1)) == 1
     assert _stuck_events(events_function_scope, "WARNING") == []
@@ -155,8 +158,57 @@ def test_only_stuck_vm_in_mixed_batch_is_redeployed(azure_service, events_functi
         instances = provisioner.get_or_create_instances(definitions)
 
     assert [instance.name for instance in instances] == ["node-good-1", "node-bad", "node-good-2"]
-    redeploy_spy.assert_called_once_with("node-bad")
+    redeploy_spy.assert_called_once_with("node-bad", PricingModel.SPOT)
     assert len(_stuck_events(events_function_scope, "NORMAL", expected=1)) == 1
+
+
+def _spot_termination_events(events, expected: int = 0) -> list[str]:
+    # see _stuck_events: events are published asynchronously and reached via the file logger, so
+    # wait until at least `expected` SpotTerminationEvent CRITICAL events are visible (or timeout).
+    file_logger = events.get_events_logger()
+    deadline = time.time() + 10
+
+    def _matching() -> list[str]:
+        by_category = file_logger.get_events_by_category()
+        return [line for line in by_category.get("CRITICAL", []) if "SpotTerminationEvent" in line]
+
+    matching = _matching()
+    while time.time() < deadline and len(matching) < expected:
+        time.sleep(0.1)
+        matching = _matching()
+    return matching
+
+
+def _vm_provider_with_vanishing_vm(azure_service, vm_name: str, timeout: float = 0.5, poll: float = 0.01):
+    """Create a VM that reports Creating then vanishes (404) - an Azure spot eviction during provisioning."""
+    resource_group = f"SCT-{uuid.uuid4()}-eastus"
+    azure_service.resource.resource_groups.create_or_update(resource_group, {"location": "eastus"})
+    FakeVirtualMachines.set_provision_script(vm_name, [VMCreateBehavior(stuck=True, disappear_after_polls=2)])
+    provider = VirtualMachineProvider(resource_group, "eastus", "", False, azure_service)
+    provider._stuck_vm_timeout = timeout
+    provider._stuck_vm_poll_interval = poll
+    azure_service.compute.virtual_machines.begin_create_or_update(
+        resource_group,
+        vm_name,
+        {"location": "eastus", "tags": {"NodeType": "scylla-db"}, "properties": {}},
+    )
+    return provider
+
+
+def test_vanishing_spot_vm_raises_preempted_and_publishes_spot_termination(azure_service, events_function_scope):
+    """A spot VM removed by Azure mid-provisioning (404) must raise OperationPreemptedError and a SpotTerminationEvent."""
+    provider = _vm_provider_with_vanishing_vm(azure_service, "node-evicted")
+    with pytest.raises(OperationPreemptedError):
+        provider._wait_until_provisioned("node-evicted", PricingModel.SPOT)
+    assert len(_spot_termination_events(events_function_scope, expected=1)) == 1
+
+
+def test_vanishing_on_demand_vm_is_not_treated_as_eviction(azure_service, events_function_scope):
+    """A non-spot VM that 404s mid-provisioning is not an eviction: the 404 propagates, no SpotTerminationEvent."""
+    provider = _vm_provider_with_vanishing_vm(azure_service, "node-gone")
+    with pytest.raises(ResourceNotFoundError):
+        provider._wait_until_provisioned("node-gone", PricingModel.ON_DEMAND)
+    assert _spot_termination_events(events_function_scope) == []
 
 
 def test_discovery_does_not_cache_still_creating_vm(azure_service):

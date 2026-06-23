@@ -213,13 +213,13 @@ class AzureProvisioner(Provisioner):
                         message="recovering stuck VM (redeploy, recreate on failure)",
                         severity=Severity.NORMAL,
                     ).publish_or_dump(default_logger=LOGGER)
-                    if not self._redeploy_stuck_node(vm_name):
+                    if not self._redeploy_stuck_node(vm_name, pricing_model):
                         LOGGER.warning(
                             "Redeploy did not rescue VM %s; deleting it to recreate on fresh capacity", vm_name
                         )
                         self._delete_stuck_node(vm_name)
 
-    def _redeploy_stuck_node(self, name: str) -> bool:
+    def _redeploy_stuck_node(self, name: str, pricing_model: PricingModel) -> bool:
         """Redeploy VM to a new node.
 
         Returns True if the VM reached the 'Succeeded' provisioning state; False if the redeploy
@@ -235,7 +235,7 @@ class AzureProvisioner(Provisioner):
         if not poller.done():
             LOGGER.warning("Redeploy of stuck VM %s did not complete within %ss", name, DEFAULT_REDEPLOY_TIMEOUT)
             return False
-        return self._vm_provider.recheck_provisioned(name) is not None
+        return self._vm_provider.recheck_provisioned(name, pricing_model) is not None
 
     def _delete_stuck_node(self, name: str) -> None:
         """Delete a stuck VM and its network resources."""
