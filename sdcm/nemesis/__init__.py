@@ -1291,6 +1291,19 @@ class NemesisRunner:
             self.set_target_node(allow_only_last_node_in_rack=True)
 
         target_is_seed = self.target_node.is_seed
+        replacement_should_be_seed = target_is_seed
+        if target_is_seed and len(self.cluster.seed_nodes) < 2:
+            seed_candidates = [node for node in self.cluster.nodes if node is not self.target_node]
+            if seed_candidates:
+                new_seed_node = self.random.choice(seed_candidates)
+                self.log.info(
+                    "Selecting %s as a seed before decommissioning the last seed node %s",
+                    new_seed_node.name,
+                    self.target_node.name,
+                )
+                new_seed_node.set_seed_flag(True)
+                self.cluster.update_seed_provider()
+                replacement_should_be_seed = False
         with (
             suppress_expected_unavailability_errors(),
             self.action_log_scope(
@@ -1310,8 +1323,8 @@ class NemesisRunner:
             # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
             # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
             # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
-            if new_node.is_seed != target_is_seed:
-                new_node.set_seed_flag(target_is_seed)
+            if new_node.is_seed != replacement_should_be_seed:
+                new_node.set_seed_flag(replacement_should_be_seed)
                 self.cluster.update_seed_provider()
             self.actions_log.info(f"new node added: {new_node.name}")
             if dc_topology_rf_change:
