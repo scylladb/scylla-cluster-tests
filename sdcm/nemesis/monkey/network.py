@@ -22,7 +22,6 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import (
     ignore_alternator_client_errors,
-    ignore_audit_errors,
     suppress_expected_unavailability_errors,
 )
 from sdcm.sct_events.system import InfoEvent, CoreDumpEvent
@@ -557,14 +556,13 @@ class StopStartInterfacesNetworkMonkey(NemesisBaseClass):
         wait_time = self.runner.random.choice(list_of_timeout_options)
         self.runner.log.debug("Taking down eth1 for %dsec", wait_time)
 
-        with ignore_audit_errors():
-            try:
-                self.runner.target_node.stop_network_interface()
-                self.runner.actions_log.info(f"Taking {self.runner.target_node.name} node network interface down")
-                time.sleep(wait_time)
-            finally:
-                self.runner.actions_log.info(f"Brigning {self.runner.target_node.name} node network interface up")
-                self.runner.target_node.start_network_interface()
-                with self.runner.action_log_scope("Wait all nodes up and normal"):
-                    self.runner.cluster.wait_all_nodes_un()
+        try:
+            self.runner.target_node.stop_network_interface()
+            self.runner.actions_log.info(f"Taking {self.runner.target_node.name} node network interface down")
+            time.sleep(wait_time)
+        finally:
+            self.runner.actions_log.info(f"Brigning {self.runner.target_node.name} node network interface up")
+            self.runner.target_node.start_network_interface()
+            with self.runner.action_log_scope("Wait all nodes up and normal"):
+                self.runner.cluster.wait_all_nodes_un()
         self.runner.actions_log.info(f"Network interface down/up finished on {self.runner.target_node.name} node")
