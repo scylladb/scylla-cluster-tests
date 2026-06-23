@@ -52,6 +52,7 @@ from argus.common.enums import TestStatus
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
+from sdcm.provision.gce.zone_resolver import GceAZResolver
 from sdcm.cluster import (
     BaseCluster,
     NoMonitorSet,
@@ -1461,6 +1462,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return nemesis_threads
 
     def get_cluster_gce(self, loader_info, db_info, monitor_info):  # noqa: PLR0912, PLR0914
+        GceAZResolver(self.params).resolve()
+
         if loader_info["n_nodes"] is None:
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):
