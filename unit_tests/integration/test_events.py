@@ -13,6 +13,7 @@
 
 import pytest
 
+import sdcm.sct_events.setup as events_setup
 from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.setup import enable_default_filters
@@ -24,11 +25,13 @@ from unit_tests.lib.real_events import RealEventsTest
 
 class TestSctEventsIntegration(RealEventsTest):
     @pytest.mark.integration
-    def test_default_filters(self):
+    def test_default_filters(self, monkeypatch):
+        monkeypatch.setattr(events_setup, "SkipPerIssues", lambda *args, **kwargs: True)
+
         with environment(SCT_CLUSTER_BACKEND="docker"):
             enable_default_filters(SCTConfiguration())
 
-        with self.wait_for_n_events(self.get_events_logger(), count=5):
+        with self.wait_for_n_events(self.get_events_logger(), count=6):
             DatabaseLogEvent.BACKTRACE().add_info(
                 node="A",
                 line_number=22,
@@ -62,6 +65,13 @@ class TestSctEventsIntegration(RealEventsTest):
                 "(raft topology: exec_global_command(barrier) failed with seastar::rpc::closed_error (connection is closed))",
             ).publish()
 
+            DatabaseLogEvent.DATABASE_ERROR().add_info(
+                node="A",
+                line_number=22,
+                line="ERROR 2023-12-18 12:45:25,673 [shard 0:stre] audit - Unexpected exception when writing login log: "
+                "std::runtime_error (exception exceptions::unavailable_exception (Cannot achieve consistency level for cl ONE. Requires 1, alive 0))",
+            ).publish()
+
         log_content = self.get_event_log_file("events.log")
 
         assert "other back trace" in log_content
@@ -69,9 +79,11 @@ class TestSctEventsIntegration(RealEventsTest):
 
         warnings_log_content = self.get_event_log_file("warning.log")
         assert "data_dictionary::no_such_column_family" in warnings_log_content
-        assert "Authentication error" not in warnings_log_content
+        assert "Authentication error" in warnings_log_content
+        assert "Unexpected exception when writing login log" in warnings_log_content
 
         error_log_content = self.get_event_log_file("error.log")
         assert "data_dictionary::no_such_column_family" not in error_log_content
-        assert "Authentication error" in error_log_content
+        assert "Authentication error" not in error_log_content
+        assert "Unexpected exception when writing login log" not in error_log_content
         assert "topology change coordinator fiber got error" not in error_log_content
