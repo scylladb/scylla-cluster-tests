@@ -4706,7 +4706,7 @@ class NemesisRunner:
                 raise UnsupportedNemesis("Tried to create already existing index. See log for details")
             try:
                 with adaptive_timeout(
-                    operation=Operations.CREATE_INDEX, node=self.target_node, timeout=14400
+                    operation=Operations.CREATE_INDEX, node=self.target_node, timeout=18000
                 ) as timeout:
                     with self.action_log_scope("Wait for index to be built"):
                         wait_for_index_to_be_built(self.target_node, ks, index_name, timeout=timeout * 2)
@@ -4769,7 +4769,7 @@ class NemesisRunner:
                         self.target_node.run_nodetool(sub_cmd="repair -pr")
                     with (
                         adaptive_timeout(
-                            operation=Operations.CREATE_MV, node=self.target_node, timeout=14400
+                            operation=Operations.CREATE_MV, node=self.target_node, timeout=18000
                         ) as timeout,
                         self.action_log_scope(
                             f"Wait for {ks_name}.{view_name} materialized view to be built on "
@@ -5294,7 +5294,7 @@ class NemesisRunner:
                         )
                         break
 
-                with adaptive_timeout(operation=Operations.CREATE_MV, node=working_node, timeout=14400) as timeout:
+                with adaptive_timeout(operation=Operations.CREATE_MV, node=working_node, timeout=18000) as timeout:
                     wait_for_view_to_be_built(working_node, ks_name, view_name, timeout=timeout * 2)
 
                 with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
