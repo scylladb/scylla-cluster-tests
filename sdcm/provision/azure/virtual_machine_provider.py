@@ -33,6 +33,7 @@ from sdcm.provision.provisioner import (
     StuckVMProvisioningError,
 )
 from sdcm.provision.user_data import UserDataBuilder
+from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.azure_utils import AzureService
 from sdcm.wait import wait_for
 from sdcm.exceptions import WaitForTimeoutError
@@ -182,7 +183,7 @@ class VirtualMachineProvider:
                 LOGGER.error("Error when waiting for creation of VM %s: %s", definition.name, str(err))
                 error_to_raise = err
                 continue
-            v_m = self._wait_until_provisioned(definition.name)
+            v_m = self._wait_until_provisioned(definition.name, pricing_model)
             if v_m is None:
                 # accepted by Azure but never reached Succeeded within the timeout (i.e. stuck);
                 # do NOT cache or return it; the provisioner will redeploy it to a new node
@@ -197,10 +198,13 @@ class VirtualMachineProvider:
             raise StuckVMProvisioningError(stuck_vm_names)
         return v_ms
 
-    def _wait_until_provisioned(self, name: str) -> Optional[VirtualMachine]:
+    def _wait_until_provisioned(self, name: str, pricing_model: PricingModel) -> Optional[VirtualMachine]:
         """Wait until the VM reaches ProvisioningState=Succeeded.
 
         Returns the VM on success, or None if the stuck-VM timeout expires first.
+        Raises OperationPreemptedError if a spot VM vanishes (404): Azure accepts the create, then
+        deletes the VM on spot eviction / capacity-allocation failure (evictionPolicy=Delete), so
+        get() returns ResourceNotFound.
         """
 
         def get_provisioned_vm() -> Optional[VirtualMachine]:
@@ -228,10 +232,19 @@ class VirtualMachineProvider:
             )
         except WaitForTimeoutError:
             return None
+        except ResourceNotFoundError as exc:
+            if not pricing_model.is_spot():
+                raise
+            message = (
+                "Azure removed the spot VM during provisioning (ResourceNotFound 404) - "
+                "spot eviction / capacity-allocation failure"
+            )
+            SpotTerminationEvent(node=name, message=message).publish_or_dump(default_logger=LOGGER)
+            raise OperationPreemptedError(f"spot VM {name} evicted during provisioning: {message}") from exc
 
-    def recheck_provisioned(self, name: str) -> Optional[VirtualMachine]:
+    def recheck_provisioned(self, name: str, pricing_model: PricingModel) -> Optional[VirtualMachine]:
         """Re-poll a VM after an unplanned action (e.g. redeploy); cache and return it if it reaches 'Succeeded'."""
-        v_m = self._wait_until_provisioned(name)
+        v_m = self._wait_until_provisioned(name, pricing_model)
         if v_m is not None:
             self._cache[v_m.name] = v_m
         return v_m
