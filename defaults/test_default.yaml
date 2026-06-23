@@ -232,7 +232,7 @@ pre_filter_unavailable_availability_zones: true
 pre_flight_capacity_probe: false
 
 enable_argus: true
-argus_use_ssh_tunnel: false
+argus_use_ssh_tunnel: true
 
 enable_kernel_panic_checker: true
 
