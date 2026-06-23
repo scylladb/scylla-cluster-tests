@@ -1,21 +1,67 @@
 test_duration: 900
 
-prepare_write_cmd:  ["cassandra-stress write cl=QUORUM n=20971520 no-warmup -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-                     "cassandra-stress user profile=/tmp/cs_mv_si_keyspace1.yaml n=3000000 no-warmup ops'(insert=1)' -mode cql3 native -rate threads=40 -log interval=5"
-                    ]
+prepare_write_cmd:
+  - >-
+    cassandra-stress write cl=QUORUM no-warmup
+    n=2M
+    -pop seq=1..2M
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)'
+    -col 'n=FIXED(5) size=FIXED(128)'
+    -mode cql3 native
+    -log interval=5
+    -rate threads=2
+  - >-
+    cassandra-stress user profile=/tmp/cs_mv_si_keyspace1.yaml no-warmup ops'(insert=1)'
+    n=2M
+    -mode cql3 native
+    -log interval=5
+    -rate threads=2
 
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=720m no-warmup -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-             "cassandra-stress read  cl=QUORUM duration=720m no-warmup -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-             "cassandra-stress user profile=/tmp/cs_mv_si_keyspace1.yaml duration=700m no-warmup ops'(insert=1,read=1,mv_read1=1,mv_read2=1)' -mode cql3 native -rate threads=40 -log interval=5",
-             "cassandra-stress user profile=/tmp/cs_mv_si_keyspace1.yaml duration=700m no-warmup ops'(insert=1,read=1,si_read1=1,si_read2=1)' -mode cql3 native -rate threads=40 -log interval=5"
-             ]
+stress_cmd:
+  - >-
+    cassandra-stress write cl=QUORUM no-warmup
+    duration=720m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)'
+    -col 'n=FIXED(5) size=FIXED(128)'
+    -mode cql3 native
+    -log interval=5
+    -rate threads=1
+    -pop 'dist=uniform(1..2M)'
+  - >-
+    cassandra-stress read cl=QUORUM no-warmup
+    duration=720m
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)'
+    -col 'n=FIXED(5) size=FIXED(128)'
+    -mode cql3 native
+    -log interval=5
+    -rate threads=1
+    -pop 'dist=uniform(1..2M)'
+  - >-
+    cassandra-stress user profile=/tmp/cs_mv_si_keyspace1.yaml no-warmup ops'(insert=1,read=1,mv_read1=1,mv_read2=1)'
+    duration=700m
+    -mode cql3 native
+    -log interval=5
+    -rate threads=1
+  - >-
+    cassandra-stress user profile=/tmp/cs_mv_si_keyspace1.yaml no-warmup ops'(insert=1,read=1,si_read1=1,si_read2=1)'
+    duration=700m
+    -mode cql3 native
+    -log interval=5
+    -rate threads=1
+
 
 n_db_nodes: 3
 n_loaders: 2
 
-# Note: the instance of i8ge is not supported on all region and not on all availability zones.
-# Example: i8ge.2xlarge is currently supported on us-east-1b,us-east-1c,us-east-1d. And not on us-east-1a.
-instance_type_db: 'i8ge.2xlarge'
+sizing_db:
+  # Use >=4 (not exact 4) so OCI and GCE can match:
+  # OCI DenseIO starts at 16 vCPU .
+  # GCE z3-highmem starts at 8 vCPUs.
+  # AWS/Azure still resolve to their 4-vCPU instances (smallest fitting).
+  vcpu: ">=4"
+  memory: ">=32"
+  # Force x86_64 arch to avoid AWS i8g family, which may run into capacity issues
+  arch: x86_64
 
 
 nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']
