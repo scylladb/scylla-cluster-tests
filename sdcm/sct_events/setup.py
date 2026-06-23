@@ -175,6 +175,17 @@ def enable_default_filters(sct_config: SCTConfiguration):
             r"Cannot achieve consistency level for cl ONE",
         ).publish()
 
+    # Audit writes can briefly fail with unavailable_exception during transient cluster
+    # disruptions. This is expected and should not fail the test.
+    # Decided to do a global ignore instead of ignoring on all of the nemesis
+    # https://scylladb.atlassian.net/browse/SCT-518
+    # https://scylladb.atlassian.net/browse/SCYLLADB-706
+    EventsSeverityChangerFilter(
+        new_severity=Severity.WARNING,
+        event_class=DatabaseLogEvent,
+        regex=r".*audit - Unexpected exception when writing.*unavailable_exception.*",
+    ).publish()
+
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="Rate-limit: supressed").publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="Rate-limit: suppressed").publish()
     DbEventsFilter(db_event=DatabaseLogEvent.WARNING, line="abort_requested_exception").publish()

@@ -84,7 +84,6 @@ from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import (
     ignore_alternator_client_errors,
-    ignore_audit_errors,
     ignore_no_space_errors,
     ignore_scrub_invalid_errors,
     decorate_with_context,
@@ -4057,17 +4056,16 @@ class NemesisRunner:
         wait_time = self.random.choice(list_of_timeout_options)
         self.log.debug("Taking down eth1 for %dsec", wait_time)
 
-        with ignore_audit_errors():
-            try:
-                self.target_node.stop_network_interface()
-                self.actions_log.info(f"Taking {self.target_node.name} node network interface down")
-                time.sleep(wait_time)
-            finally:
-                self.actions_log.info(f"Brigning {self.target_node.name} node network interface up")
-                self.target_node.start_network_interface()
-                with self.action_log_scope("Wait all nodes up and normal"):
-                    self.cluster.wait_all_nodes_un()
-            self.actions_log.info(f"Network interface down/up finished on {self.target_node.name} node")
+        try:
+            self.target_node.stop_network_interface()
+            self.actions_log.info(f"Taking {self.target_node.name} node network interface down")
+            time.sleep(wait_time)
+        finally:
+            self.actions_log.info(f"Brigning {self.target_node.name} node network interface up")
+            self.target_node.start_network_interface()
+            with self.action_log_scope("Wait all nodes up and normal"):
+                self.cluster.wait_all_nodes_un()
+        self.actions_log.info(f"Network interface down/up finished on {self.target_node.name} node")
 
     def _call_disrupt_func_after_expression_logged(
         self,
