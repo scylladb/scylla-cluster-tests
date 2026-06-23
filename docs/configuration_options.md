@@ -4466,7 +4466,7 @@ Control reporting to argus
 
 Enable SSH tunnel support in the Argus client connection
 
-**default:** False
+**default:** True
 
 **type:** bool
 
