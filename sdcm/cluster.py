@@ -5392,6 +5392,7 @@ class BaseScyllaCluster:
                 throw_exc=True,
             )
         else:
+            seeds_num = min(seeds_num, len(self.nodes))
             if seeds_selector == "random":
                 selected_nodes = random.sample(self.nodes, seeds_num)
             # seeds_selector == 'first'
@@ -5401,8 +5402,7 @@ class BaseScyllaCluster:
             seed_nodes_addresses = [node.scylla_listen_address for node in selected_nodes]
 
         for node in self.nodes:
-            if node.scylla_listen_address in seed_nodes_addresses:
-                node.set_seed_flag(True)
+            node.set_seed_flag(node.scylla_listen_address in seed_nodes_addresses)
 
         assert seed_nodes_addresses, "We should have at least one selected seed by now"
 

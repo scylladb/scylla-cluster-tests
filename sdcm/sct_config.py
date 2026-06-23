@@ -3924,13 +3924,6 @@ class SCTConfiguration(BaseModel):
         seeds_num = self.get("seeds_num")
         assert seeds_num > 0, "Seed number should be at least one"
 
-        num_of_db_nodes = sum(
-            self.get("n_db_nodes") if isinstance(self.get("n_db_nodes"), list) else [self.get("n_db_nodes")]
-        )
-        assert not num_of_db_nodes or seeds_num <= num_of_db_nodes, (
-            f"Seeds number ({seeds_num}) should be not more then nodes number ({num_of_db_nodes})"
-        )
-
     def _validate_nemesis_can_run_on_non_seed(self) -> None:
         if self.get("nemesis_filter_seeds") is False or self.get("nemesis_class_name") == ["NoOpMonkey"]:
             return

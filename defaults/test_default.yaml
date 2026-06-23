@@ -47,8 +47,8 @@ nemesis_add_node_cnt: 3
 
 nemesis_filter_seeds: false
 
-seeds_selector: "first"
-seeds_num: 1
+seeds_selector: "random"
+seeds_num: 3
 
 instance_provision: "spot"
 
