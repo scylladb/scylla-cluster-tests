@@ -11,96 +11,269 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
-"""Tests for GCE zone fallback on resource pool exhaustion."""
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import MagicMock
 
-import google.api_core.exceptions
-
+from sdcm.provision.gce.zone_resolver import GceAZResolver, NoValidAvailabilityZoneError, _node_count_positive
 from sdcm.utils.gce_utils import get_alternative_zones
-from sdcm.cluster_gce import _ZoneExhaustedError
 
 
-class TestGetAlternativeZones:
-    def test_returns_alternatives_excluding_exhausted(self):
-        alternatives = get_alternative_zones("us-east1", "us-east1-c")
-        assert "c" not in alternatives
-        assert "d" in alternatives
-
-    def test_returns_empty_for_unknown_region(self):
-        assert get_alternative_zones("unknown-region1", "unknown-region1-a") == []
-
-    def test_handles_zone_name_as_input(self):
-        # When passing the full zone name (e.g., "us-east1-c"), extracts last char
-        alternatives = get_alternative_zones("us-east1", "us-east1-c")
-        assert "c" not in alternatives
-        assert "d" in alternatives
-
-    def test_handles_single_letter_input(self):
-        alternatives = get_alternative_zones("us-east1", "c")
-        assert "c" not in alternatives
-        assert "d" in alternatives
-
-    def test_returns_all_other_zones_for_region(self):
-        # us-east1 has zones "cd" in SUPPORTED_REGIONS
-        alternatives = get_alternative_zones("us-east1", "us-east1-c")
-        assert alternatives == ["d"]
-
-    def test_multi_zone_region(self):
-        # us-central1 has zones "abcf"
-        alternatives = get_alternative_zones("us-central1", "us-central1-a")
-        assert set(alternatives) == {"b", "c", "f"}
+class _DotDict(dict):
+    __getattr__ = dict.__getitem__
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
 
 
-class TestZoneExhaustedError:
-    """Test that _ZoneExhaustedError is not caught by the @retrying decorator."""
+def _make_params(**overrides):
+    params = _DotDict(
+        {
+            "cluster_backend": "gce",
+            "gce_datacenter": "us-east1",
+            "availability_zone": "b",
+            "gce_instance_type_db": "n2-highmem-8",
+            "gce_instance_type_loader": "e2-standard-2",
+            "gce_instance_type_monitor": "n2-highmem-8",
+            "n_db_nodes": 3,
+            "n_loaders": 1,
+            "n_monitor_nodes": 1,
+            "pre_filter_unavailable_availability_zones": True,
+            **overrides,
+        }
+    )
+    params.gce_datacenters = (
+        params["gce_datacenter"].split() if isinstance(params["gce_datacenter"], str) else params["gce_datacenter"]
+    )
+    return params
 
-    def test_zone_exhausted_error_is_not_google_api_error(self):
-        """Verify _ZoneExhaustedError is not a subclass of GoogleAPIError."""
-        assert not issubclass(_ZoneExhaustedError, google.api_core.exceptions.GoogleAPIError)
 
-    def test_zone_exhausted_error_preserves_cause(self):
-        original = google.api_core.exceptions.GoogleAPIError("ZONE_RESOURCE_POOL_EXHAUSTED")
-        exc = _ZoneExhaustedError("zone exhausted")
-        exc.__cause__ = original
-        assert exc.__cause__ is original
+@pytest.fixture(name="mock_gce_zone_resolver")
+def mock_gce_zone_resolver_fixture():
+    with patch("sdcm.provision.gce.zone_resolver.GceZoneResolver") as mock_cls:
+        instance = mock_cls.return_value
+        instance.get_common_zones.return_value = ["us-east1-b", "us-east1-c", "us-east1-d"]
+        yield mock_cls, instance
 
 
-class TestGCEClusterZoneFallback:
-    """Test zone fallback logic in GCECluster._create_instances."""
+def test_required_machine_types_collects_all_role_types_when_active():
+    params = _make_params(
+        gce_instance_type_db="n2-highmem-8",
+        gce_instance_type_loader="e2-standard-2",
+        gce_instance_type_monitor="n2-highmem-4",
+        instance_type_db_oracle="n2-highmem-16",
+        instance_type_db_target="n2d-standard-8",
+        nemesis_grow_shrink_instance_type="n2-highmem-16",
+        zero_token_instance_type_db="e2-medium",
+        instance_type_vector_store="e2-medium",
+        n_loaders=1,
+        n_monitor_nodes=1,
+        n_test_oracle_db_nodes=1,
+        db_type="mixed_scylla",
+        n_db_zero_token_nodes=1,
+        use_zero_nodes=True,
+        n_vector_store_nodes=2,
+    )
+    types = GceAZResolver(params).required_machine_types()
+    assert set(types) == {
+        "n2-highmem-8",
+        "e2-standard-2",
+        "n2-highmem-4",
+        "n2-highmem-16",
+        "n2d-standard-8",
+        "e2-medium",
+    }
 
-    @pytest.fixture
-    def mock_cluster(self):
-        """Create a mock GCECluster with minimal attributes for testing zone fallback."""
-        cluster = MagicMock()
-        cluster._gce_zone_names = {0: "us-east1-c"}
-        cluster.instance_provision = "on_demand"
-        cluster._node_index = 0
-        cluster.log = MagicMock()
-        return cluster
 
-    def test_fallback_disabled_raises_google_api_error(self, mock_cluster):
-        """When fallback is disabled, _ZoneExhaustedError should be re-raised as GoogleAPIError."""
-        mock_cluster.is_az_fallback_enabled = False
+def test_required_machine_types_excludes_types_with_zero_node_count():
+    params = _make_params(
+        gce_instance_type_db="n2-highmem-8",
+        gce_instance_type_loader="e2-standard-2",
+        gce_instance_type_monitor="n2-highmem-8",
+        instance_type_vector_store="e2-medium",
+        instance_type_db_oracle="n2-highmem-16",
+        zero_token_instance_type_db="e2-medium",
+        n_loaders=0,
+        n_monitor_nodes=0,
+        n_vector_store_nodes=0,
+        n_test_oracle_db_nodes=1,
+        db_type="scylla",
+        use_zero_nodes=False,
+    )
+    assert GceAZResolver(params).required_machine_types() == ["n2-highmem-8"]
 
-        original_cause = google.api_core.exceptions.GoogleAPIError("ZONE_RESOURCE_POOL_EXHAUSTED")
-        zone_exc = _ZoneExhaustedError("zone exhausted")
-        zone_exc.__cause__ = original_cause
 
-        # Simulate what _create_instances does when fallback is disabled
-        with pytest.raises(google.api_core.exceptions.GoogleAPIError):
-            if not mock_cluster.is_az_fallback_enabled:
-                raise google.api_core.exceptions.GoogleAPIError(str(zone_exc)) from zone_exc.__cause__
+def test_resolve_disabled_returns_unchanged(mock_gce_zone_resolver):
+    params = _make_params(pre_filter_unavailable_availability_zones=False, availability_zone="b,c")
+    GceAZResolver(params).resolve()
+    assert params["availability_zone"] == "b,c"
 
-    def test_alternative_zones_called_with_correct_region(self, mock_cluster):
-        """Verify region is correctly extracted from zone name."""
-        zone_name = "us-east1-c"
-        region = zone_name.rsplit("-", 1)[0]
-        assert region == "us-east1"
 
-    def test_region_extraction_from_zone(self):
-        """Test region extraction logic for various zone formats."""
-        assert "us-east1-c".rsplit("-", 1)[0] == "us-east1"
-        assert "us-central1-a".rsplit("-", 1)[0] == "us-central1"
-        assert "europe-west1-b".rsplit("-", 1)[0] == "europe-west1"
+def test_resolve_replaces_invalid_zone_with_valid_alternative(mock_gce_zone_resolver):
+    _, resolver_instance = mock_gce_zone_resolver
+    resolver_instance.get_common_zones.return_value = ["us-east1-c", "us-east1-d"]
+    params = _make_params(availability_zone="b")
+    GceAZResolver(params).resolve()
+    assert params["availability_zone"] in {"c", "d"}
+
+
+def test_resolve_multi_az_drops_unsupported_and_fills_alternatives(mock_gce_zone_resolver):
+    _, resolver_instance = mock_gce_zone_resolver
+    resolver_instance.get_common_zones.return_value = ["us-east1-b", "us-east1-c", "us-east1-d"]
+    params = _make_params(availability_zone="b,f,e")
+    GceAZResolver(params).resolve()
+    result = params["availability_zone"].split(",")
+    assert len(result) == 3
+    assert "b" in result
+    assert "f" not in result
+    assert "e" not in result
+    assert set(result) <= {"b", "c", "d"}
+
+
+def test_resolve_raises_when_no_valid_zone_in_region(mock_gce_zone_resolver):
+    _, resolver_instance = mock_gce_zone_resolver
+    resolver_instance.get_common_zones.return_value = []
+    params = _make_params(availability_zone="b")
+    with pytest.raises(NoValidAvailabilityZoneError):
+        GceAZResolver(params).resolve()
+
+
+@pytest.fixture(name="mock_multi_region")
+def mock_multi_region_fixture():
+    region_returns: dict[str, list[str]] = {}
+
+    class _ResolverStub:
+        def get_common_zones(self, region, machine_types, preferred_zones=None):  # noqa: ARG002
+            return region_returns.get(region, [])
+
+        def get_per_type_zones(self, region, machine_types):  # noqa: ARG002
+            zones = region_returns.get(region, [])
+            return {mt: zones for mt in machine_types}
+
+    with patch("sdcm.provision.gce.zone_resolver.GceZoneResolver", return_value=_ResolverStub()):
+        yield region_returns
+
+
+def test_resolve_multi_region_intersects_supported_zone_letters(mock_multi_region):
+    mock_multi_region["us-east1"] = ["us-east1-b", "us-east1-c"]
+    mock_multi_region["us-east4"] = ["us-east4-c", "us-east4-a"]
+    params = _make_params(gce_datacenter="us-east1 us-east4", availability_zone="b")
+    GceAZResolver(params).resolve()
+    assert params["availability_zone"] == "c"
+
+
+def test_resolve_multi_region_raises_when_no_common_letter(mock_multi_region):
+    mock_multi_region["us-east1"] = ["us-east1-b", "us-east1-c"]
+    mock_multi_region["us-east4"] = ["us-east4-a", "us-east4-d"]
+    params = _make_params(gce_datacenter="us-east1 us-east4", availability_zone="b")
+    with pytest.raises(NoValidAvailabilityZoneError):
+        GceAZResolver(params).resolve()
+
+
+def test_resolve_multi_region_multi_az_drops_unsupported_and_fills(mock_multi_region):
+    mock_multi_region["us-east1"] = ["us-east1-b", "us-east1-c", "us-east1-d"]
+    mock_multi_region["us-east4"] = ["us-east4-b", "us-east4-c", "us-east4-d"]
+    params = _make_params(gce_datacenter="us-east1 us-east4", availability_zone="a,b,c")
+    GceAZResolver(params).resolve()
+    result = params["availability_zone"].split(",")
+    assert set(result) == {"b", "c", "d"}
+
+
+@pytest.fixture(name="mock_discovery_resolver")
+def mock_discovery_resolver_fixture():
+    class _DiscoveryStub:
+        def get_zones_for_region(self, region):
+            return [f"{region}-b", f"{region}-c", f"{region}-d"]
+
+        def get_common_zones(self, region, machine_types, preferred_zones=None):  # noqa: ARG002
+            return [f"{region}-b", f"{region}-c"]
+
+    with patch("sdcm.provision.gce.zone_resolver.GceZoneResolver", return_value=_DiscoveryStub()):
+        yield
+
+
+@pytest.mark.parametrize("az_value", ["", None])
+def test_resolve_with_unset_availability_zone_discovers_valid_zone(mock_discovery_resolver, az_value):
+    params = _make_params(availability_zone=az_value)
+    GceAZResolver(params).resolve()
+    assert params["availability_zone"] in {"b", "c"}
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (None, False),
+        (True, True),
+        (False, False),
+        (0, False),
+        (1, True),
+        (3, True),
+        ([], False),
+        ([0, 0], False),
+        ([2, 0], True),
+        ("", False),
+        ("0", False),
+        ("3", True),
+        ("3 4", True),
+        ({"a": 1}, False),
+    ],
+)
+def test_node_count_positive(value, expected):
+    assert _node_count_positive(value) is expected
+
+
+def test_required_machine_types_skips_target_when_none():
+    params = _make_params(
+        gce_instance_type_db="n2-highmem-8",
+        instance_type_db_target=None,
+        nemesis_grow_shrink_instance_type="",
+        gce_instance_type_loader="",
+        n_loaders=0,
+        gce_instance_type_monitor="",
+        n_monitor_nodes=0,
+    )
+    assert GceAZResolver(params).required_machine_types() == ["n2-highmem-8"]
+
+
+@pytest.fixture(name="mock_zone_letters")
+def mock_zone_letters_fixture():
+    """Mock _get_zone_letters_for_region so tests don't call GCE API."""
+    zone_map = {
+        "us-east1": ["b", "c", "d"],
+        "us-east4": ["a", "b", "c"],
+        "us-west1": ["a", "b", "c"],
+        "us-central1": ["a", "b", "c", "f"],
+    }
+    with patch(
+        "sdcm.utils.gce_utils._get_zone_letters_for_region",
+        side_effect=lambda region: zone_map.get(region, []),
+    ):
+        yield
+
+
+def test_get_alternative_zones_excludes_exhausted_zone_letter(mock_zone_letters):
+    alternatives = get_alternative_zones("us-east1", "b")
+    assert "b" not in alternatives
+
+
+def test_get_alternative_zones_excludes_exhausted_full_zone_name(mock_zone_letters):
+    alternatives = get_alternative_zones("us-east1", "us-east1-b")
+    assert "b" not in alternatives
+
+
+def test_get_alternative_zones_returns_remaining_zone_letters(mock_zone_letters):
+    alternatives = get_alternative_zones("us-east1", "c")
+    assert "d" in alternatives
+
+
+def test_get_alternative_zones_returns_empty_for_unknown_region(mock_zone_letters):
+    assert get_alternative_zones("unknown-region-1", "a") == []
+
+
+def test_get_alternative_zones_returns_shuffled_list(mock_zone_letters):
+    results = [tuple(get_alternative_zones("us-central1", "a")) for _ in range(20)]
+    assert len(set(results)) > 1
+
+
+def test_get_alternative_zones_single_zone_region_returns_empty():
+    with patch("sdcm.utils.gce_utils._get_zone_letters_for_region", return_value=["a"]):
+        assert get_alternative_zones("single-region-1", "a") == []
