@@ -265,7 +265,9 @@ class OciNode(cluster.BaseNode):
             )
             return private_ip_address
 
-    def create_node_certificate(self, cert_file, cert_key, csr_file=None):
+    def create_node_certificate(
+        self, cert_file, cert_key, csr_file=None, extra_ip_addresses=None, extra_dns_names=None
+    ):
         """Create OCI node certificate with both short and FQDN hostname SANs when available."""
         dns_names = {
             self.public_dns_name,
@@ -290,6 +292,13 @@ class OciNode(cluster.BaseNode):
             except ValueError:
                 pass
 
+        if extra_dns_names:
+            dns_names.update(extra_dns_names)
+
+        ip_addresses = [self.ip_address, self.public_ip_address]
+        if extra_ip_addresses:
+            ip_addresses.extend(extra_ip_addresses)
+
         create_certificate(
             cert_file,
             cert_key,
@@ -297,7 +306,7 @@ class OciNode(cluster.BaseNode):
             ca_cert_file=CA_CERT_FILE,
             ca_key_file=CA_KEY_FILE,
             server_csr_file=csr_file,
-            ip_addresses=[self.ip_address, self.public_ip_address],
+            ip_addresses=ip_addresses,
             dns_names=sorted(dns for dns in dns_names if dns),
         )
 
