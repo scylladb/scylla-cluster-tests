@@ -32,6 +32,16 @@ EMR_PROVISIONING_STATES = ("STARTING", "BOOTSTRAPPING", "RUNNING")
 EMR_TERMINAL_STATES = ("TERMINATED", "TERMINATED_WITH_ERRORS")
 
 
+class EmrClusterTerminatedError(Exception):
+    """Raised when an EMR cluster reaches a terminal state (TERMINATED / TERMINATED_WITH_ERRORS)
+    and should not be retried.
+    """
+
+
+class EmrClusterNotReadyError(Exception):
+    """Raised while an EMR cluster is still provisioning (not yet WAITING). Retryable."""
+
+
 class EmrClusterProvisioner:
     """Provisions and manages Amazon EMR clusters for spark-migrator testing.
 
@@ -152,7 +162,12 @@ class EmrClusterProvisioner:
 
         return instance_groups
 
-    @retrying(n=60, sleep_time=30, message="Waiting for EMR cluster to be ready...")
+    @retrying(
+        n=60,
+        sleep_time=30,
+        allowed_exceptions=(EmrClusterNotReadyError,),
+        message="Waiting for EMR cluster to be ready...",
+    )
     def wait_for_emr_cluster_ready(self, cluster_id=None):
         """Wait until EMR cluster reaches WAITING state.
 
@@ -163,7 +178,9 @@ class EmrClusterProvisioner:
             dict: Cluster description.
 
         Raises:
-            AssertionError: If cluster enters a terminal state.
+            EmrClusterTerminatedError: If the cluster enters a terminal state. Not retried — a
+                self-terminated cluster never recovers, so the wait fails fast.
+            EmrClusterNotReadyError: If the cluster is still provisioning. Retried by the decorator.
         """
         cluster_id = cluster_id or self.cluster_id
         status = self.get_emr_cluster_status(cluster_id)
@@ -173,12 +190,15 @@ class EmrClusterProvisioner:
             LOGGER.info("EMR cluster %s is ready (state: %s)", cluster_id, state)
             return status
 
-        assert state not in EMR_TERMINAL_STATES, (
-            f"EMR cluster {cluster_id} entered terminal state: {state}. "
-            f"Reason: {status.get('StateChangeReason', {}).get('Message', 'unknown')}"
-        )
-        assert state in EMR_PROVISIONING_STATES, f"EMR cluster {cluster_id} in unexpected state: {state}"
-        raise RuntimeError(f"EMR cluster {cluster_id} still provisioning (state: {state})")
+        if state in EMR_TERMINAL_STATES:
+            reason = status.get("StateChangeReason", {}).get("Message", "unknown")
+            raise EmrClusterTerminatedError(
+                f"EMR cluster {cluster_id} entered terminal state: {state}. Reason: {reason}"
+            )
+
+        if state not in EMR_PROVISIONING_STATES:
+            LOGGER.warning("EMR cluster %s in unexpected non-terminal state: %s", cluster_id, state)
+        raise EmrClusterNotReadyError(f"EMR cluster {cluster_id} still provisioning (state: {state})")
 
     def get_emr_cluster_status(self, cluster_id=None):
         """Get current EMR cluster status.

@@ -16,6 +16,7 @@ from sdcm.provision.aws.emr_provisioner import (
     EMR_EC2_INSTANCE_PROFILE_NAME,
     EMR_SERVICE_ROLE_NAME,
     EmrClusterProvisioner,
+    EmrClusterTerminatedError,
     ensure_emr_roles,
     list_emr_clusters,
 )
@@ -295,3 +296,39 @@ def test_ensure_emr_roles_idempotent(moto_server, iam_roles):
         ensure_emr_roles(AWS_REGION)
 
     assert iam.get_role(RoleName=EMR_SERVICE_ROLE_NAME)["Role"]["RoleName"] == EMR_SERVICE_ROLE_NAME
+
+
+def test_wait_for_emr_cluster_ready_fails_fast_on_terminal_state(provisioner):
+    """A terminal TERMINATED_WITH_ERRORS state raises immediately — no retry, no ~30 min wait in SetUp."""
+    cluster_id = "j-CLUSTER"
+    terminal_message = "bootstrap action 1 returned a non-zero return code"
+    terminal_status = {
+        "State": "TERMINATED_WITH_ERRORS",
+        "StateChangeReason": {"Message": terminal_message},
+    }
+
+    with (
+        patch.object(provisioner, "get_emr_cluster_status", return_value=terminal_status) as mock_status,
+        patch("sdcm.utils.decorators.time.sleep") as mock_sleep,
+        pytest.raises(EmrClusterTerminatedError, match=terminal_message),
+    ):
+        provisioner.wait_for_emr_cluster_ready(cluster_id)
+
+    assert mock_status.call_count == 1
+    mock_sleep.assert_not_called()
+
+
+def test_wait_for_emr_cluster_ready_retries_while_provisioning(provisioner):
+    """A still-provisioning state is retried until the cluster reaches WAITING."""
+    cluster_id = "j-CLUSTER"
+    waiting_status = {"State": "WAITING"}
+    states = [{"State": "STARTING"}, {"State": "BOOTSTRAPPING"}, waiting_status]
+
+    with (
+        patch.object(provisioner, "get_emr_cluster_status", side_effect=states) as mock_status,
+        patch("sdcm.utils.decorators.time.sleep"),
+    ):
+        result = provisioner.wait_for_emr_cluster_ready(cluster_id)
+
+    assert result == waiting_status
+    assert mock_status.call_count == 3
