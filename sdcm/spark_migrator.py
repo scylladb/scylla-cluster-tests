@@ -36,20 +36,29 @@ MIGRATOR_JAR_NAME = "scylla-migrator-assembly.jar"
 # The workaround installs Spark 4.x via a bootstrap action and uses a wrapper shell script
 # (through script-runner.jar) instead of a native Spark step.
 # Once Amazon EMR is bundled with Spark 4.x out of the box, this workaround can be removed.
+#
+# The Spark 4.x tarball is mirrored into the SCT-owned S3 bucket on first use, and the bootstrap pulls it
+# from there via `aws s3 cp`. This avoids depending on the Apache live mirror (downloads.apache.org), which
+# serves only current releases and returns 404 once a version is superseded. The one-time mirror upload reads
+# from the Apache archive (archive.apache.org), which retains every release permanently.
 SPARK4_VERSION = "4.0.2"
 SPARK4_INSTALL_DIR = "/opt/spark4"
 _BOOTSTRAP_SCRIPT_S3_KEY = "scripts/bootstrap-spark4.sh"
 _SPARK4_PACKAGE = f"spark-{SPARK4_VERSION}-bin-hadoop3"
-_SPARK4_URL = f"https://downloads.apache.org/spark/spark-{SPARK4_VERSION}/{_SPARK4_PACKAGE}.tgz"
+_SPARK4_ARCHIVE_URL = f"https://archive.apache.org/dist/spark/spark-{SPARK4_VERSION}/{_SPARK4_PACKAGE}.tgz"
+_SPARK4_S3_KEY = f"spark/{_SPARK4_PACKAGE}.tgz"
 _RUNNER_SCRIPT_S3_KEY = "scripts/run-migrator.sh"
 _VALIDATOR_SCRIPT_S3_KEY = "scripts/run-validator.sh"
 _MIGRATOR_MAIN_CLASS = "com.scylladb.migrator.Migrator"
 _VALIDATOR_MAIN_CLASS = "com.scylladb.migrator.Validator"
 
-_BOOTSTRAP_SCRIPT_CONTENT = f"""#!/bin/bash
+
+def _build_bootstrap_script(s3_bucket):
+    """Return the Spark 4.x install bootstrap script that pulls the tarball from the SCT S3 mirror."""
+    return f"""#!/bin/bash
 set -ex
 cd /tmp
-wget -q "{_SPARK4_URL}"
+aws s3 cp "s3://{s3_bucket}/{_SPARK4_S3_KEY}" "{_SPARK4_PACKAGE}.tgz"
 tar xzf "{_SPARK4_PACKAGE}.tgz"
 sudo mv /tmp/{_SPARK4_PACKAGE} {SPARK4_INSTALL_DIR}
 sudo chown -R hadoop:hadoop {SPARK4_INSTALL_DIR}
@@ -81,12 +90,55 @@ def _ensure_s3_bucket(s3_client, bucket_name, region_name):
 
 
 # TODO: Spark 4.x workaround
-def build_spark4_bootstrap_actions(region_name, s3_bucket=None):
-    """Upload Spark 4.x bootstrap script to S3 and return EMR bootstrap actions."""
-    s3_bucket = s3_bucket or f"sct-emr-spark-migrator-{region_name}"
+def upload_spark4_tarball_to_s3(s3_bucket, region_name):
+    """Mirror the Spark 4.x tarball into S3 if absent, and return its S3 URI.
+
+    Downloads from the Apache archive (which retains all releases) on first use, then caches it in the SCT
+    bucket so the EMR bootstrap can pull it from S3 - independent of Apache live-mirror rotation for latest release.
+
+    Args:
+        s3_bucket: Target S3 bucket name.
+        region_name: AWS region for the S3 client.
+
+    Returns:
+        str: S3 URI of the Spark tarball.
+    """
+    s3_uri = f"s3://{s3_bucket}/{_SPARK4_S3_KEY}"
     s3_client = boto3.client("s3", region_name=region_name)
     _ensure_s3_bucket(s3_client, s3_bucket, region_name)
-    s3_client.put_object(Bucket=s3_bucket, Key=_BOOTSTRAP_SCRIPT_S3_KEY, Body=_BOOTSTRAP_SCRIPT_CONTENT.encode("utf-8"))
+
+    try:
+        s3_client.head_object(Bucket=s3_bucket, Key=_SPARK4_S3_KEY)
+        LOGGER.info("Spark 4.x tarball already exists at %s, skipping upload", s3_uri)
+        return s3_uri
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] != "404":
+            raise
+
+    LOGGER.info("Downloading Spark 4.x tarball from %s", _SPARK4_ARCHIVE_URL)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        local_path = os.path.join(tmp_dir, f"{_SPARK4_PACKAGE}.tgz")
+        response = requests.get(_SPARK4_ARCHIVE_URL, stream=True, timeout=600)
+        response.raise_for_status()
+        with open(local_path, "wb") as tarball_file:
+            tarball_file.writelines(response.iter_content(chunk_size=8192))
+
+        LOGGER.info("Uploading Spark 4.x tarball to %s", s3_uri)
+        s3_client.upload_file(local_path, s3_bucket, _SPARK4_S3_KEY)
+
+    LOGGER.info("Spark 4.x tarball uploaded to %s", s3_uri)
+    return s3_uri
+
+
+# TODO: Spark 4.x workaround
+def build_spark4_bootstrap_actions(region_name, s3_bucket=None):
+    """Mirror the Spark 4.x tarball to S3, upload the bootstrap script, and return EMR bootstrap actions."""
+    s3_bucket = s3_bucket or f"sct-emr-spark-migrator-{region_name}"
+    upload_spark4_tarball_to_s3(s3_bucket, region_name)
+    s3_client = boto3.client("s3", region_name=region_name)
+    s3_client.put_object(
+        Bucket=s3_bucket, Key=_BOOTSTRAP_SCRIPT_S3_KEY, Body=_build_bootstrap_script(s3_bucket).encode("utf-8")
+    )
     return [
         {
             "Name": f"Install Spark {SPARK4_VERSION}",

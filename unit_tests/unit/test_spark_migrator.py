@@ -19,6 +19,7 @@ from sdcm.spark_migrator import (
     discover_cs_source_hosts,
     get_migrator_download_url,
     upload_migrator_jar_to_s3,
+    upload_spark4_tarball_to_s3,
 )
 import spark_migrator_test
 
@@ -188,11 +189,14 @@ def test_upload_migrator_jar_to_s3_downloads_and_uploads():
 # TODO: Spark 4.x workaround
 @mock_aws
 def test_build_spark4_bootstrap_actions():
-    """Test that bootstrap actions are built and script is uploaded to S3."""
+    """Bootstrap actions are built, the Spark tarball is mirrored to S3, and the script pulls it via aws s3 cp."""
     s3_client = boto3.client("s3", region_name="us-east-1")
     s3_client.create_bucket(Bucket="sct-emr-spark-migrator-us-east-1")
 
-    actions = build_spark4_bootstrap_actions("us-east-1")
+    mock_response = MagicMock()
+    mock_response.iter_content.return_value = [b"fake-spark-tarball"]
+    with patch("sdcm.spark_migrator.requests.get", return_value=mock_response):
+        actions = build_spark4_bootstrap_actions("us-east-1")
 
     assert len(actions) == 1
     assert actions[0]["Name"] == f"Install Spark {SPARK4_VERSION}"
@@ -205,7 +209,36 @@ def test_build_spark4_bootstrap_actions():
     )
     assert SPARK4_VERSION in body
     assert SPARK4_INSTALL_DIR in body
-    assert "wget" in body
+    assert "aws s3 cp" in body
+    assert "wget" not in body
+    assert "downloads.apache.org" not in body
+
+    tarball = s3_client.get_object(
+        Bucket="sct-emr-spark-migrator-us-east-1", Key=f"spark/spark-{SPARK4_VERSION}-bin-hadoop3.tgz"
+    )["Body"].read()
+    assert tarball == b"fake-spark-tarball"
+
+
+# TODO: Spark 4.x workaround
+@mock_aws
+def test_upload_spark4_tarball_to_s3_downloads_from_archive_and_uploads():
+    """Spark tarball is downloaded from the Apache archive (not the live mirror) and uploaded to S3 when absent."""
+    s3_client = boto3.client("s3", region_name="us-east-1")
+    s3_client.create_bucket(Bucket="sct-emr-spark-migrator-us-east-1")
+
+    mock_response = MagicMock()
+    mock_response.iter_content.return_value = [b"spark-tarball-bytes"]
+    with patch("sdcm.spark_migrator.requests.get", return_value=mock_response) as mock_get:
+        uri = upload_spark4_tarball_to_s3("sct-emr-spark-migrator-us-east-1", "us-east-1")
+        assert mock_get.call_count == 1
+        call_url = mock_get.call_args[0][0]
+        assert "archive.apache.org" in call_url
+        assert SPARK4_VERSION in call_url
+
+    key = f"spark/spark-{SPARK4_VERSION}-bin-hadoop3.tgz"
+    assert uri == f"s3://sct-emr-spark-migrator-us-east-1/{key}"
+    body = s3_client.get_object(Bucket="sct-emr-spark-migrator-us-east-1", Key=key)["Body"].read()
+    assert body == b"spark-tarball-bytes"
 
 
 @mock_aws
