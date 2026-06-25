@@ -88,3 +88,33 @@ queries:
    stmt-delete-if-exists: # CASQuery.java: not batched execution, do select first then delete
       cql: delete from targettable where pr1 = ? if exists
       fields: samerow
+   # Prefixed aliases — read_* / write_* / mix_* prefix is used by the SCT framework
+   # (set_hdr_tags in stress_thread.py) to assign HDR histogram tags automatically.
+   # The old unprefixed names above are kept for backward compatibility.
+   read_stmt-select:
+      cql: select pr1, aux1, aux2, aux3, aux4, aux5 from targettable where pr1 = ?
+      fields: samerow
+   write_stmt-insert:
+      cql: insert into targettable(pr1, aux1, aux2, aux3, aux4, aux5) values (?,?,?,?,?,?)
+      fields: samerow
+   write_stmt-update:
+      cql: update targettable set aux1 = ?, aux2 = ?, aux3 = ?, aux4 = ?, aux5 = ? where pr1 = ?
+      fields: samerow
+   write_stmt-delete:
+      cql: delete from targettable where pr1 = ?
+      fields: samerow
+   write_stmt-update-if-cond:
+      cql: update targettable set aux1 = ?, aux2 = ?, aux3 = ?, aux4 = ?, aux5 = ? where pr1 = ? if aux1 = ? and aux2 = ? and aux3 = ? and aux4 = ? and aux5 = ?
+      fields: samerow
+   write_stmt-update-if-exists:
+      cql: update targettable set aux1 = ?, aux2 = ?, aux3 = ?, aux4 = ?, aux5 = ? where pr1 = ? if exists
+      fields: samerow
+   write_stmt-insert-if-not-exists:
+      cql: insert into targettable(pr1, aux1, aux2, aux3, aux4, aux5 ) values (?,?,?,?,?,?) if not exists
+      fields: samerow
+   write_stmt-delete-if-cond:
+      cql: delete from targettable where pr1 = ? if aux1 = ? and aux2 = ? and aux3 = ? and aux4 = ? and aux5 = ?
+      fields: samerow
+   write_stmt-delete-if-exists:
+      cql: delete from targettable where pr1 = ? if exists
+      fields: samerow

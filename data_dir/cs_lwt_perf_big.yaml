@@ -108,3 +108,33 @@ queries:
    stmt-delete-if-exists:  # CASQuery.java: not batched execution, do select first then delete
       cql: delete from targettable where pr1 = ? AND cl1 = ? if exists
       fields: samerow
+   # Prefixed aliases — read_* / write_* / mix_* prefix is used by the SCT framework
+   # (set_hdr_tags in stress_thread.py) to assign HDR histogram tags automatically.
+   # The old unprefixed names above are kept for backward compatibility.
+   read_stmt-select:
+      cql: select pr1, cl1, aux1, aux2, aux3, aux4, aux5, aux6, aux7, aux8, aux9 from targettable where pr1 = ? AND cl1 = ?
+      fields: samerow
+   write_stmt-insert:
+      cql: insert into targettable(pr1, cl1, aux1, aux2, aux3, aux4, aux5, aux6, aux7, aux8, aux9) values (?,?,?,?,?,?,?,?,?,?,?)
+      fields: samerow
+   write_stmt-update:
+      cql: update targettable set aux1 = ?, aux2 = ?, aux3 = ?, aux4 = ?, aux5 = ?, aux6 = ?, aux7 = ?, aux8 = ?, aux9 = ? where pr1 = ? AND cl1 = ?
+      fields: samerow
+   write_stmt-delete:
+      cql: delete from targettable where pr1 = ? AND cl1 = ?
+      fields: samerow
+   write_stmt-update-if-cond:
+      cql: update targettable set aux1 = ?, aux2 = ?, aux3 = ?, aux4 = ?, aux5 = ?, aux6 = ?, aux7 = ?, aux8 = ?, aux9 = ? where pr1 = ? AND cl1 = ? if aux1 = ? AND aux2 = ? AND aux3 = ? AND aux4 = ? AND aux5 = ? AND aux6 = ? AND aux7 = ? AND aux8 = ? AND aux9 = ?
+      fields: samerow
+   write_stmt-update-if-exists:
+      cql: update targettable set aux1 = ?, aux2 = ?, aux3 = ?, aux4 = ?, aux5 = ?, aux6 = ?, aux7 = ?, aux8 = ?, aux9 = ? where pr1 = ? AND cl1 = ? if exists
+      fields: samerow
+   write_stmt-insert-if-not-exists:
+      cql: insert into targettable(pr1, cl1, aux1, aux2, aux3, aux4, aux5, aux6, aux7, aux8, aux9) values (?,?,?,?,?,?,?,?,?,?,?) if not exists
+      fields: samerow
+   write_stmt-delete-if-cond:
+      cql: delete from targettable where pr1 = ? AND cl1 = ? IF aux1 = ? AND aux2 = ? AND aux3 = ? AND aux4 = ? AND aux5 = ? AND aux6 = ? AND aux7 = ? AND aux8 = ? AND aux9 = ?
+      fields: samerow
+   write_stmt-delete-if-exists:
+      cql: delete from targettable where pr1 = ? AND cl1 = ? if exists
+      fields: samerow
