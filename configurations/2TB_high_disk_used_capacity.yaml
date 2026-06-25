@@ -18,6 +18,7 @@ stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=6800m -schema 'replicati
              "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=6800m -mode cql3 native -rate threads=10",
              "cassandra-stress read cl=QUORUM duration=6800m -mode cql3 native  -rate threads=10 -pop seq=1..1840000000  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'" ]
 
+instance_type_db: 'i8g.2xlarge'
 # i8g.2xlarge: 8 vCPU, 64 GB RAM, 1x1,875 GB NVMe SSD (~1,750 GiB formatted)
 sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
   vcpu: 8
