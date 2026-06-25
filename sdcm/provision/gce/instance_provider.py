@@ -42,8 +42,26 @@ LOGGER = logging.getLogger(__name__)
 
 ZONE_EXHAUSTED_MARKER = "ZONE_RESOURCE_POOL_EXHAUSTED"
 
+# Markers indicating a configuration error (e.g., incompatible disk type) rather
+# than a genuine zone capacity issue.  When these appear in an error that also
+# contains ZONE_RESOURCE_POOL_EXHAUSTED, the error should NOT be classified as
+# zone-exhausted because retrying in another zone will not help.
+_CONFIG_ERROR_MARKERS = (
+    "disk type cannot be used",
+    "does not support disk type",
+    "is not compatible with",
+)
+
+
+def _is_config_error(error: BaseException) -> bool:
+    """Return True if the error indicates a configuration/compatibility problem."""
+    error_str = str(error).lower()
+    return any(marker in error_str for marker in _CONFIG_ERROR_MARKERS)
+
 
 def _is_zone_exhausted(error: BaseException) -> bool:
+    if _is_config_error(error):
+        return False
     return ZONE_EXHAUSTED_MARKER in str(error)
 
 
@@ -126,6 +144,10 @@ class VirtualMachineProvider:
                 )
                 pending_instance_creations.append((definition, operation, normalized_name, user_data, startup_script))
             except google.api_core.exceptions.GoogleAPIError as err:
+                if _is_config_error(err):
+                    raise ProvisionError(
+                        f"Failed to create instance {normalized_name} due to configuration error: {err}"
+                    ) from err
                 if _is_zone_exhausted(err):
                     LOGGER.error(
                         "Zone %s resource pool exhausted during insert request for %s",
@@ -147,6 +169,10 @@ class VirtualMachineProvider:
                 # Zone exhaustion is unrecoverable; let it propagate immediately.
                 # Successfully-created instances remain in self._cache so callers
                 # can clean them up before retrying in a different zone.
+                raise
+            except ProvisionError:
+                # Configuration errors (e.g., incompatible disk type) are unrecoverable;
+                # propagate immediately without retrying in other zones.
                 raise
             except google.api_core.exceptions.GoogleAPIError as err:
                 LOGGER.error("Error when waiting for instance %s: %s", normalized_name, str(err))
@@ -193,6 +219,14 @@ class VirtualMachineProvider:
                 raise ZoneResourcesExhaustedError(
                     f"Zone {self.zone} resource pool exhausted: {gce_error}"
                 ) from gce_error
+            if _is_config_error(gce_error):
+                LOGGER.error(
+                    "Instance %s creation failed due to configuration error (not retryable): %s",
+                    normalized_name,
+                    gce_error,
+                )
+                self._cleanup_failed_instance(normalized_name, str(gce_error))
+                raise ProvisionError(f"Failed to create instance {normalized_name}: {gce_error}") from gce_error
             LOGGER.warning("Instance %s creation failed: %s, will retry", normalized_name, gce_error)
             self._cleanup_failed_instance(normalized_name, str(gce_error))
             # Retry the entire creation process with retry decorator
