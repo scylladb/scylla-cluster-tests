@@ -1752,7 +1752,7 @@ def lint_test_docs(test_case_dir, missing_only, test_case_file):
         result = lint_test_metadata(path, taxonomy_path if taxonomy_path.exists() else None)
 
         if missing_only:
-            if result.errors and any("TD-001" in e for e in result.errors):
+            if result.missing:
                 missing_count += 1
                 click.secho(str(path), fg="yellow")
             continue
