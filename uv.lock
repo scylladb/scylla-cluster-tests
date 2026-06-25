@@ -4453,7 +4453,7 @@ dev = [
     { name = "pre-commit", specifier = "==4.0.1" },
     { name = "pycodestyle", specifier = "==2.13.0" },
     { name = "ruff", specifier = "==0.14.6" },
-    { name = "uv-sort", specifier = ">=0.7.0" },
+    { name = "uv-sort", specifier = ">=0.7.0,<0.8.0" },
 ]
 profiling = [
     { name = "gprof2dot" },
