@@ -1,0 +1,28 @@
+# Override configuration to scale the 1TB longevity test to ~2TB dataset
+# Extends: test-cases/longevity/longevity-1TB-5days-authorization-and-tls-ssl.yaml
+#
+# Target: ~50% CPU load during stress phase, ~60% disk fill on i8g.2xlarge
+#
+# Dataset increased from 1.1TB to 1.84TB rows to reach ~60% fill target.
+
+# Prepare phase: 4 commands x threads=140 rate-capped at 30K/s each
+# 1.84B total rows (4 x 460M): ~1.8 TB logical dataset
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=460000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=140 fixed=30000/s' -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..460000000",
+                    "cassandra-stress write cl=QUORUM n=460000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=140 fixed=30000/s' -col 'size=FIXED(200) n=FIXED(5)' -pop seq=460000001..920000000",
+                    "cassandra-stress write cl=QUORUM n=460000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=140 fixed=30000/s' -col 'size=FIXED(200) n=FIXED(5)' -pop seq=920000001..1380000000",
+                    "cassandra-stress write cl=QUORUM n=460000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=140 fixed=30000/s' -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1380000001..1840000000"]
+
+# Stress phase: target ~50% CPU load on i8g.2xlarge (8 vCPU)
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=6800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop seq=1..920000000  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+             "cassandra-stress mixed cl=QUORUM duration=6800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop seq=920000001..1840000000  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+             "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=6800m -mode cql3 native -rate threads=10",
+             "cassandra-stress read cl=QUORUM duration=6800m -mode cql3 native  -rate threads=10 -pop seq=1..1840000000  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'" ]
+
+instance_type_db: 'i8g.2xlarge'
+# i8g.2xlarge: 8 vCPU, 64 GB RAM, 1x1,875 GB NVMe SSD (~1,750 GiB formatted)
+sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
+  vcpu: 8
+  memory: '>=64'
+
+user_prefix: 'longevity-2tb-high-disk-used'
+nemesis_selector: 'supports_high_disk_utilization'

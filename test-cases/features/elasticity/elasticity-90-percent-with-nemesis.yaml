@@ -16,11 +16,25 @@ pre_create_keyspace: "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication =
 
 n_db_nodes: 6
 n_loaders: 4
+<<<<<<< HEAD
 nemesis_grow_shrink_instance_type: 'i4i.large'
 
 instance_type_loader: 'c6i.2xlarge'
 instance_type_monitor: 't3.large'
 instance_type_db: 'i4i.large'
+||||||| parent of 93902601c (fix(tier1): Restore tuned tier1 instances)
+nemesis_grow_shrink_instance_type: 'i8g.2xlarge'
+
+sizing_db:  # no GCE/OCI match (DenseIO min 16 vCPUs on OCI, z3 min 8 vCPUs on GCE)
+  vcpu: 2
+  memory: '>=16'
+sizing_loader:
+  vcpu: 8
+  memory: '>=8'
+=======
+nemesis_grow_shrink_instance_type: 'i8g.2xlarge'
+instance_type_db: 'i8g.large'
+>>>>>>> 93902601c (fix(tier1): Restore tuned tier1 instances)
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'supports_high_disk_utilization'
