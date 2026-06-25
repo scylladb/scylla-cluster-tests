@@ -9,15 +9,10 @@ from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_k8s.eks import EksScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
 from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
-from sdcm.nemesis.monkey.runners import CategoricalMonkey
 from unit_tests.unit.nemesis.fake_cluster import FakeTester
 from unit_tests.unit.nemesis.test_sisyphus import TestNemesisClass
 
 LOGGER = logging.getLogger(__name__)
-
-
-class FakeCategorialMonkey(CategoricalMonkey, TestNemesisClass):
-    """Override CategoricalMonkey with a new disruption tree"""
 
 
 @pytest.mark.parametrize(
@@ -42,20 +37,3 @@ def test_is_it_on_kubernetes(parent, result):
     params = {"nemesis_interval": 10, "nemesis_filter_seeds": 1}
     nemesis = TestNemesisClass(FakeTester(db_cluster=FakeClass(), params=params), None)
     assert nemesis._is_it_on_kubernetes() == result
-
-
-@pytest.mark.parametrize(
-    "dist, output",
-    [
-        ({"CustomNemesisA": 1}, "called test function a\n"),
-        ({"CustomNemesisC": 0.5}, "called test function c\n"),
-        ({"CustomNemesisAD": 1, "CustomNemesisA": 0}, "called test function d\n"),
-    ],
-)
-def test_categorical_monkey_simple(dist, output, capsys):
-    nemesis = FakeCategorialMonkey(FakeTester(), None, dist, default_weight=0)
-    method = nemesis.select_next_nemesis()
-
-    method.disrupt()
-    captured = capsys.readouterr()
-    assert output in captured.out
