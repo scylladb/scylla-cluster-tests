@@ -156,7 +156,7 @@ Phases are ordered by dependency: the framework hook and reporting/empty-list ha
 
 **Deliverables**:
 - For each pruned nemesis, publish a single `DisruptionEvent` marked skipped (via `DisruptionEvent.skip(reason)`, `sdcm/sct_events/continuous_event.py:134`) so it appears exactly once as `NemesisStatus.SKIPPED` in Argus (`sdcm/sct_events/argus.py:66`). Emitted at precheck time, not per cycle.
-- Empty-rotation guard: if `disruptions_list` is empty after pruning, publish one `InfoEvent(..., severity=Severity.CRITICAL)` naming the excluded nemesis and their reasons, and stop the nemesis thread cleanly instead of letting `call_next_nemesis()` raise the bare `AssertionError` at `sdcm/nemesis/__init__.py:2085`. This supersedes the "skipped 3× in a row" static path (`sdcm/nemesis/__init__.py:440`) for prune-based cases.
+- Empty-rotation guard: if `disruptions_list` is empty after pruning, publish one `TestFrameworkEvent(..., severity=Severity.CRITICAL)` naming the excluded nemesis and their reasons, and stop the nemesis thread cleanly instead of letting `call_next_nemesis()` raise the bare `AssertionError` at `sdcm/nemesis/__init__.py:2085`. This supersedes the "skipped 3× in a row" static path (`sdcm/nemesis/__init__.py:440`) for prune-based cases.
 
 **Adaptation Notes**: "Configured nemesis not running must fail the test" — the CRITICAL event is the failure signal. Decide whether to raise after publishing or rely on the event severity to fail the test summary; align with how existing CRITICAL nemesis events fail runs (`get_event_summary().get("CRITICAL")`, used at `sdcm/nemesis/__init__.py:1953`).
 
@@ -194,7 +194,7 @@ Phases are ordered by dependency: the framework hook and reporting/empty-list ha
 ### Phase 4: Migrate Category 2 (version / feature flag / cluster-uniform node attribute) skips
 
 **Importance**: Important
-**Description**: Move the 28 version/feature/uniform-attribute guards into `precheck(node)`, using the provided representative node for cluster-wide probes. Convert the implicit `@scylla_versions` `MethodVersionNotFound` cases into explicit `precheck(node)` version checks where the method group is owned by a single nemesis. Split into ≤200 LOC PRs (e.g. tablets group, raft-coordinator group, version-compare group, `SkipPerIssues` group).
+**Description**: Move the remaining 27 version/feature/uniform-attribute guards into `precheck(node)`, using the provided representative node for cluster-wide probes. Convert the implicit `@scylla_versions` `MethodVersionNotFound` cases into explicit `precheck(node)` version checks where the method group is owned by a single nemesis. Split into ≤200 LOC PRs (e.g. tablets group, raft-coordinator group, version-compare group, `SkipPerIssues` group). Excludes `AbortDecommissionMonkey`'s tablets guard, already migrated ahead of schedule in the foundation PR (see PR History).
 
 **Dependencies**: Phase 1, Phase 2
 
@@ -205,7 +205,7 @@ Phases are ordered by dependency: the framework hook and reporting/empty-list ha
 **Adaptation Notes (Needs Investigation)**: `disrupt_create_index`, `disrupt_add_remove_mv`, `disrupt_kill_mv_building_coordinator`, and `disrupt_trigger_split_merge_tablets_with_alter` mix Category 2 feature gates with Category 3 table-existence / node-busy gates. Confirm per nemesis that only the feature/version portion is hoisted to `precheck(node)` and the dynamic portion remains in `disrupt()`. Verify that `is_views_with_tablets_enabled(session)` (`sdcm/nemesis/__init__.py:5841`) can be evaluated against a representative node session before the execution loop.
 
 **Definition of Done**:
-- [ ] All 28 Category 2 guards evaluated via `precheck(node)`; static guards removed from the per-cycle path.
+- [ ] Remaining 27 Category 2 guards evaluated via `precheck(node)`; static guards removed from the per-cycle path.
 - [ ] Feature probes use a representative node, not a target node.
 - [ ] Unit tests assert pruning under disabled feature/version and retention under enabled.
 - [ ] `uv run sct.py pre-commit` passes for each PR.
@@ -340,8 +340,8 @@ Files: `sdcm/nemesis/__init__.py`, `unit_tests/unit/nemesis/__init__.py`,
   passed to `precheck(node)` (no `target_node` exists yet). Existing call-sites are
   unchanged (default `node=None` → `self.target_node`).
 - `run()` calls `precheck_nemesis()` before the loop; if exclusions emptied the
-  rotation it publishes one `Severity.CRITICAL` `InfoEvent` naming every excluded
-  nemesis and returns.
+  rotation it publishes one `Severity.CRITICAL` `TestFrameworkEvent` naming every
+  excluded nemesis and returns.
 - Test infrastructure (shipped here to keep the suite green — `run()` now calls
   `precheck(node)` on test nemesis): add a `precheck(node)` stub to `TestBaseClass` and
   `TestExecuteBaseClass`, plus `PrecheckSkipNemesis` / `PrecheckErrorNemesis`.
@@ -362,14 +362,20 @@ SKIPPED/FAILED reporting, empty-rotation CRITICAL, before/after example). Update
 the `writing-nemesis` skill and the AGENTS.md nemesis section. Advance plan
 status to `in_progress`.
 
-### Future work — migrating the 85 static skips (Phases 3–4)
+### Future work — migrating the remaining 84 static skips (Phases 3–4)
 
-Migrating the 57 config/backend and 28 version/feature guards out of the
+Migrating the 57 config/backend and remaining 27 version/feature guards out of the
 `disrupt_*` methods into `precheck(node)` overrides (Implementation Phases 3 and 4
 above) is **not** part of this foundation PR. Each migration adds a `precheck(node)`
 override to a nemesis class and removes the matching `raise UnsupportedNemesis`
 guard, grouped by nemesis family into ≤200 LOC PRs, using the `precheck_nemesis()`
 machinery landed here.
+
+One Category 2 guard already migrated ahead of schedule as part of this branch:
+`AbortDecommissionMonkey`'s `is_tablets_feature_enabled()` check
+(`sdcm/nemesis/monkey/abort_decommission.py`) moved from `decommission_target_node()`
+into `precheck(node)` — see PR History below. It is excluded from the Phase 4 count
+and deliverables to avoid double-migrating it.
 
 ## PR History
 
@@ -378,5 +384,5 @@ machinery landed here.
 | Phase 1 — `precheck(node)` hook + pruning | current PR | Done |
 | Phase 2 — Empty-list + Argus reporting | current PR | Done |
 | Phase 3 — Migrate Category 1 skips | — | Not started |
-| Phase 4 — Migrate Category 2 skips | — | Not started |
+| Phase 4 — Migrate Category 2 skips | — | Not started (1/28 done ahead of schedule: `AbortDecommissionMonkey` tablets guard, current PR) |
 | Phase 5 — Documentation | current PR | Done |
