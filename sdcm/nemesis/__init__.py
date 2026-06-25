@@ -97,7 +97,7 @@ from sdcm.sct_events.group_common_events import (
 
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
-from sdcm.sct_events.system import InfoEvent
+from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.sla.sla_tests import SlaTests
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
@@ -438,12 +438,15 @@ class NemesisRunner:
         excluded = self.precheck_nemesis()
         if excluded and not self.disruptions_list:
             reason_list = "; ".join(f"{name}: {reason}" for name, reason in excluded)
-            InfoEvent(
-                message=(
-                    f"All {len(excluded)} selected nemesis were excluded by precheck and will not run. "
-                    f"Reasons: {reason_list}"
-                ),
+            selector_message = f" Selector: {self.nemesis_selector!r}." if self.nemesis_selector else ""
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
                 severity=Severity.CRITICAL,
+                message=(
+                    f"No runnable nemesis remain after precheck. "
+                    f"All {len(excluded)} selected nemesis were excluded before execution.{selector_message} "
+                    f"Exclusions: {reason_list}"
+                ),
             ).publish()
             return
         try:

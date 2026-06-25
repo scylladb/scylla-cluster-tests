@@ -4,7 +4,7 @@ precheck_nemesis() is evaluated once before the execution loop starts. It prunes
 every nemesis whose precheck() returns a reason (or raises) from disruptions_list,
 reports each exclusion via a DisruptionEvent and the Argus nemesis tab
 (submit_nemesis + finalize_nemesis), and returns the list of (name, reason)
-exclusions.  run() emits a single CRITICAL InfoEvent and stops when every selected
+exclusions.  run() emits a single CRITICAL TestFrameworkEvent and stops when every selected
 nemesis was pruned.
 
 This is part of the execute-nemesis reporting pattern, hence its home here.
@@ -350,15 +350,23 @@ def test_exception_argus_message_contains_traceback(runner, argus_mock):
 
 def test_run_all_pruned_emits_critical_and_stops(runner, events_function_scope):
     """When every selected nemesis is pruned, run() publishes one CRITICAL
-    InfoEvent and stops without executing any nemesis."""
+    TestFrameworkEvent and stops without executing any nemesis."""
     runner.disruptions_list = [PrecheckSkipNemesis(runner)]
 
     runner.run(cycles_count=5)
 
     assert runner.disruptions_list == []
-    critical_events = events_function_scope.get_events_by_category()["CRITICAL"]
-    assert len(critical_events) == 1, f"Expected 1 CRITICAL InfoEvent, got {len(critical_events)}: {critical_events}"
-    assert "PrecheckSkipNemesis" in critical_events[0]
+    framework_events = [
+        event
+        for event in events_function_scope.published_events
+        if event.get("base") == "TestFrameworkEvent" and event.get("severity") == "CRITICAL"
+    ]
+    assert len(framework_events) == 1, (
+        f"Expected 1 CRITICAL TestFrameworkEvent, got {len(framework_events)}: {framework_events}"
+    )
+    assert framework_events[0]["source"] == "TestNemesisRunner"
+    assert "No runnable nemesis remain after precheck" in framework_events[0]["message"]
+    assert "PrecheckSkipNemesis" in framework_events[0]["message"]
     assert runner.duration_list == []
 
 
