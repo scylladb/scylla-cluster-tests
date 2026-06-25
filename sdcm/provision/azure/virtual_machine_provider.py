@@ -257,7 +257,9 @@ class VirtualMachineProvider:
         self._azure_service.compute.virtual_machines.begin_update(
             self._resource_group_name,
             vm_name=name,
-            parameters={"storageProfile": {"osDisk": {"createOption": "FromImage", "deleteOption": "Delete"}}},
+            parameters={
+                "properties": {"storageProfile": {"osDisk": {"createOption": "FromImage", "deleteOption": "Delete"}}}
+            },
         )
 
         task = self._azure_service.compute.virtual_machines.begin_delete(self._resource_group_name, vm_name=name)
