@@ -27,7 +27,7 @@ from azure.mgmt.compute.models import TargetRegion
 from sdcm.utils.azure_utils import AzureService
 
 if TYPE_CHECKING:
-    from typing import Optional
+    from typing import Any, Optional
 
     from azure.mgmt.compute.models import Gallery, GalleryImageVersion, VirtualMachine
     from azure.mgmt.network.models import (
@@ -317,84 +317,60 @@ class AzureRegion:
     ) -> VirtualMachine:
         if os_state is AzureOsState.GENERALIZED:
             assert admin_username and admin_public_key, "Need to provide login and public key for generalized image"
-        return self.azure_service.compute.virtual_machines.begin_create_or_update(
-            resource_group_name=self.sct_resource_group_name,
-            vm_name=vm_name,
-            parameters=self.common_parameters(tags=tags)
-            | {
-                "properties": {
-                    "hardwareProfile": {
-                        "vmSize": vm_size,
+        properties: dict[str, Any] = {
+            "hardwareProfile": {
+                "vmSize": vm_size,
+            },
+            "storageProfile": {
+                "imageReference": image,
+                "osDisk": {
+                    "name": vm_name,
+                    "osType": "linux",
+                    "caching": "ReadWrite",
+                    "createOption": "FromImage",
+                    "managedDisk": {
+                        "storageAccountType": "StandardSSD_LRS",
                     },
-                    "storageProfile": {
-                        "imageReference": image,
-                        "osDisk": {
-                            "name": vm_name,
-                            "osType": "linux",
-                            "caching": "ReadWrite",
-                            "createOption": "FromImage",
-                            "managedDisk": {
-                                "storageAccountType": "StandardSSD_LRS",  # SSD
-                            },
-                        }
-                        | (
-                            {}
-                            if disk_size is None
-                            else {
-                                "diskSizeGb": disk_size,
-                            }
-                        ),
-                    },
-                    "networkProfile": {
-                        "networkInterfaces": [
+                }
+                | ({} if disk_size is None else {"diskSizeGb": disk_size}),
+            },
+            "networkProfile": {
+                "networkInterfaces": [
+                    {
+                        "id": self.create_network_interface(
+                            network_interface_name=f"{vm_name}-{self.NETWORK_INTERFACE_NAME_SUFFIX}",
+                            tags=tags,
+                            create_public_ip_address=create_public_ip_address,
+                        ).id,
+                    }
+                ],
+            },
+        }
+        if os_state is not AzureOsState.SPECIALIZED:
+            properties["osProfile"] = {
+                "computerName": computer_name or vm_name.replace(".", "-"),
+                "adminUsername": admin_username,
+                "adminPassword": binascii.hexlify(os.urandom(20)).decode(),
+                "linuxConfiguration": {
+                    "disablePasswordAuthentication": True,
+                    "ssh": {
+                        "publicKeys": [
                             {
-                                "id": self.create_network_interface(
-                                    network_interface_name=f"{vm_name}-{self.NETWORK_INTERFACE_NAME_SUFFIX}",
-                                    tags=tags,
-                                    create_public_ip_address=create_public_ip_address,
-                                ).id,
+                                "path": f"/home/{admin_username}/.ssh/authorized_keys",
+                                "keyData": admin_public_key,
                             }
                         ],
                     },
-                }
+                },
             }
-            | (
-                {}
-                if os_state is AzureOsState.SPECIALIZED
-                else {
-                    "properties": {
-                        "osProfile": {
-                            "computerName": computer_name or vm_name.replace(".", "-"),
-                            "adminUsername": admin_username,
-                            "adminPassword": binascii.hexlify(os.urandom(20)).decode(),
-                            "linuxConfiguration": {
-                                "disablePasswordAuthentication": True,
-                                "ssh": {
-                                    "publicKeys": [
-                                        {
-                                            "path": f"/home/{admin_username}/.ssh/authorized_keys",
-                                            "keyData": admin_public_key,
-                                        }
-                                    ],
-                                },
-                            },
-                        },
-                    }
-                }
-            )
-            | (
-                {}
-                if not spot
-                else {
-                    "properties": {
-                        "priority": "Spot",  # possible values are "Regular", "Low", or "Spot"
-                        "evictionPolicy": "Deallocate",  # can be "Deallocate" or "Delete"
-                        "billingProfile": {
-                            "maxPrice": -1,  # -1 indicates the VM shouldn't be evicted for price reasons
-                        },
-                    }
-                }
-            ),
+        if spot:
+            properties["priority"] = "Spot"
+            properties["evictionPolicy"] = "Deallocate"
+            properties["billingProfile"] = {"maxPrice": -1}
+        return self.azure_service.compute.virtual_machines.begin_create_or_update(
+            resource_group_name=self.sct_resource_group_name,
+            vm_name=vm_name,
+            parameters=self.common_parameters(tags=tags) | {"properties": properties},
         ).result()
 
     def deallocate_virtual_machine(self, vm_name: str) -> None:
@@ -453,8 +429,10 @@ class AzureRegion:
             gallery_image_version_name=gallery_image_version_name,
             gallery_image_version=self.common_parameters(location=self.sct_gallery_location, tags=tags)
             | {
-                "storage_profile": {
-                    "source": {"virtual_machine_id": source_id},
+                "properties": {
+                    "storageProfile": {
+                        "source": {"virtualMachineId": source_id},
+                    },
                 },
             },
         ).wait()
