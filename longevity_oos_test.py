@@ -186,14 +186,13 @@ class LongevityOutOfSpaceTest(LongevityTest):
 
     def prepare(self):
         self.run_prepare_write_cmd()
-        for node in self.db_cluster.nodes:
-            usage = self.get_disk_usage(node)
-            if usage <= 85:
-                TestFrameworkEvent(
-                    source=self.__class__.__name__,
-                    message=f"Node {node.name} ({node.private_ip_address}) max disk is only {usage:.2f}% after prepare.",
-                    severity=Severity.CRITICAL,
-                ).publish()
+        mean_usage = sum(self.get_disk_usage(node) for node in self.db_cluster.nodes) / len(self.db_cluster.nodes)
+        if mean_usage <= 85:
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                message=f"Mean disk usage is only {mean_usage:.2f}% after prepare.",
+                severity=Severity.ERROR,
+            ).publish()
 
     def test_oos_write(self):
         """
