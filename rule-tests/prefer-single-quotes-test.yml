@@ -1,0 +1,27 @@
+id: prefer-single-quotes
+# Test cases that SHOULD trigger the rule
+invalidSamples:
+  - code: |
+      def name = "John Doe"
+    fix: |
+      def name = 'John Doe'
+
+  - code: |
+      println("Hello World")
+    fix: |
+      println('Hello World')
+
+# Test cases that SHOULD BE IGNORED by the rule
+validSamples:
+  - code: |
+      def greeting = 'Hello World' # Already single quotes
+  - code: |
+      def dynamic = "Hello ${name}" # Contains interpolation
+  - code: |
+      def possessive = "It's a beautiful day" # Contains single quote
+  - code: |
+      def escaped = "Line 1\nLine 2" # Contains escape sequence
+  - code: |
+      def multiline = """
+      This is a triple-quote block
+      """ # Triple double-quotes are ignored

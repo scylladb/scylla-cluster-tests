@@ -1,14 +1,14 @@
 #!groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
-def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+def lib = library(identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
-    backend: "aws",
-    region: "us-east-1",
-    test_name: "performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest",
+    backend: 'aws',
+    region: 'us-east-1',
+    test_name: 'performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest',
     test_config: '''["test-cases/performance/perf-regression-predefined-throughput-steps.yaml", "configurations/cs-gauss-distribution.yaml", "configurations/cs-compaction-strategy-lcs.yaml"]''',
-    sub_tests: ["test_write_gradual_increase_load","test_read_gradual_increase_load", "test_mixed_gradual_increase_load"],
+    sub_tests: ['test_write_gradual_increase_load','test_read_gradual_increase_load', 'test_mixed_gradual_increase_load'],
 
-    timeout: [time: 1600, unit: "MINUTES"]
+    timeout: [time: 1600, unit: 'MINUTES']
 )

@@ -1,0 +1,9 @@
+id: no-redundant-tostring-in-gstring
+message: "Style: Calling '.toString()' inside a GString interpolation expression is redundant because Groovy evaluates it automatically."
+severity: info
+language: groovy
+rule:
+  # 1. Match a redundant toString() call embedded inside a GString interpolation block
+  pattern: "${$VAR.toString()}"
+# 2. Cleanly strip out the .toString() method invocation, leaving just the variable/object reference
+fix: "${$VAR}"

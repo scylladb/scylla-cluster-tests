@@ -8,20 +8,20 @@ import com.google.jenkins.plugins.credentials.oauth.GoogleOAuth2ScopeRequirement
 def call() {
     def cloudInfo = identifyCloud()
     def buildTag = env.BUILD_TAG
-    def jenkinsJobTag = buildTag ?: ""
+    def jenkinsJobTag = buildTag ?: ''
     def jenkinsJob = deriveJenkinsJob(jenkinsJobTag)
     def tags = [RunByUser: "${getRunningUserId()}",
                 JenkinsJobTag: jenkinsJobTag,
                 JenkinsJob: jenkinsJob,
-                NodeType: "builder",
-                keep_action: "terminate",
+                NodeType: 'builder',
+                keep_action: 'terminate',
                 billing_project:"${GetBillingProjectTag()}"]
     applyTagsWithCreds(cloudInfo, tags)
 }
 
 private String deriveJenkinsJob(String buildTag) {
     if (!buildTag) {
-        return ""
+        return ''
     }
     def matcher = (buildTag =~ /^(.*)-\d+$/)
     if (matcher.matches()) {
@@ -39,7 +39,7 @@ private String GetBillingProjectTag() {
             def prefix = ~/^(scylladb-|scylla-)/
             def billingProjectValue = releaseFolder - prefix
             // Don't set billing_project to "staging"
-            if (billingProjectValue != "staging") {
+            if (billingProjectValue != 'staging') {
                 echo "Project tag '${billingProjectValue}' derived from JOB_NAME."
                 return billingProjectValue
             }
@@ -57,12 +57,12 @@ private String GetBillingProjectTag() {
         }
     }
 
-    echo "No project tag could be derived."
+    echo 'No project tag could be derived.'
     return 'no_billing_project'
 }
 
 def getRunningUserId () {
-    String runningUserID = "jenkins"
+    String runningUserID = 'jenkins'
 
     try {
         if (params.requested_by_user) {
@@ -71,9 +71,9 @@ def getRunningUserId () {
     } catch (ignored) {
     }
 
-    if (runningUserID == "jenkins") {
+    if (runningUserID == 'jenkins') {
         def buildCause = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')
-        echo "Build cause: |${buildCause.toString()}|"
+        echo "Build cause: |${buildCause}|"
         if (buildCause != null && !buildCause.isEmpty()) {
             runningUserID = buildCause[0].userId
         }
@@ -125,13 +125,13 @@ def identifyCloud() {
 
     // --- METHOD 1: Local DMI/Vendor Files ---
     try {
-        def sysVendor  = sh(script: "cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true", returnStdout: true).trim()
-        def prodVersion = sh(script: "cat /sys/class/dmi/id/product_version 2>/dev/null || true", returnStdout: true).trim()
-        def chassisAsset = sh(script: "cat /sys/class/dmi/id/chassis_asset_tag 2>/dev/null || true", returnStdout: true).trim()
-        def prodName   = sh(script: "cat /sys/class/dmi/id/product_name 2>/dev/null || true", returnStdout: true).trim()
+        def sysVendor  = sh(script: 'cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true', returnStdout: true).trim()
+        def prodVersion = sh(script: 'cat /sys/class/dmi/id/product_version 2>/dev/null || true', returnStdout: true).trim()
+        def chassisAsset = sh(script: 'cat /sys/class/dmi/id/chassis_asset_tag 2>/dev/null || true', returnStdout: true).trim()
+        def prodName   = sh(script: 'cat /sys/class/dmi/id/product_name 2>/dev/null || true', returnStdout: true).trim()
 
         // 1. AWS Detection
-        if (sysVendor == "Amazon EC2" || prodVersion.toLowerCase().contains("amazon")) {
+        if (sysVendor == 'Amazon EC2' || prodVersion.toLowerCase().contains('amazon')) {
             info.provider = 'AWS'
             info.method = 'DMI_Check'
 
@@ -141,7 +141,7 @@ def identifyCloud() {
             def token = sh(script: "curl -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' -s 2>/dev/null", returnStdout: true).trim()
 
             // 2. Prepare Header (Use token if we got one)
-            def tokenHeader = token ? "-H 'X-aws-ec2-metadata-token: ${token}'" : ""
+            def tokenHeader = token ? "-H 'X-aws-ec2-metadata-token: ${token}'" : ''
 
             // 3. Fetch Data (Using Token)
             info.instanceId = sh(script: "curl -fs ${tokenHeader} http://169.254.169.254/latest/meta-data/instance-id", returnStdout: true).trim()
@@ -154,7 +154,7 @@ def identifyCloud() {
         }
 
         // 2. OCI Detection
-        if (chassisAsset == "OracleCloud.com" || sysVendor == "OracleCloud") {
+        if (chassisAsset == 'OracleCloud.com' || sysVendor == 'OracleCloud') {
             info.provider = 'OCI'
             info.method = 'DMI_Check'
             info.instanceId = sh(script: "curl -fs -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/id", returnStdout: true).trim()
@@ -163,7 +163,7 @@ def identifyCloud() {
         }
 
         // 3. GCE Detection
-        if (prodName.contains("Google")) {
+        if (prodName.contains('Google')) {
             info.provider = 'GCE'
             info.method = 'DMI_Check'
             info.instanceId = sh(script: "curl -fs -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/name", returnStdout: true).trim()
@@ -181,7 +181,7 @@ def identifyCloud() {
     // AWS Network Check (IMDSv2 Aware)
     // Try to fetch token first
     def awsToken = sh(script: "curl -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' --connect-timeout 1 -s 2>/dev/null", returnStdout: true).trim()
-    def awsHeader = awsToken ? "-H 'X-aws-ec2-metadata-token: ${awsToken}'" : ""
+    def awsHeader = awsToken ? "-H 'X-aws-ec2-metadata-token: ${awsToken}'" : ''
 
     if (sh(script: "curl -fs --connect-timeout 2 ${awsHeader} http://169.254.169.254/latest/meta-data/instance-id", returnStatus: true) == 0) {
         info.provider = 'AWS'
@@ -261,9 +261,9 @@ private def writeKeyFile(jsonKey) {
         json = new String(jsonKey.getPlainData())
     }
 
-    def tempDir = pwd() + "/.auth"
+    def tempDir = pwd() + '/.auth'
     sh "mkdir -p '${tempDir}'"
-    def tempFile = "${tempDir}/gcloud-${UUID.randomUUID().toString()}.json"
+    def tempFile = "${tempDir}/gcloud-${UUID.randomUUID()}.json"
 
     writeFile encoding: 'UTF-8', file: tempFile, text: json
     return tempFile
@@ -271,8 +271,8 @@ private def writeKeyFile(jsonKey) {
 
 def cleanTags(Map tags) {
     return tags.collectEntries { k, v ->
-        def cleanKey = k.toString().toLowerCase().replaceAll("[^a-z0-9_-]", "-")
-        def cleanValue = v.toString().toLowerCase().replaceAll("[^a-z0-9_-]", "-")
+        def cleanKey = k.toLowerCase().replaceAll('[^a-z0-9_-]', '-')
+        def cleanValue = v.toLowerCase().replaceAll('[^a-z0-9_-]', '-')
         [(cleanKey): cleanValue]
     }
 }
@@ -309,7 +309,7 @@ def cleanTags(Map tags) {
  */
 def applyTagsWithCreds(Map cloudInfo, Map tags) {
     if (!tags || tags.isEmpty()) {
-        echo "No tags provided; skipping applyTagsWithCreds"
+        echo 'No tags provided; skipping applyTagsWithCreds'
         return
     }
 
@@ -328,7 +328,7 @@ def applyTagsWithCreds(Map cloudInfo, Map tags) {
     else if (cloudInfo.provider == 'GCE') {
         def maxLabelLength = 63
         tags = cleanTags(tags)
-        def gce_project = "${params.gce_project ?: 'gcp-sct-project-1'}" - "gcp-"
+        def gce_project = "${params.gce_project ?: 'gcp-sct-project-1'}" - 'gcp-'
         withGceCredentials(gce_project) { keyFilePath ->
             sh "gcloud auth activate-service-account --key-file='${keyFilePath}'"
             def labelsArg = tags.collect { k, v -> "${k}=${normalizeValueLength(v, maxLabelLength)}" }.join(',')
@@ -339,7 +339,7 @@ def applyTagsWithCreds(Map cloudInfo, Map tags) {
         def maxTagLength = 256
         tags = cleanTags(tags)
         withCredentials([ociCredentials(credentialsId: 'oci-sct-user')]) {
-            withEnv(["OCI_CLI_REGION=${cloudInfo.region}", "OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True"]) {
+            withEnv(["OCI_CLI_REGION=${cloudInfo.region}", 'OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True']) {
                 def jsonTag = tags.collect { k, v -> "\"${k}\": \"${normalizeValueLength(v, maxTagLength)}\"" }.join(',')
                 def script = """
                     oci compute instance update --instance-id ${cloudInfo.instanceId} --freeform-tags '{${jsonTag}}' --force

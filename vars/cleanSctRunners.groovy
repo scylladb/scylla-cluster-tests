@@ -5,7 +5,7 @@ import org.jenkinsci.plugins.workflow.support.steps.build.RunWrapper
 def call(Map params, RunWrapper currentBuild){
     def cloud_provider = getCloudProviderFromBackend(params.backend)
 
-    if ( params.backend.equals("xcloud") ) {
+    if ( params.backend.equals('xcloud') ) {
         cloud_provider = params.xcloud_provider
     }
 

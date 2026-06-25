@@ -1,6 +1,6 @@
 #!groovy
 
-def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+def lib = library(identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 // This scenario can only be triggered with a scylla repo, not an ami
 longevityPipeline(

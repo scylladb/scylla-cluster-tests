@@ -1,0 +1,7 @@
+id: unnecessary-tostring-concat
+message: "Style/Performance: Explicitly calling .toString() during string concatenation is redundant."
+severity: info
+language: groovy
+rule:
+  pattern: "$VAR.toString()"
+fix: "$VAR"

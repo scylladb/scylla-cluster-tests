@@ -49,6 +49,14 @@ repos:
 
 -   repo: local
     hooks:
+    -   id: ast-grep
+        name: AST Linter (Dynamic Rules)
+        language: docker_image
+        entry: "scylladb/ast-grep:1.0.0"
+        args: []
+        files: \.(groovy|jenkinsfile|Jenkinsfile|py)$
+        pass_filenames: false
+
     -   id: ruff-format
         name: ruff-format
         entry: ruff format

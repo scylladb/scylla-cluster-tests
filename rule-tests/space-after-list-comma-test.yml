@@ -1,0 +1,28 @@
+id: space-after-list-comma
+invalidSamples:
+  # Case 1: First item boundary check (Verifies no leading comma is injected)
+  - code: |
+      def tags = ["qa","prod", "staging"]
+    fix: |
+      def tags = ["qa", "prod", "staging"]
+
+  # Case 2: Multi-item packed array layout
+  - code: |
+      def list = [1,2,3]
+    fix: |
+      def list = [1, 2, 3]
+
+  # Case 3: Mixed packed elements
+  - code: |
+      def settings = [true, false,true]
+    fix: |
+      def settings = [true, false, true]
+
+validSamples:
+  # Case 1: Properly formatted list
+  - code: |
+      def items = ['alpha', 'beta', 'gamma']
+
+  # Case 2: Single element list (No commas exist)
+  - code: |
+      def single = ['lone-item']

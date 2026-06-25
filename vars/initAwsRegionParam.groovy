@@ -1,7 +1,7 @@
 #!groovy
 
 def call(String regionStr, String builder_region){
-    if (regionStr == "random"){
+    if (regionStr == 'random'){
         return builder_region
     }
     else{

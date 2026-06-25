@@ -1,0 +1,32 @@
+id: prefer-single-quotes
+message: "Style: Use single quotes for literal strings that do not contain interpolation or internal single quotes."
+severity: info
+language: groovy
+rule:
+  # 1. Look for string nodes
+  kind: string
+  # 2. Tell ast-grep to bind the text of this string node to a custom meta-variable $STR
+  pattern: $STR
+constraints:
+  # 3. Now $STR is explicitly defined, so we can securely attach our filters to it!
+  STR:
+    all:
+      # Match standard double-quoted strings with NO interpolation ($)
+      - regex: '^"[^\$]*"$'
+      # Skip strings that already contain single quotes to prevent breaking syntax
+      - not:
+          regex: "'"
+      # Skip strings containing backslashes or escape characters
+      - not:
+          regex: '\\\\'
+      # Skip triple double-quoted multiline blocks (""")
+      - not:
+          regex: '^"""'
+transform:
+  STR_CONTENT:
+    substring:
+      # 4. Pull directly from our successfully bound meta-variable
+      source: $STR
+      startChar: 1
+      endChar: -1
+fix: "'$STR_CONTENT'"

@@ -7,10 +7,10 @@ def call(Map params, RunWrapper currentBuild){
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def test_status = currentBuild.currentResult
     if (test_status) {
-        test_status = "--test-status " + test_status
+        test_status = '--test-status ' + test_status
     }
     if (start_time) {
-        start_time = "--start-time " + start_time
+        start_time = '--start-time ' + start_time
     }
 
     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)

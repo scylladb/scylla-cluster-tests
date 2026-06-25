@@ -1,6 +1,7 @@
 #!groovy
 import groovy.json.JsonSlurperClassic
 
+
 def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
@@ -132,7 +133,7 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
-            stage("Preparation") {
+            stage('Preparation') {
                 // NOTE: this stage is a workaround for the following Jenkins bug:
                 // https://issues.jenkins-ci.org/browse/JENKINS-41929
                 when { expression { env.BUILD_NUMBER == '1' } }
@@ -164,6 +165,7 @@ def call(Map pipelineParams) {
                                     dir('scylla-cluster-tests') {
                                         checkout scm
                                         dockerLogin(params)
+
                                         (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
                                     }
                                 }
@@ -195,7 +197,7 @@ def call(Map pipelineParams) {
                                 node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
-                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",
+                                             "SCT_TEST_ID=${UUID.randomUUID()}",
                                              "SCT_GCE_PROJECT=${env.SCT_GCE_PROJECT ?: ''}",
                                              "SCT_BILLING_PROJECT=${env.SCT_BILLING_PROJECT ?: ''}",]) {
                                         stage("Checkout for ${sub_test}") {

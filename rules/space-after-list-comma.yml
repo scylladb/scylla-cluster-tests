@@ -1,0 +1,9 @@
+id: space-after-list-comma
+message: "Style: Missing whitespace after comma in list definition."
+severity: info
+language: groovy
+rule:
+  # 1. Match a list structure containing a tightly packed item pair anywhere inside it
+  pattern: "[$***BEFORE, $ITEM1,$ITEM2, $***AFTER]"
+# 2. Re-space only the matched tightly packed items safely
+fix: "[$***BEFORE, $ITEM1, $ITEM2, $***AFTER]"

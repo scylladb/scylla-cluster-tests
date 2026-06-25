@@ -3,21 +3,21 @@
 def call(Map params, String region, functional_test = false, Map pipelineParams = [:]){
     // handle params which can be a json list
     def current_region = initAwsRegionParam(params.region, region)
-    def current_gce_datacenter = params.gce_datacenter ?: ""
-    def current_oci_region = ""
+    def current_gce_datacenter = params.gce_datacenter ?: ''
+    def current_oci_region = ''
     if (params.oci_region_name) {
         current_oci_region = initAwsRegionParam(params.oci_region_name, region)
     }
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
-    def email_recipients = params.email_recipients ? groovy.json.JsonOutput.toJson(params.email_recipients) : ""
+    def email_recipients = params.email_recipients ? groovy.json.JsonOutput.toJson(params.email_recipients) : ''
 
     def test_cmd
 
     if (functional_test != null && functional_test) {
-        test_cmd = "run-pytest"
+        test_cmd = 'run-pytest'
     } else {
-        test_cmd = "run-test"
+        test_cmd = 'run-test'
     }
 
     try {
@@ -267,7 +267,7 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
                     ./docker/env/hydra.sh fetch-junit-from-runner \${RUNNER_IP} --backend ${params.backend}
                 fi
             """
-            junit(testResults:"**/junit.xml", keepProperties:true)
+            junit(testResults:'**/junit.xml', keepProperties:true)
         }
     }
 }

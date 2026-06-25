@@ -74,42 +74,42 @@ def call(String backend, String region=null, String datacenter=null, String loca
         def supported_regions = []
 
         if (cloud_provider == 'aws') {
-            supported_regions = ["eu-west-2", "eu-north-1", "eu-central-1", "us-west-2", "us-east-2", "eu-west-3", "ca-central-1"]
+            supported_regions = ['eu-west-2', 'eu-north-1', 'eu-central-1', 'us-west-2', 'us-east-2', 'eu-west-3', 'ca-central-1']
         } else if (cloud_provider == 'gce') {
-            supported_regions = ["us-east1", "us-east4", "us-west1", "us-central1"]
+            supported_regions = ['us-east1', 'us-east4', 'us-west1', 'us-central1']
             region = datacenter
         } else if (cloud_provider == 'azure') {
-            supported_regions = ["eastus"]
+            supported_regions = ['eastus']
             region = location
         } else if (cloud_provider == 'oci') {
-            supported_regions = ["us-ashburn-1", "us-phoenix-1"]
+            supported_regions = ['us-ashburn-1', 'us-phoenix-1']
             region = oci_region
         }
 
-        println("Finding builder for region: " + region)
-        if (region == "random" || datacenter == "random" || location == "random") {
+        println('Finding builder for region: ' + region)
+        if (region == 'random' || datacenter == 'random' || location == 'random') {
             Collections.shuffle(supported_regions)
             region = supported_regions[0]
         }
 
-        def cp_region = cloud_provider + "-" + region
-        println("Checking if we have a label for " + cp_region)
+        def cp_region = cloud_provider + '-' + region
+        println('Checking if we have a label for ' + cp_region)
 
         def label = jenkins_labels.get(cp_region, null)
         if (label != null) {
-            println("Found builder with label: " + label)
-            return [ "label": label, "region": region ]
+            println('Found builder with label: ' + label)
+            return [ 'label': label, 'region': region ]
         } else {
             throw new Exception("=================== ${cloud_provider} region ${region} not supported ! ===================")
         }
     } else if (region == 'fips') {
-        return [ "label": jenkins_labels['aws-fips'], "region": '' ]
+        return [ 'label': jenkins_labels['aws-fips'], 'region': '' ]
     } else {
         def label = jenkins_labels.get(cloud_provider, null)
         if (label == null) {
             throw new Exception("=================== No Jenkins builder label mapping found for backend '${backend}' (resolved " +
                                 "to cloud_provider '${cloud_provider}'). Available mappings: ${jenkins_labels.keySet().sort()} ===================")
         }
-        return [ "label": label, "region": region ]
+        return [ 'label': label, 'region': region ]
     }
 }

@@ -31,12 +31,12 @@ Master monthly (master-monthly):
 
 def isVersionIgnored(String version, List ignoreVersions) {
     return ignoreVersions.any { ver ->
-        version?.trim() == ver || version?.trim().startsWith(ver + ".")
+        version?.trim() == ver || version?.trim().startsWith(ver + '.')
     }
 }
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels("aws", "eu-west-1")
+    def builder = getJenkinsLabels('aws', 'eu-west-1')
     pipeline {
         agent {
             label {
@@ -81,8 +81,8 @@ def call(Map pipelineParams) {
                     script {
                         def scylla_version = params.scylla_version?.trim()
                         def labels_selector = params.labels_selector?.trim()
-                        if (scylla_version == "master:latest") {
-                            scylla_version = "master"
+                        if (scylla_version == 'master:latest') {
+                            scylla_version = 'master'
                             if (!labels_selector) {
                                 error "Labels selector is not set. Please provide one of a valid 'labels_selector' values: 'master-weekly' OR 'master-daily' OR 'master-3weeks'."
                             }
@@ -360,13 +360,13 @@ def call(Map pipelineParams) {
                         def jobs_names = testRegionMatrix*.job_name.toSet()
                         println("Jobs names: $jobs_names")
                         def image_names = [:]
-                        if (scylla_version == "master") {
+                        if (scylla_version == 'master') {
                             // Collect unique cloud_provider-arch combinations first
                             def unique_keys = [:]  // image_cache_key -> [cloud_provider, arch, region]
                             for (def entry in testRegionMatrix) {
                                 String cloud_provider = entry.cloud_provider ?: 'aws'
                                 String arch = entry.arch ?: 'x86_64'
-                                String image_cache_key = "${cloud_provider}-${arch}".toString()
+                                String image_cache_key = "${cloud_provider}-${arch}"
                                 if (!unique_keys.containsKey(image_cache_key)) {
                                     String lookup_region = entry.region ?: 'us-east-1'
                                     unique_keys[image_cache_key] = [cloud_provider: cloud_provider, arch: arch, region: lookup_region]
@@ -382,7 +382,7 @@ def call(Map pipelineParams) {
                                 def image_name_json = output.split('\n')[-1].trim()
                                 println("Image name json: $image_name_json")
                                 if (!image_name_json) {
-                                    error "Image name is empty. Please check the hydra.sh command output."
+                                    error 'Image name is empty. Please check the hydra.sh command output.'
                                 }
                                 image_names[image_cache_key] = new groovy.json.JsonSlurperClassic().parseText(image_name_json).keySet()[0]
                                 println("Image name for ${image_cache_key}: ${image_names[image_cache_key]}")
@@ -410,20 +410,20 @@ def call(Map pipelineParams) {
                                         }
                                     } else {
                                         for (def ver in (entry.versions ?: [])) {
-                                            if (scylla_version?.trim() == ver || scylla_version?.trim().startsWith(ver + ".")) {
+                                            if (scylla_version?.trim() == ver || scylla_version?.trim().startsWith(ver + '.')) {
                                                 version = params.scylla_version
                                                 entry_version_matched = true
                                             }
                                         }
                                     }
                                     if (entry_version_matched) {
-                                        if (scylla_version == "master" && labels_selector && !(entry.labels.contains(labels_selector))) {
+                                        if (scylla_version == 'master' && labels_selector && !(entry.labels.contains(labels_selector))) {
                                             println("Skipping job $job_name for labels_selector: $labels_selector")
                                             continue
                                         }
                                         // NOTE: Check that Scylla version matches specified 'pre-release' parts.
                                         //       Semver structure: <major> "." <minor> "." <patch> "-" <pre-release> "+" <build>
-                                        if (!scylla_version?.startsWith("master") && entry.pre_release && !entry.pre_release.any { pr -> version.contains("-${pr}") }) {
+                                        if (!scylla_version?.startsWith('master') && entry.pre_release && !entry.pre_release.any { pr -> version.contains("-${pr}") }) {
                                             println("Skipping job $job_name because $version version doesn't match specified pre-releases: ${entry.pre_release}")
                                             continue
                                         }
@@ -439,7 +439,7 @@ def call(Map pipelineParams) {
                                             image_name_for_job = null
                                         } else {
                                             def job_cloud_provider = entry.cloud_provider ?: 'aws'
-                                            String job_image_cache_key = "${job_cloud_provider}-${job_arch}".toString()
+                                            String job_image_cache_key = "${job_cloud_provider}-${job_arch}"
                                             image_name_for_job = image_names[job_image_cache_key]
                                         }
                                     }

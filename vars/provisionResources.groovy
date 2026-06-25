@@ -2,12 +2,12 @@
 
 def call(Map params, String region){
     if (params.reuse_cluster) {
-        echo "Cluster reuse mode: skipping resource provisioning"
+        echo 'Cluster reuse mode: skipping resource provisioning'
         return
     }
 
     def current_region = initAwsRegionParam(params.region, region)
-    def current_oci_region = ""
+    def current_oci_region = ''
     if (params.oci_region_name) {
         current_oci_region = initAwsRegionParam(params.oci_region_name, region)
     }

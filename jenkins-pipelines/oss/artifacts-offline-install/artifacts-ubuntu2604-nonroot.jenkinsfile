@@ -1,7 +1,7 @@
 #! groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
-def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+def lib = library(identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 artifactsPipeline(
     test_config: 'test-cases/artifacts/ubuntu2604.yaml',
