@@ -268,10 +268,10 @@ class MyTabletNemesis(NemesisBaseClass):
 2. Exactly one `DisruptionEvent` marked `SKIPPED` is published at precheck time
    (one `NemesisStatus.SKIPPED` row in Argus per excluded nemesis, not per cycle).
 3. A warning is logged: `"Nemesis <Name> excluded by precheck: <reason>"`.
-4. If **every** selected nemesis is excluded, one `Severity.CRITICAL` `InfoEvent`
-   is published naming each exclusion reason, and the nemesis thread stops
-   cleanly. A misconfigured selector that produces an empty rotation fails the
-   test loudly.
+4. If **every** selected nemesis is excluded, one `Severity.CRITICAL`
+   `TestFrameworkEvent` is published naming each exclusion reason, and the
+   nemesis thread stops cleanly. A misconfigured selector that produces an
+   empty rotation fails the test loudly.
 
 #### Before / after example
 
