@@ -15,7 +15,7 @@ from sdcm.wait import wait_for
 
 from sdcm.sct_events.group_common_events import decorate_with_context, ignore_ycsb_connection_refused
 from sdcm.utils.parallel_object import ParallelObject
-from sdcm.utils.raft import get_node_status_from_system_by
+from sdcm.utils.raft import get_node_status_from_system_by, NodeState
 from sdcm.cluster import BaseMonitorSet, NodeSetupFailed, BaseScyllaCluster, BaseNode
 from sdcm.exceptions import RaftTopologyCoordinatorNotFound
 from sdcm.rest.storage_service_client import StorageServiceClient
@@ -145,13 +145,95 @@ class NodeBootstrapAbortManager:
         finally:
             self._set_wait_stop_event()
 
+    def _wait_for_host_id_not_bootstrapping(self, host_id: str, timeout: int = 180) -> None:
+        """Wait until the given host_id is no longer in BOOTSTRAPPING state in raft topology.
+
+        A node killed mid-bootstrap may remain in BOOTSTRAPPING state in the raft
+        topology coordinator for some time. Issuing removenode while the node is still
+        in this transitional state is ineffective. This helper blocks until the
+        coordinator transitions the entry out of BOOTSTRAPPING (or the entry disappears),
+        so that the subsequent removenode has a chance of succeeding.
+        """
+
+        def _not_bootstrapping() -> bool:
+            node_status = get_node_status_from_system_by(
+                verification_node=self.verification_node,
+                host_id=host_id,
+            )
+            if node_status.state == NodeState.NOTEXISTS:
+                LOGGER.debug("Host %s no longer exists in system.cluster_status", host_id)
+                return True
+            if node_status.state != NodeState.BOOTSTRAPPING:
+                LOGGER.debug("Host %s transitioned out of BOOTSTRAPPING to %s", host_id, node_status.state)
+                return True
+            return False
+
+        wait_for(
+            func=_not_bootstrapping,
+            step=5,
+            timeout=timeout,
+            throw_exc=True,
+            text=f"Waiting for host {host_id} to exit BOOTSTRAPPING state before removenode",
+        )
+
+    def _verify_node_removed_from_topology(self, timeout: int = 300) -> None:
+        """Verify the bootstrap node's IP is fully removed from raft topology.
+
+        This is the final safety gate before rebootstrap: it ensures that the stale
+        topology entry (by IP) is gone from system.cluster_status. If the entry still
+        exists after the timeout, an exception is raised to prevent a doomed rebootstrap
+        attempt that would be rejected by the coordinator with "already exists".
+        """
+
+        def _node_not_in_topology() -> bool:
+            node_status = get_node_status_from_system_by(
+                verification_node=self.verification_node,
+                ip_address=self.bootstrap_node.ip_address,
+            )
+            if node_status.state == NodeState.NOTEXISTS:
+                return True
+            LOGGER.debug(
+                "Bootstrap node %s (IP %s) still present in topology with state=%s, up=%s",
+                self.bootstrap_node.name,
+                self.bootstrap_node.ip_address,
+                node_status.state,
+                node_status.up,
+            )
+            return False
+
+        wait_for(
+            func=_node_not_in_topology,
+            step=10,
+            timeout=timeout,
+            throw_exc=True,
+            text=(
+                f"Waiting for bootstrap node {self.bootstrap_node.name} "
+                f"(IP {self.bootstrap_node.ip_address}) to be fully removed from raft topology"
+            ),
+        )
+        LOGGER.info(
+            "Confirmed: bootstrap node %s (IP %s) is no longer in raft topology",
+            self.bootstrap_node.name,
+            self.bootstrap_node.ip_address,
+        )
+
     def prepare_node_for_rebootstrap(self):
-        """Prepare node for rebootstrap by removing it from cluster and cleaning data"""
+        """Prepare node for rebootstrap by removing it from cluster and cleaning data.
+
+        The sequence is:
+        1. Wait for each host_id to exit BOOTSTRAPPING state — a node killed
+           mid-bootstrap stays in this transitional state and removenode cannot
+           remove it until the coordinator transitions it out.
+        2. Issue removenode for each host_id.
+        3. Run clean_group0_garbage to handle any remaining inconsistencies.
+        4. Wipe local Scylla data so the node can rejoin fresh.
+        """
         node_host_ids = self.get_host_ids_from_log()
         # if node_host_ids is empty that means that node was not started properly and host id was not generated
         # so no need to remove it from cluster and just check and clean group0 garbage and scylla data
         if node_host_ids:
             for host_id in set(node_host_ids):
+                self._wait_for_host_id_not_bootstrapping(host_id)
                 self.verification_node.run_nodetool(f"removenode {host_id}", ignore_status=True, retry=3)
         self.verification_node.raft.clean_group0_garbage(raise_exception=True)
         with self.actions_log.action_scope(f"Clean Scylla data {self.bootstrap_node.name} node"):
@@ -235,6 +317,7 @@ class NodeBootstrapAbortManager:
         )
 
         self.prepare_node_for_rebootstrap()
+        self._verify_node_removed_from_topology()
         watcher_startup_failed = partial(self.watch_startup_failed, timeout=3600)
         try:
             LOGGER.debug("Start rebootstrap as new node")
