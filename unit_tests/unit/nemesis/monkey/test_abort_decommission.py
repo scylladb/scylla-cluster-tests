@@ -217,11 +217,20 @@ def test_disrupt_raises_unsupported_when_single_node_in_rack(runner):
         AbortDecommissionMonkey(runner).disrupt()
 
 
-def test_disrupt_raises_unsupported_when_tablets_not_enabled(runner):
-    """UnsupportedNemesis raised when tablets feature is not enabled."""
+def test_precheck_skips_when_tablets_not_enabled(runner):
+    """precheck() skips when tablets feature is not enabled."""
     with patch(f"{_MODULE}.is_tablets_feature_enabled", return_value=False):
-        with pytest.raises(UnsupportedNemesis, match="only supported with tablets"):
-            AbortDecommissionMonkey(runner).disrupt()
+        assert AbortDecommissionMonkey(runner).precheck(node=runner.cluster.data_nodes[0]) == (
+            "Aborting decommission is only supported with tablets."
+        )
+
+
+def test_precheck_keeps_when_tablets_enabled(runner):
+    """precheck() keeps the nemesis when tablets feature is enabled."""
+    with patch(f"{_MODULE}.is_tablets_feature_enabled", return_value=True) as mock_tablets_enabled:
+        assert AbortDecommissionMonkey(runner).precheck(node=runner.cluster.data_nodes[0]) is None
+
+    mock_tablets_enabled.assert_called_once_with(runner.cluster.data_nodes[0])
 
 
 def test_disrupt_raises_unsupported_when_no_tablet_tables(runner):
