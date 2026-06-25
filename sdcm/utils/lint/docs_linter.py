@@ -25,6 +25,10 @@ class LintResult:
     def passed(self) -> bool:
         return len(self.errors) == 0
 
+    @property
+    def missing(self) -> bool:
+        return any("TD-001" in e for e in self.errors)
+
 
 def lint_test_metadata(config_path: Path, taxonomy_path: Path | None = None) -> LintResult:
     """Validate test_metadata in a test-case YAML against taxonomy and config content.
