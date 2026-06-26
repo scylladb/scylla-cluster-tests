@@ -260,6 +260,45 @@ class AZResolver:
             candidates.append((region, letters[:cardinality]))
         return candidates
 
+    def get_dc_fallback_candidates(self, dc_index: int) -> list[tuple[str, list[str]]]:
+        """Collect ordered ``(region, az_letters)`` candidates to relocate the DC at ``dc_index``."""
+        region_names = self._region_names()
+        if dc_index >= len(region_names):
+            return []
+
+        in_use_regions = set(region_names)
+        staying_regions = [region for index, region in enumerate(region_names) if index != dc_index]
+        configured_letters = self._configured_az_letters()
+        required_az_count = len(configured_letters) or 1
+        instance_types = [instance_type for instance_type in [self._params.get("instance_type_db")] if instance_type]
+
+        candidates = []
+        for region in AWS_SUPPORTED_REGIONS:
+            if region in in_use_regions:
+                continue
+            if not all(self._is_region_peered(staying, region) for staying in staying_regions):
+                LOGGER.info(
+                    "Region fallback (DC %d): skipping %s (no active VPC peering with all staying DCs %s)",
+                    dc_index,
+                    region,
+                    staying_regions,
+                )
+                continue
+
+            supported_letters = self._common_supported_letters([region], configured_letters, instance_types)
+            if len(supported_letters) < required_az_count:
+                LOGGER.info(
+                    "Region fallback (DC %d): skipping %s (only %d AZ letter(s) support %s, need %d)",
+                    dc_index,
+                    region,
+                    len(supported_letters),
+                    instance_types,
+                    required_az_count,
+                )
+                continue
+            candidates.append((region, supported_letters[:required_az_count]))
+        return candidates
+
     @staticmethod
     def _is_region_peered(current_region: str, candidate_region: str) -> bool:
         """Return True only when an ACTIVE VPC peering exists between the two regions."""

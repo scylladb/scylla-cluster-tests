@@ -24,16 +24,23 @@ from sdcm.provision.aws.az_resolver import (
     is_region_fallback_enabled,
     run_pre_flight_capacity_probe,
 )
-from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, RegionAMINotFoundError, is_capacity_error
+from sdcm.provision.aws.capacity_errors import (
+    ProvisioningCapacityExhausted,
+    RegionAMINotFoundError,
+    get_failed_region,
+    is_capacity_error,
+)
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.aws.region_fallback import (
     cleanup_region,
+    enforce_multi_dc_fallback_supported,
     enforce_single_region_gate,
     restore_region,
+    switch_dc_region,
     switch_region,
 )
-from sdcm.provision.aws.utils import ec2_clients
+from sdcm.provision.aws.utils import cleanup_abandoned_region, ec2_clients
 from sdcm.sct_provision.aws.cluster import OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.test_config import TestConfig
@@ -57,7 +64,10 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
 
     def provision(self):
         if is_region_fallback_enabled(self._params):
-            self._provision_with_region_fallback()
+            if len(self._params.region_names) > 1:
+                self._provision_with_multi_dc_fallback()
+            else:
+                self._provision_with_region_fallback()
             return
         self._provision_once()
 
@@ -214,6 +224,144 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
 
     def _cleanup_region(self, region: str | None) -> None:
         cleanup_region(self._test_config.test_id(), region, partial_cleanup=self._cleanup_partial_provision)
+
+    def _provision_with_multi_dc_fallback(self) -> None:
+        """Provision a multi-region cluster, relocating DB DCs on capacity exhaustion."""
+        enforce_multi_dc_fallback_supported(self._params)
+
+        if is_az_fallback_enabled(self._params):
+            LOGGER.info(
+                "Multi-DC fallback: availability_zone is global, so a DC that exhausts capacity is relocated "
+                "to another region rather than retried in a different AZ within the same region."
+            )
+
+        original_region_names = list(self._params.region_names)
+        original_az = self._params.get("availability_zone")
+        original_env_region = os.environ.get("SCT_REGION_NAME")
+
+        try:
+            AZResolver(self._params).resolve()
+            run_pre_flight_capacity_probe(self._params)
+
+            if self.placement_group:
+                self.placement_group.provision()
+
+            self._provision_db_with_dc_fallback()
+
+            for cluster in (self.monitoring_cluster, self.loader_cluster, self.cs_db_cluster):
+                if cluster:
+                    cluster.provision()
+        except Exception:
+            self._restore_region_names(original_region_names, original_az, original_env_region)
+            raise
+
+    def _provision_db_with_dc_fallback(self) -> None:
+        """Provision the DB cluster across DCs, relocating any DC that exhausts capacity."""
+        if not self.db_cluster:
+            return
+
+        tried_by_dc = {}
+        while True:
+            try:
+                self.db_cluster.provision(skip_region_ids=self._completed_db_region_ids())
+                return
+            except (ClientError, ProvisioningCapacityExhausted) as exc:
+                if isinstance(exc, ClientError) and not is_capacity_error(exc):
+                    raise
+                self._relocate_failed_db_dc(exc, tried_by_dc)
+
+    def _relocate_failed_db_dc(self, exc: Exception, tried_by_dc: dict[int, set[str]]) -> None:
+        """Relocate the DC whose DB provisioning exhausted to its next eligible region, or give up."""
+        region_names = list(self._params.region_names)
+        failed_region = get_failed_region(exc)
+        if failed_region is None or failed_region not in region_names:
+            raise exc
+
+        dc_index = region_names.index(failed_region)
+        self._cleanup_dc_region(failed_region)
+        tried = tried_by_dc.setdefault(dc_index, set())
+        tried.add(failed_region)
+
+        candidates = [
+            region for region, _ in AZResolver(self._params).get_dc_fallback_candidates(dc_index) if region not in tried
+        ]
+        for target in candidates:
+            tried.add(target)
+            try:
+                self._switch_dc_region(dc_index, target, source_region=failed_region)
+                LOGGER.warning("DB DC '%s' (index %d) exhausted; relocated to '%s'", failed_region, dc_index, target)
+                return
+            except RegionAMINotFoundError as ami_exc:
+                LOGGER.warning("Region '%s' ineligible for DC %d (no equivalent AMI): %s", target, dc_index, ami_exc)
+
+        raise RuntimeError(
+            f"DB DC '{failed_region}' (index {dc_index}) exhausted; no eligible fallback region "
+            f"(tried: {sorted(tried)})"
+        ) from exc
+
+    def _completed_db_region_ids(self) -> set[int]:
+        """Region indices whose DB instances are already provisioned, so a retry skips them."""
+        region_names = list(self._params.region_names)
+        done: set[int] = set()
+        for instance in getattr(self.db_cluster, "_provisioned_instances", None) or []:
+            region = self._instance_region(instance)
+            if region in region_names:
+                done.add(region_names.index(region))
+
+        return done
+
+    def _cleanup_dc_region(self, region: str) -> None:
+        """Terminate one region's partial instances across cached clusters, drop them from tracking, then sweep."""
+        for prop in _CLUSTER_CACHED_PROPS:
+            cluster_obj = self.__dict__.get(prop)
+            provisioned = getattr(cluster_obj, "_provisioned_instances", None) if cluster_obj is not None else None
+            if not provisioned:
+                continue
+
+            instance_ids = []
+            for inst in provisioned:
+                if self._instance_region(inst) != region:
+                    continue
+                instance_id = getattr(inst, "instance_id", None) or getattr(inst, "id", None)
+                if instance_id:
+                    instance_ids.append(instance_id)
+
+            if instance_ids:
+                LOGGER.info(
+                    "Terminating %d partial instance(s) in abandoned DC %s: %s", len(instance_ids), region, instance_ids
+                )
+                try:
+                    ec2_clients[region].terminate_instances(InstanceIds=instance_ids)
+                except Exception as exc:  # noqa: BLE001
+                    LOGGER.warning("Failed to terminate instances in %s: %s", region, exc)
+
+            provisioned[:] = [inst for inst in provisioned if self._instance_region(inst) != region]
+
+        cleanup_abandoned_region(self._test_config.test_id(), region)
+
+    def _switch_dc_region(self, dc_index: int, region: str, source_region: str) -> None:
+        switch_dc_region(
+            self._params, dc_index, region, source_region, invalidate_caches=self._invalidate_region_derived_caches
+        )
+
+    def _invalidate_region_derived_caches(self) -> None:
+        """Drop region-name-derived caches on the retained cluster objects, preserving _provisioned_instances."""
+        for prop in _CLUSTER_CACHED_PROPS:
+            cluster_obj = self.__dict__.get(prop)
+            if cluster_obj is None:
+                continue
+            for cached in ("_active_region_ids", "_azs", "_node_nums"):
+                cluster_obj.__dict__.pop(cached, None)
+
+    def _restore_region_names(self, region_names: list[str], availability_zone, env_region: str | None) -> None:
+        """Restore the original multi-region placement after a failed relocation."""
+        if env_region is None:
+            os.environ.pop("SCT_REGION_NAME", None)
+        else:
+            os.environ["SCT_REGION_NAME"] = env_region
+
+        self._params["region_name"] = " ".join(region_names)
+        self._params["availability_zone"] = availability_zone
 
     def _do_provision(self):
         use_scylla_cloud = self._params.get("cluster_backend") == "xcloud" or self._params.get("xcloud_provider")

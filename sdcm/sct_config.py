@@ -3283,23 +3283,29 @@ class SCTConfiguration(BaseModel):
         if not placement:
             return
 
-        original_region = self.region_names[0] if self.region_names else None
+        original_region_list = " ".join(self.region_names) if self.region_names else None
+        original_first_region = self.region_names[0] if self.region_names else None
         region_name = placement.get("region_name")
         availability_zone = placement.get("availability_zone")
+        amis = placement.get("amis")
         if region_name:
             os.environ["SCT_REGION_NAME"] = region_name
             self["region_name"] = region_name
-            if original_region and region_name != original_region:
-                self._resolved_placement_source_region = original_region
+            if amis:
+                for key, value in amis.items():
+                    self[key] = value
+            elif original_region_list and region_name != original_region_list:
+                self._resolved_placement_source_region = original_first_region
         if availability_zone:
             os.environ["SCT_AVAILABILITY_ZONE"] = availability_zone
             self["availability_zone"] = availability_zone
 
         self.log.info(
-            "Applied resolved placement for test_id=%s: region_name=%s availability_zone=%s",
+            "Applied resolved placement for test_id=%s: region_name=%s availability_zone=%s amis=%s",
             test_id,
             region_name,
             availability_zone,
+            bool(amis),
         )
 
     def resolve_amis(self, region_names: List[str], source_region: str | None = None) -> None:

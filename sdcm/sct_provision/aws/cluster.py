@@ -15,9 +15,10 @@ import abc
 from functools import cached_property
 from typing import List, Tuple
 
+from botocore.exceptions import ClientError
 from pydantic import BaseModel, ConfigDict, PrivateAttr, computed_field
 from sdcm import cluster
-from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted
+from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, attach_failed_region
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.common.provision_plan import ProvisionPlan
@@ -83,7 +84,7 @@ class ClusterBase(BaseModel):
     def nodes(self) -> list[ClusterNode]:
         nodes = []
         node_num = 0
-        for region_id in range(len(self._regions_with_nodes)):
+        for region_id in self._active_region_ids:
             for idx in range(self._node_nums[region_id]):
                 node_num += 1
                 nodes.append(
@@ -166,14 +167,14 @@ class ClusterBase(BaseModel):
         return self.params.region_names
 
     @cached_property
-    def _regions_with_nodes(self) -> List[str]:
-        output = []
-        for region_id, region_name in enumerate(self.params.region_names):
-            if len(self._node_nums) <= region_id:
-                continue
-            if self._node_nums[region_id] > 0:
-                output.append(region_name)
-        return output
+    def _active_region_ids(self) -> List[int]:
+        """Positional indices of regions that host at least one node (zero-node DCs are skipped)."""
+        node_nums = self._node_nums
+        return [
+            region_id
+            for region_id in range(len(self.params.region_names))
+            if region_id < len(node_nums) and node_nums[region_id] > 0
+        ]
 
     def _region(self, region_id: int) -> str:
         return self.params.region_names[region_id]
@@ -223,10 +224,26 @@ class ClusterBase(BaseModel):
             **params_builder.model_dump(exclude_none=True, exclude_unset=True, exclude_defaults=True)
         )
 
+    def _provision_az_instances(self, region_id, az_id, instance_parameters, node_tags, node_names, node_count):
+        """Provision one (region, az) batch and tag capacity errors with region/AZ for fallback."""
+        try:
+            instances = self.provision_plan(region_id, self._azs[az_id]).provision_instances(
+                instance_parameters=instance_parameters,
+                node_tags=node_tags,
+                node_names=node_names,
+                node_count=node_count,
+            )
+            if not instances:
+                raise ProvisioningCapacityExhausted("End of provision plan reached, but no instances provisioned")
+        except (ClientError, ProvisioningCapacityExhausted) as exc:
+            attach_failed_region(exc, self._region(region_id), self._azs[az_id])
+            raise
+        return instances
+
     def provision(self):
         if self._node_nums == [0]:
             return []
-        for region_id in range(len(self._regions_with_nodes)):
+        for region_id in self._active_region_ids:
             az_nodes = self._az_nodes(region_id=region_id)
             for az_id, _ in enumerate(self._azs):
                 node_count = az_nodes[az_id]
@@ -235,14 +252,9 @@ class ClusterBase(BaseModel):
                 instance_parameters = self._instance_parameters(region_id=region_id, availability_zone=az_id)
                 node_tags = self._node_tags(region_id=region_id, az_id=az_id)
                 node_names = self._node_names(region_id=region_id, az_id=az_id)
-                instances = self.provision_plan(region_id, self._azs[az_id]).provision_instances(
-                    instance_parameters=instance_parameters,
-                    node_tags=node_tags,
-                    node_names=node_names,
-                    node_count=node_count,
+                instances = self._provision_az_instances(
+                    region_id, az_id, instance_parameters, node_tags, node_names, node_count
                 )
-                if not instances:
-                    raise ProvisioningCapacityExhausted("End of provision plan reached, but no instances provisioned")
                 self._provisioned_instances.extend(instances)
         return list(self._provisioned_instances)
 
@@ -337,10 +349,13 @@ class DBCluster(ClusterBase):
             total_nodes = [n1 + n2 for n1, n2 in zip(total_nodes, zero_token_nodes)]
         return total_nodes
 
-    def provision(self):
+    def provision(self, skip_region_ids: set[int] | None = None):
         if self._node_nums == [0]:
             return []
-        for region_id in range(len(self._regions_with_nodes)):
+        skip_region_ids = skip_region_ids or set()
+        for region_id in self._active_region_ids:
+            if region_id in skip_region_ids:
+                continue
             az_nodes, az_zero_nodes = self._az_nodes(region_id=region_id)
             for az_id, _ in enumerate(self._azs):
                 node_count = az_nodes[az_id]
@@ -349,16 +364,9 @@ class DBCluster(ClusterBase):
                     instance_parameters = self._instance_parameters(region_id=region_id, availability_zone=az_id)
                     node_tags = self._node_tags(region_id=region_id, az_id=az_id)[:node_count]
                     node_names = self._node_names(region_id=region_id, az_id=az_id)[:node_count]
-                    instances = self.provision_plan(region_id, self._azs[az_id]).provision_instances(
-                        instance_parameters=instance_parameters,
-                        node_tags=node_tags,
-                        node_names=node_names,
-                        node_count=node_count,
+                    instances = self._provision_az_instances(
+                        region_id, az_id, instance_parameters, node_tags, node_names, node_count
                     )
-                    if not instances:
-                        raise ProvisioningCapacityExhausted(
-                            "End of provision plan reached, but no instances provisioned"
-                        )
                     self._provisioned_instances.extend(instances)
 
                 if zero_node_count:
@@ -369,16 +377,9 @@ class DBCluster(ClusterBase):
                     for node_tag in node_tags:
                         node_tag.update({"ZeroTokenNode": "True"})
                     node_names = self._node_names(region_id=region_id, az_id=az_id)[node_count:]
-                    instances = self.provision_plan(region_id, self._azs[az_id]).provision_instances(
-                        instance_parameters=instance_parameters,
-                        node_tags=node_tags,
-                        node_names=node_names,
-                        node_count=zero_node_count,
+                    instances = self._provision_az_instances(
+                        region_id, az_id, instance_parameters, node_tags, node_names, zero_node_count
                     )
-                    if not instances:
-                        raise ProvisioningCapacityExhausted(
-                            "End of provision plan reached, but no instances provisioned"
-                        )
                     self._provisioned_instances.extend(instances)
         return list(self._provisioned_instances)
 

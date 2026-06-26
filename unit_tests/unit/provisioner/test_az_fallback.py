@@ -346,6 +346,8 @@ def test_provision_legacy_with_az_fallback_non_capacity_error_propagates():
 class _RegionParams(_DotDict):
     """Params stub that derives `region_names` from `region_name` like `SCTConfiguration`."""
 
+    ami_id_params = ["ami_id_db_scylla", "ami_id_loader"]
+
     @property
     def region_names(self):
         return (self.get("region_name") or "").split()
@@ -431,10 +433,30 @@ def test_region_fallback_non_capacity_error_propagates_and_restores(patched_capa
     assert params["region_name"] == "us-east-1"  # original region restored
 
 
-def test_region_fallback_gate_rejects_multi_region(restore_region_env):  # noqa: ARG001
-    layout = SCTProvisionAWSLayout(_make_region_params(region_name="us-east-1 eu-west-1"))
+def test_legacy_region_fallback_gate_rejects_multi_region(restore_region_env):  # noqa: ARG001
+    """The modern path now supports multi-DC fallback; the legacy path still refuses it via the gate."""
+    stub = _make_region_tester_stub(region_name="us-east-1 eu-west-1")
     with pytest.raises(ValueError, match="single configured region"):
-        layout.provision()
+        ClusterTester._get_cluster_aws_with_region_fallback(stub, {}, {}, {})
+
+
+@pytest.mark.parametrize(
+    ("region_name", "expect_once", "expect_fallback"),
+    [
+        pytest.param("eu-west-1 us-west-2", True, False, id="multi_region_uses_once_path"),
+        pytest.param("us-east-1", False, True, id="single_region_uses_region_fallback"),
+    ],
+)
+def test_get_cluster_aws_routing_by_region_count(region_name, expect_once, expect_fallback, restore_region_env):  # noqa: ARG001
+    """`get_cluster_aws` routes multi-region to once-path, and single-region to legacy region-fallback path."""
+    stub = _make_region_tester_stub(region_name=region_name)
+    stub._get_cluster_aws_once = MagicMock()
+    stub._get_cluster_aws_with_region_fallback = MagicMock()
+
+    ClusterTester.get_cluster_aws(stub, {}, {}, {})
+
+    assert stub._get_cluster_aws_once.called is expect_once
+    assert stub._get_cluster_aws_with_region_fallback.called is expect_fallback
 
 
 def test_region_fallback_all_regions_exhausted_raises_and_restores(patched_capacity_reservation, restore_region_env):  # noqa: ARG001

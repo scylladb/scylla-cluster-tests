@@ -450,6 +450,31 @@ def test_get_region_fallback_candidates_excludes_current_and_non_peered():
     assert set(regions) == peered
 
 
+def test_get_dc_fallback_candidates_requires_peering_with_every_staying_dc():
+    """A candidate must be peered with ALL staying DCs, not just one."""
+    params = _make_params(region_name="us-east-1 eu-west-1 us-west-2", availability_zone="a")
+    resolver = AZResolver(params)
+
+    peering = {
+        ("us-east-1", "eu-west-2"): True,
+        ("us-west-2", "eu-west-2"): True,
+        ("us-east-1", "eu-west-3"): True,
+        ("us-west-2", "eu-west-3"): False,
+    }
+
+    def is_region_peered(staying: str, candidate: str) -> bool:
+        return peering.get((staying, candidate), False)
+
+    with (
+        patch.object(AZResolver, "_is_region_peered", side_effect=is_region_peered),
+        patch.object(AZResolver, "_common_supported_letters", return_value=["a"]),
+    ):
+        regions = [region for region, _ in resolver.get_dc_fallback_candidates(dc_index=1)]
+
+    assert "eu-west-2" in regions
+    assert "eu-west-3" not in regions
+
+
 def test_is_region_peered_true_only_for_active_connection():
     """_is_region_peered must accept only active peering, not pending-acceptance or missing."""
     region_pair = ("us-east-1", "eu-west-1")
