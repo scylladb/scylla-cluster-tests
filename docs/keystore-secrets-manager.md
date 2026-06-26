@@ -50,6 +50,7 @@ is set. `KeyStore` therefore always passes `region_name`, defaulting to
 | `hytrust-kmip-scylla.pem` | binary | HyTrust KMIP client cert |
 | `housekeeping-db.json` | json | Internal DB credentials |
 | `backup_azure_blob.json` | json | Azure Blob backup credentials |
+| `backup_oci.json` | json | OCI Object Storage backup credentials (S3-compatible keys) |
 | `azure_kms_config.json` | json | Azure KMS config |
 | `gcp_kms_config.json` | json | GCP KMS config |
 | `scylladb_upload.json` | json | Upload API token |
@@ -224,7 +225,7 @@ required="scylla_test_id_ed25519 scylla_test_id_ed25519.pub
           azure.json oci.json docker.json
           email_config.json ldap_ms_ad.json
           argus_rest_credentials.json scylladb_jira.json
-          housekeeping-db.json backup_azure_blob.json
+          housekeeping-db.json backup_azure_blob.json backup_oci.json
           azure_kms_config.json gcp_kms_config.json
           scylladb_upload.json qa_users.json bucket-users.json
           gcp-scylladbaaslab.json aws_images_role.json

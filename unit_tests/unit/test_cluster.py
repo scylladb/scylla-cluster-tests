@@ -1173,7 +1173,22 @@ def test_vector_store_address_follows_the_re_created_container():
         assert node.get_vector_store_api_client().base_url == "http://172.17.0.2:6080"
 
 
-def test_proposed_scylla_yaml_object_storage_endpoint_region(tmp_path):
+@pytest.mark.parametrize(
+    "cluster_backend,endpoint,expected",
+    [
+        (
+            "aws",
+            {"name": "s3.{region}.amazonaws.com", "port": 443, "https": True, "aws_region": "{region}"},
+            {"name": "s3.eu-west-1.amazonaws.com", "port": 443, "https": True, "aws_region": "eu-west-1"},
+        ),
+        (
+            "oci",
+            {"name": "https://ns.compat.objectstorage.{region}.oci.customer-oci.com", "aws_region": "{region}"},
+            {"name": "https://ns.compat.objectstorage.us-ashburn-1.oci.customer-oci.com", "aws_region": "us-ashburn-1"},
+        ),
+    ],
+)
+def test_proposed_scylla_yaml_object_storage_endpoint_region(tmp_path, cluster_backend, endpoint, expected):
     node = DummyNode(
         name="test_node",
         parent_cluster=None,
@@ -1181,20 +1196,16 @@ def test_proposed_scylla_yaml_object_storage_endpoint_region(tmp_path):
         ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
     )
     node.parent_cluster = DummyDbCluster(nodes=[node])
+    node.parent_cluster.params["cluster_backend"] = cluster_backend
     node.parent_cluster.params["region_name"] = "eu-west-1 us-east-1"
-    node.parent_cluster.params["append_scylla_yaml"] = {
-        "object_storage_endpoints": [
-            {"name": "s3.{region}.amazonaws.com", "port": 443, "https": True, "aws_region": "{region}"},
-        ],
-    }
+    node.parent_cluster.params["oci_region_name"] = ["us-ashburn-1", "us-phoenix-1"]
+    node.parent_cluster.params["append_scylla_yaml"] = {"object_storage_endpoints": [endpoint]}
     with unittest.mock.patch.object(
         BaseNode, "_proposed_scylla_yaml_properties", new_callable=unittest.mock.PropertyMock, return_value={}
     ):
         scylla_yaml = node.proposed_scylla_yaml
 
-    assert scylla_yaml.object_storage_endpoints == [
-        {"name": "s3.eu-west-1.amazonaws.com", "port": 443, "https": True, "aws_region": "eu-west-1"},
-    ]
+    assert scylla_yaml.object_storage_endpoints == [expected]
 
 
 def test_get_ks_cf_with_most_sstables_counts_with_one_ssh_call():

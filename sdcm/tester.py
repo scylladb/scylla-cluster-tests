@@ -185,6 +185,7 @@ from sdcm.stress_thread import (
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
 from sdcm.utils.net import get_my_ip, get_sct_runner_ip
+from sdcm.utils.object_storage import object_storage_endpoints
 from sdcm.utils.operations_thread import ThreadParams
 from sdcm.utils.replication_strategy_utils import LocalReplicationStrategy, NetworkTopologyReplicationStrategy
 from sdcm.utils.tablets.common import TabletsConfiguration
@@ -1292,6 +1293,10 @@ class ClusterTester(unittest.TestCase):
 
         if self.params.get("backup_bucket_backend") == "azure":
             self.test_config.set_backup_azure_blob_credentials()
+
+        # every OCI backup credentials consumer (Scylla native S3, manager agent, bucket access) needs the endpoint
+        if self.params.get("cluster_backend") == "oci" and object_storage_endpoints(self.params):
+            self.test_config.set_backup_oci_credentials()
 
         self.test_config.BACKTRACE_DECODING = self.params.get("backtrace_decoding")
         if self.test_config.BACKTRACE_DECODING:
