@@ -22,19 +22,19 @@ sizing_loader:
   memory: '>=16'
   arch: x86_64
 
-## OCI rate-limits object storage reads (TooManyRequests): the CL=ALL cache warm-up saturated at ~5k op/s over 2 loaders
-## (2,500 threads per loader, ~1.2 s mean latency). The read steps below stay under that limit and the unthrottled step
-## measures it, so they override configurations/performance/cassandra_stress_gradual_load_steps_object_storage.yaml.
-## Read threads follow Little's law at ~500 ms worst-case latency: 4k op/s over 2 loaders needs 2,000 x 0.5 = 1,000 threads
-## per loader. The unthrottled step keeps the 2,500 threads that saturated OCI.
-## Writes were not throttled by OCI, so the write steps are unchanged.
-#perf_gradual_threads: {"read": [250, 2500], "write": 500}
-#perf_gradual_throttle_steps: {"read": ['1000', 'unthrottled'], "write": ['25000', '50000', 'unthrottled']}
-#perf_gradual_step_duration: {"read": '30m', "write": '30m'}
-#
-## 10M rows per loader instead of 60M. The warm-up runs at the 1,000 op/s read step instead of the 2,500 unthrottled
-## threads: at 2,500 threads OCI throttled it from the first seconds and CL=ALL reads hit the 10 c-s retries. ~2.8 hours.
-#stress_cmd_cache_warmup: [
-#  "cassandra-stress read no-warmup cl=ALL n=10000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=250 throttle=1000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..190000000,95000000,20000000)'",
-#  "cassandra-stress read no-warmup cl=ALL n=10000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=250 throttle=1000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..190000000,95000000,20000000)'",
-#]
+# OCI Object Storage limits reads to 12,000 requests/s per tenancy in us-phoenix-1 and answers 429 TooManyRequests above
+# it; the unthrottled read step saturated at ~5.4k op/s. The read steps below stay under that limit and the unthrottled
+# step measures it, so they override configurations/performance/cassandra_stress_gradual_load_steps_object_storage.yaml.
+# Read threads follow Little's law at ~500 ms worst-case latency: 4k op/s over 2 loaders needs 2,000 x 0.5 = 1,000
+# threads per loader. The unthrottled step keeps the 900 threads of the default config.
+# Writes were not throttled by OCI, so the write steps are unchanged.
+perf_gradual_threads: {"read": [250, 650, 1000, 900], "write": 500}
+perf_gradual_throttle_steps: {"read": ['1000', '2500', '4000', 'unthrottled'], "write": ['25000', '50000', 'unthrottled']}
+perf_gradual_step_duration: {"read": '30m', "write": '30m'}
+
+# 10M rows per loader instead of 60M, throttled to 1,000 op/s per loader: unthrottled CL=ALL reads got 429
+# TooManyRequests from the first seconds and hit the 10 c-s retries. ~2.8 hours.
+stress_cmd_cache_warmup: [
+  "cassandra-stress read no-warmup cl=ALL n=10000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=250 throttle=1000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..190000000,95000000,20000000)'",
+  "cassandra-stress read no-warmup cl=ALL n=10000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=250 throttle=1000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..190000000,95000000,20000000)'",
+]
