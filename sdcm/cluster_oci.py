@@ -31,6 +31,7 @@ from sdcm.provision.helpers.certificate import CA_CERT_FILE, CA_KEY_FILE, create
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
+from sdcm.remote.remote_file import install_secret_file
 from sdcm.utils.decorators import retrying
 from sdcm.utils.net import resolve_ip_to_dns
 from sdcm.utils.oci_utils import (
@@ -408,6 +409,32 @@ class OciNode(cluster.BaseNode):
             self.log.warning("Error during getting OCI spot termination notification: %s", details)
 
         return SPOT_TERMINATION_CHECK_DELAY
+
+    def fix_scylla_server_systemd_config(self):
+        """
+        OCI S3-compatible object storage authenticates via AWS-style credentials.
+        It requires `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, but they
+        may already be present in the environment, with AWS related values.
+        Override whatever values are in the environment (SCT runner credentials)
+        with the OCI backup credentials so Scylla talks to the right endpoint.
+        Only applied when `object_storage_endpoints` is configured.
+        """
+        super().fix_scylla_server_systemd_config()
+        if self.is_docker():
+            return
+        if not (self.parent_cluster.params.get("append_scylla_yaml") or {}).get("object_storage_endpoints"):
+            return
+        if not (oci_creds := self.test_config.backup_oci_credentials):
+            self.log.warning("object_storage_endpoints set, but no OCI backup credentials loaded; skipping")
+            return
+        access_key = oci_creds["access_key_id"]
+        secret_key = oci_creds["secret_access_key"]
+        self.log.debug("Setting OCI S3 credentials in scylla-server systemd unit")
+        dropin = (
+            f"[Service]\nEnvironment=AWS_ACCESS_KEY_ID={access_key}\nEnvironment=AWS_SECRET_ACCESS_KEY={secret_key}\n"
+        )
+        install_secret_file(self.remoter, dropin, "/etc/systemd/system/scylla-server.service.d/oci-s3-creds.conf")
+        self.remoter.sudo("systemctl daemon-reload")
 
     def _restart_inner(self):
         self._instance.reboot(wait=True, hard=False)

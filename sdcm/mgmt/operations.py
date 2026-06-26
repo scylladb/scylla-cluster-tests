@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Callable, Iterator
 
 import boto3
 import yaml
+from botocore.config import Config
 from google.api_core.exceptions import Forbidden
 from invoke import exceptions
 
@@ -20,6 +21,7 @@ from sdcm import mgmt
 from sdcm.exceptions import FilesNotCorrupted
 from sdcm.keystore import KeyStore
 from sdcm.remote import shell_script_cmd, LOCALRUNNER
+from sdcm.remote.remote_file import install_secret_file
 from sdcm.utils.curl import curl_with_retry
 from sdcm.sct_events.system import InfoEvent
 from sdcm.test_config import TestConfig
@@ -40,6 +42,16 @@ from sdcm.utils.time_utils import ExecutionTimer
 
 if TYPE_CHECKING:
     from google.cloud.storage import Bucket
+
+OCI_AWS_CLI_CONFIG = "/root/.aws/oci-backup-config"
+
+
+def oci_object_storage_endpoint(params) -> dict:
+    """First entry of `object_storage_endpoints`, same source as BaseNode.update_manager_agent_backup_config."""
+    endpoints = (params.get("append_scylla_yaml") or {}).get("object_storage_endpoints")
+    if not endpoints:
+        raise ValueError("OCI backup bucket access needs object_storage_endpoints in append_scylla_yaml")
+    return endpoints[0]
 
 
 class ClusterOperations(ClusterTester):
@@ -134,6 +146,7 @@ class ClusterOperations(ClusterTester):
 class BucketOperations(ClusterTester):
     backup_azure_blob_service = None
     backup_azure_blob_sas = None
+    backup_aws_cli = "aws"
 
     def _run_cmd_with_retry(self, executor, cmd, retries=10):
         for _ in range(retries):
@@ -160,6 +173,20 @@ class BucketOperations(ClusterTester):
         else:
             raise RuntimeError("This distro is not supported")
         self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd(cmd))
+        if self.params.get("cluster_backend") == "oci":
+            # OCI object storage is reached through its S3-compatible API: OCI keys, endpoint and path-style addressing
+            endpoint = oci_object_storage_endpoint(self.params)
+            creds = self.test_config.backup_oci_credentials
+            config = dedent(f"""\
+                [default]
+                aws_access_key_id = {creds["access_key_id"]}
+                aws_secret_access_key = {creds["secret_access_key"]}
+                region = {endpoint["aws_region"]}
+                s3 =
+                    addressing_style = path
+            """)
+            install_secret_file(node.remoter, config, OCI_AWS_CLI_CONFIG)
+            self.backup_aws_cli = f"env AWS_CONFIG_FILE={OCI_AWS_CLI_CONFIG} aws --endpoint-url {endpoint['name']}"
 
     def install_gsutil_dependencies(self, node):
         if node.distro.is_ubuntu or node.distro.is_debian:
@@ -193,9 +220,8 @@ class BucketOperations(ClusterTester):
         )
         self.backup_azure_blob_sas = self.test_config.backup_azure_blob_credentials["download_sas"]
 
-    @staticmethod
-    def download_from_s3(node, source, destination):
-        node.remoter.sudo(f"aws s3 cp '{source}' '{destination}'")
+    def download_from_s3(self, node, source, destination):
+        node.remoter.sudo(f"{self.backup_aws_cli} s3 cp '{source}' '{destination}'")
 
     @staticmethod
     def download_from_gs(node, source, destination):
@@ -417,15 +443,37 @@ class SnapshotOperations(ClusterTester):
         """
         return [loc.strip().strip("'\"") for item in location_list for loc in item.split(",") if loc.strip("'\" ")]
 
-    @staticmethod
+    def _backup_s3_client(self, region_name: str | None = None):
+        """boto3 S3 client for the backup bucket.
+
+        OCI exposes object storage through an S3-compatible API, so it needs the OCI endpoint,
+        the OCI backup keys (instead of the runner's AWS ones) and path-style addressing.
+        Requests are signed with the endpoint's region; `region_name` (AWS `region_name` param) is ignored.
+        """
+        if self.params.get("cluster_backend") != "oci":
+            return boto3.client("s3", region_name=region_name)
+        endpoint = oci_object_storage_endpoint(self.params)
+        creds = TestConfig().backup_oci_credentials
+        return boto3.client(
+            "s3",
+            region_name=endpoint["aws_region"],
+            endpoint_url=endpoint["name"],
+            aws_access_key_id=creds["access_key_id"],
+            aws_secret_access_key=creds["secret_access_key"],
+            config=Config(s3={"addressing_style": "path"}),
+        )
+
     def _iter_s3_objects(
-        bucket_name: str, prefixes: list[str], region_name: str | None = None
+        self, bucket_name: str, prefixes: list[str], region_name: str | None = None
     ) -> Iterator[tuple[str, int]]:
-        """Yield (key, size) of objects under the prefixes. Bucket region is discovered if not given."""
-        if not region_name:
+        """Yield (key, size) of objects under the prefixes. Bucket region is discovered if not given.
+
+        On OCI the region comes from the configured endpoint instead (see `_backup_s3_client`).
+        """
+        if not region_name and self.params.get("cluster_backend") != "oci":
             location = boto3.client("s3").get_bucket_location(Bucket=bucket_name)["LocationConstraint"]
             region_name = location or "us-east-1"
-        paginator = boto3.client("s3", region_name=region_name).get_paginator("list_objects_v2")
+        paginator = self._backup_s3_client(region_name).get_paginator("list_objects_v2")
         for prefix in prefixes:
             for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
                 # No Contents key means no files under the prefix

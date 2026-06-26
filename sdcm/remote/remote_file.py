@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
+import stat
 import logging
 import tempfile
 import contextlib
@@ -106,6 +107,30 @@ def remote_file(
             remoter.sudo(f"chmod {permissions} {remote_path}")
 
     os.unlink(local_tempfile)
+
+
+def install_secret_file(remoter, content: str, remote_path: str) -> None:
+    """Install `content` as a root-owned 0600 file at `remote_path`.
+
+    The content goes through a local 0600 temp file and a file transfer, so it never
+    appears on a command line, where it would be logged.
+    """
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp:
+        try:
+            os.chmod(tmp.name, stat.S_IRUSR | stat.S_IWUSR)
+            tmp.write(content)
+            tmp.flush()
+            tmp_remote = f"/tmp/{os.path.basename(tmp.name)}"
+            remoter.send_files(src=tmp.name, dst=tmp_remote)
+        finally:
+            os.unlink(tmp.name)
+    remoter.sudo(
+        shell_script_cmd(f"""\
+        mkdir -p {os.path.dirname(remote_path)}
+        install -m 0600 -o root -g root {tmp_remote} {remote_path}
+        rm -f {tmp_remote}
+    """)
+    )
 
 
 def yaml_file_to_dict(fobj):
