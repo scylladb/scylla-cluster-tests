@@ -33,6 +33,17 @@ def is_capacity_error(exception: BaseException) -> bool:
     return bool(codes & set(CAPACITY_ERROR_CODES))
 
 
+def attach_failed_region(exception: BaseException, region: str | None, az: str | None = None) -> None:
+    """Tag an exception with failed region/AZ info for fallback handling."""
+    exception.failed_region = region
+    exception.failed_az = az
+
+
+def get_failed_region(exception: BaseException) -> str | None:
+    """Return the region a capacity error was tagged with, or None when untagged."""
+    return getattr(exception, "failed_region", None)
+
+
 class ProvisioningCapacityExhausted(Exception):
     """Raised when a provision plan exits with no instances, signalling capacity exhaustion.
 

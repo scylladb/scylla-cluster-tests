@@ -348,7 +348,7 @@ def provision_resources(backend, test_name: str, config: str):
         click.echo("Generate SCT agent API key")
         test_config.generate_and_save_agent_api_key()
 
-    original_region = params.region_names[0] if params.region_names else None
+    original_region = " ".join(params.region_names) if params.region_names else None
     handoff_test_id = params.get("reuse_cluster") or test_id
 
     click.echo(f"Provision {backend} cloud resources")
@@ -358,8 +358,9 @@ def provision_resources(backend, test_name: str, config: str):
             test_config.persist_resolved_placement_if_changed(
                 handoff_test_id,
                 original_region=original_region,
-                region_name=params.region_names[0] if params.region_names else None,
+                region_name=" ".join(params.region_names) if params.region_names else None,
                 availability_zone=params.get("availability_zone"),
+                amis={key: params.get(key) for key in params.ami_id_params if params.get(key)},
             )
         elif backend in ("azure", "gce", "oci"):
             if backend == "gce":
@@ -380,8 +381,9 @@ def provision_resources(backend, test_name: str, config: str):
                     test_config.persist_resolved_placement_if_changed(
                         handoff_test_id,
                         original_region=original_region,
-                        region_name=params.region_names[0] if params.region_names else None,
+                        region_name=" ".join(params.region_names) if params.region_names else None,
                         availability_zone=params.get("availability_zone"),
+                        amis={key: params.get(key) for key in params.ami_id_params if params.get(key)},
                     )
                 finally:
                     params.update({"cluster_backend": original_backend})

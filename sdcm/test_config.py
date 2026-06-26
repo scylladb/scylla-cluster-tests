@@ -162,8 +162,10 @@ class TestConfig(metaclass=Singleton):
         return os.path.join(cls.base_logdir(), f"{test_id}", cls.RESOLVED_PLACEMENT_FILENAME)
 
     @classmethod
-    def write_resolved_placement(cls, test_id: str, region_name: str, availability_zone: str) -> str:
-        """Save the resolved region/AZ placement."""
+    def write_resolved_placement(
+        cls, test_id: str, region_name: str, availability_zone: str, amis: Optional[Dict[str, str]] = None
+    ) -> str:
+        """Save the resolved region/AZ placement (and resolved AMIs, when provided)."""
         file_path = cls.resolved_placement_file_path(test_id)
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
@@ -172,6 +174,8 @@ class TestConfig(metaclass=Singleton):
             "region_name": region_name,
             "availability_zone": availability_zone,
         }
+        if amis:
+            payload["amis"] = amis
         with open(file_path, "w", encoding="utf-8") as handle:
             yaml.safe_dump(payload, handle)
         LOGGER.info("Wrote resolved placement handoff to %s: %s", file_path, payload)
@@ -205,11 +209,22 @@ class TestConfig(metaclass=Singleton):
 
     @classmethod
     def persist_resolved_placement_if_changed(
-        cls, test_id: str, original_region: Optional[str], region_name: Optional[str], availability_zone: Optional[str]
+        cls,
+        test_id: str,
+        original_region: Optional[str],
+        region_name: Optional[str],
+        availability_zone: Optional[str],
+        amis: Optional[Dict[str, str]] = None,
     ) -> None:
-        """Save the resolved placement only when the cluster was relocated to a different region."""
+        """Save the resolved placement only when the cluster was relocated to a different region.
+
+        ``original_region`` / ``region_name`` are the full (space-joined) region lists, so a relocation
+        of any DC - not only the first - is detected.
+        """
         if region_name and original_region and region_name != original_region:
-            cls.write_resolved_placement(test_id, region_name=region_name, availability_zone=availability_zone)
+            cls.write_resolved_placement(
+                test_id, region_name=region_name, availability_zone=availability_zone, amis=amis
+            )
 
     @classmethod
     def delete_resolved_placement(cls, test_id: str) -> None:

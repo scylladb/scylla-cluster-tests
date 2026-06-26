@@ -970,3 +970,25 @@ def test_overlay_beats_env_when_test_id_matches(monkeypatch, placement_logdir): 
     assert conf["availability_zone"] == "b"
     # AMIs must have been re-resolved for the relocated region
     assert conf["ami_id_db_scylla"] == "ami-dummy-west"
+
+
+def test_resolved_placement_with_amis_applies_directly_and_skips_re_resolution(monkeypatch, placement_logdir):  # noqa: ARG001
+    """When the handoff carries resolved AMIs, apply them verbatim and do not re-resolve."""
+    test_id = "22222222-2222-2222-2222-222222222222"
+    _set_aws_overlay_env(monkeypatch, test_id, original_region="us-east-1")
+    TestConfig.write_resolved_placement(
+        test_id,
+        region_name="eu-west-1",
+        availability_zone="b",
+        amis={"ami_id_db_scylla": "ami-persisted-west"},
+    )
+
+    with patch(
+        "sdcm.sct_config.find_equivalent_ami",
+        return_value=[{"region": "eu-west-1", "ami_id": "ami-reresolved"}],
+    ):
+        conf = sct_config.SCTConfiguration()
+
+    assert conf.region_names == ["eu-west-1"]
+    assert conf["availability_zone"] == "b"
+    assert conf["ami_id_db_scylla"] == "ami-persisted-west"

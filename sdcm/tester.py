@@ -1872,7 +1872,7 @@ class ClusterTester(unittest.TestCase):
 
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         """Provision AWS cluster with optional region fallback."""
-        if is_region_fallback_enabled(self.params):
+        if is_region_fallback_enabled(self.params) and len(self.params.region_names) == 1:
             self._get_cluster_aws_with_region_fallback(loader_info, db_info, monitor_info)
             return
         self._get_cluster_aws_once(loader_info, db_info, monitor_info)
@@ -1957,6 +1957,7 @@ class ClusterTester(unittest.TestCase):
                     original_region=original_region,
                     region_name=current_region,
                     availability_zone=self.params.get("availability_zone"),
+                    amis={key: self.params.get(key) for key in self.params.ami_id_params if self.params.get(key)},
                 )
                 return
 
