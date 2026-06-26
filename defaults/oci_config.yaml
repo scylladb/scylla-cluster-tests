@@ -4,6 +4,7 @@
 user_credentials_path: "~/.ssh/scylla_test_id_ed25519"
 use_preinstalled_scylla: true
 backup_bucket_backend: 's3'
+backup_bucket_location: 'manager-backup-tests-us-ashburn-1'
 
 instance_provision: "on_demand" # NOTE: DenseIO shapes cannot be 'spot'
 oci_region_name:

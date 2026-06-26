@@ -235,6 +235,9 @@ class KeyStore:
     def get_backup_azure_blob_credentials(self):
         return self.get_json("backup_azure_blob.json")
 
+    def get_backup_oci_credentials(self):
+        return self.get_json("backup_oci.json")
+
     def get_docker_hub_credentials(self):
         return self.get_json("docker.json")
 

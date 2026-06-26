@@ -1539,6 +1539,7 @@ the bucket name to be used for backup (e.g., 'manager-backup-tests')
 - `manager-backup-tests-{region}`: aws, aws-siren, k8s-eks
 - `manager-backup-tests-sct-project-1-us-east1`: gce, gce-siren
 - `manager-backup-tests-us-east-1`: azure
+- `manager-backup-tests-us-ashburn-1`: oci
 - `minio-bucket`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke
 
 
