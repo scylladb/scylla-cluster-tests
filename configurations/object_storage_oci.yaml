@@ -1,0 +1,5 @@
+append_scylla_yaml:
+  auto_snapshot: false
+  object_storage_endpoints:
+    - name: https://idedxcgnkfkt.compat.objectstorage.{region}.oci.customer-oci.com  # {region} is replaced with the backup bucket region
+      aws_region: "{region}"

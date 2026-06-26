@@ -220,6 +220,7 @@ from sdcm.utils.minicloud.preflight import scylla_reserve_memory
 from sdcm.utils.net import get_my_ip, to_inet_ntop_format
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.nvme_diagnostics import collect_all_smart_logs, install_nvme_cli, store_baseline_smart_logs
+from sdcm.utils.object_storage import backup_bucket_region, object_storage_endpoints
 from sdcm.utils.raft import get_raft_mode
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.replication_strategy_utils import DataCenterTopologyRfControl, ReplicationStrategy
@@ -968,12 +969,8 @@ class BaseNode(AutoSshContainerMixin):
             for kms_host_name, kms_host_data in append_scylla_yaml.get("kms_hosts", {}).items():
                 if kms_host_data["aws_region"] == "auto":
                     append_scylla_yaml["kms_hosts"][kms_host_name]["aws_region"] = self.vm_region
-            # Backup bucket lives in the first region, see `backup_bucket_location`
-            bucket_region = next(iter(self.parent_cluster.params.region_names), "")
-            for endpoint in append_scylla_yaml.get("object_storage_endpoints") or []:
-                for key in ("name", "aws_region"):
-                    if key in endpoint:
-                        endpoint[key] = endpoint[key].format(region=bucket_region)
+            if append_scylla_yaml.get("object_storage_endpoints"):
+                append_scylla_yaml["object_storage_endpoints"] = object_storage_endpoints(self.parent_cluster.params)
             scylla_yml.update(append_scylla_yaml)
         if self.parent_cluster.node_type == "oracle-db":
             scylla_yml.experimental_features = []  # Oracle Scylla does not use experimental features
@@ -3006,9 +3003,31 @@ class BaseNode(AutoSshContainerMixin):
         if general_config is provided.
         """
         backup_backend = self.parent_cluster.params.get("backup_bucket_backend")
+        cluster_backend = self.parent_cluster.params.get("cluster_backend")
         backup_backend_config = {}
         if backup_backend == "s3":
-            if region and region != self.region:
+            # OCI is compatible with S3, so we use the S3 backend for OCI
+            # but requires different endpoint and region configuration, as well as access keys.
+            # object_storage_endpoints is a list of endpoints, we take the first one
+            oci_endpoints = object_storage_endpoints(self.parent_cluster.params)
+            if cluster_backend == "oci" and not oci_endpoints:
+                self.log.warning(
+                    "No object_storage_endpoints in append_scylla_yaml; "
+                    "manager agent s3 backend is left unconfigured for OCI, backup will not work"
+                )
+            elif cluster_backend == "oci":
+                backup_backend_config["endpoint"] = oci_endpoints[0]["name"]
+                backup_backend_config["region"] = oci_endpoints[0]["aws_region"]
+                backup_backend_config["access_key_id"] = self.test_config.backup_oci_credentials["access_key_id"]
+                backup_backend_config["secret_access_key"] = self.test_config.backup_oci_credentials[
+                    "secret_access_key"
+                ]
+                # forces path-style addressing, e.g.endpoint/bucket instead of bucket.endpoint
+                # OCI is a subcase of AWS, but it's URLs are created different
+                # AWS -> us-east-1.aws.com vs OCI -> oci.com/us-phoenix-1
+                # See https://scylladb.atlassian.net/browse/CLOUD-4499
+                backup_backend_config["provider"] = "Other"
+            elif region and region != self.region:
                 backup_backend_config["region"] = region
         elif backup_backend == "gcs":
             backup_backend_config["endpoint"] = "https://storage.googleapis.com"
@@ -6894,7 +6913,7 @@ class BaseScyllaCluster:
         else:
             agent_backup_general_config = None
         node.update_manager_agent_backup_config(
-            region=next(iter(self.params.region_names), ""),
+            region=backup_bucket_region(self.params),
             general_config=agent_backup_general_config,
         )
 
