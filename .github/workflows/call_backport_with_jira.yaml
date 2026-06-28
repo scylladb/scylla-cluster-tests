@@ -10,8 +10,10 @@
 #     branch-X.Y, so backport PRs target branch-X.Y directly.
 #   * Performance branches: branch-perf-v<N>, driven by backport/perf-v<N> labels.
 #   * Manager branches: manager-X.Y, driven by backport/manager-X.Y labels.
-#   * Backports are always created in parallel (one PR per target branch at once),
+#   * Backports are created in parallel by default (one PR per target branch at once),
 #     since the branches are independent and there is no chained gating to walk.
+#     Add the 'cascade_backport' label to a PR to opt into chained (highest->lowest)
+#     backports instead.
 #
 # Jira: a backport sub-task is created under the issue referenced in the PR body
 # (Fixes: SCT-123 -> project SCT) and assigned to the original author. If the PR
