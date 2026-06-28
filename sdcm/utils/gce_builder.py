@@ -54,7 +54,7 @@ gcpCloud.setNoDelayProvisioning(true)
 
 InstanceConfiguration instanceConfiguration = new InstanceConfiguration()
 instanceConfiguration.setNumExecutorsStr("1")
-instanceConfiguration.setOneShot(false)
+instanceConfiguration.setOneShot(true)
 instanceConfiguration.setNamePrefix("builders")
 instanceConfiguration.setDescription("SCT Jenkins builders")
 instanceConfiguration.setRegion("https://www.googleapis.com/compute/v1/projects/{project_id}/regions/{region_name}")
