@@ -10,8 +10,10 @@
 #     branch-X.Y, so backport PRs target branch-X.Y directly.
 #   * Performance branches: branch-perf-v<N>, driven by backport/perf-v<N> labels.
 #   * Manager branches: manager-X.Y, driven by backport/manager-X.Y labels.
-#   * Backports are always created in parallel (one PR per target branch at once),
+#   * Backports are created in parallel by default (one PR per target branch at once),
 #     since the branches are independent and there is no chained gating to walk.
+#     Add the 'cascade_backport' label to a PR to opt into chained (highest->lowest)
+#     backports instead.
 #
 # Jira: a backport sub-task is created under the issue referenced in the PR body
 # (Fixes: SCT-123 -> project SCT) and assigned to the original author. If the PR
@@ -44,7 +46,7 @@ jobs:
   # Adds promoted-to-* labels and triggers/continues the backports for merged commits.
   backport-on-push:
     if: github.event_name == 'push'
-    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@e58a9a6ad95847406ad1fd12549834683c0a9f2f # main
+    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@2e3189423c3199d71f214da853bb9651a0a1037c # main
     with:
       event_type: 'push'
       base_branch: ${{ github.ref }}
@@ -58,7 +60,7 @@ jobs:
   # A backport/* label was added to a (closed) PR: create the backport PR(s).
   backport-on-label:
     if: github.event_name == 'pull_request_target' && github.event.action == 'labeled'
-    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@e58a9a6ad95847406ad1fd12549834683c0a9f2f # main
+    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@2e3189423c3199d71f214da853bb9651a0a1037c # main
     with:
       event_type: 'labeled'
       base_branch: refs/heads/${{ github.event.pull_request.base.ref }}
@@ -76,7 +78,7 @@ jobs:
   # for the always-parallel model, but kept for parity with the shared workflow).
   backport-chain:
     if: github.event_name == 'pull_request_target' && github.event.action == 'closed' && github.event.pull_request.merged == true
-    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@e58a9a6ad95847406ad1fd12549834683c0a9f2f # main
+    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@2e3189423c3199d71f214da853bb9651a0a1037c # main
     with:
       event_type: 'chain'
       base_branch: refs/heads/${{ github.event.pull_request.base.ref }}
