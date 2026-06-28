@@ -3316,6 +3316,7 @@ class SCTConfiguration(BaseModel):
             "k8s-gke": "gce",
             "azure": "azure",
             "oci": "oci",
+            "xcloud": env.get("xcloud_provider", None),
         }
         ROLE_PARAMS = {
             "aws": {
@@ -3351,7 +3352,7 @@ class SCTConfiguration(BaseModel):
 
         cloud = BACKEND_TO_CLOUD.get(backend)
         if not cloud:
-            self.log.info("Unknown backend %s — skipping instance size resolution", backend)
+            self.log.warning("Unknown backend %s — skipping instance size resolution", backend)
             return
 
         AGNOSTIC_FALLBACK = {
