@@ -297,6 +297,16 @@
       "pr": 13509,
       "phases_total": null,
       "phases_done": 0
+    },
+    {
+      "id": "nvme-diagnostics-collection",
+      "title": "NVMe Diagnostics Collection for DB Nodes",
+      "file": "infrastructure/nvme-diagnostics-collection.md",
+      "domain": "cluster",
+      "status": "draft",
+      "created": "2026-06-28",
+      "phases_total": 8,
+      "phases_done": 0
     }
   ]
 }
