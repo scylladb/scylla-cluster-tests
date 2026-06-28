@@ -3001,6 +3001,24 @@ Collect logs from instances and sct runner
 **type:** boolean
 
 
+## **collect_nvme_diagnostics** / SCT_COLLECT_NVME_DIAGNOSTICS
+
+Collect NVMe SMART logs, error logs, and self-test results from DB nodes during test teardown.<br>Requires nvme-cli to be installed on the nodes.<br>Skipped gracefully on backends without NVMe devices.
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **nvme_self_test_type** / SCT_NVME_SELF_TEST_TYPE
+
+NVMe device self-test type to run: 1 (short, ~2 min) or 2 (extended, may take hours).<br>Only used when collect_nvme_diagnostics is enabled.
+
+**default:** 1
+
+**type:** int
+
+
 ## **execute_post_behavior** / SCT_EXECUTE_POST_BEHAVIOR
 
 Run post behavior actions in sct teardown step
@@ -3608,7 +3626,7 @@ Run commit log check thread if commitlog_use_hard_size_limit is True
 
 Configuration for additional validations executed after the test
 
-**default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}, 'rackaware': {'enabled': False}}
+**default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}, 'rackaware': {'enabled': False}, 'nvme': {'enabled': False}}
 
 **type:** dict_or_str
 
