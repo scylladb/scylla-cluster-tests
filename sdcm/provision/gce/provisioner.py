@@ -50,46 +50,66 @@ class GceProvisioner(Provisioner):
         Args:
             test_id: Test ID for tagging resources
             region: GCE region (e.g., 'us-east1')
-            availability_zone: GCE zone letter (e.g., 'b') or None for random
+            availability_zone: GCE zone letter (e.g., 'b'), or comma-separated
+                letters (e.g., 'a,b,c') to distribute nodes across AZs.
+                If None/empty, a random zone is selected.
             network_name: VPC network name (from gce_network SCT parameter)
             **config: Additional configuration options
         """
-        # If availability_zone is None or empty, use random_zone
-        # This matches the logic in GCECluster.__init__
-        if not availability_zone:
-            availability_zone = random_zone(region)
+        # Parse availability zones
+        if not availability_zone or not availability_zone.strip():
+            zone_letters = [random_zone(region)]
+        elif "," in availability_zone:
+            zone_letters = [az.strip() for az in availability_zone.split(",") if az.strip()]
+            if not zone_letters:
+                zone_letters = [random_zone(region)]
+        else:
+            zone_letters = [availability_zone.strip()]
 
-        # Construct full zone name (region + zone)
-        zone = f"{region}-{availability_zone}"
-        super().__init__(test_id, region, zone)
+        # Primary zone (first one) used for base class
+        primary_zone = f"{region}-{zone_letters[0]}"
+        super().__init__(test_id, region, primary_zone)
 
         # Get GCE credentials
         credentials = KeyStore().get_gcp_credentials()
         self.project_id = credentials["project_id"]
 
-        # Initialize providers
-        self._disk_provider = DiskProvider(self.project_id, zone)
+        # Create a VM provider per zone for distributing nodes across AZs
+        self._zone_names = [f"{region}-{letter}" for letter in zone_letters]
         self._network_provider = NetworkProvider(self.project_id, network_name)
-        self._vm_provider = VirtualMachineProvider(
-            self.project_id,
-            zone,
-            test_id,
-            self._disk_provider,
-            self._network_provider,
-        )
+        self._vm_providers: Dict[str, VirtualMachineProvider] = {}
+        for zone in self._zone_names:
+            disk_provider = DiskProvider(self.project_id, zone)
+            self._vm_providers[zone] = VirtualMachineProvider(
+                self.project_id,
+                zone,
+                test_id,
+                disk_provider,
+                self._network_provider,
+            )
+
+        # Primary zone providers for backward compatibility
+        self._disk_provider = DiskProvider(self.project_id, primary_zone)
+        self._vm_provider = self._vm_providers[primary_zone]
 
         # Cache for instances
         self._cache: Dict[str, VmInstance] = {}
 
-        # Populate cache with existing instances
-        for gce_instance in self._vm_provider.list():
-            try:
-                vm_instance = self._gce_instance_to_vm_instance(gce_instance)
-                self._cache[vm_instance.name] = vm_instance
-            except Exception as exc:  # noqa: BLE001
-                LOGGER.warning("Failed to cache instance %s: %s", gce_instance.name, exc)
+        # Populate cache with existing instances from all zones
+        for vm_provider in self._vm_providers.values():
+            for gce_instance in vm_provider.list():
+                try:
+                    vm_instance = self._gce_instance_to_vm_instance(gce_instance)
+                    self._cache[vm_instance.name] = vm_instance
+                except Exception as exc:  # noqa: BLE001
+                    LOGGER.warning("Failed to cache instance %s: %s", gce_instance.name, exc)
 
-        LOGGER.debug("Initialized GceProvisioner for test_id=%s, region=%s, zone=%s", test_id, region, zone)
+        LOGGER.debug(
+            "Initialized GceProvisioner for test_id=%s, region=%s, zones=%s",
+            test_id,
+            region,
+            self._zone_names,
+        )
 
     def __str__(self):
         return f"{self.__class__.__name__}(region={self.region}, zone={self.availability_zone})"
@@ -172,7 +192,8 @@ class GceProvisioner(Provisioner):
         """
         Create a set of instances specified by a list of InstanceDefinition.
 
-        Instances are created in parallel for better performance.
+        Instances are distributed across configured availability zones in
+        round-robin fashion. Within each zone, instances are created in parallel.
 
         Args:
             definitions: List of instance definitions
@@ -193,19 +214,30 @@ class GceProvisioner(Provisioner):
                 vms_to_create.append(definition)
                 user_data_list.append(user_data)
 
-        # Create instances in parallel
         provisioned = list(cached)
         if vms_to_create:
-            gce_instances = self._vm_provider.get_or_create(
-                definitions=vms_to_create,
-                pricing_model=pricing_model,
-                user_data_list=user_data_list,
-                startup_script_list=[""] * len(vms_to_create),
-            )
-            for gce_instance in gce_instances:
-                vm_instance = self._gce_instance_to_vm_instance(gce_instance)
-                self._cache[vm_instance.name] = vm_instance
-                provisioned.append(vm_instance)
+            # Group definitions by zone (round-robin assignment)
+            zone_groups: Dict[str, tuple] = {zone: ([], []) for zone in self._zone_names}
+            for idx, (definition, user_data) in enumerate(zip(vms_to_create, user_data_list)):
+                zone = self._zone_names[idx % len(self._zone_names)]
+                zone_groups[zone][0].append(definition)
+                zone_groups[zone][1].append(user_data)
+
+            # Create instances in each zone
+            for zone, (zone_definitions, zone_user_data) in zone_groups.items():
+                if not zone_definitions:
+                    continue
+                LOGGER.info("Creating %d instance(s) in zone %s", len(zone_definitions), zone)
+                gce_instances = self._vm_providers[zone].get_or_create(
+                    definitions=zone_definitions,
+                    pricing_model=pricing_model,
+                    user_data_list=zone_user_data,
+                    startup_script_list=[""] * len(zone_definitions),
+                )
+                for gce_instance in gce_instances:
+                    vm_instance = self._gce_instance_to_vm_instance(gce_instance)
+                    self._cache[vm_instance.name] = vm_instance
+                    provisioned.append(vm_instance)
 
         return provisioned
 
