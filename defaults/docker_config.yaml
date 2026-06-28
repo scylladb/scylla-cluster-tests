@@ -4,3 +4,4 @@ use_preinstalled_scylla: true
 docker_image: ''
 scylla_linux_distro: 'centos'
 print_kernel_callstack: false
+collect_nvme_diagnostics: false
