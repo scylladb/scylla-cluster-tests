@@ -55,6 +55,7 @@ class LocalCmdRunner(CommandRunner):
         retry: int = 1,
         watchers: Optional[List[StreamWatcher]] = None,
         change_context: bool = False,
+        user: Optional[str] = None,
     ) -> Result:
         watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
