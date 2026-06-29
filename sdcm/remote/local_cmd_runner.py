@@ -56,6 +56,7 @@ class LocalCmdRunner(CommandRunner):
         watchers: Optional[List[StreamWatcher]] = None,
         change_context: bool = False,
         timestamp_logs: bool = False,
+        user: Optional[str] = None,
     ) -> Result:
         watchers = self._setup_watchers(
             verbose=verbose, log_file=log_file, additional_watchers=watchers, timestamp_logs=timestamp_logs
