@@ -32,7 +32,7 @@ class SstableLoadUtils:
 
     @staticmethod
     def calculate_columns_count_in_table(
-        target_node, keyspace_name: str = "keyspace1", table_name: str = "standard1"
+        target_node, keyspace_name: str = "keyspace_refresh", table_name: str = "standard1"
     ) -> int:
         query_cmd = f"SELECT * FROM {keyspace_name}.{table_name} LIMIT 1"
         result = target_node.run_cqlsh(query_cmd)
@@ -67,7 +67,7 @@ class SstableLoadUtils:
     def upload_sstables(
         node,
         test_data: TestDataInventory,
-        keyspace_name: str = "keyspace1",
+        keyspace_name: str = "keyspace_refresh",
         table_name=None,
         create_schema: bool = False,
         is_cloud_cluster=False,
@@ -129,7 +129,12 @@ class SstableLoadUtils:
 
     @classmethod
     def run_load_and_stream(
-        cls, node, keyspace_name: str = "keyspace1", table_name: str = "standard1", start_timeout=60, end_timeout=600
+        cls,
+        node,
+        keyspace_name: str = "keyspace_refresh",
+        table_name: str = "standard1",
+        start_timeout=60,
+        end_timeout=600,
     ):
         """runs load and stream using API request and waits for it to finish"""
         with wait_for_log_lines(
@@ -155,7 +160,7 @@ class SstableLoadUtils:
         # Find the compaction output that reported about the resharding
 
         system_log_follower = node.follow_system_log(patterns=[r"Resharded.*"])
-        node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
+        node.run_nodetool(sub_cmd="refresh", args="-- keyspace_refresh standard1")
         return system_log_follower
 
     @staticmethod
@@ -169,24 +174,24 @@ class SstableLoadUtils:
         # Validate that files after resharding were saved in the "upload" folder.
         # Example of compaction output:
 
-        #   scylla[6653]:  [shard 0] compaction - [Reshard keyspace1.standard1 3cad4140-f8c3-11ea-acb1-000000000002]
+        #   scylla[6653]:  [shard 0] compaction - [Reshard keyspace_refresh.standard1 3cad4140-f8c3-11ea-acb1-000000000002]
         #   Resharded 1 sstables to [
-        #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-9-big-Data.db:level=0,
-        #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-10-big-Data.db:level=0,
-        #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-11-big-Data.db:level=0,
-        #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-12-big-Data.db:level=0,
-        #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-13-big-Data.db:level=0,
-        #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-22-big-Data.db:level=0,
-        #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-15-big-Data.db:level=0,
-        #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-16-big-Data.db:level=0,
+        #   /var/lib/scylla/data/keyspace_refresh/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-9-big-Data.db:level=0,
+        #   /var/lib/scylla/data/keyspace_refresh/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-10-big-Data.db:level=0,
+        #   /var/lib/scylla/data/keyspace_refresh/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-11-big-Data.db:level=0,
+        #   /var/lib/scylla/data/keyspace_refresh/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-12-big-Data.db:level=0,
+        #   /var/lib/scylla/data/keyspace_refresh/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-13-big-Data.db:level=0,
+        #   /var/lib/scylla/data/keyspace_refresh/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-22-big-Data.db:level=0,
+        #   /var/lib/scylla/data/keyspace_refresh/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-15-big-Data.db:level=0,
+        #   /var/lib/scylla/data/keyspace_refresh/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-16-big-Data.db:level=0,
         #   ]. 91MB to 92MB (~100% of original) in 5009ms = 18MB/s. ~370176 total partitions merged to 370150
 
         Starting with Scylla 4.7 messages have changed to the following:
-        [shard 1] sstables_loader - Loading new SSTables for keyspace=keyspace1, table=standard1, ...
-        [shard 1] database - Resharding 223kB for keyspace1.standard1
-        [shard 1] database - Resharded 223kB for keyspace1.standard1 in 0.14 seconds, 1MB/s
-        [shard 1] database - Loaded 16 SSTables into /var/lib/scylla/data/keyspace1/standard1-eb0401905d8311ecb391aa52ebf0b3e1
-        [shard 1] sstables_loader - Done loading new SSTables for keyspace=keyspace1, table=standard1, ...
+        [shard 1] sstables_loader - Loading new SSTables for keyspace=keyspace_refresh, table=standard1, ...
+        [shard 1] database - Resharding 223kB for keyspace_refresh.standard1
+        [shard 1] database - Resharded 223kB for keyspace_refresh.standard1 in 0.14 seconds, 1MB/s
+        [shard 1] database - Loaded 16 SSTables into /var/lib/scylla/data/keyspace_refresh/standard1-eb0401905d8311ecb391aa52ebf0b3e1
+        [shard 1] sstables_loader - Done loading new SSTables for keyspace=keyspace_refresh, table=standard1, ...
 
         So, there is no per-file paths anymore for resharding log messages, only root dir path.
         """
@@ -230,7 +235,7 @@ class SstableLoadUtils:
     def create_keyspace(
         cls,
         node,
-        keyspace_name: str = "keyspace1",
+        keyspace_name: str = "keyspace_refresh",
         strategy: str = "NetworkTopologyStrategy",
         replication_factor: int = 1,
     ):
@@ -245,7 +250,7 @@ class SstableLoadUtils:
         session.execute(schema.replace("\n", ""))
 
     @classmethod
-    def validate_data_count_after_upload(cls, node, keyspace_name: str = "keyspace1", table_name: str = "standard1"):
+    def validate_data_count_after_upload(cls, node, keyspace_name: str = "keyspace1", table_name: str = "standard2"):
         result = node.run_cqlsh(f"consistency QUORUM;SELECT COUNT(*) FROM {keyspace_name}.{table_name}")
 
         next_line_is_result = False
