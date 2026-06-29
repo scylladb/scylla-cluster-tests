@@ -43,6 +43,7 @@ from sdcm.provision.network_configuration import (
 )
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
+from sdcm.provision.provisioner import ProvisionError
 from sdcm.sct_provision.aws.cluster import PlacementGroup
 
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
@@ -512,6 +513,11 @@ class AWSCluster(cluster.BaseCluster):
             self.log.info("Found instances to be reused from test [%s] = %s", self.test_config.REUSE_CLUSTER, instances)
             return instances
         if instances := self._get_instances(dc_idx, az_idx):
+            if len(instances) < count:
+                raise ProvisionError(
+                    f"Found only {len(instances)} pre-provisioned instance(s) but {count} were requested "
+                    f"for dc_idx={dc_idx}, az_idx={az_idx}. The pre-provisioning step may have partially failed."
+                )
             self.log.info("Found provisioned instances = %s", instances)
             return instances
         self.log.info("Found no provisioned instances. Provision them.")
