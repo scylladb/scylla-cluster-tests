@@ -32,8 +32,12 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import IntEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generator
+
+from sdcm.sct_events import Severity
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
@@ -881,3 +885,164 @@ def collect_all_smart_logs(node: "BaseNode") -> list[NvmeSmartLog]:
             smart_logs.append(smart_log)
 
     return smart_logs
+
+
+# ---------------------------------------------------------------------------
+# Health check thresholds
+# ---------------------------------------------------------------------------
+
+# Default thresholds for NVMe SMART health checks. These can be overridden
+# via the thresholds parameter in check_nvme_health().
+DEFAULT_NVME_THRESHOLDS = {
+    "percentage_used_warning": 90,
+    "temperature_warning_celsius": 70,
+}
+
+
+# ---------------------------------------------------------------------------
+# Health check generator
+# ---------------------------------------------------------------------------
+
+# Type alias matching health_checker.py convention
+NvmeHealthEventsGenerator = Generator[ClusterHealthValidatorEvent, None, None]
+
+
+def check_nvme_health(
+    current_node: "BaseNode",
+    thresholds: dict | None = None,
+) -> NvmeHealthEventsGenerator:
+    """Check NVMe device health and yield events for detected issues.
+
+    Collects SMART logs for all NVMe data disks on the node and evaluates
+    them against health thresholds. Automatically collects error logs when
+    media errors or error log entries are detected.
+
+    Severity mapping:
+        - critical_warning != 0 -> CRITICAL
+        - media_errors > 0 -> ERROR
+        - num_err_log_entries > 0 -> WARNING (also collects error log)
+        - percentage_used > threshold -> WARNING
+        - available_spare < available_spare_threshold -> WARNING
+        - temperature > threshold -> WARNING
+
+    Args:
+        current_node: SCT node to check.
+        thresholds: Optional dict overriding DEFAULT_NVME_THRESHOLDS.
+
+    Yields:
+        ClusterHealthValidatorEvent.NvmeHealth events for each issue found.
+    """
+    if not current_node.parent_cluster.params.get("collect_nvme_diagnostics"):
+        return
+
+    if not is_nvme_cli_available(current_node):
+        return
+
+    effective_thresholds = {**DEFAULT_NVME_THRESHOLDS, **(thresholds or {})}
+    smart_logs = collect_all_smart_logs(current_node)
+    if not smart_logs:
+        return
+
+    for smart_log in smart_logs:
+        yield from _check_single_device_health(current_node, smart_log, effective_thresholds)
+
+
+def _check_single_device_health(
+    current_node: "BaseNode",
+    smart_log: NvmeSmartLog,
+    thresholds: dict,
+) -> NvmeHealthEventsGenerator:
+    """Evaluate a single device's SMART log against health thresholds."""
+    device = smart_log.device_path
+
+    # critical_warning != 0 -> CRITICAL
+    if smart_log.has_critical_warning:
+        yield ClusterHealthValidatorEvent.NvmeHealth(
+            severity=Severity.CRITICAL,
+            node=current_node.name,
+            error=f"NVMe {device}: critical_warning={smart_log.critical_warning} (non-zero indicates hardware issue)",
+        )
+
+    # media_errors > 0 -> ERROR
+    if smart_log.has_media_errors:
+        yield ClusterHealthValidatorEvent.NvmeHealth(
+            severity=Severity.ERROR,
+            node=current_node.name,
+            error=f"NVMe {device}: media_errors={smart_log.media_errors}",
+        )
+        _collect_error_log_with_timestamp(current_node, device)
+
+    # num_err_log_entries > 0 -> WARNING (also collect error log)
+    if smart_log.has_error_log_entries:
+        yield ClusterHealthValidatorEvent.NvmeHealth(
+            severity=Severity.WARNING,
+            node=current_node.name,
+            message=f"NVMe {device}: num_err_log_entries={smart_log.num_err_log_entries}",
+        )
+        if not smart_log.has_media_errors:
+            # Only collect if not already collected above
+            _collect_error_log_with_timestamp(current_node, device)
+
+    # percentage_used > threshold -> WARNING
+    pct_threshold = thresholds["percentage_used_warning"]
+    if smart_log.percentage_used > pct_threshold:
+        yield ClusterHealthValidatorEvent.NvmeHealth(
+            severity=Severity.WARNING,
+            node=current_node.name,
+            message=f"NVMe {device}: percentage_used={smart_log.percentage_used}% (threshold {pct_threshold}%)",
+        )
+
+    # available_spare < available_spare_threshold -> WARNING
+    if smart_log.available_spare < smart_log.available_spare_threshold:
+        yield ClusterHealthValidatorEvent.NvmeHealth(
+            severity=Severity.WARNING,
+            node=current_node.name,
+            message=(
+                f"NVMe {device}: available_spare={smart_log.available_spare}% "
+                f"below threshold {smart_log.available_spare_threshold}%"
+            ),
+        )
+
+    # temperature above threshold -> WARNING
+    temp_threshold = thresholds["temperature_warning_celsius"]
+    if smart_log.temperature_celsius > temp_threshold:
+        yield ClusterHealthValidatorEvent.NvmeHealth(
+            severity=Severity.WARNING,
+            node=current_node.name,
+            message=(f"NVMe {device}: temperature={smart_log.temperature_celsius}°C (threshold {temp_threshold}°C)"),
+        )
+
+
+def _collect_error_log_with_timestamp(node: "BaseNode", device_path: str) -> None:
+    """Collect NVMe error log and save with timestamp for post-mortem analysis.
+
+    Saves the raw error log output to the node's log directory with a
+    timestamped filename for correlation with test events.
+    """
+    timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
+    device_name = device_path.replace("/dev/", "")
+    filename = f"nvme_error_log_{device_name}_{timestamp}.log"
+
+    entries = get_error_log(node, device_path)
+    if not entries:
+        node.log.debug("NVMe error log for %s is empty", device_path)
+        return
+
+    lines = []
+    for entry in entries:
+        lines.append(
+            f"error_count={entry.error_count} sqid={entry.submission_queue_id} "
+            f"cmdid={entry.command_id} status=0x{entry.status_field:04x} "
+            f"lba=0x{entry.lba:x} nsid={entry.nsid} opcode=0x{entry.opcode:02x}"
+        )
+    content = "\n".join(lines) + "\n"
+
+    try:
+        log_dir = node.logdir
+        if log_dir:
+            filepath = f"{log_dir}/{filename}"
+            with open(filepath, "w", encoding="utf-8") as fobj:
+                fobj.write(content)
+            node.log.info("NVMe error log saved to %s (%d entries)", filepath, len(entries))
+    except Exception as exc:  # noqa: BLE001
+        node.log.warning("Failed to save NVMe error log: %s", exc)
