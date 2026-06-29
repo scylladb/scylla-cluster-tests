@@ -26,6 +26,7 @@ from google.cloud import compute_v1
 
 from sdcm import cluster
 from sdcm.provision.network_configuration import ssh_connection_ip_type
+from sdcm.provision.provisioner import ProvisionError
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
@@ -660,6 +661,12 @@ class GCECluster(cluster.BaseCluster):
             instances = self._get_instances(instance_dc)
             if not instances:
                 raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
+            if len(instances) < count:
+                raise ProvisionError(
+                    f"Found only {len(instances)} pre-provisioned instance(s) but {count} were requested "
+                    f"for dc_idx={instance_dc}. The pre-provisioning step may have partially failed."
+                )
+
         else:
             instances = self._create_instances(count, instance_dc, enable_auto_bootstrap, instance_type=instance_type)
 
