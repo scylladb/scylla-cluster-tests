@@ -47,6 +47,7 @@ from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
+from sdcm.provision.provisioner import ProvisionError
 from sdcm.utils.net import resolve_ip_to_dns
 
 
@@ -661,6 +662,16 @@ class GCECluster(cluster.BaseCluster):
             instances = self._get_instances(instance_dc)
             if not instances:
                 raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
+        elif not self.nodes and (instances := self._get_instances(instance_dc)):
+            # Only look for pre-provisioned instances during initial cluster setup (no nodes yet).
+            # Mid-test calls (e.g. from GrowShrinkClusterNemesis) must always create new instances,
+            # otherwise _get_instances() returns already-running nodes that share the same tags.
+            if len(instances) < count:
+                raise ProvisionError(
+                    f"Found only {len(instances)} pre-provisioned instance(s) but {count} were requested "
+                    f"for dc_idx={instance_dc}. The pre-provisioning step may have partially failed."
+                )
+            self.log.info("Found provisioned instances = %s", instances)
         else:
             instances = self._create_instances(count, instance_dc, enable_auto_bootstrap, instance_type=instance_type)
 
