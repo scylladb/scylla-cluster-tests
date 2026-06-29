@@ -637,6 +637,11 @@ class GCECluster(cluster.BaseCluster):
             if not instances:
                 raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
         elif instances := self._get_instances(instance_dc):
+            if len(instances) < count:
+                raise ProvisionError(
+                    f"Found only {len(instances)} pre-provisioned instance(s) but {count} were requested "
+                    f"for dc_idx={instance_dc}. The pre-provisioning step may have partially failed."
+                )
             self.log.info("Found provisioned instances = %s", instances)
         else:
             self.log.info("Found no provisioned instances. Provision them.")
