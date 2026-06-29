@@ -660,6 +660,7 @@ class GCECluster(cluster.BaseCluster):
             instances = self._get_instances(instance_dc)
             if not instances:
                 raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
+
         else:
             instances = self._create_instances(count, instance_dc, enable_auto_bootstrap, instance_type=instance_type)
 
