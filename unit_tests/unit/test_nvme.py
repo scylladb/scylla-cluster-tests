@@ -22,12 +22,15 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, PropertyMock
 
-
+from sdcm.cluster import BaseScyllaCluster
+from sdcm.sct_events import Severity
 from sdcm.utils.nvme import (
     NvmeDevice,
     NvmeSmartLog,
     SelfTestType,
+    _check_single_device_health,
     abort_self_test,
+    check_nvme_health,
     collect_all_smart_logs,
     filter_data_disks,
     get_error_log,
@@ -947,3 +950,289 @@ def test_collect_all_smart_logs_no_nvme_cli():
 
     smart_logs = collect_all_smart_logs(node)
     assert smart_logs == []
+
+
+# ---------------------------------------------------------------------------
+# Tests: _setup_nvme_diagnostics (cluster integration)
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_cluster(collect_nvme_diagnostics=True):
+    """Create a mock cluster object with params and the _setup_nvme_diagnostics method."""
+    cluster = MagicMock(spec=BaseScyllaCluster)
+    cluster.params = MagicMock()
+    cluster.params.get = MagicMock(
+        side_effect=lambda key, *a, **kw: {
+            "collect_nvme_diagnostics": collect_nvme_diagnostics,
+        }.get(key)
+    )
+    # Bind the real method to the mock so we test actual logic
+    cluster._setup_nvme_diagnostics = BaseScyllaCluster._setup_nvme_diagnostics.__get__(cluster)
+    return cluster
+
+
+def test_setup_nvme_diagnostics_installs_and_logs_baseline(monkeypatch):
+    """_setup_nvme_diagnostics installs nvme-cli and logs baseline SMART data."""
+    node = _make_mock_node()
+    cluster = _make_mock_cluster()
+
+    smart = NvmeSmartLog(
+        device_path="/dev/nvme1n1",
+        temperature_kelvin=315,
+        available_spare=100,
+        percentage_used=2,
+        media_errors=0,
+        num_err_log_entries=0,
+        power_on_hours=8760,
+    )
+    monkeypatch.setattr("sdcm.cluster.install_nvme_cli", lambda n: True)
+    monkeypatch.setattr("sdcm.cluster.collect_all_smart_logs", lambda n: [smart])
+
+    cluster._setup_nvme_diagnostics(node)
+
+    # Verify baseline was logged
+    node.log.info.assert_called()
+    logged_args = node.log.info.call_args_list[-1]
+    assert "/dev/nvme1n1" in str(logged_args)
+    assert "8760" in str(logged_args)
+
+
+def test_setup_nvme_diagnostics_skips_when_install_fails(monkeypatch):
+    """_setup_nvme_diagnostics skips gracefully when nvme-cli install fails."""
+    node = _make_mock_node()
+    cluster = _make_mock_cluster()
+
+    monkeypatch.setattr("sdcm.cluster.install_nvme_cli", lambda n: False)
+    collect_mock = MagicMock()
+    monkeypatch.setattr("sdcm.cluster.collect_all_smart_logs", collect_mock)
+
+    cluster._setup_nvme_diagnostics(node)
+
+    # collect_all_smart_logs should not be called
+    collect_mock.assert_not_called()
+    # Should log that it's skipping
+    node.log.info.assert_called()
+    assert "skipping" in str(node.log.info.call_args_list[0]).lower()
+
+
+def test_setup_nvme_diagnostics_skips_when_no_data_disks(monkeypatch):
+    """_setup_nvme_diagnostics skips gracefully when no NVMe data disks found."""
+    node = _make_mock_node()
+    cluster = _make_mock_cluster()
+
+    monkeypatch.setattr("sdcm.cluster.install_nvme_cli", lambda n: True)
+    monkeypatch.setattr("sdcm.cluster.collect_all_smart_logs", lambda n: [])
+
+    cluster._setup_nvme_diagnostics(node)
+
+    # Should log that no data disks were found
+    node.log.info.assert_called()
+    assert "skipping" in str(node.log.info.call_args_list[0]).lower()
+
+
+# ---------------------------------------------------------------------------
+# Tests: _check_single_device_health (threshold logic)
+# ---------------------------------------------------------------------------
+
+DEFAULT_THRESHOLDS = {
+    "percentage_used_warning": 90,
+    "temperature_warning_celsius": 70,
+}
+
+
+def _make_smart_log(**overrides) -> NvmeSmartLog:
+    """Create an NvmeSmartLog with healthy defaults, overridable per field."""
+    defaults = {
+        "device_path": "/dev/nvme1n1",
+        "critical_warning": 0,
+        "temperature_kelvin": 310,  # 37°C
+        "available_spare": 100,
+        "available_spare_threshold": 10,
+        "percentage_used": 2,
+        "media_errors": 0,
+        "num_err_log_entries": 0,
+        "power_on_hours": 1000,
+    }
+    defaults.update(overrides)
+    return NvmeSmartLog(**defaults)
+
+
+def test_threshold_healthy_device_yields_nothing():
+    """A healthy device yields no events."""
+    node = _make_mock_node()
+    smart = _make_smart_log()
+    events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
+    assert events == []
+
+
+def test_threshold_critical_warning_yields_critical():
+    """critical_warning != 0 yields a CRITICAL event."""
+    node = _make_mock_node()
+    smart = _make_smart_log(critical_warning=4)
+    events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
+
+    critical_events = [e for e in events if e.severity == Severity.CRITICAL]
+    assert len(critical_events) == 1
+    assert "critical_warning=4" in critical_events[0].error
+
+
+def test_threshold_media_errors_yields_error():
+    """media_errors > 0 yields an ERROR event."""
+    node = _make_mock_node()
+    node.logdir = "/tmp/opencode/test_logdir"
+    smart = _make_smart_log(media_errors=42)
+    events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
+
+    error_events = [e for e in events if e.severity == Severity.ERROR]
+    assert len(error_events) == 1
+    assert "media_errors=42" in error_events[0].error
+
+
+def test_threshold_error_log_entries_yields_warning():
+    """num_err_log_entries > 0 yields a WARNING event."""
+    node = _make_mock_node()
+    node.logdir = "/tmp/opencode/test_logdir"
+    smart = _make_smart_log(num_err_log_entries=5)
+    events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
+
+    warning_events = [e for e in events if e.severity == Severity.WARNING]
+    assert len(warning_events) == 1
+    assert "num_err_log_entries=5" in warning_events[0].message
+
+
+def test_threshold_percentage_used_above_threshold_yields_warning():
+    """percentage_used above threshold yields a WARNING event."""
+    node = _make_mock_node()
+    smart = _make_smart_log(percentage_used=95)
+    events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
+
+    warning_events = [e for e in events if e.severity == Severity.WARNING]
+    assert len(warning_events) == 1
+    assert "percentage_used=95%" in warning_events[0].message
+
+
+def test_threshold_percentage_used_at_threshold_no_event():
+    """percentage_used exactly at threshold does not yield an event."""
+    node = _make_mock_node()
+    smart = _make_smart_log(percentage_used=90)
+    events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
+    assert events == []
+
+
+def test_threshold_available_spare_below_device_threshold_yields_warning():
+    """available_spare below the device's own spare_threshold yields a WARNING."""
+    node = _make_mock_node()
+    smart = _make_smart_log(available_spare=5, available_spare_threshold=10)
+    events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
+
+    warning_events = [e for e in events if e.severity == Severity.WARNING]
+    assert len(warning_events) == 1
+    assert "available_spare=5%" in warning_events[0].message
+
+
+def test_threshold_temperature_above_threshold_yields_warning():
+    """Temperature above threshold yields a WARNING event."""
+    node = _make_mock_node()
+    smart = _make_smart_log(temperature_kelvin=348)  # 75°C
+    events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
+
+    warning_events = [e for e in events if e.severity == Severity.WARNING]
+    assert len(warning_events) == 1
+    assert "temperature=75" in warning_events[0].message
+
+
+def test_threshold_temperature_at_threshold_no_event():
+    """Temperature exactly at threshold does not yield an event."""
+    node = _make_mock_node()
+    smart = _make_smart_log(temperature_kelvin=343)  # 70°C
+    events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
+    assert events == []
+
+
+def test_threshold_multiple_issues_yields_multiple_events():
+    """A device with multiple issues yields one event per issue."""
+    node = _make_mock_node()
+    node.logdir = "/tmp/opencode/test_logdir"
+    smart = _make_smart_log(
+        critical_warning=1,
+        media_errors=10,
+        num_err_log_entries=20,
+        percentage_used=95,
+    )
+    events = list(_check_single_device_health(node, smart, DEFAULT_THRESHOLDS))
+
+    # critical_warning -> CRITICAL, media_errors -> ERROR,
+    # num_err_log_entries -> WARNING, percentage_used -> WARNING
+    assert len(events) == 4
+    severities = [e.severity for e in events]
+    assert Severity.CRITICAL in severities
+    assert Severity.ERROR in severities
+    assert severities.count(Severity.WARNING) == 2
+
+
+def test_threshold_custom_thresholds_override_defaults():
+    """Custom thresholds override the default values."""
+    node = _make_mock_node()
+    smart = _make_smart_log(percentage_used=50, temperature_kelvin=333)  # 60°C
+    custom = {"percentage_used_warning": 40, "temperature_warning_celsius": 55}
+    events = list(_check_single_device_health(node, smart, custom))
+
+    # Both should trigger with lowered thresholds
+    assert len(events) == 2
+
+
+# ---------------------------------------------------------------------------
+# Tests: check_nvme_health (full generator)
+# ---------------------------------------------------------------------------
+
+
+def test_check_nvme_health_disabled_by_config(monkeypatch):
+    """check_nvme_health yields nothing when collect_nvme_diagnostics is False."""
+    node = _make_mock_node()
+    node.parent_cluster = MagicMock()
+    node.parent_cluster.params.get.return_value = False
+
+    events = list(check_nvme_health(current_node=node))
+    assert events == []
+
+
+def test_check_nvme_health_no_nvme_cli(monkeypatch):
+    """check_nvme_health yields nothing when nvme-cli not available."""
+    node = _make_mock_node()
+    node.parent_cluster = MagicMock()
+    node.parent_cluster.params.get.return_value = True
+    node.remoter.run.return_value = _make_result(exited=1)  # which nvme -> not found
+
+    events = list(check_nvme_health(current_node=node))
+    assert events == []
+
+
+def test_check_nvme_health_healthy_device(monkeypatch):
+    """check_nvme_health yields nothing for a healthy device."""
+    node = _make_mock_node()
+    node.parent_cluster = MagicMock()
+    node.parent_cluster.params.get.return_value = True
+
+    smart = _make_smart_log()
+    monkeypatch.setattr("sdcm.utils.nvme.is_nvme_cli_available", lambda n: True)
+    monkeypatch.setattr("sdcm.utils.nvme.collect_all_smart_logs", lambda n: [smart])
+
+    events = list(check_nvme_health(current_node=node))
+    assert events == []
+
+
+def test_check_nvme_health_yields_events_for_errors(monkeypatch):
+    """check_nvme_health yields events when SMART data shows errors."""
+    node = _make_mock_node()
+    node.parent_cluster = MagicMock()
+    node.parent_cluster.params.get.return_value = True
+    node.logdir = "/tmp/opencode/test_logdir"
+
+    smart = _make_smart_log(media_errors=5)
+    monkeypatch.setattr("sdcm.utils.nvme.is_nvme_cli_available", lambda n: True)
+    monkeypatch.setattr("sdcm.utils.nvme.collect_all_smart_logs", lambda n: [smart])
+    monkeypatch.setattr("sdcm.utils.nvme.get_error_log", lambda n, d, **kw: [])
+
+    events = list(check_nvme_health(current_node=node))
+    assert len(events) == 1
+    assert events[0].severity == Severity.ERROR

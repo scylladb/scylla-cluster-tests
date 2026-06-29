@@ -6,6 +6,7 @@ ClusterHealthValidatorEvent.NodeSchemaVersion: ERROR
 ClusterHealthValidatorEvent.NodesNemesis: WARNING
 ClusterHealthValidatorEvent.ScyllaCloudClusterServerDiagnostic: CRITICAL
 ClusterHealthValidatorEvent.ParallelHealthCheckFailure: ERROR
+ClusterHealthValidatorEvent.NvmeHealth: CRITICAL
 ClusterHealthValidatorEvent: NORMAL
 DataValidatorEvent.DataValidator: ERROR
 DataValidatorEvent.ImmutableRowsValidator: ERROR
