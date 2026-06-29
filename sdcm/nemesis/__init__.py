@@ -1674,10 +1674,12 @@ class NemesisRunner:
         self._major_compaction()
 
     def disrupt_load_and_stream(self):
-        # Checking the columns number of keyspace1.standard1
-        self.log.debug("Prepare keyspace1.standard1 if it does not exist")
-        self._prepare_test_table(ks="keyspace1")
-        column_num = SstableLoadUtils.calculate_columns_count_in_table(self.target_node)
+        # Checking the columns number of keyspace_refresh.standard1
+        self.log.debug("Prepare keyspace_refresh.standard1 if it does not exist")
+        self._prepare_test_table(ks="keyspace_refresh")
+        column_num = SstableLoadUtils.calculate_columns_count_in_table(
+            self.target_node, keyspace_name="keyspace_refresh"
+        )
 
         # Run load-and-stream test on regular standard1 table of cassandra-stress.
         if column_num < 5:
@@ -1685,26 +1687,32 @@ class NemesisRunner:
 
         test_data = SstableLoadUtils.get_load_test_data_inventory(column_num, big_sstable=False, load_and_stream=True)
 
-        result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
+        result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace_refresh.standard1")
 
-        if result is not None and result.exit_status == 0:
-            map_files_to_node = SstableLoadUtils.distribute_test_files_to_cluster_nodes(
-                nodes=self.cluster.data_nodes, test_data=test_data
+        if result is None or result.exit_status != 0:
+            raise UnsupportedNemesis("cfstats failed for keyspace_refresh.standard1, table may not exist yet")
+
+        map_files_to_node = SstableLoadUtils.distribute_test_files_to_cluster_nodes(
+            nodes=self.cluster.data_nodes, test_data=test_data
+        )
+        for sstables_info, load_on_node in map_files_to_node:
+            self.actions_log.info(f"Uploading sstables to {load_on_node.name}")
+            SstableLoadUtils.upload_sstables(
+                load_on_node, test_data=sstables_info, keyspace_name="keyspace_refresh", table_name="standard1"
             )
-            for sstables_info, load_on_node in map_files_to_node:
-                self.actions_log.info(f"Uploading sstables to {load_on_node.name}")
-                SstableLoadUtils.upload_sstables(load_on_node, test_data=sstables_info, table_name="standard1")
-                # NOTE: on K8S logs may appear with a delay, so add a bigger timeout for it.
-                #       See https://github.com/scylladb/scylla-cluster-tests/issues/6314
-                kwargs = {"start_timeout": 1800, "end_timeout": 1800} if self._is_it_on_kubernetes() else {}
-                with self.action_log_scope(f"Loading and streaming sstables on {load_on_node.name} node"):
-                    SstableLoadUtils.run_load_and_stream(load_on_node, **kwargs)
+            # NOTE: on K8S logs may appear with a delay, so add a bigger timeout for it.
+            #       See https://github.com/scylladb/scylla-cluster-tests/issues/6314
+            kwargs = {"start_timeout": 1800, "end_timeout": 1800} if self._is_it_on_kubernetes() else {}
+            with self.action_log_scope(f"Loading and streaming sstables on {load_on_node.name} node"):
+                SstableLoadUtils.run_load_and_stream(load_on_node, **kwargs)
 
     def disrupt_nodetool_refresh(self, big_sstable: bool = False):
-        # Checking the columns number of keyspace1.standard1
-        self.log.debug("Prepare keyspace1.standard1 if it does not exist")
-        self._prepare_test_table(ks="keyspace1")
-        column_num = SstableLoadUtils.calculate_columns_count_in_table(self.target_node)
+        # Checking the columns number of keyspace_refresh.standard1
+        self.log.debug("Prepare keyspace_refresh.standard1 if it does not exist")
+        self._prepare_test_table(ks="keyspace_refresh")
+        column_num = SstableLoadUtils.calculate_columns_count_in_table(
+            self.target_node, keyspace_name="keyspace_refresh", table_name="standard1"
+        )
 
         # Note: when issue #6617 is fixed, we can try to load snapshot (cols=5) to a table (1 < cols < 5),
         #       expect that refresh will fail (no serious db error).
@@ -1715,43 +1723,43 @@ class NemesisRunner:
             column_num, big_sstable=big_sstable, load_and_stream=False
         )
 
-        result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
+        result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace_refresh.standard1")
 
-        if result is not None and result.exit_status == 0:
-            key = "0x32373131364f334f3830"
-            # Check one special key before refresh, we will verify refresh by query in the end
-            # Note: we can't DELETE the key before refresh, otherwise the old sstable won't be loaded
-            #       TRUNCATE can be used the clean the table, but we can't do it for keyspace1.standard1
-            query_verify = f"SELECT * FROM keyspace1.standard1 WHERE key={key}"
-            result = self.target_node.run_cqlsh(query_verify)
-            if "(0 rows)" in result.stdout:
-                self.log.debug("Key %s does not exist before refresh", key)
-            else:
-                self.log.debug("Key %s already exists before refresh", key)
+        if result is None or result.exit_status != 0:
+            raise UnsupportedNemesis("cfstats failed for keyspace_refresh.standard1, table may not exist yet")
 
-            # Executing rolling refresh one by one
-            shards_num = self.cluster.data_nodes[0].scylla_shards
-            for node in self.cluster.data_nodes:
-                SstableLoadUtils.upload_sstables(
-                    node,
-                    test_data=test_data[0],
-                    table_name="standard1",
-                    is_cloud_cluster=self.cluster.params.get("db_type") == "cloud_scylla",
-                )
-                with self.action_log_scope(f"Running nodetool refresh on {node.name} node"):
-                    system_log_follower = SstableLoadUtils.run_refresh(node, test_data=test_data[0])
-                # NOTE: resharding happens only if we have more than 1 core.
-                #       We may have 1 core in a K8S setup.
-                # If tablets in use, skipping resharding validation since it doesn't work the same as vnodes
-                if shards_num > 1 and not is_tablets_feature_enabled(self.cluster.data_nodes[0]):
-                    self.actions_log.info(f"Validating resharding after refresh on {node.name}")
-                    SstableLoadUtils.validate_resharding_after_refresh(
-                        node=node, system_log_follower=system_log_follower
-                    )
+        key = "0x32373131364f334f3830"
+        # Check one special key before refresh, we will verify refresh by query in the end
+        # Note: we can't DELETE the key before refresh, otherwise the old sstable won't be loaded
+        #       TRUNCATE can be used the clean the table, but we can't do it for keyspace_refresh.standard1
+        query_verify = f"SELECT * FROM keyspace_refresh.standard1 WHERE key={key}"
+        result = self.target_node.run_cqlsh(query_verify)
+        if "(0 rows)" in result.stdout:
+            self.log.debug("Key %s does not exist before refresh", key)
+        else:
+            self.log.debug("Key %s already exists before refresh", key)
 
-            # Verify that the special key is loaded by SELECT query
-            result = self.target_node.run_cqlsh(query_verify)
-            assert "(1 rows)" in result.stdout, f"The key {key} is not loaded by `nodetool refresh`"
+        # Executing rolling refresh one by one
+        shards_num = self.cluster.data_nodes[0].scylla_shards
+        for node in self.cluster.data_nodes:
+            SstableLoadUtils.upload_sstables(
+                node,
+                test_data=test_data[0],
+                table_name="standard1",
+                is_cloud_cluster=self.cluster.params.get("db_type") == "cloud_scylla",
+            )
+            with self.action_log_scope(f"Running nodetool refresh on {node.name} node"):
+                system_log_follower = SstableLoadUtils.run_refresh(node, test_data=test_data[0])
+            # NOTE: resharding happens only if we have more than 1 core.
+            #       We may have 1 core in a K8S setup.
+            # If tablets in use, skipping resharding validation since it doesn't work the same as vnodes
+            if shards_num > 1 and not is_tablets_feature_enabled(self.cluster.data_nodes[0]):
+                self.actions_log.info(f"Validating resharding after refresh on {node.name}")
+                SstableLoadUtils.validate_resharding_after_refresh(node=node, system_log_follower=system_log_follower)
+
+        # Verify that the special key is loaded by SELECT query
+        result = self.target_node.run_cqlsh(query_verify)
+        assert "(1 rows)" in result.stdout, f"The key {key} is not loaded by `nodetool refresh`"
 
     def _k8s_fake_enospc_error(self, node):
         """Fakes ENOSPC error for scylla container (for /var/lib/scylla dir) using chaos-mesh without filling up disk."""
@@ -2169,12 +2177,10 @@ class NemesisRunner:
         """Populate ``ks.standard1`` with 400 K rows via cassandra-stress."""
         stress_cmd = (
             "cassandra-stress write n=400000 cl=QUORUM -mode native cql3 "
-            f"-schema 'replication(strategy=NetworkTopologyStrategy,"
+            f"-schema 'keyspace={ks} replication(strategy=NetworkTopologyStrategy,"
             f"replication_factor={self.tester.reliable_replication_factor})' -log interval=5"
         )
-        cs_thread = self.tester.run_stress_thread(
-            stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False, round_robin=True
-        )
+        cs_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd, stop_test_on_failure=False, round_robin=True)
         self.tester.verify_stress_thread(cs_thread, error_handler=self._nemesis_stress_failure_handler)
 
     def _nemesis_stress_failure_handler(self, stress_pool, errors):
