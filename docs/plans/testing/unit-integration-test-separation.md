@@ -1,8 +1,8 @@
 ---
-status: done
+status: complete
 domain: testing
 created: 2026-03-23
-last_updated: 2026-03-23
+last_updated: 2026-06-25
 owner: null
 ---
 
@@ -153,12 +153,12 @@ path resolution. No test files move yet; no conftest changes yet.
   `unit_tests/` from `unit_tests/unit/` or `unit_tests/integration/`) at move time.
 
 **Definition of Done**:
-- [ ] Stale directories removed
-- [ ] Both `__init__.py` files exist
-- [ ] `unit_tests_data_dir` fixture present in parent `unit_tests/conftest.py`
-- [ ] `UV_PROJECT_ENVIRONMENT=.venv uv run python -m pytest unit_tests/ --collect-only -q`
-      collects 1697 tests (unchanged)
-- [ ] `uv run sct.py pre-commit` passes
+- [x] Stale directories removed
+- [x] Both `__init__.py` files exist
+- [x] `unit_tests_data_dir` fixture present in parent `unit_tests/conftest.py`
+- [x] `UV_PROJECT_ENVIRONMENT=.venv uv run python -m pytest unit_tests/ --collect-only -q`
+       collects 1697 tests (unchanged)
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -201,15 +201,15 @@ Also fix `__file__`-relative paths that traverse upward past `unit_tests/`:
 - `sct.py` FakeTester import updated
 
 **Definition of Done**:
-- [ ] All purely-unit files live under `unit_tests/unit/`
-- [ ] `sct.py` import updated and verified:
-      `python -c "from unit_tests.unit.nemesis.fake_cluster import FakeTester"`
-- [ ] All `__file__`-relative paths to `unit_tests/test_data/` updated in moved files
-- [ ] `UV_PROJECT_ENVIRONMENT=.venv uv run python -m pytest unit_tests/ --collect-only -q`
-      collects 1697 tests
-- [ ] `UV_PROJECT_ENVIRONMENT=.venv uv run python -m pytest unit_tests/ -m "not integration" --collect-only -q`
-      collects 1487 tests
-- [ ] `uv run sct.py pre-commit` passes
+- [x] All purely-unit files live under `unit_tests/unit/`
+- [x] `sct.py` import updated and verified:
+       `python -c "from unit_tests.unit.nemesis.fake_cluster import FakeTester"`
+- [x] All `__file__`-relative paths to `unit_tests/test_data/` updated in moved files
+- [x] `UV_PROJECT_ENVIRONMENT=.venv uv run python -m pytest unit_tests/ --collect-only -q`
+       collects 1697 tests
+- [x] `UV_PROJECT_ENVIRONMENT=.venv uv run python -m pytest unit_tests/ -m "not integration" --collect-only -q`
+       collects 1487 tests
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -226,12 +226,12 @@ The root conftest hook still applies at this stage.
 - 19 files moved to `unit_tests/integration/`
 
 **Definition of Done**:
-- [ ] All 19 purely-integration files live under `unit_tests/integration/`
-- [ ] All `@pytest.mark.integration` markers preserved
-- [ ] `UV_PROJECT_ENVIRONMENT=.venv uv run python -m pytest unit_tests/ -m "integration" --collect-only -q`
-      collects 210 tests
-- [ ] Total test count remains 1697
-- [ ] `uv run sct.py pre-commit` passes
+- [x] All 19 purely-integration files live under `unit_tests/integration/`
+- [x] All `@pytest.mark.integration` markers preserved
+- [x] `UV_PROJECT_ENVIRONMENT=.venv uv run python -m pytest unit_tests/ -m "integration" --collect-only -q`
+       collects 210 tests
+- [x] Total test count remains 1697
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -266,12 +266,12 @@ integration files are already in their respective directories.
 - `pytest_collection_modifyitems` hook deleted
 
 **Definition of Done**:
-- [ ] `pytest_collection_modifyitems` hook does not exist anywhere in the codebase
-- [ ] `mock_cloud_services` is `autouse=True` in `unit_tests/unit/conftest.py`
-- [ ] `UV_PROJECT_ENVIRONMENT=.venv uv run python -m pytest unit_tests/ -m "not integration" -x -q`
-      passes (1487 tests)
-- [ ] Integration tests do not receive `fake_remoter` or `mock_cloud_services`
-- [ ] `uv run sct.py pre-commit` passes
+- [x] `pytest_collection_modifyitems` hook does not exist anywhere in the codebase
+- [x] `mock_cloud_services` is `autouse=True` in `unit_tests/unit/conftest.py`
+- [x] `UV_PROJECT_ENVIRONMENT=.venv uv run python -m pytest unit_tests/ -m "not integration" -x -q`
+       passes (1487 tests)
+- [x] Integration tests do not receive `fake_remoter` or `mock_cloud_services`
+- [x] `uv run sct.py pre-commit` passes
 
 ---
 
@@ -311,14 +311,14 @@ not duplicated.
 - `AGENTS.md` and skill files updated
 
 **Definition of Done**:
-- [ ] No test files remain at `unit_tests/` root level (only conftest, `__init__.py`, `lib/`,
-      `test_data/`, `test_configs/`)
-- [ ] All `@pytest.mark.integration` markers preserved on integration tests
-- [ ] Total test count remains 1697
-- [ ] No shared test classes duplicated
-- [ ] `uv run sct.py unit-tests` and `uv run sct.py integration-tests` work correctly
-- [ ] `AGENTS.md` reflects new directory structure
-- [ ] `uv run sct.py pre-commit` passes
+- [x] No test files remain at `unit_tests/` root level (only conftest, `__init__.py`, `lib/`,
+       `test_data/`, `test_configs/`)
+- [x] All `@pytest.mark.integration` markers preserved on integration tests
+- [x] Total test count remains 1697
+- [x] No shared test classes duplicated
+- [x] `uv run sct.py unit-tests` and `uv run sct.py integration-tests` work correctly
+- [x] `AGENTS.md` reflects new directory structure
+- [x] `uv run sct.py pre-commit` passes
 
 ## Testing Requirements
 
