@@ -349,4 +349,4 @@ Reference these for style and quality:
 | `docs/plans/nemesis/nemesis-rework.md` | Feature refactoring | Large-scale restructuring, backward compatibility |
 | `docs/plans/infrastructure/docker-cleanup-all-backends.md` | Infrastructure cleanup | Multi-backend impact analysis |
 | `docs/plans/config/full-version-tag-lookup.md` | Feature implementation | Focused feature with clear deliverables |
-| `docs/plans/ai-skills-framework.md` | Framework design | Multi-phase skill creation with platform compatibility |
+| `docs/plans/ai-tooling/ai-skills-framework.md` | Framework design | Multi-phase skill creation with platform compatibility |
