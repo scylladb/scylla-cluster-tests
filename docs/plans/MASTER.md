@@ -56,8 +56,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Jenkins Uno-Choice Billing Project | `draft` | [jenkins-uno-choice-billing-project.md](jenkins/jenkins-uno-choice-billing-project.md) |
 | Centralized Trigger Matrix | `draft` | [centralized-trigger-matrix.md](jenkins/centralized-trigger-matrix.md) |
 | i8g Performance Jobs Migration | `draft` | [i8g-performance-jobs-migration.md](i8g-performance-jobs-migration.md) |
-| Perf-Simple-Query Offline Installer Trigger | `draft` | [perf-simple-query-offline-installer-trigger.md](jenkins/perf-simple-query-offline-installer-trigger.md) |
-| curl Retry/Timeout Linting | `pending_pr` | [#13509](https://github.com/scylladb/scylla-cluster-tests/pull/13509) |
+| Perf-Simple-Query Offline Installer Trigger | `complete` | [perf-simple-query-offline-installer-trigger.md](jenkins/perf-simple-query-offline-installer-trigger.md), [#14340](https://github.com/scylladb/scylla-cluster-tests/pull/14340) |
 
 ### Config — Configuration system
 
@@ -67,7 +66,8 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Typed Config Access Migration | `pending_pr` | [#13878](https://github.com/scylladb/scylla-cluster-tests/pull/13878) |
 | SCT Config Validation and Lazy Images | `draft` | [sct-config-validation-and-lazy-images.md](sct-config-validation-and-lazy-images.md) |
 | SCT Config Follow-up Refactoring | `pending_pr` | [#13845](https://github.com/scylladb/scylla-cluster-tests/pull/13845) |
-| Config Type Normalization | `draft` | [config-type-normalization.md](config/config-type-normalization.md) |
+| Config Type Normalization | `complete` | [config-type-normalization.md](config/config-type-normalization.md), [#14805](https://github.com/scylladb/scylla-cluster-tests/pull/14805) |
+| Constraint-Based Instance Sizing | `complete` | [constraint-based-sizing.md](constraint-based-sizing.md), [#14576](https://github.com/scylladb/scylla-cluster-tests/pull/14576) |
 
 ### K8s — Kubernetes operator, K8s backends
 
@@ -87,7 +87,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 
 | Plan | Status | File / PR |
 |------|--------|-----------|
-| AI Skills Framework | `draft` | [ai-skills-framework.md](ai-skills-framework.md) |
+| AI Skills Framework | `complete` | [ai-skills-framework.md](ai-skills-framework.md), [#13799](https://github.com/scylladb/scylla-cluster-tests/pull/13799), [#13827](https://github.com/scylladb/scylla-cluster-tests/pull/13827), [#13836](https://github.com/scylladb/scylla-cluster-tests/pull/13836) |
 | PR Review Taxonomy Analysis | `in_progress` | [pr-review-taxonomy-analysis.md](pr-review-taxonomy-analysis.md) |
 
 ### Testing — Unit/integration test infrastructure
@@ -95,7 +95,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | Plan | Status | File / PR |
 |------|--------|-----------|
 | MiniCloud Local Testing | `pending_pr` | [#14009](https://github.com/scylladb/scylla-cluster-tests/pull/14009) |
-| Unit/Integration Test Separation | `draft` | [unit-integration-test-separation.md](testing/unit-integration-test-separation.md) |
+| Unit/Integration Test Separation | `complete` | [unit-integration-test-separation.md](testing/unit-integration-test-separation.md), [#14172](https://github.com/scylladb/scylla-cluster-tests/pull/14172) |
 
 ## Cross-Plan Dependencies
 

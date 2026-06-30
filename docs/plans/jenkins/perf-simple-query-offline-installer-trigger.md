@@ -1,8 +1,8 @@
 ---
-status: done
+status: complete
 domain: ci-cd
 created: 2026-04-06
-last_updated: 2026-04-13
+last_updated: 2026-06-25
 owner: juliayakovlev
 ---
 # Triggers for perf-simple-query Tests Run as Offline Installer After PGO Builds
