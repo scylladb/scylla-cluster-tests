@@ -831,3 +831,34 @@ def test_env_var_whitespace_is_stripped(monkeypatch, raw_value, expected):
     monkeypatch.setenv("SCT_SCYLLA_VERSION", raw_value)
     conf = sct_config.SCTConfiguration()
     assert conf.get("scylla_version") == expected
+
+
+def test_collect_nvme_diagnostics_default_true(conf):
+    """collect_nvme_diagnostics defaults to True for AWS backend."""
+    assert conf.get("collect_nvme_diagnostics") is True
+
+
+def test_collect_nvme_diagnostics_default_false_docker(monkeypatch):
+    """collect_nvme_diagnostics defaults to False for docker backend."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    docker_conf = sct_config.SCTConfiguration()
+    assert docker_conf.get("collect_nvme_diagnostics") is False
+
+
+def test_collect_nvme_diagnostics_env_override(monkeypatch):
+    """collect_nvme_diagnostics can be set via environment variable."""
+    monkeypatch.setenv("SCT_COLLECT_NVME_DIAGNOSTICS", "false")
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("collect_nvme_diagnostics") is False
+
+
+def test_nvme_self_test_type_default(conf):
+    """nvme_self_test_type defaults to 1 (short)."""
+    assert conf.get("nvme_self_test_type") == 1
+
+
+def test_nvme_self_test_type_env_override(monkeypatch):
+    """nvme_self_test_type can be set to 2 (extended) via environment variable."""
+    monkeypatch.setenv("SCT_NVME_SELF_TEST_TYPE", "2")
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("nvme_self_test_type") == 2

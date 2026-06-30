@@ -3991,6 +3991,27 @@ Collect logs from instances and sct runner
 **type:** bool
 
 
+## **collect_nvme_diagnostics** / SCT_COLLECT_NVME_DIAGNOSTICS
+
+Collect NVMe SMART logs, error logs, and self-test results from DB nodes during test teardown. Requires nvme-cli to be installed on the nodes. Skipped gracefully on backends without NVMe devices.
+
+**default:** True
+
+**type:** bool
+
+**backend overrides:**
+- `False`: docker
+
+
+## **nvme_self_test_type** / SCT_NVME_SELF_TEST_TYPE
+
+NVMe device self-test type to run: 1 (short, ~2 min) or 2 (extended, may take hours). Only used when collect_nvme_diagnostics is enabled.
+
+**default:** 1
+
+**type:** int
+
+
 ## **use_scylla_doctor_on_failure** / SCT_USE_SCYLLA_DOCTOR_ON_FAILURE
 
 Run scylla-doctor on test failure to collect additional diagnostics
