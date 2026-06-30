@@ -171,6 +171,7 @@ from sdcm.stress_thread import (
     apply_gemini_stress_duration,
     extract_gemini_seed,
     get_timeout_from_stress_cmd,
+    stress_cmd_get_duration_pattern,
 )
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
@@ -3118,10 +3119,18 @@ class ClusterTester(unittest.TestCase):
     def run_gemini(self, cmd, duration=None):
         if duration:
             timeout = self.get_duration(duration)
+            cmd = apply_gemini_stress_duration(cmd, duration)
         elif self._stress_duration:
             timeout = self.get_duration(self._stress_duration)
             cmd = apply_gemini_stress_duration(cmd, self._stress_duration)
         else:
+            if "--duration" not in cmd:
+                # When the custom command has no --duration, extract it from the configured
+                # gemini_cmd (the "previous command") so the test doesn't silently run for
+                # the Gemini CLI default of 30s.
+                default_cmd = self.params.get("gemini_cmd") or ""
+                if duration_match := stress_cmd_get_duration_pattern.search(default_cmd):
+                    cmd += f" --duration {duration_match.group(1)}"
             timeout = get_timeout_from_stress_cmd(cmd) or self.get_duration(duration)
         return GeminiStressThread(
             test_cluster=self.db_cluster,

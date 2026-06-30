@@ -18,6 +18,7 @@ from sdcm.stress_thread import (
     apply_gemini_stress_duration,
     extract_gemini_seed,
     get_timeout_from_stress_cmd,
+    stress_cmd_get_duration_pattern,
 )
 from sdcm.utils.common import time_period_str_to_seconds
 
@@ -321,3 +322,39 @@ def test_apply_gemini_stress_duration(original_cmd, stress_duration, expected_cm
 )
 def test_extract_gemini_seed(gemini_cmd, expected_seed):
     assert extract_gemini_seed(gemini_cmd) == expected_seed
+
+
+@pytest.mark.parametrize(
+    "default_cmd, expected_duration",
+    [
+        pytest.param(
+            "--duration 3h\n--concurrency 100\n--mode mixed",
+            "3h",
+            id="yaml-block-scalar",
+        ),
+        pytest.param(
+            " --duration 30m --concurrency 50",
+            "30m",
+            id="space-delimited",
+        ),
+        pytest.param(
+            "--duration=8h --mode mixed",
+            "8h",
+            id="equals-form",
+        ),
+        pytest.param(
+            "--concurrency 50 --mode mixed",
+            None,
+            id="no-duration-returns-none",
+        ),
+    ],
+)
+def test_stress_cmd_get_duration_pattern_group1(default_cmd, expected_duration):
+    """Verify the pattern used by run_gemini to extract --duration from the configured
+    gemini_cmd (previous command) when the custom command has no --duration."""
+    match = stress_cmd_get_duration_pattern.search(default_cmd)
+    if expected_duration is None:
+        assert match is None
+    else:
+        assert match is not None
+        assert match.group(1) == expected_duration
