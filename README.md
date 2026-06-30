@@ -12,7 +12,7 @@ These tests automatically create:
 
 #### Option 1 - Config AWS using OKTA (preferred option)
 
-https://www.notion.so/AWS-864b26157112426f8e74bab61001425d
+https://scylladb.atlassian.net/wiki/spaces/RND/pages/386138322/AWS+Setup+and+Okta+Integration+for+Scylla+Cluster+Tests
 
 #### Option 2 - Config AWS using AWS credentials
 ```bash
