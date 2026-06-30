@@ -7249,6 +7249,24 @@ class BaseMonitorSet:
         """)
         node.remoter.run(f"bash -ce '{script}'")
 
+    @staticmethod
+    def _build_xcloud_scrape_config(promproxy_config):
+        """Build the scrape job from the Scylla Cloud promproxy config."""
+        scrape_configs = (yaml.safe_load(promproxy_config) or {}).get("scrape_configs") or []
+        return scrape_configs[0] if scrape_configs else None
+
+    @staticmethod
+    def _build_xcloud_cluster_relabel_config(xcloud_scrape_config):
+        """Create a relabel rule that adds the Scylla Cloud cluster label to SCT-scraped metrics."""
+        if match := re.search(r"/cluster/(\d+)/", xcloud_scrape_config.get("metrics_path") or ""):
+            return {
+                "source_labels": ["cluster"],
+                "regex": "^$",
+                "target_label": "cluster",
+                "replacement": f"#{match[1]}",
+            }
+        return None
+
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # noqa: PLR0914
         cloud_prom_bearer_token = self.params.get("cloud_prom_bearer_token")
 
@@ -7309,9 +7327,18 @@ class BaseMonitorSet:
                 )
 
             if self.params.get("cluster_backend") == "xcloud" and self.promproxy_config:
-                yaml_from_xcloud = yaml.safe_load(self.promproxy_config)
-                xcloud_config = next(iter(yaml_from_xcloud.get("scrape_configs", [])), None)
-                scrape_configs.append(xcloud_config)
+                if xcloud_config := self._build_xcloud_scrape_config(self.promproxy_config):
+                    scrape_configs.append(xcloud_config)
+                    if cluster_relabel := self._build_xcloud_cluster_relabel_config(xcloud_config):
+                        for scrape_config in scrape_configs:
+                            if scrape_config.get("job_name") == "node_exporter":
+                                scrape_config.setdefault("metric_relabel_configs", []).append(cluster_relabel)
+                                break
+                    else:
+                        self.log.warning(
+                            "Could not derive cluster id from promproxy config; "
+                            "non-DB node metrics will not be visible on host dashboards"
+                        )
 
             if self.params.get("gemini_cmd"):
                 gemini_loader_targets_list = [
