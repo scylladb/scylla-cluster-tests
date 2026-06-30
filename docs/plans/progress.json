@@ -4,7 +4,7 @@
     {
       "id": "ai-skills-framework",
       "title": "AI Skills Framework",
-      "file": "ai-skills-framework.md",
+      "file": "ai-tooling/ai-skills-framework.md",
       "domain": "ai-tooling",
       "status": "complete",
       "created": "2025-02-25",
@@ -54,7 +54,7 @@
     {
       "id": "constraint-based-sizing",
       "title": "Constraint-Based Instance Sizing",
-      "file": "constraint-based-sizing.md",
+      "file": "config/constraint-based-sizing.md",
       "domain": "config",
       "status": "complete",
       "created": "2026-05-13",

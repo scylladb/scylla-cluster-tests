@@ -67,7 +67,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 | SCT Config Validation and Lazy Images | `draft` | [sct-config-validation-and-lazy-images.md](sct-config-validation-and-lazy-images.md) |
 | SCT Config Follow-up Refactoring | `pending_pr` | [#13845](https://github.com/scylladb/scylla-cluster-tests/pull/13845) |
 | Config Type Normalization | `complete` | [config-type-normalization.md](config/config-type-normalization.md), [#14805](https://github.com/scylladb/scylla-cluster-tests/pull/14805) |
-| Constraint-Based Instance Sizing | `complete` | [constraint-based-sizing.md](constraint-based-sizing.md), [#14576](https://github.com/scylladb/scylla-cluster-tests/pull/14576) |
+| Constraint-Based Instance Sizing | `complete` | [constraint-based-sizing.md](config/constraint-based-sizing.md), [#14576](https://github.com/scylladb/scylla-cluster-tests/pull/14576) |
 
 ### K8s — Kubernetes operator, K8s backends
 
@@ -87,7 +87,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 
 | Plan | Status | File / PR |
 |------|--------|-----------|
-| AI Skills Framework | `complete` | [ai-skills-framework.md](ai-skills-framework.md), [#13799](https://github.com/scylladb/scylla-cluster-tests/pull/13799), [#13827](https://github.com/scylladb/scylla-cluster-tests/pull/13827), [#13836](https://github.com/scylladb/scylla-cluster-tests/pull/13836) |
+| AI Skills Framework | `complete` | [ai-skills-framework.md](ai-tooling/ai-skills-framework.md), [#13799](https://github.com/scylladb/scylla-cluster-tests/pull/13799), [#13827](https://github.com/scylladb/scylla-cluster-tests/pull/13827), [#13836](https://github.com/scylladb/scylla-cluster-tests/pull/13836) |
 | PR Review Taxonomy Analysis | `in_progress` | [pr-review-taxonomy-analysis.md](pr-review-taxonomy-analysis.md) |
 
 ### Testing — Unit/integration test infrastructure
