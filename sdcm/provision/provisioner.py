@@ -59,6 +59,14 @@ class ProvisionError(Exception):
     pass
 
 
+class ProvisionUnrecoverableError(Exception):
+    """Base class for provisioning failures that retrying cannot fix (e.g. zone capacity)."""
+
+
+class ZoneResourcesExhaustedError(ProvisionUnrecoverableError):
+    """Raised when the target availability zone has no capacity for the requested resources."""
+
+
 class OperationPreemptedError(Exception):
     pass
 
