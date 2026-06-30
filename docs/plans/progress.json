@@ -106,10 +106,10 @@
       "title": "Nemesis Pre-Execution Skip Check (precheck)",
       "file": "nemesis/nemesis-precheck.md",
       "domain": "nemesis",
-      "status": "draft",
+      "status": "in_progress",
       "created": "2026-06-11",
       "phases_total": 5,
-      "phases_done": 0
+      "phases_done": 2
     },
     {
       "id": "k8s-multitenancy-dict-config",
