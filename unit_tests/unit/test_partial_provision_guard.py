@@ -118,7 +118,7 @@ def test_gce_add_nodes_no_instances_provisions_inline():
     )
 
     result = GCECluster.add_nodes.__wrapped__(cluster, count=3, dc_idx=0, rack=0)
-    cluster._create_instances.assert_called_once_with(3, 0, instance_type=None)
+    cluster._create_instances.assert_called_once_with(3, 0, False, instance_type=None)
     assert len(result) == 3
 
 
