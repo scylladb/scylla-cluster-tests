@@ -87,7 +87,6 @@ from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
-from sdcm.provision.oci.provisioner import OciProvisioner
 from sdcm.provision.provisioner import ProvisionError, ProvisionUnrecoverableError, provisioner_factory
 from sdcm.provision.helpers.certificate import (
     create_ca,
