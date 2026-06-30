@@ -59,6 +59,14 @@ class ProvisionError(Exception):
     pass
 
 
+class ProvisionUnrecoverableError(ProvisionError):
+    pass
+
+
+class ZoneResourcesExhaustedError(ProvisionError):
+    pass
+
+
 class OperationPreemptedError(Exception):
     pass
 
