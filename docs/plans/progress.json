@@ -4,12 +4,12 @@
     {
       "id": "ai-skills-framework",
       "title": "AI Skills Framework",
-      "file": "ai-skills-framework.md",
+      "file": "ai-tooling/ai-skills-framework.md",
       "domain": "ai-tooling",
-      "status": "draft",
+      "status": "complete",
       "created": "2025-02-25",
-      "phases_total": null,
-      "phases_done": 0
+      "phases_total": 7,
+      "phases_done": 7
     },
     {
       "id": "docker-cleanup-all-backends",
@@ -52,6 +52,26 @@
       "phases_done": 0
     },
     {
+      "id": "constraint-based-sizing",
+      "title": "Constraint-Based Instance Sizing",
+      "file": "config/constraint-based-sizing.md",
+      "domain": "config",
+      "status": "complete",
+      "created": "2026-05-13",
+      "phases_total": null,
+      "phases_done": 0
+    },
+    {
+      "id": "config-type-normalization",
+      "title": "Config Type Normalization",
+      "file": "config/config-type-normalization.md",
+      "domain": "config",
+      "status": "complete",
+      "created": "2026-04-17",
+      "phases_total": 5,
+      "phases_done": 5
+    },
+    {
       "id": "jenkins-pipeline-config-linter",
       "title": "Jenkins Pipeline Config Linter",
       "file": "jenkins/jenkins-pipeline-config-linter.md",
@@ -70,6 +90,16 @@
       "created": "2026-02-11",
       "phases_total": null,
       "phases_done": 0
+    },
+    {
+      "id": "perf-simple-query-offline-installer-trigger",
+      "title": "Perf-Simple-Query Offline Installer Trigger",
+      "file": "jenkins/perf-simple-query-offline-installer-trigger.md",
+      "domain": "ci-cd",
+      "status": "complete",
+      "created": "2026-04-06",
+      "phases_total": 3,
+      "phases_done": 3
     },
     {
       "id": "pipeline-labeling-and-documentation",
@@ -138,6 +168,16 @@
       "pr": 14009,
       "phases_total": null,
       "phases_done": 0
+    },
+    {
+      "id": "unit-integration-test-separation",
+      "title": "Unit/Integration Test Separation",
+      "file": "testing/unit-integration-test-separation.md",
+      "domain": "testing",
+      "status": "complete",
+      "created": "2026-03-23",
+      "phases_total": 5,
+      "phases_done": 5
     },
     {
       "id": "resilient-test-config-dependencies",
@@ -226,15 +266,6 @@
       "domain": "ci-cd",
       "status": "pending_pr",
       "pr": 13629,
-      "phases_total": null,
-      "phases_done": 0
-    },
-    {
-      "id": "curl-retry-timeout-linting",
-      "title": "curl Retry/Timeout Linting",
-      "domain": "ci-cd",
-      "status": "pending_pr",
-      "pr": 13509,
       "phases_total": null,
       "phases_done": 0
     }

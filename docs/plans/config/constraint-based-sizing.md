@@ -1,3 +1,11 @@
+---
+status: complete
+domain: config
+created: 2026-05-13
+last_updated: 2026-06-25
+owner: null
+---
+
 # Constraint-Based Instance Sizing
 
 ## Implementation Status
@@ -103,13 +111,13 @@ Enable cloud-agnostic instance selection via hardware constraints (vcpu, memory,
 - `docs/cross-cloud-sizing.md` — updated user guide
 
 ### Definition of Done
-- [ ] `{vcpu: 8, memory: ">16gb"}` on AWS resolves to `i8g.2xlarge` (ARM preferred) and all downstream works
-- [ ] `SCT_DB_INSTANCE_TYPE.vcpu=16` and `SCT_DB_INSTANCE_TYPE.memory=32` env vars parse correctly via dot-notation
-- [ ] `SCT_DB_INSTANCE_TYPE.vcpu=8` with `SCT_DB_INSTANCE_TYPE.arch=x86` forces x86 on AWS (overrides arm64 default)
-- [ ] `instance_type_db: 'i4i.large'` still works (literal passthrough)
-- [ ] `sct.py show-prices --cloud aws --role db` shows pricing table
-- [ ] 100% unit test coverage on matcher logic
-- [ ] Integration tests verify API-based catalog generation
+- [x] `{vcpu: 8, memory: ">16gb"}` on AWS resolves to `i8g.2xlarge` (ARM preferred) and all downstream works
+- [x] `SCT_DB_INSTANCE_TYPE.vcpu=16` and `SCT_DB_INSTANCE_TYPE.memory=32` env vars parse correctly via dot-notation
+- [x] `SCT_DB_INSTANCE_TYPE.vcpu=8` with `SCT_DB_INSTANCE_TYPE.arch=x86` forces x86 on AWS (overrides arm64 default)
+- [x] `instance_type_db: 'i4i.large'` still works (literal passthrough)
+- [x] `sct.py show-prices --cloud aws --role db` shows pricing table
+- [x] 100% unit test coverage on matcher logic
+- [x] Integration tests verify API-based catalog generation
 
 ### Must Have
 - Backward compatibility: literal instance type strings still work as passthrough
@@ -919,9 +927,9 @@ uv run sct.py show-prices --cloud aws --role db  # CLI works
 ```
 
 ### Final Checklist
-- [ ] All "Must Have" present
-- [ ] All "Must NOT Have" absent
-- [ ] All tests pass
-- [ ] Literal string backward compat verified
-- [ ] All 5 roles work with constraint syntax
-- [ ] Docker backend silently skips resolution
+- [x] All "Must Have" present
+- [x] All "Must NOT Have" absent
+- [x] All tests pass
+- [x] Literal string backward compat verified
+- [x] All 5 roles work with constraint syntax
+- [x] Docker backend silently skips resolution

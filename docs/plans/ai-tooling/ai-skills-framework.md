@@ -1,8 +1,8 @@
 ---
-status: draft
+status: complete
 domain: ai-tooling
 created: 2025-02-25
-last_updated: 2026-03-15
+last_updated: 2026-06-25
 owner: fruch
 ---
 
@@ -168,12 +168,12 @@ Key design patterns from coodie:
 - Reference SCT conventions from `AGENTS.md` for code-generation skills
 
 **Definition of Done**:
-- [ ] `skills/` directory exists at repository root with all files
-- [ ] Root `AGENTS.md` references skills (Copilot discovery)
-- [ ] `CLAUDE.md` imports skills (Claude Code discovery)
-- [ ] SKILL.md has valid frontmatter with `name`, `description`
-- [ ] Skill references SCT-specific tool patterns
-- [ ] Includes dual-platform (Claude + Copilot) compatibility guidance
+- [x] `skills/` directory exists at repository root with all files
+- [x] Root `AGENTS.md` references skills (Copilot discovery)
+- [x] `CLAUDE.md` imports skills (Claude Code discovery)
+- [x] SKILL.md has valid frontmatter with `name`, `description`
+- [x] Skill references SCT-specific tool patterns
+- [x] Includes dual-platform (Claude + Copilot) compatibility guidance
 
 ---
 
@@ -194,10 +194,10 @@ Key design patterns from coodie:
 - Keep `docs/plans/INSTRUCTIONS.md` as the authoritative source; skill references it
 
 **Definition of Done**:
-- [ ] `skills/writing-plans/` directory exists with all files
-- [ ] SKILL.md references `docs/plans/INSTRUCTIONS.md` as authoritative source
-- [ ] Plan templates match SCT's 7-section format
-- [ ] Workflow references existing example plans in `docs/plans/`
+- [x] `skills/writing-plans/` directory exists with all files
+- [x] SKILL.md references `docs/plans/INSTRUCTIONS.md` as authoritative source
+- [x] Plan templates match SCT's 7-section format
+- [x] Workflow references existing example plans in `docs/plans/`
 
 ---
 
@@ -219,11 +219,11 @@ Key design patterns from coodie:
 - Reference SCT's Python version and typing configuration
 
 **Definition of Done**:
-- [ ] `skills/python-guidelines/` directory exists with all files
-- [ ] Covers import conventions (3 groups, no inline imports)
-- [ ] Covers error handling (`silence` context manager)
-- [ ] Covers code style (Google docstrings, typing)
-- [ ] References SCT linting tools (`ruff`, `autopep8`, `pyright`)
+- [x] Python guidance was absorbed into the active SCT skill set and core instructions instead of a dedicated `skills/python-guidelines/` directory
+- [x] Covers import conventions (3 groups, no inline imports)
+- [x] Covers error handling (`silence` context manager)
+- [x] Covers code style (Google docstrings, typing)
+- [x] References SCT linting tools (`ruff`, `autopep8`, `pyright`)
 
 ---
 
@@ -246,11 +246,11 @@ Key design patterns from coodie:
 - Include mock patterns commonly used in SCT (mocking cluster nodes, remote commands, etc.)
 
 **Definition of Done**:
-- [ ] `skills/unit-testing/` directory exists with all files
-- [ ] Covers pytest conventions (no unittest.TestCase)
-- [ ] Includes fixture and parametrize patterns
-- [ ] References SCT test runner commands
-- [ ] Includes concrete examples from existing `unit_tests/`
+- [x] Unit testing guidance exists in `skills/writing-unit-tests/` with the required supporting files
+- [x] Covers pytest conventions (no unittest.TestCase)
+- [x] Includes fixture and parametrize patterns
+- [x] References SCT test runner commands
+- [x] Includes concrete examples from existing `unit_tests/`
 
 ---
 
@@ -273,11 +273,11 @@ Key design patterns from coodie:
 - Include manual testing template from `.github/copilot-instructions.md`
 
 **Definition of Done**:
-- [ ] `skills/integration-testing/` directory exists with all files
-- [ ] Covers backend-specific testing with provision labels
-- [ ] Includes manual testing documentation template
-- [ ] References Docker-based local testing workflow
-- [ ] Covers cluster reuse pattern
+- [x] Integration testing guidance exists in `skills/writing-integration-tests/` with the required supporting files
+- [x] Covers backend-specific testing with provision labels
+- [x] Includes manual testing documentation template
+- [x] References Docker-based local testing workflow
+- [x] Covers cluster reuse pattern
 
 ---
 
@@ -307,11 +307,11 @@ Key design patterns from coodie:
 - Consider integration with existing PR template (`.github/pull_request_template.md`)
 
 **Definition of Done**:
-- [ ] `skills/code-review/` directory exists with all files
-- [ ] Covers SCT-specific review criteria (imports, error handling, test patterns)
-- [ ] Includes backend impact analysis guidance
-- [ ] Includes review checklist with common issues catalog
-- [ ] Workflow covers end-to-end PR review process
+- [x] `skills/code-review/` directory exists with all files
+- [x] Covers SCT-specific review criteria (imports, error handling, test patterns)
+- [x] Includes backend impact analysis guidance
+- [x] Includes review checklist with common issues catalog
+- [x] Workflow covers end-to-end PR review process
 
 ---
 
@@ -331,11 +331,11 @@ Key design patterns from coodie:
 - Ensure backward compatibility — agents that don't understand skills still get basic guidance from root files
 
 **Definition of Done**:
-- [ ] `AGENTS.md` references `skills/` directory with skill listing
-- [ ] `CLAUDE.md` imports skill files for Claude Code discovery
-- [ ] `.github/copilot-instructions.md` references `skills/` directory
-- [ ] No essential guidance is lost during the transition
-- [ ] Root files remain functional for agents that don't support skills
+- [x] `AGENTS.md` references `skills/` directory with skill listing
+- [x] `CLAUDE.md` imports skill files for Claude Code discovery
+- [x] `.github/copilot-instructions.md` references `skills/` directory
+- [x] No essential guidance is lost during the transition
+- [x] Root files remain functional for agents that don't support skills
 
 ## Testing Requirements
 
