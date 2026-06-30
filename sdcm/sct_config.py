@@ -4625,8 +4625,7 @@ class SCTConfiguration(BaseModel):
                     raise ValueError(f"Scylla-bench command {cmd} doesn't have parameter -workload")
 
     def _validate_docker_backend_parameters(self):
-        if self.get("use_mgmt"):
-            raise ValueError("Scylla Manager is not supported for docker backend")
+        pass
 
     def _verify_rackaware_configuration(self):
         if not self.get("rack_aware_loader"):

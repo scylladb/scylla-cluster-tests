@@ -15,6 +15,7 @@ import os
 import re
 import logging
 import shutil
+import time
 from typing import Optional, Union, Dict
 from functools import cached_property
 
@@ -30,7 +31,13 @@ from sdcm.remote import LOCALRUNNER
 from sdcm.remote.docker_cmd_runner import DockerCmdRunner
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
-from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
+from sdcm.utils.docker_utils import (
+    get_docker_bridge_gateway,
+    Container,
+    ContainerManager,
+    DockerException,
+    _default_docker_client,
+)
 from sdcm.utils.health_checker import check_nodes_status
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import get_my_public_ip
@@ -201,6 +208,8 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
 
+        self._restart_manager_agent_if_needed()
+
     @cluster.log_run_info
     def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
         self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
@@ -241,6 +250,17 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
     @cluster.log_run_info
     def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=1800) -> None:
         self.restart_scylla_server(verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
+
+    def _restart_manager_agent_if_needed(self):
+        """Restart the manager agent process if it was previously installed (e.g. after container restart by nemesis)."""
+        exit_code, _ = ContainerManager.get_container(self, "node").exec_run("test -x /usr/bin/scylla-manager-agent")
+        if exit_code != 0:
+            return
+        # Agent binary exists but process may be dead after container restart — re-launch it
+        self.remoter.run(
+            "sudo bash -c 'nohup /usr/bin/scylla-manager-agent > /var/log/scylla-manager-agent.log 2>&1 &'",
+        )
+        self.log.info("Scylla Manager agent restarted after container start")
 
     @property
     def image(self) -> str:
@@ -471,6 +491,59 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
 
         node.config_setup(append_scylla_args=self.get_scylla_args())
         node.restart_scylla(verify_up_before=True)
+
+        if self.params.get("use_mgmt"):
+            self.install_scylla_manager(node)
+
+    def install_scylla_manager(self, node):
+        """Install manager agent into running Scylla Docker container.
+
+        Copies the agent binary from the scylladb/scylla-manager-agent image,
+        writes config with auth_token, and starts the agent process.
+        """
+        mgmt_agent_image = "scylladb/scylla-manager-agent:latest"
+        auth_token = self.test_config.test_id()
+        manager_prometheus_port = self.params.get("manager_prometheus_port") or "56090"
+
+        LOGGER.info("Installing manager agent on Docker node %s", node.name)
+
+        node.remoter.run("sudo mkdir -p /etc/scylla-manager-agent", ignore_status=True)
+        node.remoter.run(
+            f"sudo bash -c 'cat > /etc/scylla-manager-agent/scylla-manager-agent.yaml << EOF\n"
+            f"auth_token: {auth_token}\n"
+            f'prometheus: ":{manager_prometheus_port}"\n'
+            f"EOF'",
+        )
+
+        container = ContainerManager.get_container(node, "node")
+
+        docker_client = _default_docker_client()
+
+        tmp_container_name = f"mgmt-agent-copy-{node.node_index}"
+        try:
+            docker_client.containers.get(tmp_container_name).remove(force=True)
+        except Exception:  # noqa: BLE001
+            pass
+
+        docker_client.images.pull(*mgmt_agent_image.split(":", maxsplit=1))
+        tmp_container = docker_client.containers.create(
+            mgmt_agent_image,
+            name=tmp_container_name,
+            command="sleep 1",
+        )
+        try:
+            bits, _ = tmp_container.get_archive("/usr/bin/scylla-manager-agent")
+            container.put_archive("/usr/bin/", bits)
+        finally:
+            tmp_container.remove(force=True)
+
+        node.remoter.run("sudo chmod +x /usr/bin/scylla-manager-agent")
+
+        node.remoter.run(
+            "sudo bash -c 'nohup /usr/bin/scylla-manager-agent > /var/log/scylla-manager-agent.log 2>&1 &'",
+        )
+
+        node.wait_manager_agent_up(timeout=60)
 
     def _generate_db_node_certs(self, node):
         """Generate per-node SSL certificates for a Docker DB node."""
@@ -967,6 +1040,9 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
             n_nodes=n_nodes,
             params=params,
         )
+        self._manager_container = None
+        self._manager_db_container = None
+        self.manager_container_name = None
 
     def _create_node(self, node_index, container=None, after_config=None):
         node = DockerMonitoringNode(
@@ -996,6 +1072,76 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
     def install_scylla_monitoring_prereqs(node):
         pass  # since running local, don't install anything, just the monitor
 
+    def install_scylla_manager(self, node):
+        """Start manager server + manager-db as Docker containers."""
+        docker_client = _default_docker_client()
+        docker_network = self.params.get("docker_network")
+        user_prefix = self.params.get("user_prefix") or "sct"
+
+        LOGGER.info("Starting Scylla Manager DB container")
+        mgr_db_name = f"{user_prefix}-manager-db"
+        try:
+            docker_client.containers.get(mgr_db_name).remove(force=True)
+        except Exception:  # noqa: BLE001
+            pass
+
+        mgr_db_image = self.params.get("docker_image") or "scylladb/scylla:latest"
+        docker_client.images.pull(*mgr_db_image.split(":", maxsplit=1))
+        self._manager_db_container = docker_client.containers.run(
+            image=mgr_db_image,
+            name=mgr_db_name,
+            command="--smp 1 --memory 512M --developer-mode 1",
+            network=docker_network,
+            detach=True,
+        )
+
+        LOGGER.info("Waiting for manager DB to be ready")
+        for _ in range(60):
+            time.sleep(5)
+            exit_code, _ = self._manager_db_container.exec_run("cqlsh -e 'SELECT now() FROM system.local'")
+            if exit_code == 0:
+                break
+        else:
+            raise RuntimeError("Manager DB did not become ready in time")
+
+        LOGGER.info("Starting Scylla Manager server container")
+        mgr_name = f"{user_prefix}-manager-server"
+        try:
+            docker_client.containers.get(mgr_name).remove(force=True)
+        except Exception:  # noqa: BLE001
+            pass
+
+        mgmt_image = self.params.get("mgmt_docker_image") or "scylladb/scylla-manager:latest"
+        docker_client.images.pull(*mgmt_image.split(":", maxsplit=1))
+        self._manager_db_container.reload()
+        mgr_db_ip = self._manager_db_container.attrs["NetworkSettings"]["Networks"][docker_network or "bridge"][
+            "IPAddress"
+        ]
+
+        self._manager_container = docker_client.containers.run(
+            image=mgmt_image,
+            name=mgr_name,
+            network=docker_network,
+            environment={
+                "SCYLLA_MANAGER_DB_HOSTS": mgr_db_ip,
+            },
+            detach=True,
+        )
+
+        LOGGER.info("Waiting for manager server to be ready")
+        for _ in range(60):
+            time.sleep(5)
+            exit_code, output = self._manager_container.exec_run(
+                'curl --silent --output /dev/null --write-out "%{http_code}" http://127.0.0.1:5080/ping'
+            )
+            if exit_code == 0 and b"204" in output:
+                break
+        else:
+            raise RuntimeError("Manager server did not become ready in time")
+
+        LOGGER.info("Scylla Manager is running in container %s", mgr_name)
+        self.manager_container_name = mgr_name
+
     def get_backtraces(self):
         pass
 
@@ -1007,3 +1153,14 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
             except Exception as exc:  # noqa: BLE001
                 self.log.error(f"Stopping scylla monitoring failed with {exc!s}")
             node.destroy()
+
+        if self._manager_container:
+            try:
+                self._manager_container.remove(force=True)
+            except Exception:  # noqa: BLE001
+                pass
+        if self._manager_db_container:
+            try:
+                self._manager_db_container.remove(force=True)
+            except Exception:  # noqa: BLE001
+                pass
