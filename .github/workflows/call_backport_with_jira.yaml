@@ -46,7 +46,7 @@ jobs:
   # Adds promoted-to-* labels and triggers/continues the backports for merged commits.
   backport-on-push:
     if: github.event_name == 'push'
-    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@main
+    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@8641631b6b7a9c06e341de25e875974a4f029cbc # main
     with:
       event_type: 'push'
       base_branch: ${{ github.ref }}
@@ -60,7 +60,7 @@ jobs:
   # A backport/* label was added to a (closed) PR: create the backport PR(s).
   backport-on-label:
     if: github.event_name == 'pull_request_target' && github.event.action == 'labeled'
-    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@main
+    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@8641631b6b7a9c06e341de25e875974a4f029cbc # main
     with:
       event_type: 'labeled'
       base_branch: refs/heads/${{ github.event.pull_request.base.ref }}
@@ -78,7 +78,7 @@ jobs:
   # for the always-parallel model, but kept for parity with the shared workflow).
   backport-chain:
     if: github.event_name == 'pull_request_target' && github.event.action == 'closed' && github.event.pull_request.merged == true
-    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@main
+    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@8641631b6b7a9c06e341de25e875974a4f029cbc # main
     with:
       event_type: 'chain'
       base_branch: refs/heads/${{ github.event.pull_request.base.ref }}
