@@ -726,7 +726,7 @@ class LogCollector:
                 node.remoter.run(collect_log_command, ignore_status=True, verbose=True)
                 result = node.remoter.run(f"test -f '{log_filename}'", ignore_status=True)
                 ok = result.ok
-            except (Libssh2_Failure, InvokeFailure):
+            except Libssh2_Failure, InvokeFailure:
                 ssh_connected = False
 
         # Check if node is AWS-based
@@ -1122,7 +1122,7 @@ class BaseSCTLogCollector(LogCollector):
     ]
     cluster_log_type = "sct-runner-events"
     cluster_dir_prefix = "sct-runner-events"
-    too_big_log_size = 3 * 1024 * 1024 * 1024
+    too_big_log_size = 1 * 1024 * 1024 * 1024
 
     def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
         for ent in self.log_entities:
@@ -1211,9 +1211,20 @@ class PythonSCTLogCollector(BaseSCTLogCollector):
     def create_archive_and_upload(self) -> list[str]:
         file_archives = self.archive_to_tarfile(os.path.join(self.local_dir, "sct.log"), add_test_id_to_archive=True)
         s3_links = []
-        for file_archive in file_archives:
-            s3_links.append(upload_archive_to_s3(file_archive, f"{self.test_id}/{self.current_run}"))
+
+        def _upload_and_cleanup(file_archive):
+            link = upload_archive_to_s3(file_archive, f"{self.test_id}/{self.current_run}")
             remove_files(file_archive)
+            return link
+
+        parallel = ParallelObject(file_archives, timeout=3600, num_workers=min(len(file_archives), 4))
+        results = parallel.run(_upload_and_cleanup, ignore_exceptions=True)
+        for result in results:
+            if result.exc:
+                LOGGER.error("Failed to upload archive chunk: %s", result.exc)
+            else:
+                s3_links.append(result.result)
+
         remove_files(self.local_dir)
         return s3_links
 
