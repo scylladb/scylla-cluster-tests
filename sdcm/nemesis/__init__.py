@@ -94,6 +94,7 @@ from sdcm.sct_events.group_common_events import (
     ignore_ipv6_failure_to_assign,
     ignore_raft_topology_cmd_failing,
     suppress_expected_unavailability_errors,
+    ignore_raft_applier_gate_closed_errors,
 )
 
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
@@ -5565,7 +5566,7 @@ class NemesisRunner:
             bootstrap_node=new_node, verification_node=self.target_node, actions_log=self.actions_log
         )
 
-        with suppress_expected_unavailability_errors():
+        with suppress_expected_unavailability_errors(), ignore_raft_applier_gate_closed_errors():
             bootstrapabortmanager.run_bootstrap_and_abort_with_action(
                 terminate_pattern, abort_action=new_node.stop_scylla
             )
