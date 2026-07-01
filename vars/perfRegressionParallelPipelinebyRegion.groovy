@@ -6,6 +6,7 @@ Master weekly (master-weekly):
 Master 3-weeks (master-3weeks):
 - latency-650gb-during-rolling-upgrade-i8g-tablets — us-east-2, versions: ['master'], labels: ['master-3weeks'], mixed load
 - latency-650gb-with-nemesis-i8g-tablets — eu-north-1, versions: ['master'], labels: ['master-3weeks'], mixed load
+- latency-2.5tb-i8g-elasticity — eu-west-1, versions: ['master'], mixed only
 
 Master monthly (master-monthly):
 - predefined-throughput-steps-i8g-vnodes — eu-west-2, versions: ['master'], labels: ['master-monthly'], all 4 sub tests
@@ -27,6 +28,7 @@ Master monthly (master-monthly):
 - latency-650gb-with-nemesis-i8g-tablets — eu-west-2, ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], read + mixed
 - predefined-throughput-steps-i8g-vnodes — eu-west-2, ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed only
 - latency-650gb-with-nemesis-i8g-vnodes — eu-west-1, ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed only
+- latency-2.5tb-i8g-elasticity — eu-west-1, ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'], mixed only
 */
 
 def isVersionIgnored(String version, List ignoreVersions) {
@@ -340,20 +342,24 @@ def call(Map pipelineParams) {
                                 arch: 'aarch64'
                             ],
                             [
-                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-elasticity',
-                                region: 'eu-north-1',
-                                ignore_versions: ['2024.1', '2024.2', 'master'],
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-2.5tb-i8g-elasticity',
+                                region: 'eu-west-1',
+                                versions: ['master'],
                                 pre_release: [],
-                                sub_tests: ['"test_latency_mixed_with_nemesis"', '"test_latency_write_with_nemesis"'],
-                                labels: ['master-3weeks']
+                                sub_tests: ['"test_latency_mixed_with_nemesis"'],
+                                labels: ['master-3weeks'],
+                                job_throttle_category: 'SCT-perf-eu-west-1-i8g',
+                                arch: 'aarch64'
                             ],
                             [
-                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-elasticity',
-                                region: 'eu-north-1',
-                                versions: [],
+                                job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-2.5tb-i8g-elasticity',
+                                region: 'eu-west-1',
+                                ignore_versions: ['2025.2', '2025.1', '2024.2', '2024.1', 'master'],
                                 pre_release: [],
-                                sub_tests: [],
-                                labels: []
+                                sub_tests: ['"test_latency_mixed_with_nemesis"'],
+                                labels: [],
+                                job_throttle_category: 'SCT-perf-eu-west-1-i8g',
+                                arch: 'aarch64'
                             ],
                         ]
                         println("testRegionMatrix: $testRegionMatrix")

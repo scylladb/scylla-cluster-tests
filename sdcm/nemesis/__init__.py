@@ -3872,7 +3872,14 @@ class NemesisRunner:
     def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:
         nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type)
         self.actions_log.info(f"New nodes added: {', '.join(node.name for node in nodes)}")
-        ParallelObject(objects=self.cluster.data_nodes, timeout=7200).run(wait_no_tablets_migration_running)
+        tablet_migration_timeout = 7200
+
+        def _wait_no_tablets_migration(node):
+            wait_no_tablets_migration_running(node, timeout=tablet_migration_timeout)
+
+        ParallelObject(objects=self.cluster.data_nodes, timeout=tablet_migration_timeout + 120).run(
+            _wait_no_tablets_migration
+        )
         return nodes
 
     @latency_calculator_decorator(legend="Decommission nodes: remove nodes from cluster")
@@ -3934,6 +3941,9 @@ class NemesisRunner:
         if isinstance(stress_cmd, list):
             stress_cmd = stress_cmd[0]
         self.log.info("Doubling the load on the cluster for %s minutes", duration)
+        stress_cmd = self.tester.stress_cmd
+        if isinstance(stress_cmd, list):
+            stress_cmd = stress_cmd[0]
         stress_queue = self.tester.run_stress_thread(
             stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False, duration=duration
         )

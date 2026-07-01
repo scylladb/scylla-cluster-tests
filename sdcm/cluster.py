@@ -6465,9 +6465,25 @@ class BaseScyllaCluster:
         target_node_ip = node.ip_address
         node_allocator = self.test_config.tester_obj().nemesis_allocator
         verification_candidates = [n for n in self.data_nodes if n != node]
-        with node_allocator.run_nemesis(
-            nemesis_label="verify decommission", node_list=verification_candidates
-        ) as verification_node:
+
+        # Retry node allocation in case all candidates are temporarily busy
+        # (e.g. during parallel decommissions where multiple verify_decommission calls compete)
+        from sdcm.nemesis.utils.node_allocator import AllNodesRunNemesisError  # noqa: PLC0415
+
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            try:
+                allocator_context = node_allocator.run_nemesis(
+                    nemesis_label="verify decommission", node_list=verification_candidates
+                )
+                verification_node = allocator_context.__enter__()
+                break
+            except AllNodesRunNemesisError as err:
+                if attempt == max_attempts - 1:
+                    raise AllNodesRunNemesisError("Failed to allocate node for verify_decommission") from err
+                time.sleep(5 * (attempt + 1))
+
+        try:
             node_ip_list = get_node_ip_list(verification_node)
             missing_host_ids = verification_node.raft.search_inconsistent_host_ids()
 
@@ -6505,6 +6521,8 @@ class BaseScyllaCluster:
                 verification_node.raft.clean_group0_garbage(raise_exception=True)
                 LOGGER.error("Decommission for node %s was aborted", node)
                 raise NodeCleanedAfterDecommissionAborted(f"Decommission for node {node} was aborted")
+        finally:
+            allocator_context.__exit__(None, None, None)
 
         LOGGER.info("Decommission %s PASS", node)
         self.terminate_node(node)

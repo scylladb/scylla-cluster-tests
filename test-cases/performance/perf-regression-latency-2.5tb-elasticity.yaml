@@ -1,0 +1,55 @@
+test_duration: 3000
+
+# for i8g.4xlarge - prepare phase is not throttled
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=650000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=300 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..650000000",
+                    "cassandra-stress write no-warmup cl=ALL n=650000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=300 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=650000000..1300000000",
+                    "cassandra-stress write no-warmup cl=ALL n=650000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=300 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1300000000..1950000000",
+                    "cassandra-stress write no-warmup cl=ALL n=650000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=300 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1950000000..2600000000"]
+# 80% throughput calibrated from gradual throughput test on i8g.4xlarge (build 46-47):
+# - read_disk_only: 330K@p99=1.95ms, 400K@p99=2.62ms, unthrottled=558K@p99=63ms
+# - read (in-cache): 1.5M@p99=1.68ms, unthrottled=1.76M@p99=2.5ms
+# - write: 600K@p99=3.2ms, unthrottled=712K@p99=5ms
+# With 2.5TB data and Gaussian distribution: ~40% cache hit rate observed.
+# Rates set to ~1.5x i4i levels, keeping combined load (read+write) at ~57% CPU
+# to leave headroom for nemesis grow/shrink operations.
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=2850m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=350 fixed=40000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2600000000,1300000000,39000000)' "
+stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=350 fixed=36000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2600000000,1300000000,39000000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=350 fixed=33000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2600000000,1300000000,26000000)' "
+
+n_db_nodes: 3
+n_loaders: 4
+
+instance_type_loader: 'c6i.2xlarge'
+instance_type_monitor: 't3.large'
+instance_type_db: 'i8g.4xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: 'GrowShrinkClusterNemesis'
+nemesis_interval: 30
+nemesis_sequence_sleep_between_ops: 10
+nemesis_add_node_cnt: 6
+nemesis_grow_shrink_instance_type: 'i8g.2xlarge'
+
+user_prefix: 'elasticity-test'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: true
+backtrace_stall_decoding: false
+argus_email_report_template: email_report_performance.yaml
+
+email_recipients: ["scylla-perf-results@scylladb.com"]
+use_prepared_loaders: false
+use_hdrhistogram: true
+
+# Using 4g heap instead of 8g: loaders have 16GB RAM and during elasticity double-load step
+# two c-s processes run on the same loader, so 8g each causes OOM.
+cs_extra_jvm_opts: '-XX:+UseZGC -XX:+ZGenerational -Xms4g -Xmx4g -XX:+AlwaysPreTouch'
+email_subject_postfix: 'elasticity test'
+nemesis_double_load_during_grow_shrink_duration: 30
+parallel_node_operations: true
+cluster_health_check: false
+
+adaptive_timeout_store_metrics: false
