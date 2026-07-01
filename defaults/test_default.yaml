@@ -285,6 +285,8 @@ teardown_validators:
       - event_class: CoreDumpEvent
   rackaware:
     enabled: false
+  nvme:
+    enabled: false
 
 kafka_backend: null
 kafka_connectors: []
