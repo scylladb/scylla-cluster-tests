@@ -175,6 +175,7 @@ from sdcm.stress_thread import (
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
 from sdcm.utils.net import get_my_ip, get_sct_runner_ip
+from sdcm.utils.nvme import SelfTestType, run_self_test_on_all_devices
 from sdcm.utils.operations_thread import ThreadParams
 from sdcm.utils.replication_strategy_utils import LocalReplicationStrategy, NetworkTopologyReplicationStrategy
 from sdcm.utils.tablets.common import TabletsConfiguration
@@ -4007,6 +4008,29 @@ class ClusterTester(unittest.TestCase):
         if not found_live_node:
             self.log.error("Didn't find any live node for saving the schema.")
 
+    def _run_nvme_self_tests(self):
+        """Run NVMe self-tests on all DB nodes during teardown.
+
+        Triggered after workload ends but before cluster teardown. Controlled
+        by the ``collect_nvme_diagnostics`` and ``nvme_self_test_type`` config
+        parameters. Results are published as ClusterHealthValidatorEvent.NvmeHealth
+        events for any failures detected.
+        """
+        if not self.params.get("collect_nvme_diagnostics"):
+            return
+        if not self.db_cluster:
+            return
+
+        test_type_int = self.params.get("nvme_self_test_type") or 1
+        test_type = SelfTestType(test_type_int)
+        self.log.info("Running NVMe self-tests (type=%s) on DB nodes", test_type.name)
+
+        for node in self.db_cluster.nodes:
+            try:
+                run_self_test_on_all_devices(node, test_type=test_type)
+            except Exception:  # noqa: BLE001
+                self.log.warning("NVMe self-test failed on %s", node.name, exc_info=True)
+
     def tearDown(self):
         self.teardown_started = True
         # Stop nemesis first — if still running, it keeps disrupting nodes and
@@ -4018,6 +4042,9 @@ class ClusterTester(unittest.TestCase):
         with silence(parent=self, name="Sending test end event"):
             InfoEvent(message="TEST_END").publish()
         self.save_schema()
+
+        with silence(parent=self, name="Running NVMe self-tests"):
+            self._run_nvme_self_tests()
 
         test_status = self.get_test_status()
         if test_status == "FAILED":

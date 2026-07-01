@@ -24,6 +24,7 @@ from sdcm.sct_events.events_processes import (
     verbose_suppress,
 )
 from sdcm.sct_events.handlers.schema_disagreement import SchemaDisagreementHandler
+from sdcm.sct_events.handlers.nvme_self_test import NvmeSelfTestHandler
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class EventsHandler(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
 
     handlers = {
         "CassandraStressLogEvent.SchemaDisagreement": SchemaDisagreementHandler(),
+        "FailedResultEvent": NvmeSelfTestHandler(),
     }
 
     def run(self) -> None:
