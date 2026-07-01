@@ -1744,7 +1744,7 @@ Flag to run a thread that checks commit logs
 
 Validators to use during teardown phase
 
-**default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}, 'rackaware': {'enabled': False}}
+**default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}, 'rackaware': {'enabled': False}, 'nvme': {'enabled': False}}
 
 **type:** dict | YAML/JSON string → dict
 
@@ -4028,12 +4028,9 @@ Collect logs from instances and sct runner
 
 Collect NVMe SMART logs, error logs, and self-test results from DB nodes during test teardown. Requires nvme-cli to be installed on the nodes. Skipped gracefully on backends without NVMe devices.
 
-**default:** True
+**default:** False
 
 **type:** bool
-
-**backend overrides:**
-- `False`: docker
 
 
 ## **nvme_self_test_type** / SCT_NVME_SELF_TEST_TYPE

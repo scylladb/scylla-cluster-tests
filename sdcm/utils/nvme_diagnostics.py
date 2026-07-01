@@ -1046,3 +1046,195 @@ def _collect_error_log_with_timestamp(node: "BaseNode", device_path: str) -> Non
             node.log.info("NVMe error log saved to %s (%d entries)", filepath, len(entries))
     except Exception as exc:  # noqa: BLE001
         node.log.warning("Failed to save NVMe error log: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Self-test orchestration (Phase 5)
+# ---------------------------------------------------------------------------
+
+# Default timeout for short self-test polling (seconds). NVMe short self-tests
+# typically complete in 1-2 minutes; extended tests can take hours.
+SHORT_SELF_TEST_TIMEOUT = 300
+EXTENDED_SELF_TEST_TIMEOUT = 14400  # 4 hours
+SELF_TEST_POLL_INTERVAL = 10  # seconds between poll attempts
+
+
+def poll_self_test_completion(
+    node: "BaseNode",
+    device_path: str,
+    timeout: int | None = None,
+    poll_interval: int = SELF_TEST_POLL_INTERVAL,
+    test_type: SelfTestType = SelfTestType.SHORT,
+) -> NvmeSelfTestLog | None:
+    """Poll for NVMe self-test completion with timeout.
+
+    Checks the self-test log periodically until the test completes or
+    the timeout expires. If the timeout is reached, the in-progress
+    test is aborted.
+
+    Args:
+        node: SCT node with remoter.
+        device_path: NVMe device path (e.g. "/dev/nvme0n1").
+        timeout: Maximum seconds to wait. Defaults based on test_type.
+        poll_interval: Seconds between poll attempts.
+        test_type: Type of self-test being polled (for default timeout).
+
+    Returns:
+        NvmeSelfTestLog with results, or None on failure.
+    """
+    import time  # noqa: PLC0415 -- avoid adding to module-level imports used only here
+
+    if timeout is None:
+        timeout = SHORT_SELF_TEST_TIMEOUT if test_type == SelfTestType.SHORT else EXTENDED_SELF_TEST_TIMEOUT
+
+    deadline = time.monotonic() + timeout
+    node.log.info(
+        "Polling self-test completion on %s (timeout=%ds, interval=%ds)",
+        device_path,
+        timeout,
+        poll_interval,
+    )
+
+    while time.monotonic() < deadline:
+        test_log = get_self_test_log(node, device_path)
+        if test_log is None:
+            node.log.warning("Failed to read self-test log for %s, retrying...", device_path)
+            time.sleep(poll_interval)
+            continue
+
+        if not test_log.test_in_progress:
+            node.log.info("Self-test completed on %s", device_path)
+            return test_log
+
+        node.log.debug(
+            "Self-test in progress on %s: operation=%d, completion=%d%%",
+            device_path,
+            test_log.current_operation,
+            test_log.current_completion,
+        )
+        time.sleep(poll_interval)
+
+    # Timeout reached — abort the test
+    node.log.warning(
+        "Self-test on %s did not complete within %ds, aborting",
+        device_path,
+        timeout,
+    )
+    abort_self_test(node, device_path)
+
+    # Collect final log after abort
+    return get_self_test_log(node, device_path)
+
+
+def check_self_test_results(
+    node: "BaseNode",
+    test_log: NvmeSelfTestLog,
+) -> NvmeHealthEventsGenerator:
+    """Evaluate self-test results and yield events for failures.
+
+    Checks the most recent self-test result entry. A result_code of 0
+    means success; any other value indicates a failure or abort.
+
+    Result codes (NVMe spec):
+        0 = completed without error
+        1 = aborted by Device Self-test command
+        2 = aborted by Controller Level Reset
+        3 = aborted by namespace removal
+        4 = aborted by Format NVM command
+        5-7 = vendor specific
+        15 = entry not used (no test run)
+
+    Args:
+        node: SCT node (for event node name).
+        test_log: Parsed self-test log.
+
+    Yields:
+        ClusterHealthValidatorEvent.NvmeHealth for failed results.
+    """
+    if not test_log.results:
+        return
+
+    latest = test_log.results[0]
+
+    # result_code 15 (0xf) means "entry not used" — no test was run
+    if latest.result_code == 0xF:
+        return
+
+    # result_code 1 means aborted by user (e.g., timeout abort) — just warn
+    if latest.result_code == 1:
+        node.log.info(
+            "Self-test on %s was aborted (code=%d)",
+            test_log.device_path,
+            latest.result_code,
+        )
+        return
+
+    # result_code 0 means success
+    if latest.passed:
+        node.log.info("Self-test on %s passed", test_log.device_path)
+        return
+
+    # Any other code is a real failure
+    severity = Severity.ERROR if latest.result_code >= 4 else Severity.WARNING
+    yield ClusterHealthValidatorEvent.NvmeHealth(
+        severity=severity,
+        node=node.name,
+        error=(
+            f"NVMe {test_log.device_path}: self-test failed "
+            f"(result_code={latest.result_code}, test_type={latest.self_test_code}, "
+            f"nsid={latest.nsid}, failing_lba=0x{latest.failing_lba:x})"
+        ),
+    )
+
+
+def run_self_test_on_all_devices(
+    node: "BaseNode",
+    test_type: SelfTestType = SelfTestType.SHORT,
+    timeout: int | None = None,
+) -> list[NvmeSelfTestLog]:
+    """Run self-test on all NVMe data disks and collect results.
+
+    Triggers a self-test on each data disk, polls for completion, and
+    generates events for any failures. This is the high-level entry point
+    for end-of-test self-test execution.
+
+    Args:
+        node: SCT node with remoter.
+        test_type: Type of self-test (SHORT or EXTENDED).
+        timeout: Max seconds to wait per device. Defaults based on test_type.
+
+    Returns:
+        List of NvmeSelfTestLog results for all tested devices.
+    """
+    if not is_nvme_cli_available(node):
+        node.log.debug("nvme-cli not available, skipping self-tests")
+        return []
+
+    devices = list_nvme_devices(node)
+    if not devices:
+        return []
+
+    data_disks = filter_data_disks(devices)
+    if not data_disks:
+        node.log.debug("No NVMe data disks found, skipping self-tests")
+        return []
+
+    results = []
+    for disk in data_disks:
+        if not run_self_test(node, disk.device_path, test_type):
+            node.log.warning("Failed to trigger self-test on %s, skipping", disk.device_path)
+            continue
+
+        test_log = poll_self_test_completion(
+            node,
+            disk.device_path,
+            timeout=timeout,
+            test_type=test_type,
+        )
+        if test_log:
+            results.append(test_log)
+            # Publish events for failures
+            for event in check_self_test_results(node, test_log):
+                event.publish()
+
+    return results
