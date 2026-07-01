@@ -281,21 +281,21 @@ The `sync()` and `get_obj_if_needed()` methods (used for SSH key distribution to
 
 **Deliverables**:
 - New `_get_from_secrets_manager(secret_name)` method using `boto3.client("secretsmanager").get_secret_value()`
-- `SCT_KEYSTORE_BACKEND` environment variable: `"s3"` (default, backward compatible) or `"secretsmanager"`
+- `SCT_KEYSTORE_BACKEND` environment variable: `"secretsmanager"` (default) or `"s3"` (legacy)
 - `get_file_contents()` dispatches to the configured backend
 - Secrets Manager secret names use a configurable prefix (default: `sct/`) to namespace secrets and avoid collisions, e.g. `sct/scylla_test_id_ed25519`
 - `SCT_KEYSTORE_SM_PREFIX` environment variable for the prefix (default: `sct/`)
 - `sync()` updated to work with both backends — fetches from Secrets Manager when configured, writes to disk as before
 - Cutover runbook in the PR description covering:
   1. Pre-cutover: run validation script (Phase 4) to confirm all `sct/*` secrets are populated
-  2. Cutover: set `SCT_KEYSTORE_BACKEND=secretsmanager` in the SCT runner environment
+  2. Cutover: default is now `secretsmanager`; no environment variable change needed
   3. Validation: run a docker-backend test, verify credential access logs
-  4. Rollback: unset `SCT_KEYSTORE_BACKEND` (reverts to S3)
+  4. Rollback: set `SCT_KEYSTORE_BACKEND=s3` to revert to S3
 - Update unit tests to cover both backends
 
 **Definition of Done**:
-- [ ] `SCT_KEYSTORE_BACKEND=secretsmanager` reads from Secrets Manager
-- [ ] `SCT_KEYSTORE_BACKEND=s3` (or unset) reads from S3 (existing behavior)
+- [ ] `SCT_KEYSTORE_BACKEND=secretsmanager` (or unset) reads from Secrets Manager (default)
+- [ ] `SCT_KEYSTORE_BACKEND=s3` reads from S3 (legacy behavior)
 - [ ] Binary and JSON secrets round-trip correctly through Secrets Manager
 - [ ] `sync()` writes SSH keys to disk correctly from both backends
 - [ ] Caching and retry logic work identically for both backends
@@ -324,11 +324,11 @@ The `sync()` and `get_obj_if_needed()` methods (used for SSH key distribution to
 
 ---
 
-### Phase 7: Shared Instance Pattern
+### Phase 7: Shared Instance Pattern *(Deferred)*
 
 **Importance**: Medium — reduces redundant instantiation across 41 call sites.
 
-**Description**: Add a module-level `get_keystore()` function that returns a shared `KeyStore` instance (lazy, thread-safe initialization). When callers share a single instance, the cache is shared too — maximizing cache hits. Existing `KeyStore()` direct instantiation continues to work. Migrating call sites is deferred to a follow-up effort.
+**Status**: Deferred to a follow-up PR. Not required for the initial Secrets Manager rollout.
 
 **Dependencies**: Phase 3 (caching must be in place for shared instance to be useful)
 
@@ -349,7 +349,7 @@ The `sync()` and `get_obj_if_needed()` methods (used for SSH key distribution to
 
 **Importance**: Medium — ensures the changes are discoverable and usable.
 
-**Dependencies**: Phases 1-7
+**Dependencies**: Phases 1-6
 
 **Deliverables**:
 - Update `AGENTS.md` environment variables section with:
