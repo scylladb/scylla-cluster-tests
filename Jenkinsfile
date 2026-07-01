@@ -316,6 +316,17 @@ pipeline {
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
+                                                dir(working_dir) {
+                                                    timeout(time: 5, unit: 'MINUTES') {
+                                                        createArgusTestRun(curr_params)
+                                                    }
+                                                }
+                                            }
+                                        } catch(Exception err) {
+                                            echo "${err}"
+                                        }
+                                        try {
+                                            wrap([$class: 'BuildUser']) {
                                                 env.BUILD_USER_ID=env.CHANGE_AUTHOR
                                                 timeout(time: 300, unit: 'MINUTES') {
                                                     dir(working_dir) {
@@ -376,6 +387,17 @@ pipeline {
                                                 result = 'FAILURE'
                                                 pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed during cluster reuse test')
                                             }
+                                        }
+                                        try {
+                                            wrap([$class: 'BuildUser']) {
+                                                dir(working_dir) {
+                                                    timeout(time: 5, unit: 'MINUTES') {
+                                                        finishArgusTestRun(curr_params, currentBuild)
+                                                    }
+                                                }
+                                            }
+                                        } catch(Exception err) {
+                                            echo "${err}"
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
