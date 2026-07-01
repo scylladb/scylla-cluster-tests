@@ -623,13 +623,10 @@ _AZURE_FAMILY_SPECS: dict[str, dict[str, Any]] = {
 # In Azure naming, "d" before "s" in the suffix (e.g. "pds", "ds", "ads")
 # indicates the VM has local NVMe temp storage.
 # Source: https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/general-purpose/dpdsv6-series
-#         https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/general-purpose/dpdsv5-series
 # Used as fallback when Azure Compute Management API is unavailable.
 _AZURE_LOCAL_DISK_SUFFIX_SPECS: dict[str, dict[str, float]] = {
     # Dpdsv6: ARM Cobalt 100 + NVMe, 55 GiB per vCPU, 1 disk per 8 vCPUs
     "pds_v6": {"local_disk_per_vcpu": 55.0, "disk_count_divisor": 8},
-    # Dpdsv5: ARM Ampere Altra + NVMe, 37.5 GiB per vCPU, 1 disk per 24 vCPUs
-    "pds_v5": {"local_disk_per_vcpu": 37.5, "disk_count_divisor": 24},
 }
 
 # Regex to extract vCPU count from Azure SKU names.
