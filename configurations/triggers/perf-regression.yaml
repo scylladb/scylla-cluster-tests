@@ -1,0 +1,307 @@
+jenkinsfiles:
+  - path: "jenkins-pipelines/master-triggers/sct_triggers/perf-regression-trigger.jenkinsfile"
+
+# Performance regression trigger matrix — single source of truth for all perf regression jobs.
+#
+# Replaces the testRegionMatrix in:
+#   vars/perfRegressionParallelPipelinebyRegion.groovy
+
+cron_triggers:
+  - schedule: "0 8 * * *"
+    params:
+      scylla_version: "{branch}:latest"
+      job_folder: "scylla-master"
+      labels_selector: "alternator-daily"
+      requested_by_user: "radoslawcybulski"
+  - schedule: "0 8 * * 6"
+    params:
+      scylla_version: "{branch}:latest"
+      job_folder: "scylla-master"
+      labels_selector: "alternator-weekly"
+      requested_by_user: "radoslawcybulski"
+  - schedule: "00 6 * * 0"
+    params:
+      scylla_version: "{branch}:latest"
+      job_folder: "scylla-master"
+      labels_selector: "master-weekly"
+      requested_by_user: "juliayakovlev"
+  - schedule: "0 23 */21 * *"
+    params:
+      scylla_version: "{branch}:latest"
+      job_folder: "scylla-master"
+      labels_selector: "master-3weeks"
+      requested_by_user: "juliayakovlev"
+  - schedule: "0 6 1 * *"
+    params:
+      scylla_version: "{branch}:latest"
+      job_folder: "scylla-master"
+      labels_selector: "master-monthly"
+      requested_by_user: "juliayakovlev"
+  - schedule: "13 6 8-14 * 2"
+    params:
+      scylla_version: "{branch}:latest"
+      job_folder: "scylla-master"
+      labels_selector: "gce-custom-monthly"
+      requested_by_user: "valerii.ponomarov"
+
+defaults:
+  provision_type: "on_demand"
+  post_behavior_db_nodes: "destroy"
+  post_behavior_loader_nodes: "destroy"
+  post_behavior_monitor_nodes: "destroy"
+
+jobs:
+  # === i8g vnodes (aarch64) ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-vnodes"
+    backend: "aws"
+    region: "us-east-1"
+    include_versions: ["master"]
+    labels: ["master-monthly"]
+    params:
+      sub_tests: '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_write_gradual_increase_load", "test_read_disk_only_gradual_increase_load"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-vnodes"
+    backend: "aws"
+    region: "us-east-1"
+    exclude_versions: ["2025.2", "2025.1", "2024.2", "2024.1", "master"]
+    labels: []
+    params:
+      sub_tests: '["test_mixed_gradual_increase_load"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-vnodes"
+    backend: "aws"
+    region: "us-east-2"
+    include_versions: ["master"]
+    labels: ["master-monthly"]
+    params:
+      sub_tests: '["test_latency_mixed_with_nemesis", "test_latency_read_with_nemesis", "test_latency_write_with_nemesis"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-vnodes"
+    backend: "aws"
+    region: "us-east-2"
+    exclude_versions: ["2025.2", "2025.1", "2024.2", "2024.1", "master"]
+    labels: []
+    params:
+      sub_tests: '["test_latency_mixed_with_nemesis"]'
+
+  # === x86 vnodes (non-master only) ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes"
+    backend: "aws"
+    region: "us-east-1"
+    include_versions: ["2025.2", "2025.1", "2024.2", "2024.1"]
+    labels: []
+    params:
+      sub_tests: '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_read_disk_only_gradual_increase_load"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-vnodes"
+    backend: "aws"
+    region: "us-east-1"
+    include_versions: ["2025.2", "2025.1", "2024.2", "2024.1"]
+    labels: []
+    params:
+      sub_tests: '["test_write_gradual_increase_load"]'
+
+  # === Latency with rolling upgrade (all versions) ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade"
+    backend: "aws"
+    region: "eu-west-1"
+    labels: []
+    params:
+      rolling_upgrade_test: "true"
+
+  # === Latency with nemesis x86 (non-master only) ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis"
+    backend: "aws"
+    region: "eu-west-2"
+    include_versions: ["2025.2", "2025.1", "2024.2", "2024.1"]
+    labels: []
+    params:
+      sub_tests: '["test_latency_mixed_with_nemesis"]'
+
+  # === Latency with nemesis rbno-disabled (all versions) ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-rbno-disabled"
+    backend: "aws"
+    region: "eu-west-3"
+    labels: []
+
+  # === Weekly microbenchmarks ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64"
+    backend: "aws"
+    region: "us-east-1"
+    labels: ["master-weekly"]
+    params:
+      microbenchmark: "true"
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-write"
+    backend: "aws"
+    region: "us-east-1"
+    labels: ["master-weekly"]
+    params:
+      microbenchmark: "true"
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64"
+    backend: "aws"
+    region: "us-east-1"
+    labels: ["master-weekly"]
+    params:
+      microbenchmark: "true"
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64-write"
+    backend: "aws"
+    region: "us-east-1"
+    labels: ["master-weekly"]
+    params:
+      microbenchmark: "true"
+
+  # === Daily sanity perf (master-only) ===
+
+  - job_name: "/scylla-master/perf-regression/perf-regression-predefined-throughput-steps-sanity-vnodes"
+    backend: "aws"
+    region: ""
+    labels: ["master-daily"]
+
+  # === Weekly alternator perf (master-only) ===
+
+  - job_name: "/scylla-master/perf-regression/scylla-release-perf-regression-alternator"
+    backend: "aws"
+    region: "eu-north-1"
+    include_versions: ["master"]
+    labels: ["alternator-weekly"]
+    params:
+      sub_tests: "test_full"
+
+  # === GCE custom monthly latte ===
+
+  - job_name: "/scylla-master/perf-regression/latte-perf-regression-latency-steady-state-custom-d1-workload1-vnodes"
+    backend: "gce"
+    region: "us-east1"
+    exclude_versions: ["2024.1", "2024.2"]
+    pre_release: ["rc1", "rc3"]
+    labels: ["gce-custom-monthly"]
+    params:
+      sub_tests: '["test_latency_steady_state"]'
+
+  - job_name: "/scylla-master/perf-regression/latte-perf-regression-latency-steady-state-custom-d1-workload1-tablets"
+    backend: "gce"
+    region: "us-east1"
+    exclude_versions: ["2024.1", "2024.2"]
+    pre_release: ["rc1", "rc3"]
+    labels: ["gce-custom-monthly"]
+    params:
+      sub_tests: '["test_latency_steady_state"]'
+
+  # === i8g tablets (aarch64) — weekly ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets"
+    backend: "aws"
+    region: "us-east-1"
+    include_versions: ["master"]
+    labels: ["master-weekly"]
+    params:
+      sub_tests: '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_write_gradual_increase_load", "test_read_disk_only_gradual_increase_load"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets"
+    backend: "aws"
+    region: "us-east-1"
+    exclude_versions: ["2025.2", "2025.1", "2024.1", "2024.2", "master"]
+    labels: []
+    params:
+      sub_tests: '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_write_gradual_increase_load", "test_read_disk_only_gradual_increase_load"]'
+
+  # === x86 tablets (non-master only) ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets"
+    backend: "aws"
+    region: "us-east-1"
+    include_versions: ["2025.2", "2025.1"]
+    labels: []
+    params:
+      sub_tests: '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_read_disk_only_gradual_increase_load"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-tablets"
+    backend: "aws"
+    region: "us-east-1"
+    include_versions: ["2025.2", "2025.1"]
+    labels: []
+    params:
+      sub_tests: '["test_write_gradual_increase_load"]'
+
+  # === Tablets latency — rolling upgrade (non-master) ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-tablets"
+    backend: "aws"
+    region: "eu-west-2"
+    include_versions: ["2025.2", "2025.1"]
+    labels: []
+    params:
+      sub_tests: '["test_latency_mixed_with_upgrade"]'
+      rolling_upgrade_test: "true"
+
+  # === Tablets latency with nemesis (non-master) ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-tablets"
+    backend: "aws"
+    region: "eu-west-3"
+    include_versions: ["2025.2", "2025.1"]
+    labels: []
+    params:
+      sub_tests: '["test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"]'
+
+  # === i8g tablets latency — rolling upgrade (3-weekly) ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets"
+    backend: "aws"
+    region: "us-west-2"
+    include_versions: ["master"]
+    labels: ["master-3weeks"]
+    params:
+      sub_tests: '["test_latency_mixed_with_upgrade"]'
+      rolling_upgrade_test: "true"
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets"
+    backend: "aws"
+    region: "us-west-2"
+    exclude_versions: ["2025.2", "2025.1", "2024.2", "2024.1", "master"]
+    labels: []
+    params:
+      sub_tests: '["test_latency_mixed_with_upgrade"]'
+      rolling_upgrade_test: "true"
+
+  # === i8g tablets latency with nemesis (3-weekly) ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets"
+    backend: "aws"
+    region: "us-east-2"
+    include_versions: ["master"]
+    labels: ["master-3weeks"]
+    params:
+      sub_tests: '["test_latency_mixed_with_nemesis"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets"
+    backend: "aws"
+    region: "us-east-2"
+    exclude_versions: ["2025.2", "2025.1", "2024.2", "2024.1", "master"]
+    labels: []
+    params:
+      sub_tests: '["test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"]'
+
+  # === Elasticity (3-weekly) ===
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-elasticity"
+    backend: "aws"
+    region: "eu-north-1"
+    exclude_versions: ["2024.1", "2024.2", "master"]
+    labels: ["master-3weeks"]
+    params:
+      sub_tests: '["test_latency_mixed_with_nemesis", "test_latency_write_with_nemesis"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-elasticity"
+    backend: "aws"
+    region: "eu-north-1"
+    labels: []
