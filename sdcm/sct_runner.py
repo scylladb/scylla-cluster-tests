@@ -53,10 +53,10 @@ from oci.core.models import (
 )
 
 try:
-    from oci.core.models import LaunchInstanceShapeConfig
+    from oci.core.models import LaunchInstanceShapeConfigDetails as LaunchInstanceShapeConfig
 except ImportError:
     try:
-        from oci.core.models.compute_models import LaunchInstanceShapeConfig
+        from oci.core.models import LaunchInstanceShapeConfig
     except ImportError:
         LaunchInstanceShapeConfig = None
 
@@ -180,7 +180,7 @@ class SctRunnerInfo:
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
 
-    VERSION = "1.17"  # Version of the Image
+    VERSION = "1.18"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -360,8 +360,11 @@ class SctRunner(ABC):
             # Install Docker.
             apt-get -qq install --no-install-recommends \
                 apt-transport-https ca-certificates curl gnupg-agent software-properties-common
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-            add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+            install -m 0755 -d /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+            chmod a+r /etc/apt/keyrings/docker.asc
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+            apt-get -qq update
             apt-get -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io
             usermod -aG docker {login_user}
 
@@ -591,7 +594,7 @@ class AwsSctRunner(SctRunner):
     """Provision and configure the SCT Runner on AWS."""
 
     CLOUD_PROVIDER = "aws"
-    BASE_IMAGE = "ami-02f921fd5f09a1812"  # Canonical, Ubuntu, 24.04 LTS, amd64 numbat image build on 2024-08-06
+    BASE_IMAGE = "resolve:ssm:/aws/service/canonical/ubuntu/server/26.04/stable/current/amd64/hvm/ebs-gp3/ami-id"  # Canonical, Ubuntu, 26.04 LTS
     SOURCE_IMAGE_REGION = "eu-west-2"  # where the source Runner image will be created and copied to other regions
     IMAGE_BUILDER_INSTANCE_TYPE = "t3.small"
     REGULAR_TEST_INSTANCE_TYPE = "m7i-flex.large"  # 2 vcpus, 8G
@@ -942,7 +945,7 @@ class GceSctRunner(SctRunner):
 
     CLOUD_PROVIDER = "gce"
     BASE_IMAGE = (
-        "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64"
+        "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2604-lts-amd64"
     )
     SOURCE_IMAGE_REGION = "us-east1"  # where the source Runner image will be created and copied to other regions
     IMAGE_BUILDER_INSTANCE_TYPE = "e2-standard-2"
@@ -1179,7 +1182,7 @@ class AzureSctRunner(SctRunner):
     GALLERY_IMAGE_VERSION = f"{SctRunner.VERSION}.0"  # Azure requires to have it in `X.Y.Z' format
     BASE_IMAGE = {
         "publisher": "canonical",
-        "offer": "ubuntu-24_04-lts",
+        "offer": "ubuntu-26_04-lts",
         "sku": "server",
         "version": "latest",
     }
@@ -1249,6 +1252,7 @@ class AzureSctRunner(SctRunner):
                 "computer_name": self.image_name.replace(".", "-"),
                 "admin_username": self.LOGIN_USER,
                 "admin_public_key": self.key_pair.public_key.decode(),
+                "enable_accelerated_networking": False,
             }
             self.instance = azure_region.create_virtual_machine(
                 vm_name=instance_name,
@@ -1389,14 +1393,22 @@ class OciSctRunner(SctRunner):
     LONGTERM_TEST_INSTANCE_TYPE = "VM.Standard.E4.Flex-4-16"  # 4 vcpus, 16G
     OCI_CLI_VERSION = "3.76.2"  # Pinned version for reproducibility
 
-    @cached_property
-    def BASE_IMAGE(self) -> str:
-        """Get the latest Ubuntu 24.04 image for the source region."""
-        return get_ubuntu_image_ocid(
-            compartment_id=self.oci_region_src.compartment_id,
-            region=self.SOURCE_IMAGE_REGION,
-            version="24.04",
-        )
+    # Custom Ubuntu 26.04 image created by upgrading 24.04 in-place.
+    # OCI marketplace does not have Ubuntu 26.04 yet; this image was built
+    # from the marketplace 24.04 image via do-release-upgrade -d.
+    # Switch to get_ubuntu_image_ocid(version="26.04") once Canonical publishes
+    # an official 26.04 image to the OCI marketplace.
+    BASE_IMAGE = "ocid1.image.oc1.iad.aaaaaaaa25pea47rb7sjmv7wwrap2y53nbr6iumxqxxdffil4nfjjtqqjtiq"
+
+    # TODO: use following instead of the hardcoded custom image ID when OCI gets official Ubuntu26
+    # @cached_property
+    # def BASE_IMAGE(self) -> str:
+    #     """Get the latest Ubuntu 26.04 image for the source region."""
+    #     return get_ubuntu_image_ocid(
+    #         compartment_id=self.oci_region_src.compartment_id,
+    #         region=self.SOURCE_IMAGE_REGION,
+    #         version="26.04",
+    #     )
 
     def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration):
         availability_zone = availability_zone or (params.get("availability_zone") if params else "")
@@ -1610,6 +1622,8 @@ class OciSctRunner(SctRunner):
         # Standard.E4.Flex can have 1-32 OCPUs and 1-192 GB memory
         # Determine OCPU and memory based on instance type
         shape_type, ocpus, memory_in_gbs = instance_type.split("-")
+        ocpus = float(ocpus)
+        memory_in_gbs = float(memory_in_gbs)
 
         # Create shape config based on available class
         if LaunchInstanceShapeConfig:
