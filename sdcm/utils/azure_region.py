@@ -275,7 +275,11 @@ class AzureRegion:
         ).result()
 
     def create_network_interface(
-        self, network_interface_name: str, tags: Optional[dict] = None, create_public_ip_address: bool = True
+        self,
+        network_interface_name: str,
+        tags: Optional[dict] = None,
+        create_public_ip_address: bool = True,
+        enable_accelerated_networking: bool = True,
     ) -> NetworkInterface:
         parameters = self.common_parameters(tags=tags) | {
             "ip_configurations": [
@@ -286,7 +290,7 @@ class AzureRegion:
                     },
                 }
             ],
-            "enable_accelerated_networking": True,
+            "enable_accelerated_networking": enable_accelerated_networking,
         }
         if create_public_ip_address:
             parameters["ip_configurations"][0]["public_ip_address"] = {
@@ -314,6 +318,7 @@ class AzureRegion:
         tags: Optional[dict] = None,
         create_public_ip_address: bool = True,
         spot: bool = False,
+        enable_accelerated_networking: bool = True,
     ) -> VirtualMachine:
         if os_state is AzureOsState.GENERALIZED:
             assert admin_username and admin_public_key, "Need to provide login and public key for generalized image"
@@ -329,7 +334,7 @@ class AzureRegion:
                     "caching": "ReadWrite",
                     "createOption": "FromImage",
                     "managedDisk": {
-                        "storageAccountType": "StandardSSD_LRS",
+                        "storageAccountType": "StandardSSD_LRS",  # SSD
                     },
                 }
                 | ({} if disk_size is None else {"diskSizeGb": disk_size}),
@@ -341,6 +346,7 @@ class AzureRegion:
                             network_interface_name=f"{vm_name}-{self.NETWORK_INTERFACE_NAME_SUFFIX}",
                             tags=tags,
                             create_public_ip_address=create_public_ip_address,
+                            enable_accelerated_networking=enable_accelerated_networking,
                         ).id,
                     }
                 ],
@@ -366,7 +372,9 @@ class AzureRegion:
         if spot:
             properties["priority"] = "Spot"
             properties["evictionPolicy"] = "Deallocate"
-            properties["billingProfile"] = {"maxPrice": -1}
+            properties["billingProfile"] = {
+                "maxPrice": -1,  # -1 indicates the VM shouldn't be evicted for price reasons
+            }
         return self.azure_service.compute.virtual_machines.begin_create_or_update(
             resource_group_name=self.sct_resource_group_name,
             vm_name=vm_name,
