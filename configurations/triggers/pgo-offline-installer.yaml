@@ -1,0 +1,66 @@
+jenkinsfiles:
+  - path: "jenkins-pipelines/master-triggers/sct_triggers/performance/perf-simple-query-offline-installer-trigger-arm.jenkinsfile"
+    labels_selector: "pgo-arm"
+  - path: "jenkins-pipelines/master-triggers/sct_triggers/performance/perf-simple-query-offline-installer-trigger-x86.jenkinsfile"
+    labels_selector: "pgo-x86"
+
+# PGO offline installer trigger matrix — fires perf-simple-query jobs after PGO builds.
+#
+# Replaces:
+#   - vars/perfSimpleQueryOfflineInstallerTriggerX86.groovy
+#   - vars/perfSimpleQueryOfflineInstallerTriggerArm.groovy
+#
+# Triggered manually with unified_package URL from a completed PGO build.
+
+defaults:
+  provision_type: "on_demand"
+  post_behavior_db_nodes: "destroy"
+  post_behavior_loader_nodes: "destroy"
+  post_behavior_monitor_nodes: "destroy"
+
+jobs:
+  # --- x86_64 microbenchmarks ---
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64"
+    backend: "aws"
+    region: "us-east-1"
+    wait: false
+    labels:
+      - "pgo-x86"
+    exclude_versions: []
+    params:
+      unified_package: "{unified_package}"
+      nonroot_offline_install: "false"
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64-write"
+    backend: "aws"
+    region: "us-east-1"
+    wait: false
+    labels:
+      - "pgo-x86"
+    exclude_versions: []
+    params:
+      unified_package: "{unified_package}"
+      nonroot_offline_install: "false"
+
+  # --- ARM64 microbenchmarks ---
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64"
+    backend: "aws"
+    region: "us-east-1"
+    wait: false
+    labels:
+      - "pgo-arm"
+    exclude_versions: []
+    params:
+      unified_package: "{unified_package}"
+      nonroot_offline_install: "false"
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-write"
+    backend: "aws"
+    region: "us-east-1"
+    wait: false
+    labels:
+      - "pgo-arm"
+    exclude_versions: []
+    params:
+      unified_package: "{unified_package}"
+      nonroot_offline_install: "false"

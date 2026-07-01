@@ -84,6 +84,13 @@ repos:
         pass_filenames: false
         files: (^sdcm/nemesis/|templates/.*.j2)
 
+    -   id: generate-trigger-jenkinsfiles
+        name: generate-trigger-jenkinsfiles
+        entry: python3 utils/build_system/generate_trigger_jenkinsfiles.py
+        language: system
+        pass_filenames: false
+        files: ^configurations/triggers/.*\.yaml$
+
     -   id: generate-progress-svg
         name: generate-progress-svg
         entry: python3 scripts/generate_progress_svg.py

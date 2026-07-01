@@ -1,0 +1,7 @@
+// AUTO-GENERATED from configurations/triggers/sanity.yaml — do not edit manually.
+// Run: python utils/build_system/generate_trigger_jenkinsfiles.py
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+triggerMatrixPipeline(
+    matrix_file: 'configurations/triggers/sanity.yaml'
+)

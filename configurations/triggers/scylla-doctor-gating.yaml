@@ -1,0 +1,60 @@
+jenkinsfiles:
+  - path: "jenkins-pipelines/oss/sct_triggers/scylla-doctor-gating-trigger.jenkinsfile"
+
+# Scylla-doctor gating trigger — runs artifacts tests with full doctor edition,
+# waits for completion, and collects analysis results.
+#
+# This is a gating trigger: if scylla-doctor analysis finds critical issues,
+# the trigger pipeline fails, blocking downstream release gates.
+#
+# Jobs use absolute paths (scylla-doctor/oss/artifacts/...) since they live
+# under the scylla-doctor top-level folder, not under scylla-{branch}/.
+
+defaults:
+  provision_type: "on_demand"
+  post_behavior_db_nodes: "destroy"
+  post_behavior_loader_nodes: "destroy"
+  post_behavior_monitor_nodes: "destroy"
+  scylla_doctor_edition: "full"
+
+jobs:
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-ami-test"
+    backend: "aws"
+    region: "eu-west-1"
+    wait: true
+    wait_timeout: 7200
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+    params:
+      scylla_doctor_edition: "full"
+
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-ami-arm-test"
+    backend: "aws"
+    region: "eu-west-1"
+    wait: true
+    wait_timeout: 7200
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+    params:
+      scylla_doctor_edition: "full"
+
+  - job_name: "/scylla-doctor/oss/artifacts/artifacts-docker-test"
+    backend: "aws"
+    region: "eu-west-1"
+    wait: true
+    wait_timeout: 3600
+    fail_on_error: true
+    collect_results:
+      - "scylla_doctor_*_analysis.json"
+    labels:
+      - "gating"
+    params:
+      scylla_doctor_edition: "full"
+
+email_recipients: "qa@scylladb.com"

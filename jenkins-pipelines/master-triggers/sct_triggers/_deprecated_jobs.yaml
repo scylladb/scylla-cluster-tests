@@ -1,0 +1,9 @@
+# Jobs to disable when create-test-release-jobs runs for scylla-master.
+# These are replaced by the centralized trigger matrix system.
+# See: configurations/triggers/*.yaml and vars/triggerMatrixPipeline.groovy
+
+jobs:
+  - name: "perf-regression-trigger"
+    reason: "Replaced by perf-regression-matrix-trigger using triggerMatrixPipeline (configurations/triggers/perf-regression.yaml)"
+  - name: "tier1-custom-time-trigger"
+    reason: "Replaced by oss/sct_triggers/tier1-trigger using triggerMatrixPipeline (configurations/triggers/tier1.yaml)"
