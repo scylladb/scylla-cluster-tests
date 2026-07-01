@@ -232,6 +232,15 @@ def test_get_instances_by_family(multi_cloud_dir: Path, cloud: str, family: str,
     assert all(inst.cloud == cloud and inst.family == family for inst in result)
 
 
+def test_real_azure_catalog_excludes_scsi_only_dpdsv5():
+    # Dpdsv5 (Ampere Altra) exposes local disk via SCSI (not NVMe), so it must not
+    # appear in the Azure pricing/sizing catalog
+    catalog_dir = Path(__file__).parents[2] / "data" / "instance_catalog"
+    catalog = InstanceCatalog.from_directory(catalog_dir)
+    dpdsv5 = [inst.instance_type for inst in catalog.get_instances("azure") if "pds_v5" in inst.instance_type]
+    assert not dpdsv5, f"SCSI-only Dpdsv5 types must not appear in the Azure catalog: {dpdsv5}"
+
+
 def test_instance_type_info_is_dataclass():
     info = InstanceTypeInfo(
         instance_type="t3.micro",
