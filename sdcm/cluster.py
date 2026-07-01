@@ -145,6 +145,7 @@ from sdcm.utils.health_checker import (
     CHECK_NODE_HEALTH_RETRIES,
     CHECK_NODE_HEALTH_RETRY_DELAY,
 )
+from sdcm.cluster_health_monitor import ClusterHealthMonitor
 from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property, optional_stage
 from sdcm.test_config import TestConfig
 from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
@@ -459,6 +460,7 @@ class BaseNode(AutoSshContainerMixin):
 
         self.kernel_panic_checker = None
         self.running_nemesis = None
+        self.last_nemesis_finish_time: float = 0  # Used by ClusterHealthMonitor grace period
 
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
@@ -3502,32 +3504,52 @@ class BaseNode(AutoSshContainerMixin):
                 else:
                     raise
 
-    def node_health_events(self) -> Iterator[ClusterHealthValidatorEvent]:
+    def node_health_events(self, nemesis_node_ips: set[str] | frozenset[str] | None = None,
+                           connect_timeout: int | None = None,
+                           retry_n: int | None = None,
+                           retry_sleep_time: int | None = None,
+                           ) -> Iterator[ClusterHealthValidatorEvent]:
         nodes_status = self.get_nodes_status()
-        peers_details = self.get_peers_info() or {}
-        gossip_info = self.get_gossip_info() or {}
-        group0_members = self.raft.get_group0_members()
-        tokenring_members = self.get_token_ring_members()
+        cql_kwargs = {"connect_timeout": connect_timeout} if connect_timeout else {}
+        retry_kwargs: dict = {}
+        if retry_n is not None:
+            retry_kwargs["_retry_n"] = retry_n
+        if retry_sleep_time is not None:
+            retry_kwargs["_retry_sleep_time"] = retry_sleep_time
+        peers_details = self.get_peers_info(**cql_kwargs, **retry_kwargs) or {}
+        gossip_info = self.get_gossip_info(**retry_kwargs) or {}
+        group0_members = self.raft.get_group0_members(**cql_kwargs) or []
+        tokenring_members = self.get_token_ring_members(**retry_kwargs) or []
 
         return itertools.chain(
             check_nodes_status(
                 nodes_status=nodes_status,
                 current_node=self,
                 removed_nodes_list=self.parent_cluster.dead_nodes_ip_address_list,
+                nemesis_node_ips=nemesis_node_ips,
             ),
             check_node_status_in_gossip_and_nodetool_status(
-                gossip_info=gossip_info, nodes_status=nodes_status, current_node=self
+                gossip_info=gossip_info, nodes_status=nodes_status, current_node=self,
+                nemesis_node_ips=nemesis_node_ips,
             ),
             check_schema_version(
-                gossip_info=gossip_info, peers_details=peers_details, nodes_status=nodes_status, current_node=self
+                gossip_info=gossip_info, peers_details=peers_details, nodes_status=nodes_status, current_node=self,
+                nemesis_node_ips=nemesis_node_ips,
             ),
-            check_nulls_in_peers(gossip_info=gossip_info, peers_details=peers_details, current_node=self),
+            check_nulls_in_peers(gossip_info=gossip_info, peers_details=peers_details, current_node=self,
+                                 nemesis_node_ips=nemesis_node_ips),
             check_group0_tokenring_consistency(
-                group0_members=group0_members, tokenring_members=tokenring_members, current_node=self
+                group0_members=group0_members, tokenring_members=tokenring_members, current_node=self,
+                connect_timeout=connect_timeout,
             ),
         )
 
-    def check_node_health(self, retries: int = CHECK_NODE_HEALTH_RETRIES) -> None:
+    def check_node_health(self, retries: int = CHECK_NODE_HEALTH_RETRIES,
+                          nemesis_node_ips: set[str] | frozenset[str] | None = None,
+                          connect_timeout: int | None = None,
+                          retry_n_override: int | None = None,
+                          retry_sleep_override: int | None = None,
+                          ) -> None:
         # Task 1443: ClusterHealthCheck is bottle neck in scale test and create a lot of noise in 5000 tables test.
         # Disable it
         if not self.parent_cluster.params.get("cluster_health_check"):
@@ -3535,7 +3557,10 @@ class BaseNode(AutoSshContainerMixin):
 
         for retry_n in range(1, retries + 1):
             LOGGER.debug("Check the health of the node `%s' [attempt #%d]", self.name, retry_n)
-            events = self.node_health_events()
+            events = self.node_health_events(
+                nemesis_node_ips=nemesis_node_ips, connect_timeout=connect_timeout,
+                retry_n=retry_n_override, retry_sleep_time=retry_sleep_override,
+            )
             event = next(events, None)
             if event is None:
                 LOGGER.debug("Node `%s' is healthy", self.name)
@@ -3582,7 +3607,7 @@ class BaseNode(AutoSshContainerMixin):
         return nodes_status
 
     @retrying(n=5, sleep_time=5, raise_on_exceeded=False)
-    def get_peers_info(self):
+    def get_peers_info(self, connect_timeout=None):
         columns = (
             "peer",
             "data_center",
@@ -3594,7 +3619,8 @@ class BaseNode(AutoSshContainerMixin):
             "supported_features",
         )
         peers_details = {}
-        with self.parent_cluster.cql_connection_patient_exclusive(self) as session:
+        cql_kwargs = {"connect_timeout": connect_timeout} if connect_timeout else {}
+        with self.parent_cluster.cql_connection_patient_exclusive(self, **cql_kwargs) as session:
             result = session.execute(f"select {', '.join(columns)} from system.peers")
             cql_results = result.all()
         err = ""
@@ -3625,7 +3651,8 @@ class BaseNode(AutoSshContainerMixin):
     @retrying(n=10, sleep_time=5, raise_on_exceeded=False)
     def get_gossip_info(self) -> dict[BaseNode, dict]:
         gossip_info = self.run_nodetool(
-            "gossipinfo", verbose=False, warning_event_on_exception=(Exception,), publish_event=False
+            "gossipinfo", verbose=False, warning_event_on_exception=(Exception,), publish_event=False,
+            timeout=300,
         )
         LOGGER.debug("get_gossip_info: %s", gossip_info)
         gossip_node_schemas = {}
@@ -3952,7 +3979,7 @@ class BaseNode(AutoSshContainerMixin):
         self.log.debug("Get token ring members")
         token_ring_members = []
         token_ring_members_cmd = build_node_api_command("/storage_service/host_id")
-        result = self.remoter.run(token_ring_members_cmd, ignore_status=True, verbose=True)
+        result = self.remoter.run(token_ring_members_cmd, ignore_status=True, verbose=True, timeout=300)
         if not result.stdout:
             return []
         try:
@@ -4291,7 +4318,7 @@ class BaseCluster:
         if not verification_node:
             verification_node = random.choice(self.nodes)
         status = {}
-        res = verification_node.run_nodetool("status", publish_event=False)
+        res = verification_node.run_nodetool("status", publish_event=False, timeout=300)
 
         data_centers = res.stdout.split("Datacenter: ")
         # see TestNodetoolStatus test in test_cluster.py
@@ -5307,6 +5334,7 @@ class BaseScyllaCluster:
     name: str
     nodes: List[BaseNode]
     log: logging.Logger
+    health_monitor: ClusterHealthMonitor | None = None
 
     def __init__(self, *args, **kwargs):
         self.nemesis_termination_event = threading.Event()
@@ -5606,72 +5634,54 @@ class BaseScyllaCluster:
         info_res = yaml.safe_load(proper_yaml_output)
         return info_res
 
-    def check_cluster_health(self):
-        # Task 1443: ClusterHealthCheck is bottle neck in scale test and create a lot of noise in 5000 tables test.
-        # Disable it
+    def init_health_monitor(self) -> None:
+        """Start background health monitor. Called once after cluster is ready.
+
+        Safe to call multiple times — will not start a second monitor.
+        """
         if not self.params.get("cluster_health_check"):
-            self.log.debug("Cluster health check disabled")
+            self.log.debug("Health monitor disabled by cluster_health_check=False")
+            return
+        if self.health_monitor and self.health_monitor.is_alive():
+            self.log.debug("Health monitor already running")
             return
 
-        with ClusterHealthValidatorEvent() as chc_event:
-            # Don't run health check in case parallel nemesis.
-            # TODO: find how to recognize, that nemesis on the node is running
-            if self.nemesis_count == 1:
-                node_for_timeout = next((n for n in self.nodes if not n.running_nemesis), self.nodes[0])
-                with adaptive_timeout(Operations.HEALTHCHECK, node=node_for_timeout, timeout=len(self.nodes) * 30):
-                    # Parallel health check execution
-                    parallel_workers = self.params.get("cluster_health_check_parallel_workers")
-                    # Ensure at least 1 worker. Values above 10 are not recommended:
-                    # higher parallelism risks API rate limiting and connection exhaustion,
-                    # and testing shows diminishing returns beyond 10 workers.
-                    parallel_workers = max(1, parallel_workers)
+        self.health_monitor = ClusterHealthMonitor(cluster=self, params=self.params)
+        self.health_monitor.start()
+        self.log.info("Background health monitor started")
 
-                    if parallel_workers == 1 or len(self.nodes) == 1:
-                        # Sequential execution for single worker or single node
-                        for node in self.nodes:
-                            node.check_node_health()
-                    else:
-                        # Parallel execution
-                        self.log.debug(
-                            "Running health checks on %d nodes with %d parallel workers",
-                            len(self.nodes),
-                            parallel_workers,
-                        )
-                        failed_nodes = []
-                        with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
-                            futures = {executor.submit(node.check_node_health): node for node in self.nodes}
-                            for future in as_completed(futures):
-                                node = futures[future]
-                                try:
-                                    future.result()
-                                except Exception as exc:  # noqa: BLE001
-                                    failed_nodes.append((node, exc))
-                                    # Log and publish error event for visibility in Argus
-                                    self.log.error(
-                                        "Health check for node %s generated an exception: %s",
-                                        node.name,
-                                        exc,
-                                    )
-                                    ClusterHealthValidatorEvent.ParallelHealthCheckFailure(
-                                        node=node,
-                                        error=f"Health check failed with exception: {exc}",
-                                        severity=Severity.ERROR,
-                                    ).publish()
-                        if failed_nodes:
-                            for node, exc in failed_nodes:
-                                self.log.error("Health check failure details for %s: %s", node.name, exc, exc_info=exc)
-                            names = ", ".join(n.name for n, _ in failed_nodes)
-                            raise ClusterHealthCheckError(
-                                f"Health check failed on {len(failed_nodes)} node(s): {names}"
-                            ) from failed_nodes[0][1]
-            else:
-                chc_event.message = "Test runs with parallel nemesis. Nodes health checks are disabled."
+    def stop_health_monitor(self) -> None:
+        """Stop the background health monitor. Safe to call if not started."""
+        if self.health_monitor:
+            self.health_monitor.stop()  # stop() already does set() + join(timeout=30)
+            self.log.info("Background health monitor stopped")
+
+    def check_cluster_health(self):
+        """Query cluster health status (non-blocking, never raises).
+
+        Reads cached status from background health monitor + runs cheap local validations.
+        """
+        try:
+            if not self.params.get("cluster_health_check"):
                 return
+
+            if self.health_monitor:
+                unhealthy = self.health_monitor.get_unhealthy_nodes()
+                if unhealthy:
+                    self.log.warning(
+                        "Nodes with health issues (non-blocking, nemesis will proceed): %s",
+                        unhealthy,
+                    )
+                else:
+                    self.log.debug("All monitored nodes healthy")
+            else:
+                self.log.debug("Health monitor not initialized")
 
             self.check_nodes_running_nemesis_count()
             if partitions_attrs := self.test_config.tester_obj().partitions_attrs:
                 partitions_attrs.validate_rows_per_partitions()
-            chc_event.message = "Cluster health check finished"
+        except Exception:  # noqa: BLE001
+            self.log.warning("check_cluster_health() failed unexpectedly (non-fatal)", exc_info=True)
 
     def check_nodes_running_nemesis_count(self):
         nodes_running_nemesis = [node for node in self.nodes if node.running_nemesis]

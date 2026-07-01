@@ -1446,6 +1446,7 @@ class ClusterTester(unittest.TestCase):
                 self.db_cluster.start_kms_key_rotation_thread()
                 self.db_cluster.start_azure_kms_key_rotation_thread()
                 self.db_cluster.start_gcp_key_rotation_thread()
+                self.db_cluster.init_health_monitor()
 
             for future in as_completed(futures):
                 future.result()
@@ -4038,6 +4039,8 @@ class ClusterTester(unittest.TestCase):
         for validator_class in teardown_validators_list:
             validator_class(self.params, self).validate()
         self.log.info("TearDown is starting...")
+        if self.db_cluster:
+            self.db_cluster.stop_health_monitor()
         self.stop_timeout_thread()
         self.stop_event_analyzer()
         self.stop_resources()
