@@ -831,3 +831,37 @@ def test_env_var_whitespace_is_stripped(monkeypatch, raw_value, expected):
     monkeypatch.setenv("SCT_SCYLLA_VERSION", raw_value)
     conf = sct_config.SCTConfiguration()
     assert conf.get("scylla_version") == expected
+
+
+def test_docker_simulated_racks_sets_gossiping_snitch(monkeypatch):
+    """Test that GossipingPropertyFileSnitch is auto-set for Docker with multiple racks.
+
+    When simulated_racks > 1 on the Docker backend, the endpoint_snitch
+    should be automatically resolved to GossipingPropertyFileSnitch.
+    """
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_SIMULATED_RACKS", "2")
+    monkeypatch.setenv("SCT_N_DB_NODES", "3")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+
+    conf = sct_config.SCTConfiguration()
+    conf.verify_configuration()
+
+    assert conf.get("endpoint_snitch") == "org.apache.cassandra.locator.GossipingPropertyFileSnitch"
+
+
+def test_docker_single_rack_no_snitch_override(monkeypatch):
+    """Test that endpoint_snitch is not auto-set for Docker with a single rack.
+
+    When simulated_racks is 1 (default), no snitch override should occur
+    and endpoint_snitch should remain None.
+    """
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_SIMULATED_RACKS", "1")
+    monkeypatch.setenv("SCT_N_DB_NODES", "3")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+
+    conf = sct_config.SCTConfiguration()
+    conf.verify_configuration()
+
+    assert conf.get("endpoint_snitch") is None
