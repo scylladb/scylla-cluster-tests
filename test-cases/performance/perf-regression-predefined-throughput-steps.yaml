@@ -87,3 +87,9 @@ use_placement_group: true
 use_prepared_loaders: false
 
 adaptive_timeout_store_metrics: false
+
+collect_nvme_diagnostics: true
+
+teardown_validators:
+  nvme:
+    enabled: true
