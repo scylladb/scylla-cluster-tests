@@ -1576,11 +1576,17 @@ class SCTool:
 
     @property
     def client_version_timestamp(self) -> int:
-        """Gets the timestamp of the client version
+        """Gets the timestamp of the client version.
 
-        Example, for client version `3.3.3-0.20240912.924034e0d` the timestamp is `1726099200` (2024-09-12 00:00:00)
+        Examples:
+            - `3.3.3-0.20240912.924034e0d`               -> 1726099200 (2024-09-12)
+            - `3.12.0-dev-0.20260622.462bd8021-SNAPSHOT` -> 1750550400 (2026-06-22)
+            - `3.12.0-dev.0.20260629.d78e5dcc9.SNAPSHOT` -> 1751155200 (2026-06-29)
         """
-        date_str = self.client_version.split(".")[-2]
+        match = re.search(r"\b\d{8}\b", self.client_version)
+        if not match:
+            raise ValueError(f"Cannot find YYYYMMDD date segment in client version: {self.client_version!r}")
+        date_str = match.group()
         date_obj = datetime.datetime.strptime(date_str, "%Y%m%d")
         timestamp = int(date_obj.timestamp())
         return timestamp
