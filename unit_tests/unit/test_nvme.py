@@ -23,16 +23,18 @@ import json
 from unittest.mock import MagicMock, PropertyMock
 
 
-from sdcm.utils.nvme_diagnostics import (
 from sdcm.cluster import BaseScyllaCluster
 from sdcm.sct_events import Severity
 from sdcm.utils.nvme_diagnostics import (
     NvmeDevice,
+    NvmeSelfTestLog,
+    NvmeSelfTestResult,
     NvmeSmartLog,
     SelfTestType,
     _check_single_device_health,
     abort_self_test,
     check_nvme_health,
+    check_self_test_results,
     collect_all_smart_logs,
     filter_data_disks,
     get_error_log,
@@ -45,7 +47,9 @@ from sdcm.utils.nvme_diagnostics import (
     parse_nvme_list_output,
     parse_self_test_log_output,
     parse_smart_log_output,
+    poll_self_test_completion,
     run_self_test,
+    run_self_test_on_all_devices,
 )
 
 
@@ -197,6 +201,39 @@ command specific               : 0
 opcode                         : 0x01
 """
 
+# nvme-cli pads the entry index and prints hex values with a "0x" prefix
+ERROR_LOG_TEXT_PADDED_OUTPUT = """\
+Error Log Entries for device:nvme1n1 entries:2
+Entry[ 0]
+.................
+error_count	: 7
+sqid	: 0
+cmdid	: 0x12
+status_field	: 0x4004
+parm_error_location	: 0
+lba	: 0
+nsid	: 0x1
+vs	: 0
+trtype	: 0
+cs	: 0
+opcode	: 0x2
+.................
+Entry[ 1]
+.................
+error_count	: 6
+sqid	: 0
+cmdid	: 0xa
+status_field	: 0x4004
+parm_error_location	: 0
+lba	: 0x1000
+nsid	: 0x1
+vs	: 0
+trtype	: 0
+cs	: 0
+opcode	: 0x1
+.................
+"""
+
 ERROR_LOG_JSON_OUTPUT = json.dumps(
     [
         {
@@ -250,6 +287,33 @@ nsid                                : 1
 Failing LBA                         : 0x00001234
 SCT                                 : 0
 SC                                  : 0
+"""
+
+# Format printed by nvme-cli itself: hex values and its own field names
+SELF_TEST_LOG_TEXT_NVME_CLI_OUTPUT = """\
+Device Self Test Log for NVME device:nvme1n1
+Current operation  : 0x2
+Current Completion : 67%
+Self Test Result[0]:
+  Operation Result             : 0x0
+  Self Test Code               : 0x1
+  Valid Diagnostic Information : 0x0
+  Power on hours (POH)         : 0x2238
+  Namespace Identifier         : 0x1
+  Failing LBA                  : 0x0
+  Status Code Type             : 0x0
+  Status Code                  : 0x0
+  Segment Number               : 0x0
+Self Test Result[1]:
+  Operation Result             : 0x7
+  Self Test Code               : 0x2
+  Valid Diagnostic Information : 0x1
+  Power on hours (POH)         : 0x2000
+  Namespace Identifier         : 0x1
+  Failing LBA                  : 0x1234
+  Status Code Type             : 0x1
+  Status Code                  : 0x3
+  Segment Number               : 0x2
 """
 
 SELF_TEST_LOG_JSON_OUTPUT = json.dumps(
@@ -417,6 +481,21 @@ def test_parse_smart_log_temperature_celsius_zero_kelvin():
     assert smart.temperature_celsius == 0
 
 
+def test_parse_smart_log_text_hex_critical_warning():
+    """Hex values are parsed as hex, not as their leading "0"."""
+    output = (
+        "Smart Log for NVME device:nvme1n1 namespace-id:ffffffff\n"
+        "critical_warning                        : 0x1\n"
+        "temperature                             : 315 K (42 Celsius)\n"
+        "media_errors                            : 0xa\n"
+    )
+    smart = parse_smart_log_output("/dev/nvme1n1", output)
+    assert smart is not None
+    assert smart.critical_warning == 1
+    assert smart.media_errors == 10
+    assert smart.temperature_kelvin == 315
+
+
 # ---------------------------------------------------------------------------
 # Tests: parse_error_log_output
 # ---------------------------------------------------------------------------
@@ -438,6 +517,23 @@ def test_parse_error_log_text():
     assert entries[1].command_id == 0x000A
     assert entries[1].lba == 0x1000
     assert entries[1].opcode == 0x01
+
+
+def test_parse_error_log_text_padded_entry_headers():
+    """Parse nvme-cli output where the entry index is padded ("Entry[ 0]")."""
+    entries = parse_error_log_output(ERROR_LOG_TEXT_PADDED_OUTPUT)
+    assert len(entries) == 2
+
+    assert entries[0].error_count == 7
+    assert entries[0].command_id == 0x12
+    assert entries[0].status_field == 0x4004
+    assert entries[0].nsid == 1
+    assert entries[0].opcode == 0x2
+
+    assert entries[1].error_count == 6
+    assert entries[1].command_id == 0xA
+    assert entries[1].lba == 0x1000
+    assert entries[1].opcode == 0x1
 
 
 def test_parse_error_log_json():
@@ -495,6 +591,28 @@ def test_parse_self_test_log_text():
     assert log.results[1].self_test_code == 2
     assert log.results[1].power_on_hours == 8500
     assert log.results[1].failing_lba == 0x1234
+    assert not log.results[1].passed
+
+
+def test_parse_self_test_log_text_nvme_cli_format():
+    """Parse nvme-cli output: hex current operation and its own field names."""
+    log = parse_self_test_log_output("/dev/nvme1n1", SELF_TEST_LOG_TEXT_NVME_CLI_OUTPUT)
+    assert log is not None
+    assert log.current_operation == 2
+    assert log.current_completion == 67
+    assert log.test_in_progress
+    assert len(log.results) == 2
+
+    assert log.results[0].result_code == 0
+    assert log.results[0].self_test_code == 1
+    assert log.results[0].power_on_hours == 0x2238
+    assert log.results[0].nsid == 1
+    assert log.results[0].passed
+
+    assert log.results[1].result_code == 7
+    assert log.results[1].failing_lba == 0x1234
+    assert log.results[1].status_code_type == 1
+    assert log.results[1].status_code == 3
     assert not log.results[1].passed
 
 
@@ -1216,8 +1334,8 @@ def test_check_nvme_health_healthy_device(monkeypatch):
     node.parent_cluster.params.get.return_value = True
 
     smart = _make_smart_log()
-    monkeypatch.setattr("sdcm.utils.nvme.is_nvme_cli_available", lambda n: True)
-    monkeypatch.setattr("sdcm.utils.nvme.collect_all_smart_logs", lambda n: [smart])
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.is_nvme_cli_available", lambda n: True)
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.collect_all_smart_logs", lambda n: [smart])
 
     events = list(check_nvme_health(current_node=node))
     assert events == []
@@ -1231,10 +1349,183 @@ def test_check_nvme_health_yields_events_for_errors(monkeypatch):
     node.logdir = "/tmp/opencode/test_logdir"
 
     smart = _make_smart_log(media_errors=5)
-    monkeypatch.setattr("sdcm.utils.nvme.is_nvme_cli_available", lambda n: True)
-    monkeypatch.setattr("sdcm.utils.nvme.collect_all_smart_logs", lambda n: [smart])
-    monkeypatch.setattr("sdcm.utils.nvme.get_error_log", lambda n, d, **kw: [])
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.is_nvme_cli_available", lambda n: True)
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.collect_all_smart_logs", lambda n: [smart])
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_error_log", lambda n, d, **kw: [])
 
     events = list(check_nvme_health(current_node=node))
     assert len(events) == 1
     assert events[0].severity == Severity.ERROR
+
+
+# ---------------------------------------------------------------------------
+# Tests: poll_self_test_completion
+# ---------------------------------------------------------------------------
+
+
+def test_poll_self_test_completion_immediate(monkeypatch):
+    """poll_self_test_completion returns immediately when test is not in progress."""
+    node = _make_mock_node()
+    completed_log = NvmeSelfTestLog(device_path="/dev/nvme0n1", current_operation=0)
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_self_test_log", lambda n, d: completed_log)
+
+    result = poll_self_test_completion(node, "/dev/nvme0n1", timeout=10)
+    assert result is not None
+    assert not result.test_in_progress
+
+
+def test_poll_self_test_completion_waits_then_completes(monkeypatch):
+    """poll_self_test_completion polls until test completes."""
+    node = _make_mock_node()
+    in_progress_log = NvmeSelfTestLog(device_path="/dev/nvme0n1", current_operation=1, current_completion=50)
+    completed_log = NvmeSelfTestLog(device_path="/dev/nvme0n1", current_operation=0)
+
+    call_count = 0
+
+    def mock_get_self_test_log(n, d):
+        nonlocal call_count
+        call_count += 1
+        return completed_log if call_count >= 3 else in_progress_log
+
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_self_test_log", mock_get_self_test_log)
+    # Use a very short poll interval for testing
+    result = poll_self_test_completion(node, "/dev/nvme0n1", timeout=60, poll_interval=0)
+    assert result is not None
+    assert not result.test_in_progress
+    assert call_count >= 3
+
+
+def test_poll_self_test_completion_timeout_aborts(monkeypatch):
+    """poll_self_test_completion aborts the test on timeout."""
+    node = _make_mock_node()
+    in_progress_log = NvmeSelfTestLog(device_path="/dev/nvme0n1", current_operation=1, current_completion=10)
+
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.get_self_test_log", lambda n, d: in_progress_log)
+    # Mock abort_self_test to track it was called
+    abort_called = []
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.abort_self_test", lambda n, d: abort_called.append(d) or True)
+
+    poll_self_test_completion(node, "/dev/nvme0n1", timeout=0, poll_interval=0)
+    assert len(abort_called) == 1
+    assert abort_called[0] == "/dev/nvme0n1"
+
+
+# ---------------------------------------------------------------------------
+# Tests: check_self_test_results
+# ---------------------------------------------------------------------------
+
+
+def test_check_self_test_results_passed():
+    """No events for a passing self-test."""
+    node = _make_mock_node()
+    log = NvmeSelfTestLog(
+        device_path="/dev/nvme0n1",
+        results=[NvmeSelfTestResult(result_code=0, self_test_code=1)],
+    )
+    events = list(check_self_test_results(node, log))
+    assert events == []
+
+
+def test_check_self_test_results_failure():
+    """ERROR event for a self-test failure with result_code >= 4."""
+    node = _make_mock_node()
+    node.name = "test-node"
+    log = NvmeSelfTestLog(
+        device_path="/dev/nvme0n1",
+        results=[NvmeSelfTestResult(result_code=4, self_test_code=1, failing_lba=0x1000)],
+    )
+    events = list(check_self_test_results(node, log))
+    assert len(events) == 1
+    assert events[0].severity == Severity.ERROR
+    assert "self-test failed" in events[0].error
+
+
+def test_check_self_test_results_aborted():
+    """No event for user-aborted self-test (result_code=1)."""
+    node = _make_mock_node()
+    log = NvmeSelfTestLog(
+        device_path="/dev/nvme0n1",
+        results=[NvmeSelfTestResult(result_code=1, self_test_code=1)],
+    )
+    events = list(check_self_test_results(node, log))
+    assert events == []
+
+
+def test_check_self_test_results_empty():
+    """No events when no results in self-test log."""
+    node = _make_mock_node()
+    log = NvmeSelfTestLog(device_path="/dev/nvme0n1", results=[])
+    events = list(check_self_test_results(node, log))
+    assert events == []
+
+
+def test_check_self_test_results_entry_not_used():
+    """No events for result_code=0xf (entry not used)."""
+    node = _make_mock_node()
+    log = NvmeSelfTestLog(
+        device_path="/dev/nvme0n1",
+        results=[NvmeSelfTestResult(result_code=0xF)],
+    )
+    events = list(check_self_test_results(node, log))
+    assert events == []
+
+
+# ---------------------------------------------------------------------------
+# Tests: run_self_test_on_all_devices
+# ---------------------------------------------------------------------------
+
+
+def test_run_self_test_on_all_devices_no_nvme_cli(monkeypatch):
+    """Returns empty list when nvme-cli is not available."""
+    node = _make_mock_node()
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.is_nvme_cli_available", lambda n: False)
+
+    result = run_self_test_on_all_devices(node)
+    assert result == []
+
+
+def test_run_self_test_on_all_devices_triggers_all_before_polling(monkeypatch):
+    """Self-tests are triggered on all disks first, so they run in parallel."""
+    node = _make_mock_node()
+    disks = [
+        NvmeDevice(
+            device_path=f"/dev/nvme{i}n1",
+            model="Amazon EC2 NVMe Instance Storage",
+            serial=f"AWS{i}",
+            firmware="0",
+            size_bytes=1900000000000,
+            used_bytes=0,
+            sector_size=512,
+            is_data_disk=True,
+        )
+        for i in range(3)
+    ]
+    calls = []
+
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.is_nvme_cli_available", lambda n: True)
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.list_nvme_devices", lambda n: disks)
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.filter_data_disks", lambda devices, **kwargs: disks)
+    monkeypatch.setattr(
+        "sdcm.utils.nvme_diagnostics.run_self_test",
+        lambda n, device_path, test_type: calls.append(("trigger", device_path)) is None,
+    )
+    monkeypatch.setattr(
+        "sdcm.utils.nvme_diagnostics.poll_self_test_completion",
+        lambda n, device_path, timeout=None, test_type=None: calls.append(("poll", device_path)),
+    )
+
+    result = run_self_test_on_all_devices(node, SelfTestType.SHORT)
+
+    assert result == []
+    assert [device_path for action, device_path in calls if action == "trigger"] == [d.device_path for d in disks]
+    assert [action for action, _ in calls] == ["trigger"] * 3 + ["poll"] * 3
+
+
+def test_run_self_test_on_all_devices_no_devices(monkeypatch):
+    """Returns empty list when no NVMe devices are found."""
+    node = _make_mock_node()
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.is_nvme_cli_available", lambda n: True)
+    monkeypatch.setattr("sdcm.utils.nvme_diagnostics.list_nvme_devices", lambda n: [])
+
+    result = run_self_test_on_all_devices(node)
+    assert result == []
