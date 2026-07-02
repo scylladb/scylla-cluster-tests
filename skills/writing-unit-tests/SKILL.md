@@ -3,9 +3,10 @@ name: writing-unit-tests
 description: >-
   Guides writing and debugging unit tests for the SCT framework using
   pytest conventions. Use when creating new test files in unit_tests/,
-  adding test cases, mocking external services, setting up fixtures, or
-  reviewing test coverage. Covers network-blocking patterns, FakeRemoter,
-  moto for AWS mocking, monkeypatch, and common pitfalls.
+  adding test cases, mocking external services, setting up fixtures,
+  reviewing test coverage, or verifying test isolation. Covers
+  network-blocking patterns, FakeRemoter, moto for AWS mocking,
+  monkeypatch, and common pitfalls.
 ---
 
 # Writing Unit Tests for SCT
