@@ -5253,11 +5253,15 @@ class BaseScyllaCluster:
                         traceback=traceback.format_exc(),
                     ).publish()
                 try:
+                    ready_nodes = [node for node in db_cluster.data_nodes if node.remoter and node.db_up()]
+                    if not ready_nodes:
+                        self.log.warning("No ready nodes available for KMS encryption check, skipping this iteration")
+                        continue
                     nemesis_class = (
                         self.nemesis[0] if self.nemesis else getattr(import_module("sdcm.nemesis"), "Nemesis")
                     )
                     with nemesis_class.run_nemesis(
-                        node_list=db_cluster.data_nodes, nemesis_label="KMS encryption check"
+                        node_list=ready_nodes, nemesis_label="KMS encryption check"
                     ) as target_node:
                         self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
 
