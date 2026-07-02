@@ -54,8 +54,9 @@ def read_skill(skill_dir: Path) -> str | None:
 
 
 def judge_skill(client, skill_name: str, content: str) -> dict:
+    model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
     message = client.messages.create(
-        model="claude-haiku-4-5-20250515",
+        model=model,
         max_tokens=512,
         messages=[
             {"role": "user", "content": f"# Skill: {skill_name}\n\n{content}"},
@@ -114,8 +115,8 @@ def main():
             if score < threshold:
                 failed = True
                 print(f"::error file=skills/{skill_name}/SKILL.md::Score {score} below threshold {threshold}")
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            print(f"::warning::Failed to parse judge response for {skill_name}: {e}")
+        except (json.JSONDecodeError, KeyError, IndexError, TypeError, anthropic.APIError) as e:
+            print(f"::warning::Failed to judge {skill_name}: {e}")
             continue
 
     print(f"\n{'=' * 60}")

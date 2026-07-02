@@ -108,9 +108,10 @@ When apt-get commands are embedded in shell scripts (via `shell_script_cmd()` or
 
 ```python
 script = dedent("""
-    sudo apt-get -o Acquire::http::Timeout=60 -o Acquire::Retries=3 update
-    sudo apt-get -o Acquire::http::Timeout=60 -o Acquire::Retries=3 install -y docker.io
+    apt-get -o Acquire::http::Timeout=60 -o Acquire::Retries=3 update
+    apt-get -o Acquire::http::Timeout=60 -o Acquire::Retries=3 install -y docker.io
 """)
+self.remoter.sudo(f"bash -ce '{script}'")
 ```
 
 ## GPG Key Fetching
