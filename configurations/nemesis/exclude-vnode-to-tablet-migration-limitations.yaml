@@ -1,0 +1,64 @@
+# Nemesis exclusions for vnode-to-tablet migration tests.
+#
+# These nemeses are excluded because they violate limitations of the
+# migrate-to-tablets procedure, as documented at:
+# https://github.com/scylladb/scylladb/blob/master/docs/operating-scylla/procedures/config-change/migrate-vnodes-to-tablets.rst
+#
+# Limitation: "No schema changes" — do not create, alter, or drop tables in migrating keyspace
+# Limitation: "No topology changes" — do not add, remove, decommission, or replace nodes
+# Limitation: "No TRUNCATE" on tables in migrating keyspace
+# Limitation: Only CQL base tables — no MV, secondary indexes, CDC, or Alternator tables
+# Limitation: Nodetool refresh - RefreshBigMonkey
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: >-
+  not AddDropColumnMonkey
+  and not ToggleTableIcsMonkey
+  and not ToggleGcModeMonkey
+  and not ToggleCDCMonkey
+  and not NoCorruptRepairMonkey
+  and not EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey
+  and not EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey
+  and not ToggleAuditNemesisSyslog
+  and not AddRemoveMvNemesis
+  and not ModifyTableCommentMonkey
+  and not ModifyTableGcGraceTimeMonkey
+  and not ModifyTableCachingMonkey
+  and not ModifyTableBloomFilterFpChanceMonkey
+  and not ModifyTableCompactionMonkey
+  and not ModifyTableCompressionMonkey
+  and not ModifyTableCrcCheckChanceMonkey
+  and not ModifyTableDclocalReadRepairChanceMonkey
+  and not ModifyTableDefaultTimeToLiveMonkey
+  and not ModifyTableMaxIndexIntervalMonkey
+  and not ModifyTableMinIndexIntervalMonkey
+  and not ModifyTableMemtableFlushPeriodInMsMonkey
+  and not ModifyTableReadRepairChanceMonkey
+  and not ModifyTableSpeculativeRetryMonkey
+  and not ModifyTableTwcsWindowSizeMonkey
+  and not DecommissionMonkey
+  and not DecommissionSeedNode
+  and not AbortDecommissionMonkey
+  and not TerminateAndRemoveNodeMonkey
+  and not NodeTerminateAndReplace
+  and not DecommissionStreamingErrMonkey
+  and not GrowShrinkClusterNemesis
+  and not AddRemoveRackNemesis
+  and not AddRemoveDcNemesis
+  and not BootstrapStreamingErrorNemesis
+  and not GrowShrinkZeroTokenNode
+  and not DrainKubernetesNodeThenReplaceScyllaNode
+  and not TerminateKubernetesHostThenReplaceScyllaNode
+  and not DrainKubernetesNodeThenDecommissionAndAddScyllaNode
+  and not TerminateKubernetesHostThenDecommissionAndAddScyllaNode
+  and not OperatorNodeReplace
+  and not IsolateNodeWithProcessSignalNemesis
+  and not IsolateNodeWithIptableRuleNemesis
+  and not TruncateMonkey
+  and not TruncateLargeParititionMonkey
+  and not KillMVBuildingCoordinator
+  and not CreateIndexNemesis
+  and not CDCStressorMonkey
+  and not RefreshBigMonkey
+  and not NodeRestartWithResharding
+  and not RefreshMonkey
