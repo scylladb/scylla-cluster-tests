@@ -30,7 +30,10 @@ jobs:
 
           for skill_dir in skills/*/; do
             if [ -f "$skill_dir/SKILL.md" ]; then
+              echo "::group::Checking $skill_dir"
               OUTPUT=$(aif check "$skill_dir/SKILL.md" 2>&1) || true
+              echo "$OUTPUT"
+              echo "::endgroup::"
               if echo "$OUTPUT" | grep -q "^PASS"; then
                 PASSED=$((PASSED + 1))
               elif echo "$OUTPUT" | grep -q "^FAIL"; then
@@ -38,6 +41,8 @@ jobs:
                 ISSUES=$(echo "$OUTPUT" | grep -E "^\s+\[" | sed 's/^/  /')
                 FINDINGS="$FINDINGS
           | \`$(basename "$skill_dir")\` | :x: | $(echo "$ISSUES" | head -1 | sed 's/^  //') |"
+              else
+                echo "::warning::Unexpected output for $skill_dir: $OUTPUT"
               fi
             fi
           done
@@ -79,11 +84,13 @@ jobs:
         run: |
           DIRS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
             --jq '[.[].filename | select(startswith("skills/")) | split("/")[0:2] | join("/")] | unique | .[]')
-          echo "skill_dirs=$DIRS" >> "$GITHUB_OUTPUT"
-          if [ -z "$DIRS" ]; then
+          # Use space-separated single line for GITHUB_OUTPUT (multiline breaks the format)
+          DIRS_ONELINE=$(echo "$DIRS" | tr '\n' ' ' | xargs)
+          echo "skill_dirs=$DIRS_ONELINE" >> "$GITHUB_OUTPUT"
+          if [ -z "$DIRS_ONELINE" ]; then
             echo "No skill directories changed"
           else
-            echo "Changed skills: $DIRS"
+            echo "Changed skills: $DIRS_ONELINE"
           fi
 
       - name: Install anthropic SDK
