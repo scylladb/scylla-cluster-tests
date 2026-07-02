@@ -252,7 +252,7 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
     docker_scylla.reload_config = reload_config_for_test
 
     cluster = docker_scylla.parent_cluster
-    os.environ.setdefault("_SCT_TEST_LOGDIR", "/tmp/test_vector_search_logs")
+    os.environ.setdefault("SCT_TEST_LOGDIR", "/tmp/test_vector_search_logs")
 
     class MockTester:
         def __init__(self):

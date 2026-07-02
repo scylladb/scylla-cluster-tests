@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 import time
 
-from argus.client.tunnel_models import (
+from argus.client.tunnel.models import (
     ALLOWED_HOST_KEY_TYPES,
     DEFAULT_RECONNECT_RETRIES,
     DEFAULT_TUNNEL_TIMEOUT,
@@ -17,7 +17,7 @@ from argus.client.tunnel_models import (
     TunnelClientError,
     TunnelConfig,
 )
-from argus.client.tunnel_state import get_tunnel_state_paths
+from argus.client.tunnel.state import get_tunnel_state_paths
 
 
 LOGGER = logging.getLogger(__name__)

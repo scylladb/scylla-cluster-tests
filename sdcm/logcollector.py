@@ -744,7 +744,7 @@ class LogCollector:
                 node.remoter.run(collect_log_command, ignore_status=True, verbose=True)
                 result = node.remoter.run(f"test -f '{log_filename}'", ignore_status=True)
                 ok = result.ok
-            except Libssh2_Failure, InvokeFailure:
+            except (Libssh2_Failure, InvokeFailure):
                 ssh_connected = False
 
         # Check if node is AWS-based
@@ -1222,6 +1222,7 @@ class BaseSCTLogCollector(LogCollector):
         FileLog(name="cdc-replicator.log", search_locally=True),
         FileLog(name="scylla-migrate.log", search_locally=True),
         FileLog(name="argus.log", search_locally=True),
+        FileLog(name="argus_replay_log_*.jsonl", search_locally=True),
         FileLog(name="actions.log", search_locally=True),
         FileLog(name=r"*debug.json", search_locally=True),
         FileLog(name="result_gradual_increase.log", search_locally=True),
@@ -1463,7 +1464,7 @@ class KubernetesLogCollector(BaseSCTLogCollector):
             if not test_run_logdir:
                 return super().collect_logs(local_search_path=local_search_path)
             k8s_logdirs = self._find_k8s_subdirs(test_run_logdir)
-            with environment(_SCT_TEST_LOGDIR=test_run_logdir):
+            with environment(SCT_TEST_LOGDIR=test_run_logdir):
                 for k8s_logdir in k8s_logdirs:
                     if os.path.isdir(k8s_logdir) and not os.path.isdir(os.path.join(k8s_logdir, "namespaces")):
                         for _, _, current_k8s_logdir_sub_file in next(os.walk(os.path.join(k8s_logdir, ".kube"))):

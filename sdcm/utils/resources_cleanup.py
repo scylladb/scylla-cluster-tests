@@ -16,7 +16,7 @@ import logging
 import os
 import time
 import ipaddress
-from unittest.mock import MagicMock
+import tempfile
 from collections import defaultdict
 
 from botocore.exceptions import ClientError
@@ -32,7 +32,13 @@ from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.aws.emr_provisioner import list_emr_clusters
 from sdcm.provision.azure.provisioner import AzureProvisioner
-from sdcm.utils.argus import ArgusError, get_argus_client, get_argus_use_tunnel_from_env, terminate_resource_in_argus
+from sdcm.utils.argus import (
+    ArgusError,
+    ReplayOnlyArgusSCTClient,
+    get_argus_client,
+    get_argus_use_tunnel_from_env,
+    terminate_resource_in_argus,
+)
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_region import GceRegion
@@ -80,7 +86,12 @@ def init_argus_client(test_id: str, use_tunnel: bool | None = None):
         argus_client = get_argus_client(run_id=test_id, use_tunnel=use_tunnel)
     except ArgusError as exc:
         LOGGER.warning("Unable to initialize Argus: %s", exc.message)
-        argus_client = MagicMock()
+        # Fall back to replay-only mode so all intended API calls are still
+        # captured to the replay log instead of being silently mocked away.
+        argus_client = ReplayOnlyArgusSCTClient(
+            run_id=test_id,
+            log_dir=os.environ.get("SCT_TEST_LOGDIR") or tempfile.gettempdir(),
+        )
     return argus_client
 
 

@@ -29,7 +29,7 @@ LOGGER = logging.getLogger(__name__)
 
 @pytest.fixture(name="kafka_cluster", scope="function")
 def fixture_kafka_cluster(tmp_path_factory, params, monkeypatch):
-    monkeypatch.setenv("_SCT_TEST_LOGDIR", str(tmp_path_factory.mktemp("logs")))
+    monkeypatch.setenv("SCT_TEST_LOGDIR", str(tmp_path_factory.mktemp("logs")))
     kafka = LocalKafkaCluster(params=params)
 
     kafka.start()

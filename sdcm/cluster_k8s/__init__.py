@@ -1598,8 +1598,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
     @cached_property
     def logdir(self) -> str:
-        assert "_SCT_TEST_LOGDIR" in os.environ
-        logdir = os.path.join(os.environ["_SCT_TEST_LOGDIR"], self.name)
+        assert "SCT_TEST_LOGDIR" in os.environ
+        logdir = os.path.join(os.environ["SCT_TEST_LOGDIR"], self.name)
         os.makedirs(logdir, exist_ok=True)
         return logdir
 

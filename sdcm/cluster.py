@@ -4332,8 +4332,8 @@ class BaseCluster:
         return status
 
     def init_log_directory(self):
-        assert "_SCT_TEST_LOGDIR" in os.environ
-        self.logdir = os.path.join(os.environ["_SCT_TEST_LOGDIR"], self.name)
+        assert "SCT_TEST_LOGDIR" in os.environ
+        self.logdir = os.path.join(os.environ["SCT_TEST_LOGDIR"], self.name)
         os.makedirs(self.logdir, exist_ok=True)
 
     def nodes_by_region(self, nodes=None) -> dict:
