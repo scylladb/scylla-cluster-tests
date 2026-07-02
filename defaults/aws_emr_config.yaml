@@ -11,5 +11,6 @@ emr_spark_migrator_jar_path: ''
 emr_spark_migrator_release: ''
 emr_log_uri: ''
 emr_keep_alive: true
+emr_install_spark4_via_bootstrap: false
 migrator_step_timeout_minutes: 360
 validator_step_timeout_minutes: 60

@@ -1290,6 +1290,11 @@ class SCTConfiguration(BaseModel):
     emr_keep_alive: Boolean = SctField(
         description="Whether EMR cluster stays alive after job completion (default: true for reuse during testing)",
     )
+    emr_install_spark4_via_bootstrap: Boolean = SctField(
+        description="Legacy fallback: install Spark 4.x via an EMR bootstrap action and submit the migrator "
+        "through script-runner.jar (for emr-7.x releases). Default value is false - i.e. deployment of native Spark "
+        "on an `emr-spark-8.x` release label.",
+    )
     # spark-migrator external-source options (for Cassandra-to-Scylla migration)
     migrator_source_hosts: StringOrList = SctField(
         description="CQL contact-point IPs for the source Cassandra/Scylla cluster. "
@@ -3810,6 +3815,7 @@ class SCTConfiguration(BaseModel):
         self._validate_perf_gradual_throttle_steps()
 
         self._verify_migrator_source_params()
+        self._verify_emr_spark_mode()
 
     def _get_normalized_arch(self, instance_type: str, region_name: str, default: str = "x86_64") -> str:
         """Detect architecture from AWS instance type and normalize to Scylla package naming.
@@ -4696,6 +4702,27 @@ class SCTConfiguration(BaseModel):
     def _verify_migrator_source_params(self):
         if self.get("migrator_source_hosts") and self.get("migrator_source_test_id"):
             raise ValueError("migrator_source_hosts and migrator_source_test_id are mutually exclusive — set only one")
+
+    def _verify_emr_spark_mode(self):
+        """Validate that EMR release label matches selected Spark provisioning mode."""
+        label = self.get("emr_release_label")
+        if not label:
+            return
+
+        native = not self.get("emr_install_spark4_via_bootstrap")
+        is_spark_release = label.startswith("emr-spark-")
+        if native and not is_spark_release:
+            raise ValueError(
+                f"emr_release_label={label!r} is not a native Spark 4.X release; the native path "
+                "(emr_install_spark4_via_bootstrap=false) requires an 'emr-spark-*' label such as "
+                "'emr-spark-8.0.0'. Set emr_install_spark4_via_bootstrap=true to use an emr-7.x release."
+            )
+        if not native and is_spark_release:
+            self.log.warning(
+                "emr_install_spark4_via_bootstrap=true installs standalone Spark 4.x via bootstrap, but "
+                "release %s already ships native Spark 4 - the bootstrap is redundant.",
+                label,
+            )
 
     def _verify_data_volume_configuration(self, backend):
         dev_num = self.get("data_volume_disk_num")
