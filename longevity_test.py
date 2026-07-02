@@ -208,7 +208,8 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self.partitions_attrs.collect_initial_partitions_info()
 
         stress_cmd = self.params.get("stress_cmd")
-        self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
+        for cmd in stress_cmd:
+            self.run_stress(stress_cmd=cmd)
 
         customer_profiles = self.params.get("cs_user_profiles")
         if customer_profiles:
