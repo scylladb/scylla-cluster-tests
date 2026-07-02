@@ -2409,8 +2409,9 @@ class ClusterTester(unittest.TestCase):
             if subnets:
                 subnet_id = subnets.id
 
-        # TODO: Spark 4.x workaround
-        bootstrap_actions = build_spark4_bootstrap_actions(region_name)
+        bootstrap_actions = None
+        if self.params.get("emr_install_spark4_via_bootstrap"):
+            bootstrap_actions = build_spark4_bootstrap_actions(region_name)
 
         self.emr_cluster.create_emr_cluster(
             test_id=self.test_config.test_id(),

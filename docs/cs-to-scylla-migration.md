@@ -27,6 +27,21 @@ Both yamls set `db_type: mixed_cassandra` so SCT provisions BOTH a Scylla target
 cluster (`self.db_cluster`) AND a Cassandra source cluster (`self.cs_db_cluster`)
 in a single run, plus an EMR cluster (`self.emr_cluster`) sized for the migration job.
 
+## EMR Spark provisioning mode
+
+The migrator requires Spark 4.x / Scala 2.13. By default SCT provisions a **native Spark 4.0** EMR
+cluster (`emr_install_spark4_via_bootstrap: false`) on an `emr-spark-8.x` release label (e.g. `emr-spark-8.0.0`):
+the migrator and validator run as native `spark-submit` steps on the cluster own Spark, with the
+app JAR and the `--files` config read directly from S3 - no bootstrap.
+The `cs-to-scylla-small` and `cs-to-scylla-500gb` yamls use this path.
+
+The legacy fallback (`emr_install_spark4_via_bootstrap: true`) targets an `emr-7.x` release that ships
+Spark 3.x, installs Spark 4.x into `/opt/spark4` via an EMR bootstrap action, and submits jobs through
+`script-runner.jar`. It is retained for debugging and kept runnable via `spark-migrator-basic.yaml` config.
+
+The two switches must agree: the native path requires an `emr-spark-*` label, so config verification
+fails fast at load time on a `native + emr-7.x` mismatch (and warns on the redundant `legacy + emr-spark-*` combination).
+
 ## Reusing a provisioned cluster
 
 The 500GB preload takes a long time. To skip preload and rerun the migration + validation

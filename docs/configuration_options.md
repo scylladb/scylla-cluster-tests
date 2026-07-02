@@ -1956,6 +1956,18 @@ Whether EMR cluster stays alive after job completion (default: true for reuse du
 - `True`: aws
 
 
+## **emr_install_spark4_via_bootstrap** / SCT_EMR_INSTALL_SPARK4_VIA_BOOTSTRAP
+
+Legacy fallback: install Spark 4.x via an EMR bootstrap action and submit the migrator through script-runner.jar (for emr-7.x releases). Default value is false - i.e. deployment of native Spark on an `emr-spark-8.x` release label.
+
+**default:** N/A
+
+**type:** bool
+
+**backend overrides:**
+- `False`: aws
+
+
 ## **migrator_source_hosts** / SCT_MIGRATOR_SOURCE_HOSTS
 
 CQL contact-point IPs for the source Cassandra/Scylla cluster. Mutually exclusive with migrator_source_test_id.

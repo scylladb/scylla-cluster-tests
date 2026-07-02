@@ -18,8 +18,7 @@ n_loaders: 0
 n_monitor_nodes: 1
 instance_type_monitor: 't3.large'
 
-# EMR cluster (single core node is enough for a 100K-row migration)
-emr_release_label: 'emr-7.12.0'
+emr_release_label: 'emr-spark-8.0.0'
 emr_instance_type_master: 'm5.xlarge'
 emr_instance_type_core: 'm5.xlarge'
 emr_instance_count_core: 1
