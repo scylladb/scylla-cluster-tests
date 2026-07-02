@@ -19,9 +19,45 @@ jobs:
           allow-unsafe-pr-checkout: true
 
       - name: SkillForge lint and security scan
-        uses: LiqunChen0606/skillforge@943ee942d57ac6c7b3788acb6003cc3259a47694 # v0.8.0
-        with:
-          path: ./skills
+        id: skillforge
+        continue-on-error: true
+        run: |
+          pip install aif-skillforge
+          REPORT="/tmp/skillforge-report.md"
+          PASSED=0
+          FAILED=0
+          FINDINGS=""
+
+          for skill_dir in skills/*/; do
+            if [ -f "$skill_dir/SKILL.md" ]; then
+              OUTPUT=$(aif check "$skill_dir/SKILL.md" 2>&1) || true
+              if echo "$OUTPUT" | grep -q "^PASS"; then
+                PASSED=$((PASSED + 1))
+              elif echo "$OUTPUT" | grep -q "^FAIL"; then
+                FAILED=$((FAILED + 1))
+                ISSUES=$(echo "$OUTPUT" | grep -E "^\s+\[" | sed 's/^/  /')
+                FINDINGS="$FINDINGS
+          | \`$(basename "$skill_dir")\` | :x: | $(echo "$ISSUES" | head -1 | sed 's/^  //') |"
+              fi
+            fi
+          done
+
+          TOTAL=$((PASSED + FAILED))
+          if [ "$FAILED" -eq 0 ]; then
+            echo ":white_check_mark: **All $TOTAL skills passed** lint and security checks" > "$REPORT"
+          else
+            {
+              echo ":warning: **$PASSED/$TOTAL passed** — $FAILED skill(s) have findings"
+              echo ""
+              echo "| Skill | Status | Top Finding |"
+              echo "|-------|--------|-------------|"
+              echo "$FINDINGS"
+            } > "$REPORT"
+          fi
+
+          echo "---"
+          cat "$REPORT"
+          [ "$FAILED" -eq 0 ]
 
       - name: Check for Claude API key
         id: auth
@@ -35,14 +71,30 @@ jobs:
             echo "::notice::ANTHROPIC_API_KEY not configured. Skipping LLM quality judge."
           fi
 
+      - name: Find changed skills
+        id: changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          DIRS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" \
+            --jq '[.[].filename | select(startswith("skills/")) | split("/")[0:2] | join("/")] | unique | .[]')
+          echo "skill_dirs=$DIRS" >> "$GITHUB_OUTPUT"
+          if [ -z "$DIRS" ]; then
+            echo "No skill directories changed"
+          else
+            echo "Changed skills: $DIRS"
+          fi
+
       - name: Install anthropic SDK
-        if: steps.auth.outputs.available == 'true'
+        if: steps.auth.outputs.available == 'true' && steps.changed.outputs.skill_dirs != ''
         run: pip install anthropic
 
       - name: Claude quality judge
-        if: steps.auth.outputs.available == 'true'
+        if: steps.auth.outputs.available == 'true' && steps.changed.outputs.skill_dirs != ''
+        continue-on-error: true
         id: judge
-        run: python .github/scripts/skill-quality-judge.py
+        run: python .github/scripts/skill-quality-judge.py ${{ steps.changed.outputs.skill_dirs }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SKILL_QUALITY_THRESHOLD: "70"
@@ -53,21 +105,42 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          SKILLFORGE_OUTCOME: ${{ steps.skillforge.outcome }}
+          JUDGE_OUTCOME: ${{ steps.judge.outcome }}
+          AUTH_AVAILABLE: ${{ steps.auth.outputs.available }}
         run: |
           MARKER="<!-- skill-review-bot -->"
+
           BODY="$MARKER
           ## Skill Quality Review
 
           ### SkillForge (lint + security)
-          See workflow logs for structural and security scan results.
           "
+
+          if [ -f /tmp/skillforge-report.md ]; then
+            BODY="$BODY$(cat /tmp/skillforge-report.md)
+          "
+          elif [ "$SKILLFORGE_OUTCOME" = "skipped" ]; then
+            BODY="$BODY:grey_question: Did not run
+          "
+          fi
 
           if [ -f /tmp/skill-review-report.md ]; then
             BODY="$BODY
           ### Claude Quality Judge
           $(cat /tmp/skill-review-report.md)
           "
-          elif [ "${{ steps.auth.outputs.available }}" != "true" ]; then
+          elif [ "$AUTH_AVAILABLE" = "true" ] && [ "$JUDGE_OUTCOME" = "failure" ]; then
+            BODY="$BODY
+          ### Claude Quality Judge
+          :x: Failed — see [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          "
+          elif [ "$AUTH_AVAILABLE" = "true" ] && [ "$JUDGE_OUTCOME" = "skipped" ]; then
+            BODY="$BODY
+          ### Claude Quality Judge
+          _Skipped: blocked by earlier step failure._
+          "
+          elif [ "$AUTH_AVAILABLE" != "true" ]; then
             BODY="$BODY
           ### Claude Quality Judge
           _Skipped: \`ANTHROPIC_API_KEY\` not configured._
