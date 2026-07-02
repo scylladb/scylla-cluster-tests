@@ -42,6 +42,7 @@ def test_send_latency_decorator_result_to_argus(test_data_dir):
                 sut_timestamp=0,
                 results=[
                     Cell(column="P90 write", row=row_name, value=2.15, status=Status.UNSET),
+                    Cell(column="P95 write", row=row_name, value=2.36, status=Status.UNSET),
                     Cell(column="P99 write", row=row_name, value=3.62, status=Status.UNSET),
                     Cell(column="duration", row=row_name, value=2654, status=Status.UNSET),
                     Cell(column="start time", row=row_name, value="12:14:23", status=Status.UNSET),
@@ -61,6 +62,7 @@ def test_send_latency_decorator_result_to_argus(test_data_dir):
                         status=Status.UNSET,
                     ),
                     Cell(column="P90 read", row=row_name, value=2.86, status=Status.UNSET),
+                    Cell(column="P95 read", row=row_name, value=3.53, status=Status.UNSET),
                     Cell(column="P99 read", row=row_name, value=5.36, status=Status.UNSET),
                 ],
             )

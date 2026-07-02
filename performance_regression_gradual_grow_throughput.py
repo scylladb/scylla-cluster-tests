@@ -1,5 +1,6 @@
 import pathlib
 import time
+from contextlib import contextmanager, nullcontext
 from enum import Enum
 from collections import defaultdict, Counter
 
@@ -8,7 +9,9 @@ from dataclasses import dataclass, replace
 from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
+from sdcm.rest.task_profiler_client import TaskProfilerClient
 from sdcm.utils.common import skip_optional_stage
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.decorators import latency_calculator_decorator
@@ -34,6 +37,7 @@ class Workload:
     prepare_schema: bool
     test_keyspace: str = ""
     test_table: str = ""
+    task_profiler: bool = False
 
     def __post_init__(self):
         if isinstance(self.num_threads, int):
@@ -234,6 +238,37 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         )
         self._base_test_workflow(workload=workload, test_name="test_write_gradual_increase_load (100% writes)")
 
+    def test_write_gradual_increase_load_with_task_profiler(self):
+        """Run write workload with task profiler enabled.
+
+        Identical to test_write_gradual_increase_load but brackets each
+        throttle step with task profiler start/stop calls on all DB
+        nodes. The stop call also dumps per-shard profiling data.
+        Requires a Scylla build from
+        https://github.com/Jadw1/scylla/tree/sc_perf_with_profile
+        """
+        workload_type = "write"
+        keyspace, table = self.get_test_table_name(self.params.get("stress_cmd_w"))
+        workload = Workload(
+            workload_type=workload_type,
+            cs_cmd_tmpl=self.params.get("stress_cmd_w"),
+            cs_cmd_warm_up=None,
+            num_threads=self.params["perf_gradual_threads"][workload_type],
+            throttle_steps=self.throttle_steps(workload_type),
+            preload_data=False,
+            drop_keyspace=True,
+            wait_no_compactions=False,
+            step_duration=self.step_duration(workload_type),
+            test_keyspace=keyspace,
+            test_table=table,
+            prepare_schema=True,
+            task_profiler=True,
+        )
+        self._base_test_workflow(
+            workload=workload,
+            test_name="test_write_gradual_increase_load_with_task_profiler (100% writes)",
+        )
+
     def test_read_gradual_increase_load(self):
         """
         Test steps:
@@ -326,6 +361,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 self._run_cql_commands(matching_cmds)
 
     def preload_data(self, compaction_strategy=None):
+        if self.params.get("pre_create_keyspace"):
+            self._pre_create_keyspace()
+
         population_commands: list = self.params.get("prepare_write_cmd")
 
         self.log.info("Population c-s commands: %s", population_commands)
@@ -357,7 +395,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         self.log.info("Dataset has been populated")
 
     def prepare_schema(self, workload: Workload):
-        if workload.prepare_schema and (prepare_stress_cmds := self.params.get("prepare_stress_cmd")):
+        if workload.prepare_schema and self.params.get("pre_create_keyspace"):
+            self._pre_create_keyspace()
+        elif workload.prepare_schema and (prepare_stress_cmds := self.params.get("prepare_stress_cmd")):
             stress_queue = []
             for stress_cmd in prepare_stress_cmds:
                 self.log.info("Preparing schema using command: %s", stress_cmd)
@@ -566,16 +606,19 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 step_params["threads"],
                 current_throttle_step,
             )
-            run_step = (
-                latency_calculator_decorator(
-                    legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
+
+            with self._task_profiler_step(current_throttle_step) if workload.task_profiler else nullcontext():
+                run_step = (
+                    latency_calculator_decorator(
+                        legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
+                    )
+                )(self.run_step)
+                results, _ = run_step(
+                    stress_cmds=workload.cs_cmd_tmpl,
+                    step_params=step_params,
+                    step_duration=workload.step_duration,
                 )
-            )(self.run_step)
-            results, _ = run_step(
-                stress_cmds=workload.cs_cmd_tmpl,
-                step_params=step_params,
-                step_duration=workload.step_duration,
-            )
+
             self.log.debug("All c-s commands results collected and saved in Argus")
 
             calculate_result = self._calculate_average_max_latency(results)
@@ -601,6 +644,112 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 self.wait_for_no_tablets_splits()
 
         self.save_total_summary_in_file(total_summary)
+
+    @contextmanager
+    def _task_profiler_step(self, step_name: str):
+        """Bracket a single throttle step with task profiler start/stop+collect.
+
+        Starts the profiler on all DB nodes before yield and
+        stops, dumps, archives, downloads, and cleans up in finally,
+        so cleanup runs even on exceptions.
+        """
+        self._task_profiler_start_all_nodes()
+        try:
+            yield
+        finally:
+            self._task_profiler_stop_and_collect(step_name=step_name)
+
+    def _task_profiler_start_all_nodes(self, sampling_interval_ms: int = 10):
+        """Start task profiler on all DB nodes in parallel."""
+
+        def start_on_node(node):
+            self.log.info("Starting task profiler on %s", node.name)
+            TaskProfilerClient(node).start(sampling_interval_ms=sampling_interval_ms)
+
+        ParallelObject(objects=self.db_cluster.nodes, timeout=120).run(start_on_node, ignore_exceptions=False)
+
+    def _task_profiler_stop_and_collect(self, step_name: str):
+        """Stop profiler, write dump files, verify, archive, download, and clean up for one step.
+
+        For each node in parallel:
+        1. Create the dump directory on the remote node.
+        2. Call the REST stop endpoint which stops profiling AND writes per-shard
+           folded-stack files to the given path.
+        3. Verify at least one dump file exists and is non-empty.
+        4. Create a tar.gz archive on the remote node.
+        5. Download the archive into node.logdir/ via receive_files.
+        6. Clean up remote files.
+        """
+
+        def stop_and_collect_on_node(node):
+            dump_dir = f"/tmp/async_profile_{step_name}_{node.name}"
+            dump_filename = f"{dump_dir}/async_profile_{step_name}"
+            archive_name = f"async_profiles_{step_name}_{node.name}.tar.gz"
+            remote_archive = f"/tmp/{archive_name}"
+
+            # mkdir must happen first (stop writes files into this dir).
+            # If mkdir fails, stop profiler with a fallback path so it
+            # doesn't keep running and skew subsequent steps.
+            try:
+                node.remoter.run(f"mkdir -p {dump_dir} && chmod 777 {dump_dir}")
+            except Exception:
+                self.log.warning("mkdir failed on %s, stopping profiler with fallback path", node.name)
+                try:
+                    TaskProfilerClient(node).stop(filename=f"/tmp/async_profile_fallback_{step_name}")
+                except Exception:  # noqa: BLE001
+                    self.log.error("Fallback stop also failed on %s, profiler may still be running", node.name)
+                raise
+
+            # Stop profiler + write dump files into the prepared directory
+            self.log.info("Stopping task profiler on %s, dumping to %s", node.name, dump_filename)
+            TaskProfilerClient(node).stop(filename=dump_filename)
+
+            # Verify dumps exist
+            result = node.remoter.run(
+                f"ls {dump_dir}/async_profile_* 2>/dev/null | head -1",
+                ignore_status=True,
+            )
+            if result.failed or not result.stdout.strip():
+                raise FileNotFoundError(f"No task profiler dump files found on {node.name} under {dump_dir}/")
+
+            # Verify at least the first file is non-empty
+            first_file = result.stdout.strip()
+            size_result = node.remoter.run(f"stat -c %s {first_file}")
+            file_size = int(size_result.stdout.strip())
+            if file_size == 0:
+                raise ValueError(f"Task profiler dump file {first_file} on {node.name} is empty")
+
+            # Count total dump files
+            count_result = node.remoter.run(f"ls -1 {dump_dir}/async_profile_* | wc -l")
+            file_count = int(count_result.stdout.strip())
+            self.log.info(
+                "Found %d task profiler dump files on %s for step %s",
+                file_count,
+                node.name,
+                step_name,
+            )
+
+            # Archive
+            node.remoter.run(f"tar -czf {remote_archive} -C /tmp async_profile_{step_name}_{node.name}/")
+
+            # Download into node.logdir (where FileLog search_locally finds it)
+            node.remoter.receive_files(
+                src=remote_archive,
+                dst=node.logdir,
+            )
+            self.log.info(
+                "Downloaded %s to %s/%s",
+                archive_name,
+                node.logdir,
+                archive_name,
+            )
+
+            # Cleanup remote files
+            node.remoter.run(f"rm -rf {dump_dir} {remote_archive}")
+
+        ParallelObject(objects=self.db_cluster.nodes, timeout=600).run(
+            stop_and_collect_on_node, ignore_exceptions=False
+        )
 
     def save_total_summary_in_file(self, total_summary):
         total_summary_json = json.dumps(total_summary, indent=4, separators=(", ", ": "))
