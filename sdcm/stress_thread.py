@@ -546,6 +546,28 @@ stress_cmd_get_duration_pattern = re.compile(r"(?:^|[ \n])[-]{0,2}duration[\s=]+
 stress_cmd_get_warmup_pattern = re.compile(r"(?:^|[ \n])[-]{0,2}warmup[\s=]+([\d]+[hms]+)")
 
 
+def extract_gemini_seed(cmd: str) -> int:
+    """Extract --seed value from a gemini command string.
+
+    Accepts both --seed VALUE and --seed=VALUE formats.
+    Returns the seed as an int, or -1 if not found.
+    """
+    seed_match = re.search(r"--seed[= ](\d+)", cmd)
+    return int(seed_match.group(1)) if seed_match else -1
+
+
+def apply_gemini_stress_duration(cmd: str, stress_duration: int) -> str:
+    """Replace or inject --duration in a gemini command with stress_duration (in minutes).
+
+    Handles both space-delimited (--duration 3h), equals-form (--duration=3h), and YAML
+    block-scalar format where --duration appears at the start of the string with no
+    leading space.
+    """
+    if "--duration" in cmd:
+        return re.sub(r"(^|\s)--duration[\s=]+\S+", f"\\1--duration {stress_duration}m", cmd)
+    return cmd + f" --duration {stress_duration}m"
+
+
 def get_timeout_from_stress_cmd(stress_cmd: str) -> int | None:
     """Gets timeout in seconds based on duration and warmup arguments from stress command."""
     timeout = 0

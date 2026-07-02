@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import json
 import re
 import os
 import logging
@@ -42,8 +43,6 @@ from sdcm.utils.features import get_enabled_features
 #   - 3.3.rc1-0.20200209.0d0c1d43188
 #   - 2019.1.4-0.20191217.b59e92dbd
 
-# gemini version 1.0.1, commit ef7c6f422c78ef6b84a6f3bccf52ea9ec846bba0, date 2019-05-16T09:56:16Z
-GEMINI_VERSION_RE = re.compile(r"\s(?P<gemini_version>([\d]+\.[\d]+\.[\d]+)?),")
 REPO_VERSIONS_REGEX = re.compile(r"Filename: .*?server_(.*?)_.*\n", re.DOTALL)
 
 # NOTE: following regex is taken from the 'semver' package as is:
@@ -479,13 +478,16 @@ def assume_version(params: dict[str], scylla_version: Optional[str] = None) -> s
     return version_type
 
 
-def get_gemini_version(output: str):
-    # take only version number - 1.0.1
-    result = GEMINI_VERSION_RE.search(output)
+def get_gemini_version(output: str) -> str | None:
+    """Extract the gemini version from `gemini --version-json` stdout.
 
-    if result:
-        return result.groupdict().get("gemini_version", None)
-    return None
+    Expected JSON shape:
+        {"gemini": {"version": "2.3.9", "commit_date": "...", "commit_sha": "..."}, ...}
+    """
+    try:
+        return json.loads(output).get("gemini", {}).get("version")
+    except json.JSONDecodeError, AttributeError:
+        return None
 
 
 def get_node_supported_sstable_versions(node_system_log) -> List[str]:
