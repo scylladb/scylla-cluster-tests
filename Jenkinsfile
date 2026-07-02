@@ -302,43 +302,6 @@ pipeline {
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
-                                                dir(working_dir) {
-                                                    timeout(time: 30, unit: 'MINUTES') {
-                                                        if (curr_params.backend == 'xcloud') {
-                                                            echo "Scylla Cloud backend selected: provisioning loader nodes only on ${curr_params.xcloud_provider} cloud provider"
-                                                        }
-                                                        if (curr_params.backend == 'xcloud' || curr_params.backend == 'aws' || curr_params.backend == 'azure' || curr_params.backend == 'oci') {
-                                                            provisionResources(curr_params, builder.region)
-                                                        } else if (curr_params.backend.contains('docker')) {
-                                                            sh """
-                                                                echo 'Tests are to be executed on Docker backend in SCT-Runner. No additional resources to be provisioned.'
-                                                            """
-                                                        } else {
-                                                            sh """
-                                                                echo 'Skipping resource provisioning because this backend is not supported'
-                                                            """
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        } catch(Exception err) {
-                                            echo "${err}"
-                                            result = 'FAILURE'
-                                            pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Resource provisioning failed')
-                                        }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir(working_dir) {
-                                                    timeout(time: 5, unit: 'MINUTES') {
-                                                        createArgusTestRun(curr_params)
-                                                    }
-                                                }
-                                            }
-                                        } catch(Exception err) {
-                                            echo "${err}"
-                                        }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
                                                 env.BUILD_USER_ID=env.CHANGE_AUTHOR
                                                 timeout(time: 300, unit: 'MINUTES') {
                                                     dir(working_dir) {
@@ -399,17 +362,6 @@ pipeline {
                                                 result = 'FAILURE'
                                                 pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed during cluster reuse test')
                                             }
-                                        }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir(working_dir) {
-                                                    timeout(time: 5, unit: 'MINUTES') {
-                                                        finishArgusTestRun(curr_params, currentBuild)
-                                                    }
-                                                }
-                                            }
-                                        } catch(Exception err) {
-                                            echo "${err}"
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
