@@ -5874,9 +5874,17 @@ class BaseScyllaCluster:
                         traceback=traceback.format_exc(),
                     ).publish()
                 try:
+                    ready_nodes = [
+                        node
+                        for node in db_cluster.data_nodes
+                        if not node.running_nemesis and node.remoter and node.db_up()
+                    ]
+                    if not ready_nodes:
+                        self.log.warning("No ready nodes available for KMS encryption check, skipping this iteration")
+                        continue
                     nemesis_node_allocator = self.test_config.tester_obj().nemesis_allocator
                     with nemesis_node_allocator.run_nemesis(
-                        nemesis_label="KMS encryption check", node_list=db_cluster.data_nodes
+                        nemesis_label="KMS encryption check", node_list=ready_nodes
                     ) as target_node:
                         self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
 
