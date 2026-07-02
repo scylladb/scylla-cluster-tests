@@ -111,16 +111,52 @@ This returns JSON with structure:
 
 ## Phase 4: Build the HTML Report
 
-### Report Structure (per load type)
+### Overall Page Structure
 
-Each workload section must follow this structure:
+The report has a top-level structure followed by per-workload sections:
 
 ```
-## Throughput & Latency - <Workload> workload
-### ScyllaDB Enterprise: <version1> vs <version2> vs <version3>
+<h1>Performance Comparison: ScyllaDB Enterprise <version1> vs <version2> vs <version3></h1>
 
-Test: <test_method> (Predefined Throughput Steps)
+Test: PerformanceRegressionPredefinedStepsTest
 Infrastructure: <instance types and counts>
+Date: <dates>
+
+---
+<h2>Executive Summary</h2>
+[TABLE: Workload | Test | Version1 status | Version2 status | Version3 status | Key Issue]
+
+---
+<h3>Overall Assessment</h3>
+[Numbered list comparing version pairs, listing regressions and improvements]
+
+---
+<h3>Known Issues</h3>
+[Links to any related Jira tickets, or "No linked issues"]
+
+---
+<h2>Throughput & Latency - <Workload> workload</h2>  (repeated per load type)
+...per-workload details...
+```
+
+### Executive Summary Table
+
+One row per workload showing PASSED/FAILED per version and a one-line "Key Issue" summary.
+
+### Overall Assessment
+
+Numbered list with:
+1. **Version B vs Version A (baseline):** High-level comparison
+2. **Version C vs Version B:** What changed between the two newer versions
+3. **Regressions requiring investigation:** Bulleted list with red-highlighted specific failures
+4. **Improvements in newer versions:** Bulleted list with green-highlighted wins
+
+### Per-Workload Section Structure
+
+```
+<h2>Throughput & Latency - <Workload> workload</h2>
+
+Test: <test_method>
 Date: <date>
 
 ---
@@ -136,8 +172,6 @@ Date: <date>
 [TABLE with columns: Version | Result | Issues]
 
 ---
-[Conclusion paragraph - analytical, explaining WHY not WHAT]
-
 Links:
 - Version1: <argus_url>
 - Version2: <argus_url>
