@@ -131,8 +131,8 @@ The report has a top-level structure followed by per-workload sections:
 
 ```
 <h1>Performance Comparison: ScyllaDB Enterprise <version1> vs <version2> vs <version3></h1>
+<h1>Predefined Throughput Steps</h1>
 
-Test: PerformanceRegressionPredefinedStepsTest
 Infrastructure: <instance types and counts>
 Date: <dates>
 
@@ -149,7 +149,7 @@ Date: <dates>
 [Links to any related Jira tickets, or "No linked issues"]
 
 ---
-<h2>Throughput & Latency - <Workload> workload</h2>  (repeated per load type)
+<h2><Workload> workload</h2>  (repeated per load type)
 ...per-workload details...
 ```
 
@@ -168,7 +168,7 @@ Numbered list with:
 ### Per-Workload Section Structure
 
 ```
-<h2>Throughput & Latency - <Workload> workload</h2>
+<h2><Workload> workload</h2>
 
 Test: <test_method>
 Date: <date>
