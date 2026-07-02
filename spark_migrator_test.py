@@ -38,6 +38,9 @@ from sdcm.tester import ClusterTester
 
 _SAMPLE_SIZE = 10
 
+_VALIDATOR_LOG_FETCH_ATTEMPTS = 6
+_VALIDATOR_LOG_FETCH_DELAY_S = 20
+
 
 class SparkMigratorTest(ClusterTester):
     """Test scylla-spark-migrator on Amazon EMR clusters.
@@ -552,16 +555,33 @@ class SparkMigratorTest(ClusterTester):
                 step_id,
                 timeout_minutes=self.params.get("validator_step_timeout_minutes") or 60,
             )
-        except AssertionError:
+        except AssertionError as step_err:
+            step_log = self._fetch_validator_step_log(runner, step_id)
+            self.log.error("Validator step output:\n%s", step_log or "(no log captured)")
+            raise AssertionError(f"validator step FAILED: {step_err}") from step_err
+
+        self.log.info("Validator passed: 0 mismatches across migrated rows")
+
+    def _fetch_validator_step_log(self, runner, step_id):
+        """Fetch validator stdout/stderr from S3, retrying for EMR log-flush delay."""
+        for attempt in range(1, _VALIDATOR_LOG_FETCH_ATTEMPTS + 1):
             try:
                 step_log = runner.get_step_stdout(self.emr_cluster.cluster_id, step_id)
             except Exception as fetch_err:  # noqa: BLE001
                 self.log.warning("Could not fetch validator step log: %s", fetch_err)
-                step_log = ""
-            self.log.error("Validator step output:\n%s", step_log or "(no log captured)")
-            raise AssertionError("validator step FAILED — see stdout dump above") from None
+                return ""
 
-        self.log.info("Validator passed: 0 mismatches across migrated rows")
+            if step_log:
+                return step_log
+            if attempt < _VALIDATOR_LOG_FETCH_ATTEMPTS:
+                self.log.debug(
+                    "Validator step log not on S3 yet (attempt %d/%d); waiting %ds for EMR to flush",
+                    attempt,
+                    _VALIDATOR_LOG_FETCH_ATTEMPTS,
+                    _VALIDATOR_LOG_FETCH_DELAY_S,
+                )
+                time.sleep(_VALIDATOR_LOG_FETCH_DELAY_S)
+        return ""
 
     def test_migration_cs_to_scylla_scale(self):
         """Scale-out variant of the cs-to-scylla migration test."""

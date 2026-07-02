@@ -429,7 +429,7 @@ def test_submit_validator_job_uploads_validator_script_with_validator_main_class
     s3_client = boto3.client("s3", region_name="us-east-1")
     s3_client.create_bucket(Bucket="sct-emr-spark-migrator-us-east-1")
 
-    mock_provisioner = MagicMock(region_name="us-east-1")
+    mock_provisioner = MagicMock(region_name="us-east-1", params={"emr_install_spark4_via_bootstrap": True})
     mock_provisioner.add_step.return_value = "s-VALIDATOR123"
 
     config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
@@ -463,7 +463,7 @@ def test_submit_validator_job_uses_distinct_step_name_and_script_runner():
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
 
-    mock_provisioner = MagicMock(region_name="eu-west-1")
+    mock_provisioner = MagicMock(region_name="eu-west-1", params={"emr_install_spark4_via_bootstrap": True})
     mock_provisioner.add_step.return_value = "s-VAL"
 
     config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
@@ -484,7 +484,9 @@ def test_submit_migration_job_still_uses_cluster_deploy_mode():
     s3_client = boto3.client("s3", region_name="us-east-1")
     s3_client.create_bucket(Bucket="sct-emr-spark-migrator-us-east-1")
 
-    mock_provisioner = MagicMock(region_name="us-east-1", **{"add_step.return_value": "s-MIG"})
+    mock_provisioner = MagicMock(
+        region_name="us-east-1", params={"emr_install_spark4_via_bootstrap": True}, **{"add_step.return_value": "s-MIG"}
+    )
 
     config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
     config.config_path = "s3://bucket/configs/test-id/config.yaml"
@@ -497,6 +499,76 @@ def test_submit_migration_job_still_uses_cluster_deploy_mode():
         .decode("utf-8")
     )
     assert "--deploy-mode cluster" in body
+
+
+def _build_native_runner_and_config(step_return_value):
+    provisioner = MagicMock(region_name="us-east-1", params={"emr_install_spark4_via_bootstrap": False})
+    provisioner.add_step.return_value = step_return_value
+
+    config = MigratorConfig(source_hosts=["10.0.0.1"], target_host="10.0.0.2")
+    config.config_path = "s3://bucket/configs/test-id/config.yaml"
+
+    return SparkMigratorRunner(provisioner), provisioner, config
+
+
+def test_submit_migration_native_uses_command_runner_with_s3_files():
+    """Native migration (cluster mode): command-runner.jar spark-submit, config read via --files from S3.
+
+    In cluster mode YARN localizes --files into the driver container CWD, so a relative
+    spark.scylla.config basename resolves — no local staging needed.
+    """
+    runner, provisioner, config = _build_native_runner_and_config("s-MIG")
+
+    with patch.object(SparkMigratorRunner, "_upload_runner_script") as mock_upload:
+        step_id = runner.submit_migration_job("j-CLUSTER", "s3://bucket/jars/x/migrator.jar", config)
+
+    assert step_id == "s-MIG"
+    mock_upload.assert_not_called()  # native path uploads no /opt/spark4 wrapper
+
+    kwargs = provisioner.add_step.call_args[1]
+    assert kwargs["step_name"] == "spark-migrator"
+    assert kwargs["jar"] == "command-runner.jar"
+    assert kwargs["args"] == [
+        "spark-submit",
+        "--deploy-mode",
+        "cluster",
+        "--master",
+        "yarn",
+        "--class",
+        "com.scylladb.migrator.Migrator",
+        "--conf",
+        "spark.scylla.config=config.yaml",
+        "--files",
+        "s3://bucket/configs/test-id/config.yaml",
+        "s3://bucket/jars/x/migrator.jar",
+    ]
+
+
+def test_submit_validator_native_stages_config_locally_for_client_mode():
+    """Native validator (client mode) must stage config to /tmp and use local spark.scylla.config path."""
+    runner, provisioner, config = _build_native_runner_and_config("s-VAL")
+    jar_s3_path = "s3://bucket/jars/x/migrator.jar"
+
+    expected_args = [
+        "bash",
+        "-c",
+        "aws s3 cp s3://bucket/configs/test-id/config.yaml /tmp/config.yaml && "
+        "spark-submit --deploy-mode client --master yarn "
+        "--class com.scylladb.migrator.Validator "
+        "--conf spark.scylla.config=/tmp/config.yaml "
+        "--files /tmp/config.yaml s3://bucket/jars/x/migrator.jar",
+    ]
+
+    with patch.object(SparkMigratorRunner, "_upload_runner_script") as mock_upload:
+        step_id = runner.submit_validator_job("j-CLUSTER", jar_s3_path, config)
+
+    assert step_id == "s-VAL"
+    mock_upload.assert_not_called()
+
+    add_step_kwargs = provisioner.add_step.call_args.kwargs
+    assert add_step_kwargs["step_name"] == "spark-migrator-validator"
+    assert add_step_kwargs["jar"] == "command-runner.jar"
+    assert add_step_kwargs["args"] == expected_args
 
 
 @mock_aws

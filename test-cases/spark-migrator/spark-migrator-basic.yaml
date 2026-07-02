@@ -8,8 +8,9 @@ instance_type_db: 'i4i.large'
 instance_type_loader: 'c6i.xlarge'
 instance_type_monitor: 't3.large'
 
-# EMR cluster configuration
+# legacy fallback: Spark 4.x installed via bootstrap on an emr-7.x release
 emr_release_label: 'emr-7.12.0'
+emr_install_spark4_via_bootstrap: true
 emr_instance_type_master: 'm5.xlarge'
 emr_instance_type_core: 'm5.xlarge'
 emr_instance_count_core: 2

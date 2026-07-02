@@ -51,6 +51,8 @@ _RUNNER_SCRIPT_S3_KEY = "scripts/run-migrator.sh"
 _VALIDATOR_SCRIPT_S3_KEY = "scripts/run-validator.sh"
 _MIGRATOR_MAIN_CLASS = "com.scylladb.migrator.Migrator"
 _VALIDATOR_MAIN_CLASS = "com.scylladb.migrator.Validator"
+_COMMAND_RUNNER_JAR = "command-runner.jar"
+_SPARK_SCYLLA_CONFIG_KEY = "spark.scylla.config"
 
 
 def _build_bootstrap_script(s3_bucket):
@@ -346,14 +348,74 @@ cd /tmp
         LOGGER.info("Runner script uploaded to %s", s3_uri)
         return s3_uri
 
-    # TODO: Spark 4.x workaround
-    def submit_migration_job(self, cluster_id, jar_s3_path, migrator_config):
-        """Submit a spark-migrator job as an EMR step.
+    def _use_bootstrap(self):
+        """True when the legacy Spark-4 bootstrap workaround is selected (emr_install_spark4_via_bootstrap)."""
+        return bool(self.emr_provisioner.params.get("emr_install_spark4_via_bootstrap"))
 
-        Uses script-runner.jar with a wrapper script that invokes the standalone
-        Spark 4.x installation. This is part of the Spark 4.x workaround — once
-        EMR bundles Spark 4.x, this can be replaced with a native spark-submit step
-        using command-runner.jar.
+    def _submit_spark_step(self, cluster_id, step_name, jar_s3_path, config_s3_path, main_class, deploy_mode):
+        """Submit a Spark EMR step using either legacy bootstrap mode or native command-runner mode.
+
+        Args:
+            cluster_id: EMR cluster ID.
+            step_name: EMR step name.
+            jar_s3_path: S3 path to the spark-migrator JAR.
+            config_s3_path: S3 path to the migrator config YAML.
+            main_class: Spark application main class (Migrator or Validator).
+            deploy_mode: Spark deploy mode ("cluster" for migration, "client" for the validator so its
+                log4j output lands in the step's stderr.gz).
+
+        Returns:
+            str: Step ID of the submitted job.
+        """
+        if self._use_bootstrap():  # Spark 4.x workaround - legacy script-runner.jar + /opt/spark4 wrapper
+            script_key = _RUNNER_SCRIPT_S3_KEY if main_class == _MIGRATOR_MAIN_CLASS else _VALIDATOR_SCRIPT_S3_KEY
+            runner_script_uri = self._upload_runner_script(
+                jar_s3_path,
+                config_s3_path,
+                main_class=main_class,
+                script_key=script_key,
+                deploy_mode=deploy_mode,
+            )
+            jar = f"s3://{self.emr_provisioner.region_name}.elasticmapreduce/libs/script-runner/script-runner.jar"
+            args = [runner_script_uri]
+            return self.emr_provisioner.add_step(cluster_id=cluster_id, step_name=step_name, jar=jar, args=args)
+
+        # native EMR Spark 4
+        jar = _COMMAND_RUNNER_JAR
+        config_basename = config_s3_path.rsplit("/", 1)[-1]
+        config_ref = config_basename
+        files_arg = config_s3_path
+
+        pre_cmd = ""
+        if deploy_mode == "client":
+            config_ref = f"/tmp/{config_basename}"
+            files_arg = config_ref
+            pre_cmd = f"aws s3 cp {config_s3_path} {config_ref} && "
+
+        spark_submit_parts = [
+            "spark-submit",
+            "--deploy-mode",
+            deploy_mode,
+            "--master",
+            "yarn",
+            "--class",
+            main_class,
+            "--conf",
+            f"{_SPARK_SCYLLA_CONFIG_KEY}={config_ref}",
+            "--files",
+            files_arg,
+            jar_s3_path,
+        ]
+
+        if pre_cmd:
+            args = ["bash", "-c", pre_cmd + " ".join(spark_submit_parts)]
+        else:
+            args = spark_submit_parts
+
+        return self.emr_provisioner.add_step(cluster_id=cluster_id, step_name=step_name, jar=jar, args=args)
+
+    def submit_migration_job(self, cluster_id, jar_s3_path, migrator_config):
+        """Submit a spark-migrator job as an EMR step (cluster deploy mode).
 
         Args:
             cluster_id: EMR cluster ID.
@@ -363,26 +425,18 @@ cd /tmp
         Returns:
             str: Step ID of the submitted job.
         """
-        runner_script_uri = self._upload_runner_script(jar_s3_path, migrator_config.config_path)
-        script_runner_jar = (
-            f"s3://{self.emr_provisioner.region_name}.elasticmapreduce/libs/script-runner/script-runner.jar"
-        )
-        step_id = self.emr_provisioner.add_step(
-            cluster_id=cluster_id,
-            step_name="spark-migrator",
-            jar=script_runner_jar,
-            args=[runner_script_uri],
+        step_id = self._submit_spark_step(
+            cluster_id, "spark-migrator", jar_s3_path, migrator_config.config_path, _MIGRATOR_MAIN_CLASS, "cluster"
         )
         LOGGER.info("Spark migrator job submitted as step %s on cluster %s", step_id, cluster_id)
         return step_id
 
-    # TODO: Spark 4.x workaround
     def submit_validator_job(self, cluster_id, jar_s3_path, migrator_config):
-        """Submit a scylla-migrator validator job as an EMR step.
+        """Submit a scylla-migrator validator job as an EMR step (client deploy mode).
 
-        Reuses the script-runner.jar wrapper pattern from submit_migration_job but invokes
-        com.scylladb.migrator.Validator instead. Validator reads the same migrator config
-        YAML - no separate config upload needed.
+        Validator reads the same migrator config YAML as the migration — no separate config upload
+        needed. Client mode keeps the driver on the master so its log4j diff summary lands in the
+        step's stderr.gz.
 
         Args:
             cluster_id: EMR cluster ID.
@@ -392,21 +446,13 @@ cd /tmp
         Returns:
             str: Step ID of the submitted validator job.
         """
-        runner_script_uri = self._upload_runner_script(
+        step_id = self._submit_spark_step(
+            cluster_id,
+            "spark-migrator-validator",
             jar_s3_path,
             migrator_config.config_path,
-            main_class=_VALIDATOR_MAIN_CLASS,
-            script_key=_VALIDATOR_SCRIPT_S3_KEY,
-            deploy_mode="client",
-        )
-        script_runner_jar = (
-            f"s3://{self.emr_provisioner.region_name}.elasticmapreduce/libs/script-runner/script-runner.jar"
-        )
-        step_id = self.emr_provisioner.add_step(
-            cluster_id=cluster_id,
-            step_name="spark-migrator-validator",
-            jar=script_runner_jar,
-            args=[runner_script_uri],
+            _VALIDATOR_MAIN_CLASS,
+            "client",
         )
         LOGGER.info("Spark migrator validator job submitted as step %s on cluster %s", step_id, cluster_id)
         return step_id

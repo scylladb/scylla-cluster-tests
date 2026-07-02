@@ -992,3 +992,23 @@ def test_resolved_placement_with_amis_applies_directly_and_skips_re_resolution(m
     assert conf.region_names == ["eu-west-1"]
     assert conf["availability_zone"] == "b"
     assert conf["ami_id_db_scylla"] == "ami-persisted-west"
+
+
+@pytest.mark.parametrize(
+    "release_label, expected_error",
+    [
+        ("emr-7.12.0", "not a native Spark 4.X release"),
+        ("emr-spark-8.0.0", None),
+    ],
+)
+def test_verify_emr_spark_mode_native_release_label(monkeypatch, release_label, expected_error):
+    """Native Spark mode validates emr-spark-* releases and rejects non-spark release labels."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_EMR_RELEASE_LABEL", release_label)
+
+    conf = sct_config.SCTConfiguration()
+    if expected_error is None:
+        conf.verify_configuration()
+    else:
+        with pytest.raises(ValueError, match=expected_error):
+            conf.verify_configuration()
