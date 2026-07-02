@@ -38,6 +38,7 @@ stress_read_cmd: [
 
 n_db_nodes: 6
 n_loaders: 3
+instance_type_db: 'i8ge.xlarge'
 
 sizing_db:
   vcpu: 4

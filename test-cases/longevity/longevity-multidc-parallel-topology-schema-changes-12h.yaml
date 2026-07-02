@@ -63,6 +63,7 @@ n_loaders: '2 2'
 
 region_aware_loader: true
 simulated_racks: 0
+instance_type_db: 'i7i.xlarge'
 
 sizing_db:
   vcpu: 4
