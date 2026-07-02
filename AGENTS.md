@@ -313,6 +313,8 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | commit-summary | Generate weekly commit summary reports for the SCT repository | `skills/commit-summary/SKILL.md` |
 | writing-nemesis | Guides writing new nemesis (chaos disruptions). Use when creating NemesisBaseClass subclasses or implementing disruption logic. | `skills/writing-nemesis/SKILL.md` |
 | package-installation | Guides writing remote package installation commands (apt-get, yum, dnf, zypper) in SCT. Use when adding install/update calls via remoter to ensure timeouts, retries, and non-interactive flags. | `skills/package-installation/SKILL.md` |
+| reviewing-pipeline-docs | Guides reviewing and generating test_metadata sections for SCT test-case YAML files. Use when adding or auditing test_metadata, checking description/tier/labels accuracy, or running lint-test-docs. | `skills/reviewing-pipeline-docs/SKILL.md` |
+| labeling-pipelines | Guides bulk-labeling and linting test-case YAML files with test_metadata. Use when finding coverage gaps, auto-fixing mismatches, or auditing label accuracy across a directory. | `skills/labeling-pipelines/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 

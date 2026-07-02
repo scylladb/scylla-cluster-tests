@@ -1,5 +1,18 @@
 test_duration: 330
 argus_use_ssh_tunnel: true
+test_metadata:
+  description: >-
+    Longevity test with 100GB dataset using cql-stress-cassandra-stress for mixed
+    read/write workloads at QUORUM consistency on a 6-node encrypted cluster with
+    SisyphusMonkey nemesis. Validates stability under sustained heavy I/O with
+    SizeTieredCompactionStrategy.
+  test_type: longevity
+  tier: tier1
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - cql-stress-cassandra-stress
 
 n_db_nodes: 6
 n_loaders: 2

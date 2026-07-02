@@ -3,6 +3,24 @@
 # stress_during_entire_upgrade:       # To be configured in additional yaml
 # stress_after_cluster_upgrade:    # To be configured in additional yaml
 test_duration: 360
+test_metadata:
+  description: >-
+    Generic rolling upgrade test that upgrades a 3-node cluster from a base Scylla
+    version to a new version, with optional rollback of 2 nodes. Validates that
+    rolling upgrades complete successfully with TLS/internode compression enabled.
+    Stress workloads are injected via additional YAML overlays.
+  test_type: upgrade
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - gce
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  nemesis_labels: []
+  features:
+    - tls-ssl
 
 n_db_nodes: 3
 n_loaders: 1

@@ -1,4 +1,21 @@
 test_duration: 255
+test_metadata:
+  description: >-
+    Basic longevity test running cassandra-stress write workload at QUORUM consistency
+    for ~4 hours on a 6-node single-DC cluster with SisyphusMonkey nemesis. Validates
+    cluster stability under moderate write load with continuous chaos operations.
+  test_type: longevity
+  tier: tier1
+  duration_class: short
+  supported_backends:
+    - aws
+    - gce
+    - azure
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  nemesis_labels:
+    - SisyphusMonkey
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
              ]
 
