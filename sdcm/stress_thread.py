@@ -151,6 +151,9 @@ class CassandraStressThread(DockerBasedStressThread):
         else:
             self.hdr_tags = [f"WRITE-{tag_suffix}"]
 
+    WRITE_OP_PREFIXES = ("write_",)
+    READ_OP_PREFIXES = ("read_",)
+    MIXED_OP_PREFIXES = ("mix_",)
     WRITE_OP_KEYWORDS = ("insert", "update", "delete", "write")
     READ_OP_KEYWORDS = ("read", "select", "get", "count", "scan")
 
@@ -159,7 +162,8 @@ class CassandraStressThread(DockerBasedStressThread):
         """Classify user-profile ops(...) operations as write and/or read.
 
         Parses the ops clause from the stress command (e.g. ``ops'(select_base=3,url_column_update=1)'``)
-        and classifies each operation name using keyword matching.
+        and classifies each operation name using the preferred read_/write_/mix_ prefix convention first,
+        falling back to keyword matching for older profiles.
         Operations whose names don't match any known keyword are treated as both write and read
         to avoid silently dropping HDR data.
 
@@ -171,7 +175,14 @@ class CassandraStressThread(DockerBasedStressThread):
         if ops_match := re.search(r"ops['\s]*\(([^)]+)\)", stress_cmd):
             for op_part in ops_match.group(1).split(","):
                 op_name = op_part.strip().split("=")[0].lower()
-                if any(w in op_name for w in cls.WRITE_OP_KEYWORDS):
+                if op_name.startswith(cls.MIXED_OP_PREFIXES):
+                    has_write = True
+                    has_read = True
+                elif op_name.startswith(cls.WRITE_OP_PREFIXES):
+                    has_write = True
+                elif op_name.startswith(cls.READ_OP_PREFIXES):
+                    has_read = True
+                elif any(w in op_name for w in cls.WRITE_OP_KEYWORDS):
                     has_write = True
                 elif any(r in op_name for r in cls.READ_OP_KEYWORDS):
                     has_read = True
