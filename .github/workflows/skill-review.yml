@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
 
       - name: SkillForge lint and security scan
         uses: LiqunChen0606/skillforge@v0.6.4
@@ -80,5 +81,5 @@ jobs:
             gh api "repos/${{ github.repository }}/issues/comments/${EXISTING}" \
               -X PATCH -f body="$BODY"
           else
-            gh pr comment "$PR_NUMBER" --body "$BODY"
+            gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$BODY"
           fi
