@@ -2,11 +2,12 @@
 
 # Performance Version Comparison Reports
 
-Generate Confluence-ready HTML reports comparing predefined-throughput-steps test results across multiple ScyllaDB versions.
+Generate Confluence-ready HTML reports comparing predefined-throughput-steps or simple-query microbenchmark test results across multiple ScyllaDB versions.
 
 ## When to Use
 
 - Comparing throughput test results between 2+ ScyllaDB versions (e.g., release vs RC vs master)
+- Comparing microbenchmark (simple-query) results between versions
 - Creating a Confluence page summarizing predefined-steps throughput regression results
 - Generating side-by-side latency/throughput comparison from Argus test run IDs
 - Documenting performance changes across version branches
@@ -21,13 +22,25 @@ Generate Confluence-ready HTML reports comparing predefined-throughput-steps tes
 
 **Start by asking the user:**
 
-1. **Test type and subtests (load types)** to compare. The predefined-throughput-steps test has these subtests:
+1. **Test type** to compare:
+   - `predefined-throughput-steps` - Gradual load increase throughput test
+   - `microbenchmark` - Simple query microbenchmark (perf-simple-query)
+
+2. **Subtests (load types or variants)** to compare:
+
+   For predefined-throughput-steps:
    - `read` - Pure read workload
    - `write` - Pure write workload
    - `mixed` - 50/50 read/write workload
    - `read_disk_only` - Read from disk (no cache) workload
 
-2. **Versions and test run IDs** for each subtest. Format:
+   For microbenchmark (simple-query):
+   - `arm64` - ARM64 read workload
+   - `arm64-write` - ARM64 write workload
+   - `x86_64` - x86_64 read workload
+   - `x86_64-write` - x86_64 write workload
+
+3. **Versions and test run IDs** for each subtest. Format:
    ```
    Load type: <load>
    Version A (name): <test_id_uuid>
@@ -36,8 +49,24 @@ Generate Confluence-ready HTML reports comparing predefined-throughput-steps tes
    ```
 
 Example prompt to user:
-> Which load types do you want to compare? (read, write, mixed, read_disk_only)
+> Which test type: predefined-throughput-steps or microbenchmark?
+> Which load types do you want to compare?
 > For each load type, provide the version names and Argus test run IDs.
+
+**Finding microbenchmark runs by version:** If the user provides versions but not run IDs, use `argus run list` with the following test UUIDs to find runs, then check `scylla_version` for each:
+
+| Microbenchmark Test | Argus Test UUID |
+|---|---|
+| simple-query-weekly-microbenchmark_arm64 | `a0063c73-efcf-4878-988d-72af779dc59d` |
+| simple-query-weekly-microbenchmark_arm64-write | `dcc1afa0-2225-468c-9f45-5cfc8486f7f8` |
+| simple-query-weekly-microbenchmark_x86_64 | `03464849-60e8-46c8-91b9-955cdeb07ea6` |
+| simple-query-weekly-microbenchmark_x86_64-write | `6e745123-cb53-482b-836c-0609bd36a4e6` |
+
+```bash
+argus run list --test-id <test_uuid> --limit 50
+```
+
+Then for each run, query the Argus API to check its `scylla_version`. Note that runs may have "failed" status but still contain valid results (microbenchmark tests fail when metrics exceed thresholds).
 
 ## Phase 2: Fetch Run Metadata from Argus
 
@@ -122,6 +151,81 @@ This returns JSON with structure:
 - `duration` - step duration in seconds
 
 **Tables with "stalls" in the name** contain reactor stall events (ignore for main metrics, count for analysis).
+
+## Phase 4b: Microbenchmark Results Structure
+
+For microbenchmark (simple-query) tests, the results have a different structure:
+
+```bash
+argus run results --run-id <UUID>
+```
+
+Returns JSON:
+```json
+[
+  {
+    "name": "<workload> - Perf Simple Query",
+    "description": "...",
+    "status": "PASS",
+    "rows": [
+      {
+        "name": "Cycle #0",
+        "cells": {
+          "median tps": {"value": 146362.95, "status": "UNSET"},
+          "max tps": {"value": 146743.60, "status": "UNSET"},
+          "min tps": {"value": 145961.78, "status": "UNSET"},
+          "mad tps": {"value": 258.03, "status": "UNSET"},
+          "allocs_per_op": {"value": 58.07, "status": "PASS"},
+          "cpu_cycles_per_op": {"value": 16680.32, "status": "UNSET"},
+          "instructions_per_op": {"value": 32731.11, "status": "PASS"},
+          "tasks_per_op": {"value": 14.13, "status": "UNSET"},
+          "logallocs_per_op": {"value": 0, "status": "UNSET"}
+        }
+      }
+    ]
+  }
+]
+```
+
+**Key metrics to extract for microbenchmarks:**
+- `median tps` - Median transactions per second (primary throughput metric)
+- `max tps` / `min tps` - Throughput range
+- `mad tps` - Median absolute deviation (throughput stability)
+- `allocs_per_op` - Memory allocations per operation (efficiency)
+- `cpu_cycles_per_op` - CPU cycles per operation (efficiency)
+- `instructions_per_op` - CPU instructions per operation (efficiency)
+- `tasks_per_op` - Seastar tasks per operation
+
+**Status field meanings:**
+- `PASS` - Value within acceptable threshold
+- `ERROR` - Value exceeded threshold (test fails)
+- `UNSET` - No threshold configured for this metric
+
+### Microbenchmark Summary Results Table
+
+For microbenchmarks, use this table structure instead of the load-step format:
+
+| Metric | Version1 | Version2 | Version3 | Delta (V2 vs V1) | Delta (V3 vs V1) | Status |
+
+**Status thresholds for microbenchmarks:**
+- TPS decrease >10%: `REGRESSION` (red)
+- TPS decrease >5%: `WARNING` (orange)
+- allocs/instructions increase >5%: `WARNING` (orange)
+- allocs/instructions increase >10%: `REGRESSION` (red)
+- MAD TPS increase >50%: `WARNING` (orange)
+- MAD TPS increase >100%: `REGRESSION` (red)
+- Otherwise: `OK`
+
+**Important:** For TPS metrics, higher is better (delta is positive when improved). For per-op metrics (allocs, cycles, instructions), lower is better (negative delta is improvement).
+
+### Microbenchmark Key Findings Rules
+
+In addition to the general Key Findings rules, for microbenchmarks:
+- Note if per-op efficiency improved but TPS did not follow (suggests scheduling/system overhead)
+- Compare ARM64 vs x86_64 patterns (architecture-specific regressions)
+- Note if `allocs_per_op` or `instructions_per_op` has ERROR status (threshold failure = test failure reason)
+- Correlate MAD TPS with min/max spread to assess stability
+- Note if a version failed due to threshold violations vs actual performance issues
 
 ## Phase 4: Build the HTML Report
 
@@ -252,10 +356,12 @@ https://argus.scylladb.com/tests/scylla-cluster-tests/{test_id}
 
 ## Success Criteria
 
-- [ ] User was asked for load types and test IDs before starting
+- [ ] User was asked for test type, load types, and test IDs before starting
 - [ ] Summary Results table has Delta columns and Status labels
 - [ ] Key Findings are analytical (explain WHY, not repeat WHAT)
-- [ ] Test Outcome has Issues column (empty if no linked issues)
+- [ ] Test Outcome has Issues column (populated from Argus activity log)
 - [ ] Conclusion paragraph provides root cause hypothesis and next steps
 - [ ] All Argus links are correct and clickable
 - [ ] HTML renders correctly when opened in browser
+- [ ] For microbenchmarks: per-op efficiency metrics included alongside TPS
+- [ ] For microbenchmarks: ARM64 and x86_64 results shown as separate sections
