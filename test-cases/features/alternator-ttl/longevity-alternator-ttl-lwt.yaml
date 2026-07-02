@@ -19,7 +19,7 @@ instance_type_db: 'i4i.2xlarge'
 n_db_nodes: 6
 
 nemesis_class_name: 'NoOpMonkey'
-nemesis_seed: '007'
+nemesis_seed: 7
 nemesis_interval: 30
 nemesis_during_prepare: false
 

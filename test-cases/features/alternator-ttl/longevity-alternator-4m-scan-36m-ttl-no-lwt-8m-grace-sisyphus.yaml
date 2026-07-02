@@ -25,8 +25,7 @@ instance_type_db: 'i4i.large'
 n_db_nodes: 6
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '033'
-
+nemesis_seed: 33
 user_prefix: '4m-scan-36m-ttl-8m-grace-sisyphus'
 
 alternator_port: 8080

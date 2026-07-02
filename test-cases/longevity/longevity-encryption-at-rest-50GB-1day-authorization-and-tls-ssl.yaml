@@ -14,8 +14,7 @@ instance_type_db: 'i4i.4xlarge'
 instance_type_loader: 'c6i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '111'
-
+nemesis_seed: 111
 user_prefix: 'longevity-encrypt-at-rest-50gb-1d'
 
 space_node_threshold: 644245094

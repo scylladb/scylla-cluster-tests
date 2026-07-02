@@ -47,7 +47,7 @@ sizing_db:
 nemesis_class_name: 'SisyphusMonkey'
 # exclude ModifyTableCompactionMonkey because it will change TWCS
 nemesis_selector: 'not ModifyTableCompactionMonkey'
-nemesis_seed: '025'
+nemesis_seed: 25
 nemesis_interval: 15
 nemesis_during_prepare: false
 space_node_threshold: 64424

@@ -1,7 +1,7 @@
 test_duration: 480
-n_db_nodes: '3 3'
+n_db_nodes: [3, 3]
 region_name: 'eu-west-1 us-east-1'
-n_loaders: '1 1'
+n_loaders: [1, 1]
 
 prepare_write_cmd: [
   "cassandra-stress write cl=LOCAL_ONE n=450000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=300 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..450000000",

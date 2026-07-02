@@ -11,8 +11,8 @@ stress_cmd: >-
   cli.timeoutMillis=14400000; writeRateLimit=1350 ; readRateLimit=12000
 
 region_name: 'us-east-1 eu-west-1'
-n_db_nodes: '6 6'
-n_loaders: '2 2'
+n_db_nodes: [6, 6]
+n_loaders: [2, 2]
 
 rack_aware_loader: true
 region_aware_loader: true
