@@ -4235,6 +4235,9 @@ On capacity errors, after all AZs in the configured region are exhausted, reloca
 
 **type:** bool
 
+**backend overrides:**
+- `True`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+
 
 ## **num_nodes_to_rollback** / SCT_NUM_NODES_TO_ROLLBACK
 
