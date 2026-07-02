@@ -49,6 +49,29 @@ def test_05_latte_parse_final_output():
 
 
 @pytest.mark.parametrize(
+    "stress_cmd,expected_hdr_tags",
+    (
+        ("latte run data_dir/latte/latte_cs_alike.rn --function write -q -r 500", ["fn--write"]),
+        ("latte run data_dir/latte/latte_cs_alike.rn --function read -q -r 500", ["fn--read"]),
+        ("latte run data_dir/latte/latte_cs_alike.rn --function write:1,read:1 -q -r 500", ["fn--write", "fn--read"]),
+        ("latte schema data_dir/latte/latte_cs_alike.rn", []),
+    ),
+)
+def test_latte_hdr_tags_set_in_constructor(stress_cmd, expected_hdr_tags):
+    # NOTE: 'hdr_tags' must be populated eagerly in __init__ (main thread) so that
+    #       performance_regression_test.run_workload() can read them right after the stress
+    #       thread is created, without racing the worker thread that builds the stress command.
+    latte = LatteStressThread(
+        loader_set=["fake-loader"],
+        stress_cmd=stress_cmd,
+        timeout=1,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": "aws"},
+    )
+    assert latte.hdr_tags == expected_hdr_tags
+
+
+@pytest.mark.parametrize(
     "cmd,items",
     (
         ("latte run /foo/bar.rn %swrite -q -r 500", ["write"]),

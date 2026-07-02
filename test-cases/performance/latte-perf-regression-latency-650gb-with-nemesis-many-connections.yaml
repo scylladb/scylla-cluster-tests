@@ -1,0 +1,120 @@
+test_duration: 840
+
+# "Many connections" latte latency-650gb-with-nemesis config: target 1000 CQL
+# connections per Scylla shard while the SisyphusMonkey nemesis sequence runs.
+#
+# Connection math: latte's --connections is per shard, per latte process; the shard-aware
+# rust driver replicates that pool to every shard on every node automatically. So the
+# aggregate connections per shard is:
+#   connections_per_shard = --connections * n_loader_processes
+# With n_loaders=4 (one latte process per loader; round_robin copies the single command
+# to every loader): --connections 250 * 4 loaders = 1000 connections/shard.
+# Capacity check: 1000/shard * 15 shards (i8g.4xlarge = 16 vCPU - 1 reserved for Scylla)
+#   * 3 nodes = 45,000 sockets total (~11,250 per loader).
+#
+# Throttled rates mirror the cassandra-stress baseline (also 4 loaders):
+#   test-cases/performance/perf-regression-latency-650gb-with-nemesis.yaml
+#   write 20332/s, read 10310/s, mixed 8750/s per loader. TUNE after first runs.
+#
+# NOTE: latte auto-creates the schema from the .rn script during build_stress_cmd; the
+#       script defaults (column_count=8, column_size=128) already match this workload, so
+#       no 'latte_schema_parameters' override is required.
+
+# Prepare write commands: populate the database with 650M rows (162.5M per loader).
+# CL=ALL for consistency during preparation; --duration here is an integer cycle count.
+prepare_write_cmd:
+  - >-
+    latte run --function write --tag latte-prepare-01 --duration 162500000
+    --threads 30 --concurrency 180 --connections 250 --consistency ALL
+    -P replication_factor=3
+    -P key_size=16 -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=0
+    --sampling 10s --retry-number 10 --retry-interval '500ms,5s' --request-timeout 60
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --tag latte-prepare-02 --duration 162500000
+    --threads 30 --concurrency 180 --connections 250 --consistency ALL
+    -P replication_factor=3
+    -P key_size=16 -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=162500000
+    --sampling 10s --retry-number 10 --retry-interval '500ms,5s' --request-timeout 60
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --tag latte-prepare-03 --duration 162500000
+    --threads 30 --concurrency 180 --connections 250 --consistency ALL
+    -P replication_factor=3
+    -P key_size=16 -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=325000000
+    --sampling 10s --retry-number 10 --retry-interval '500ms,5s' --request-timeout 60
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function write --tag latte-prepare-04 --duration 162500000
+    --threads 30 --concurrency 180 --connections 250 --consistency ALL
+    -P replication_factor=3
+    -P key_size=16 -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=487500000
+    --sampling 10s --retry-number 10 --retry-interval '500ms,5s' --request-timeout 60
+    data_dir/latte/latte_cs_alike.rn
+
+# Write latency workload (CL=QUORUM, throttled). gauss distribution centred on the dataset.
+stress_cmd_w: >-
+    latte run --function write --tag latte-main-write --duration 2850m --rate 20332
+    --threads 30 --concurrency 180 --connections 250 --consistency QUORUM
+    -P replication_factor=3
+    -P key_size=16 -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=0
+    --sampling 10s --retry-number 10 --retry-interval '500ms,5s' --request-timeout 60
+    -P gauss_mean=325000000 -P gauss_stddev=9750000
+    data_dir/latte/latte_cs_alike.rn
+
+# Read latency workload (CL=QUORUM, throttled).
+stress_cmd_r: >-
+    latte run --function read --tag latte-main-read --duration 800m --rate 10310
+    --threads 30 --concurrency 180 --connections 250 --consistency QUORUM
+    -P replication_factor=3
+    -P key_size=16 -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=0
+    --sampling 10s --retry-number 10 --retry-interval '500ms,5s' --request-timeout 60
+    -P gauss_mean=325000000 -P gauss_stddev=9750000
+    data_dir/latte/latte_cs_alike.rn
+
+# Mixed latency workload (50/50 write/read, CL=QUORUM, throttled).
+stress_cmd_m: >-
+    latte run --function write:1,read:1 --tag latte-main-mixed --duration 800m --rate 8750
+    --threads 30 --concurrency 180 --connections 250 --consistency QUORUM
+    -P replication_factor=3
+    -P key_size=16 -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=0
+    --sampling 10s --retry-number 10 --retry-interval '500ms,5s' --request-timeout 60
+    -P gauss_mean=325000000 -P gauss_stddev=6500000
+    data_dir/latte/latte_cs_alike.rn
+
+n_db_nodes: 3
+n_loaders: 4
+
+instance_type_db: 'i8g.4xlarge'
+# c7i.16xlarge (64 vCPU): the throttled latency load is light on CPU, but each loader must
+# sustain ~11,250 CQL sockets without becoming the latency bottleneck. Reduce if proven safe.
+instance_type_loader: 'c7i.16xlarge'
+instance_type_monitor: 't3.large'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: 'NemesisSequenceWithReboot'
+nemesis_interval: 30
+nemesis_sequence_sleep_between_ops: 10
+
+user_prefix: 'latte-perf-latency-nemesis-many-conn'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: true
+backtrace_stall_decoding: false
+
+email_recipients: ["scylla-perf-results@scylladb.com"]
+use_prepared_loaders: false
+use_hdrhistogram: true
+
+use_placement_group: true
+use_capacity_reservation: true
+email_subject_postfix: 'latency during operations'
+parallel_node_operations: false  # doing this to align the measurement
+cluster_health_check: false
+hinted_handoff: 'enabled'
+argus_email_report_template: email_report_performance.yaml
+
+adaptive_timeout_store_metrics: false

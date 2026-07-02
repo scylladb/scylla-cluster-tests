@@ -95,6 +95,16 @@ class LatteStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
     SCHEMA_CMD_CALL_COUNTER = {}
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # NOTE: compute HDR tags eagerly in the constructor (main thread) so callers such as
+        #       performance_regression_test.run_workload() can read 'self.hdr_tags' right after
+        #       the stress thread is created. Otherwise they race with the worker thread, which
+        #       would only populate the tags lazily from within 'build_stress_cmd' (after the
+        #       slow 'latte schema' call), and would observe an empty list. This mirrors how
+        #       CassandraStressThread and ScyllaBenchThread set their HDR tags in __init__.
+        self.set_hdr_tags(self.stress_cmd)
+
     def set_stress_operation(self, stress_cmd):
         return get_latte_operation_type(self.stress_cmd)
 
@@ -206,7 +216,6 @@ class LatteStressThread(DockerBasedStressThread):
         # NOTE: 'latte schema' doesn't support '-q', but other subcommands (e.g. 'latte run') do.
         quiet_flag = "" if "latte schema" in self.stress_cmd else "-q "
         stress_cmd = f"{self.stress_cmd} {ssl_config}{auth_config}{custom_schema_params} {datacenter}{rack}{quiet_flag}"
-        self.set_hdr_tags(self.stress_cmd)
 
         return stress_cmd
 
