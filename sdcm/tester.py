@@ -87,7 +87,7 @@ from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
-from sdcm.provision.provisioner import provisioner_factory
+from sdcm.provision.provisioner import ProvisionError, ProvisionUnrecoverableError, provisioner_factory
 from sdcm.provision.helpers.certificate import (
     create_ca,
     update_certificate,
@@ -254,8 +254,19 @@ def teardown_on_exception(method):
         try:
             return method(*args, **kwargs)
         except Exception as exc:
+            # Provisioning errors are always forced to CRITICAL to trigger
+            # EventsAnalyzer interrupts (exc.severity is NOT preserved for them).
+            # Non-provisioning exceptions forward exc.severity when present;
+            # otherwise leave as None so TestFrameworkEvent defaults to ERROR.
+            if isinstance(exc, (ProvisionError, ProvisionUnrecoverableError)):
+                severity = Severity.CRITICAL
+            else:
+                severity = getattr(exc, "severity", None)
             TestFrameworkEvent(
-                source=args[0].__class__.__name__, source_method="SetUp", exception=exc
+                source=args[0].__class__.__name__,
+                source_method="SetUp",
+                exception=exc,
+                severity=severity,
             ).publish_or_dump()
             TEST_LOG.exception("Exception in %s. Will call tearDown", method.__name__)
             args[0].tearDown()
