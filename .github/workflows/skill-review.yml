@@ -1,0 +1,84 @@
+name: Skill Quality Review
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, ready_for_review, reopened]
+    paths: ['skills/**', '.github/workflows/skill-review.yml']
+
+jobs:
+  skill-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: SkillForge lint and security scan
+        uses: LiqunChen0606/skillforge@v0.6.4
+        with:
+          path: ./skills
+
+      - name: Check for Claude API key
+        id: auth
+        env:
+          TOKEN: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ANTHROPIC_API_KEY not configured. Skipping LLM quality judge."
+          fi
+
+      - name: Install anthropic SDK
+        if: steps.auth.outputs.available == 'true'
+        run: pip install anthropic
+
+      - name: Claude quality judge
+        if: steps.auth.outputs.available == 'true'
+        id: judge
+        run: python .github/scripts/skill-quality-judge.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SKILL_QUALITY_THRESHOLD: "70"
+          SKILL_REVIEW_REPORT: /tmp/skill-review-report.md
+
+      - name: Post or update PR comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          MARKER="<!-- skill-review-bot -->"
+          BODY="$MARKER
+          ## Skill Quality Review
+
+          ### SkillForge (lint + security)
+          See workflow logs for structural and security scan results.
+          "
+
+          if [ -f /tmp/skill-review-report.md ]; then
+            BODY="$BODY
+          ### Claude Quality Judge
+          $(cat /tmp/skill-review-report.md)
+          "
+          elif [ "${{ steps.auth.outputs.available }}" != "true" ]; then
+            BODY="$BODY
+          ### Claude Quality Judge
+          _Skipped: \`ANTHROPIC_API_KEY\` not configured._
+          "
+          fi
+
+          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" | head -1)
+
+          if [ -n "$EXISTING" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/${EXISTING}" \
+              -X PATCH -f body="$BODY"
+          else
+            gh pr comment "$PR_NUMBER" --body "$BODY"
+          fi
