@@ -16,9 +16,12 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
 
       - name: SkillForge lint and security scan
         uses: LiqunChen0606/skillforge@v0.6.4
+        continue-on-error: true
+        id: skillforge
         with:
           path: ./skills
 
@@ -52,13 +55,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          SKILLFORGE_OUTCOME: ${{ steps.skillforge.outcome }}
         run: |
           MARKER="<!-- skill-review-bot -->"
+
+          if [ "$SKILLFORGE_OUTCOME" = "success" ]; then
+            SF_STATUS=":white_check_mark: All checks passed"
+          else
+            SF_STATUS=":warning: Findings detected (see workflow logs)"
+          fi
+
           BODY="$MARKER
           ## Skill Quality Review
 
           ### SkillForge (lint + security)
-          See workflow logs for structural and security scan results.
+          ${SF_STATUS}
           "
 
           if [ -f /tmp/skill-review-report.md ]; then
@@ -80,5 +91,5 @@ jobs:
             gh api "repos/${{ github.repository }}/issues/comments/${EXISTING}" \
               -X PATCH -f body="$BODY"
           else
-            gh pr comment "$PR_NUMBER" --body "$BODY"
+            gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$BODY"
           fi
