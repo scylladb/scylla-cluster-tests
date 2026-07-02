@@ -6056,6 +6056,9 @@ class Nemesis(NemesisFlags):
     def disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node(self):
         self._refuse_connection_from_banned_node(use_iptables=False)
 
+    def _is_single_node_in_rack(self, node: BaseNode) -> bool:
+        return len([n for n in self.cluster.data_nodes if (n.rack == node.rack and n.dc_idx == node.dc_idx)]) == 1
+
     def _refuse_connection_from_banned_node(self, use_iptables=False):
         """Banned node could not connect with rest nodes in cluster
 
@@ -6077,6 +6080,8 @@ class Nemesis(NemesisFlags):
             raise UnsupportedNemesis("Skip test for K8S because no supported yet")
         keyspace_name = "banned_keyspace"
         table_name = "table1"
+        if self._is_single_node_in_rack(self.target_node):
+            raise UnsupportedNemesis(f"Target node {self.target_node.name} is alone in its rack, cannot remove it.")
 
         def drop_keyspace(node):
             with self.cluster.cql_connection_patient(node=node) as session:
