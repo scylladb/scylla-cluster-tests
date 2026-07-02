@@ -43,21 +43,6 @@ class LongevityBalancerTest(LongevityTest):
     - stress_cmd: The stress command to use for the second data population, after adding and removing nodes
     """
 
-    def expand_cluster_heterogenous(self):
-        new_nodes = self.db_cluster.add_nodes(
-            count=self.params.get("nemesis_add_node_cnt"),
-            instance_type=self.params.get("nemesis_grow_shrink_instance_type"),
-            enable_auto_bootstrap=True,
-            rack=None,
-        )
-        self.monitors.reconfigure_scylla_monitoring()
-        up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
-        with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
-            self.db_cluster.wait_for_init(node_list=new_nodes, timeout=up_timeout, check_node_health=False)
-        self.db_cluster.set_seeds()
-        self.db_cluster.update_seed_provider()
-        self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
-
     def wait_for_balance(self):
         # run multiple times because `storage_service/quiesce_topology` only returns when
         # the topology operations that were ongoing when the command was issued are done
@@ -140,7 +125,7 @@ class LongevityBalancerTest(LongevityTest):
         6. Wait for the cluster to balance.
         7. Check the final balance of the cluster.
         """
-        self.expand_cluster_heterogenous()
+        self.expand_cluster_heterogeneous()
         with PeriodicDiskUsageToArgus(
             self.db_cluster, self.test_config.argus_client(), interval=600, threshold=BALANCE_THRESHOLD
         ):
