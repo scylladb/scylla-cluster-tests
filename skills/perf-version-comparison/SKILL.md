@@ -70,7 +70,21 @@ Extract from each run:
 - `scylla_version`
 - `test_method`
 
-## Phase 3: Fetch Test Results via Argus CLI
+## Phase 3: Fetch Linked Issues via Argus CLI
+
+Issues attached to runs are in the **activity log**. Fetch them:
+
+```bash
+argus run activity --run-id <UUID>
+```
+
+Filter events with `kind == "ARGUS_TEST_RUN_ISSUE_ADDED"`. The `body` field is JSON containing:
+- `url` - Jira ticket URL (e.g., `https://scylladb.atlassian.net/browse/SCYLLADB-1902`)
+- `summary` - Issue title
+
+Use these to populate the "Issues" column in Test Outcome tables and the "Known Issues" section.
+
+## Phase 4: Fetch Test Results via Argus CLI
 
 The predefined-throughput-steps results are stored as Argus result tables. Fetch them using the `argus` CLI:
 
