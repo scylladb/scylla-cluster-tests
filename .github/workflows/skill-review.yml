@@ -19,7 +19,7 @@ jobs:
           allow-unsafe-pr-checkout: true
 
       - name: SkillForge lint and security scan
-        uses: LiqunChen0606/skillforge@v0.6.4
+        uses: LiqunChen0606/skillforge@a3861807f7d2096c941d696f3617c07e190593de # v0.6.4
         with:
           path: ./skills
 
