@@ -7,3 +7,5 @@ jobs:
     reason: "Replaced by perf-regression-matrix-trigger using triggerMatrixPipeline (configurations/triggers/perf-regression.yaml)"
   - name: "tier1-custom-time-trigger"
     reason: "Replaced by oss/sct_triggers/tier1-trigger using triggerMatrixPipeline (configurations/triggers/tier1.yaml)"
+  - name: "weekly-master-images-rolling-upgrades-trigger"
+    reason: "Replaced by oss/sct_triggers/rolling-upgrade-trigger using triggerMatrixPipeline (configurations/triggers/rolling-upgrade.yaml)"
