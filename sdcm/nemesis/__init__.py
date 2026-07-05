@@ -1661,7 +1661,7 @@ class NemesisRunner:
                             SimpleStatement(f"DROP TABLE drop_table_during_repair_ks_{i}.standard1"), timeout=300
                         )
             finally:
-                thread.result()
+                thread.result(timeout=HOUR_IN_SEC * 8)
 
     def _major_compaction(self):
         with (
@@ -2086,21 +2086,37 @@ class NemesisRunner:
     def run_repair_nodetool(self, nodes: list, publish_event=True, timeout=HOUR_IN_SEC * 3):
         """
         Execute a repair using Nodetool, which runs both vnode repair (repair) and tablet repairs (cluster repair)
+
+        The adaptive_timeout yields the soft_timeout value. We use 2.5x that as the actual command
+        timeout so the SoftTimeoutEvent fires as a non-disruptive early warning well before the
+        command is killed.
         """
         for node in nodes:
             with (
-                adaptive_timeout(Operations.REPAIR, node, timeout=timeout),
+                adaptive_timeout(Operations.REPAIR, node, timeout=timeout) as soft_timeout,
                 self.action_log_scope(f"nodetool repair on {node.name} node"),
             ):
-                node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
+                node.run_nodetool(
+                    sub_cmd="repair",
+                    publish_event=publish_event,
+                    timeout=soft_timeout * 2.5,
+                    long_running=True,
+                    retry=0,
+                )
 
         target_node = nodes[0]
         if is_tablets_feature_enabled(target_node):
             with (
-                adaptive_timeout(Operations.REPAIR, target_node, timeout=timeout),
+                adaptive_timeout(Operations.REPAIR, target_node, timeout=timeout) as soft_timeout,
                 self.action_log_scope("nodetool cluster repair", target=target_node.name),
             ):
-                target_node.run_nodetool(sub_cmd="cluster repair", publish_event=publish_event)
+                target_node.run_nodetool(
+                    sub_cmd="cluster repair",
+                    publish_event=publish_event,
+                    timeout=soft_timeout * 2.5,
+                    long_running=True,
+                    retry=0,
+                )
 
     @latency_calculator_decorator(legend="Run repair process through Scylla manager", cycle_name="_mgmt_repair_cli")
     def run_repair_manager(self, ignore_down_hosts: bool = False, timeout=HOUR_IN_SEC * 3):
