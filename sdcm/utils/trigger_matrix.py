@@ -613,6 +613,43 @@ def _is_pre_release_match(scylla_version: str, resolved_version: str, pre_releas
     return any(f"-{tag}" in resolved_version for tag in pre_release)
 
 
+def _extract_branch_from_version(scylla_version: str) -> str:
+    """Extract branch name from a scylla_version string for template resolution.
+
+    Examples:
+        >>> _extract_branch_from_version("master:latest")
+        'master'
+        >>> _extract_branch_from_version("2025.4.1-0.20250601.abc123def456-1")
+        '2025.4'
+        >>> _extract_branch_from_version("")
+        ''
+    """
+    if not scylla_version:
+        return ""
+
+    branch_match = BRANCH_VERSION_RE.match(scylla_version)
+    if branch_match:
+        return branch_match.group("branch")
+
+    full_match = FULL_VERSION_TAG_RE.match(scylla_version)
+    if not full_match:
+        full_match = SIMPLE_VERSION_RE.match(scylla_version)
+    if full_match:
+        return f"{full_match.group('major')}.{full_match.group('minor')}"
+
+    if scylla_version.strip().lower() == "master":
+        return "master"
+
+    return ""
+
+
+def _resolve_templates(value: object, branch: str) -> object:
+    """Replace {branch} placeholder in a string value."""
+    if isinstance(value, str) and "{branch}" in value:
+        return value.replace("{branch}", branch)
+    return value
+
+
 def build_job_parameters(
     job: JobConfig,
     defaults: dict,
@@ -624,6 +661,9 @@ def build_job_parameters(
     Priority: cli_overrides > job.params > defaults.
     Always includes scylla_version. Downstream jobs resolve their
     own backend-specific images from the version.
+
+    Template variables in parameter values are resolved:
+      {branch} — extracted from scylla_version (e.g., "master" from "master:latest")
 
     Args:
         job: Job configuration.
@@ -643,6 +683,11 @@ def build_job_parameters(
         params["scylla_version"] = scylla_version
     if job.region:
         params.setdefault("region", job.region)
+
+    # Resolve {branch} templates in param values
+    branch = _extract_branch_from_version(scylla_version)
+    if branch:
+        params = {k: _resolve_templates(v, branch) for k, v in params.items()}
 
     return params
 
