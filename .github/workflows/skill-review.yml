@@ -108,42 +108,57 @@ jobs:
           SKILLFORGE_OUTCOME: ${{ steps.skillforge.outcome }}
           JUDGE_OUTCOME: ${{ steps.judge.outcome }}
           AUTH_AVAILABLE: ${{ steps.auth.outputs.available }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           MARKER="<!-- skill-review-bot -->"
 
           BODY="$MARKER
           ## Skill Quality Review
+          "
 
+          BODY="$BODY
           ### SkillForge (lint + security)
           "
-
           if [ -f /tmp/skillforge-report.md ]; then
-            BODY="$BODY$(cat /tmp/skillforge-report.md)
+            BODY="$BODY
+          $(cat /tmp/skillforge-report.md)
+          "
+          elif [ "$SKILLFORGE_OUTCOME" = "failure" ]; then
+            BODY="$BODY
+          :x: **Failed** — see [workflow logs]($RUN_URL)
           "
           elif [ "$SKILLFORGE_OUTCOME" = "skipped" ]; then
-            BODY="$BODY:grey_question: Did not run
+            BODY="$BODY
+          :grey_question: Did not run
+          "
+          else
+            BODY="$BODY
+          :grey_question: No results available
           "
           fi
 
+          BODY="$BODY
+          ### Claude Quality Judge
+          "
           if [ -f /tmp/skill-review-report.md ]; then
             BODY="$BODY
-          ### Claude Quality Judge
           $(cat /tmp/skill-review-report.md)
           "
           elif [ "$AUTH_AVAILABLE" = "true" ] && [ "$JUDGE_OUTCOME" = "failure" ]; then
             BODY="$BODY
-          ### Claude Quality Judge
-          :x: Failed — see [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          :x: **Failed** — see [workflow logs]($RUN_URL)
           "
           elif [ "$AUTH_AVAILABLE" = "true" ] && [ "$JUDGE_OUTCOME" = "skipped" ]; then
             BODY="$BODY
-          ### Claude Quality Judge
-          _Skipped: blocked by earlier step failure._
+          _Skipped: no changed skills detected or blocked by earlier failure._
           "
           elif [ "$AUTH_AVAILABLE" != "true" ]; then
             BODY="$BODY
-          ### Claude Quality Judge
           _Skipped: \`ANTHROPIC_API_KEY\` not configured._
+          "
+          else
+            BODY="$BODY
+          :grey_question: No results available
           "
           fi
 
