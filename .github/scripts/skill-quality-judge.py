@@ -54,7 +54,7 @@ def read_skill(skill_dir: Path) -> str | None:
 
 
 def judge_skill(client, skill_name: str, content: str) -> dict:
-    model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+    model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
     message = client.messages.create(
         model=model,
         max_tokens=512,
@@ -84,6 +84,7 @@ def main():
         skill_dirs = sorted(Path("skills").iterdir())
 
     results = []
+    errors = []
     failed = False
     threshold = int(os.environ.get("SKILL_QUALITY_THRESHOLD", "70"))
 
@@ -116,7 +117,9 @@ def main():
                 failed = True
                 print(f"::error file=skills/{skill_name}/SKILL.md::Score {score} below threshold {threshold}")
         except (json.JSONDecodeError, KeyError, IndexError, TypeError, anthropic.APIError) as e:
-            print(f"::warning::Failed to judge {skill_name}: {e}")
+            print(f"::error file=skills/{skill_name}/SKILL.md::Failed to judge: {e}")
+            errors.append({"skill": skill_name, "error": str(e)})
+            failed = True
             continue
 
     print(f"\n{'=' * 60}")
@@ -133,30 +136,40 @@ def main():
 
     report_path = os.environ.get("SKILL_REVIEW_REPORT")
     if report_path:
-        write_markdown_report(results, threshold, avg, Path(report_path))
+        write_markdown_report(results, errors, threshold, avg, Path(report_path))
 
     sys.exit(1 if failed else 0)
 
 
-def write_markdown_report(results: list, threshold: int, avg: float, path: Path):
+def write_markdown_report(results: list, errors: list, threshold: int, avg: float, path: Path):
     lines = []
-    lines.append(f"**{len(results)} skills** reviewed | Average: **{avg:.0f}/100** | Threshold: {threshold}\n")
-    lines.append("| Skill | Description | Content | Overall | Status |")
-    lines.append("|-------|-------------|---------|---------|--------|")
-    for r in sorted(results, key=lambda x: x["overall_score"]):
-        score = r["overall_score"]
-        icon = "\u2705" if score >= threshold else "\u274c"
-        lines.append(f"| {r['skill']} | {r['description_score']} | {r['content_score']} | **{score}** | {icon} |")
 
-    below = [r for r in results if r["overall_score"] < threshold]
-    if below:
-        lines.append("\n<details><summary>Suggestions for skills below threshold</summary>\n")
-        for r in below:
-            lines.append(f"**{r['skill']}** ({r['overall_score']}/100): {r['summary']}")
-            for s in r.get("suggestions", []):
-                lines.append(f"- {s}")
-            lines.append("")
-        lines.append("</details>")
+    if errors:
+        lines.append(f":x: **{len(errors)} skill(s) failed** to evaluate\n")
+        for e in errors:
+            lines.append(f"- `{e['skill']}`: {e['error']}")
+        lines.append("")
+
+    if results:
+        lines.append(f"**{len(results)} skills** reviewed | Average: **{avg:.0f}/100** | Threshold: {threshold}\n")
+        lines.append("| Skill | Description | Content | Overall | Status |")
+        lines.append("|-------|-------------|---------|---------|--------|")
+        for r in sorted(results, key=lambda x: x["overall_score"]):
+            score = r["overall_score"]
+            icon = "\u2705" if score >= threshold else "\u274c"
+            lines.append(f"| {r['skill']} | {r['description_score']} | {r['content_score']} | **{score}** | {icon} |")
+
+        below = [r for r in results if r["overall_score"] < threshold]
+        if below:
+            lines.append("\n<details><summary>Suggestions for skills below threshold</summary>\n")
+            for r in below:
+                lines.append(f"**{r['skill']}** ({r['overall_score']}/100): {r['summary']}")
+                for s in r.get("suggestions", []):
+                    lines.append(f"- {s}")
+                lines.append("")
+            lines.append("</details>")
+    elif not errors:
+        lines.append("_No skills to review._")
 
     path.write_text("\n".join(lines))
 
