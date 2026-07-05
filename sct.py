@@ -3116,7 +3116,13 @@ def hdr_investigate(
     help="Scylla repo URL for rolling-upgrade jobs (RPM .repo or DEB .list). Overrides per-job template values.",
 )
 @click.option("--dry-run", is_flag=True, default=False, help="Preview mode — do not trigger jobs")
+@click.option(
+    "--use-job-throttling/--no-use-job-throttling",
+    default=None,
+    help="Override use_job_throttling parameter for triggered jobs",
+)
 @click.option("--requested-by-user", default=None, type=str, help="User requesting the run")
+@click.option("--billing-project", default=None, type=str, help="Billing project for resource tagging")
 @click.option(
     "--email-recipients", default=None, type=str, help="Comma-separated email recipients for wait-mode results report"
 )
@@ -3138,7 +3144,9 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     unified_package,
     new_scylla_repo,
     dry_run,
+    use_job_throttling,
     requested_by_user,
+    billing_project,
     email_recipients,
 ):
     add_file_logger()
@@ -3198,10 +3206,14 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
         overrides["provision_type"] = provision_type
     if requested_by_user:
         overrides["requested_by_user"] = requested_by_user
+    if billing_project:
+        overrides["billing_project"] = billing_project
     if unified_package:
         overrides["unified_package"] = unified_package
     if new_scylla_repo:
         overrides["new_scylla_repo"] = new_scylla_repo
+    if use_job_throttling is not None:
+        overrides["use_job_throttling"] = use_job_throttling
 
     try:
         results = run_trigger_matrix(
