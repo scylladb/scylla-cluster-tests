@@ -68,6 +68,8 @@ def call(Map pipelineParams = [:]) {
                    description: 'Scylla OCI image OCID — passed to OCI jobs. Use with backend=oci to run only OCI jobs.')
             string(name: 'unified_package', defaultValue: '',
                    description: 'URL to unified (relocatable) Scylla package — for PGO offline installer triggers')
+            string(name: 'new_scylla_repo', defaultValue: '',
+                   description: 'Scylla repo URL for rolling-upgrade jobs (RPM .repo or DEB .list). Overrides per-job template values when set.')
             string(name: 'requested_by_user', defaultValue: '',
                    description: 'User requesting the run')
             string(name: 'email_recipients', defaultValue: 'qa@scylladb.com',
@@ -138,9 +140,9 @@ def call(Map pipelineParams = [:]) {
                         if (!params.matrix_file?.trim()) {
                             error("'matrix_file' parameter is required")
                         }
-                        def hasImageParam = params.scylla_ami_id?.trim() || params.gce_image_db?.trim() || params.azure_image_db?.trim() || params.oci_image_db?.trim() || params.unified_package?.trim()
+                        def hasImageParam = params.scylla_ami_id?.trim() || params.gce_image_db?.trim() || params.azure_image_db?.trim() || params.oci_image_db?.trim() || params.unified_package?.trim() || params.new_scylla_repo?.trim()
                         if (!scyllaVersion?.trim() && !hasImageParam) {
-                            error("Either 'scylla_version' or an image/package param (scylla_ami_id, gce_image_db, azure_image_db, oci_image_db, unified_package) is required")
+                            error("Either 'scylla_version' or an image/package param (scylla_ami_id, gce_image_db, azure_image_db, oci_image_db, unified_package, new_scylla_repo) is required")
                         }
 
                         // Build CLI command
@@ -187,6 +189,9 @@ def call(Map pipelineParams = [:]) {
                         }
                         if (params.unified_package?.trim()) {
                             cmd += " --unified-package '${params.unified_package}'"
+                        }
+                        if (params.new_scylla_repo?.trim()) {
+                            cmd += " --new-scylla-repo '${params.new_scylla_repo}'"
                         }
                         if (params.requested_by_user?.trim()) {
                             cmd += " --requested-by-user '${params.requested_by_user}'"

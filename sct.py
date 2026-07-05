@@ -3109,12 +3109,18 @@ def hdr_investigate(
     type=str,
     help="Unified package URL (for PGO offline installer jobs that don't need scylla_version)",
 )
+@click.option(
+    "--new-scylla-repo",
+    default=None,
+    type=str,
+    help="Scylla repo URL for rolling-upgrade jobs (RPM .repo or DEB .list). Overrides per-job template values.",
+)
 @click.option("--dry-run", is_flag=True, default=False, help="Preview mode — do not trigger jobs")
 @click.option("--requested-by-user", default=None, type=str, help="User requesting the run")
 @click.option(
     "--email-recipients", default=None, type=str, help="Comma-separated email recipients for wait-mode results report"
 )
-def trigger_matrix_cmd(  # noqa: PLR0913
+def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     matrix,
     scylla_version,
     job_folder,
@@ -3130,6 +3136,7 @@ def trigger_matrix_cmd(  # noqa: PLR0913
     azure_image_db,
     oci_image_db,
     unified_package,
+    new_scylla_repo,
     dry_run,
     requested_by_user,
     email_recipients,
@@ -3143,11 +3150,14 @@ def trigger_matrix_cmd(  # noqa: PLR0913
         if unified_package:
             # PGO jobs only need unified_package, no version resolution needed
             pass
+        elif new_scylla_repo:
+            # Rolling upgrade jobs can be triggered with just new_scylla_repo
+            pass
         elif not has_image:
             click.echo(
                 "Error: Either --scylla-version, an image param "
                 "(--scylla-ami-id, --gce-image-db, --azure-image-db, --oci-image-db), "
-                "or --unified-package is required",
+                "--new-scylla-repo, or --unified-package is required",
                 err=True,
             )
             sys.exit(1)
@@ -3190,6 +3200,8 @@ def trigger_matrix_cmd(  # noqa: PLR0913
         overrides["requested_by_user"] = requested_by_user
     if unified_package:
         overrides["unified_package"] = unified_package
+    if new_scylla_repo:
+        overrides["new_scylla_repo"] = new_scylla_repo
 
     try:
         results = run_trigger_matrix(
