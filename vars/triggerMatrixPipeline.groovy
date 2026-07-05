@@ -72,8 +72,12 @@ def call(Map pipelineParams = [:]) {
                    description: 'Scylla repo URL for rolling-upgrade jobs (RPM .repo or DEB .list). Overrides per-job template values when set.')
             string(name: 'requested_by_user', defaultValue: '',
                    description: 'User requesting the run')
+            string(name: 'billing_project', defaultValue: '',
+                   description: 'Billing project for resource tagging')
             string(name: 'email_recipients', defaultValue: 'qa@scylladb.com',
                    description: 'Comma-separated email recipients for wait-mode results report')
+            booleanParam(name: 'use_job_throttling', defaultValue: true,
+                   description: 'If true, use job throttling to limit the number of concurrent builds')
             booleanParam(name: 'dry_run', defaultValue: false,
                    description: 'Preview mode — do not trigger jobs')
         }
@@ -128,6 +132,7 @@ def call(Map pipelineParams = [:]) {
                             'oci_image_db': params.oci_image_db,
                             'unified_package': params.unified_package,
                             'requested_by_user': params.requested_by_user,
+                            'billing_project': params.billing_project,
                             'email_recipients': params.email_recipients,
                         ]
 
@@ -196,8 +201,16 @@ def call(Map pipelineParams = [:]) {
                         if (params.requested_by_user?.trim()) {
                             cmd += " --requested-by-user '${params.requested_by_user}'"
                         }
+                        if (params.billing_project?.trim()) {
+                            cmd += " --billing-project '${params.billing_project}'"
+                        }
                         if (params.email_recipients?.trim()) {
                             cmd += " --email-recipients '${params.email_recipients}'"
+                        }
+                        if (params.use_job_throttling) {
+                            cmd += " --use-job-throttling"
+                        } else {
+                            cmd += " --no-use-job-throttling"
                         }
                         if (params.dry_run) {
                             cmd += " --dry-run"
