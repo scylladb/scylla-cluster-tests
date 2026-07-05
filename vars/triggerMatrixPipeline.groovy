@@ -90,11 +90,28 @@ def call(Map pipelineParams = [:]) {
             stage('Trigger Matrix') {
                 steps {
                     script {
+                        // Resolve {branch} placeholder in scylla_version.
+                        // Cron triggers pass "{branch}:latest" literally; resolve
+                        // it from job_folder (e.g. "scylla-master" -> "master",
+                        // "scylla-2026.2" -> "branch-2026.2") or from JOB_NAME.
+                        def scyllaVersion = params.scylla_version ?: ''
+                        if (scyllaVersion.contains('{branch}')) {
+                            def folder = (params.job_folder?.trim()) ?: env.JOB_NAME?.split('/')[0] ?: ''
+                            def branch = folder.replaceFirst(/^scylla-/, '')
+                            if (branch && branch != 'master') {
+                                branch = "branch-${branch}"
+                            }
+                            if (branch) {
+                                scyllaVersion = scyllaVersion.replace('{branch}', branch)
+                                println("Resolved {branch} placeholder: scylla_version='${scyllaVersion}'")
+                            }
+                        }
+
                         // Input sanitization — allow only safe characters
                         def safePattern = ~/^[a-zA-Z0-9_.:\-\/,@\s]*$/
                         def paramChecks = [
                             'matrix_file': params.matrix_file,
-                            'scylla_version': params.scylla_version,
+                            'scylla_version': scyllaVersion,
                             'labels_selector': params.labels_selector,
                             'backend': params.backend,
                             'skip_jobs': params.skip_jobs,
@@ -122,15 +139,15 @@ def call(Map pipelineParams = [:]) {
                             error("'matrix_file' parameter is required")
                         }
                         def hasImageParam = params.scylla_ami_id?.trim() || params.gce_image_db?.trim() || params.azure_image_db?.trim() || params.oci_image_db?.trim() || params.unified_package?.trim()
-                        if (!params.scylla_version?.trim() && !hasImageParam) {
+                        if (!scyllaVersion?.trim() && !hasImageParam) {
                             error("Either 'scylla_version' or an image/package param (scylla_ami_id, gce_image_db, azure_image_db, oci_image_db, unified_package) is required")
                         }
 
                         // Build CLI command
                         def cmd = "./docker/env/hydra.sh trigger-matrix"
                         cmd += " --matrix '${params.matrix_file}'"
-                        if (params.scylla_version?.trim()) {
-                            cmd += " --scylla-version '${params.scylla_version}'"
+                        if (scyllaVersion?.trim()) {
+                            cmd += " --scylla-version '${scyllaVersion}'"
                         }
                         if (params.job_folder?.trim()) {
                             cmd += " --job-folder '${params.job_folder}'"
