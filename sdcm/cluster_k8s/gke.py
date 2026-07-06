@@ -23,6 +23,7 @@ import tenacity
 from google.cloud import compute_v1
 
 from sdcm import sct_abs_path, cluster
+from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.wait import exponential_retry
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
@@ -654,7 +655,13 @@ class MonitorSetGKE(MonitorSetGCE):
         instances_by_nodetype = list_instances_gce(tags_dict={"MonitorId": self.monitor_id, "NodeType": self.node_type})
         instances_by_zone = self._get_instances_by_prefix(dc_idx)
         instances = []
-        ip_addresses = gce_public_addresses if self._node_public_ips else gce_private_addresses
+        # Use ssh_connection_ip_type from params if _node_public_ips is not yet set (during __init__)
+        # If _node_public_ips exists, use it; otherwise fallback to ssh_connection_ip_type
+        if hasattr(self, "_node_public_ips"):
+            use_public_ips = bool(self._node_public_ips)
+        else:
+            use_public_ips = ssh_connection_ip_type(self.params) == "public"
+        ip_addresses = gce_public_addresses if use_public_ips else gce_private_addresses
         for node_zone in instances_by_zone:
             # Filter nodes by zone and by ip addresses
             if not ip_addresses(node_zone):
