@@ -120,7 +120,7 @@ Number list of database nodes in multiple data centers.
 
 **default:** N/A
 
-**type:** int | list[int] | space-separated ints → list[int]
+**type:** int | list[int] → list[int]
 
 **backend overrides:**
 - `4`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke, k8s-eks
@@ -133,7 +133,7 @@ Number list of oracle test nodes in multiple data centers.
 
 **default:** 1
 
-**type:** int | list[int] | space-separated ints → list[int]
+**type:** int | list[int] → list[int]
 
 
 ## **n_loaders** / SCT_N_LOADERS
@@ -142,7 +142,7 @@ Number list of loader nodes in multiple data centers
 
 **default:** N/A
 
-**type:** int | list[int] | space-separated ints → list[int]
+**type:** int | list[int] → list[int]
 
 **backend overrides:**
 - `1`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce, k8s-gke, k8s-eks, xcloud
@@ -154,7 +154,7 @@ Number list of monitor nodes in multiple data centers
 
 **default:** 1
 
-**type:** int | list[int] | space-separated ints → list[int]
+**type:** int | list[int] → list[int]
 
 **backend overrides:**
 - `0`: k8s-local-kind, k8s-local-kind-aws, k8s-local-kind-gce
@@ -1066,7 +1066,7 @@ A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
 
 **default:** N/A
 
-**type:** int | list[int] | space-separated ints → list[int]
+**type:** int | list[int] → list[int]
 
 
 ## **nemesis_add_node_cnt** / SCT_NEMESIS_ADD_NODE_CNT
@@ -1093,7 +1093,7 @@ Used for scale test: max size of the cluster
 
 **default:** N/A
 
-**type:** int | list[int] | space-separated ints → list[int]
+**type:** int | list[int] → list[int]
 
 
 ## **space_node_threshold** / SCT_SPACE_NODE_THRESHOLD
@@ -2120,11 +2120,11 @@ If True, enable support in SCT of zero nodes (configuration, nemesis)
 
 ## **n_db_zero_token_nodes** / SCT_N_DB_ZERO_TOKEN_NODES
 
-Number of zero token nodes in cluster. Value should be set as '0 1 1' for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions
+Number of zero token nodes in cluster. Value should be set as [0, 1, 1] for multidc configuration in same manner as 'n_db_nodes' and should be equal number of regions
 
 **default:** 0
 
-**type:** int | list[int] | space-separated ints → list[int]
+**type:** int | list[int] → list[int]
 
 
 ## **zero_token_instance_type_db** / SCT_ZERO_TOKEN_INSTANCE_TYPE_DB

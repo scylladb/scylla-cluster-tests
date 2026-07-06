@@ -11,7 +11,7 @@ instance_type_db: 'i4i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'limited'
-nemesis_seed: '028'
+nemesis_seed: 28
 nemesis_during_prepare: false
 
 user_prefix: 'longevity-encrypt-at-rest-200gb-6h-tls'

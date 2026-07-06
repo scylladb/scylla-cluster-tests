@@ -26,7 +26,7 @@ sizing_monitor:
 root_disk_size_runner: 120
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '023'
+nemesis_seed: 23
 nemesis_interval: 30
 
 user_prefix: 'longevity-mv-si-4d'

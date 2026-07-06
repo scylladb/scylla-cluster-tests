@@ -46,7 +46,7 @@ n_loaders: 2
 k8s_loader_run_type: 'dynamic'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '080'
+nemesis_seed: 80
 nemesis_during_prepare: false
 
 user_prefix: 'k8s-alternator-https-3h'

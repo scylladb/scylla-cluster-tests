@@ -20,7 +20,7 @@ round_robin: true
 instance_type_db: 'i4i.4xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '008'
+nemesis_seed: 8
 nemesis_during_prepare: false
 
 user_prefix: 'longevity-cdc-3d-400gb'
