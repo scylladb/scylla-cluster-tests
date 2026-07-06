@@ -619,7 +619,13 @@ class GCECluster(cluster.BaseCluster):
 
         instances_by_tags = list_instances_gce(tags_dict={"TestId": test_id, "NodeType": self.node_type})
         region = self._gce_zone_names[dc_idx][:-2]
-        ip_addresses = gce_public_addresses if self._node_public_ips else gce_private_addresses
+        # Use ssh_connection_ip_type from params if _node_public_ips is not yet set (during __init__)
+        # If _node_public_ips exists, use it; otherwise fallback to ssh_connection_ip_type
+        if hasattr(self, "_node_public_ips"):
+            use_public_ips = bool(self._node_public_ips)
+        else:
+            use_public_ips = ssh_connection_ip_type(self.params) == "public"
+        ip_addresses = gce_public_addresses if use_public_ips else gce_private_addresses
 
         # Filter instances by ip addresses and region
         instances = [instance for instance in instances_by_tags if ip_addresses(instance) and region in instance.zone]
