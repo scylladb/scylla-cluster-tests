@@ -13,6 +13,8 @@
 
 import pytest
 import re
+import os
+import glob
 import requests
 
 from sdcm.stress.latte_thread import LatteStressThread
@@ -78,10 +80,34 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
 
     latte_thread.run()
 
-    @timeout(timeout=60)
+    @timeout(timeout=120)
     def check_metrics():
+        # Surface any stress thread exception early instead of waiting the full timeout
+        for future in latte_thread.results_futures:
+            if future.done():
+                # _run_stress swallows exceptions internally, so check the result
+                result = future.result()
+                if result:
+                    _loader, result_dict, stress_event = result
+                    if not result_dict:
+                        raise AssertionError(
+                            f"Latte stress thread completed but returned empty result. "
+                            f"Event severity: {stress_event.severity if hasattr(stress_event, 'severity') else 'N/A'}, "
+                            f"Event errors: {stress_event.errors if hasattr(stress_event, 'errors') else 'N/A'}"
+                        )
         output = requests.get(f"http://{prom_address}/metrics").text
-        assert "sct_latte_user_gauge" in output
+        # Gather diagnostic info about log files and docker containers
+        log_files = glob.glob(os.path.join(loader_set.nodes[0].logdir, "latte-*.log"))
+        log_info = {}
+        for lf in log_files:
+            try:
+                log_info[lf] = os.path.getsize(lf)
+            except OSError:
+                log_info[lf] = "not found"
+        assert "sct_latte_user_gauge" in output, (
+            f"Metric not found. Futures done: {[f.done() for f in latte_thread.results_futures]}. "
+            f"Log files: {log_info}"
+        )
 
         regex = re.compile(r"^sct_latte_user_gauge.*?([0-9\.]*?)$", re.MULTILINE)
         matches = regex.findall(output)

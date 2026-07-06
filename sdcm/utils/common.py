@@ -24,7 +24,6 @@ import time
 import datetime
 import errno
 import threading
-import select
 import shutil
 import copy
 import string
@@ -1221,22 +1220,22 @@ class FileFollowerIterator:
     def __iter__(self):
         with open(self.filename, encoding="utf-8") as input_file:
             line = ""
-            poller = select.poll()
-            registered = False
             while not self.thread_obj.stopped():
-                if not registered:
-                    poller.register(input_file, select.POLLIN)
-                    registered = True
-                if poller.poll(100):
-                    line += input_file.readline()
+                line += input_file.readline()
                 if not line or not line.endswith("\n"):
                     time.sleep(0.1)
                     continue
-                poller.unregister(input_file)
-                registered = False
                 yield line
                 line = ""
-            yield line
+            # Drain any remaining data written to the file after stop was signaled
+            while True:
+                line += input_file.readline()
+                if not line or not line.endswith("\n"):
+                    break
+                yield line
+                line = ""
+            if line:
+                yield line
 
 
 class FileFollowerThread:

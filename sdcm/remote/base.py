@@ -19,6 +19,7 @@ import logging
 import re
 import os
 import subprocess
+import threading
 from textwrap import dedent
 
 from invoke.watchers import StreamWatcher, Responder
@@ -266,17 +267,19 @@ class OutputWatcher(StreamWatcher):
     def __init__(self, log: logging.Logger, hostname: str):
         super().__init__()
         self.hostname = hostname
-        self.len = 0
+        self._stream_lens = {}  # per-thread position tracking
         self.log = log
 
     def submit(self, stream: str) -> list:
-        stream_buffer = stream[self.len :]
+        tid = threading.current_thread().ident
+        prev_len = self._stream_lens.get(tid, 0)
+        stream_buffer = stream[prev_len:]
 
         while "\n" in stream_buffer:
             out_buf, rest_buf = stream_buffer.split("\n", 1)
             self.log.debug("<%s>: %s", self.hostname, out_buf)
             stream_buffer = rest_buf
-        self.len = len(stream) - len(stream_buffer)
+        self._stream_lens[tid] = len(stream) - len(stream_buffer)
         return []
 
     def submit_line(self, line: str):
@@ -286,9 +289,9 @@ class OutputWatcher(StreamWatcher):
 class LogWriteWatcher(StreamWatcher):
     def __init__(self, log_file: str):
         super().__init__()
-        self.len = 0
+        self._stream_lens = {}  # per-thread position tracking
         self.log_file = log_file
-        # open fail with line buffering, so prom stats would be as accuracte as possible
+        # open file with line buffering, so prom stats would be as accurate as possible
 
         self.file_object = open(self.log_file, "a+", encoding="utf-8", buffering=1)
 
@@ -296,12 +299,14 @@ class LogWriteWatcher(StreamWatcher):
         return line
 
     def submit(self, stream: str) -> list:
-        stream_buffer = stream[self.len :]
-        lines = stream_buffer.splitlines(True)
-        formatted_lines = [self._format_line(line) for line in lines]
-        self.file_object.write("".join(formatted_lines))
-
-        self.len = len(stream)
+        tid = threading.current_thread().ident
+        prev_len = self._stream_lens.get(tid, 0)
+        stream_buffer = stream[prev_len:]
+        if stream_buffer:
+            lines = stream_buffer.splitlines(True)
+            formatted_lines = [self._format_line(line) for line in lines]
+            self.file_object.write("".join(formatted_lines))
+        self._stream_lens[tid] = len(stream)
         return []
 
     def submit_line(self, line: str):

@@ -117,9 +117,6 @@ class StressExporter(FileFollowerThread, metaclass=ABCMeta):
                 continue
 
             for line in self.follow_file(self.stress_log_filename):
-                if self.stopped():
-                    break
-
                 if self.skip_line(line=line):
                     continue
 
