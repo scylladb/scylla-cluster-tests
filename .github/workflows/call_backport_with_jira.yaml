@@ -1,0 +1,91 @@
+# Backport automation for scylla-cluster-tests.
+#
+# This is a thin caller for the shared reusable workflow maintained in
+# scylladb/github-automation (.github/workflows/backport-with-jira.yaml).
+# It replaces the previous in-repo automation (add-label-when-promoted.yaml
+# plus .github/scripts/auto-backport.py / search_commits.py).
+#
+# scylla-cluster-tests specifics handled by the shared workflow/script:
+#   * No "next"/"next-X.Y" gating branches: PRs merge straight to master or
+#     branch-X.Y, so backport PRs target branch-X.Y directly.
+#   * Performance branches: branch-perf-v<N>, driven by backport/perf-v<N> labels.
+#   * Manager branches: manager-X.Y, driven by backport/manager-X.Y labels.
+#   * Backports are created in parallel by default (one PR per target branch at once),
+#     since the branches are independent and there is no chained gating to walk.
+#     Add the 'cascade_backport' label to a PR to opt into chained (highest->lowest)
+#     backports instead.
+#
+# Jira: a backport sub-task is created under the issue referenced in the PR body
+# (Fixes: SCT-123 -> project SCT) and assigned to the original author. If the PR
+# has no Jira reference, the backport is still created without Jira.
+
+name: Backport with Jira Integration
+
+on:
+  push:
+    branches:
+      - master
+      - branch-*.*
+      - branch-perf-v*
+      - manager-*.*
+  pull_request_target:
+    types: [labeled, closed]
+    branches:
+      - master
+      - branch-*.*
+      - branch-perf-v*
+      - manager-*.*
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  # Promotion to a stable branch (master / branch-X.Y / branch-perf-v<N> / manager-X.Y).
+  # Adds promoted-to-* labels and triggers/continues the backports for merged commits.
+  backport-on-push:
+    if: github.event_name == 'push'
+    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@f21278ec327c00fa6760a393cd8ac6a978e896ce # main
+    with:
+      event_type: 'push'
+      base_branch: ${{ github.ref }}
+      commits: ${{ github.event.before }}..${{ github.sha }}
+    secrets:
+      gh_token: ${{ secrets.AUTO_BACKPORT_TOKEN }}
+      jira_auth: ${{ secrets.USER_AND_KEY_FOR_JIRA_AUTOMATION }}
+      dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+      dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  # A backport/* label was added to a (closed) PR: create the backport PR(s).
+  backport-on-label:
+    if: github.event_name == 'pull_request_target' && github.event.action == 'labeled'
+    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@f21278ec327c00fa6760a393cd8ac6a978e896ce # main
+    with:
+      event_type: 'labeled'
+      base_branch: refs/heads/${{ github.event.pull_request.base.ref }}
+      pull_request_number: ${{ github.event.pull_request.number }}
+      head_commit: ${{ github.event.pull_request.base.sha }}
+      label_name: ${{ github.event.label.name }}
+      pr_state: ${{ github.event.pull_request.state }}
+    secrets:
+      gh_token: ${{ secrets.AUTO_BACKPORT_TOKEN }}
+      jira_auth: ${{ secrets.USER_AND_KEY_FOR_JIRA_AUTOMATION }}
+      dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+      dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  # A backport PR was merged: mark the original label done (chain handling is a no-op
+  # for the always-parallel model, but kept for parity with the shared workflow).
+  backport-chain:
+    if: github.event_name == 'pull_request_target' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    uses: scylladb/github-automation/.github/workflows/backport-with-jira.yaml@f21278ec327c00fa6760a393cd8ac6a978e896ce # main
+    with:
+      event_type: 'chain'
+      base_branch: refs/heads/${{ github.event.pull_request.base.ref }}
+      pull_request_number: ${{ github.event.pull_request.number }}
+      pr_body: ${{ github.event.pull_request.body }}
+    secrets:
+      gh_token: ${{ secrets.AUTO_BACKPORT_TOKEN }}
+      jira_auth: ${{ secrets.USER_AND_KEY_FOR_JIRA_AUTOMATION }}
+      dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+      dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
