@@ -111,15 +111,18 @@ def _get_cleanup_timeout(node_info_service, timeout=None):
     """
     MIN_CLEANUP_TIMEOUT = 120  # seconds
     SAFETY_FACTOR = 2.0
-    data_size_mb = node_info_service.node_data_size_mb
-    throughput = node_info_service.expected_throughput  # MB/s
-    if data_size_mb and throughput:
-        calculated = (data_size_mb / throughput) * SAFETY_FACTOR
-        timeout = max(MIN_CLEANUP_TIMEOUT, calculated)
-    else:
-        timeout = timeout or MIN_CLEANUP_TIMEOUT
-    return timeout, node_info_service.as_dict()
-
+    try:
+        data_size_mb = node_info_service.node_data_size_mb
+        throughput = node_info_service.expected_throughput  # MB/s
+        if data_size_mb and throughput:
+            calculated = (data_size_mb / throughput) * SAFETY_FACTOR
+            timeout = max(MIN_CLEANUP_TIMEOUT, calculated)
+        else:
+            timeout = timeout or MIN_CLEANUP_TIMEOUT
+        return timeout, node_info_service.as_dict()
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.warning("Failed to calculate cleanup timeout: \n%s \nDefaulting to %s seconds", exc, MIN_CLEANUP_TIMEOUT)
+        return timeout or MIN_CLEANUP_TIMEOUT, {}
 
 
 class Operations(Enum):
