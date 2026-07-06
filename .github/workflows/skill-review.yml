@@ -178,3 +178,21 @@ jobs:
           else
             gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$BODY"
           fi
+
+      - name: Fail if any review step failed
+        if: always()
+        env:
+          SKILLFORGE_OUTCOME: ${{ steps.skillforge.outcome }}
+          JUDGE_OUTCOME: ${{ steps.judge.outcome }}
+        run: |
+          FAILED=""
+          if [ "$SKILLFORGE_OUTCOME" = "failure" ]; then
+            FAILED="$FAILED SkillForge"
+          fi
+          if [ "$JUDGE_OUTCOME" = "failure" ]; then
+            FAILED="$FAILED Claude-judge"
+          fi
+          if [ -n "$FAILED" ]; then
+            echo "::error::The following review steps failed:$FAILED"
+            exit 1
+          fi
