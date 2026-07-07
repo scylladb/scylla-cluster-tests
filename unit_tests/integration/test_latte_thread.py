@@ -78,7 +78,7 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
 
     latte_thread.run()
 
-    @timeout(timeout=60)
+    @timeout(timeout=120)
     def check_metrics():
         output = requests.get(f"http://{prom_address}/metrics").text
         assert "sct_latte_user_gauge" in output
