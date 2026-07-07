@@ -257,7 +257,6 @@ def cli(ctx):
         try_auth_with_okta()
 
         key_store = KeyStore()
-        # TODO: still leaving old keys, until we'll rebuild runner images - and reconfigure jenkins
         key_store.sync(
             keys=["scylla-qa-ec2", "scylla-test", "scylla_test_id_ed25519"],
             local_path=Path("~/.ssh/").expanduser(),

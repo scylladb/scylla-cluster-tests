@@ -180,7 +180,7 @@ class SctRunnerInfo:
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
 
-    VERSION = "1.19"  # Version of the Image
+    VERSION = "1.20"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -401,6 +401,8 @@ class SctRunner(ABC):
 
         node_exporter_setup = NodeExporterSetup()
         node_exporter_setup.install(remoter=remoter)
+
+        remoter.sudo("cloud-init clean --logs")
 
         remoter.stop()
         if result.ok:

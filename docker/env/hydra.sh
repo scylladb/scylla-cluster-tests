@@ -234,6 +234,7 @@ function run_in_docker () {
            -v /dev:/dev:rw
            --tmpfs "${HOME_DIR}/.local:exec,mode=1777"
            -u ${USER_ID}
+           -e HOME="${HOME_DIR}"
            )
     else
         PODMAN_PORT=$(EPHEMERAL_PORT)

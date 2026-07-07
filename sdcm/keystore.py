@@ -248,6 +248,8 @@ class KeyStore:
                     dl_flag = False
         except FileNotFoundError:
             pass
+        except PermissionError:
+            os.unlink(path)
 
         if dl_flag:
             self.download_file(filename=key, dest_filename=path)
