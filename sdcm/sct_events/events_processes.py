@@ -127,6 +127,14 @@ class EventsProcessPipe(BaseEventsProcess[T_inbound_event, T_outbound_event], th
             except queue.Empty:
                 pass
 
+        # stop_event is set: flush whatever is already queued instead of dropping it.
+        while True:
+            try:
+                yield self.outbound_queue.get_nowait()
+                events_counter.value += 1
+            except queue.Empty:
+                return
+
 
 class EventsProcessProcess(BaseEventsProcess[T_inbound_event, T_outbound_event], multiprocessing.Process): ...
 
