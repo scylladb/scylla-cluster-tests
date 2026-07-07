@@ -148,6 +148,96 @@ def test_dict_or_str_invalid(input_val):
 
 
 # ---------------------------------------------------------------------------
+# perf_gradual_connections_per_host
+# ---------------------------------------------------------------------------
+
+
+def _gradual_conf(monkeypatch, throttle_steps=None, threads=None, connections_per_host=None):
+    """Build an SCTConfiguration with the perf_gradual_* params set from the environment.
+
+    ``_validate_perf_gradual_throttle_steps()`` runs from ``SCTConfiguration.__init__``,
+    so merely constructing the object exercises the validator.
+    """
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    if throttle_steps is not None:
+        monkeypatch.setenv("SCT_PERF_GRADUAL_THROTTLE_STEPS", throttle_steps)
+    if threads is not None:
+        monkeypatch.setenv("SCT_PERF_GRADUAL_THREADS", threads)
+    if connections_per_host is not None:
+        monkeypatch.setenv("SCT_PERF_GRADUAL_CONNECTIONS_PER_HOST", connections_per_host)
+    return SCTConfiguration()
+
+
+@pytest.mark.parametrize(
+    "env_value,expected",
+    [
+        # no default (like the other perf_gradual_* params); the value comes from the load-steps fragment
+        (None, None),
+        (
+            "{'read': 8, 'write': 16, 'mixed': 32, 'read_disk_only': 8}",
+            {"read": 8, "write": 16, "mixed": 32, "read_disk_only": 8},
+        ),
+        ("{'read': [8, 100, 1000], 'write': 8}", {"read": [8, 100, 1000], "write": 8}),
+    ],
+)
+def test_perf_gradual_connections_per_host_config(monkeypatch, env_value, expected):
+    """perf_gradual_connections_per_host resolves as a per-workload dict (no default when unset)."""
+    conf = _gradual_conf(monkeypatch, connections_per_host=env_value)
+    assert conf["perf_gradual_connections_per_host"] == expected
+
+
+@pytest.mark.parametrize(
+    "connections_per_host,expected",
+    [
+        # unset is legal: stress tools without a '$connections_per_host' placeholder never define it
+        (None, None),
+        # a workload absent from perf_gradual_throttle_steps is never visited by the validator,
+        # so it is left untouched - Workload.__post_init__ normalises it at runtime instead
+        ("{'write': 8}", {"write": 8}),
+        # a single integer is normalised to a one-element list and broadcast to every step
+        ("{'read': 8}", {"read": [8]}),
+        ("{'read': [8]}", {"read": [8]}),
+        # one value per throttle step
+        ("{'read': [8, 100, 1000]}", {"read": [8, 100, 1000]}),
+    ],
+)
+def test_perf_gradual_connections_per_host_valid(monkeypatch, connections_per_host, expected):
+    conf = _gradual_conf(
+        monkeypatch,
+        throttle_steps="{'read': ['100000', '200000', 'unthrottled']}",
+        threads=r"{'read': 620}",
+        connections_per_host=connections_per_host,
+    )
+    assert conf["perf_gradual_connections_per_host"] == expected
+
+
+@pytest.mark.parametrize(
+    "connections_per_host",
+    [
+        "{'read': 'eight'}",  # not a list or integer
+        "{'read': [8, 'x', 16]}",  # non-integer element
+        "{'read': [8, 0, 16]}",  # zero is not a valid connection count
+        "{'read': -8}",  # negative
+        "{'read': True}",  # bool must not be accepted as an int
+        "{'read': [8, 100]}",  # length neither 1 nor len(throttle_steps)
+        "{'read': [8, 100, 1000, 3750]}",  # too many values for 3 steps
+        "{'read': []}",  # empty list would silently disable the substitution
+    ],
+)
+def test_perf_gradual_connections_per_host_invalid(monkeypatch, connections_per_host):
+    with pytest.raises(ValueError):
+        _gradual_conf(
+            monkeypatch,
+            throttle_steps="{'read': ['100000', '200000', 'unthrottled']}",
+            threads=r"{'read': 620}",
+            connections_per_host=connections_per_host,
+        )
+
+
+# ---------------------------------------------------------------------------
 # SCTConfiguration._as_list  (stress-cmd loop normalisation helper)
 # ---------------------------------------------------------------------------
 

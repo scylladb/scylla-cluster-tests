@@ -25,6 +25,7 @@ class Workload:
     workload_type: str
     cs_cmd_tmpl: list
     cs_cmd_warm_up: list | None
+    connections_per_host: list[int] | int | None
     num_threads: Union[List[int], int]
     throttle_steps: list
     preload_data: bool
@@ -39,6 +40,9 @@ class Workload:
         if isinstance(self.num_threads, int):
             # If only one thread count is provided, convert it to a list
             self.num_threads = [self.num_threads]
+        if isinstance(self.connections_per_host, int):
+            # If only one connections per host count is provided, convert it to a list
+            self.connections_per_host = [self.connections_per_host]
 
         # Normalize throttle_steps to dict format for internal use
         # Convert string/int steps to dict: '100000' -> {rate: '100000'}
@@ -93,6 +97,19 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 severity=Severity.CRITICAL,
             ).publish()
         return throttle_steps[workload_type]
+
+    def connections_per_host(self, workload_type) -> list[int] | int | None:
+        """Resolve connectionsPerHost for a workload, or None when not configured.
+
+        Unlike throttle_steps/step_duration this parameter is optional: stress tools other than
+        cassandra-stress (latte, scylla-bench, cql-stress, logstor) have no '$connections_per_host'
+        placeholder and their load-steps fragments do not set it. Returning None makes run_step()
+        skip the substitution entirely.
+        """
+        connections_per_host = self.params.get("perf_gradual_connections_per_host")
+        if not connections_per_host:
+            return None
+        return connections_per_host.get(workload_type)
 
     def get_num_threads_for_workload(self, workload_type):
         """
@@ -197,6 +214,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_m"),
             cs_cmd_warm_up=self.params.get("stress_cmd_cache_warmup"),
+            connections_per_host=self.connections_per_host(workload_type),
             num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
             preload_data=True,
@@ -222,6 +240,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_w"),
             cs_cmd_warm_up=None,
+            connections_per_host=self.connections_per_host(workload_type),
             num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
             preload_data=False,
@@ -247,6 +266,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_r"),
             cs_cmd_warm_up=self.params.get("stress_cmd_cache_warmup"),
+            connections_per_host=self.connections_per_host(workload_type),
             num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
             preload_data=True,
@@ -272,6 +292,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload_type=workload_type,
             cs_cmd_tmpl=self.params.get("stress_cmd_read_disk"),
             cs_cmd_warm_up=None,
+            connections_per_host=self.connections_per_host(workload_type),
             num_threads=self.get_num_threads_for_workload(workload_type),
             throttle_steps=self.throttle_steps(workload_type),
             preload_data=True,
@@ -408,6 +429,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 stress_cmd_to_run = stress_cmd_to_run.replace("$threads", str(step_params["threads"]))
             if "concurrency" in step_params:
                 stress_cmd_to_run = stress_cmd_to_run.replace("$concurrency", str(step_params["concurrency"]))
+            if "connections_per_host" in step_params:
+                stress_cmd_to_run = stress_cmd_to_run.replace(
+                    "$connections_per_host", str(step_params["connections_per_host"])
+                )
             if "throttle" in step_params:
                 stress_cmd_to_run = stress_cmd_to_run.replace("$throttle", step_params["throttle"])
             if step_duration is not None:
@@ -478,20 +503,25 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         return self._step_names(step_names, total_counts)
 
     @staticmethod
-    def update_num_threads_for_steps(workload: Workload):
+    def update_workload_for_steps(workload: Workload):
         """
-        Ensures that the `num_threads` list in the workload matches the length of `throttle_steps`.
-        If only one thread count is provided but multiple throttle steps exist, the single value is repeated
-        to match the number of steps.
+        Ensures the per-step lists in the workload match the length of `throttle_steps`.
 
         Args:
-            workload (Workload): The workload namedtuple containing `num_threads` and `throttle_steps`.
+            workload (Workload): The workload containing `num_threads`, `connections_per_host`
+                and `throttle_steps`.
 
         Returns:
-            Workload: A new Workload instance with an updated `num_threads` list if needed.
+            Workload: A new Workload instance with the per-step lists expanded if needed.
         """
-        if len(workload.num_threads) == 1 and len(workload.throttle_steps) > 1:
-            workload = replace(workload, num_threads=[workload.num_threads[0]] * len(workload.throttle_steps))
+        if len(workload.throttle_steps) > 1:
+            if len(workload.num_threads) == 1:
+                workload = replace(workload, num_threads=[workload.num_threads[0]] * len(workload.throttle_steps))
+            if workload.connections_per_host and len(workload.connections_per_host) == 1:
+                workload = replace(
+                    workload,
+                    connections_per_host=[workload.connections_per_host[0]] * len(workload.throttle_steps),
+                )
         return workload
 
     @staticmethod
@@ -525,13 +555,14 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
     # pylint: disable=too-many-arguments,too-many-locals
     def run_gradual_increase_load(self, workload: Workload, stress_num, num_loaders, test_name):  # noqa: PLR0914
-        workload = self.update_num_threads_for_steps(workload=workload)
+        workload = self.update_workload_for_steps(workload=workload)
 
         if workload.cs_cmd_warm_up is not None:
             # Use the maximum thread count for warmup to ensure the cache is warmed up with the highest level of concurrency
             # Build warmup params dict
-            max_threads = max(workload.num_threads)
-            warmup_params = {"threads": max_threads}
+            warmup_params = {"threads": max(workload.num_threads)}
+            if workload.connections_per_host:
+                warmup_params["connections_per_host"] = max(workload.connections_per_host)
             # If any throttle step has concurrency, use max for warmup
             concurrency_values = [step.get("concurrency") for step in workload.throttle_steps if "concurrency" in step]
             if concurrency_values:
@@ -543,13 +574,18 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         total_summary = {}
 
         sequential_steps = self.get_sequential_throttle_steps(workload)
-        for throttle_step_dict, num_threads, current_throttle_step in zip(
-            workload.throttle_steps, workload.num_threads, sequential_steps
+        # connections_per_host is optional; pad with None so the zip() below stays aligned
+        connections_per_step = workload.connections_per_host or [None] * len(workload.throttle_steps)
+        for throttle_step_dict, connections_per_host, num_threads, current_throttle_step in zip(
+            workload.throttle_steps, connections_per_step, workload.num_threads, sequential_steps
         ):
             self.prepare_schema(workload=workload)
 
             # Build step_params dict from throttle_step_dict and num_threads
             step_params = dict(throttle_step_dict)  # Copy the dict
+
+            if connections_per_host is not None:
+                step_params["connections_per_host"] = connections_per_host
 
             # Add threads from num_threads if not already in step dict
             if "threads" not in step_params:
@@ -654,6 +690,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 stress_cmd_to_run = stress_cmd_to_run.replace("$threads", str(params_dict["threads"]))
             if "concurrency" in params_dict:
                 stress_cmd_to_run = stress_cmd_to_run.replace("$concurrency", str(params_dict["concurrency"]))
+            if "connections_per_host" in params_dict:
+                stress_cmd_to_run = stress_cmd_to_run.replace(
+                    "$connections_per_host", str(params_dict["connections_per_host"])
+                )
 
             params.update({"stress_cmd": stress_cmd_to_run})
             # Run all stress commands

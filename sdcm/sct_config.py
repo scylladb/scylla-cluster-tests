@@ -1922,6 +1922,14 @@ class SCTConfiguration(BaseModel):
         description="Threads amount of stress load for gradual performance test per sub-test. "
         "Example: {'read': 100, 'write': [200, 300], 'mixed': 300}",
     )
+    perf_gradual_connections_per_host: DictOrStr = SctField(
+        description="Number of cassandra-stress connections per host ('connectionsPerHost') for gradual "
+        "performance tests. Per workload type, the value is either a single integer applied to every "
+        "throttle step, or a list with one entry per perf_gradual_throttle_steps entry for that workload. "
+        "Substituted into the '$connections_per_host' placeholder of the stress commands. Optional: "
+        "workloads and stress tools without that placeholder simply omit it. "
+        "Example: {'read': [8, 100, 1000, 3750], 'write': 8, 'mixed': 8, 'read_disk_only': 8}",
+    )
     perf_gradual_throttle_steps: DictOrStr = SctField(
         description="Used for gradual performance test. Define throttle for load step in ops. "
         "Supports three formats: "
@@ -3966,7 +3974,7 @@ class SCTConfiguration(BaseModel):
             )
             return default
 
-    def _validate_perf_gradual_throttle_steps(self):
+    def _validate_perf_gradual_throttle_steps(self):  # noqa: PLR0912
         """Validate perf_gradual_throttle_steps configuration parameter."""
         if not (performance_throughput_params := self.get("perf_gradual_throttle_steps")):
             return
@@ -4060,6 +4068,32 @@ class SCTConfiguration(BaseModel):
                     raise ValueError(
                         f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
                         f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
+                    )
+
+            # perf_gradual_connections_per_host mirrors perf_gradual_threads: a single value broadcast
+            # to all steps, or one value per throttle step. Unlike threads it is optional -- stress tools
+            # without a '$connections_per_host' placeholder never define it.
+            gradual_cph = self.get("perf_gradual_connections_per_host")
+            if gradual_cph and workload in gradual_cph:
+                if not isinstance(gradual_cph[workload], list | int):
+                    raise ValueError(f"perf_gradual_connections_per_host for {workload} should be a list or integer")
+
+                if isinstance(gradual_cph[workload], int):
+                    gradual_cph[workload] = [gradual_cph[workload]]
+
+                for connections in gradual_cph[workload]:
+                    # bool is a subclass of int, guard against True/False being read as 1/0.
+                    if not isinstance(connections, int) or isinstance(connections, bool) or connections <= 0:
+                        raise ValueError(
+                            f"Invalid connections per host for '{workload}': {connections} (must be a positive integer)"
+                        )
+
+                if not gradual_cph[workload] or (
+                    len(gradual_cph[workload]) > 1 and len(gradual_cph[workload]) != len(params)
+                ):
+                    raise ValueError(
+                        f"perf_gradual_connections_per_host for {workload} should be a single-element list or "
+                        f"integer, or a list with the same length as perf_gradual_throttle_steps for {workload}"
                     )
 
     def _replace_docker_image_latest_tag(self):
