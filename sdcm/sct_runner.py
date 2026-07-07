@@ -310,7 +310,8 @@ class SctRunner(ABC):
             # Make sure that cloud-init finished running.
             until [ -f /var/lib/cloud/instance/boot-finished ]; do sleep 1; done
 
-            echo "fs.aio-max-nr = {AIO_MAX_NR_RECOMMENDED_VALUE}" >> /etc/sysctl.conf
+            echo "fs.aio-max-nr = {AIO_MAX_NR_RECOMMENDED_VALUE}" > /etc/sysctl.d/99-sct-runner.conf
+            sysctl --system
             echo "{login_user} soft nofile 65536" >> /etc/security/limits.conf
             echo "jenkins soft nofile 65536" >> /etc/security/limits.conf
             echo "root soft nofile 65536" >> /etc/security/limits.conf
