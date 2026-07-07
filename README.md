@@ -94,11 +94,8 @@ hydra run-test longevity_test.LongevityTest.test_custom_time --backend azure --c
 If you wish to run the tests on a local machine, ensure you have Docker installed and running.
 If necessary, set a higher value for asynchronous I/O by:
 ```bash
-sudo nano /etc/sysctl.conf
-# Edit or add the following line:
-# fs.aio-max-nr=3000000
-# Save and exit the file, then apply the changes:
-sudo sysctl -p
+echo "fs.aio-max-nr=3000000" | sudo tee /etc/sysctl.d/99-sct-aio.conf
+sudo sysctl --system
 ```
 For the purpose of debugging a simple logic of a nemesis, for example, it would be recommended to use Docker backend.
 ```bash

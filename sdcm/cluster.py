@@ -591,8 +591,8 @@ class BaseNode(AutoSshContainerMixin):
                 try:
                     self.remoter.sudo(
                         shell_script_cmd("""\
-                    echo 'kernel.perf_event_paranoid = 0' >> /etc/sysctl.conf
-                    sysctl -p
+                    echo 'kernel.perf_event_paranoid = 0' > /etc/sysctl.d/99-sct-perf.conf
+                    sysctl --system
                     """),
                         verbose=True,
                     )
