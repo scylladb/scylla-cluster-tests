@@ -35,8 +35,8 @@ cmd_checkout() {
         --jq '{base: .baseRefName, head: .headRefName, headRepoOwner: .headRepositoryOwner.login}')"
 
     local head_ref head_repo_owner
-    head_ref="$(echo "$metadata" | grep -o '"head":"[^"]*"' | cut -d'"' -f4)"
-    head_repo_owner="$(echo "$metadata" | grep -o '"headRepoOwner":"[^"]*"' | cut -d'"' -f4)"
+    head_ref="$(echo "$metadata" | jq -r '.head')"
+    head_repo_owner="$(echo "$metadata" | jq -r '.headRepoOwner')"
 
     # Try normal checkout first. If it fails (diverged branch from a previous
     # worktree), fetch the remote branch and hard-reset to it.
@@ -58,7 +58,7 @@ cmd_checkout() {
     echo "=== PUSH INSTRUCTIONS ==="
     echo "Remote: ${head_repo_owner}"
     echo "Branch: ${head_ref}"
-    echo "Command: .claude/scripts/fix-backport.sh push ${head_repo_owner} ${head_ref}"
+    echo "Command: ${SCRIPT} push ${head_repo_owner} ${head_ref}"
 }
 
 cmd_rebase() {
