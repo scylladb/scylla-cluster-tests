@@ -859,7 +859,11 @@ class AwsSctRunner(SctRunner):
         runner_image = aws_region.resource.Image(image_id)
         runner_image.wait_until_exists()
 
-        LOGGER.info("Image '%s' exists and ready. Tagging...", image_id)
+        LOGGER.info("Waiting for image '%s' to become available...", image_id)
+        waiter = aws_region.client.get_waiter("image_available")
+        waiter.wait(ImageIds=[image_id])
+
+        LOGGER.info("Image '%s' is available. Tagging...", image_id)
         runner_image.create_tags(Tags=[{"Key": key, "Value": value} for key, value in self.image_tags.items()])
         LOGGER.info("Tagging completed.")
 
