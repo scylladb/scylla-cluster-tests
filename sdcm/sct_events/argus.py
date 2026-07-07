@@ -34,6 +34,7 @@ from sdcm.utils.argus import Argus
 
 
 ARGUS_EVENT_AGGREGATOR_TIME_WINDOW: float = 90  # seconds
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -109,14 +110,20 @@ class ArgusEventPostman(BaseEventsProcess[SCTArgusEvent, None], threading.Thread
     def run(self) -> None:
         self.enabled.wait()
 
-        for event in self.inbound_events():  # events from ArgusAggregator
-            with verbose_suppress(
-                "ArgusEventPostman failed to post an event to '%s' endpoint.\nEvent: %s",
-                self._argus_client.Routes.SUBMIT_EVENT,
-                event,
-            ):
-                if self._argus_client:
-                    self._argus_client.submit_event(event)
+        with verbose_suppress("ArgusEventPostman failed while consuming inbound events"):
+            for event in self.inbound_events():  # events from ArgusAggregator
+                self._submit_event(event)
+
+    def _submit_event(self, event: SCTArgusEvent) -> None:
+        """Post a single event to Argus, swallowing and logging any failure (see verbose_suppress)."""
+        if not self._argus_client:
+            return
+        with verbose_suppress(
+            "ArgusEventPostman failed to post an event to '%s' endpoint.\nEvent: %s",
+            self._argus_client.Routes.SUBMIT_EVENT,
+            event,
+        ):
+            self._argus_client.submit_event(event)
 
     def enable_argus_posting(self) -> None:
         self._argus_client = Argus.get().client
