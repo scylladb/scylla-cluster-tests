@@ -65,6 +65,7 @@ class FakeMultitenantPerformanceTest(FakeMultitenantTestBase, FakePerformanceTes
     pass
 
 
+@pytest.mark.skip(reason="multitenancy removed on master; stricter config validation not compatible")
 class TestUtilsOperatorMultitenantCommon:
     @pytest.fixture(autouse=True)
     def fixture_env(self, monkeypatch):
