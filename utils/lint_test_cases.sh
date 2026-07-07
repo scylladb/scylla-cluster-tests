@@ -7,7 +7,7 @@ OUT=$(($OUT + $?))
 SCT_AZURE_IMAGE_DB=image SCT_AZURE_REGION_NAME="eastus" SCT_AZURE_INSTANCE_TYPE_DB=Standard_E4s_v5 ./sct.py lint-yamls --backend azure -i azure
 OUT=$(($OUT + $?))
 
-SCT_OCI_IMAGE_DB=image SCT_OCI_REGION_NAME="us-ashburn-1" SCT_OCI_INSTANCE_TYPE_DB=VM.Standard3.Flex ./sct.py lint-yamls --backend oci -i 'oci,oel'
+SCT_OCI_IMAGE_DB=image SCT_OCI_REGION_NAME="us-ashburn-1" SCT_OCI_INSTANCE_TYPE_DB=VM.Standard3.Flex SCT_SCYLLA_REPO='http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla-2021.1.repo' ./sct.py lint-yamls --backend oci -i 'oci,oel'
 OUT=$(($OUT + $?))
 
 SCT_GCE_IMAGE_DB=image SCT_GCE_INSTANCE_TYPE_DB=n2-standard-2 SCT_SCYLLA_REPO='http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla-2021.1.repo' ./sct.py lint-yamls -b gce -i 'rolling,artifacts,private-repo,gce,custom-d3,jepsen' -e 'multi-dc,multiDC,docker,azure,oci,5dcs,oel'
