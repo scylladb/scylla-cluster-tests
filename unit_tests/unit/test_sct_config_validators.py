@@ -6,6 +6,7 @@ from sdcm.sct_config import (
     SCTConfiguration,
     boolean_or_space_separated_booleans,
     dict_or_str,
+    dict_or_str_or_int,
     int_or_space_separated_ints,
     str_or_list_or_eval,
 )
@@ -145,6 +146,65 @@ def test_dict_or_str_valid(input_val, expected):
 def test_dict_or_str_invalid(input_val):
     with pytest.raises(ValueError):
         dict_or_str(input_val)
+
+
+# ---------------------------------------------------------------------------
+# dict_or_str_or_int
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "input_val,expected",
+    [
+        (None, None),
+        (8, 8),
+        (0, 0),
+        ("8", 8),
+        ({"read": 8, "write": 4}, {"read": 8, "write": 4}),
+        ("{'read': 8, 'write': 4}", {"read": 8, "write": 4}),
+    ],
+)
+def test_dict_or_str_or_int_valid(input_val, expected):
+    assert dict_or_str_or_int(input_val) == expected
+
+
+@pytest.mark.parametrize(
+    "input_val",
+    [
+        "plain string",
+        "[1, 2]",
+        1.5,
+        True,  # bool must not be accepted as an int
+        "True",
+    ],
+)
+def test_dict_or_str_or_int_invalid(input_val):
+    with pytest.raises(ValueError):
+        dict_or_str_or_int(input_val)
+
+
+@pytest.mark.parametrize(
+    "env_value,expected",
+    [
+        (None, None),  # no default (like other perf_gradual_* params); value comes from the load-steps fragment
+        ("16", 16),
+        (
+            "{'read': 8, 'write': 16, 'mixed': 32, 'read_disk_only': 8}",
+            {"read": 8, "write": 16, "mixed": 32, "read_disk_only": 8},
+        ),
+    ],
+)
+def test_perf_gradual_connections_per_host_config(monkeypatch, env_value, expected):
+    """perf_gradual_connections_per_host resolves as int or per-workload dict (no default when unset)."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    if env_value is not None:
+        monkeypatch.setenv("SCT_PERF_GRADUAL_CONNECTIONS_PER_HOST", env_value)
+
+    conf = SCTConfiguration()
+    assert conf["perf_gradual_connections_per_host"] == expected
 
 
 # ---------------------------------------------------------------------------

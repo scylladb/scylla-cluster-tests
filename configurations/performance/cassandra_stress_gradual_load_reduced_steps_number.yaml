@@ -1,4 +1,5 @@
 # Define load ops for steps
+perf_gradual_connections_per_host: 8
 # # For debugging, you can set a specific thread count for each step (per load).
 ## The value of perf_gradual_threads[load] must be either:
 ##   - a single-element list or integer (applied to all throttle steps)

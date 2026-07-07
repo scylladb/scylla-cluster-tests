@@ -1,0 +1,14 @@
+# "many connections" variant of cassandra_stress_gradual_load_steps_i8g.yaml.
+# Drives a high cassandra-stress connection count (connectionsPerHost) and thread count to
+# stress connection scaling. The throttle steps and step durations are kept identical to the
+# i8g fragment; only perf_gradual_connections_per_host and perf_gradual_threads differ.
+perf_gradual_connections_per_host: 3750
+# perf_gradual_threads == perf_gradual_connections_per_host on purpose: the driver evenly spreads new
+# requests across the connection pool, but only min(threads, connectionsPerHost) connections can be
+# busy at any instant. Matching them keeps all opened connections simultaneously busy, not just open.
+perf_gradual_threads: {"read": 3750, "write": 3750, "mixed": 3750, "read_disk_only": 3750}
+## The value of perf_gradual_throttle_steps[load] is a percentage of the max throughput (unthrottled) for that load type, which is determined by a preliminary run of the stress command with no throttle and the specified thread count.
+perf_gradual_throttle_steps: {"read": ['500000', '900000', '1200000', '1500000', 'unthrottled'], "mixed": ['250000', '480000', '600000', '750000', 'unthrottled'], "write": ['350000', '600000', 'unthrottled'], "read_disk_only": ['110000', '220000', '330000', '400000', 'unthrottled']}  # where every value is in ops
+perf_gradual_step_duration: {"read": '30m', "write": None, "mixed": '30m', "read_disk_only": '30m'}
+
+instance_type_loader: 'c7i.16xlarge'
