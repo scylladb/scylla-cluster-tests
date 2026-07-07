@@ -180,7 +180,7 @@ class SctRunnerInfo:
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
 
-    VERSION = "1.18"  # Version of the Image
+    VERSION = "1.19"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
