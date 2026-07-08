@@ -331,6 +331,7 @@ class MatrixConfig(BaseModel):
 
     jobs: list[JobConfig]
     defaults: dict = Field(default_factory=dict)
+    default_scylla_version: str = ""
     cron_triggers: list[CronTriggerConfig] = Field(default_factory=list)
     email_recipients: list[str] = Field(default_factory=list)
 
@@ -1015,7 +1016,7 @@ def send_trigger_matrix_email(
         logger.warning("Failed to send email report: %s", exc)
 
 
-def trigger_matrix(
+def trigger_matrix(  # noqa: PLR0914
     matrix_file: str,
     scylla_version: str,
     filter_version: str | None = None,
@@ -1048,6 +1049,7 @@ def trigger_matrix(
         JenkinsTriggerError: If Jenkins credentials are missing (non-dry-run).
     """
     config = load_matrix_config(matrix_file)
+    scylla_version = scylla_version or config.default_scylla_version
     resolved_folder = determine_job_folder(filter_version or scylla_version, job_folder)
 
     skip_list = [s.strip() for s in skip_jobs.split(",") if s.strip()] if skip_jobs else []

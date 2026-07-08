@@ -12,6 +12,8 @@ jenkinsfiles:
 #
 # Triggered manually with unified_package URL from a completed PGO build.
 
+default_scylla_version: "master"
+
 defaults:
   provision_type: "on_demand"
   post_behavior_db_nodes: "destroy"
