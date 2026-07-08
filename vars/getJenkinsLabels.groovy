@@ -58,9 +58,9 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'aws': 'aws-sct-builders-eu-west-1-v4-asg',
                           'azure-eastus': 'aws-sct-builders-us-east-1-v4-asg',
                           'aws-fips': 'aws-sct-builders-us-east-1-v4-fibs-CI-FIPS',
-                          'oci': 'oci-sct-builders-us-ashburn-1-v2',
-                          'oci-us-ashburn-1': 'oci-sct-builders-us-ashburn-1-v2',
-                          'oci-us-phoenix-1': 'oci-sct-builders-us-phoenix-1-v2',
+                          'oci': 'oci-sct-builders-us-ashburn-1-v1',
+                          'oci-us-ashburn-1': 'oci-sct-builders-us-ashburn-1-v1',
+                          'oci-us-phoenix-1': 'oci-sct-builders-us-phoenix-1-v1',
                           ]
 
     def cloud_provider = getCloudProviderFromBackend(backend)

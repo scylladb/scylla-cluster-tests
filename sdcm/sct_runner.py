@@ -1398,22 +1398,15 @@ class OciSctRunner(SctRunner):
     LONGTERM_TEST_INSTANCE_TYPE = "VM.Standard.E4.Flex-4-16"  # 4 vcpus, 16G
     OCI_CLI_VERSION = "3.76.2"  # Pinned version for reproducibility
 
-    # Custom Ubuntu 26.04 image created by upgrading 24.04 in-place.
-    # OCI marketplace does not have Ubuntu 26.04 yet; this image was built
-    # from the marketplace 24.04 image via do-release-upgrade -d.
-    # Switch to get_ubuntu_image_ocid(version="26.04") once Canonical publishes
-    # an official 26.04 image to the OCI marketplace.
-    BASE_IMAGE = "ocid1.image.oc1.iad.aaaaaaaa25pea47rb7sjmv7wwrap2y53nbr6iumxqxxdffil4nfjjtqqjtiq"
-
-    # TODO: use following instead of the hardcoded custom image ID when OCI gets official Ubuntu26
-    # @cached_property
-    # def BASE_IMAGE(self) -> str:
-    #     """Get the latest Ubuntu 26.04 image for the source region."""
-    #     return get_ubuntu_image_ocid(
-    #         compartment_id=self.oci_region_src.compartment_id,
-    #         region=self.SOURCE_IMAGE_REGION,
-    #         version="26.04",
-    #     )
+    @cached_property
+    def BASE_IMAGE(self) -> str:
+        """Get the latest Ubuntu 24.04 image for the source region."""
+        # TODO: switch to the Ubuntu 26.04
+        return get_ubuntu_image_ocid(
+            compartment_id=self.oci_region_src.compartment_id,
+            region=self.SOURCE_IMAGE_REGION,
+            version="24.04",
+        )
 
     def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration):
         availability_zone = availability_zone or (params.get("availability_zone") if params else "")
