@@ -11,7 +11,7 @@ FILE="$1"
 CHUNK_SIZE="$2"
 ARCHIVE_NAME="$3"
 
-WORK_DIR=$(mktemp -d)
+WORK_DIR=$(mktemp -d --tmpdir=/var/tmp)
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 split --line-bytes="$CHUNK_SIZE" --numeric-suffixes=1 --additional-suffix=".part" "$FILE" "$WORK_DIR/chunk_"
