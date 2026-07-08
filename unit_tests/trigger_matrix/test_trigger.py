@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import jenkins as jenkins_lib
 import pytest
+import yaml
 
 from sdcm.utils.trigger_matrix import JenkinsTriggerError, trigger_jenkins_job, trigger_matrix
 
@@ -165,3 +166,30 @@ def test_unknown_skip_jobs_logs_warning(sample_matrix_yaml, caplog):
             dry_run=True,
         )
     assert any("not found in matrix" in record.message for record in caplog.records)
+
+
+def test_default_scylla_version_used_when_empty(tmp_path):
+    """When scylla_version is empty, trigger_matrix uses default_scylla_version from the YAML."""
+    data = {
+        "default_scylla_version": "master",
+        "defaults": {"provision_type": "on_demand"},
+        "jobs": [
+            {
+                "job_name": "/scylla-enterprise/perf-regression/perf-test",
+                "backend": "aws",
+                "region": "us-east-1",
+                "labels": [],
+                "exclude_versions": [],
+                "params": {"unified_package": "https://example.com/scylla-unified.tar.gz"},
+            },
+        ],
+    }
+    matrix_file = tmp_path / "pgo-matrix.yaml"
+    matrix_file.write_text(yaml.dump(data))
+
+    results = trigger_matrix(
+        matrix_file=str(matrix_file),
+        scylla_version="",
+        dry_run=True,
+    )
+    assert len(results["triggered"]) == 1
