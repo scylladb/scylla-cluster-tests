@@ -20,7 +20,7 @@ from typing import Type, Optional, List, Tuple, Any
 import dateutil.parser
 from invoke.runners import Result
 
-from sdcm.sct_events import Severity, SctEventProtocol
+from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent, LogEventProtocol, T_log_event, SctEvent
 from sdcm.sct_events.stress_events import BaseStressEvent, StressEvent, StressEventProtocol
 
@@ -87,22 +87,7 @@ class LatteStressEvent(StressEvent): ...
 class CqlStressCassandraStressEvent(StressEvent): ...
 
 
-class CassandraHarryEvent(StressEvent, abstract=True):
-    failure: Type[StressEventProtocol]
-    error: Type[SctEventProtocol]
-    timeout: Type[StressEventProtocol]
-    start: Type[StressEventProtocol]
-    finish: Type[StressEventProtocol]
-
-    @property
-    def msgfmt(self):
-        fmt = super(StressEvent, self).msgfmt + ": type={0.type} node={0.node} stress_cmd={0.stress_cmd}"
-        if self.errors:
-            return fmt + " error={0.errors_formatted}"
-        return fmt
-
-
-CassandraHarryEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR, timeout=Severity.ERROR)
+class CassandraHarryEvent(StressEvent): ...
 
 
 class YcsbStressEvent(StressEvent): ...

@@ -19,6 +19,7 @@ import logging
 
 from sdcm.loader import CassandraHarryStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.sct_events import Severity
 from sdcm.sct_events.loaders import CassandraHarryEvent, CASSANDRA_HARRY_ERROR_EVENTS_PATTERNS
 from sdcm.utils.argus import report_stress_command
 from sdcm.utils.docker_remote import RemoteDocker
@@ -85,10 +86,9 @@ class CassandraHarryThread(DockerBasedStressThread):
 
         node_cmd = f"STRESS_TEST_MARKER={self.shell_marker}; {node_cmd}"
 
-        CassandraHarryEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
-
         result = {}
-        harry_failure_event = harry_finish_event = None
+
+        harry_event = CassandraHarryEvent(node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name)
 
         report_stress_command(
             client=loader.parent_cluster.test_config.argus_client(),
@@ -108,6 +108,7 @@ class CassandraHarryThread(DockerBasedStressThread):
             cleanup_context,
         ):
             result = None
+            harry_event.begin_event()
             try:
                 docker_run_result = docker.run(
                     cmd=f"{node_cmd} -node {ip}",
@@ -120,27 +121,15 @@ class CassandraHarryThread(DockerBasedStressThread):
                 result = self._parse_harry_summary(docker_run_result.stdout.splitlines())
             except Exception as exc:  # noqa: BLE001
                 errors_str = format_stress_cmd_error(exc)
-                if "timeout" in errors_str:
-                    harry_failure_event = CassandraHarryEvent.timeout
-                elif self.stop_test_on_failure:
-                    harry_failure_event = CassandraHarryEvent.failure
+                harry_event.add_error([errors_str])
+                if "timeout" not in errors_str and self.stop_test_on_failure:
+                    harry_event.severity = Severity.CRITICAL
                 else:
-                    harry_failure_event = CassandraHarryEvent.error
-                harry_failure_event(
-                    node=loader,
-                    stress_cmd=self.stress_cmd,
-                    log_file_name=log_file_name,
-                    errors=[
-                        errors_str,
-                    ],
-                ).publish()
-            else:
-                harry_finish_event = CassandraHarryEvent.finish(
-                    node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name
-                )
-                harry_finish_event.publish()
+                    harry_event.severity = Severity.ERROR
+            finally:
+                harry_event.end_event()
 
-        return loader, result, harry_failure_event or harry_finish_event
+        return loader, result, harry_event
 
     @staticmethod
     def _parse_harry_summary(lines):
