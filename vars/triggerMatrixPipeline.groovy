@@ -113,8 +113,6 @@ def call(Map pipelineParams = [:]) {
                             }
                         }
 
-                        // Input sanitization — allow only safe characters
-                        def safePattern = ~/^[a-zA-Z0-9_.:\-\/,@\s]*$/
                         def paramChecks = [
                             'matrix_file': params.matrix_file,
                             'scylla_version': scyllaVersion,
@@ -135,12 +133,6 @@ def call(Map pipelineParams = [:]) {
                             'billing_project': params.billing_project,
                             'email_recipients': params.email_recipients,
                         ]
-
-                        paramChecks.each { name, value ->
-                            if (value && !(value ==~ safePattern)) {
-                                error("Invalid characters in parameter '${name}': ${value}")
-                            }
-                        }
 
                         if (!params.matrix_file?.trim()) {
                             error("'matrix_file' parameter is required")
