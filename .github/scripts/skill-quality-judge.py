@@ -53,6 +53,21 @@ def read_skill(skill_dir: Path) -> str | None:
     return skill_md.read_text()
 
 
+def _extract_json(text: str) -> str:
+    """Strip markdown code fences from a response if present."""
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        # Remove opening fence (```json or ```)
+        start = 1
+        # Remove closing fence if present
+        end = len(lines)
+        if end > start and lines[-1].strip() == "```":
+            end -= 1
+        text = "\n".join(lines[start:end]).strip()
+    return text
+
+
 def judge_skill(client, skill_name: str, content: str) -> dict:
     model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
     message = client.messages.create(
@@ -64,7 +79,7 @@ def judge_skill(client, skill_name: str, content: str) -> dict:
         system=RUBRIC_PROMPT,
     )
     text = message.content[0].text
-    return json.loads(text)
+    return json.loads(_extract_json(text))
 
 
 def main():
