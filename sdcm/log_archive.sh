@@ -1,31 +1,35 @@
-#!/bin/bash
-# Split a large log file into compressed chunks efficiently.
+#!/usr/bin/env bash
 # Usage: log_archive.sh <file> <chunk_size_bytes> <archive_name>
-#
-# Uses split for single-pass file splitting, then compresses chunks in parallel.
-# Disk-efficient: removes each raw chunk immediately after compression.
 
 set -euo pipefail
 
-FILE="$1"
+INPUT_FILE="$1"
 CHUNK_SIZE="$2"
 ARCHIVE_NAME="$3"
 
-WORK_DIR=$(mktemp -d --tmpdir=/var/tmp)
+WORK_DIR=${LOG_ARCHIVE_WORK_DIR:-$(mktemp -d --tmpdir=/var/tmp)}
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-split --line-bytes="$CHUNK_SIZE" --numeric-suffixes=1 --additional-suffix=".part" "$FILE" "$WORK_DIR/chunk_"
+export WORK_DIR ARCHIVE_NAME
 
-seq=0
-for chunk in "$WORK_DIR"/chunk_*.part; do
-    [ -f "$chunk" ] || continue
-    seq=$((seq + 1))
-    timestamp=$(head -1 "$chunk" | awk '{print $2,$3}' | sed -e 's/t://g;s/ /__/g;s/-/_/g;s/:/_/g;s/,/_/g;')
-    if [ -z "$timestamp" ] || [ "$timestamp" = "__" ]; then
-        timestamp="part_$(printf '%04d' $seq)"
-    fi
-    out_name="${timestamp}.${ARCHIVE_NAME}.zst"
-    zstd --rm -q "$chunk" -o "$out_name" &
-done
+# Injecting 'set -eu' into the subshell ensures failures abort the split process.
+# (Note: 'pipefail' is omitted as split defaults to /bin/sh, which is 'dash' on many distros).
+split --line-bytes="$CHUNK_SIZE" --numeric-suffixes=1 --additional-suffix=".part" \
+    --filter='
+        set -eu
+        if IFS= read -r first_line; then
+            chunk_seq=$(basename "$FILE" .part)
 
-wait
+            # Extract timestamp completely in-memory
+            timestamp=$(printf "%s\n" "$first_line" | awk "{print \$2,\$3}" | sed -e "s/t://g;s/ /__/g;s/-/_/g;s/:/_/g;s/,/_/g;")
+
+            if [ -z "$timestamp" ] || [ "$timestamp" = "__" ]; then
+                out_name="${chunk_seq}.${ARCHIVE_NAME}.zst"
+            else
+                out_name="${timestamp}.${chunk_seq}.${ARCHIVE_NAME}.zst"
+            fi
+
+            # Stream the first line + the remaining stdin directly into zstd
+            { printf "%s\n" "$first_line"; cat; } | zstd -q -o "$out_name"
+        fi
+    ' "$INPUT_FILE" "$WORK_DIR/chunk_"

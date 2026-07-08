@@ -14,6 +14,7 @@
 import os
 import shutil
 import subprocess
+import threading
 
 import pytest
 
@@ -229,7 +230,7 @@ def test_disk_efficiency_original_not_duplicated(tmp_path, large_log_file):
     assert len(part_files) == 0, f"Raw chunks should be removed after compression: {part_files}"
 
 
-def test_parallel_compression_produces_valid_archives(tmp_path, large_log_file):
+def test_many_chunks_produce_valid_archives(tmp_path, large_log_file):
     file_size = os.path.getsize(large_log_file)
     chunk_size = file_size // 8
 
@@ -247,3 +248,57 @@ def test_parallel_compression_produces_valid_archives(tmp_path, large_log_file):
     for zst_file in zst_files:
         result = subprocess.run(["zstd", "-t", str(zst_file)], capture_output=True, text=True, check=False)
         assert result.returncode == 0, f"Corrupt archive: {zst_file}"
+
+
+def test_peak_work_dir_size_bounded_to_single_chunk(tmp_path, large_log_file):
+    """Assert peak temp-dir size stays bounded — no raw chunks accumulate.
+
+    This is the core regression test for the streaming rewrite: the old approach
+    wrote all split chunks to WORK_DIR before compressing (peak = full file size),
+    while the new --filter approach pipes directly (peak ~ 0).
+    """
+
+    file_size = os.path.getsize(large_log_file)
+    chunk_size = file_size // 4
+
+    work_dir = tmp_path / "work"
+    work_dir.mkdir()
+
+    max_observed = [0]
+    stop_event = threading.Event()
+
+    def monitor_work_dir():
+        while not stop_event.is_set():
+            try:
+                total = sum(f.stat().st_size for f in work_dir.iterdir() if f.is_file())
+                max_observed[0] = max(max_observed[0], total)
+            except (FileNotFoundError, OSError):
+                pass
+            stop_event.wait(0.005)
+
+    monitor = threading.Thread(target=monitor_work_dir, daemon=True)
+    monitor.start()
+
+    env = os.environ.copy()
+    env["LOG_ARCHIVE_WORK_DIR"] = str(work_dir)
+
+    result = subprocess.run(
+        ["bash", LOG_ARCHIVE_SCRIPT, str(large_log_file), str(chunk_size), "sct.log"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    stop_event.set()
+    monitor.join(timeout=2)
+
+    assert result.returncode == 0, f"Script failed: {result.stderr}"
+
+    # With streaming, the work dir should never hold raw chunks.
+    # Allow a small margin for filesystem metadata / directory entries.
+    assert max_observed[0] < chunk_size, (
+        f"Peak work-dir usage was {max_observed[0]} bytes — expected < {chunk_size} (one chunk). "
+        f"Raw chunks are being written to disk instead of streamed."
+    )
