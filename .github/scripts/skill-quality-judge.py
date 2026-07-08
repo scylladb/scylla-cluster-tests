@@ -54,11 +54,16 @@ def read_skill(skill_dir: Path) -> str | None:
 
 
 def _extract_json(text: str) -> str:
-    """Strip markdown code fences from a response if present."""
+    """Strip markdown code fences from a response if present.
+
+    Handles: ```json, ```, ``` json, ```json extra, and empty lines after fence.
+    Skips the entire opening fence line regardless of its content (language tag,
+    extra text, etc.), then strips trailing whitespace.
+    """
     text = text.strip()
     if text.startswith("```"):
         lines = text.splitlines()
-        # Remove opening fence (```json or ```)
+        # Skip the entire opening fence line (handles ```json, ``` json, etc.)
         start = 1
         # Remove closing fence if present
         end = len(lines)
