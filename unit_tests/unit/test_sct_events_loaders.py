@@ -25,6 +25,7 @@ from sdcm.sct_events.loaders import (
     CassandraStressEvent,
     ScyllaBenchEvent,
     YcsbStressEvent,
+    CassandraHarryEvent,
     NdBenchStressEvent,
     CDCReaderStressEvent,
     KclStressEvent,
@@ -262,7 +263,7 @@ class TestScyllaBenchEvent:
         assert scylla_bench_event == pickle.loads(pickle.dumps(scylla_bench_event))
 
 
-@pytest.mark.parametrize("event_class", [YcsbStressEvent])
+@pytest.mark.parametrize("event_class", [YcsbStressEvent, CassandraHarryEvent])
 class TestConvertedStressEvents:
     """Stress events that moved from `.start()`/`.finish()` subevents to the continuous event pattern."""
 
