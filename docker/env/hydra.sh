@@ -233,6 +233,7 @@ function run_in_docker () {
            -v /var/run:/run
            -v /dev:/dev:rw
            --tmpfs "${HOME_DIR}/.local:exec,mode=1777"
+           -e HOME="${HOME_DIR}"
            -u ${USER_ID}
            )
     else
@@ -358,8 +359,12 @@ if [[ -n "$RUNNER_IP" ]]; then
 
     SCT_DIR="/home/ubuntu/scylla-cluster-tests"
     HOST_NAME="ip-${RUNNER_IP//./-}"
-    USER_ID=1000:1000
     RUNNER_CMD="ssh -o StrictHostKeyChecking=no ubuntu@${RUNNER_IP}"
+    if [ -z "$HYDRA_DRY_RUN" ]; then
+        USER_ID=$(${RUNNER_CMD} id -u):$(${RUNNER_CMD} id -g)
+    else
+        USER_ID=1000:1000
+    fi
     DOCKER_HOST="-H ssh://ubuntu@${RUNNER_IP}"
 fi
 
