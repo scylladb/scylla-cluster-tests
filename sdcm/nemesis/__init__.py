@@ -100,6 +100,7 @@ from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent, CoreDumpEvent
 from sdcm.sla.sla_tests import SlaTests
+from sdcm.snitch_configuration import SnitchConfig
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
@@ -4939,13 +4940,19 @@ class NemesisRunner:
                     parameters=[{"seeds": self.tester.db_cluster.seed_nodes_addresses}],
                 )
             ]
-            endpoint_snitch = self.cluster.params.get("endpoint_snitch") or ""
-            if endpoint_snitch.endswith("GossipingPropertyFileSnitch"):
-                rackdc_value = {"dc": "add_remove_nemesis_dc"}
-            else:
-                rackdc_value = {"dc_suffix": "_nemesis_dc"}
-        with new_node.remote_cassandra_rackdc_properties() as properties_file:
-            properties_file.update(**rackdc_value)
+
+        dc_suffix = "_nemesis_dc"
+        dc_name = f"add_remove{dc_suffix}"
+
+        SnitchConfig(node=new_node, datacenters=[dc_name]).apply(force=True)
+
+        endpoint_snitch = self.cluster.params.get("endpoint_snitch") or ""
+        if not endpoint_snitch.endswith("GossipingPropertyFileSnitch"):
+            # Non-GPFS snitches (Ec2Snitch, GoogleCloudSnitch, etc.) derive dc from cloud metadata
+            # and only read dc_suffix from the properties file to form the final dc name.
+            with new_node.remote_cassandra_rackdc_properties() as properties_file:
+                properties_file["dc_suffix"] = dc_suffix
+
         self.cluster.wait_for_init(node_list=[new_node], timeout=900, check_node_health=False)
         new_node.wait_node_fully_start()
         self.monitoring_set.reconfigure_scylla_monitoring()
