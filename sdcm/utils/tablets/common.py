@@ -1,5 +1,4 @@
 import logging
-import time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -26,31 +25,23 @@ class TabletsConfiguration:
         return "{" + ", ".join(items) + "}"
 
 
-def wait_no_tablets_migration_running(node, timeout: int = 3600):
+def wait_tablets_balanced(node, timeout: int = 3600):
     """
-    Waiting for having no ongoing tablets topology operations using REST API.
-    !!! It does not guarantee that tablets are balanced !!!
-    Keep in mind that it is good only to find when ongoing tablets topology operations is done.
-    Very next second another topology operation can be started.
-
-    doing it several times as there's a risk of:
-    "currently a small time window after adding nodes and before load balancing starts during which
-    topology may appear as quiesced because the state machine goes through an idle state before it enters load balancing state"
-    """
+    Wait for tablets to be balanced, no more pending splits/merges and no ongoing tablets topology operations using REST API.
+    A single request is enough as it is submitted as a global topology request and completes only after fresh tablet load stats produce an empty balance plan and tablets are idle."""
     if not is_tablets_feature_enabled(node):
         LOGGER.info("Tablets are disabled, skipping wait for balance")
         return
-    time.sleep(60)  # one minute gap before checking, just to give some time to the state machine
     client = RemoteCurlClient(host="127.0.0.1:10000", endpoint="", node=node)
-    LOGGER.info("Waiting for having no ongoing tablets topology operations")
+    LOGGER.info("Waiting for tablets balancing (no pending splits/merges, no ongoing topology operations)")
     try:
         with adaptive_timeout(Operations.TABLET_MIGRATION, node, timeout=timeout) as adaptive_timeout_value:
             client.run_remoter_curl(
                 method="POST", path="storage_service/quiesce_topology", params={}, timeout=adaptive_timeout_value
             )
-        LOGGER.info("All ongoing tablets topology operations are done")
+        LOGGER.info("Tablets are balanced")
     except Exception as exc:  # noqa: BLE001
         InfoEvent(
-            f"Failed to wait for having no ongoing tablets topology operations. Exception: {exc.__repr__()}",
+            f"Failed to wait for tablets to be balanced. Exception: {exc.__repr__()}",
             severity=Severity.ERROR,
         ).publish()

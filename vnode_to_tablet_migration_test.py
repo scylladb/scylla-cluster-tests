@@ -18,7 +18,7 @@ from enum import StrEnum
 
 from longevity_test import LongevityTest
 from sdcm.sct_events.system import InfoEvent
-from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+from sdcm.utils.tablets.common import wait_tablets_balanced
 from sdcm.wait import wait_for
 
 
@@ -148,8 +148,7 @@ class VnodeToTabletMigrationTest(LongevityTest):
             coordinator_node.run_nodetool(f"migrate-to-tablets finalize {ks}")
 
         InfoEvent(message="Step 6 - Waiting for tablet migration to fully complete").publish()
-        for migration_node in self.db_cluster.data_nodes:
-            wait_no_tablets_migration_running(migration_node, timeout=7200)
+        wait_tablets_balanced(self.db_cluster.data_nodes[0], timeout=7200)
 
         InfoEvent(message="Step 7 - Verifying migrated keyspaces have tablets in system.tablets").publish()
         with self.db_cluster.cql_connection_patient(coordinator_node, connect_timeout=600) as session:
