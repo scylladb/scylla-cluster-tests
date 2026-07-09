@@ -7,7 +7,7 @@ from typing import Callable, Dict, TYPE_CHECKING
 
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import is_system_keyspace, LOGGER
-from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+from sdcm.utils.tablets.common import wait_tablets_balanced
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
@@ -214,7 +214,7 @@ class DataCenterTopologyRfControl:
                     keyspace=keyspace, replication_factor=self.original_nodes_number, node=self.cluster.data_nodes[0]
                 )
         if node_to_wait_for_balance:
-            wait_no_tablets_migration_running(node_to_wait_for_balance)
+            wait_tablets_balanced(node_to_wait_for_balance)
 
     def decrease_keyspaces_rf(self):
         """

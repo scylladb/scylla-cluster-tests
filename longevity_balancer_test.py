@@ -23,7 +23,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import ParallelObject, get_node_disk_usage
-from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+from sdcm.utils.tablets.common import wait_tablets_balanced
 
 # Per requirement, load balance difference should be bellow 5% for nodes in the same rack
 # https://scylladb.atlassian.net/wiki/spaces/RND/pages/5505671/Size-Based+Load+Balancing+Requirement+Document#Performance
@@ -59,11 +59,7 @@ class LongevityBalancerTest(LongevityTest):
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
 
     def wait_for_balance(self):
-        # run multiple times because `storage_service/quiesce_topology` only returns when
-        # the topology operations that were ongoing when the command was issued are done
-        # but new operations can start right after that
-        for _ in range(3):
-            ParallelObject(objects=self.db_cluster.data_nodes, timeout=3600).run(wait_no_tablets_migration_running)
+        wait_tablets_balanced(self.db_cluster.data_nodes[0])
 
     def check_balance(self):
         rack_usages = defaultdict(list)

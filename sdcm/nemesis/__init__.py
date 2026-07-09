@@ -158,7 +158,7 @@ from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator, NemesisNodeA
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.sstable.sstable_utils import SstableUtils
-from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+from sdcm.utils.tablets.common import wait_tablets_balanced
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions, ComparableScyllaVersion
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
@@ -3872,7 +3872,7 @@ class NemesisRunner:
     def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:
         nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type)
         self.actions_log.info(f"New nodes added: {', '.join(node.name for node in nodes)}")
-        ParallelObject(objects=self.cluster.data_nodes, timeout=7200).run(wait_no_tablets_migration_running)
+        wait_tablets_balanced(self.cluster.data_nodes[0])
         return nodes
 
     @latency_calculator_decorator(legend="Decommission nodes: remove nodes from cluster")
