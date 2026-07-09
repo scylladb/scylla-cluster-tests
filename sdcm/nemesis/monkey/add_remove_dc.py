@@ -5,6 +5,7 @@ from sdcm.cluster import BaseNode
 from sdcm.exceptions import KillNemesis, UnsupportedNemesis
 from sdcm.nemesis import NemesisBaseClass
 from sdcm.provision.scylla_yaml import SeedProvider
+from sdcm.snitch_configuration import SnitchConfig
 from sdcm.utils.decorators import retrying, skip_on_capacity_issues
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.replication_strategy_utils import (
@@ -137,13 +138,16 @@ class AddRemoveDcNemesis(NemesisBaseClass):
             ]
 
         endpoint_snitch = self.runner.cluster.params.get("endpoint_snitch") or ""
-        if endpoint_snitch.endswith("GossipingPropertyFileSnitch"):
-            rackdc_value = {"dc": "add_remove_nemesis_dc"}
-        else:
-            rackdc_value = {"dc_suffix": "_nemesis_dc"}
+        dc_suffix = "_nemesis_dc"
+        dc_name = f"add_remove{dc_suffix}"
 
-        with node.remote_cassandra_rackdc_properties() as properties_file:
-            properties_file.update(**rackdc_value)
+        SnitchConfig(node=node, datacenters=[dc_name]).apply(force=True)
+
+        if not endpoint_snitch.endswith("GossipingPropertyFileSnitch"):
+            # Non-GPFS snitches (Ec2Snitch, GoogleCloudSnitch, etc.) derive dc from cloud metadata
+            # and only read dc_suffix from the properties file to form the final dc name.
+            with node.remote_cassandra_rackdc_properties() as properties_file:
+                properties_file["dc_suffix"] = dc_suffix
 
     def add_nodes_in_new_dc(self) -> None:
         """Add and initialize temporary nodes configured to join a new datacenter."""
