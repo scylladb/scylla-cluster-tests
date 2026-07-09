@@ -41,8 +41,9 @@ def dict_keys_to_camel_case(dct):
 
 
 class WaitableObject:
-    def __init__(self, error: AzureError = None):
+    def __init__(self, error: AzureError = None, value: Any = None):
         self.error = error
+        self.value = value
 
     def wait(self, timeout=None):
         if self.error:
@@ -50,6 +51,11 @@ class WaitableObject:
 
     def done(self) -> bool:
         return True
+
+    def result(self, timeout=None):
+        if self.error:
+            raise self.error
+        return self.value
 
 
 class ResultableObject:
@@ -435,7 +441,7 @@ class FakeNetworkInterface:
             self.path / resource_group_name / f"nic-{network_interface_name}.json", "w", encoding="utf-8"
         ) as file:
             json.dump(base, fp=file, indent=2)
-        return WaitableObject()
+        return WaitableObject(value=NetworkInterface.from_dict(base))
 
     def get(self, resource_group_name: str, network_interface_name: str) -> NetworkInterface:
         try:
