@@ -43,11 +43,12 @@ class SnitchConfig:
         else:
             return ""
 
-    def apply(self) -> None:
+    def apply(self, force: bool = False) -> None:
         """
         Apply snitch configuration to the node (only in cassandra-rackdc.properties, scylla.yaml must be updated separately.).
 
-        Returns `True` if require Scylla restart to make the effect.
+        Args:
+            force: If True, forcibly overwrite existing properties (used by AddRemoveDc nemesis).
         """
         properties = {
             "dc": self._datacenter,
@@ -59,7 +60,7 @@ class SnitchConfig:
 
         with self._node.remote_cassandra_rackdc_properties() as properties_file:
             for key, value in properties.items():
-                if hasattr(self._node, "query_oci_metadata"):
+                if force or hasattr(self._node, "query_oci_metadata"):
                     # NOTE: OCI images have predefined properties file with real data for dc and rack.
                     #       So, set it forcibly because defaulting will not have an effect.
                     properties_file[key] = value
