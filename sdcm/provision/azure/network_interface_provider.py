@@ -81,8 +81,7 @@ class NetworkInterfaceProvider:
             )
             pollers.append((nic_name, poller))
         for nic_name, poller in pollers:
-            poller.wait()
-            nic = self._azure_service.network.network_interfaces.get(self._resource_group_name, nic_name)
+            nic = poller.result()
             LOGGER.info("Provisioned nic %s in the %s resource group", nic.name, self._resource_group_name)
             self._cache[nic_name] = nic
             nics.append(nic)
