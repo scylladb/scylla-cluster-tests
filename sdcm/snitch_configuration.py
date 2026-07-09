@@ -60,7 +60,7 @@ class SnitchConfig:
 
         with self._node.remote_cassandra_rackdc_properties() as properties_file:
             for key, value in properties.items():
-                if force or hasattr(self._node, "query_oci_metadata"):
+                if force or self._node.parent_cluster.cluster_backend == "oci":
                     # NOTE: OCI images have predefined properties file with real data for dc and rack.
                     #       So, set it forcibly because defaulting will not have an effect.
                     properties_file[key] = value
