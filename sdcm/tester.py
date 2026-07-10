@@ -1869,6 +1869,21 @@ class ClusterTester(unittest.TestCase):
         else:
             self.monitors = NoMonitorSet()
 
+        db_type = self.params.get("db_type")
+        if db_type == "mixed_scylla":
+            self.test_config.mixed_cluster(True)
+            oracle_image = self.params.get("oci_image_db_oracle") or oci_image
+            self.cs_db_cluster = ScyllaOciCluster(
+                image_id=oracle_image,
+                root_disk_size=db_info["disk_size"],
+                instance_type=self.params.get("oci_instance_type_db_oracle"),
+                provisioners=provisioners,
+                n_nodes=self.params.get("n_test_oracle_db_nodes"),
+                user_name=self.params.get("oci_image_username"),
+                node_type="oracle-db",
+                **(common_params | {"user_prefix": user_prefix + "-oracle"}),
+            )
+
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         """Provision AWS cluster with optional region fallback."""
         if is_region_fallback_enabled(self.params) and len(self.params.region_names) == 1:

@@ -321,7 +321,7 @@ Format version of the user-data to use for scylla images,<br>default to what tag
 
 ## **oracle_scylla_version** / SCT_ORACLE_SCYLLA_VERSION
 
-Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'<br>Automatically lookup AMIs for formal versions.<br>WARNING: can't be used together with 'ami_id_db_oracle'
+Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'<br>Automatically looks up cloud images for formal versions.<br>WARNING: can't be used together with 'ami_id_db_oracle' and 'oci_image_db_oracle'
 
 **default:** 2026.1
 
@@ -2466,6 +2466,15 @@ Oracle Cloud instance shape to use for 'oracle' (2nd ref cluster) ScylladbDB clu
 ## **oci_image_db** / SCT_OCI_IMAGE_DB
 
 Oracle Cloud image to use for DB node(s)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **oci_image_db_oracle** / SCT_OCI_IMAGE_DB_ORACLE
+
+Oracle Cloud image to use for oracle (2nd ref cluster) DB node(s). If not set and 'oracle_scylla_version' is provided, it will be resolved automatically.
 
 **default:** N/A
 
