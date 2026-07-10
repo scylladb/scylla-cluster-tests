@@ -84,8 +84,10 @@ class DefinitionBuilder(abc.ABC):
         user_prefix = self.params.get("user_prefix")
         common_tags = TestConfig.common_tags()
         node_type_short = "db" if "db" in node_type else node_type
+        # Use distinct name prefix for oracle-db to avoid name collision with scylla-db
+        node_type_name = "oracle-db" if node_type == "oracle-db" else node_type_short
         short_test_id = self.test_config.test_id()[:8]
-        name = f"{user_prefix}-{node_type_short}-node-{short_test_id}-{region}-{index}".lower()
+        name = f"{user_prefix}-{node_type_name}-node-{short_test_id}-{region}-{index}".lower()
         action = self.params.get(f"post_behavior_{node_type_short}_nodes")
         tags = common_tags | {
             "NodeType": node_type,

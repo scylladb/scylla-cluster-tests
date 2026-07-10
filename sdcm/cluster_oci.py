@@ -394,6 +394,7 @@ class ScyllaOciCluster(cluster.BaseScyllaCluster, OciCluster):
         n_nodes=3,
         params=None,
         region_names=None,
+        node_type="scylla-db",
     ):
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "db-cluster")
         node_prefix = cluster.prepend_user_prefix(user_prefix, "db-node")
@@ -409,7 +410,7 @@ class ScyllaOciCluster(cluster.BaseScyllaCluster, OciCluster):
             n_nodes=n_nodes,
             params=params,
             region_names=region_names,
-            node_type="scylla-db",
+            node_type=node_type,
         )
         self.version = "2.1"
 

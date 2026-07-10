@@ -41,8 +41,20 @@ monitor_map = ConfigParamsMap(
     root_disk_size="root_disk_size_monitor",
 )
 
+oracle_db_map = ConfigParamsMap(
+    image_id="oci_image_db_oracle",
+    type="oci_instance_type_db_oracle",
+    user_name="oci_image_username",
+    root_disk_size="root_disk_size_db",
+)
+
 LOGGER = logging.getLogger(__name__)
-mapper: Dict[NodeTypeType, ConfigParamsMap] = {"scylla-db": db_map, "loader": loader_map, "monitor": monitor_map}
+mapper: Dict[NodeTypeType, ConfigParamsMap] = {
+    "scylla-db": db_map,
+    "oracle-db": oracle_db_map,
+    "loader": loader_map,
+    "monitor": monitor_map,
+}
 
 
 class OciDefinitionBuilder(DefinitionBuilder):
