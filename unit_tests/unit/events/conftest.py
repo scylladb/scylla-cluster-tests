@@ -4,7 +4,12 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
 class MainEventsContext(EventsUtilsMixin):
-    pass
+    """Keep event process state isolated from other tests using EventsUtilsMixin.
+
+    EventsUtilsMixin stores its runtime state on class attributes, so this dedicated
+    subclass gives the fixture its own namespace instead of sharing mutable state
+    with other helpers such as RealEventsTest.
+    """
 
 
 @pytest.fixture

@@ -37,11 +37,11 @@ LOGGER = logging.getLogger(__name__)
 @pytest.fixture(scope="module")
 def real_events():
     events = RealEventsTest()
-    events.setup_class()
+    RealEventsTest.setup_class()
     try:
         yield events
     finally:
-        events.teardown_class()
+        RealEventsTest.teardown_class()
 
 
 def test_disruption_skipped_event():
