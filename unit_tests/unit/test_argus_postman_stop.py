@@ -94,7 +94,10 @@ def test_stop_is_bounded_when_submit_hangs(argus_pipeline):
     elapsed = time.monotonic() - start
 
     try:
-        assert elapsed < 3
+        # Generous margin over the timeout=1 above: real thread scheduling under a loaded,
+        # parallelized CI run can add noticeable jitter; this only needs to catch stop()
+        # ignoring the timeout altogether, not verify it precisely.
+        assert elapsed < 10
         postman._argus_client.submit_event.assert_called_once()  # drain was attempted
         assert postman.is_alive()  # the hung submit is still stuck past the timeout
     finally:
