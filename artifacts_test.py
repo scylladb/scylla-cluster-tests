@@ -35,9 +35,19 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.perftune_validator import PerftuneOutputChecker
 from sdcm.utils.validators.iotune import IOTuneValidator
+from sdcm import wait
 from utils.scylla_doctor import ScyllaDoctor
 
 STRESS_CMD: str = "/usr/bin/cassandra-stress"
+
+# NVMe namespace-rescan repro test (nvme_rescan_repro) - see
+# docs/plans/testing/nvme-namespace-rescan-repro-test.md
+NVME_FAULT_INJECT_SERVICE = "sct-nvme-fault-inject.service"
+NVME_IMAGE_SETUP_SERVICE = "scylla-image-setup.service"
+NVME_MACHINE_IMAGE_CONFIGURED_MARKER = "/etc/scylla/machine_image_configured"
+# written by the remove-mode injector (see NvmeFaultInjectUserDataObject)
+NVME_FAULT_INJECT_EXPECTED_CONTROLLERS_FILE = "/var/lib/sct-nvme-fault-inject/expected_controllers"
+NVME_FAULT_INJECT_REMOVED_PCI_ADDRS_FILE = "/run/sct-nvme-fault-inject/removed"
 
 
 BACKENDS = {
@@ -539,6 +549,138 @@ class ArtifactsTest(ClusterTester):
         if backend == "docker":
             with self.logged_subtest("Check docker latest tags"):
                 self.verify_docker_latest_match_release()
+
+    def _wait_for_service_terminal_state(self, service_name: str, timeout: int) -> None:
+        def is_terminal() -> bool:
+            state = self.node.remoter.sudo(
+                f"systemctl show {service_name} --property=ActiveState --value", ignore_status=True
+            ).stdout.strip()
+            return state in ("active", "failed")
+
+        wait.wait_for(
+            is_terminal,
+            step=10,
+            timeout=timeout,
+            text=f"waiting for {service_name} to reach a terminal state",
+            throw_exc=True,
+        )
+
+    def test_nvme_namespace_rescan_repro(self):
+        """
+        Repro test for the scylla-machine-image NVMe namespace-rescan race fix
+        (see docs/plans/testing/nvme-namespace-rescan-repro-test.md). Only runs when the
+        'nvme_rescan_repro' test-case flag is set.
+
+        Reboots the node with a pre-injected fault and asserts scylla-image-setup.service
+        recovers via the fix's rescan path. The fault primitive depends on
+        'nvme_rescan_repro_mode':
+
+        - 'unbind' (default): local NVMe PCI function's driver unbound - the
+          "controller present, namespace missing" repro. Exercises only the fix's
+          PCI-bus-rescan fallback branch, and cannot work on NVMe-root SKUs (a bus
+          rescan can't rebind a still-registered pci_dev).
+        - 'remove': local NVMe PCI devices deleted outright on an NVMe-root SKU
+          (Standard_L8s_v4) - the "controller never enumerated" production incident that
+          scylla-machine-image commit 02bb3c74's unconditional PCI-bus rescan fixes.
+          Additionally asserts every removed PCI address was genuinely re-enumerated on
+          the repro boot, proving the bus rescan itself did the recovery.
+
+        See the plan's Risk Mitigation section for what each mode can and cannot prove.
+        """
+        if not self.params.get("nvme_rescan_repro"):
+            self.skipTest("nvme_rescan_repro test-case flag is not set")
+
+        with self.logged_subtest("verify the idempotency marker survived the first boot"):
+            # The marker must still be present after the first boot: it is what SCT's generic
+            # setUp() machine-image wait polls for, and the fault injector deliberately leaves it
+            # in place (see NvmeFaultInjectUserDataObject). It is removed by the fault-inject
+            # systemd unit only on the reboot triggered below, right before scylla-image-setup
+            # re-runs.
+            marker_present = self.node.remoter.sudo(
+                f"test -e {NVME_MACHINE_IMAGE_CONFIGURED_MARKER}", ignore_status=True
+            ).ok
+            assert marker_present, (
+                f"{NVME_MACHINE_IMAGE_CONFIGURED_MARKER} is missing after the first boot - "
+                f"the fault injector must leave it in place so setUp()'s machine-image wait succeeds"
+            )
+
+        pre_reboot_timestamp = int(self.node.remoter.sudo("date +%s").stdout.strip())
+
+        with self.logged_subtest("reboot node with injected NVMe fault"):
+            self.node.reboot()
+
+        with self.logged_subtest("wait for scylla-image-setup.service to reach a terminal state"):
+            self._wait_for_service_terminal_state(NVME_IMAGE_SETUP_SERVICE, timeout=1200)
+
+        with self.logged_subtest("verify machine_image_configured was refreshed by the re-run"):
+            marker_mtime = int(
+                self.node.remoter.sudo(f"stat -c %Y {NVME_MACHINE_IMAGE_CONFIGURED_MARKER}").stdout.strip()
+            )
+            assert marker_mtime > pre_reboot_timestamp, (
+                f"{NVME_MACHINE_IMAGE_CONFIGURED_MARKER} mtime is not after the reboot - "
+                "scylla-image-setup was skipped, not re-run"
+            )
+
+        with self.logged_subtest("verify the fault-injection unit actually ran"):
+            fault_inject_status = self.node.remoter.sudo(
+                f"systemctl show {NVME_FAULT_INJECT_SERVICE} --property=ExecMainStatus --value"
+            ).stdout.strip()
+            if fault_inject_status != "0":
+                journal = self.node.remoter.sudo(
+                    f"journalctl -u {NVME_FAULT_INJECT_SERVICE} -b 0 --no-pager", ignore_status=True
+                ).stdout
+                raise AssertionError(
+                    f"{NVME_FAULT_INJECT_SERVICE} did not exit 0 (ExecMainStatus={fault_inject_status}) - "
+                    f"the fault may not have been injected:\n{journal}"
+                )
+
+        with self.logged_subtest("verify scylla-image-setup recovered via the retry/rescan path"):
+            journal = self.node.remoter.sudo(f"journalctl -u {NVME_IMAGE_SETUP_SERVICE} -b 0 --no-pager").stdout
+            retry_idx = journal.find("No device names available yet, retrying...")
+            found_idx = journal.find("Found devices:")
+            assert retry_idx != -1, (
+                f"Expected retry log line not found in {NVME_IMAGE_SETUP_SERVICE} journal:\n{journal}"
+            )
+            assert found_idx != -1, (
+                f"Expected recovery log line not found in {NVME_IMAGE_SETUP_SERVICE} journal:\n{journal}"
+            )
+            assert retry_idx < found_idx, (
+                f"Recovery log line appeared before the retry log line - unexpected ordering:\n{journal}"
+            )
+
+            exec_status = self.node.remoter.sudo(
+                f"systemctl show {NVME_IMAGE_SETUP_SERVICE} --property=ExecMainStatus --value"
+            ).stdout.strip()
+            assert exec_status == "0", f"{NVME_IMAGE_SETUP_SERVICE} did not exit 0 (ExecMainStatus={exec_status})"
+
+        if self.params.get("nvme_rescan_repro_mode") == "remove":
+            with self.logged_subtest("verify every removed PCI device was genuinely re-enumerated"):
+                expected_count = int(
+                    self.node.remoter.sudo(f"cat {NVME_FAULT_INJECT_EXPECTED_CONTROLLERS_FILE}").stdout.strip()
+                )
+                removed_addrs = self.node.remoter.sudo(f"cat {NVME_FAULT_INJECT_REMOVED_PCI_ADDRS_FILE}").stdout.split()
+                assert len(removed_addrs) == expected_count, (
+                    f"injector removed {len(removed_addrs)} PCI devices but the first boot recorded "
+                    f"{expected_count} non-root NVMe controllers - partial injection voids the repro"
+                )
+                kernel_log = self.node.remoter.sudo("journalctl -k -b 0 --no-pager").stdout
+                for pci_addr in removed_addrs:
+                    enumerations = kernel_log.count(f"pci function {pci_addr}")
+                    # one from initial boot enumeration, one from the fix's PCI-bus rescan
+                    # re-discovering the removed device - a single occurrence means either
+                    # the removal or the rediscovery never happened
+                    assert enumerations >= 2, (
+                        f"PCI device {pci_addr} was enumerated {enumerations} time(s) this boot, expected >= 2 - "
+                        f"recovery did not happen via genuine PCI re-enumeration:\n"
+                        f"{[line for line in kernel_log.splitlines() if pci_addr in line]}"
+                    )
+
+        with self.logged_subtest("verify scylla-server is active after recovery"):
+            self.node.wait_db_up(timeout=600)
+
+        with self.logged_subtest("verify recovered disk is usable"):
+            self.verify_nvme_write_cache()
+            self.verify_xfs_online_discard_enabled()
 
     def run_scylla_doctor(self):
         if self.params.get("client_encrypt") and SkipPerIssues(
