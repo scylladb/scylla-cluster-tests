@@ -12,4 +12,4 @@
 # Copyright (c) 2021 ScyllaDB
 from typing import Literal
 
-NodeTypeType = Literal["scylla-db", "loader", "monitor"]
+NodeTypeType = Literal["scylla-db", "oracle-db", "loader", "monitor"]

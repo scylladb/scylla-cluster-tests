@@ -21,7 +21,7 @@ from sdcm.sct_provision.user_data_objects import SctUserDataObject
 class ScyllaUserDataObject(SctUserDataObject):
     @property
     def is_applicable(self) -> bool:
-        return self.node_type == "scylla-db"
+        return self.node_type in ("scylla-db", "oracle-db")
 
     @property
     def scylla_machine_image_json(self) -> str:
