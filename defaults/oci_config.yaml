@@ -10,6 +10,8 @@ oci_region_name:
   - us-ashburn-1
 
 oci_instance_type_db: ''
+oci_instance_type_db_oracle: ''
+oci_image_db_oracle: ''
 oci_instance_type_loader: ''
 oci_image_loader: ""  # NOTE: Code will automatically take latest ubuntu:24.04
 ami_loader_user: 'ubuntu'
