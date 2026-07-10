@@ -13,6 +13,7 @@
 
 import re
 
+import pytest
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
@@ -26,31 +27,37 @@ from sdcm.sct_events.database import (
 from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 
 
-def test_known_system_errors():
-    assert issubclass(DatabaseLogEvent.NO_SPACE_ERROR, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.UNKNOWN_VERB, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.CLIENT_DISCONNECT, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.SEMAPHORE_TIME_OUT, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.LDAP_CONNECTION_RESET, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.SERVICE_LEVEL_CONTROLLER, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.EMPTY_NESTED_EXCEPTION, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.DATABASE_ERROR, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.BAD_ALLOC, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.SCHEMA_FAILURE, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.RUNTIME_ERROR, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.FILESYSTEM_ERROR, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.STACKTRACE, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.BACKTRACE, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.ABORTING_ON_SHARD, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.SEGMENTATION, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.INTEGRITY_CHECK, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.SUPPRESSED_MESSAGES, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.stream_exception, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.DISK_ERROR, DatabaseLogEvent)
-    assert issubclass(DatabaseLogEvent.TOO_LONG_QUEUE_ACCUMULATED, DatabaseLogEvent)
+@pytest.mark.parametrize(
+    "event_class",
+    [
+        pytest.param(DatabaseLogEvent.NO_SPACE_ERROR, id="no-space-error"),
+        pytest.param(DatabaseLogEvent.UNKNOWN_VERB, id="unknown-verb"),
+        pytest.param(DatabaseLogEvent.CLIENT_DISCONNECT, id="client-disconnect"),
+        pytest.param(DatabaseLogEvent.SEMAPHORE_TIME_OUT, id="semaphore-time-out"),
+        pytest.param(DatabaseLogEvent.LDAP_CONNECTION_RESET, id="ldap-connection-reset"),
+        pytest.param(DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT, id="system-paxos-timeout"),
+        pytest.param(DatabaseLogEvent.SERVICE_LEVEL_CONTROLLER, id="service-level-controller"),
+        pytest.param(DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT, id="restarted-due-to-time-out"),
+        pytest.param(DatabaseLogEvent.EMPTY_NESTED_EXCEPTION, id="empty-nested-exception"),
+        pytest.param(DatabaseLogEvent.DATABASE_ERROR, id="database-error"),
+        pytest.param(DatabaseLogEvent.BAD_ALLOC, id="bad-alloc"),
+        pytest.param(DatabaseLogEvent.SCHEMA_FAILURE, id="schema-failure"),
+        pytest.param(DatabaseLogEvent.RUNTIME_ERROR, id="runtime-error"),
+        pytest.param(DatabaseLogEvent.FILESYSTEM_ERROR, id="filesystem-error"),
+        pytest.param(DatabaseLogEvent.STACKTRACE, id="stacktrace"),
+        pytest.param(DatabaseLogEvent.BACKTRACE, id="backtrace"),
+        pytest.param(DatabaseLogEvent.ABORTING_ON_SHARD, id="aborting-on-shard"),
+        pytest.param(DatabaseLogEvent.SEGMENTATION, id="segmentation"),
+        pytest.param(DatabaseLogEvent.INTEGRITY_CHECK, id="integrity-check"),
+        pytest.param(DatabaseLogEvent.REACTOR_STALLED, id="reactor-stalled"),
+        pytest.param(DatabaseLogEvent.SUPPRESSED_MESSAGES, id="suppressed-messages"),
+        pytest.param(DatabaseLogEvent.stream_exception, id="stream-exception"),
+        pytest.param(DatabaseLogEvent.DISK_ERROR, id="disk-error"),
+        pytest.param(DatabaseLogEvent.TOO_LONG_QUEUE_ACCUMULATED, id="too-long-queue-accumulated"),
+    ],
+)
+def test_known_system_errors(event_class):
+    assert issubclass(event_class, DatabaseLogEvent)
 
 
 def test_reactor_stalled_severity():
@@ -158,22 +165,20 @@ KS_CF = "ks_cf"
 MSG = "msg"
 
 
-def test_full_scan_event_no_message():
-    event = FullScanEvent(node=NODE_NAME, ks_cf=KS_CF)
-    assert event.message is None
+@pytest.mark.parametrize(
+    "message, expected_message, expected_pattern",
+    [
+        pytest.param(None, None, f"node={NODE_NAME} select_from={KS_CF}", id="without-message"),
+        pytest.param(MSG, MSG, f"node={NODE_NAME} select_from={KS_CF} message={MSG}", id="with-message"),
+    ],
+)
+def test_full_scan_event(message, expected_message, expected_pattern):
+    kwargs = {"message": message} if message is not None else {}
+    event = FullScanEvent(node=NODE_NAME, ks_cf=KS_CF, **kwargs)
+    assert event.message == expected_message
     assert re.match(
         r"\(FullScanEvent Severity\.NORMAL\) period_type=not-set event_id=([\d\w-]{36}) "
-        f"node={NODE_NAME} select_from={KS_CF}",
-        str(event),
-    )
-
-
-def test_full_scan_event_with_message():
-    event = FullScanEvent(node=NODE_NAME, ks_cf=KS_CF, message=MSG)
-    assert event.message == MSG
-    assert re.match(
-        r"\(FullScanEvent Severity\.NORMAL\) period_type=not-set event_id=([\d\w-]{36}) "
-        f"node={NODE_NAME} select_from={KS_CF} message={MSG}",
+        f"{expected_pattern}",
         str(event),
     )
 
