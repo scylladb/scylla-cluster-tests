@@ -475,8 +475,8 @@ class SCTConfiguration(dict):
             env="SCT_ORACLE_SCYLLA_VERSION",
             type=str,
             help="""Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'
-                     Automatically lookup AMIs for formal versions.
-                     WARNING: can't be used together with 'ami_id_db_oracle'""",
+                     Automatically looks up cloud images for formal versions.
+                     WARNING: can't be used together with 'ami_id_db_oracle' and 'oci_image_db_oracle'""",
             appendable=False,
         ),
         dict(
@@ -1381,6 +1381,15 @@ class SCTConfiguration(dict):
             help="Oracle Cloud instance shape to use for 'oracle' (2nd ref cluster) ScylladbDB cluster",
         ),
         dict(name="oci_image_db", env="SCT_OCI_IMAGE_DB", type=str, help="Oracle Cloud image to use for DB node(s)"),
+        dict(
+            name="oci_image_db_oracle",
+            env="SCT_OCI_IMAGE_DB_ORACLE",
+            type=str,
+            help=(
+                "Oracle Cloud image to use for oracle (2nd ref cluster) DB node(s). "
+                "If not set and 'oracle_scylla_version' is provided, it will be resolved automatically."
+            ),
+        ),
         dict(
             name="oci_image_monitor",
             env="SCT_OCI_IMAGE_MONITOR",
@@ -3481,8 +3490,33 @@ class SCTConfiguration(dict):
                     )
                     ami_list.append(ami)
                 self["ami_id_db_oracle"] = " ".join(ami.image_id for ami in ami_list)
-            else:
+            elif self.get("cluster_backend") == "aws":
                 raise ValueError("'oracle_scylla_version' and 'ami_id_db_oracle' can't used together")
+            elif not self.get("oci_image_db_oracle") and self.get("cluster_backend") == "oci":
+                oci_oracle_images = []
+                oci_region_names = self.get("oci_region_name") or []
+                if not isinstance(oci_region_names, list):
+                    oci_region_names = [oci_region_names]
+                for region in oci_region_names:
+                    try:
+                        if ":" in oracle_scylla_version:
+                            oci_image = oci_utils.get_scylla_images_by_branch(oracle_scylla_version, region)[0]
+                        else:
+                            oci_image = oci_utils.get_scylla_images_by_version(oracle_scylla_version, region)[0]
+                    except Exception as ex:  # noqa: BLE001
+                        raise ValueError(
+                            f"OCI Image for oracle_scylla_version='{oracle_scylla_version}' not found in {region}"
+                        ) from ex
+                    self.log.debug(
+                        "Found OCI Image %s for oracle_scylla_version='%s' in %s",
+                        oci_image[1],
+                        oracle_scylla_version,
+                        region,
+                    )
+                    oci_oracle_images.append(oci_image)
+                self["oci_image_db_oracle"] = " ".join(image[2] for image in oci_oracle_images)
+            elif self.get("cluster_backend") == "oci":
+                raise ValueError("'oracle_scylla_version' and 'oci_image_db_oracle' can't used together")
 
         # 6.2) handle vector_store_version if exists
         if vs_version := self.get("vector_store_version"):

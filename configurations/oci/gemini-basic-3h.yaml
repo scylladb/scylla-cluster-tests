@@ -1,0 +1,15 @@
+user_prefix: 'gemini-basic-3h-oci'
+
+#NOTE: default ScyllaDB version for oracle is '2026.1', but lowest available
+#      in OCI is '2026.2.0'. So, redefine it here.
+oracle_scylla_version: '2026.2.0'
+
+# oci_instance_type_db: 'VM.DenseIO.E5.Flex:8'
+# oci_instance_type_db_oracle: 'VM.DenseIO.E5.Flex:8'
+# oci_instance_type_loader: 'VM.Standard3.Flex:4:32'
+sizing_db:
+  vcpu: 16
+  memory: '>=60'
+sizing_db_oracle:
+  vcpu: 16
+  memory: '>=60'
