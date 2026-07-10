@@ -17,7 +17,7 @@ import pytest
 
 from sdcm.utils.trigger_matrix import filter_jobs, load_matrix_config
 
-PERF_YAML = Path(__file__).parent.parent.parent / "configurations" / "triggers" / "perf-regression.yaml"
+PERF_YAML = Path(__file__).parents[3] / "configurations" / "triggers" / "perf-regression.yaml"
 
 
 @pytest.fixture()
