@@ -486,7 +486,10 @@ def ignore_raft_topology_cmd_failing():
             EventsSeverityChangerFilter(
                 new_severity=Severity.WARNING,
                 event_class=DatabaseLogEvent,
-                regex=r".*raft_topology - topology change coordinator fiber got error std::runtime_error.*connection is closed",
+                regex=(
+                    r".*raft_topology - topology change coordinator fiber got error "
+                    r".*connection is closed"
+                ),
                 extra_time_to_expiration=30,
             )
         )
