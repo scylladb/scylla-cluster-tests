@@ -20,7 +20,7 @@ import yaml
 
 from sdcm.utils.trigger_matrix import JOB_LEVEL_KEYS, MatrixValidationError, load_matrix_config
 
-TRIGGERS_DIR = Path(__file__).parent.parent.parent / "configurations" / "triggers"
+TRIGGERS_DIR = Path(__file__).parent.parent.parent.parent / "configurations" / "triggers"
 
 
 def write_matrix(tmp_path, data) -> Path:

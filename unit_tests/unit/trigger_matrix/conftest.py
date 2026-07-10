@@ -46,6 +46,11 @@ def stub_image_lookups(monkeypatch):
     monkeypatch.setattr(trigger_matrix, "_version_exists_in_region", lambda *args, **kwargs: True)
 
 
+@pytest.fixture(autouse=True)
+def disable_trigger_matrix_email(monkeypatch):
+    monkeypatch.setattr("sdcm.utils.trigger_matrix.send_trigger_matrix_email", lambda *args, **kwargs: None)
+
+
 @pytest.fixture()
 def sample_matrix_yaml(tmp_path):
     """Create a sample YAML matrix file and return its path."""

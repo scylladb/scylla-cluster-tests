@@ -24,7 +24,7 @@ from sdcm.utils.trigger_matrix import (
     load_matrix_config,
 )
 
-ROLLING_UPGRADE_YAML = Path(__file__).parent.parent.parent / "configurations" / "triggers" / "rolling-upgrade.yaml"
+ROLLING_UPGRADE_YAML = Path(__file__).parents[3] / "configurations" / "triggers" / "rolling-upgrade.yaml"
 
 
 @pytest.mark.parametrize(
@@ -314,7 +314,7 @@ def test_rolling_upgrade_jobs_have_new_scylla_repo():
     blanks scylla_version with no repo to fall back on, and provisioning fails downstream
     with 'missing options: [ami_id_db_scylla]'.
     """
-    triggers_dir = Path(__file__).parent.parent.parent / "configurations" / "triggers"
+    triggers_dir = Path(__file__).parent.parent.parent.parent / "configurations" / "triggers"
     for yaml_path in sorted(triggers_dir.glob("*.yaml")):
         config = load_matrix_config(yaml_path)
         for job in config.jobs:
