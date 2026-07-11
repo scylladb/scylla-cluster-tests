@@ -184,6 +184,23 @@ def create_default_events_process_registry(log_dir: Union[str, Path]):
     raise RuntimeError("Try to create default EventsProcessRegistry second time")
 
 
+def destroy_default_events_process_registry(_registry: Optional[EventsProcessesRegistry] = None) -> None:
+    """Allow create_default_events_process_registry() to create a fresh default registry again.
+
+    Needed when more than one test runs in the same pytest process (e.g. two ArtifactsTest
+    methods collected into one session) - each test's teardown stops its registry's processes
+    but, without this, the module-level default stays set and the next test's setup hits
+    "Try to create default EventsProcessRegistry second time". Only resets the global if
+    `_registry` actually is the tracked default instance, so tearing down a non-default
+    (e.g. multi-tenant) registry never touches it.
+    """
+    global _EVENTS_PROCESSES  # noqa: PLW0603
+
+    with _EVENTS_PROCESSES_LOCK:
+        if _registry is None or _registry is _EVENTS_PROCESSES:
+            _EVENTS_PROCESSES = None
+
+
 def get_default_events_process_registry(_registry: Optional[EventsProcessesRegistry] = None) -> EventsProcessesRegistry:
     if _registry is not None:
         return _registry
@@ -230,6 +247,7 @@ __all__ = (
     "EventsProcessPipe",
     "EventsProcessesRegistry",
     "create_default_events_process_registry",
+    "destroy_default_events_process_registry",
     "start_events_process",
     "get_events_process",
     "verbose_suppress",
