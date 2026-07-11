@@ -429,6 +429,30 @@ build with `02bb3c74` passes; against a build without it (e.g. `d86a9ae`) fails 
   (injector unit exits non-zero, or re-enumeration lines missing) rather than
   silently passing, so drift is detectable. Mitigation: keep the scouted behavior
   documented here; re-scout before porting remove mode to another backend.
+- **Forced scylla-image-setup re-run clobbers `intra_node_comm_public`'s scylla.yaml patch
+  (found and fixed via a real run, 2026-07-11, on `db-cluster-1eb7c0f6`)**: the repro
+  reboot forces `scylla-image-setup.service` — and therefore scylla-machine-image's
+  `scylla_configure` — to genuinely re-run. `scylla_configure` regenerates
+  `listen_address`/`seed_provider` from its own machine-image defaults (private IP),
+  but never touches `broadcast_address`. Since Azure's two nvme-rescan test-cases set
+  `intra_node_comm_public: true` (the SCT runner runs in AWS and needs a public address
+  to reach the Azure node), the node's *initial* `config_setup()` call had already
+  patched `broadcast_address` to the public IP — a patch that lives only in the running
+  `/etc/scylla/scylla.yaml`, not in anything `scylla_configure` re-derives. The re-run
+  therefore leaves `broadcast_address` (public IP) and `seed_provider`/`listen_address`
+  (private IP, freshly regenerated) disagreeing, and Scylla's own startup validation
+  refuses to start: `Startup failed: std::runtime_error (Use broadcast_address for seeds
+  list)`. Confirmed live: `scylla-image-setup.service` itself succeeded (`exited,
+  status=0/SUCCESS`, all 4 removed controllers recovered and RAID0 rebuilt) — the NVMe
+  fix validation worked correctly — but `scylla-server.service` then failed on this
+  unrelated config mismatch, with no `Restart=` on its unit to retry automatically.
+  Fixed in `test_nvme_namespace_rescan_repro` by re-applying `node.config_setup(...)`
+  (the same patch normal node provisioning applies once) immediately before starting
+  scylla-server, then explicitly calling `node.restart_scylla_server(...)` instead of a
+  passive `wait_db_up()` (which never starts a stopped service). This is a test-design
+  gap specific to combining a forced mid-test `scylla-image-setup` re-run with
+  `intra_node_comm_public` — not a bug in scylla-machine-image's fix, and not backend-
+  general (AWS/GCE/OCI's nvme-rescan test-cases don't set `intra_node_comm_public`).
 - **Cross-repo coupling**: this test asserts against specific log strings
   (`"No device names available yet, retrying..."`, `"Found devices:"`) and file paths
   (`/etc/scylla/machine_image_configured`) owned by scylla-machine-image. If that repo

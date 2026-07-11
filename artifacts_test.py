@@ -675,8 +675,21 @@ class ArtifactsTest(ClusterTester):
                         f"{[line for line in kernel_log.splitlines() if pci_addr in line]}"
                     )
 
+        with self.logged_subtest("reconcile scylla.yaml network config clobbered by the forced setup re-run"):
+            # The repro reboot forces scylla-image-setup.service (and therefore scylla_configure)
+            # to regenerate scylla.yaml from scratch, resetting listen_address/seed_provider to
+            # their machine-image defaults (private IP). broadcast_address survives untouched
+            # (scylla_configure never sets it), since it was patched in by the node's initial
+            # config_setup() call for intra_node_comm_public - so the two diverge and scylla-server
+            # refuses to start ("Use broadcast_address for seeds list"). Re-apply the same patch
+            # to reconcile them before checking scylla-server. No-op when the two already agree.
+            self.node.config_setup(append_scylla_args=self.db_cluster.get_scylla_args())
+
         with self.logged_subtest("verify scylla-server is active after recovery"):
-            self.node.wait_db_up(timeout=600)
+            # scylla-server already tried and failed to start once, with the pre-reconciliation
+            # scylla.yaml (see previous subtest) - its unit has no Restart= directive, so it will
+            # not retry on its own. Explicitly restart it now that scylla.yaml is consistent.
+            self.node.restart_scylla_server(timeout=600)
 
         with self.logged_subtest("verify recovered disk is usable"):
             self.verify_nvme_write_cache()
