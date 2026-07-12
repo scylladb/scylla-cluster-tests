@@ -717,8 +717,105 @@ def resolve_job_path(job_name: str, job_folder: str) -> str:
     return f"{job_folder}/{job_name}"
 
 
+def _escape_groovy_string(value: str) -> str:
+    """Escape a value for embedding in a Groovy single-quoted string literal."""
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def _build_trigger_groovy(job_name: str, parameters: dict, return_queue_url: bool = False) -> str:
+    """Build Groovy script that triggers a Jenkins job with UpstreamCause.
+
+    Uses Jenkins Script Console to schedule a build, bypassing the REST API
+    'Location' header issue (https://github.com/bndr/gojenkins/issues/248).
+    Injects UpstreamCause so Jenkins UI shows 'Started by upstream project X build Y'.
+
+    Args:
+        job_name: Full Jenkins job path (slash-separated).
+        parameters: Parameters to pass to the job.
+        return_queue_url: If True, return queue item URL (for wait-mode polling).
+            If False, return the job URL (fire-and-forget).
+
+    Returns:
+        Groovy script string.
+    """
+    escaped_job_name = _escape_groovy_string(job_name)
+    params_groovy = ", ".join(
+        f"new StringParameterValue('{_escape_groovy_string(k)}', '{_escape_groovy_string(str(v))}')"
+        for k, v in parameters.items()
+    )
+
+    upstream_job = os.environ.get("JOB_NAME", "")
+    upstream_build = os.environ.get("BUILD_NUMBER", "")
+
+    if upstream_job and upstream_build:
+        escaped_upstream = _escape_groovy_string(upstream_job)
+        cause_section = f"""
+def upstreamJob = Jenkins.instance.getItemByFullName('{escaped_upstream}')
+def upstreamBuild = upstreamJob?.getBuildByNumber({upstream_build})
+def cause
+if (upstreamBuild) {{
+    cause = new hudson.model.Cause.UpstreamCause((hudson.model.Run) upstreamBuild)
+}} else {{
+    cause = new hudson.model.Cause.RemoteCause('{escaped_upstream}', 'Build #{upstream_build} (upstream build not found)')
+}}
+"""
+    else:
+        cause_section = """
+def cause = new hudson.model.Cause.RemoteCause('trigger-matrix', 'Triggered via SCT trigger-matrix CLI')
+"""
+
+    if return_queue_url:
+        # Return the queue item URL for wait-mode polling via _wait_for_build_start()
+        output_section = """
+def rootUrl = Jenkins.instance.rootUrl ?: ''
+def queueItem = Jenkins.instance.queue.getItems().find { it.task == targetJob }
+if (queueItem) {
+    println "TRIGGERED:${rootUrl}queue/item/${queueItem.id}/"
+} else {
+    println "TRIGGERED:${targetJob.getAbsoluteUrl()}"
+}
+"""
+    else:
+        output_section = """
+println "TRIGGERED:${targetJob.getAbsoluteUrl()}"
+"""
+
+    return f"""
+import jenkins.model.Jenkins
+import hudson.model.*
+
+def targetJob = Jenkins.instance.getItemByFullName('{escaped_job_name}')
+if (!targetJob) {{
+    println "ERROR: Job not found: {escaped_job_name}"
+    return
+}}
+{cause_section}
+def params = [{params_groovy}]
+def actions = []
+if (params) {{
+    actions.add(new ParametersAction(params))
+}}
+actions.add(new CauseAction(cause))
+
+def future = targetJob.scheduleBuild2(0, actions.toArray(new Action[0]))
+if (future != null) {{
+{output_section}
+}} else {{
+    println "ERROR: scheduleBuild2 returned null for {escaped_job_name}"
+}}
+"""
+
+
 def trigger_jenkins_job(job_name: str, parameters: dict, dry_run: bool = False) -> bool:
-    """Trigger a Jenkins job via REST API or print in dry-run mode.
+    """Trigger a Jenkins job via Groovy Script Console.
+
+    Uses /scriptText API to schedule builds, which avoids the known Jenkins
+    issue where the REST build API omits the 'Location' header from the response
+    (causing python-jenkins to raise EmptyResponseException and retry — triggering
+    the job multiple times).
+
+    Injects UpstreamCause so Jenkins UI displays 'Started by upstream project [X] build [Y]'
+    with clickable links.
 
     Args:
         job_name: Full Jenkins job path.
@@ -727,22 +824,28 @@ def trigger_jenkins_job(job_name: str, parameters: dict, dry_run: bool = False) 
 
     Returns:
         True if the job was triggered (or would be in dry-run), False on failure.
-
-    Raises:
-        JenkinsTriggerError: If the job fails to trigger after retries.
     """
     if dry_run:
         params_str = ", ".join(f"{k}={v}" for k, v in sorted(parameters.items()))
         logger.info("[DRY-RUN] Would trigger: %s with params: {%s}", job_name, params_str)
         return True
 
-    client, _ = _get_jenkins_client()
+    client, jenkins_url = _get_jenkins_client()
+    script = _build_trigger_groovy(job_name, parameters)
 
     for attempt in range(MAX_TRIGGER_RETRIES):
         try:
-            client.build_job(job_name, parameters=parameters)
-            logger.info("Triggered: %s", job_name)
-            return True
+            result = client.run_script(script)
+            if result and result.startswith("TRIGGERED:"):
+                build_url = result[len("TRIGGERED:") :].strip()
+                logger.info("Triggered: %s — %s", job_name, build_url)
+                return True
+            if result and result.startswith("ERROR:"):
+                error_msg = result[len("ERROR:") :].strip()
+                logger.error("Failed to trigger %s: %s", job_name, error_msg)
+                return False
+            # Unexpected output — treat as failure
+            logger.warning("Unexpected script output for %s: %s", job_name, result)
         except jenkins_lib.JenkinsException as exc:
             logger.warning("Trigger attempt %d/%d for %s failed: %s", attempt + 1, MAX_TRIGGER_RETRIES, job_name, exc)
 
@@ -756,10 +859,10 @@ def trigger_jenkins_job(job_name: str, parameters: dict, dry_run: bool = False) 
 
 
 def trigger_jenkins_job_with_queue(job_name: str, parameters: dict, dry_run: bool = False) -> str:
-    """Trigger a Jenkins job and return the queue URL for later polling.
+    """Trigger a Jenkins job via Groovy Script Console and return the queue item URL.
 
-    Uses the same triggering logic as trigger_jenkins_job but captures the
-    queue location header for subsequent wait operations.
+    Same retry behavior as trigger_jenkins_job. Returns a queue item URL
+    suitable for polling via _wait_for_build_start().
 
     Args:
         job_name: Full Jenkins job path.
@@ -767,10 +870,10 @@ def trigger_jenkins_job_with_queue(job_name: str, parameters: dict, dry_run: boo
         dry_run: If True, simulate without triggering.
 
     Returns:
-        Queue URL string (empty string in dry-run mode).
+        Queue item URL string (empty string in dry-run mode).
 
     Raises:
-        JenkinsTriggerError: If the job fails to trigger.
+        JenkinsTriggerError: If the job fails to trigger after retries.
     """
     if dry_run:
         params_str = ", ".join(f"{k}={v}" for k, v in sorted(parameters.items()))
@@ -778,16 +881,28 @@ def trigger_jenkins_job_with_queue(job_name: str, parameters: dict, dry_run: boo
         return ""
 
     client, jenkins_url = _get_jenkins_client()
+    script = _build_trigger_groovy(job_name, parameters, return_queue_url=True)
 
-    try:
-        queue_id = client.build_job(job_name, parameters=parameters)
-    except jenkins_lib.JenkinsException as exc:
-        raise JenkinsTriggerError(f"Failed to trigger {job_name}: {exc}") from exc
+    for attempt in range(MAX_TRIGGER_RETRIES):
+        try:
+            result = client.run_script(script)
+            if result and result.startswith("TRIGGERED:"):
+                queue_url = result[len("TRIGGERED:") :].strip()
+                logger.info("Triggered %s — %s (will wait for completion)", job_name, queue_url)
+                return queue_url
+            if result and result.startswith("ERROR:"):
+                error_msg = result[len("ERROR:") :].strip()
+                raise JenkinsTriggerError(f"Failed to trigger {job_name}: {error_msg}")
+            logger.warning("Unexpected script output for %s: %s", job_name, result)
+        except jenkins_lib.JenkinsException as exc:
+            logger.warning("Trigger attempt %d/%d for %s failed: %s", attempt + 1, MAX_TRIGGER_RETRIES, job_name, exc)
 
-    queue_url = f"{jenkins_url}/queue/item/{queue_id}/"
-    job_url = f"{jenkins_url}/job/{job_name.replace('/', '/job/')}"
-    logger.info("Triggered %s — %s (will wait for completion)", job_name, job_url)
-    return queue_url
+        if attempt < MAX_TRIGGER_RETRIES - 1:
+            wait = RETRY_BACKOFF_BASE ** (attempt + 1)
+            logger.info("Retrying in %ds...", wait)
+            time.sleep(wait)
+
+    raise JenkinsTriggerError(f"Failed to trigger {job_name} after {MAX_TRIGGER_RETRIES} attempts")
 
 
 def wait_for_builds(
@@ -1095,11 +1210,17 @@ def trigger_matrix(  # noqa: PLR0914
     filtered_names = {j.job_name for j in filtered}
     results["skipped"] = [j.job_name for j in config.jobs if j.job_name not in filtered_names]
 
-    # Step 1: Trigger all jobs (identical logic for wait and non-wait)
+    # Step 1: Trigger all jobs, deduplicating by resolved path to prevent
+    # the same Jenkins job from being triggered twice (e.g. when both x86
+    # and aarch64 entries match the same labels_selector).
     pending_wait_jobs: list[_PendingWaitJob] = []
+    triggered_paths: set[str] = set()
 
     for job in filtered:
         full_path = resolve_job_path(job.job_name, resolved_folder)
+        if full_path in triggered_paths:
+            logger.debug("Skipping duplicate trigger for %s", full_path)
+            continue
         params = build_job_parameters(
             job, config.defaults, scylla_version, overrides, branch_source_version=filter_version
         )
@@ -1107,6 +1228,7 @@ def trigger_matrix(  # noqa: PLR0914
         if job.wait:
             try:
                 queue_url = trigger_jenkins_job_with_queue(full_path, params, dry_run=dry_run)
+                triggered_paths.add(full_path)
                 results["triggered"].append(full_path)
                 pending_wait_jobs.append(
                     _PendingWaitJob(
@@ -1123,6 +1245,7 @@ def trigger_matrix(  # noqa: PLR0914
         else:
             success = trigger_jenkins_job(full_path, params, dry_run=dry_run)
             if success:
+                triggered_paths.add(full_path)
                 results["triggered"].append(full_path)
             else:
                 results["failed"].append(full_path)
