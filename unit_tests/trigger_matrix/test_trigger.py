@@ -108,7 +108,7 @@ def test_jenkins_exception_returns_false(mock_sleep, monkeypatch):
     monkeypatch.setenv("JENKINS_API_TOKEN", "fake-token")
 
     mock_client = MagicMock()
-    mock_client.build_job.side_effect = jenkins_lib.JenkinsException("Not Found")
+    mock_client.run_script.side_effect = jenkins_lib.JenkinsException("Not Found")
     with patch(
         "sdcm.utils.trigger_matrix._get_jenkins_client", return_value=(mock_client, "https://jenkins.example.com")
     ):
@@ -122,13 +122,13 @@ def test_jenkins_exception_retries_then_fails(mock_sleep, monkeypatch):
     monkeypatch.setenv("JENKINS_API_TOKEN", "fake-token")
 
     mock_client = MagicMock()
-    mock_client.build_job.side_effect = jenkins_lib.JenkinsException("Service Unavailable")
+    mock_client.run_script.side_effect = jenkins_lib.JenkinsException("Service Unavailable")
     with patch(
         "sdcm.utils.trigger_matrix._get_jenkins_client", return_value=(mock_client, "https://jenkins.example.com")
     ):
         result = trigger_jenkins_job("test-job", {}, dry_run=False)
     assert result is False
-    assert mock_client.build_job.call_count == 3
+    assert mock_client.run_script.call_count == 3
 
 
 @patch("sdcm.utils.trigger_matrix.time.sleep")
@@ -137,13 +137,31 @@ def test_jenkins_exception_then_success(mock_sleep, monkeypatch):
     monkeypatch.setenv("JENKINS_API_TOKEN", "fake-token")
 
     mock_client = MagicMock()
-    mock_client.build_job.side_effect = [jenkins_lib.JenkinsException("fail"), 42]
+    mock_client.run_script.side_effect = [
+        jenkins_lib.JenkinsException("fail"),
+        "TRIGGERED:https://jenkins.example.com/job/test-job/",
+    ]
     with patch(
         "sdcm.utils.trigger_matrix._get_jenkins_client", return_value=(mock_client, "https://jenkins.example.com")
     ):
         result = trigger_jenkins_job("test-job", {}, dry_run=False)
     assert result is True
-    assert mock_client.build_job.call_count == 2
+    assert mock_client.run_script.call_count == 2
+
+
+@patch("sdcm.utils.trigger_matrix.time.sleep")
+def test_trigger_script_error_returns_false_without_retry(mock_sleep, monkeypatch):
+    monkeypatch.setenv("JENKINS_URL", "https://jenkins.example.com")
+    monkeypatch.setenv("JENKINS_API_TOKEN", "fake-token")
+
+    mock_client = MagicMock()
+    mock_client.run_script.return_value = "ERROR: Job not found: test-job"
+    with patch(
+        "sdcm.utils.trigger_matrix._get_jenkins_client", return_value=(mock_client, "https://jenkins.example.com")
+    ):
+        result = trigger_jenkins_job("test-job", {}, dry_run=False)
+    assert result is False
+    assert mock_client.run_script.call_count == 1
 
 
 def test_zero_match_logs_warning(sample_matrix_yaml, caplog):
@@ -193,3 +211,43 @@ def test_default_scylla_version_used_when_empty(tmp_path):
         dry_run=True,
     )
     assert len(results["triggered"]) == 1
+
+
+def test_duplicate_job_names_deduplicated(tmp_path):
+    """When same job_name appears multiple times (e.g. x86 + aarch64), only trigger once."""
+    data = {
+        "defaults": {"provision_type": "on_demand"},
+        "jobs": [
+            {
+                "job_name": "tier1/longevity-twcs-48h-test",
+                "backend": "aws",
+                "region": "us-east-1",
+                "labels": ["weekly"],
+            },
+            {
+                "job_name": "tier1/longevity-twcs-48h-test",
+                "backend": "aws",
+                "region": "us-east-1",
+                "labels": ["weekly", "aarch64"],
+            },
+            {
+                "job_name": "tier1/longevity-2tb-5days-test",
+                "backend": "aws",
+                "region": "eu-west-1",
+                "labels": ["weekly"],
+            },
+        ],
+    }
+    matrix_file = tmp_path / "dedup-matrix.yaml"
+    matrix_file.write_text(yaml.dump(data))
+
+    results = trigger_matrix(
+        matrix_file=str(matrix_file),
+        scylla_version="master:latest",
+        labels_selector="weekly",
+        dry_run=True,
+    )
+    assert len(results["triggered"]) == 2
+    triggered_names = [j.split("/")[-1] for j in results["triggered"]]
+    assert "longevity-twcs-48h-test" in triggered_names
+    assert "longevity-2tb-5days-test" in triggered_names
