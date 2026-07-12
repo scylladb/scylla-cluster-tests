@@ -156,6 +156,7 @@ class LocalScyllaClusterDummy(BaseScyllaCluster, BaseCluster):
     def add_nodes(self, *args, **kwargs):
         raise NotImplementedError
 
-    def get_ip_to_node_map(self):
+    def get_ip_to_node_map(self, nodes=None):
         """returns {ip: node} map for all nodes in cluster to get node by ip"""
-        return {node.ip_address: node for node in self.nodes}
+        source = nodes if nodes is not None else self.nodes
+        return {node.ip_address: node for node in source}
