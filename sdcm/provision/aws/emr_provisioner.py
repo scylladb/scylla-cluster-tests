@@ -18,6 +18,7 @@ import time
 
 import boto3
 import botocore
+from botocore.config import Config
 
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.decorators import retrying
@@ -331,7 +332,9 @@ def list_emr_clusters(tags_dict, region_name):
     Returns:
         list: List of matching EMR cluster summaries with cluster IDs.
     """
-    emr_client = boto3.client("emr", region_name=region_name)
+    # fail fast on unreachable regions
+    fail_fast_config = Config(connect_timeout=10, read_timeout=30, retries={"total_max_attempts": 1})
+    emr_client = boto3.client("emr", region_name=region_name, config=fail_fast_config)
     matching_clusters = []
 
     paginator = emr_client.get_paginator("list_clusters")

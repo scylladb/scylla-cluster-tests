@@ -401,3 +401,12 @@ class TestCleanCloudResources:
         params = {"RunByUser": "test", "TestId": "1111", "NodeType": "monitor"}
         res = clean_cloud_resources(params, self.config)
         assert res
+
+    def test_step_failure_does_not_abort_cleanup(self):
+        # SCT-507: a cleanup step that raises (e.g. an unreachable region) must not
+        # abort the whole run; later steps still execute.
+        resources_cleanup.SCTDedicatedHosts.release_by_tags.side_effect = RuntimeError("me-south-1 unreachable")
+        res = clean_cloud_resources({"RunByUser": "test"}, self.config)
+        assert res  # the run completed and did not propagate the exception
+        # clean_elastic_ips_aws runs right after the failing dedicated-hosts step
+        resources_cleanup.clean_elastic_ips_aws.assert_called()

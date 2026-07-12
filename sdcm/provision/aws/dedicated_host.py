@@ -25,8 +25,7 @@ import tenacity
 from sdcm.wait import exponential_retry
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import tags_as_ec2_tags
-from sdcm.utils.common import all_aws_regions
-from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.common import all_aws_regions, run_per_region_ignore_failures, AWS_SCAN_FAIL_FAST_CONFIG
 from sdcm.test_config import TestConfig
 
 
@@ -161,7 +160,7 @@ class SCTDedicatedHosts:
             if verbose:
                 LOGGER.info('Going to list aws region "%s"', region)
             time.sleep(random.random())
-            client = boto3.client("ec2", region_name=region)
+            client = boto3.client("ec2", region_name=region, config=AWS_SCAN_FAIL_FAST_CONFIG)
             custom_filter = []
             if tags_dict:
                 custom_filter = [
@@ -174,7 +173,7 @@ class SCTDedicatedHosts:
             if verbose:
                 LOGGER.info("%s: done [%s/%s]", region, len(list(hosts.keys())), len(aws_regions))
 
-        ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(get_host, ignore_exceptions=False)
+        run_per_region_ignore_failures(aws_regions, get_host, "dedicated hosts")
 
         if not group_as_region:
             hosts = list(itertools.chain(*list(hosts.values())))  # flatten the list of lists
