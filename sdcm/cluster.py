@@ -1232,12 +1232,7 @@ class BaseNode(AutoSshContainerMixin):
         raise NotImplementedError()
 
     def get_all_ip_addresses(self):
-        public_ipv4_addresses, private_ipv4_addresses = self._refresh_instance_state()
-        public_ipv4_addresses = [to_inet_ntop_format(address) for address in public_ipv4_addresses]
-        private_ipv4_addresses = [to_inet_ntop_format(address) for address in private_ipv4_addresses]
-        return list(
-            set(public_ipv4_addresses + private_ipv4_addresses + [to_inet_ntop_format(self._get_ipv6_ip_address())])
-        )
+        return [ip for ip in (self.private_ip_address, self.public_ip_address, self.ipv6_ip_address) if ip]
 
     def _wait_public_ip(self):
         public_ips, _ = self._refresh_instance_state()
@@ -3501,11 +3496,12 @@ class BaseNode(AutoSshContainerMixin):
             )
             time.sleep(CHECK_NODE_HEALTH_RETRY_DELAY)
 
-    def get_nodes_status(self) -> dict[BaseNode, dict]:
+    def get_nodes_status(self, nodes: list[BaseNode] | None = None) -> dict[BaseNode, dict]:
         nodes_status = {}
         try:
             statuses = self.parent_cluster.get_nodetool_status(verification_node=self)
-            node_ip_map = self.parent_cluster.get_ip_to_node_map()
+            node_ip_map = self.parent_cluster.get_ip_to_node_map(nodes=nodes)
+            partial = nodes is not None
             for dc, dc_status in statuses.items():
                 for node_ip, node_properties in dc_status.items():
                     if node := node_ip_map.get(node_ip):
@@ -3514,9 +3510,8 @@ class BaseNode(AutoSshContainerMixin):
                             "dc": dc,
                             "rack": node_properties["rack"],
                         }
-                    else:  # noqa: PLR5501
-                        if node_ip:
-                            LOGGER.error("Get nodes statuses. Failed to find a node in cluster by IP: %s", node_ip)
+                    elif node_ip and not partial:
+                        LOGGER.error("Get nodes statuses. Failed to find a node in cluster by IP: %s", node_ip)
 
         except Exception as error:  # noqa: BLE001
             ClusterHealthValidatorEvent.NodeStatus(
@@ -4201,9 +4196,14 @@ class BaseCluster:
     def dead_nodes_ip_address_list(self):
         return [node.ip_address for node in self.dead_nodes_list]
 
-    def get_ip_to_node_map(self) -> dict[str, BaseNode]:
-        """returns {ip: node} map for all nodes in cluster to get node by ip"""
-        return {ip: node for node in self.nodes for ip in node.get_all_ip_addresses()}
+    def get_ip_to_node_map(self, nodes: list[BaseNode] | None = None) -> dict[str, BaseNode]:
+        """Returns {ip: node} map for nodes in the cluster.
+
+        Args:
+            nodes: Subset of nodes to include. Defaults to all nodes.
+        """
+        nodes = nodes if nodes is not None else self.nodes
+        return {ip: node for node in nodes for ip in node.get_all_ip_addresses()}
 
     def init_log_directory(self):
         assert "_SCT_TEST_LOGDIR" in os.environ
@@ -4246,7 +4246,7 @@ class BaseCluster:
 
     def get_rack_names_per_datacenter_and_rack_idx(self, db_nodes: list[BaseNode] | None = None):
         db_nodes = db_nodes if db_nodes else self.nodes
-        status = db_nodes[0].get_nodes_status()
+        status = db_nodes[0].get_nodes_status(nodes=db_nodes)
 
         # intersection of asked nodes and nodes returned by nodetool status
         # since topology might change during this command execution
