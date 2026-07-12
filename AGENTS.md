@@ -313,6 +313,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | commit-summary | Generate weekly commit summary reports for the SCT repository | `skills/commit-summary/SKILL.md` |
 | writing-nemesis | Guides writing new nemesis (chaos disruptions). Use when creating NemesisBaseClass subclasses or implementing disruption logic. | `skills/writing-nemesis/SKILL.md` |
 | package-installation | Guides writing remote package installation commands (apt-get, yum, dnf, zypper) in SCT. Use when adding install/update calls via remoter to ensure timeouts, retries, and non-interactive flags. | `skills/package-installation/SKILL.md` |
+| perf-version-comparison | Generate Confluence-ready HTML reports comparing predefined-throughput-steps test results across ScyllaDB versions. Use when comparing throughput test results between versions (release vs RC vs master), creating performance comparison pages, or generating side-by-side latency/throughput analysis from Argus test run IDs. | `skills/perf-version-comparison/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 
