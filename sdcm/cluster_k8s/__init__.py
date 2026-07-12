@@ -2093,6 +2093,13 @@ class BasePodContainer(cluster.BaseNode):
             ],
         )
 
+    def get_all_ip_addresses(self):
+        ips = super().get_all_ip_addresses()
+        if cluster_ip_service := self._cluster_ip_service:
+            if cluster_ip := cluster_ip_service.spec.cluster_ip:
+                ips.append(cluster_ip)
+        return ips
+
     @property
     def k8s_pod_uid(self) -> str:
         try:
