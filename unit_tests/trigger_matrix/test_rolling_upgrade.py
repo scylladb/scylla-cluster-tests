@@ -129,3 +129,34 @@ def test_weekly_label_filter():
     config = load_matrix_config(ROLLING_UPGRADE_YAML)
     weekly_jobs = filter_jobs(config.jobs, scylla_version="master:latest", labels_selector="weekly")
     assert len(weekly_jobs) >= 9
+
+
+def test_branch_source_version_overrides_resolved_version():
+    """When trigger resolves master:latest → 2026.3.0~dev-..., {branch} should still be 'master'."""
+    job = JobConfig(
+        job_name="rolling-upgrade/test",
+        backend="gce",
+        region="us-central1",
+        params={
+            "new_scylla_repo": "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
+        },
+    )
+    params = build_job_parameters(
+        job, {}, "2026.3.0~dev-0.20260710.9cda315bbab0", {}, branch_source_version="master:latest"
+    )
+    assert params["new_scylla_repo"] == (
+        "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list"
+    )
+    assert params["scylla_version"] == "2026.3.0~dev-0.20260710.9cda315bbab0"
+
+
+def test_branch_source_version_none_falls_back_to_scylla_version():
+    """Without branch_source_version, {branch} is still extracted from scylla_version."""
+    job = JobConfig(
+        job_name="rolling-upgrade/test",
+        backend="gce",
+        region="us-central1",
+        params={"new_scylla_repo": "http://repo/{branch}/rpm/scylla.repo"},
+    )
+    params = build_job_parameters(job, {}, "2025.4.1-0.20250601.abc123def456-1", {}, branch_source_version=None)
+    assert params["new_scylla_repo"] == "http://repo/2025.4/rpm/scylla.repo"
