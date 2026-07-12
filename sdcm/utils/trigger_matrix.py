@@ -656,6 +656,7 @@ def build_job_parameters(
     defaults: dict,
     scylla_version: str,
     cli_overrides: dict,
+    branch_source_version: str | None = None,
 ) -> dict:
     """Build final parameter dict for a Jenkins job.
 
@@ -664,13 +665,17 @@ def build_job_parameters(
     own backend-specific images from the version.
 
     Template variables in parameter values are resolved:
-      {branch} — extracted from scylla_version (e.g., "master" from "master:latest")
+      {branch} — extracted from branch_source_version (or scylla_version if not provided)
 
     Args:
         job: Job configuration.
         defaults: Default parameters from the matrix.
-        scylla_version: Version string to pass to the job.
+        scylla_version: Version string to pass to the job (typically the resolved full version).
         cli_overrides: CLI-provided parameter overrides.
+        branch_source_version: Original version string used for {branch} template resolution
+            (e.g., "master:latest"). When provided, branch is extracted from this instead of
+            scylla_version. This avoids resolving {branch} to "2026.3" when the original
+            input was "master:latest".
 
     Returns:
         Merged parameter dictionary.
@@ -685,8 +690,9 @@ def build_job_parameters(
     if job.region:
         params.setdefault("region", job.region)
 
-    # Resolve {branch} templates in param values
-    branch = _extract_branch_from_version(scylla_version)
+    # Resolve {branch} templates — use the original version (e.g., "master:latest")
+    # not the resolved full tag (e.g., "2026.3.0~dev-...") which yields "2026.3".
+    branch = _extract_branch_from_version(branch_source_version or scylla_version)
     if branch:
         params = {k: _resolve_templates(v, branch) for k, v in params.items()}
 
@@ -1033,6 +1039,9 @@ def trigger_matrix(  # noqa: PLR0914
     Args:
         matrix_file: Path to the YAML matrix file.
         scylla_version: Full version tag or branch:qualifier.
+        filter_version: Original version string before resolution (e.g., "master:latest").
+            Used for job folder determination and as branch_source_version for {branch}
+            template resolution. When None, scylla_version is used for both.
         job_folder: Override auto-detected job folder.
         labels_selector: Comma-separated labels to filter jobs.
         backend: Filter by backend.
@@ -1091,7 +1100,9 @@ def trigger_matrix(  # noqa: PLR0914
 
     for job in filtered:
         full_path = resolve_job_path(job.job_name, resolved_folder)
-        params = build_job_parameters(job, config.defaults, scylla_version, overrides)
+        params = build_job_parameters(
+            job, config.defaults, scylla_version, overrides, branch_source_version=filter_version
+        )
 
         if job.wait:
             try:
