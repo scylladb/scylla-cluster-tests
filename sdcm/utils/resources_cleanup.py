@@ -18,6 +18,7 @@ import time
 import ipaddress
 import tempfile
 from collections import defaultdict
+from contextlib import contextmanager
 
 from botocore.exceptions import ClientError
 import boto3
@@ -59,6 +60,7 @@ from sdcm.utils.common import (
     list_placement_groups_aws,
     list_resources_docker,
     list_test_security_groups,
+    run_per_region_ignore_failures,
 )
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.context_managers import environment
@@ -103,11 +105,23 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
     :param config: instance of the 'SCTConfiguration' class
     :param tags_dict: key-value pairs used for filtering
     :param dry_run: boolean value which defines whether we should really cleanup resources or not
-    :return: None
+    :return: True when the cleanup flow completed, False when neither TestId nor RunByUser tag is
+        provided, None for local K8S backends (no remote resources to clean)
     """
     if "TestId" not in tags_dict and "RunByUser" not in tags_dict:
         LOGGER.error("Can't clean cloud resources, TestId or RunByUser is missing")
         return False
+
+    failures: list[tuple[str, Exception]] = []
+
+    @contextmanager
+    def cleanup_step(name):
+        """Run a cleanup step in isolation so a failure does not stop the rest of the cleanup."""
+        try:
+            yield
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Cleanup step '%s' failed, skipping: %s", name, exc)
+            failures.append((name, exc))
 
     cluster_backend = config.get("cluster_backend") or ""
     aws_regions = config.region_names
@@ -124,56 +138,82 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
         LOGGER.info("No remote resources are expected in the local K8S setups. Skipping.")
         return
     if cluster_backend in ("k8s-eks", ""):
-        clean_clusters_eks(tags_dict, regions=aws_regions, dry_run=dry_run)
-        clean_launch_templates_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
-        clean_load_balancers_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
-        clean_cloudformation_stacks_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
+        for name, clean_func in (
+            ("EKS clusters", clean_clusters_eks),
+            ("AWS launch templates", clean_launch_templates_aws),
+            ("AWS load balancers", clean_load_balancers_aws),
+            ("AWS CloudFormation stacks", clean_cloudformation_stacks_aws),
+        ):
+            with cleanup_step(name):
+                clean_func(tags_dict, regions=aws_regions, dry_run=dry_run)
     if cluster_backend in ("k8s-gke", ""):
         for project in gce_projects:
             with environment(SCT_GCE_PROJECT=project):
-                clean_clusters_gke(tags_dict, dry_run=dry_run)
-                clean_orphaned_gke_disks(tags_dict, dry_run=dry_run)
+                with cleanup_step("GKE clusters"):
+                    clean_clusters_gke(tags_dict, dry_run=dry_run)
+                with cleanup_step("GKE orphaned disks"):
+                    clean_orphaned_gke_disks(tags_dict, dry_run=dry_run)
 
     if cluster_backend in ("aws", ""):
-        clean_emr_clusters(tags_dict, regions=aws_regions, dry_run=dry_run)
+        with cleanup_step("EMR clusters"):
+            clean_emr_clusters(tags_dict, regions=aws_regions, dry_run=dry_run)
     if cluster_backend in ("aws", "k8s-eks", ""):
-        clean_instances_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
-        if config.region_names:
-            SCTCapacityReservation.get_cr_from_aws(config, force_fetch=True)
-            SCTCapacityReservation.cancel(config)
-        else:
-            SCTCapacityReservation.cancel_all_regions(config.get("test_id"))
-        # cleanup capacity reservations across all regions as region fallback can leave an idle CR in an abandoned region
-        if not dry_run and (test_id := config.get("test_id")):
-            SCTCapacityReservation.cancel_all_regions(test_id)
-        SCTDedicatedHosts.release_by_tags(tags_dict, regions=aws_regions, dry_run=dry_run)
-        clean_elastic_ips_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
-        clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
-        clean_placement_groups_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
+        with cleanup_step("AWS instances"):
+            clean_instances_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
+        with cleanup_step("AWS capacity reservations"):
+            if config.region_names:
+                SCTCapacityReservation.get_cr_from_aws(config, force_fetch=True)
+                SCTCapacityReservation.cancel(config)
+            else:
+                SCTCapacityReservation.cancel_all_regions(config.get("test_id"))
+            # cleanup capacity reservations across all regions as region fallback can leave an idle CR in an abandoned region
+            if not dry_run and (test_id := config.get("test_id")):
+                SCTCapacityReservation.cancel_all_regions(test_id)
+        with cleanup_step("AWS dedicated hosts"):
+            SCTDedicatedHosts.release_by_tags(tags_dict, regions=aws_regions, dry_run=dry_run)
+        for name, clean_func in (
+            ("AWS elastic IPs", clean_elastic_ips_aws),
+            ("AWS security groups", clean_test_security_groups),
+            ("AWS placement groups", clean_placement_groups_aws),
+        ):
+            with cleanup_step(name):
+                clean_func(tags_dict, regions=aws_regions, dry_run=dry_run)
         if cluster_backend == "aws" and not dry_run:
-            clean_aws_kms_alias(tags_dict, aws_regions or all_aws_regions())
+            with cleanup_step("AWS KMS aliases"):
+                clean_aws_kms_alias(tags_dict, aws_regions or all_aws_regions())
         if not dry_run and (test_id := tags_dict.get("TestId")):
             from sdcm.test_config import TestConfig  # noqa: PLC0415  # avoid import cycle at module load
 
-            TestConfig.delete_resolved_placement(test_id)
+            with cleanup_step("AWS resolved placement"):
+                TestConfig.delete_resolved_placement(test_id)
     if cluster_backend in ("gce", "k8s-gke", ""):
         for project in gce_projects:
             with environment(SCT_GCE_PROJECT=project):
-                clean_instances_gce(tags_dict, dry_run=dry_run)
+                with cleanup_step("GCE instances"):
+                    clean_instances_gce(tags_dict, dry_run=dry_run)
     if cluster_backend in ("azure", ""):
         azure_regions = config.get("azure_region_name") or []
-        clean_instances_azure(tags_dict, regions=azure_regions, dry_run=dry_run)
+        with cleanup_step("Azure instances"):
+            clean_instances_azure(tags_dict, regions=azure_regions, dry_run=dry_run)
     # Always clean local Docker resources for all backends (except k8s-local which has no resources)
     # Tests on any backend may create local Docker containers for stress tools, monitoring, etc.
     if not cluster_backend.startswith("k8s-local"):
-        clean_resources_docker(tags_dict, dry_run=dry_run)
+        with cleanup_step("Docker resources"):
+            clean_resources_docker(tags_dict, dry_run=dry_run)
     if cluster_backend in ("xcloud",):
-        clean_clusters_scylla_cloud(tags_dict, config, dry_run=dry_run)
+        with cleanup_step("xcloud clusters"):
+            clean_clusters_scylla_cloud(tags_dict, config, dry_run=dry_run)
     if cluster_backend in ("oci", ""):
-        clean_instances_oci(tags_dict, dry_run=dry_run)
-        clean_orphan_block_volumes_oci(
-            tags_dict=tags_dict,
-            dry_run=dry_run,
+        with cleanup_step("OCI instances"):
+            clean_instances_oci(tags_dict, dry_run=dry_run)
+        with cleanup_step("OCI block volumes"):
+            clean_orphan_block_volumes_oci(tags_dict=tags_dict, dry_run=dry_run)
+
+    if failures:
+        LOGGER.warning(
+            "clean_cloud_resources finished with %d skipped step(s): %s",
+            len(failures),
+            ", ".join(name for name, _ in failures),
         )
     return True
 
@@ -721,7 +761,7 @@ def clean_clusters_eks(tags_dict: dict, regions: list = None, dry_run: bool = Fa
     ParallelObject(eks_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
 
 
-def clean_emr_clusters(tags_dict: dict, regions: list = None, dry_run: bool = False) -> None:
+def clean_emr_clusters(tags_dict: dict, regions: list = None, dry_run: bool = False) -> list[tuple[str, Exception]]:
     """Discover and terminate EMR clusters matching the given tags.
 
     Args:
@@ -732,11 +772,11 @@ def clean_emr_clusters(tags_dict: dict, regions: list = None, dry_run: bool = Fa
     assert tags_dict, "tags_dict not provided (can't clean all EMR clusters)"
     regions = regions or all_aws_regions()
 
-    for region in regions:
+    def clean_region(region):
         matching_clusters = list_emr_clusters(tags_dict=tags_dict, region_name=region)
         if not matching_clusters:
             LOGGER.info("No EMR clusters to clean up in %s", region)
-            continue
+            return
 
         emr_client = boto3.client("emr", region_name=region)
         for cluster_info in matching_clusters:
@@ -755,6 +795,8 @@ def clean_emr_clusters(tags_dict: dict, regions: list = None, dry_run: bool = Fa
                     LOGGER.info("EMR cluster %s termination initiated", cluster_id)
                 except Exception as exc:  # noqa: BLE001
                     LOGGER.error("Failed to terminate EMR cluster %s: %s", cluster_id, exc)
+
+    return run_per_region_ignore_failures(regions, clean_region, "EMR clusters", timeout=120)
 
 
 def clean_resources_according_post_behavior(params, config, logdir, dry_run=False):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import boto3
 import pytest
@@ -207,6 +207,19 @@ def test_list_emr_clusters_by_tags(moto_server, iam_roles):
     clusters_by_test = list_emr_clusters({"TestId": "list-test-001"}, region_name=AWS_REGION)
     assert len(clusters_by_test) >= 1
     assert all(c["Tags"].get("TestId") == "list-test-001" for c in clusters_by_test)
+
+
+def test_list_emr_clusters_uses_fail_fast_client_config():
+    """The EMR client must use fail-fast network settings for unreachable regions."""
+    emr_client = MagicMock()
+    emr_client.get_paginator.return_value.paginate.return_value = []
+
+    with patch("sdcm.provision.aws.emr_provisioner.boto3.client", return_value=emr_client) as mock_client:
+        list_emr_clusters({"RunByUser": "user1"}, region_name="me-south-1")
+
+    config = mock_client.call_args.kwargs["config"]
+    assert config.connect_timeout == 10
+    assert config.retries == {"total_max_attempts": 1}
 
 
 def test_build_instance_groups_default(provisioner):

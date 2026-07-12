@@ -50,6 +50,7 @@ from collections import OrderedDict
 
 import requests
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
@@ -107,6 +108,17 @@ SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
 CREATE_TABLE_REGEX = re.compile(
     r"CREATE\s+TABLE\s+(?P<keyspace>[^\s.]+)\.(?P<table>[^\s(]+)\s*\([^)]+\)(?P<options>[^;]*)"
 )
+
+AWS_SCAN_FAIL_FAST_CONFIG = Config(connect_timeout=10, read_timeout=30, retries={"total_max_attempts": 1})
+
+
+def run_per_region_ignore_failures(regions, scan_func, resource_name, timeout=100):
+    """Run scan_func per region in parallel; log and skip regions that fail."""
+    results = ParallelObject(regions, timeout=timeout, num_workers=len(regions)).run(scan_func, ignore_exceptions=True)
+    failures = [(res.obj, res.exc) for res in results if res.exc]
+    for region, exc in failures:
+        LOGGER.warning("Failed to scan %s in region %s, skipping: %s", resource_name, region, exc)
+    return failures
 
 
 def deprecation(message):
@@ -768,7 +780,7 @@ def list_load_balancers_aws(tags_dict=None, regions=None, group_as_region=False,
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
-        tagging = boto3.client("resourcegroupstaggingapi", region_name=region)
+        tagging = boto3.client("resourcegroupstaggingapi", region_name=region, config=AWS_SCAN_FAIL_FAST_CONFIG)
         paginator = tagging.get_paginator("get_resources")
         tag_filter = [{"Key": key, "Values": [value]} for key, value in tags_dict.items() if key != "NodeType"]
 
@@ -782,9 +794,7 @@ def list_load_balancers_aws(tags_dict=None, regions=None, group_as_region=False,
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(load_balancers.keys())), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(
-        get_load_balancers, ignore_exceptions=False
-    )
+    run_per_region_ignore_failures(aws_regions, get_load_balancers, "load balancers")
 
     if not group_as_region:
         load_balancers = list(itertools.chain(*list(load_balancers.values())))  # flatten the list of lists
@@ -814,7 +824,7 @@ def list_cloudformation_stacks_aws(tags_dict=None, regions=None, group_as_region
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
-        tagging = boto3.client("resourcegroupstaggingapi", region_name=region)
+        tagging = boto3.client("resourcegroupstaggingapi", region_name=region, config=AWS_SCAN_FAIL_FAST_CONFIG)
         paginator = tagging.get_paginator("get_resources")
         tag_filter = [{"Key": key, "Values": [value]} for key, value in tags_dict.items() if key != "NodeType"]
 
@@ -826,7 +836,7 @@ def list_cloudformation_stacks_aws(tags_dict=None, regions=None, group_as_region
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(cloudformation_stacks.keys())), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(get_stacks, ignore_exceptions=False)
+    run_per_region_ignore_failures(aws_regions, get_stacks, "CloudFormation stacks")
 
     if not group_as_region:
         cloudformation_stacks = list(
@@ -856,7 +866,7 @@ def list_launch_templates_aws(tags_dict=None, regions=None, verbose=False):
         if verbose:
             LOGGER.info("Going to list AWS region '%s'", region)
         time.sleep(random.random())
-        ec2_client = boto3.client("ec2", region_name=region)
+        ec2_client = boto3.client("ec2", region_name=region, config=AWS_SCAN_FAIL_FAST_CONFIG)
         paginator = ec2_client.get_paginator("describe_launch_templates")
         tags_filters = [{"Name": f"tag:{k}", "Values": [v]} for k, v in tags_dict.items() if k != "NodeType"]
         launch_templates[region] = []
@@ -866,9 +876,7 @@ def list_launch_templates_aws(tags_dict=None, regions=None, verbose=False):
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(launch_templates), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=120, num_workers=len(aws_regions)).run(
-        get_launch_templates, ignore_exceptions=False
-    )
+    run_per_region_ignore_failures(aws_regions, get_launch_templates, "launch templates", timeout=120)
 
     if verbose:
         total_items = sum([len(value) for value in launch_templates.values()])
