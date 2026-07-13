@@ -180,6 +180,36 @@ def _get_compaction_timeout(
         return timeout, {}
 
 
+def _get_cleanup_timeout(node_info_service, timeout=None):
+    """Calculate cleanup timeout based on node data size.
+    After decommission/topology change, cleanup removes data that no longer
+    belongs to a node. The amount of data to process is proportional to total
+    node data size divided by the number of nodes (since only the reshuffled
+    portion needs cleanup).
+
+    Ref: https://scylladb.atlassian.net/browse/SCT-247
+
+    Formula:
+        timeout = max(MIN_CLEANUP_TIMEOUT, data_size_mb / throughput_mb_s * safety_factor)
+    Where:
+        - data_size_mb: total data on the node (from node_info_service)
+        - throughput_mb_s: expected I/O throughput for the instance type
+        - safety_factor: 2.0 (accounts for compaction contention, I/O variability)
+        - MIN_CLEANUP_TIMEOUT: 120 seconds (floor for small datasets)
+    """
+    MIN_CLEANUP_TIMEOUT = 120  # seconds
+    SAFETY_FACTOR = 2.0
+    data_size_mb = node_info_service.node_data_size_mb
+    throughput = node_info_service.expected_throughput  # MB/s
+    if data_size_mb and throughput:
+        calculated = (data_size_mb / throughput) * SAFETY_FACTOR
+        timeout = max(MIN_CLEANUP_TIMEOUT, calculated)
+    else:
+        timeout = timeout or MIN_CLEANUP_TIMEOUT
+    return timeout, node_info_service.as_dict()
+
+
+
 class Operations(Enum):
     """Available operations for adaptive timeouts. Each operation maps to a function to calculate timeout based on node load info.
 
@@ -197,7 +227,7 @@ class Operations(Enum):
     BACKUP = ("backup", _get_soft_timeout, ("timeout",))
     RESTORE = ("restore", _get_soft_timeout, ("timeout",))
     REBUILD = ("rebuild", _get_soft_timeout, ("timeout",))
-    CLEANUP = ("cleanup", _get_soft_timeout, ("timeout",))
+    CLEANUP = ("cleanup", _get_cleanup_timeout, ("timeout",))
     REMOVE_NODE = ("remove_node", _get_soft_timeout, ("timeout",))
     SCRUB = ("scrub", _get_soft_timeout, ("timeout",))
     SOFT_TIMEOUT = ("soft_timeout", _get_soft_timeout, ("timeout",))
