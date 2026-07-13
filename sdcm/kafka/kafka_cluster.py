@@ -20,6 +20,7 @@ from sdcm.wait import wait_for
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.git import clone_repo
 from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.remote_logger import DockerComposeLogger
 from sdcm.utils.session import create_retry_session
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
@@ -87,14 +88,26 @@ class LocalKafkaCluster(cluster.BaseCluster):
 
     def install_connector_from_url(self, connector_url: str):
         if connector_url.startswith("http"):
+            connectors_dir = self.docker_compose_path / "connectors"
             if connector_url.endswith(".jar"):
                 self.remoter.run(
-                    f"curl --show-error --fail -L --create-dirs -O --output-dir {self.docker_compose_path / 'connectors'} {connector_url} "
+                    curl_with_retry(
+                        connector_url,
+                        follow_redirects=True,
+                        fail_early=True,
+                        extra_flags=f"--show-error --create-dirs -O --output-dir {connectors_dir}",
+                    )
                 )
             if connector_url.endswith(".zip"):
+                zip_curl = curl_with_retry(
+                    connector_url,
+                    follow_redirects=True,
+                    fail_early=True,
+                    output="/tmp/connector.zip",
+                    extra_flags="--show-error",
+                )
                 self.remoter.run(
-                    f"curl --show-error --fail -L -o /tmp/connector.zip {connector_url} && "
-                    f"unzip -o /tmp/connector.zip -d {self.docker_compose_path / 'connectors'} && rm /tmp/connector.zip"
+                    f"{zip_curl} && unzip -o /tmp/connector.zip -d {connectors_dir} && rm /tmp/connector.zip"
                 )
         if connector_url.startswith("file://"):
             connector_local_path = connector_url.replace("file://", "")

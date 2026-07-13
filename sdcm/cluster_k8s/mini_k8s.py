@@ -43,6 +43,7 @@ from sdcm.cluster_k8s import (
     SCYLLA_MANAGER_AGENT_RESOURCES,
     SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER,
 )
+from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.k8s import TokenUpdateThread, HelmValues
 from sdcm.utils.k8s.chaos_mesh import ChaosMesh
 from sdcm.utils.decorators import retrying
@@ -131,11 +132,13 @@ class MinimalK8SOps:
             sysctl --system
             """)
         node.remoter.sudo(f'bash -cxe "{script}"')
+        helm_curl = curl_with_retry(
+            f'"https://get.helm.sh/helm-{HELM_VERSION}-linux-amd64.tar.gz"',
+            silent=True,
+            follow_redirects=True,
+        )
         node.remoter.sudo(
-            'bash -cxe "helm version'
-            f' || (curl --silent --location "https://get.helm.sh/helm-{HELM_VERSION}-linux-amd64.tar.gz"'
-            "  | tar xz -C /tmp && mv /tmp/linux-amd64/helm /usr/local/bin)"
-            '"'
+            f'bash -cxe "helm version || ({helm_curl}  | tar xz -C /tmp && mv /tmp/linux-amd64/helm /usr/local/bin)"'
         )
 
         # NOTE: if running in Hydra then it must have '/dev' mount from host as 'rw'
@@ -153,9 +156,16 @@ class MinimalK8SOps:
 
     @staticmethod
     def setup_docker_ubuntu(node: cluster.BaseNode, target_user: str = None) -> None:
+        docker_gpg_curl = curl_with_retry(
+            "https://download.docker.com/linux/ubuntu/gpg",
+            silent=True,
+            follow_redirects=True,
+            fail_early=True,
+            extra_flags="-S",
+        )
         script = dedent(f"""
             # Install and configure Docker.
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+            {docker_gpg_curl} | apt-key add -
             add-apt-repository \\"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\\"
             apt-get -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io
             {f"usermod -a -G docker {target_user}" if target_user else ""}
@@ -171,10 +181,17 @@ class MinimalK8SOps:
 
     @staticmethod
     def setup_kubectl_ubuntu(node: cluster.BaseNode, kubectl_version: str) -> None:
+        kubectl_curl = curl_with_retry(
+            f"https://storage.googleapis.com/kubernetes-release/release/v{kubectl_version}/bin/linux/amd64/kubectl",
+            silent=True,
+            follow_redirects=True,
+            fail_early=True,
+            output="/usr/local/bin/kubectl",
+            extra_flags="-S",
+        )
         script = dedent(f"""
             # Download kubectl binary.
-            curl -fsSLo /usr/local/bin/kubectl \
-                https://storage.googleapis.com/kubernetes-release/release/v{kubectl_version}/bin/linux/amd64/kubectl
+            {kubectl_curl}
             chmod +x /usr/local/bin/kubectl
             """)
         node.remoter.sudo(f'bash -cxe "{script}"')
@@ -487,10 +504,17 @@ class LocalKindCluster(LocalMinimalClusterBase):
         return self.host_node.remoter.run("/var/tmp/kind get kubeconfig", ignore_status=True).ok
 
     def setup_k8s_software(self):
+        kind_curl = curl_with_retry(
+            f"https://kind.sigs.k8s.io/dl/v{self.software_version}/kind-linux-amd64",
+            silent=True,
+            follow_redirects=True,
+            fail_early=True,
+            output="/var/tmp/kind",
+            extra_flags="-S",
+        )
         script = dedent(f"""
-        # Download kubectl binary.
-        curl -fsSLo /var/tmp/kind \
-            https://kind.sigs.k8s.io/dl/v{self.software_version}/kind-linux-amd64
+        # Download kind binary.
+        {kind_curl}
         chmod +x /var/tmp/kind
         """)
         self.host_node.remoter.sudo(f'bash -cxe "{script}"')

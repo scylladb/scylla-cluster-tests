@@ -19,6 +19,7 @@ from sdcm import mgmt
 from sdcm.exceptions import FilesNotCorrupted
 from sdcm.keystore import KeyStore
 from sdcm.remote import shell_script_cmd, LOCALRUNNER
+from sdcm.utils.curl import curl_with_retry
 from sdcm.sct_events.system import InfoEvent
 from sdcm.test_config import TestConfig
 from sdcm.tester import ClusterTester
@@ -152,10 +153,11 @@ class BucketOperations(ClusterTester):
             raise NotImplementedError("At the moment, we only support debian installation")
 
     def install_azcopy_dependencies(self, node):
+        azcopy_curl = curl_with_retry("https://aka.ms/downloadazcopy-v10-linux", follow_redirects=True)
         self._run_cmd_with_retry(
             executor=node.remoter.sudo,
-            cmd=shell_script_cmd("""\
-            curl -L https://aka.ms/downloadazcopy-v10-linux | \
+            cmd=shell_script_cmd(f"""\
+            {azcopy_curl} | \
                 tar xz -C /usr/bin --strip-components 1 --wildcards '*/azcopy'
         """),
         )
