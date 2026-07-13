@@ -103,7 +103,7 @@ class Remoter:
     def run(self, *args, **kwargs):
         lines = [
             "[shard 11] sstables_loader - load_and_stream: started ops_uuid=a2661989-6836-418f-aa67-2c5466499848, process [0-1] out",
-            "[shard  2] sstables_loader - Done loading new SSTables for keyspace=keyspace1, table=standard1, load_and_stream=true, "
+            "[shard  2] sstables_loader - Done loading new SSTables for keyspace=keyspace_refresh, table=standard1, load_and_stream=true, "
             "primary_replica_only=false, status=succeeded",
         ]
         for line in lines:
