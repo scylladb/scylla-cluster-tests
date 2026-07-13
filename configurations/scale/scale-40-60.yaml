@@ -7,5 +7,6 @@ user_prefix: 'cluster-scale-40-60-test'
 
 # Takes too long on big clusters
 cluster_health_check: false
+use_scylla_doctor_on_failure: false
 
 backtrace_decoding: false
