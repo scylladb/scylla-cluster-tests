@@ -3980,7 +3980,7 @@ class ClusterTester(unittest.TestCase):
             try:
                 from utils.scylla_doctor import ScyllaDoctor, ScyllaDoctorException  # noqa: PLC0415
 
-                for node in ready_nodes:
+                def run_scylla_doctor_on_node(node):
                     try:
                         doctor = ScyllaDoctor(node=node, test_config=self.test_config, offline_install=True)
                         doctor.install_scylla_doctor()
@@ -3998,7 +3998,23 @@ class ClusterTester(unittest.TestCase):
 
                         self.log.info("Scylla-doctor completed for node %s", node.name)
                     except (ScyllaDoctorException, UnexpectedExit, Failure, AssertionError) as exc:
+                        # Swallow per-node scylla-doctor failures so one bad node does not prevent
+                        # collection from the rest; the outer parallel loop keeps going.
                         self.log.warning("Failed to run scylla-doctor on node %s: %s", node.name, exc)
+
+                # Run scylla-doctor on all nodes in parallel. It installs, runs and downloads results
+                # per node and can take tens of minutes per node, so a serial pass over a large
+                # cluster (e.g. 60 nodes) previously took 40+ minutes. Workers are capped to avoid
+                # spawning an unbounded number of threads/SSH sessions on very large clusters.
+                with ThreadPoolExecutor(max_workers=min(len(ready_nodes), 20)) as executor:
+                    for future in as_completed(
+                        executor.submit(run_scylla_doctor_on_node, node) for node in ready_nodes
+                    ):
+                        # run_scylla_doctor_on_node handles its own errors; guard against unexpected ones.
+                        try:
+                            future.result()
+                        except Exception as exc:  # noqa: BLE001
+                            self.log.warning("Unexpected error running scylla-doctor on a node: %s", exc)
             except Exception as exc:  # noqa: BLE001
                 self.log.warning("Unexpected error when collecting scylla-doctor info: %s", exc)
 
