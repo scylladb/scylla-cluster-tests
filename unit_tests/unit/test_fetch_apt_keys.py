@@ -5,6 +5,7 @@ from invoke.runners import Result
 
 from sdcm.cluster import BaseNode, NodeSetupFailed
 from sdcm.remote import shell_script_cmd
+from sdcm.utils.curl import curl_with_retry
 
 
 APT_KEY = "AABBCCDD11223344"
@@ -39,10 +40,17 @@ def _gpg_recv_call(temp_keyring, keyserver, apt_key):
 
 def _https_fallback_call(temp_keyring, apt_key):
     https_url = f"https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x{apt_key}&options=mr"
+    curl_cmd = curl_with_retry(
+        f"'{https_url}'",
+        silent=True,
+        follow_redirects=True,
+        fail_early=True,
+        retry=3,
+        retry_max_time=60,
+        extra_flags="-S",
+    )
     return mock.call(
-        shell_script_cmd(
-            f"curl --retry 3 --retry-max-time 60 --connect-timeout 10 -fsSL '{https_url}' | gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --import"
-        ),
+        shell_script_cmd(f"{curl_cmd} | gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --import"),
         retry=1,
         ignore_status=True,
         timeout=120,
