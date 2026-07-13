@@ -32,7 +32,6 @@ import json
 import itertools
 from abc import ABC, abstractmethod
 from contextlib import ExitStack
-from datetime import timedelta
 from typing import List, Optional, Callable, Union, Iterable, TYPE_CHECKING
 from functools import partial, cached_property
 from collections import defaultdict, Counter, namedtuple
@@ -47,7 +46,7 @@ from sdcm.nemesis.registry import NemesisRegistry
 from sdcm.utils.action_logger import get_action_logger
 
 from sdcm.utils.cql_utils import cql_unquote_if_needed, cql_quote_if_needed
-from sdcm import wait, mgmt
+from sdcm import wait
 from sdcm.audit import Audit, AuditConfiguration
 from sdcm.cluster import (
     BaseCluster,
@@ -70,10 +69,7 @@ from sdcm.cluster_k8s import (
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
 from sdcm.logcollector import save_kallsyms_map
-from sdcm.mgmt.common import TaskStatus, ScyllaManagerError, get_persistent_snapshots, ObjectStorageUploadMode
-from sdcm.mgmt.backup import run_manager_backup
-from sdcm.mgmt.argus_report import report_manager_backup_results_to_argus
-from sdcm.mgmt.helpers import get_dc_name_from_ks_statement, get_schema_create_statements_from_snapshot
+from sdcm.mgmt.common import TaskStatus, ScyllaManagerError
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import update_certificate, TLSAssets
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
@@ -88,7 +84,6 @@ from sdcm.sct_events.group_common_events import (
     ignore_reactor_stall_errors,
     ignore_disk_quota_exceeded_errors,
     decorate_with_context_if_issues_open,
-    ignore_take_snapshot_failing,
     ignore_ipv6_failure_to_assign,
     ignore_raft_topology_cmd_failing,
     suppress_expected_unavailability_errors,
@@ -140,6 +135,7 @@ from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
 
 from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS, DefaultValue, node_operations, unique_disruption_name
+from sdcm.nemesis.utils.common_ops import destroy_data_and_restart_scylla
 from sdcm.nemesis.utils.indexes import (
     ViewFinishedBuildingException,
     is_cf_a_view,
@@ -169,7 +165,6 @@ from sdcm.exceptions import (
     KillNemesis,
     NoFilesFoundToDestroy,
     NoKeyspaceFound,
-    FilesNotCorrupted,
     LogContentNotFound,
     LdapNotRunning,
     TimestampNotFound,
@@ -196,7 +191,6 @@ from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
 
 if TYPE_CHECKING:
     from sdcm.audit import AuditStore
-    from sdcm.mgmt.cli import BackupTask
     from sdcm.tester import ClusterTester
 
 LOGGER = logging.getLogger(__name__)
@@ -1002,61 +996,10 @@ class NemesisRunner:
 
         return sstables
 
-    @decorate_with_context(suppress_expected_unavailability_errors)
     def _destroy_data_and_restart_scylla(self, keyspaces_for_destroy: list = None, sstables_to_destroy_perc: int = 50):
-        tables = self.cluster.get_non_system_ks_cf_list(
-            db_node=self.target_node, filter_empty_tables=False, filter_by_keyspace=keyspaces_for_destroy
+        destroy_data_and_restart_scylla(
+            self, keyspaces_for_destroy=keyspaces_for_destroy, sstables_to_destroy_perc=sstables_to_destroy_perc
         )
-        if not tables:
-            raise UnsupportedNemesis("Non-system keyspace and table are not found. The nemesis can't be run")
-
-        self.log.debug("Chosen tables: %s", tables)
-
-        # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
-        with self.action_log_scope(f"Stop Scylla on {self.target_node.name}"):
-            self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
-
-        try:
-            # Remove data files
-            if not (all_files_to_destroy := self.get_all_sstables(tables=tables, node=self.target_node)):
-                raise UnsupportedNemesis("SStables for destroy are not found. The nemesis can't be run")
-
-            # How many SStables are going to be deleted
-            sstables_amount_to_destroy = int(len(all_files_to_destroy) * sstables_to_destroy_perc / 100)
-            self.log.debug(
-                "SStables amount to destroy (%s percent of all SStables): %s",
-                sstables_to_destroy_perc,
-                sstables_amount_to_destroy,
-            )
-
-            destroyed_files = 0
-            while sstables_amount_to_destroy > 0:
-                file_for_destroy = random.choice(all_files_to_destroy)
-                if not (
-                    file_group_for_destroy := self.replace_full_file_name_to_prefix(
-                        one_file=file_for_destroy, ks_cf_for_destroy=tables
-                    )
-                ):
-                    continue
-
-                with DbNodeLogger(
-                    self.cluster.nodes,
-                    "remove data",
-                    target_node=self.target_node,
-                    additional_info=file_group_for_destroy,
-                ):
-                    result = self.target_node.remoter.sudo("rm -f %s" % file_group_for_destroy)
-                if result.stderr:
-                    raise FilesNotCorrupted(f"Files were not removed. The nemesis can't be run. Error: {result}")
-                all_files_to_destroy.remove(file_for_destroy)
-                sstables_amount_to_destroy -= 1
-                destroyed_files += 1
-                self.log.debug(f"Files {file_for_destroy} were destroyed")
-            self.actions_log.info(f"removed {destroyed_files} files in tables: {tables} on {self.target_node.name}")
-
-        finally:
-            with self.action_log_scope(f"Start Scylla on {self.target_node.name} node"):
-                self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     def disrupt(self):
         raise NotImplementedError("Derived classes must implement disrupt()")
@@ -2836,303 +2779,6 @@ class NemesisRunner:
 
     def disrupt_toggle_table_gc_mode(self):
         self.toggle_table_gc_mode()
-
-    def _run_manager_backup(
-        self, mgr_cluster, object_storage_upload_mode: ObjectStorageUploadMode, timeout: int
-    ) -> "BackupTask":
-        with self.action_log_scope("Scylla Manager backup"):
-            task = run_manager_backup(mgr_cluster, self.tester.locations, object_storage_upload_mode, timeout)
-        return task
-
-    def _manager_backup_and_report(self, method: ObjectStorageUploadMode, label) -> "BackupTask":
-        """
-        Run a backup using Scylla Manager and report the result to Argus.
-
-        :param method: The transfer mode for object storage (e.g., RCLONE or NATIVE).
-        :param label: A label for reporting.
-        :return: BackupTask object representing the backup operation.
-        """
-        timeout = int(timedelta(hours=14).total_seconds())
-        manager_tool = self.get_manager_tool()
-        mgr_cluster = self.tester.ensure_and_get_cluster(manager_tool)
-        decorated = latency_calculator_decorator(legend="Scylla-Manager Backup", cycle_name=label)(
-            self._run_manager_backup
-        )
-        task = decorated(mgr_cluster, method, timeout)
-        report_manager_backup_results_to_argus(self.tester.monitors, self.tester.test_config, label, task, mgr_cluster)
-        return task
-
-    def disrupt_manager_backup(self, object_storage_upload_mode: ObjectStorageUploadMode, label):
-        """
-        Perform a Manager backup as a nemesis.
-        Deletes created snapshot at end.
-        Args:
-            object_storage_upload_mode: The upload mode (e.g., RCLONE or NATIVE).
-            label: Label for reporting to Argus.
-        """
-
-        time_postfix = datetime.datetime.now().strftime("_%m%d_%H%M")
-        label_with_time = f"{label}{time_postfix}"
-        task = self._manager_backup_and_report(object_storage_upload_mode, label_with_time)
-        with self.action_log_scope("Delete Manager backup snapshot"):
-            task.delete_backup_snapshot()
-
-    def get_manager_tool(self):
-        return mgmt.get_scylla_manager_tool(manager_node=self.tester.monitors.nodes[0])
-
-    def disrupt_mgmt_backup_specific_keyspaces(self):
-        self._mgmt_backup(backup_specific_tables=True)
-
-    def disrupt_mgmt_backup(self):
-        self._mgmt_backup(backup_specific_tables=False)
-
-    def disrupt_mgmt_restore(self):  # noqa: PLR0914
-        def get_total_scylla_partition_size():
-            result = self.cluster.data_nodes[0].remoter.run("df -k | grep /var/lib/scylla")  # Size in KB
-            free_space_size = int(result.stdout.split()[1]) / 1024**2  # Converting to GB
-            return free_space_size
-
-        def choose_snapshot(snapshots_dict, region: str):
-            snapshot_groups_by_size = snapshots_dict["snapshots_sizes"]
-            total_partition_size = get_total_scylla_partition_size()
-            all_snapshot_sizes = sorted(list(snapshot_groups_by_size.keys()), reverse=True)
-            fitting_snapshot_sizes = [size for size in all_snapshot_sizes if total_partition_size / size >= 20]
-            if self.tester.test_duration < 1000:
-                # Since verifying the restored data takes a long time, the nemesis limits the size of the restored
-                # backup based on the test duration
-                fitting_snapshot_sizes = [size for size in fitting_snapshot_sizes if size < 50]
-            # The restore should not take more than 5% of the space total space in /var/lib/scylla
-            assert fitting_snapshot_sizes, "There's not enough space for any snapshot restoration"
-
-            chosen_snapshot_size = self.random.choice(fitting_snapshot_sizes)
-            all_snapshots_per_region = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"][region]
-
-            if self.cluster.nodes[0].is_enterprise:
-                snapshot_tag = self.random.choice(list(all_snapshots_per_region.keys()))
-            else:
-                oss_snapshots = [
-                    snapshot_key
-                    for snapshot_key, snapshot_value in all_snapshots_per_region.items()
-                    if snapshot_value["scylla_product"] == "oss"
-                ]
-                snapshot_tag = self.random.choice(oss_snapshots)
-
-            snapshot_info = all_snapshots_per_region[snapshot_tag]
-            snapshot_info.update(
-                {
-                    "expected_timeout": snapshot_groups_by_size[chosen_snapshot_size]["expected_timeout"],
-                    "number_of_rows": snapshot_groups_by_size[chosen_snapshot_size]["number_of_rows"],
-                }
-            )
-            return snapshot_tag, snapshot_info
-
-        def execute_data_validation_thread(command_template, keyspace_name, number_of_rows):
-            stress_queue = []
-            number_of_loaders = sum(self.tester.params.get("n_loaders"))
-            rows_per_loader = int(number_of_rows / number_of_loaders)
-            for loader_index in range(number_of_loaders):
-                stress_command = command_template.format(
-                    num_of_rows=rows_per_loader,
-                    keyspace_name=keyspace_name,
-                    sequence_start=rows_per_loader * loader_index + 1,
-                    sequence_end=rows_per_loader * (loader_index + 1),
-                )
-                read_thread = self.tester.run_stress_thread(
-                    stress_cmd=stress_command, round_robin=True, stop_test_on_failure=False
-                )
-                stress_queue.append(read_thread)
-            return stress_queue
-
-        def _restore_schema(locations: list, cluster_id: str, tag: str) -> None:
-            """Introduced to cover two flows:
-
-            - When a backup snapshot has different DC name than the current cluster's DC name -
-            restore schema out of the Manager applying CQL statements saved in schema.json file
-
-            - When backup snapshot has the same DC name as the current cluster's DC name -
-            restore schema using the Manager (sctool restore --restore-schema ...)
-            """
-            ks_statements, other_statements = get_schema_create_statements_from_snapshot(
-                bucket=locations[0].split(":")[-1],
-                mgr_cluster_id=cluster_id,
-                snapshot_tag=tag,
-            )
-
-            dc_under_test_name = next(iter(self.cluster.get_nodetool_status()))
-            # Test is supposed to work with single DC setups only, so we can take the first DC name
-            dc_from_backup_name = get_dc_name_from_ks_statement(ks_statements[0])[0]
-            self.log.debug("DC name from backup: %s, DC name under test: %s", dc_from_backup_name, dc_under_test_name)
-
-            if dc_under_test_name != dc_from_backup_name:
-                self.log.info(
-                    "DC names mismatch - restoring the schema manually altering cql statements and "
-                    "applying them one by one"
-                )
-                # Alter the dc_name in keyspace cql statements to match the current cluster's dc_name
-                old_dc_block = f"'{dc_from_backup_name}':"  # Include quotes and colon to avoid unintended replacements
-                new_dc_block = f"'{dc_under_test_name}':"
-                ks_statements = [stmt.replace(old_dc_block, new_dc_block) for stmt in ks_statements]
-                # Apply cql statements one by one to restore schema
-                for cql_stmt in ks_statements + other_statements:
-                    self.target_node.run_cqlsh(cql_stmt)
-            else:
-                self.log.info("Restoring the schema using the Scylla Manager")
-                task = mgr_cluster.create_restore_task(restore_schema=True, location_list=locations, snapshot_tag=tag)
-                task.wait_and_get_final_status(step=10, timeout=6 * 60)  # 6 giving minutes to restore the schema
-                assert task.status == TaskStatus.DONE, f"Schema restoration failed: snapshot tag - {tag}"
-
-        skip_issues = [
-            "https://github.com/scylladb/scylla-manager/issues/3829",
-            "https://github.com/scylladb/scylla-manager/issues/4049",
-        ]
-        is_multi_dc = (
-            len(self.cluster.params.region_names) > 1 or (self.cluster.params.get("simulated_regions") or 0) > 1
-        )
-        if SkipPerIssues(skip_issues, params=self.tester.params) and is_multi_dc:
-            raise UnsupportedNemesis("MultiDC cluster configuration is not supported by this nemesis")
-
-        if not (self.cluster.params.get("use_mgmt") or self.cluster.params.get("use_cloud_manager")):
-            raise UnsupportedNemesis("Scylla-manager configuration is not defined!")
-        if self.cluster.params.get("cluster_backend") not in ("aws", "k8s-eks"):
-            raise UnsupportedNemesis("The restore test only supports 'AWS' and 'K8S-EKS' backends.")
-
-        mgr_cluster = self.cluster.get_cluster_manager()
-        cluster_backend = self.cluster.params.get("cluster_backend")
-        if cluster_backend == "k8s-eks":
-            cluster_backend = "aws"
-
-        persistent_manager_snapshots_dict = get_persistent_snapshots()
-        region = next(iter(self.cluster.params.region_names), "")
-        target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"].format(region=region)
-        chosen_snapshot_tag, chosen_snapshot_info = choose_snapshot(
-            snapshots_dict=persistent_manager_snapshots_dict[cluster_backend], region=region
-        )
-
-        self.log.info("Restoring the keyspace %s", chosen_snapshot_info["keyspace_name"])
-        location_list = [f"{self.cluster.params.get('backup_bucket_backend')}:{target_bucket}"]
-        test_keyspaces = [cql_unquote_if_needed(keyspace) for keyspace in self.cluster.get_test_keyspaces()]
-        # Keyspace names that start with a digit are surrounded by quotation marks in the output of a describe query
-        if chosen_snapshot_info["keyspace_name"] not in test_keyspaces:
-            self.log.info("Restoring the schema of the keyspace '%s'", chosen_snapshot_info["keyspace_name"])
-            _restore_schema(
-                locations=location_list,
-                cluster_id=chosen_snapshot_info["cluster_id"],
-                tag=chosen_snapshot_tag,
-            )
-            with suppress_expected_unavailability_errors():
-                self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
-
-            # TODO: Bring it back after the implementation of https://github.com/scylladb/scylla-manager/issues/4049
-            # which will unblock schema restore into a different DC. For now, we can restore schema only within one DC.
-            # According to https://github.com/scylladb/scylla-manager/issues/4041#issuecomment-2565489699, the step
-            # below is not needed if restoring the schema within one DC.
-            #
-            # self.tester.set_ks_strategy_to_network_and_rf_according_to_cluster(
-            #    keyspace=chosen_snapshot_info["keyspace_name"], repair_after_alter=False)
-        try:
-            restore_task = mgr_cluster.create_restore_task(
-                restore_data=True, location_list=location_list, snapshot_tag=chosen_snapshot_tag
-            )
-            restore_task.wait_and_get_final_status(step=30, timeout=chosen_snapshot_info["expected_timeout"])
-            assert restore_task.status == TaskStatus.DONE, f"Data restoration of {chosen_snapshot_tag} has failed!"
-
-            confirmation_stress_template = (persistent_manager_snapshots_dict)[cluster_backend][
-                "confirmation_stress_template"
-            ]
-            stress_queue = execute_data_validation_thread(
-                command_template=confirmation_stress_template,
-                keyspace_name=chosen_snapshot_info["keyspace_name"],
-                number_of_rows=chosen_snapshot_info["number_of_rows"],
-            )
-
-            for stress in stress_queue:
-                is_passed = self.tester.verify_stress_thread(stress)
-                assert is_passed, (
-                    "Data verification stress command, triggered by the 'mgmt_restore' nemesis, has failed"
-                )
-        finally:
-            self.log.info("Cleaning up restored keyspace '%s'", chosen_snapshot_info["keyspace_name"])
-            drop_ks_stmt = f'DROP KEYSPACE IF EXISTS "{chosen_snapshot_info["keyspace_name"]}";'
-            try:
-                self.target_node.run_cqlsh(drop_ks_stmt)
-            except Exception as drop_err:  # noqa: BLE001
-                self.log.warning("Failed to drop restored keyspace: %s", drop_err)
-
-    def _delete_existing_backups(self, mgr_cluster):
-        deleted_tasks = []
-        existing_backup_tasks = mgr_cluster.backup_task_list
-        for backup_task in existing_backup_tasks:
-            if backup_task.status in [TaskStatus.NEW, TaskStatus.RUNNING, TaskStatus.STARTING, TaskStatus.ERROR]:
-                deleted_tasks.append(backup_task.id)
-                mgr_cluster.delete_task(backup_task)
-        if deleted_tasks:
-            self.log.warning(
-                "Deleted the following backup tasks before the nemesis starts: %s", ", ".join(deleted_tasks)
-            )
-
-    @decorate_with_context_if_issues_open(
-        ignore_take_snapshot_failing, issue_refs=["https://github.com/scylladb/scylla-manager/issues/3389"]
-    )
-    def _mgmt_backup(self, backup_specific_tables):
-        if not self.cluster.params.get("use_mgmt") and not self.cluster.params.get("use_cloud_manager"):
-            raise UnsupportedNemesis("Scylla-manager configuration is not defined!")
-        mgr_cluster = self.cluster.get_cluster_manager()
-        if self.cluster.params.get("use_cloud_manager"):
-            auto_backup_task = mgr_cluster.backup_task_list[0]
-            #  An example of the auto generated backup task of cloud manager is:
-            #  │ backup/8e40b8b4-5394-42d3-9884-a4ce8ab69687
-            #  │ --dc 'AWS_US_EAST_1' -L AWS_US_EAST_1:s3:scylla-cloud-backup-9952-10120-4q4w4d --retention 14
-            #  --rate-limit AWS_US_EAST_1:100 --snapshot-parallel '<nil>' --upload-parallel '<nil>'
-            #  │ 06 Jun 21 18:10:05 UTC (+1d)  │ NEW
-            location = auto_backup_task.get_task_info_dict()["location"]
-        else:
-            if not self.cluster.params.get("backup_bucket_location"):
-                raise UnsupportedNemesis("backup bucket location configuration is not defined!")
-
-            backup_bucket_backend = self.cluster.params.get("backup_bucket_backend")
-            region = next(iter(self.cluster.params.region_names), "")
-            backup_bucket_location = self.cluster.params.get("backup_bucket_location")[0].format(region=region)
-            location = f"{backup_bucket_backend}:{backup_bucket_location}"
-        self._delete_existing_backups(mgr_cluster)
-        if backup_specific_tables:
-            non_test_keyspaces = [cql_unquote_if_needed(ks) for ks in self.cluster.get_test_keyspaces()]
-            self.actions_log.info(f"Starting Scylla Manager backup task for keyspaces: {non_test_keyspaces}")
-            mgr_task = mgr_cluster.create_backup_task(
-                location_list=[
-                    location,
-                ],
-                keyspace_list=non_test_keyspaces,
-            )
-        else:
-            self.actions_log.info("Starting Scylla Manager backup task for all keyspaces")
-            mgr_task = mgr_cluster.create_backup_task(
-                location_list=[
-                    location,
-                ]
-            )
-
-        assert mgr_task is not None, "Backup task wasn't created"
-
-        status = mgr_task.wait_and_get_final_status(timeout=54000, step=5, only_final=True)
-        self.actions_log.info(f"Scylla Manager backup task finished with status: {status}")
-        if status == TaskStatus.DONE:
-            self.log.info("Task: %s is done.", mgr_task.id)
-        elif status in (TaskStatus.ERROR, TaskStatus.ERROR_FINAL):
-            assert False, f"Backup task {mgr_task.id} failed"
-        else:
-            mgr_task.stop()
-            assert False, f"Backup task {mgr_task.id} timed out - while on status {status}"
-
-    def disrupt_mgmt_repair_cli(self):
-        if not self.cluster.params.get("use_mgmt") and not self.cluster.params.get("use_cloud_manager"):
-            raise UnsupportedNemesis("Scylla-manager configuration is not defined!")
-        self.run_repair_manager()
-
-    def disrupt_mgmt_corrupt_then_repair(self):
-        if not self.cluster.params.get("use_mgmt") and not self.cluster.params.get("use_cloud_manager"):
-            raise UnsupportedNemesis("Scylla-manager configuration is not defined!")
-        self._destroy_data_and_restart_scylla()
-        self.run_repair_manager()
 
     def disrupt_abort_repair(self):
         """
