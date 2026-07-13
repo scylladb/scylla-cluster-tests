@@ -38,27 +38,34 @@ class NvmeFaultInjectUserDataObject(SctUserDataObject):
     - 'unbind' (default): unbinds the PCI function's driver, leaving the pci_dev
       registered - simulating the "controller present, namespace missing" boot race.
       Unbinding removes both the NVMe controller and its namespace - there is no
-      userspace-reachable way to remove only the namespace - so this only exercises
-      the fix's PCI-bus-rescan fallback branch, not its primary 'rescan_controller'
-      write branch. NOTE: a PCI-bus rescan cannot rebind an unbound-but-registered
-      pci_dev (pci_scan_slot() skips occupied slots), so on NVMe-root SKUs this mode
-      cannot validate the bus-rescan path at all - use 'remove' there.
+      userspace-reachable way to remove only the namespace. A plain PCI-bus rescan
+      cannot rebind an unbound-but-registered pci_dev (pci_scan_slot() skips occupied
+      slots) - this mode was originally believed structurally unfixable for exactly
+      that reason (verified live, run db-cluster-b0fd0433: 144 retries, zero effect).
+      scylla-machine-image subsequently closed that gap with a dedicated branch,
+      _unbound_nvme_pci_addresses() + a write to /sys/bus/pci/drivers_probe, which
+      explicitly asks the driver core to (re)bind a still-registered-but-driverless
+      PCI function - this mode now exercises exactly that branch. Unlike the bus
+      rescan, drivers_probe operates per-PCI-address and doesn't care whether the SKU
+      is NVMe-root, so this mode is valid on any backend, not just non-NVMe-root ones.
 
     - 'remove': deletes the pci_dev entirely (echo 1 > .../remove) - reproducing the
       Azure Standard_L8s_v4 production incident where the local-disk controller was
       absent from PCI enumeration for the whole boot while the *root* disk's own
       healthy NVMe controller answered rescan_controller writes. Pre-02bb3c74
       scylla-machine-image code short-circuited on that success and never reached the
-      PCI-bus rescan; only the unconditional bus rescan (scylla-machine-image commit
-      02bb3c74) can re-enumerate a removed device. ALL non-root controllers are
-      removed: leaving any survivor keeps get_local_disks() non-empty, so
-      wait_for_devices() succeeds on its first pass, no rescan ever runs, and RAID
-      silently builds on the surviving subset - partial injection is therefore treated
-      as failure. Because the injector unit starts ~3s into boot while controllers
-      enumerate at ~2.2s, the first boot records how many non-root controllers to
-      expect and the injector waits for all of them before removing anything.
-      Verified on Azure Standard_L8s_v4 (Hyper-V vPCI) only - re-scout before using
-      this mode on another backend.
+      PCI-bus rescan. A fully-removed pci_dev has no sysfs node left for
+      drivers_probe to target either - only the unconditional bus rescan
+      (scylla-machine-image commit 02bb3c74) can re-enumerate it, so this mode is
+      still the only way to exercise that third branch specifically. ALL non-root
+      controllers are removed: leaving any survivor keeps get_local_disks()
+      non-empty, so wait_for_devices() succeeds on its first pass, no rescan ever
+      runs, and RAID silently builds on the surviving subset - partial injection is
+      therefore treated as failure. Because the injector unit starts ~3s into boot
+      while controllers enumerate at ~2.2s, the first boot records how many non-root
+      controllers to expect and the injector waits for all of them before removing
+      anything. Verified on Azure Standard_L8s_v4 (Hyper-V vPCI) only - re-scout
+      before using this mode on another backend.
 
     This script runs during the first boot's cloud-init runcmd stage, i.e. after
     scylla-image-setup.service has already completed successfully on that same boot.

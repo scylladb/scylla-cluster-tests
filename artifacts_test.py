@@ -576,9 +576,11 @@ class ArtifactsTest(ClusterTester):
         'nvme_rescan_repro_mode':
 
         - 'unbind' (default): local NVMe PCI function's driver unbound - the
-          "controller present, namespace missing" repro. Exercises only the fix's
-          PCI-bus-rescan fallback branch, and cannot work on NVMe-root SKUs (a bus
-          rescan can't rebind a still-registered pci_dev).
+          "controller present, namespace missing" repro. A plain PCI-bus rescan can't
+          rebind a still-registered pci_dev, so this now exercises the fix's dedicated
+          drivers_probe branch (_unbound_nvme_pci_addresses()), added specifically to
+          recover this case - and, unlike the bus rescan, that branch is
+          SKU-agnostic, so this mode is valid on NVMe-root backends too.
         - 'remove': local NVMe PCI devices deleted outright on an NVMe-root SKU
           (Standard_L8s_v4) - the "controller never enumerated" production incident that
           scylla-machine-image commit 02bb3c74's unconditional PCI-bus rescan fixes.

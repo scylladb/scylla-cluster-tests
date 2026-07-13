@@ -2,7 +2,7 @@
 status: draft
 domain: testing
 created: 2026-07-09
-last_updated: 2026-07-10
+last_updated: 2026-07-13
 owner: null
 ---
 
@@ -36,8 +36,8 @@ designed below is likewise generic cloud-init/systemd infrastructure with no
 Azure-specific dependency (see Current State), so this plan targets all four
 backends SCT provisions on: AWS, Azure, GCE, OCI.
 
-Production incidents split into two distinct failure modes, and Phases 1–4's
-unbind-based test covers neither of them exactly:
+Production incidents split into two distinct failure modes, plus a gap this plan's own
+scouting for Phases 1–4 surfaced and which scylla-machine-image has since closed:
 
 - **Controller bound, namespace missing** (OCI incident
   `long-100gb-4h-oci-master-db-node-86f82825`): root disk is SCSI (`8:1`), the single
@@ -56,16 +56,29 @@ unbind-based test covers neither of them exactly:
   by always issuing the PCI-bus rescan unconditionally. Phases 5–6 below add a test
   variant that deterministically resurfaces this NVMe-root failure mode (fails against
   pre-`02bb3c74` code, passes with it).
+- **Controller present on the PCI bus but its driver never (re)bound** (surfaced by
+  this plan's own Phases 1–4 scouting, not an independently-reported production
+  incident): the `unbind`-mode injector's fault - a driverless-but-still-registered
+  `pci_dev` - was originally believed unrecoverable by either of the two branches
+  above (a bus rescan skips slots the kernel already knows, see the "Scope
+  limitation" risk entry's real-hardware verification). scylla-machine-image has since
+  added a third branch, `_unbound_nvme_pci_addresses()` + a `drivers_probe` write,
+  specifically to recover this case. The `unbind`-mode test (Phases 1–4) now serves as
+  the repro/regression test for this branch on all four backends.
 
 ## 2. Current State
 
 - **The fix**: `common/scylla_create_devices` (scylla-machine-image) — `wait_for_devices()`
   retries `_get_fresh_local_disks()` for `device_wait_seconds`, calling
-  `rescan_nvme_controllers()` between attempts. That function writes `1` to each
-  `/sys/class/nvme/nvme*/rescan_controller` if present, else falls back to
-  `echo 1 > /sys/bus/pci/rescan`. On success it prints `"Found devices: [...]"`; while
-  waiting it prints `"No device names available yet, retrying..."`. If `wait_seconds` is
-  falsy, the function returns immediately without retrying (`common/scylla_create_devices`,
+  `rescan_nvme_controllers()` between attempts. That function unconditionally attempts
+  all three of: writing `1` to each `/sys/class/nvme/nvme*/rescan_controller` (bound
+  controllers only); writing each address returned by `_unbound_nvme_pci_addresses()`
+  (NVMe-class PCI functions with no `driver` symlink) to `/sys/bus/pci/drivers_probe`;
+  and `echo 1 > /sys/bus/pci/rescan` (added in commit `02bb3c74`, previously gated
+  behind the other steps' success). On success it prints `"Found devices: [...]"`;
+  while waiting it prints `"No device names available yet, retrying..."`. If
+  `wait_seconds` is falsy, the function returns immediately without retrying
+  (`common/scylla_create_devices`,
   `wait_for_devices`).
 - **`device_wait_seconds` is not test-specific** — it is not set anywhere in
   scylla-machine-image by default (`lib/user_data.py:55-56` defaults to `0`, i.e.
@@ -168,9 +181,10 @@ unbind-based test covers neither of them exactly:
   "NVMe controller present initially, local disk not detected on first pass" condition
   that the fix handles, without relying on actual cloud boot-timing luck.
 - Assert `scylla-image-setup.service` still completes successfully via the fix's recovery
-  path (PCI-bus-rescan fallback branch — see Risk Mitigation for why the primary
-  `rescan_controller` branch is out of scope here) and that Scylla ends up running on the
-  recovered disk, on all four backends.
+  path (the `drivers_probe` branch added to close the unbind-mode gap this plan's
+  scouting surfaced — see Risk Mitigation for why the primary `rescan_controller`
+  branch is out of scope here) and that Scylla ends up running on the recovered disk,
+  on all four backends.
 - Share one fault-injection mechanism and one test-assertion method across all four
   backends (Phases 1 and 3) — only the per-backend test-case config and Jenkinsfile
   (Phases 2 and 4) are backend-specific.
@@ -375,18 +389,26 @@ build with `02bb3c74` passes; against a build without it (e.g. `d86a9ae`) fails 
 
 ## 7. Risk Mitigation
 
-- **Scope limitation (accepted)**: unbinding a PCI device removes both the NVMe
-  controller and its namespace — there is no userspace-reachable way to remove only the
-  namespace while leaving the controller present. This test therefore exercises the fix's
-  **PCI-bus-rescan fallback branch** (`rescan_nvme_controllers()`'s `else` path in
-  `common/scylla_create_devices`), not its primary `rescan_controller`-write branch. The
-  primary branch remains covered only by the existing mocked unit tests. Document this
-  explicitly in the new test's docstring so it isn't mistaken for full coverage of the fix.
-  A racy unbind/rebind variant that targets the primary branch was considered and
-  rejected for CI: the kernel's own async namespace scan on driver bind races with the
-  test's injected rescan, so such a test could pass regardless of whether the fix's
-  explicit rescan call did anything.
-  Consider revisiting this and asking the scylla-machine-image maintainers if there's a way to enforce this from the driver's perspective, or reach out to the kernel/cloud-provider teams for a more controlled test harness — a way to reliably reproduce "controller present, namespace missing" without full PCI unbind.
+- **Scope limitation (accepted, narrowed 2026-07-13)**: unbinding a PCI device removes
+  both the NVMe controller and its namespace — there is no userspace-reachable way to
+  remove only the namespace while leaving the controller present. This test therefore
+  cannot exercise the fix's primary `rescan_controller`-write branch (the "controller
+  bound, namespace missing" scenario) — that branch remains covered only by the
+  existing mocked unit tests. A racy unbind/rebind variant that targets it was
+  considered and rejected for CI: the kernel's own async namespace scan on driver bind
+  races with the test's injected rescan, so such a test could pass regardless of
+  whether the fix's explicit rescan call did anything.
+  What unbinding *does* exercise changed after this plan's original scouting: at the
+  time (run `db-cluster-b0fd0433`), a PCI-bus rescan was confirmed to be a no-op
+  against an unbound-but-still-registered `pci_dev`, so this test was believed to only
+  reach the bus-rescan fallback branch, and to be structurally unable to prove
+  recovery from `unbind` at all. scylla-machine-image subsequently added a dedicated
+  branch closing exactly this gap — `_unbound_nvme_pci_addresses()` walks
+  `/sys/bus/pci/devices/*/class` for NVMe-class PCI functions with no `driver` symlink
+  and writes each address to `/sys/bus/pci/drivers_probe`, asking the driver core to
+  (re)bind it directly. The `unbind`-mode test (Phases 1–4) now exercises that branch
+  specifically, on every backend — it was the real-world gap this plan's scouting
+  surfaced, not a reimplementation of the bus-rescan-fallback scenario.
 - **PCI-bus rescan on NVMe-root backends (validated on real hardware, 2026-07-10;
   covered by Phases 5–6 on Azure)**: the originally-flagged risk — a healthy NVMe root
   controller's successful `rescan_controller` write causing `rescan_nvme_controllers()`
@@ -399,10 +421,12 @@ build with `02bb3c74` passes; against a build without it (e.g. `d86a9ae`) fails 
   remainders: (1) coverage is Azure/Hyper-V-vPCI-only — the `remove`+`rescan` primitive
   was verified on Hyper-V vPCI, not on AWS Nitro or OCI DenseIO NVMe-root shapes, so
   `nvme_rescan_repro_mode: remove` must not be assumed portable to those backends
-  without the same scouting exercise; (2) the *unbind*-based Phases 1–4 test remains
-  structurally unable to exercise this scenario on any backend — a PCI-bus rescan is a
-  no-op against an unbound-but-still-registered `pci_dev` (verified in run
-  `db-cluster-b0fd0433`), which is precisely why the remove primitive was introduced.
+  without the same scouting exercise; (2) `remove` is still the only mode that can
+  exercise the unconditional-bus-rescan branch specifically — a fully-removed
+  `pci_dev` has no sysfs node left for `drivers_probe` to target, so only a real bus
+  rescan can rediscover it. The `unbind`-based Phases 1–4 test now covers a different,
+  previously unfixed branch instead (see the Scope limitation entry above), not this
+  one.
 - **Reboot-based sequencing**: relies on cloud-init's `runcmd` stage running at some point
   before the *second* boot's fault-inject unit needs to be active — not before the
   service, only before the reboot, so no strict ordering dependency exists here. This
