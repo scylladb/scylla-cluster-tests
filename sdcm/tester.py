@@ -4836,15 +4836,42 @@ class ClusterTester(unittest.TestCase):
 
     def all_nodes_scylla_shards(self):
         all_nodes_shards = defaultdict(list)
-        for node in self.db_cluster.nodes:
+
+        def get_node_shards(node):
             ipv6 = node.ipv6_ip_address if node.ip_address == node.ipv6_ip_address else ""
-            all_nodes_shards["live_nodes"].append(
-                {
-                    "name": node.name,
-                    "ip": f"{node.public_ip_address} | {node.private_ip_address}{f' | {ipv6}' if ipv6 else ''}",
-                    "shards": node.scylla_shards,
-                }
+            return {
+                "name": node.name,
+                "ip": f"{node.public_ip_address} | {node.private_ip_address}{f' | {ipv6}' if ipv6 else ''}",
+                "shards": node.scylla_shards,
+            }
+
+        nodes = list(self.db_cluster.nodes)
+        if nodes:
+            # Collect shards data from all live nodes in parallel. `scylla_shards` runs remote SSH
+            # commands that may take up to a few minutes per node, so a single serial pass over
+            # hundreds of nodes would be prohibitively slow.
+            # ignore_exceptions=True is used deliberately: this data feeds the end-of-test email
+            # report, so one unreachable/slow node must not discard the results of all the others.
+            # The timeout is generous because ParallelObject shares a single timeout budget across
+            # futures (collected in submission order) and, once one future times out, marks all the
+            # remaining uncollected futures as timed-out too - so a tight timeout would cause a
+            # cascade of false failures.
+            results = ParallelObject(objects=nodes, timeout=600, num_workers=min(len(nodes), 100)).run(
+                get_node_shards, ignore_exceptions=True, unpack_objects=True
             )
+            for node, result in zip(nodes, results):
+                if result.exc:
+                    self.log.error("Failed to collect scylla shards for node %s: %s", node.name, result.exc)
+                    ipv6 = node.ipv6_ip_address if node.ip_address == node.ipv6_ip_address else ""
+                    all_nodes_shards["live_nodes"].append(
+                        {
+                            "name": node.name,
+                            "ip": f"{node.public_ip_address} | {node.private_ip_address}{f' | {ipv6}' if ipv6 else ''}",
+                            "shards": "N/A",
+                        }
+                    )
+                else:
+                    all_nodes_shards["live_nodes"].append(result.result)
 
         all_nodes_shards["dead_nodes"] = [asdict(node) for node in self.db_cluster.dead_nodes_list]
 
