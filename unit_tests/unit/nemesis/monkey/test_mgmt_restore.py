@@ -1,8 +1,8 @@
-"""Tests for the MgmtRestore cleanup guard in sdcm.nemesis.
+"""Tests for the MgmtRestore cleanup guard in sdcm.nemesis.monkey.manager.
 
-``NemesisRunner._stop_unfinished_restore_task`` stops a Manager restore task that
-is still in progress, so that the keyspace drop which follows does not race an
-in-flight load&stream (SCT-880).
+``stop_unfinished_restore_task`` stops a Manager restore task that is still in
+progress, so that the keyspace drop which follows does not race an in-flight
+load&stream (SCT-880).
 
 The drop itself is unconditional -- the next nemesis must start from the same
 cluster state as before this one ran -- so the guard is best effort: it must
@@ -16,7 +16,7 @@ import pytest
 
 from sdcm.exceptions import WaitForTimeoutError
 from sdcm.mgmt.common import TaskStatus
-from sdcm.nemesis import NemesisRunner
+from sdcm.nemesis.monkey.manager import stop_unfinished_restore_task
 
 # Statuses the guard accepts as finished. 'ERROR' is absent on purpose: the Manager reports
 # 'ERROR (#/4)' while retries are still pending and only the last attempt maps to ERROR_FINAL.
@@ -24,18 +24,8 @@ FINAL_STATUSES = [TaskStatus.DONE, TaskStatus.ERROR_FINAL, TaskStatus.STOPPED, T
 
 
 # ---------------------------------------------------------------------------
-# Helpers and fixtures
+# Fixtures
 # ---------------------------------------------------------------------------
-
-
-def stop_unfinished_restore_task(runner, restore_task):
-    """Call the method under test with the mock runner bound as ``self``.
-
-    Args:
-        runner: A ``TestRunner`` standing in for ``NemesisRunner``.
-        restore_task: The Manager restore task, or ``None``.
-    """
-    return NemesisRunner._stop_unfinished_restore_task(runner, restore_task)
 
 
 @pytest.fixture()
