@@ -46,6 +46,16 @@ from sdcm.utils.curl import curl_with_retry
             {"retry": 0},
             "curl --connect-timeout 10 http://localhost:9180/metrics",
         ),
+        (
+            "https://x.com",
+            {"retry_all_errors": True},
+            "curl --connect-timeout 10 --retry 5 --retry-max-time 300 --retry-all-errors https://x.com",
+        ),
+        (
+            "https://x.com",
+            {"retry": 0, "retry_all_errors": True},
+            "curl --connect-timeout 10 https://x.com",
+        ),
     ],
 )
 def test_curl_with_retry(url, kwargs, expected):

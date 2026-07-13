@@ -410,6 +410,22 @@ class TestGatherFailureStatistics:
             assert tester.gather_failure_statistics.called
 
 
+def test_teardown_without_params_runs_reduced_teardown(tmp_path, caplog):
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_teardown_no_params")
+    tester.logdir = str(tmp_path)
+    tester.clean_resources = MagicMock()
+
+    assert not hasattr(tester, "params"), "params must be unset to simulate an early setUp failure"
+
+    with make_fake_events(), caplog.at_level(logging.INFO):
+        tester.events_processes_registry = SctEvent._events_processes_registry
+        tester.tearDown()
+
+    assert "running reduced teardown" in caplog.text
+    tester.clean_resources.assert_not_called()
+
+
 class TestSaveSchema:
     """Tests for the save_schema functionality."""
 

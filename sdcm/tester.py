@@ -4138,6 +4138,16 @@ class ClusterTester(unittest.TestCase):
 
     def tearDown(self):
         self.teardown_started = True
+        if not hasattr(self, "params"):
+            self.log.info("setUp failed before SCT configuration was initialized - running reduced teardown")
+            with silence(parent=self, name="Enabling teardown filters"):
+                enable_teardown_filters()
+            with silence(parent=self, name="Sending test end event"):
+                InfoEvent(message="TEST_END").publish()
+            self.stop_timeout_thread()
+            with silence(parent=self, name="Stopping event analyzer"):
+                self.stop_event_analyzer()
+            return
         # Stop nemesis first — if still running, it keeps disrupting nodes and
         # diagnostic commands (gather_failure_statistics, validators) hang indefinitely.
         if self.db_cluster:
