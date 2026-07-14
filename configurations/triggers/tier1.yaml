@@ -94,7 +94,7 @@ jobs:
 
   - job_name: "tier1/longevity-multidc-schema-topology-changes-12h-test"
     backend: "aws"
-    region: "eu-west-1"
+    region: '["eu-west-1", "eu-west-2"]'
     availability_zone: "a,b,c"
     labels:
       - "weekly"
