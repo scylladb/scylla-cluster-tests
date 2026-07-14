@@ -4218,11 +4218,18 @@ class NemesisRunner:
         else:
             context_manager = contextlib.nullcontext()
 
+        # Build a regex pattern that handles multiple Scylla log formats across versions.
+        # Scylla may log the reloaded cert path in different ways:
+        #   - messaging_service - Reloaded {"/etc/scylla/ssl_conf/db.crt"}     (quoted, single file)
+        #   - messaging_service - Reloaded {/etc/scylla/ssl_conf/db.crt}       (unquoted)
+        #   - messaging_service - Reloaded {"/path/db.crt", "/path/db.key"}    (multiple files)
+        # Use re.escape on the path and match it anywhere after "Reloaded".
+        escaped_cert_path = re.escape(ssl_files_location)
+        ssl_reload_pattern = re.compile(rf"messaging_service - Reloaded.*{escaped_cert_path}", re.IGNORECASE)
+
         with context_manager:
             for node in self.cluster.nodes:
-                node_system_logs[node] = node.follow_system_log(
-                    patterns=[f'messaging_service - Reloaded {{"{ssl_files_location}"}}']
-                )
+                node_system_logs[node] = node.follow_system_log(patterns=[ssl_reload_pattern])
                 update_certificate(node)
                 node.remoter.send_files(src=str(node.ssl_conf_dir / TLSAssets.DB_CERT), dst="/tmp")
                 self.actions_log.info(f"Update certificate file on {node.name} node")
