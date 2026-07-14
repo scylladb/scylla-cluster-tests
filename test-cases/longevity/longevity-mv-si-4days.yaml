@@ -1,5 +1,5 @@
-test_duration: 6600
-prepare_stress_duration: 900
+test_duration: 6800
+prepare_stress_duration: 1000
 prepare_write_cmd:
   - >-
     cassandra-stress user profile=/tmp/c-s_profile_4mv_5queries.yaml
