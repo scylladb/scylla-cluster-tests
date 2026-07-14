@@ -185,7 +185,7 @@ def _find_hdr_tags(*args):
     raise ValueError("Failed to find 'hdr_tags'")
 
 
-def latency_calculator_decorator(
+def latency_calculator_decorator(  # noqa: PLR0915
     original_function: Optional[Callable] = None,
     *,
     legend: Optional[str] = None,
@@ -208,7 +208,7 @@ def latency_calculator_decorator(
 
     def wrapper(func):
         @wraps(func)
-        def wrapped(*args, **kwargs):  # noqa: PLR0914
+        def wrapped(*args, **kwargs):  # noqa: PLR0912, PLR0914
             from sdcm.tester import ClusterTester  # noqa: PLC0415
             from sdcm.nemesis import Nemesis  # noqa: PLC0415
 
@@ -232,16 +232,26 @@ def latency_calculator_decorator(
             LOGGER.debug("latency_calculator_decorator cluster: %s", cluster)
             start_node_list = cluster.nodes[:]
             func_name = cycle_name or func.__name__
+            func_exception = None
             with EventCounterContextManager(
                 name=func.__name__, event_type=(DatabaseLogEvent.REACTOR_STALLED,)
             ) as counter:
-                res = func(*args, **kwargs)
+                try:
+                    res = func(*args, **kwargs)
+                except Exception as exc:  # noqa: BLE001
+                    func_exception = exc
+                    res = None
+                    LOGGER.warning(
+                        "latency_calculator_decorator: %s raised %s, will still collect latency results", func_name, exc
+                    )
                 reactor_stall_stats = counter.get_stats().copy()
             end_node_list = cluster.nodes[:]
             all_nodes_list = list(set(start_node_list + end_node_list))
             end = time.time()
             test_name = tester.__repr__().split("testMethod=")[-1].split(">")[0]
             if not monitoring_set or not monitoring_set.nodes or not tester.params.get("use_hdrhistogram"):
+                if func_exception:
+                    raise func_exception  # noqa: TRY201
                 return res
             try:
                 monitor = monitoring_set.nodes[0]
@@ -259,6 +269,8 @@ def latency_calculator_decorator(
                 elif tester.params.get("workload_name"):
                     workload = tester.params["workload_name"]
                 else:
+                    if func_exception:
+                        raise func_exception  # noqa: TRY201
                     return res
 
                 latency_results_file_path = tester.latency_results_file
@@ -341,6 +353,8 @@ def latency_calculator_decorator(
                     trace=exc.__traceback__.tb_frame,
                 ).publish_or_dump(default_logger=LOGGER)
 
+            if func_exception:
+                raise func_exception  # noqa: TRY201
             return res
 
         return wrapped
