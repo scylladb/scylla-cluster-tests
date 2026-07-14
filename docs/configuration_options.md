@@ -28,14 +28,14 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-479 options across 27 groups.
+480 options across 27 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 70 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
-| [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 70 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
+| [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 71 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 16 | The monitoring stack, event severities, Argus reporting and email reports. |
 | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) | 11 | How logs and diagnostics are collected, and what happens to the resources when the test ends. |
 | [Scylla Doctor](configuration_options/scylla-doctor.md) | 4 | The scylla-doctor diagnostic tool. It is both a subject under test (the artifact tests run it and assert on its findings) and... |
@@ -168,6 +168,7 @@ concerns first, then one page per backend, then one per test type.
 | [`docker_network`](configuration_options/docker-backend.md#docker_network) | `SCT_DOCKER_NETWORK` | [Docker backend](configuration_options/docker-backend.md) |
 | [`download_from_s3`](configuration_options/monitoring-events-and-reporting.md#download_from_s3) | `SCT_DOWNLOAD_FROM_S3` | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) |
 | [`dynamodb_primarykey_type`](configuration_options/alternator-dynamodb-api.md#dynamodb_primarykey_type) | `SCT_DYNAMODB_PRIMARYKEY_TYPE` | [Alternator (DynamoDB API)](configuration_options/alternator-dynamodb-api.md) |
+| [`effective_compression_ratio`](configuration_options/stress-commands-and-load-generation.md#effective_compression_ratio) | `SCT_EFFECTIVE_COMPRESSION_RATIO` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`eks_admin_arn`](configuration_options/kubernetes-backends-eks-gke-kind.md#eks_admin_arn) | `SCT_EKS_ADMIN_ARN` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
 | [`eks_cluster_version`](configuration_options/kubernetes-backends-eks-gke-kind.md#eks_cluster_version) | `SCT_EKS_CLUSTER_VERSION` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
 | [`eks_nodegroup_role_arn`](configuration_options/kubernetes-backends-eks-gke-kind.md#eks_nodegroup_role_arn) | `SCT_EKS_NODEGROUP_ROLE_ARN` | [Kubernetes backends (EKS/GKE/kind)](configuration_options/kubernetes-backends-eks-gke-kind.md) |
