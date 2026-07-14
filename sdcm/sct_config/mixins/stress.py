@@ -307,6 +307,15 @@ class StressConfigMixin(BaseModel):
     stress_read_cmd: StringOrList = SctField(
         description="Read stress command(s) run in the verification phase. See 'stress_cmd' for the format.",
     )
+    stress_template_context: DictOrStr = SctField(
+        description=(
+            "Shared runtime-only Jinja variables for stress command templating. "
+            "Entries are resolved in declaration order and may reference earlier context entries as well as "
+            "built-in stress template variables such as effective_disk_size_bytes and db_node_count_per_dc. "
+            "These values are available to stress commands rendered by SCT, but are not evaluated during config "
+            "load or validation."
+        ),
+    )
     use_prepared_loaders: Boolean = SctField(
         description="If True, we use prepared VMs for loader (instead of using docker images)",
     )

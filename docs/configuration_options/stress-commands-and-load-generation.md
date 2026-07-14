@@ -36,7 +36,7 @@ Everything else here is loader-side and applies whatever the tool: [`stress_imag
 the [`stress_multiplier`](#stress_multiplier) options, [`stress_duration`](#stress_duration), [`prepare_stress_duration`](#prepare_stress_duration) and
 [`stop_test_on_stress_failure`](#stop_test_on_stress_failure).
 
-**71 options.**
+**72 options.**
 
 
 <a id="add_cs_user_profiles_extra_tables"></a>
@@ -838,6 +838,17 @@ Read stress command(s) run in the verification phase. See [`stress_cmd`](#stress
 
 **type:** str | list[str]
 * appendable
+
+
+<a id="stress_template_context"></a>
+
+## **stress_template_context** / SCT_STRESS_TEMPLATE_CONTEXT
+
+Shared runtime-only Jinja variables for stress command templating. Entries are resolved in declaration order and may reference earlier context entries as well as built-in stress template variables such as effective_disk_size_bytes and db_node_count_per_dc. These values are available to stress commands rendered by SCT, but are not evaluated during config load or validation.
+
+**default:** N/A
+
+**type:** dict | str
 
 
 <a id="use_prepared_loaders"></a>
