@@ -437,6 +437,7 @@ class ClusterTester(unittest.TestCase):
         super().__init__(methodName=methodName)
         # Initialize test_config (was previously done in TestStatsMixin which was removed)
         self.test_config = TestConfig()
+        self.prepare_phase_active = threading.Event()
 
     def _init_test_duration(self):
         self._stress_duration: int = self.params.get("stress_duration")
