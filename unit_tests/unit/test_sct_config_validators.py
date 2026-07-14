@@ -2,6 +2,7 @@
 
 import pytest
 
+from pydantic import ValidationError
 from sdcm.sct_config import (
     SCTConfiguration,
     dict_or_str,
@@ -213,6 +214,7 @@ def test_list_of_stress_tools_with_list_stress_cmd(monkeypatch):
     conf = SCTConfiguration()
     tools = conf.list_of_stress_tools
     assert "cassandra-stress" in tools
+<<<<<<< HEAD
 
 
 @pytest.mark.parametrize("value", ["y", "Yes", "T", "true", "ON", "1", " true "])
@@ -230,3 +232,45 @@ def test_strtobool_rejects_anything_else(value):
     """Same contract as the distutils version it replaces -- ValueError, not a silent False."""
     with pytest.raises(ValueError, match="invalid truth value"):
         strtobool(value)
+||||||| parent of 831deb5cd (feat(longevity): Add option to template stress commands based on disk size)
+=======
+
+
+# ---------------------------------------------------------------------------
+# effective_compression_ratio validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", [1.0, 0.68, 0.5, 0.01])
+def test_effective_compression_ratio_valid(monkeypatch, value):
+    """effective_compression_ratio accepts values in (0, 1.0]."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_EFFECTIVE_COMPRESSION_RATIO", str(value))
+
+    conf = SCTConfiguration()
+    assert conf.effective_compression_ratio == pytest.approx(value)
+
+
+@pytest.mark.parametrize(
+    "value, expected_match",
+    [
+        (0, "greater than 0"),
+        (-0.5, "greater than 0"),
+        (1.1, "less than or equal to 1"),
+        (2.0, "less than or equal to 1"),
+    ],
+)
+def test_effective_compression_ratio_invalid(monkeypatch, value, expected_match):
+    """effective_compression_ratio rejects 0, negative values, and values above 1.0."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_EFFECTIVE_COMPRESSION_RATIO", str(value))
+
+    with pytest.raises(ValidationError, match=expected_match):
+        SCTConfiguration()
+>>>>>>> 831deb5cd (feat(longevity): Add option to template stress commands based on disk size)
