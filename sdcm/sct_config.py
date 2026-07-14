@@ -1839,6 +1839,7 @@ class SCTConfiguration(dict):
             You can specify everything but the -node parameter, which is going to
             be provided by the test suite infrastructure.
             multiple commands can passed as a list""",
+<<<<<<< HEAD
         ),
         dict(
             name="user_profile_table_count",
@@ -2283,6 +2284,146 @@ class SCTConfiguration(dict):
             type=str,
             help="""
                 Failure/post test behavior, i.e. what to do with the db cloud instances at the end of the test.
+||||||| parent of 831deb5cd (feat(longevity): Add option to template stress commands based on disk size)
+    )
+    prepare_write_cmd: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    stress_before_migration: String = SctField(
+        description="Stress command to write data for post-migration validation",
+    )
+    verify_stress_after_migration: String = SctField(
+        description="Stress command to verify data after migration",
+    )
+    stress_cmd_no_mv: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    stress_cmd_no_mv_profile: StringOrList = SctField(
+        description="",
+    )
+    cs_user_profiles: StringOrList = SctField(
+        description="cassandra-stress user-profiles list. Executed in test step",
+    )
+    prepare_cs_user_profiles: StringOrList = SctField(
+        description="cassandra-stress user-profiles list. Executed in prepare step",
+    )
+    cs_duration: String = SctField(
+        description="",
+    )
+    cs_debug: Boolean = SctField(
+        description="enable debug for cassandra-stress",
+    )
+    cs_extra_jvm_opts: String = SctField(
+        description="Extra JVM options passed to cassandra-stress via JVM_OPTS environment variable. "
+        "Recommended for low-latency: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch' "
+        "(requires Java 21+, which cassandra-stress 3.20.6+ ships with).",
+    )
+    stress_cmd_mv: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    prepare_stress_cmd: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    perf_gradual_threads: DictOrStr = SctField(
+        description="Threads amount of stress load for gradual performance test per sub-test. "
+        "Example: {'read': 100, 'write': [200, 300], 'mixed': 300}",
+    )
+    perf_gradual_throttle_steps: DictOrStr = SctField(
+        description="Used for gradual performance test. Define throttle for load step in ops. "
+        "Supports three formats: "
+        "1) String/int list (cassandra-stress): {'read': ['100000', '150000'], 'mixed': [100, 200]} "
+        "2) Dict list (latte/multi-param): {'read': [{'threads': 10, 'concurrency': 128, 'rate': '100000'}, ...]} "
+        "Dict format allows specifying threads, concurrency, and rate per step. "
+        "Integers are automatically converted to strings for backward compatibility.",
+    )
+    perf_gradual_step_duration: DictOrStr = SctField(
+        description="Step duration of c-s load for gradual performance test per sub-test. "
+        "Example: {'read': '30m', 'write': None, 'mixed': '30m'}",
+    )
+    perf_gradual_write_preload_data: Boolean = SctField(
+        description="If true, preload data (via prepare_write_cmd) before "
+        "test_write_gradual_increase_load. Needed for LWT conditional-update "
+        "workloads (e.g. UPDATE ... IF <cond>) that require existing rows to "
+        "have a chance of applying; not needed for INSERT-based write "
+        "workloads on a fresh table.",
+    )
+=======
+    )
+    effective_compression_ratio: confloat(gt=0, le=1.0) = SctField(
+        description=(
+            "Effective compression ratio used for Jinja stress command templating. "
+            "Defined as on_disk_bytes / logical_uncompressed_bytes. "
+            "This estimates how much disk space Scylla uses after compression relative to the logical "
+            "uncompressed dataset size. For example, 1.0 means no effective compression and 0.68 means the "
+            "data is expected to occupy about 68% of its logical uncompressed size on disk. Used together "
+            "with the effective_disk_size_bytes template variable to calculate row counts that fill a target "
+            "fraction of available disk capacity. You can estimate this ratio from Grafana in Keyspace -> "
+            "Compression metrics; a compression value of 0% corresponds to effective_compression_ratio=1.0. "
+            "Must be in range (0, 1.0]."
+        ),
+    )
+    prepare_write_cmd: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    stress_before_migration: String = SctField(
+        description="Stress command to write data for post-migration validation",
+    )
+    verify_stress_after_migration: String = SctField(
+        description="Stress command to verify data after migration",
+    )
+    stress_cmd_no_mv: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    stress_cmd_no_mv_profile: StringOrList = SctField(
+        description="",
+    )
+    cs_user_profiles: StringOrList = SctField(
+        description="cassandra-stress user-profiles list. Executed in test step",
+    )
+    prepare_cs_user_profiles: StringOrList = SctField(
+        description="cassandra-stress user-profiles list. Executed in prepare step",
+    )
+    cs_duration: String = SctField(
+        description="",
+    )
+    cs_debug: Boolean = SctField(
+        description="enable debug for cassandra-stress",
+    )
+    cs_extra_jvm_opts: String = SctField(
+        description="Extra JVM options passed to cassandra-stress via JVM_OPTS environment variable. "
+        "Recommended for low-latency: '-XX:+UseZGC -XX:+ZGenerational -Xms8g -Xmx8g -XX:+AlwaysPreTouch' "
+        "(requires Java 21+, which cassandra-stress 3.20.6+ ships with).",
+    )
+    stress_cmd_mv: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    prepare_stress_cmd: StringOrList = SctField(
+        description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
+    )
+    perf_gradual_threads: DictOrStr = SctField(
+        description="Threads amount of stress load for gradual performance test per sub-test. "
+        "Example: {'read': 100, 'write': [200, 300], 'mixed': 300}",
+    )
+    perf_gradual_throttle_steps: DictOrStr = SctField(
+        description="Used for gradual performance test. Define throttle for load step in ops. "
+        "Supports three formats: "
+        "1) String/int list (cassandra-stress): {'read': ['100000', '150000'], 'mixed': [100, 200]} "
+        "2) Dict list (latte/multi-param): {'read': [{'threads': 10, 'concurrency': 128, 'rate': '100000'}, ...]} "
+        "Dict format allows specifying threads, concurrency, and rate per step. "
+        "Integers are automatically converted to strings for backward compatibility.",
+    )
+    perf_gradual_step_duration: DictOrStr = SctField(
+        description="Step duration of c-s load for gradual performance test per sub-test. "
+        "Example: {'read': '30m', 'write': None, 'mixed': '30m'}",
+    )
+    perf_gradual_write_preload_data: Boolean = SctField(
+        description="If true, preload data (via prepare_write_cmd) before "
+        "test_write_gradual_increase_load. Needed for LWT conditional-update "
+        "workloads (e.g. UPDATE ... IF <cond>) that require existing rows to "
+        "have a chance of applying; not needed for INSERT-based write "
+        "workloads on a fresh table.",
+    )
+>>>>>>> 831deb5cd (feat(longevity): Add option to template stress commands based on disk size)
 
                 'destroy' - Destroy instances and credentials (default)
                 'keep' - Keep instances running and leave credentials alone
