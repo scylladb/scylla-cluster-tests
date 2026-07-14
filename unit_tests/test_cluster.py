@@ -533,9 +533,10 @@ class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):
         self.added_password_suffix = False
         self.log = logging.getLogger(self.name)
 
-    def get_ip_to_node_map(self):
+    def get_ip_to_node_map(self, nodes=None):
         """returns {ip: node} map for all nodes in cluster to get node by ip"""
-        return {node.myname: node for node in self.nodes}
+        nodes = nodes if nodes is not None else self.nodes
+        return {node.myname: node for node in nodes}
 
 
 class TestNodetoolStatus(unittest.TestCase):
