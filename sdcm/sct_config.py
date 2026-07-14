@@ -1978,6 +1978,18 @@ class SCTConfiguration(dict):
             ),
         ),
         dict(
+            name="stress_template_context",
+            env="SCT_STRESS_TEMPLATE_CONTEXT",
+            type=dict_or_str,
+            help=(
+                "Shared runtime-only Jinja variables for stress command templating. "
+                "Entries are resolved in declaration order and may reference earlier context entries as well as "
+                "built-in stress template variables such as effective_disk_size_bytes and db_node_count_per_dc. "
+                "These values are available to stress commands rendered by SCT, but are not evaluated during config "
+                "load or validation."
+            ),
+        ),
+        dict(
             name="prepare_write_cmd",
             env="SCT_PREPARE_WRITE_CMD",
             type=str_or_list,
