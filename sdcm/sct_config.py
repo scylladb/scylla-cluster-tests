@@ -1962,6 +1962,22 @@ class SCTConfiguration(dict):
                 multiple commands can passed as a list""",
         ),
         dict(
+            name="effective_compression_ratio",
+            env="SCT_EFFECTIVE_COMPRESSION_RATIO",
+            type=float,
+            help=(
+                "Effective compression ratio used for Jinja stress command templating. "
+                "Defined as on_disk_bytes / logical_uncompressed_bytes. "
+                "This estimates how much disk space Scylla uses after compression relative to the logical "
+                "uncompressed dataset size. For example, 1.0 means no effective compression and 0.68 means the "
+                "data is expected to occupy about 68% of its logical uncompressed size on disk. Used together "
+                "with the effective_disk_size_bytes template variable to calculate row counts that fill a target "
+                "fraction of available disk capacity. You can estimate this ratio from Grafana in Keyspace -> "
+                "Compression metrics; a compression value of 0% corresponds to effective_compression_ratio=1.0. "
+                "Must be in range (0, 1.0]."
+            ),
+        ),
+        dict(
             name="prepare_write_cmd",
             env="SCT_PREPARE_WRITE_CMD",
             type=str_or_list,
@@ -4257,6 +4273,7 @@ class SCTConfiguration(dict):
             self._validate_number_of_db_nodes_divides_by_az_number()
 
         self._validate_nemesis_parallel_config()
+        self._validate_effective_compression_ratio()
 
         if self.get("use_zero_nodes"):
             self._validate_zero_token_backend_support(backend)
@@ -4380,6 +4397,14 @@ class SCTConfiguration(dict):
         assert num_of_db_nodes > seeds_num, (
             "Nemesis cannot run when 'nemesis_filter_seeds' is true and seeds number is equal to nodes number"
         )
+
+    def _validate_effective_compression_ratio(self) -> None:
+        """Validate that effective_compression_ratio, when set, is in range (0, 1.0]."""
+        ratio = self.get("effective_compression_ratio")
+        if ratio is None:
+            return
+        if not 0 < float(ratio) <= 1.0:
+            raise ValueError(f"effective_compression_ratio must be in range (0, 1.0], got {ratio}")
 
     def _validate_nemesis_parallel_config(self) -> None:
         """Validate that nemesis_selector and nemesis_seed list lengths match nemesis_class_name.
