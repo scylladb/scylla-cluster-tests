@@ -17,6 +17,10 @@ import re
 import time
 from functools import cached_property
 
+from jinja2 import Environment, StrictUndefined, UndefinedError
+from jinja2.runtime import Context
+from jinja2.runtime import missing as jinja_missing
+
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
@@ -29,6 +33,32 @@ DEFAULT_USER_PASSWORD = "cassandra"
 STRESS_ROLE_NAME_TEMPLATE = "role%s_%s"
 STRESS_ROLE_PASSWORD_TEMPLATE = "rolep%s"
 SERVICE_LEVEL_NAME_TEMPLATE = "sl%s_%s"
+
+
+class MixinLazyContext(Context):
+    """Jinja2 ``Context`` subclass that resolves template variables from an *owner* object on demand.
+
+    Set ``env.owner`` and optionally ``env.whitelist`` on the ``Environment`` before rendering.
+    Attribute lookups on *owner* are deferred until Jinja actually references the variable name, so
+    expensive ``cached_property`` values (e.g. ones that SSH into nodes) are only evaluated when a
+    template uses them.
+
+    ``env.whitelist``: if set to a ``set[str]``, only keys in the set may be resolved from *owner*.
+    Any other key is treated as undefined (``UndefinedError`` with ``StrictUndefined``). Variables
+    already present in the render context (e.g. from ``{% set ... %}``) are always accessible.
+    """
+
+    def resolve_or_missing(self, key: str):
+        result = super().resolve_or_missing(key)
+        if result is not jinja_missing:
+            return result
+        whitelist = getattr(self.environment, "whitelist", None)
+        if whitelist is not None and key not in whitelist:
+            return jinja_missing
+        try:
+            return getattr(self.environment.owner, key)
+        except AttributeError:
+            return jinja_missing
 
 
 class LoaderUtilsMixin:
@@ -96,6 +126,35 @@ class LoaderUtilsMixin:
         # is tablets feature enabled in Scylla configuration.
         return is_tablets_feature_enabled(self.db_cluster.nodes[0])
 
+    @cached_property
+    def jinja_env(self) -> Environment:
+        env = Environment(undefined=StrictUndefined)
+        env.context_class = MixinLazyContext
+        env.owner = self
+        return env
+
+    def render_stress_cmd(self, stress_cmd: str) -> str:
+        """Render *stress_cmd* through a strict Jinja environment.
+
+        Any attribute accessible on this mixin instance (including ``cached_property``
+        values) is available as a template variable via :class:`MixinLazyContext`.
+        Variables are resolved only when Jinja actually references them, so expensive
+        properties (e.g. ones that SSH into nodes) are not evaluated for commands that
+        don't use them.
+
+        Raises ``RuntimeError`` if the command references an unknown variable or
+        contains invalid Jinja syntax, failing fast before any stress thread starts.
+        Collapses whitespace introduced by multi-line YAML block scalars.
+        """
+        try:
+            rendered = self.jinja_env.from_string(stress_cmd).render()
+        except UndefinedError as exc:
+            raise RuntimeError(
+                f"Stress command references an unknown Jinja variable: {exc}\n\nCommand: {stress_cmd}"
+            ) from exc
+        # Collapse any whitespace introduced by multi-line YAML block scalars.
+        return " ".join(rendered.split())
+
     def _run_all_stress_cmds(self, stress_queue, params):
         stress_cmds = params["stress_cmd"]
         # In some cases we want the same stress_cmd to run several times (can be used with round_robin or not).
@@ -104,28 +163,29 @@ class LoaderUtilsMixin:
             stress_cmds *= stress_multiplier
 
         for stress_cmd in stress_cmds:
+            rendered_cmd = self.render_stress_cmd(stress_cmd)
             stress_params = dict(params)
-            stress_params.update({"stress_cmd": stress_cmd})
+            stress_params.update({"stress_cmd": rendered_cmd})
 
             # Due to an issue with scylla & cassandra-stress - we need to create the counter table manually
             # also tablets doesn't yet support counters, so we skip the command and error about it
-            if "counter_" in stress_cmd:
+            if "counter_" in rendered_cmd:
                 if self.tablets_enabled and SkipPerIssues("scylladb/scylladb#18180", params=self.params):
                     TestFrameworkEvent(
                         severity=Severity.ERROR,
                         source=self.__class__.__name__,
                         source_method="_run_all_stress_cmds",
-                        message=f"Tablets feature is enabled, skipping counter stress:\n\n{stress_cmd}",
+                        message=f"Tablets feature is enabled, skipping counter stress:\n\n{rendered_cmd}",
                     ).publish()
                 else:
                     self._create_counter_table()
 
             # Run all stress commands
-            self.log.debug(f"stress cmd: {stress_cmd}")
-            if stress_cmd.startswith("scylla-bench"):
+            self.log.debug(f"stress cmd: {rendered_cmd}")
+            if rendered_cmd.startswith("scylla-bench"):
                 stress_queue.append(
                     self.run_stress_thread(
-                        stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=self.params.get("round_robin")
+                        stress_cmd=rendered_cmd, stats_aggregate_cmds=False, round_robin=self.params.get("round_robin")
                     )
                 )
             else:
