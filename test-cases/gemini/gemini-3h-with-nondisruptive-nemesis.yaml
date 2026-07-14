@@ -2,8 +2,13 @@ test_duration: 500
 n_db_nodes: 3
 n_test_oracle_db_nodes: 1
 n_loaders: 1
-instance_type_db: 'i7i.xlarge'
-instance_type_loader: 'm7i.xlarge'
+sizing_db:  # no OCI match (min 16 vCPUs in OCI catalog)
+  vcpu: 4
+  memory: '>=32'
+  arch: x86_64
+sizing_loader:
+  vcpu: 4
+  memory: '>=16'
 
 user_prefix: 'gemini-basic-3h'
 
