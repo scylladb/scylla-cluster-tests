@@ -3475,6 +3475,15 @@ cassandra-stress commands for warm-up before read workload.<br>You can specify e
 **type:** str | list[str] → list[str] (appendable)
 
 
+## **effective_compression_ratio** / SCT_EFFECTIVE_COMPRESSION_RATIO
+
+Effective compression ratio used for Jinja stress command templating. Defined as on_disk_bytes / logical_uncompressed_bytes. This estimates how much disk space Scylla uses after compression relative to the logical uncompressed dataset size. For example, 1.0 means no effective compression and 0.68 means the data is expected to occupy about 68% of its logical uncompressed size on disk. Used together with the effective_disk_size_bytes template variable to calculate row counts that fill a target fraction of available disk capacity. You can estimate this ratio from Grafana in Keyspace -> Compression metrics; a compression value of 0% corresponds to effective_compression_ratio=1.0. Must be in range (0, 1.0].
+
+**default:** 1.0
+
+**type:** float
+
+
 ## **prepare_write_cmd** / SCT_PREPARE_WRITE_CMD
 
 cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list

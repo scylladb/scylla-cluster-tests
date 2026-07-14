@@ -1,6 +1,7 @@
+import math
 import threading
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -104,3 +105,49 @@ class DummyLongevityTest(LongevityTest):
             m = MagicMock()
             m.parse_results.return_value = ([], {})
             stress_queue.append(m)
+
+
+# ---------------------------------------------------------------------------
+# effective_disk_size_bytes tests
+# ---------------------------------------------------------------------------
+
+
+def make_longevity_test_with_df_output(monkeypatch, df_available_per_node, effective_compression_ratio=1.0):
+    """Return a LongevityTest instance whose nodes return controlled df output."""
+
+    class FakeLongevityTest(LongevityTest):
+        def __init__(self):
+            pass  # skip full ClusterTester.__init__
+
+    instance = FakeLongevityTest()
+    instance.params = {"effective_compression_ratio": effective_compression_ratio}
+
+    nodes = []
+    for available_bytes in df_available_per_node:
+        node = MagicMock()
+        node.remoter.run.return_value.stdout = (
+            f"Filesystem        1B-blocks       Used  Available Use% Mounted on\n"
+            f"/dev/nvme0n1p1  1000000000  100000000  {available_bytes}  10% /var/lib/scylla\n"
+        )
+        nodes.append(node)
+
+    instance.db_cluster = MagicMock()
+    instance.db_cluster.nodes = nodes
+    return instance
+
+
+@pytest.mark.parametrize(
+    "df_available_per_node, compression_ratio, expected",
+    [
+        ([1_000_000_000], 1.0, 1_000_000_000),
+        ([1_000_000_000], 0.5, 2_000_000_000),
+        ([1_000_000_000], 0.68, math.floor(1_000_000_000 / 0.68)),
+        ([600_000_000, 1_000_000_000, 800_000_000], 1.0, 800_000_000),  # average of three nodes
+        ([600_000_000, 1_000_000_000, 800_000_000], 0.5, 1_600_000_000),
+    ],
+)
+def test_effective_disk_size_bytes(monkeypatch, df_available_per_node, compression_ratio, expected):
+    instance = make_longevity_test_with_df_output(monkeypatch, df_available_per_node, compression_ratio)
+    with patch("longevity_test.ParallelObject") as mock_parallel:
+        mock_parallel.return_value.run.return_value = [MagicMock(result=b) for b in df_available_per_node]
+        assert instance.effective_disk_size_bytes == expected
