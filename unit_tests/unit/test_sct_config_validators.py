@@ -234,3 +234,25 @@ def test_effective_compression_ratio_invalid(monkeypatch, value, expected_match)
 
     with pytest.raises(ValidationError, match=expected_match):
         SCTConfiguration()
+
+
+def test_stress_template_context_accepts_dict(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_STRESS_TEMPLATE_CONTEXT", '{"rows_total": "{{ effective_disk_size_bytes }}"}')
+
+    conf = SCTConfiguration()
+    assert conf.stress_template_context == {"rows_total": "{{ effective_disk_size_bytes }}"}
+
+
+def test_stress_template_context_accepts_yaml_string(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_STRESS_TEMPLATE_CONTEXT", "rows_total: '{{ effective_disk_size_bytes }}'")
+
+    conf = SCTConfiguration()
+    assert conf.stress_template_context == {"rows_total": "{{ effective_disk_size_bytes }}"}

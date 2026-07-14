@@ -17,6 +17,7 @@ import re
 import time
 from functools import cached_property
 
+import yaml
 from jinja2 import Environment, StrictUndefined, UndefinedError
 from jinja2.runtime import Context
 from jinja2.runtime import missing as jinja_missing
@@ -63,6 +64,15 @@ class MixinLazyContext(Context):
 
 class LoaderUtilsMixin:
     """This mixin can be added to any class that inherits the 'ClusterTester' one"""
+
+    @property
+    def stress_template_whitelist(self) -> set[str] | None:
+        """Return the allowed owner-backed Jinja variables for stress command rendering.
+
+        ``None`` means owner attributes are not restricted. Callers that want a strict
+        template surface can override this property and return a concrete set.
+        """
+        return None
 
     def _create_counter_table(self):
         """
@@ -131,7 +141,39 @@ class LoaderUtilsMixin:
         env = Environment(undefined=StrictUndefined)
         env.context_class = MixinLazyContext
         env.owner = self
+        if self.stress_template_whitelist is not None:
+            env.whitelist = self.stress_template_whitelist
         return env
+
+    def build_stress_template_context(self) -> dict:
+        """Resolve shared Jinja variables for stress command rendering.
+
+        Context entries are resolved in declaration order, so later entries may refer
+        to earlier ones. Owner-backed template variables remain subject to the mixin's
+        whitelist, while explicit context entries are passed as render locals.
+        """
+        raw_context = self.params.get("stress_template_context") or {}
+        resolved_context = {}
+
+        for key, value in raw_context.items():
+            if self.stress_template_whitelist is not None and key in self.stress_template_whitelist:
+                raise RuntimeError(
+                    f"stress_template_context key '{key}' conflicts with a built-in stress template variable"
+                )
+
+            if isinstance(value, str):
+                try:
+                    rendered_value = self.jinja_env.from_string(value).render(**resolved_context)
+                except UndefinedError as exc:
+                    raise RuntimeError(
+                        f"stress_template_context entry '{key}' references an unknown Jinja variable: {exc}\n\n"
+                        f"Value: {value}"
+                    ) from exc
+                resolved_context[key] = yaml.safe_load(rendered_value)
+            else:
+                resolved_context[key] = value
+
+        return resolved_context
 
     def render_stress_cmd(self, stress_cmd: str) -> str:
         """Render *stress_cmd* through a strict Jinja environment.
@@ -146,8 +188,9 @@ class LoaderUtilsMixin:
         contains invalid Jinja syntax, failing fast before any stress thread starts.
         Collapses whitespace introduced by multi-line YAML block scalars.
         """
+        stress_template_context = self.build_stress_template_context()
         try:
-            rendered = self.jinja_env.from_string(stress_cmd).render()
+            rendered = self.jinja_env.from_string(stress_cmd).render(**stress_template_context)
         except UndefinedError as exc:
             raise RuntimeError(
                 f"Stress command references an unknown Jinja variable: {exc}\n\nCommand: {stress_cmd}"

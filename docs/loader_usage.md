@@ -93,6 +93,38 @@ Here are common parameters for longevity and performance tests:
   - Specifically used in `longevity_test.LongevityTest.test_batch_custom_time`.
   - Defines the number of stress commands executed in a single batch.
 
+- **Templated stress commands**:
+  - Longevity stress command fields such as `prepare_write_cmd` and `stress_cmd` may use Jinja expressions.
+  - Rendering happens only at runtime, immediately before SCT dispatches the stress command.
+  - The Jinja environment is strict: unknown variables fail the test before any stress thread starts.
+  - Longevity templates currently expose `effective_disk_size_bytes` and `db_node_count_per_dc` from the test object.
+  - `db_node_count_per_dc` is the DB node count for a single DC. It uses `n_db_nodes[0]` when configured and otherwise falls back to the current number of nodes in DC 0.
+  - `effective_disk_size_bytes` is calculated as `floor(average_available_bytes_on_/var/lib/scylla / effective_compression_ratio / 1.1)`.
+  - The extra `1.1` divisor is a global 10% static overhead reserve that biases templated sizing toward undershoot to account for table/storage overhead not captured by payload-only row-size estimates.
+  - `effective_compression_ratio` is defined as `on_disk_bytes / logical_uncompressed_bytes`. You can estimate it from Grafana in `Keyspace -> Compression`; a compression value of `0%` corresponds to `effective_compression_ratio=1.0`.
+  - `stress_template_context` lets you define shared derived values once and reuse them across multiple stress commands. Entries are resolved in declaration order, so later entries may reference earlier ones.
+
+Example:
+
+```yaml
+effective_compression_ratio: 0.68
+stress_template_context:
+  fill_percent: 90
+  replication_factor: 3
+  row_size_bytes: 1000
+  total_rows: "{{ ((effective_disk_size_bytes * db_node_count_per_dc * fill_percent) // 100 // replication_factor // row_size_bytes) | int }}"
+  rows_per_cmd: "{{ total_rows // 4 }}"
+
+prepare_write_cmd:
+  - >-
+    cassandra-stress write cl=QUORUM n={{ rows_per_cmd }}
+    -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
+    -mode cql3 native
+    -rate threads=150
+    -col 'size=FIXED(200) n=FIXED(5)'
+    -pop seq=1..{{ rows_per_cmd }}
+```
+
 ---
 
 ## Guidelines for Crafting Effective Stress Commands
