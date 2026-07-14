@@ -1,6 +1,6 @@
 import pytest
 
-from sdcm.utils.curl import curl_with_retry
+from sdcm.utils.curl import _RETRY_ALL_ERRORS_FLAG, curl_with_retry
 
 
 @pytest.mark.parametrize(
@@ -49,7 +49,7 @@ from sdcm.utils.curl import curl_with_retry
         (
             "https://x.com",
             {"retry_all_errors": True},
-            "curl --connect-timeout 10 --retry 5 --retry-max-time 300 --retry-all-errors https://x.com",
+            f"curl --connect-timeout 10 --retry 5 --retry-max-time 300 {_RETRY_ALL_ERRORS_FLAG} https://x.com",
         ),
         (
             "https://x.com",
