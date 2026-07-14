@@ -4547,6 +4547,11 @@ class NemesisRunner:
             raise UnsupportedNemesis(
                 "add_remove_dc skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)"
             )
+        if self.runner.tester.prepare_phase_active.is_set():
+            raise UnsupportedNemesis(
+                "Skipped during prepare phase, due to stress commands potentially writing to the new DC."
+            )
+
         InfoEvent(message="Starting New DC Nemesis").publish()
         node = self.cluster.data_nodes[0]
         system_keyspaces = ["system_distributed", "system_traces"]
