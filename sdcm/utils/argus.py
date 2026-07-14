@@ -5,7 +5,6 @@ import re
 import os
 import tempfile
 from pathlib import Path
-import threading
 from typing import Optional
 from uuid import UUID
 
@@ -22,22 +21,28 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Argus:
-    INSTANCE: Optional[ArgusSCTClient] = None
-    INIT_DONE = threading.Event()
+    INSTANCE: Optional["Argus"] = None
 
     def __init__(self, client: ArgusSCTClient):
         self._client = client
 
     @classmethod
     def init_global(cls, client: ArgusSCTClient):
-        if cls.INIT_DONE.is_set():
-            return
+        """(Re-)point the process-wide Argus singleton at *client*.
+
+        Always overwrites. TestConfig.init_argus_client() can legitimately run more than
+        once per process (e.g. once during config resolution, again during test setUp) and
+        relies on the latest call winning - a one-shot guard here would leave this pointed
+        at a client from an earlier call that TestConfig has since closed.
+        """
         cls.INSTANCE = cls(client)
-        cls.INIT_DONE.set()
 
     @classmethod
     def get(cls, init_default=False) -> "Argus":
-        if init_default and not cls.INIT_DONE.is_set():
+        # Only the lazy default below needs a "don't clobber an explicit client" guard;
+        # checking INSTANCE is None (rather than a separate one-shot flag) means an
+        # explicit init_global() call always wins, however many times it's called.
+        if init_default and cls.INSTANCE is None:
             cls.init_global(
                 get_argus_client(
                     run_id=os.environ.get("SCT_TEST_ID"), init_global=False, use_tunnel=get_argus_use_tunnel_from_env()

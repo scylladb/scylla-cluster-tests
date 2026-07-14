@@ -480,48 +480,82 @@ class TestConfig(metaclass=Singleton):
             cls._argus_client = None
 
     @classmethod
-    def _start_argus_event_pipeline(cls) -> None:
-        """Wire up the real-time event pipeline (collector/aggregator/postman) to whatever
-        Argus client is currently active — real or replay-only — so events raised during
-        the run are always at least captured in the replay log for later bulk push.
-        """
-        Argus.init_global(cls._argus_client)
-        enable_argus_posting()
-        start_posting_argus_events()
+    def init_argus_client(cls, params: dict, test_id: str | None = None) -> None:
+        """Make sure cls._argus_client is a client for *this* run - real if Argus is
+        enabled and reachable, replay-only otherwise.
 
-    @classmethod
-    def init_argus_client(cls, params: dict, test_id: str | None = None):
-        # A replay-only client may have been lazily created by argus_client();
-        # close it before replacing so it doesn't linger alongside the new one.
+        Idempotent per run_id: this is called from more than one place for the same test
+        run (SCTConfiguration.update_argus_with_version() during config resolution, then
+        ClusterTester.init_argus_run() at the actual start of the test) and, unlike those
+        two callers, has no way to know whether it is the first or a later call - so it
+        must be safe to call repeatedly. Only a *real*, already-connected client for this
+        same run_id is reused as-is; a replay-only client is always replaced by a fresh
+        attempt, even for a matching run_id - otherwise a transient connection failure on
+        an earlier call (e.g. during config resolution) would permanently lock the run
+        into replay-only mode, since a later call would see "already have a client for
+        this run_id" and never retry the real connection.
+        """
+        run_id = test_id or cls.test_id()
+        have_real_client_for_this_run = (
+            cls._argus_client is not None
+            and not isinstance(cls._argus_client, ReplayOnlyArgusSCTClient)
+            and run_id
+            and str(cls._argus_client.run_id) == str(run_id)
+        )
+        if have_real_client_for_this_run:
+            return
+
+        # A replay-only client may have been lazily created by argus_client(), or belong to
+        # a different run - close it before replacing so it doesn't linger.
         cls._close_argus_client()
+
         if params.get("enable_argus") and get_job_name() != "local_run":
             LOGGER.info("Initializing Argus connection...")
             try:
                 cls._argus_client = get_argus_client(
-                    run_id=cls.test_id() if not test_id else test_id,
+                    run_id=run_id,
                     use_tunnel=params.argus_use_ssh_tunnel,
                     log_dir=cls.logdir(),
                 )
-                cls._start_argus_event_pipeline()
                 return
             except ArgusError as exc:
                 LOGGER.warning("Failed to initialize argus client, falling back to replay-only mode: %s", exc.message)
-            except RuntimeError as exc:
-                LOGGER.warning("Skipping setting up argus events: %s", exc)
-                # get_argus_client() may have already succeeded before the pipeline setup
-                # above raised - close it rather than leaking it under the replay-only client.
-                cls._close_argus_client()
 
-        # Argus is disabled by configuration or initialization failed —
-        # use replay-only mode so all intended API calls are still captured
-        cls._argus_client = cls._create_replay_only_client(test_id=test_id)
-        cls._start_argus_event_pipeline()
-        TestFrameworkEvent(
-            source=cls.__name__,
-            source_method="init_argus_client",
-            message="Argus is disabled by configuration, using replay-only mode",
-            severity=Severity.WARNING,
-        ).publish_or_dump()
+        # Argus is disabled by configuration, or initialization above failed — use
+        # replay-only mode so all intended API calls are still captured.
+        cls._argus_client = cls._create_replay_only_client(test_id=run_id)
+
+    @classmethod
+    def start_argus_event_pipeline(cls) -> None:
+        """Wire the real-time event pipeline (collector/aggregator/postman) to whatever
+        client init_argus_client() resolved, so events raised during the run reach at
+        least the replay log for later bulk push - instead of being silently dropped, the
+        way they were when nothing wired the pipeline up in replay-only mode.
+
+        Call this once, at the actual start of a test (ClusterTester.init_argus_run()) -
+        not from init_argus_client()'s other caller (SCTConfiguration's config-resolution
+        path), which only needs a client for a couple of synchronous submissions and has
+        no business touching the live event pipeline.
+        """
+        try:
+            Argus.init_global(cls._argus_client)
+            enable_argus_posting()
+            start_posting_argus_events()
+        except (RuntimeError, AttributeError) as exc:
+            # RuntimeError: no default events-processes registry exists yet at all.
+            # AttributeError: the registry exists but the argus postman process isn't
+            # registered in it yet - get_events_process() returns None instead of raising,
+            # and enable_argus_posting()/start_posting_argus_events() call straight into it.
+            # Either way, the events pipeline isn't ready; skip wiring it rather than crash.
+            LOGGER.warning("Skipping setting up argus events: %s", exc)
+
+        if isinstance(cls._argus_client, ReplayOnlyArgusSCTClient):
+            TestFrameworkEvent(
+                source=cls.__name__,
+                source_method="start_argus_event_pipeline",
+                message="Argus is disabled by configuration, using replay-only mode",
+                severity=Severity.WARNING,
+            ).publish_or_dump()
 
     @classmethod
     def agent_api_key(cls) -> str | None:
