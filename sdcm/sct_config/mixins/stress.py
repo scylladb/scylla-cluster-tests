@@ -16,6 +16,7 @@
 from typing import ClassVar, Literal
 
 from pydantic import BaseModel
+from pydantic.types import confloat
 
 from sdcm.sct_config.types import Boolean, BooleanOrList, DictOrStr, MultitenantValue, SctField, String, StringOrList
 
@@ -96,6 +97,19 @@ class StressConfigMixin(BaseModel):
     )
     cs_user_profiles: StringOrList = SctField(
         description="cassandra-stress user-profiles list. Executed in test step",
+    )
+    effective_compression_ratio: confloat(gt=0, le=1.0) = SctField(
+        description=(
+            "Effective compression ratio used for Jinja stress command templating. "
+            "Defined as on_disk_bytes / logical_uncompressed_bytes. "
+            "This estimates how much disk space Scylla uses after compression relative to the logical "
+            "uncompressed dataset size. For example, 1.0 means no effective compression and 0.68 means the "
+            "data is expected to occupy about 68% of its logical uncompressed size on disk. Used together "
+            "with the effective_disk_size_bytes template variable to calculate row counts that fill a target "
+            "fraction of available disk capacity. You can estimate this ratio from Grafana in Keyspace -> "
+            "Compression metrics; a compression value of 0% corresponds to effective_compression_ratio=1.0. "
+            "Must be in range (0, 1.0]."
+        ),
     )
     gemini_cmd: String = SctField(
         description="gemini command to run (for now used only in GeminiTest)",
