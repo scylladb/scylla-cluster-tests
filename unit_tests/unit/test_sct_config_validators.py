@@ -36,3 +36,22 @@ def test_effective_compression_ratio_invalid(monkeypatch, value):
     conf = SCTConfiguration()
     with pytest.raises(ValueError, match=r"effective_compression_ratio must be in range \(0, 1.0\]"):
         conf.verify_configuration()
+
+
+# ---------------------------------------------------------------------------
+# stress_template_context parsing
+# ---------------------------------------------------------------------------
+
+
+def test_stress_template_context_accepts_dict(monkeypatch):
+    monkeypatch.setenv("SCT_STRESS_TEMPLATE_CONTEXT", '{"rows_total": "{{ effective_disk_size_bytes }}"}')
+
+    conf = SCTConfiguration()
+    assert conf.get("stress_template_context") == {"rows_total": "{{ effective_disk_size_bytes }}"}
+
+
+def test_stress_template_context_accepts_yaml_string(monkeypatch):
+    monkeypatch.setenv("SCT_STRESS_TEMPLATE_CONTEXT", "rows_total: '{{ effective_disk_size_bytes }}'")
+
+    conf = SCTConfiguration()
+    assert conf.get("stress_template_context") == {"rows_total": "{{ effective_disk_size_bytes }}"}

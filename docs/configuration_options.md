@@ -2767,6 +2767,15 @@ Effective compression ratio used for Jinja stress command templating. Defined as
 **type:** float
 
 
+## **stress_template_context** / SCT_STRESS_TEMPLATE_CONTEXT
+
+Shared runtime-only Jinja variables for stress command templating. Entries are resolved in declaration order and may reference earlier context entries as well as built-in stress template variables such as effective_disk_size_bytes and db_node_count_per_dc. These values are available to stress commands rendered by SCT, but are not evaluated during config load or validation.
+
+**default:** N/A
+
+**type:** dict_or_str
+
+
 ## **prepare_write_cmd** / SCT_PREPARE_WRITE_CMD
 
 cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list
