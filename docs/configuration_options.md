@@ -28,14 +28,14 @@ concerns first, then one page per backend, then one per test type.
 
 ## Groups
 
-480 options across 27 groups.
+481 options across 27 groups.
 
 | Group | Options | What it covers |
 |---|---:|---|
 | [General and provisioning](configuration_options/general-and-provisioning.md) | 70 | Cluster topology, region/AZ placement, instance provisioning, credentials and test-level plumbing. Options here apply to every... |
 | [Scylla installation and configuration](configuration_options/scylla-installation-and-configuration.md) | 44 | Which Scylla to install and how it is configured: repos, versions, distro, `scylla.yaml`/command-line options, experimental... |
 | [Nemesis (chaos testing)](configuration_options/nemesis-chaos-testing.md) | 12 | Which disruptions run, how often, and how targets are selected. |
-| [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 71 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
+| [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) | 72 | The load applied to the cluster: stress tool command lines, loader-side settings and stress duration. **Which option belongs... |
 | [Monitoring, events and reporting](configuration_options/monitoring-events-and-reporting.md) | 16 | The monitoring stack, event severities, Argus reporting and email reports. |
 | [Logs, diagnostics and teardown](configuration_options/logs-diagnostics-and-teardown.md) | 11 | How logs and diagnostics are collected, and what happens to the resources when the test ends. |
 | [Scylla Doctor](configuration_options/scylla-doctor.md) | 4 | The scylla-doctor diagnostic tool. It is both a subject under test (the artifact tests run it and assert on its findings) and... |
@@ -493,6 +493,7 @@ concerns first, then one page per backend, then one per test type.
 | [`stress_process_step`](configuration_options/performance-regression-tests.md#stress_process_step) | `SCT_STRESS_PROCESS_STEP` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`stress_read_cmd`](configuration_options/stress-commands-and-load-generation.md#stress_read_cmd) | `SCT_STRESS_READ_CMD` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`stress_step_duration`](configuration_options/performance-regression-tests.md#stress_step_duration) | `SCT_STRESS_STEP_DURATION` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
+| [`stress_template_context`](configuration_options/stress-commands-and-load-generation.md#stress_template_context) | `SCT_STRESS_TEMPLATE_CONTEXT` | [Stress commands and load generation](configuration_options/stress-commands-and-load-generation.md) |
 | [`stress_threads_start_num`](configuration_options/performance-regression-tests.md#stress_threads_start_num) | `SCT_STRESS_THREADS_START_NUM` | [Performance regression tests](configuration_options/performance-regression-tests.md) |
 | [`target_manager_version`](configuration_options/scylla-manager.md#target_manager_version) | `SCT_TARGET_MANAGER_VERSION` | [Scylla Manager](configuration_options/scylla-manager.md) |
 | [`target_scylla_mgmt_agent_address`](configuration_options/scylla-manager.md#target_scylla_mgmt_agent_address) | `SCT_TARGET_SCYLLA_MGMT_AGENT_ADDRESS` | [Scylla Manager](configuration_options/scylla-manager.md) |
