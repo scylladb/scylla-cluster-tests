@@ -304,10 +304,10 @@ class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
         """
         Send adaptive timeout results to Argus.
         """
-        argus_client = self.test_config.argus_client()
-        if not argus_client:
+        if not self.test_config.argus_client_ready():
             LOGGER.warning("Will not submit to argus - no client initialized")
             return
+        argus_client = self.test_config.argus_client()
 
         cycle = next(self.cycle_counters[result.operation]) + 1
         table = AdaptiveTimeoutResultsTable(operation=result.operation)

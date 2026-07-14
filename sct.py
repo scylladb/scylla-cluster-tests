@@ -2253,6 +2253,7 @@ def run_pytest(target, backend, config, logdir):
         sys.exit(1)
     return_code = pytest.main(["-s", "-v", f"--junit-xml={junit_file}", target])
     test_config = get_test_config()
+    test_config.init_argus_client(params=SCTConfiguration())
     test_config.argus_client().sct_submit_junit_report(file_name=junit_file.name, raw_content=junit_file.read_text())
     sys.exit(return_code)
 

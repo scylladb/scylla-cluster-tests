@@ -13,18 +13,25 @@
 
 """Unit tests for the Argus request replay log (argus/client/replay_log.py)
 and the SCT integration that replaces MagicMock with replay-only mode.
+
+argus-alm 0.16.0 replaced the old queue + background-writer-thread design
+(ReplayRecord built in memory, enqueued via a ReplayLog.record() context
+manager) with synchronous, lock-serialized writes via ReplayLog.write() -
+the caller passes the completed outcome (success/error) directly and the
+record is on disk before write() returns. See replay_log.py's module
+docstring for the rationale. There is no ReplayRecord class anymore and no
+"give the writer thread time to flush" delay needed in these tests.
 """
 
 import json
 import sys
 import threading
-import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
 
-from argus.client.replay_log import ReplayLog, ReplayRecord, ReplayLogOnlyResponse
+from argus.client.replay_log import ReplayLog, ReplayLogOnlyResponse
 from argus.client.sct.client import ArgusSCTClient
 from sdcm.utils.argus import ReplayOnlyArgusSCTClient
 
@@ -33,57 +40,6 @@ from sdcm.utils.argus import ReplayOnlyArgusSCTClient
 def log_dir(tmp_path):
     """Provide a temporary directory for replay log files."""
     return str(tmp_path)
-
-
-class TestReplayRecord:
-    def test_record_fields(self):
-        rec = ReplayRecord(
-            method="POST",
-            endpoint="/sct/$id/event/submit",
-            location_params={"id": "test-123"},
-            params=None,
-            body={"data": "test"},
-            test_type="scylla-cluster-tests",
-        )
-        assert rec.method == "POST"
-        assert rec.endpoint == "/sct/$id/event/submit"
-        assert rec.location_params == {"id": "test-123"}
-        assert rec.body == {"data": "test"}
-        assert rec.test_type == "scylla-cluster-tests"
-        assert rec.success is False  # initial state: not yet succeeded
-        assert rec.error is None
-        assert rec.ts > 0
-
-    def test_to_dict_success(self):
-        rec = ReplayRecord(
-            method="POST",
-            endpoint="/testrun/$type/submit",
-            location_params={"type": "scylla-cluster-tests"},
-            params=None,
-            body={"run_id": "abc"},
-            test_type="scylla-cluster-tests",
-        )
-        rec.success = True
-        d = rec.to_dict()
-        assert d["success"] is True
-        assert "error" not in d
-        assert d["method"] == "POST"
-        assert d["endpoint"] == "/testrun/$type/submit"
-
-    def test_to_dict_failure(self):
-        rec = ReplayRecord(
-            method="POST",
-            endpoint="/sct/$id/nemesis/submit",
-            location_params={"id": "run-1"},
-            params=None,
-            body={},
-            test_type="scylla-cluster-tests",
-        )
-        rec.success = False
-        rec.error = "ConnectionError: Connection refused"
-        d = rec.to_dict()
-        assert d["success"] is False
-        assert d["error"] == "ConnectionError: Connection refused"
 
 
 class TestReplayLog:
@@ -111,17 +67,11 @@ class TestReplayLog:
     def test_writes_jsonl_format(self, log_dir):
         replay_log = ReplayLog(log_dir=log_dir, run_id="test-run-1", test_type="scylla-cluster-tests")
         try:
-            with replay_log.record("POST", "/sct/$id/event/submit", {"id": "run-1"}, None, {"data": "event1"}) as rec:
-                rec.success = True
-
-            # Give writer thread time to flush
-            time.sleep(0.1)
+            replay_log.write("POST", "/sct/$id/event/submit", {"id": "run-1"}, None, {"data": "event1"}, success=True)
         finally:
             replay_log.close()
 
-        content = replay_log.path.read_text()
-        lines = content.strip().split("\n")
-        # Single-write: one record per request, written on context exit.
+        lines = replay_log.path.read_text().strip().split("\n")
         assert len(lines) == 1
 
         outcome = json.loads(lines[0])
@@ -131,30 +81,48 @@ class TestReplayLog:
         assert outcome["body"] == {"data": "event1"}
         assert outcome["success"] is True
         assert outcome["test_type"] == "scylla-cluster-tests"
-        assert "error" not in outcome
+        assert "error" not in outcome  # omitted (not null) when there is none
 
-    def test_records_failure_with_exception(self, log_dir):
+    def test_writes_failure_with_error_message(self, log_dir):
+        """write(success=False, error=...) records the caller's failure verdict verbatim."""
         replay_log = ReplayLog(log_dir=log_dir, run_id="test-run-2", test_type="scylla-cluster-tests")
         try:
-            with pytest.raises(ConnectionError):
-                with replay_log.record("POST", "/sct/$id/nemesis/submit", {"id": "run-2"}, None, {"nemesis": "stop"}):
-                    raise ConnectionError("Connection refused")
-
-            time.sleep(0.1)
+            replay_log.write(
+                "POST",
+                "/sct/$id/nemesis/submit",
+                {"id": "run-2"},
+                None,
+                {"nemesis": "stop"},
+                success=False,
+                error="ConnectionError: Connection refused",
+            )
         finally:
             replay_log.close()
 
-        content = replay_log.path.read_text()
-        lines = content.strip().split("\n")
-        # Single-write: the single record captures the exception outcome.
+        lines = replay_log.path.read_text().strip().split("\n")
         assert len(lines) == 1
 
         outcome = json.loads(lines[0])
         assert outcome["success"] is False
-        assert "ConnectionError: Connection refused" in outcome["error"]
+        assert outcome["error"] == "ConnectionError: Connection refused"
+
+    def test_write_is_synchronous(self, log_dir):
+        """write() has no background writer thread or queue - by the time it returns, the
+        record is already flushed to disk, with no delay needed before reading it back."""
+        replay_log = ReplayLog(log_dir=log_dir, run_id="sync-test", test_type="scylla-cluster-tests")
+        try:
+            replay_log.write("POST", "/testrun/$type/submit", {"type": "sct"}, None, {"run_id": "x"}, success=True)
+            lines = replay_log.path.read_text().strip().split("\n")  # no sleep before reading
+        finally:
+            replay_log.close()
+
+        assert len(lines) == 1
+        outcome = json.loads(lines[0])
+        assert outcome["success"] is True
+        assert outcome["body"] == {"run_id": "x"}
 
     def test_thread_safety(self, log_dir):
-        """Multiple threads writing concurrently should produce valid JSONL."""
+        """Multiple threads writing concurrently should produce valid, non-interleaved JSONL."""
         replay_log = ReplayLog(log_dir=log_dir, run_id="thread-test", test_type="scylla-cluster-tests")
         num_threads = 8
         records_per_thread = 20
@@ -163,10 +131,14 @@ class TestReplayLog:
         def writer(thread_id):
             barrier.wait()
             for i in range(records_per_thread):
-                with replay_log.record(
-                    "POST", "/sct/$id/event/submit", {"id": "run-1"}, None, {"thread": thread_id, "seq": i}
-                ) as rec:
-                    rec.success = True
+                replay_log.write(
+                    "POST",
+                    "/sct/$id/event/submit",
+                    {"id": "run-1"},
+                    None,
+                    {"thread": thread_id, "seq": i},
+                    success=True,
+                )
 
         threads = [threading.Thread(target=writer, args=(t,)) for t in range(num_threads)]
         for t in threads:
@@ -174,15 +146,13 @@ class TestReplayLog:
         for t in threads:
             t.join()
 
-        time.sleep(0.2)
         replay_log.close()
 
-        content = replay_log.path.read_text()
-        lines = content.strip().split("\n")
-        # Single-write: exactly one record per operation.
+        lines = replay_log.path.read_text().strip().split("\n")
+        # One write() call per operation, serialized by the log's own lock.
         assert len(lines) == num_threads * records_per_thread
 
-        # Every line should be valid JSON
+        # Every line should be valid, non-interleaved JSON.
         for line in lines:
             record = json.loads(line)
             assert record["method"] == "POST"
@@ -194,69 +164,39 @@ class TestReplayLog:
 
     def test_context_manager(self, log_dir):
         with ReplayLog(log_dir=log_dir, run_id="ctx-test", test_type="scylla-cluster-tests") as replay_log:
-            with replay_log.record(
-                "POST", "/testrun/$type/submit", {"type": "scylla-cluster-tests"}, None, {"run_id": "abc"}
-            ) as rec:
-                rec.success = True
-            time.sleep(0.1)
+            replay_log.write(
+                "POST",
+                "/testrun/$type/submit",
+                {"type": "scylla-cluster-tests"},
+                None,
+                {"run_id": "abc"},
+                success=True,
+            )
 
-        content = replay_log.path.read_text()
-        # Single-write: one record per request.
-        assert len(content.strip().split("\n")) == 1
+        assert len(replay_log.path.read_text().strip().split("\n")) == 1
 
-    def test_failure_outcome_written_on_exception(self, log_dir):
-        """If the HTTP call raises, the record is still written once with the outcome.
+    def test_write_after_close_is_dropped_not_raised(self, log_dir):
+        """A write() racing (or simply arriving after) close() must never raise - the
+        record for that one call is just dropped, not worth blocking shutdown to drain."""
+        replay_log = ReplayLog(log_dir=log_dir, run_id="post-close-test", test_type="scylla-cluster-tests")
+        replay_log.close()
 
-        Single-write protocol: the record is enqueued in the context manager's
-        ``finally`` block, so an exception during the call still produces exactly
-        one record capturing ``success=False`` and the exception text.
-        """
-        replay_log = ReplayLog(log_dir=log_dir, run_id="crash-test", test_type="scylla-cluster-tests")
+        replay_log.write("POST", "/sct/$id/event/submit", {"id": "run-1"}, None, {}, success=True)
 
-        class SimulatedCrash(Exception):
-            pass
+        assert replay_log.path.read_text() == ""
 
+    def test_write_when_log_dir_unwritable_is_dropped_not_raised(self, tmp_path):
+        """If the log file can't be opened (e.g. bad log_dir), the instance still constructs
+        successfully and write()/close() are silent no-ops - a broken replay log must never
+        prevent the real Argus client from being created or making its real HTTP calls."""
+        blocking_file = tmp_path / "not_a_directory"
+        blocking_file.write_text("")  # a plain file, so mkdir() underneath it must fail
+
+        replay_log = ReplayLog(log_dir=blocking_file / "nested", run_id="broken-dir-test", test_type="sct")
         try:
-            with replay_log.record(
-                "POST", "/sct/$id/nemesis/submit", {"id": "crash-run"}, None, {"nemesis": "terminate"}
-            ) as _rec:  # noqa: F841
-                # Simulate a crash mid-call: raise before setting success.
-                raise SimulatedCrash("process killed")
-        except SimulatedCrash:
-            pass
-
-        time.sleep(0.1)
-        replay_log.close()
-
-        lines = replay_log.path.read_text().strip().split("\n")
-        assert len(lines) == 1
-
-        outcome = json.loads(lines[0])
-        assert outcome["success"] is False
-        assert outcome["endpoint"] == "/sct/$id/nemesis/submit"
-        assert outcome["body"] == {"nemesis": "terminate"}
-        assert "SimulatedCrash" in outcome["error"]
-
-    def test_record_written_once_on_exit(self, log_dir):
-        """The record is enqueued only on context exit -- nothing is written mid-call."""
-        replay_log = ReplayLog(log_dir=log_dir, run_id="exit-test", test_type="scylla-cluster-tests")
-
-        with replay_log.record("POST", "/testrun/$type/submit", {"type": "sct"}, None, {"run_id": "x"}) as rec:
-            # Inside the context, before exit, the record has not been written
-            # yet -- the writer thread creates the file lazily, so it is either
-            # absent or empty at this point.
-            assert not replay_log.path.exists() or replay_log.path.read_text() == ""
-            rec.success = True
-
-        time.sleep(0.1)
-        replay_log.close()
-
-        # After context exit, exactly one record is present.
-        lines = replay_log.path.read_text().strip().split("\n")
-        assert len(lines) == 1
-        outcome = json.loads(lines[0])
-        assert outcome["success"] is True
-        assert outcome["body"] == {"run_id": "x"}
+            replay_log.write("POST", "/sct/$id/event/submit", {"id": "run-1"}, None, {}, success=True)
+        finally:
+            replay_log.close()
 
 
 class TestArgusClientReplayOnly:
@@ -318,7 +258,6 @@ class TestArgusClientReplayOnly:
                 branch_name="master",
                 sct_config={"param": "value"},
             )
-            time.sleep(0.1)
         finally:
             client.close()
 
@@ -326,16 +265,14 @@ class TestArgusClientReplayOnly:
         jsonl_files = list(Path(log_dir).glob("argus_replay_log_*.jsonl"))
         assert len(jsonl_files) == 1
 
-        content = jsonl_files[0].read_text()
-        lines = content.strip().split("\n")
-        # Single-write: one record per request. In replay-log-only mode the HTTP
-        # call is skipped, so the record stays at success=false with no error.
+        lines = jsonl_files[0].read_text().strip().split("\n")
         assert len(lines) == 1
 
         outcome = json.loads(lines[0])
         assert outcome["method"] == "POST"
         assert outcome["endpoint"] == "/testrun/$type/submit"
         assert outcome["body"]["job_name"] == "test-job"
+        # In replay-log-only mode the HTTP call is skipped, so "not sent" means "not successful".
         assert outcome["success"] is False
         assert "error" not in outcome
 
@@ -405,6 +342,7 @@ class TestArgusClientNormalModeWithReplayLog:
         )
         mock_response = MagicMock()
         mock_response.status_code = 200
+        mock_response.ok = True
         mock_response.url = "http://localhost:9999/api/v1/client/sct/test-uuid-success/event/submit"
         mock_response.json.return_value = {"status": "ok", "response": {}}
 
@@ -415,14 +353,13 @@ class TestArgusClientNormalModeWithReplayLog:
                     location_params={"id": "test-uuid-success"},
                     body={"data": "event"},
                 )
-            time.sleep(0.1)
         finally:
             client.close()
 
         jsonl_files = list(Path(log_dir).glob("argus_replay_log_*.jsonl"))
         assert len(jsonl_files) == 1
         lines = jsonl_files[0].read_text().strip().split("\n")
-        assert len(lines) == 1  # single-write: one record per request
+        assert len(lines) == 1
         outcome = json.loads(lines[-1])
         assert outcome["success"] is True
         assert outcome["endpoint"] == "/sct/$id/event/submit"
@@ -438,6 +375,7 @@ class TestArgusClientNormalModeWithReplayLog:
         )
         mock_response = MagicMock()
         mock_response.status_code = 500
+        mock_response.ok = False
         mock_response.url = "http://localhost:9999/api/v1/client/sct/test-uuid-httperr/event/submit"
         mock_response.json.return_value = {"status": "error", "response": {"arguments": ["Internal error"]}}
 
@@ -448,14 +386,13 @@ class TestArgusClientNormalModeWithReplayLog:
                     location_params={"id": "test-uuid-httperr"},
                     body={"data": "event"},
                 )
-            time.sleep(0.1)
         finally:
             client.close()
 
         jsonl_files = list(Path(log_dir).glob("argus_replay_log_*.jsonl"))
         assert len(jsonl_files) == 1
         lines = jsonl_files[0].read_text().strip().split("\n")
-        assert len(lines) == 1  # single-write: one record per request
+        assert len(lines) == 1
         outcome = json.loads(lines[-1])
         assert outcome["success"] is False
         assert "HTTP 500" in outcome["error"]
@@ -478,14 +415,13 @@ class TestArgusClientNormalModeWithReplayLog:
                         location_params={"id": "test-uuid-connerr"},
                         body={"data": "event"},
                     )
-            time.sleep(0.1)
         finally:
             client.close()
 
         jsonl_files = list(Path(log_dir).glob("argus_replay_log_*.jsonl"))
         assert len(jsonl_files) == 1
         lines = jsonl_files[0].read_text().strip().split("\n")
-        assert len(lines) == 1  # single-write: one record per request
+        assert len(lines) == 1
         outcome = json.loads(lines[-1])
         assert outcome["success"] is False
         assert "ConnectionError" in outcome["error"]
@@ -501,6 +437,7 @@ class TestArgusClientNormalModeWithReplayLog:
         )
         mock_response = MagicMock()
         mock_response.status_code = 200
+        mock_response.ok = True
         mock_response.url = "http://localhost:9999/api/v1/client/sct/test-uuid-logical/event/submit"
         mock_response.json.return_value = {"status": "error", "response": {"arguments": ["Run not found"]}}
 
@@ -511,14 +448,13 @@ class TestArgusClientNormalModeWithReplayLog:
                     location_params={"id": "test-uuid-logical"},
                     body={"data": "event"},
                 )
-            time.sleep(0.1)
         finally:
             client.close()
 
         jsonl_files = list(Path(log_dir).glob("argus_replay_log_*.jsonl"))
         assert len(jsonl_files) == 1
         lines = jsonl_files[0].read_text().strip().split("\n")
-        assert len(lines) == 1  # single-write: one record per request
+        assert len(lines) == 1
         outcome = json.loads(lines[-1])
         assert outcome["success"] is False
 

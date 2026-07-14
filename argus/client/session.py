@@ -4,7 +4,7 @@ import os
 import threading
 import time
 import weakref
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -226,7 +226,7 @@ class TunneledSession(requests.Session):
             self._tunnel = tunnel
             self._tunnel_config = config
             self._tunnel_port = local_port
-            self._tunnel_established_at = datetime.now(UTC).isoformat()
+            self._tunnel_established_at = datetime.now(timezone.utc).isoformat()
             self._tunnel_warning_emitted = False
             self._tunnel_disabled_until = 0.0
             LOGGER.info(

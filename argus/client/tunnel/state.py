@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 import tempfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 try:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -128,14 +128,14 @@ def is_key_valid(paths: TunnelStatePaths) -> bool:
     except (OSError, json.JSONDecodeError, TypeError, ValueError):
         return False
 
-    now = datetime.now(tz=UTC)
+    now = datetime.now(tz=timezone.utc)
     return now < expires_at
 
 
 def write_key_meta(paths: TunnelStatePaths, expires_at: datetime | None) -> None:
     if expires_at is None:
         return
-    payload = {"expires_at": expires_at.astimezone(UTC).isoformat()}
+    payload = {"expires_at": expires_at.astimezone(timezone.utc).isoformat()}
     _write_text(paths.key_meta, json.dumps(payload))
     os.chmod(paths.key_meta, 0o600)
 
@@ -154,7 +154,7 @@ def read_cached_tunnel_config(paths: TunnelStatePaths) -> TunnelConfig | None:
     except TunnelClientError:
         return None
 
-    if config.expires_at is not None and datetime.now(tz=UTC) >= config.expires_at:
+    if config.expires_at is not None and datetime.now(tz=timezone.utc) >= config.expires_at:
         return None
 
     return config

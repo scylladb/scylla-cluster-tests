@@ -1,6 +1,6 @@
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
-from typing import Any, NotRequired, TypedDict
+from datetime import datetime, timezone
+from typing import Any, TypedDict
 
 
 class TunnelClientError(Exception):
@@ -18,34 +18,45 @@ ALLOWED_HOST_KEY_TYPES = (
 )
 
 
-class _TunnelApiResponse(TypedDict):
-    """Live response shape from ``/client/ssh/tunnel`` (POST register / GET fetch)."""
+# Required/optional keys are split across a base class plus a ``total=False``
+# subclass instead of ``typing.NotRequired`` so the module imports on Python
+# 3.10 (``NotRequired`` only landed in ``typing`` in 3.11).
+class _TunnelApiResponseRequired(TypedDict):
+    """Required fields of the ``/client/ssh/tunnel`` response (POST register / GET fetch)."""
     proxy_host: str
     proxy_port: int
     proxy_user: str
     target_host: str
     target_port: int
     host_key_fingerprint: str
-    expires_at: NotRequired[str | None]
-    key_id: NotRequired[str | None]
-    tunnel_id: NotRequired[str | None]
 
 
-class _TunnelCachePayload(TypedDict):
-    """On-disk cache shape written by :meth:`TunnelConfig.to_cache_payload`.
+class _TunnelApiResponse(_TunnelApiResponseRequired, total=False):
+    """Live response shape, with optional fields layered on the required base."""
+    expires_at: str | None
+    key_id: str | None
+    tunnel_id: str | None
+
+
+class _TunnelCachePayloadRequired(TypedDict):
+    """Required fields of the on-disk cache written by :meth:`TunnelConfig.to_cache_payload`."""
+    proxy_host: str
+    proxy_port: int
+    proxy_user: str
+    target_host: str
+    target_port: int
+    host_key_fingerprint: str
+
+
+class _TunnelCachePayload(_TunnelCachePayloadRequired, total=False):
+    """On-disk cache shape, with optional fields layered on the required base.
 
     Mirrors :class:`_TunnelApiResponse` but is independently typed so future
     cache-only fields don't leak into the API contract.
     """
-    proxy_host: str
-    proxy_port: int
-    proxy_user: str
-    target_host: str
-    target_port: int
-    host_key_fingerprint: str
-    expires_at: NotRequired[str | None]
-    key_id: NotRequired[str | None]
-    tunnel_id: NotRequired[str | None]
+    expires_at: str | None
+    key_id: str | None
+    tunnel_id: str | None
 
 
 # Required keys listed explicitly to avoid relying on TypedDict.__required_keys__
@@ -94,7 +105,7 @@ class TunnelConfig:
     def to_cache_payload(self) -> dict[str, Any]:
         payload = asdict(self)
         if self.expires_at is not None:
-            payload["expires_at"] = self.expires_at.astimezone(UTC).isoformat()
+            payload["expires_at"] = self.expires_at.astimezone(timezone.utc).isoformat()
         return payload
 
 
@@ -110,7 +121,12 @@ class TunnelStatePaths:
 def parse_datetime(value: str) -> datetime:
     if not value:
         raise ValueError("datetime value is required")
+    # Python 3.10's ``datetime.fromisoformat`` rejects the ``Z`` (Zulu) UTC suffix
+    # that the tunnel API emits (e.g. ``2026-04-16T12:00:00Z``); normalise it to the
+    # explicit ``+00:00`` offset that all supported versions accept.
+    if value.endswith("Z"):
+        value = f"{value[:-1]}+00:00"
     parsed = datetime.fromisoformat(value)
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
