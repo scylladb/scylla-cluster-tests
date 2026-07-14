@@ -2,8 +2,14 @@ test_duration: 500
 n_db_nodes: 6
 n_test_oracle_db_nodes: 1
 n_loaders: 1
-instance_type_db: 'i3en.3xlarge'
-instance_type_loader: 'c6i.4xlarge'
+sizing_db:  # no GCE/Azure/OCI match (12 vCPU tier unavailable on those clouds)
+  vcpu: 12
+  memory: '>=96'
+  arch: x86_64
+  local_disk_gb: '>=6000'  # ~80% of i3en.3xlarge's 7500GB
+sizing_loader:
+  vcpu: 16
+  memory: '>=32'
 
 user_prefix: 'gemini-8h-large-num-columns'
 
