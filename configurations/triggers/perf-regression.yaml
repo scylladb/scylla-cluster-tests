@@ -176,7 +176,7 @@ jobs:
     include_versions: ["master"]
     labels: ["alternator-weekly"]
     params:
-      sub_tests: "test_full"
+      sub_tests: '["test_full"]'
 
   # === GCE custom monthly latte ===
 
