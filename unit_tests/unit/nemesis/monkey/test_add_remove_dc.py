@@ -1,5 +1,6 @@
 """Tests for sdcm.nemesis.monkey.add_remove_dc module."""
 
+from threading import Event
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -91,6 +92,7 @@ def runner(base_runner):
     base_runner.cluster.racks = ["rack1"]
     base_runner.cluster.nodes = list(base_runner.cluster.data_nodes)
     base_runner.cluster.is_features_enabled_on_node.return_value = True
+    base_runner.tester.prepare_phase_active = Event()
     base_runner.decommission_nodes = MagicMock()
     base_runner.run_repair = MagicMock()
     base_runner.current_disruption = "AddRemoveDcNemesis"
@@ -118,6 +120,34 @@ def test_disrupt_raises_unsupported_for_multi_region(runner):
     runner.run_repair.assert_not_called()
     runner.decommission_nodes.assert_not_called()
     assert not runner.executed
+
+
+@pytest.mark.parametrize(
+    "prepare_phase_active,error_type,expected_error",
+    [
+        pytest.param(True, UnsupportedNemesis, "prepare phase", id="active"),
+        pytest.param(False, RuntimeError, "workflow started", id="inactive"),
+    ],
+)
+def test_disrupt_prepare_phase_gate(runner, prepare_phase_active, error_type, expected_error):
+    """disrupt() should skip only while the prepare phase event is set."""
+    if prepare_phase_active:
+        runner.tester.prepare_phase_active.set()
+
+    monkey = AddRemoveDcNemesis(runner)
+    monkey.create_new_dc_keyspace = MagicMock(side_effect=RuntimeError("workflow started"))
+
+    with pytest.raises(error_type, match=expected_error):
+        monkey.disrupt()
+
+    if prepare_phase_active:
+        monkey.create_new_dc_keyspace.assert_not_called()
+    else:
+        monkey.create_new_dc_keyspace.assert_called_once_with()
+
+    runner.cluster.add_nodes.assert_not_called()
+    runner.run_repair.assert_not_called()
+    runner.decommission_nodes.assert_not_called()
 
 
 def test_disrupt_updates_replication_and_cleans_new_dc(runner):
