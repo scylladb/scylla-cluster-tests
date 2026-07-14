@@ -282,6 +282,9 @@ class LoaderUtilsMixin:
             # Wait for some data (according to the param in the yaml) to be populated, for multi keyspace need to
             # pay attention to the fact it checks only on keyspace1
             self.db_cluster.wait_total_space_used_per_node(keyspace=None)
+            # Some nemesis should not run during the prepare phase,
+            # so we need to set the flag to let them know the prepare phase is active
+            self.prepare_phase_active.set()
             self.db_cluster.start_nemesis()
 
         # Wait on the queue till all threads come back.
@@ -319,6 +322,8 @@ class LoaderUtilsMixin:
             for node in self.db_cluster.nodes:
                 node.run_nodetool("compact")
             self.wait_no_compactions_running(n=prepare_wait_no_compactions_timeout)
+
+        self.prepare_phase_active.clear()
         self.log.info("Prepare finished")
 
     @staticmethod
