@@ -305,7 +305,12 @@ def call(Map pipelineParams) {
                         def params_mapping = [:]
                         def sub_tests
                         if (params.sub_tests) {
-                            sub_tests = new JsonSlurperClassic().parseText(params.sub_tests)
+                            try {
+                                sub_tests = new JsonSlurperClassic().parseText(params.sub_tests)
+                            } catch (groovy.json.JsonException e) {
+                                // Fallback: treat as a single, non-JSON sub-test name
+                                sub_tests = [params.sub_tests.trim()]
+                            }
                         } else {
                             sub_tests = [params.test_name]
                         }
