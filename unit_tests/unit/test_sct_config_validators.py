@@ -381,7 +381,7 @@ def test_effective_compression_ratio_valid(monkeypatch, value):
     """effective_compression_ratio accepts values in (0, 1.0]."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     monkeypatch.setenv("SCT_EFFECTIVE_COMPRESSION_RATIO", str(value))
 
@@ -402,10 +402,36 @@ def test_effective_compression_ratio_invalid(monkeypatch, value, expected_match)
     """effective_compression_ratio rejects 0, negative values, and values above 1.0."""
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2025.1.0")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
     monkeypatch.setenv("SCT_EFFECTIVE_COMPRESSION_RATIO", str(value))
 
     with pytest.raises(ValidationError, match=expected_match):
         SCTConfiguration()
+<<<<<<< HEAD
 >>>>>>> 831deb5cd (feat(longevity): Add option to template stress commands based on disk size)
+||||||| parent of 88e4502e2 (feat: Add ability to define shared variables)
+=======
+
+
+def test_stress_template_context_accepts_dict(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_STRESS_TEMPLATE_CONTEXT", '{"rows_total": "{{ effective_disk_size_bytes }}"}')
+
+    conf = SCTConfiguration()
+    assert conf.stress_template_context == {"rows_total": "{{ effective_disk_size_bytes }}"}
+
+
+def test_stress_template_context_accepts_yaml_string(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "2026.1.0")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_STRESS_TEMPLATE_CONTEXT", "rows_total: '{{ effective_disk_size_bytes }}'")
+
+    conf = SCTConfiguration()
+    assert conf.stress_template_context == {"rows_total": "{{ effective_disk_size_bytes }}"}
+>>>>>>> 88e4502e2 (feat: Add ability to define shared variables)
