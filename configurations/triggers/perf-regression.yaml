@@ -293,17 +293,20 @@ jobs:
     params:
       sub_tests: '["test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"]'
 
-  # === Elasticity (3-weekly) ===
+  # === Elasticity (monthly) ===
 
-  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-elasticity"
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-2.5tb-i8g-elasticity"
     backend: "aws"
     region: "eu-north-1"
-    exclude_versions: ["2024.1", "2024.2", "master"]
-    labels: ["master-3weeks"]
-    params:
-      sub_tests: '["test_latency_mixed_with_nemesis", "test_latency_write_with_nemesis"]'
-
-  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-elasticity"
-    backend: "aws"
-    region: "eu-north-1"
+    exclude_versions: ["2024.1", "2024.2", "2025.1", "2025.4", "master"]
     labels: []
+    params:
+      sub_tests: '["test_latency_mixed_with_nemesis"]'
+
+  - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-2.5tb-i8g-elasticity"
+    backend: "aws"
+    region: "eu-north-1"
+    include_versions: ["master"]
+    labels: ["master-monthly"]
+    params:
+      sub_tests: '["test_latency_mixed_with_nemesis"]'
