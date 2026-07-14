@@ -13,7 +13,9 @@
 
 """Tests for ArgusEventPostman draining its queue on stop() and staying time-bounded."""
 
+import json
 import time
+import logging
 import threading
 import uuid
 from types import SimpleNamespace
@@ -21,6 +23,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from argus.client.sct.client import ArgusSCTClient
 from sdcm.sct_events import Severity
 from sdcm.sct_events import events_processes as events_processes_module
 from sdcm.sct_events.base import SctEvent
@@ -50,6 +53,16 @@ def argus_event(severity: Severity, message: str) -> SCTArgusEvent:
             "message": message,
         }
     )
+
+
+def _argus_params(enable_argus: bool) -> MagicMock:
+    """Minimal SCTConfiguration stand-in for init_argus_client(): only "enable_argus" is
+    ever read via dict-style .get(), and argus_use_ssh_tunnel via attribute access.
+    """
+    params = MagicMock()
+    params.get.return_value = enable_argus
+    params.argus_use_ssh_tunnel = False
+    return params
 
 
 @pytest.fixture
@@ -140,15 +153,21 @@ def unwired_argus_postman(events_function_scope, monkeypatch, tmp_path):
     lookup at it too, since enable_argus_posting()/start_posting_argus_events() (called
     from inside TestConfig.init_argus_client()) resolve via that default rather than
     accepting a registry explicitly.
+
+    The aggregator is registered directly rather than via start_argus_aggregator() - the
+    registry has no public "register without starting" API, and starting it as a thread
+    here would require the collector (and the main device it reads from) running too,
+    which is unrelated to what these tests are about (client wiring, not event
+    transformation - that's covered separately by test_argus_event_collector_* below and
+    by the full real pipeline in the argus_pipeline fixture above).
     """
     registry = SctEvent._events_processes_registry
     monkeypatch.setattr(events_processes_module, "_EVENTS_PROCESSES", registry)
     monkeypatch.setattr(Argus, "INSTANCE", None)
     monkeypatch.setattr(TestConfig, "_argus_client", None)
+    monkeypatch.setattr(TestConfig, "_argus_client_resolved", False)
     monkeypatch.setattr(TestConfig, "_logdir", str(tmp_path))
 
-    # Registered but not started as a thread: nothing in this test publishes real events
-    # through the main device, so it's only needed as a queue for postman to read from.
     aggregator = ArgusEventAggregator(_registry=registry)
     registry._registry_dict[EVENTS_ARGUS_AGGREGATOR_ID] = aggregator  # noqa: SLF001
     start_argus_postman(_registry=registry)
@@ -174,51 +193,67 @@ def test_init_argus_client_alone_does_not_touch_event_pipeline(unwired_argus_pos
     assert Argus.get() is None
 
 
-class _EnableArgusParams(dict):
-    """Minimal SCTConfiguration stand-in: dict-style .get() plus attribute access."""
-
-    argus_use_ssh_tunnel = False
-
-
-def test_init_argus_client_reuses_real_client_for_the_same_run(monkeypatch, tmp_path):
+def test_init_argus_client_is_idempotent_after_first_resolution(monkeypatch, tmp_path):
     """init_argus_client() runs more than once per real test run - once during config
-    resolution, again in ClusterTester.setUp(). Both calls resolve the same run_id (it
-    normally comes from an env var fixed before either runs). If the first call already
-    connected a real client, the second call must reuse it rather than closing a working
-    connection and reconnecting for no reason.
+    resolution, again in ClusterTester.setUp(). test_id is fixed for the whole process
+    before either call, so a later call has nothing new to resolve: once a client (real or
+    replay-only) is set, it's final. Passing a different test_id here (which shouldn't
+    happen in practice) proves the second call really is a pure no-op, not a lucky
+    same-run_id match - it must not blow away a working connection either way.
     """
     monkeypatch.setattr(TestConfig, "_argus_client", None)
+    monkeypatch.setattr(TestConfig, "_argus_client_resolved", False)
     monkeypatch.setattr(TestConfig, "_logdir", str(tmp_path))
     monkeypatch.setattr("sdcm.test_config.get_job_name", lambda: "some-jenkins-job")
 
     real_client = MagicMock()
-    real_client.run_id = "same-run"  # the reuse check compares this against the resolved run_id
-    monkeypatch.setattr("sdcm.test_config.get_argus_client", lambda **kwargs: real_client)
-    params = _EnableArgusParams(enable_argus=True)
+    get_argus_client_mock = MagicMock(return_value=real_client)
+    monkeypatch.setattr("sdcm.test_config.get_argus_client", get_argus_client_mock)
+    params = _argus_params(enable_argus=True)
 
     TestConfig.init_argus_client(params=params, test_id="same-run")
-    TestConfig.init_argus_client(params=params, test_id="same-run")
+    TestConfig.init_argus_client(params=params, test_id="different-run")
 
     assert TestConfig._argus_client is real_client  # reused, not closed and recreated
     real_client.close.assert_not_called()
+    get_argus_client_mock.assert_called_once()  # second call didn't even try to reconnect
 
 
-def test_init_argus_client_always_retries_replay_only_client_for_the_same_run(unwired_argus_postman):
-    """Unlike a real client, a replay-only one is never reused across calls, even for a
-    matching run_id - see test_init_argus_client_retries_real_connection_after_transient_failure
-    for why: reusing it would permanently lock a transient connection failure into
-    replay-only mode. Here enable_argus=False on both calls, so the replacement is just a
-    second, distinct replay-only client rather than an upgrade to a real one.
+def test_init_argus_client_real_connection_does_not_wire_argus_singleton(monkeypatch, tmp_path):
+    """get_argus_client() defaults to init_global=True and wires Argus.init_global() as a
+    side effect of a successful connection - init_argus_client() must override that
+    (init_global=False), since Argus.init_global() is documented as belonging solely to
+    start_argus_event_pipeline(). Otherwise SCTConfiguration.update_argus_with_version()
+    (which calls only init_argus_client(), during config resolution, and never wires the
+    event pipeline itself) would prematurely set Argus.INSTANCE the moment a real
+    connection succeeds.
+
+    Exercises the real get_argus_client()/ArgusSCTClient construction path rather than
+    mocking get_argus_client() itself away, since that default lives inside the real
+    function - a fully mocked-out get_argus_client() would never reach it at all.
     """
-    postman, _ = unwired_argus_postman
+    monkeypatch.setattr(Argus, "INSTANCE", None)
+    monkeypatch.setattr(TestConfig, "_argus_client", None)
+    monkeypatch.setattr(TestConfig, "_argus_client_resolved", False)
+    monkeypatch.setattr(TestConfig, "_logdir", str(tmp_path))
+    monkeypatch.setattr("sdcm.test_config.get_job_name", lambda: "some-jenkins-job")
 
-    TestConfig.init_argus_client(params={"enable_argus": False}, test_id="same-run")
-    first_client = TestConfig._argus_client
+    fake_key_store = MagicMock()
+    fake_key_store.get_argus_rest_credentials_per_provider.return_value = {
+        "token": "fake-token",
+        "baseUrl": "http://localhost:9999",
+    }
+    monkeypatch.setattr("sdcm.utils.argus.KeyStore", lambda: fake_key_store)
 
-    TestConfig.init_argus_client(params={"enable_argus": False}, test_id="same-run")
+    params = _argus_params(enable_argus=True)
+    TestConfig.init_argus_client(params=params, test_id=str(uuid.uuid4()))
 
-    assert isinstance(TestConfig._argus_client, ReplayOnlyArgusSCTClient)
-    assert TestConfig._argus_client is not first_client
+    try:
+        assert isinstance(TestConfig._argus_client, ArgusSCTClient)
+        assert not isinstance(TestConfig._argus_client, ReplayOnlyArgusSCTClient)
+        assert Argus.INSTANCE is None  # not wired until start_argus_event_pipeline() runs
+    finally:
+        TestConfig._argus_client.close()
 
 
 def test_start_argus_event_pipeline_wires_up_replay_only_postman(unwired_argus_postman, monkeypatch):
@@ -244,67 +279,98 @@ def test_start_argus_event_pipeline_wires_up_replay_only_postman(unwired_argus_p
     submit_event.assert_called_once()  # drained and posted, not a silent no-op
 
 
-def test_start_argus_event_pipeline_second_call_takes_over_argus_singleton(unwired_argus_postman):
-    """start_argus_event_pipeline() can run more than once in the same process (e.g. across
-    multiple tests sharing a process, each with its own init_argus_client() call first).
-    The latest call's client must become Argus.get().client; if it stays stuck on an
-    earlier (now-closed) client, the event pipeline silently drops every event for the
-    rest of the run - the same failure mode this whole fix exists to prevent.
+def test_start_argus_event_pipeline_postman_really_writes_the_event_to_disk(unwired_argus_postman):
+    """Same wiring as test_start_argus_event_pipeline_wires_up_replay_only_postman above,
+    but without mocking submit_event() away: drives the real ReplayOnlyArgusSCTClient all
+    the way to its on-disk JSONL replay log, through the real postman thread and the real
+    ArgusSCTClient.submit_event()/post() code - the only thing replay-only mode itself
+    never touches is the network layer.
     """
-    postman, _ = unwired_argus_postman
+    postman, aggregator = unwired_argus_postman
+    test_id = str(uuid.uuid4())
 
-    TestConfig.init_argus_client(params={"enable_argus": False}, test_id="first-run")
+    TestConfig.init_argus_client(params={"enable_argus": False}, test_id=test_id)
     TestConfig.start_argus_event_pipeline()
-    first_client = TestConfig._argus_client
 
-    TestConfig.init_argus_client(params={"enable_argus": False}, test_id="second-run")
-    TestConfig.start_argus_event_pipeline()
-    second_client = TestConfig._argus_client
+    aggregator.outbound_queue.put(argus_event(Severity.ERROR, "a real, unmocked event"))
+    postman.stop(timeout=5)
 
-    assert second_client is not first_client
-    assert Argus.get().client is second_client
-    assert postman._argus_client is second_client
+    replay_log_path = postman._argus_client.replay_log_path
+    assert replay_log_path.exists()
+    record = json.loads(replay_log_path.read_text().strip().splitlines()[-1])
+    assert record["success"] is False  # replay-only mode never actually sends anything
+    assert record["body"]["data"]["message"] == "a real, unmocked event"
 
 
-def test_init_argus_client_retries_real_connection_after_transient_failure(monkeypatch, tmp_path):
-    """A transient get_argus_client() failure on one call must not permanently lock a run
-    into replay-only mode. init_argus_client() only reuses an *already-real* client for a
-    matching run_id - a replay-only fallback is always retried, so a later call for the
-    same run_id (e.g. ClusterTester.init_argus_run(), after an earlier failed attempt
-    during config resolution) gets a real connection if one is available this time.
+def test_init_argus_client_retries_transient_connection_failure_within_one_call(monkeypatch, tmp_path):
+    """A transient get_argus_client() failure must not immediately drop the run into
+    replay-only mode. The retry happens *within* this one call to init_argus_client() (see
+    TestConfig._connect_argus_client) - not by hoping some other, later call happens to
+    try again: per test_init_argus_client_is_idempotent_after_first_resolution, there is
+    no other chance once this call returns.
     """
     monkeypatch.setattr(TestConfig, "_argus_client", None)
+    monkeypatch.setattr(TestConfig, "_argus_client_resolved", False)
     monkeypatch.setattr(TestConfig, "_logdir", str(tmp_path))
     monkeypatch.setattr("sdcm.test_config.get_job_name", lambda: "some-jenkins-job")
+    monkeypatch.setattr("time.sleep", lambda *_: None)  # skip the real backoff between attempts
 
     real_client = MagicMock()
     attempts = []
 
     def fake_get_argus_client(**kwargs):
         attempts.append(kwargs)
-        if len(attempts) == 1:
+        if len(attempts) < 2:
             raise ArgusError("transient failure")
         return real_client
 
     monkeypatch.setattr("sdcm.test_config.get_argus_client", fake_get_argus_client)
-    params = _EnableArgusParams(enable_argus=True)
-
-    TestConfig.init_argus_client(params=params, test_id="same-run")
-    assert isinstance(TestConfig._argus_client, ReplayOnlyArgusSCTClient)  # first call fell back
+    params = _argus_params(enable_argus=True)
 
     TestConfig.init_argus_client(params=params, test_id="same-run")
 
-    assert TestConfig._argus_client is real_client  # second call retried and got a real one
+    assert TestConfig._argus_client is real_client  # retried and got a real one, in one call
     assert len(attempts) == 2
 
 
-def test_start_argus_event_pipeline_handles_postman_not_yet_registered(monkeypatch, tmp_path):
+def test_init_argus_client_falls_back_to_replay_permanently_after_exhausting_retries(monkeypatch, tmp_path):
+    """Once retries inside a single init_argus_client() call are exhausted, the run commits
+    to replay-only mode for good - a later call (e.g. from ClusterTester.init_argus_run(),
+    after config resolution already gave up) does not get a second chance to connect for
+    real; every intended submission is still captured in the replay log for later bulk
+    push either way. See test_init_argus_client_is_idempotent_after_first_resolution.
+    """
+    monkeypatch.setattr(TestConfig, "_argus_client", None)
+    monkeypatch.setattr(TestConfig, "_argus_client_resolved", False)
+    monkeypatch.setattr(TestConfig, "_logdir", str(tmp_path))
+    monkeypatch.setattr("sdcm.test_config.get_job_name", lambda: "some-jenkins-job")
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+
+    get_argus_client_mock = MagicMock(side_effect=ArgusError("permanent failure"))
+    monkeypatch.setattr("sdcm.test_config.get_argus_client", get_argus_client_mock)
+    params = _argus_params(enable_argus=True)
+
+    TestConfig.init_argus_client(params=params, test_id="same-run")
+    assert isinstance(TestConfig._argus_client, ReplayOnlyArgusSCTClient)
+    attempts_for_first_call = get_argus_client_mock.call_count
+
+    TestConfig.init_argus_client(params=params, test_id="same-run")
+
+    assert get_argus_client_mock.call_count == attempts_for_first_call  # no attempt on the second call
+    assert isinstance(TestConfig._argus_client, ReplayOnlyArgusSCTClient)
+
+
+def test_start_argus_event_pipeline_handles_postman_not_yet_registered(monkeypatch, caplog, tmp_path):
     """enable_argus_posting()/start_posting_argus_events() raise AttributeError - not
     RuntimeError - when the default events registry exists but the argus postman process
     specifically hasn't been registered in it yet (get_events_process() returns None
-    instead of raising). start_argus_event_pipeline() must catch that too, rather than
-    letting it escape into ClusterTester.init_argus_run()'s broad except Exception and
-    silently skip the submit_sct_run()/set_sct_runner() calls that follow it.
+    instead of raising). start_argus_event_pipeline() must catch that too, logging a
+    warning rather than letting it escape into ClusterTester.init_argus_run()'s broad
+    except Exception, where it would be indistinguishable from a real submission failure.
+
+    This only checks that start_argus_event_pipeline() itself contains the failure and
+    reports it - not what ClusterTester.init_argus_run() does with a client left
+    unwired, which is out of scope for this test_config-level test.
     """
     registry = EventsProcessesRegistry(log_dir=tmp_path)  # exists, but nothing registered in it
     monkeypatch.setattr(events_processes_module, "_EVENTS_PROCESSES", registry)
@@ -312,31 +378,44 @@ def test_start_argus_event_pipeline_handles_postman_not_yet_registered(monkeypat
     replay_client = ReplayOnlyArgusSCTClient(run_id="r1", log_dir=str(tmp_path))
     monkeypatch.setattr(TestConfig, "_argus_client", replay_client)
     try:
-        TestConfig.start_argus_event_pipeline()  # must not raise AttributeError
+        with caplog.at_level(logging.WARNING):
+            TestConfig.start_argus_event_pipeline()  # must not raise AttributeError
     finally:
         replay_client.close()
 
+    assert "Skipping setting up argus events" in caplog.text  # failure is logged, not silent
 
-def test_start_argus_event_pipeline_failure_does_not_discard_client(monkeypatch, tmp_path):
+
+def test_start_argus_event_pipeline_failure_does_not_discard_client(monkeypatch, caplog, tmp_path):
     """If wiring the event pipeline fails (e.g. the events-processes registry isn't up
     yet), the Argus client itself must be untouched - only the real-time event pipeline
     wiring is skipped, direct/synchronous Argus calls keep working via that same client.
+
+    start_argus_event_pipeline() deliberately fails fast and logs a warning here instead
+    of waiting/retrying for the events system to come up: in production the event_system
+    fixture always starts it before ClusterTester.init_argus_run() gets here (see
+    ArgusEventCollector.run()), so this path only exists for a non-standard startup
+    order - blocking test setup on it would turn a rare ordering bug into a hang instead
+    of a fast, visible warning.
     """
     monkeypatch.setattr(events_processes_module, "_EVENTS_PROCESSES", None)  # registry not ready
     monkeypatch.setattr(Argus, "INSTANCE", None)
     monkeypatch.setattr(TestConfig, "_argus_client", None)
+    monkeypatch.setattr(TestConfig, "_argus_client_resolved", False)
     monkeypatch.setattr(TestConfig, "_logdir", str(tmp_path))
     monkeypatch.setattr("sdcm.test_config.get_job_name", lambda: "some-jenkins-job")
 
     real_client = MagicMock()
     monkeypatch.setattr("sdcm.test_config.get_argus_client", lambda **kwargs: real_client)
 
-    params = _EnableArgusParams(enable_argus=True)
+    params = _argus_params(enable_argus=True)
     TestConfig.init_argus_client(params=params, test_id=str(uuid.uuid4()))
-    TestConfig.start_argus_event_pipeline()
+    with caplog.at_level(logging.WARNING):
+        TestConfig.start_argus_event_pipeline()
 
     assert TestConfig._argus_client is real_client  # kept, not discarded
     real_client.close.assert_not_called()
+    assert "Skipping setting up argus events" in caplog.text  # failure is logged, not silent
 
 
 def _fake_argus_event(**overrides) -> SimpleNamespace:
@@ -360,11 +439,12 @@ def _fake_argus_event(**overrides) -> SimpleNamespace:
 def test_argus_event_collector_resolves_run_id_per_event_not_once_at_thread_start(
     events_function_scope, tmp_path, monkeypatch
 ):
-    """ArgusEventCollector.run() starts (as a thread, via the autouse event_system pytest
-    fixture / start_events_device()) before TestConfig.start_argus_event_pipeline() calls
-    Argus.init_global() in ClusterTester.setUp() - so it must resolve run_id fresh for each
-    event, not once when the thread starts. Otherwise every event for the whole test would
-    be stamped with whatever Argus.get() returned at thread-start, almost always None.
+    """In a real SCT run, ClusterTester's own `event_system` pytest fixture (sdcm/tester.py)
+    starts this thread via start_events_device() before setUp() reaches init_argus_run() ->
+    start_argus_event_pipeline() -> Argus.init_global() - so it must resolve run_id fresh
+    for each event, not once when the thread starts. Otherwise every event for the whole
+    test would be stamped with whatever Argus.get() returned at thread-start, almost always
+    None. This is a production ordering issue, not an artifact of this unit test's setup.
     """
     monkeypatch.setattr(Argus, "INSTANCE", None)
 

@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
+from botocore.exceptions import ClientError
+
 from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
 from argus.client.sct.types import EventsInfo
@@ -21,6 +23,15 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Argus:
+    """Process-wide handle to the current Argus client.
+
+    Exists so that low-level, thread-based consumers - namely ArgusEventCollector
+    (sdcm.sct_events.argus), which starts running before a client is available - can read
+    the current client without a direct reference to TestConfig, which owns it. Importing
+    TestConfig from here isn't an option: sdcm.test_config imports from
+    sdcm.sct_events.argus, so a reverse import would be circular.
+    """
+
     INSTANCE: Optional["Argus"] = None
 
     def __init__(self, client: ArgusSCTClient):
@@ -30,10 +41,13 @@ class Argus:
     def init_global(cls, client: ArgusSCTClient):
         """(Re-)point the process-wide Argus singleton at *client*.
 
-        Always overwrites. TestConfig.init_argus_client() can legitimately run more than
-        once per process (e.g. once during config resolution, again during test setUp) and
-        relies on the latest call winning - a one-shot guard here would leave this pointed
-        at a client from an earlier call that TestConfig has since closed.
+        In a real SCT run this is only ever called once, from
+        TestConfig.start_argus_event_pipeline() (itself called once, from
+        ClusterTester.init_argus_run()). It always overwrites rather than guarding with a
+        one-shot flag purely so that repeated calls stay safe/idempotent for callers
+        outside that single-call path - e.g. tests that reuse the TestConfig class across
+        cases, or standalone scripts (resources_cleanup.py, Argus.get(init_default=True))
+        that construct a client directly via get_argus_client(init_global=True).
         """
         cls.INSTANCE = cls(client)
 
@@ -101,7 +115,10 @@ def get_argus_client(
     if not is_uuid(run_id):
         raise ArgusError("Malformed UUID provided")
 
-    creds = KeyStore().get_argus_rest_credentials_per_provider()
+    try:
+        creds = KeyStore().get_argus_rest_credentials_per_provider()
+    except (ClientError, KeyError, json.JSONDecodeError) as exc:
+        raise ArgusError(f"Failed to fetch Argus credentials: {exc}") from exc
     # The replay log is always created, so a real log_dir is required. Callers that
     # care where it lands (e.g. so logcollector picks it up) should pass log_dir
     # explicitly; otherwise it falls back to a temp dir.

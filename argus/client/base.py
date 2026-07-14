@@ -1,3 +1,4 @@
+import functools
 import re
 import logging
 from dataclasses import asdict
@@ -15,6 +16,25 @@ from argus.client.sct.types import LogLink
 
 JSON = dict[str, Any] | list[Any] | int | str | float | bool | Type[None]
 LOGGER = logging.getLogger(__name__)
+
+
+def _evaluate_response(response: requests.Response) -> tuple[bool, str | None]:
+    """Classify an Argus HTTP response into ``(success, error)`` for the replay log.
+
+    Only a response with ``response.ok`` true (status < 400) and a JSON body
+    with ``status == "ok"`` counts as success. A non-2xx/3xx status, a non-JSON
+    body (auth proxy, gateway error), or ``{"status": "error", ...}`` is a
+    failure that a replay tool should re-send.
+    """
+    if not response.ok:
+        return False, f"HTTP {response.status_code}"
+    try:
+        payload = response.json()
+    except ValueError:
+        return False, f"HTTP {response.status_code} non-JSON response"
+    if payload.get("status") == "ok":
+        return True, None
+    return False, f"HTTP {response.status_code} status={payload.get('status')!r}"
 
 
 class ArgusClientError(Exception):
@@ -169,18 +189,23 @@ class ArgusClient:
         params: dict = None,
         body: dict = None,
     ) -> requests.Response:
-        with self._replay_log.record("POST", endpoint, location_params, params, body) as rec:
-            if self._replay_log_only:
-                # Record the request so a future replay can re-send it, but
-                # skip the HTTP call. ``rec`` stays at success=False (default).
-                LOGGER.debug("POST [replay-log-only] %s body: %s", endpoint, body)
-                return ReplayLogOnlyResponse(endpoint=endpoint)
+        record = functools.partial(
+            self._replay_log.write, "POST", endpoint, location_params, params, body
+        )
 
-            url = self.get_url_for_endpoint(
-                endpoint=endpoint,
-                location_params=location_params
-            )
-            LOGGER.debug("POST Request: %s, params: %s, body: %s", url, params, body)
+        if self._replay_log_only:
+            # Record the request so a future replay can re-send it, but skip
+            # the HTTP call. Not sent means not successful.
+            LOGGER.debug("POST [replay-log-only] %s body: %s", endpoint, body)
+            record(success=False)
+            return ReplayLogOnlyResponse(endpoint=endpoint)
+
+        url = self.get_url_for_endpoint(
+            endpoint=endpoint,
+            location_params=location_params
+        )
+        LOGGER.debug("POST Request: %s, params: %s, body: %s", url, params, body)
+        try:
             response = self.session.post(
                 url=url,
                 params=params,
@@ -188,9 +213,13 @@ class ArgusClient:
                 headers=self.request_headers,
                 timeout=self._timeout
             )
-            LOGGER.debug("POST Response: %s %s", response.status_code, response.url)
-            rec.record(response)
-            return response
+        except Exception as exc:
+            record(success=False, error=f"{type(exc).__name__}: {exc}")
+            raise
+        LOGGER.debug("POST Response: %s %s", response.status_code, response.url)
+        success, error = _evaluate_response(response)
+        record(success=success, error=error)
+        return response
 
     def submit_run(self, run_type: str, run_body: dict) -> requests.Response:
         return self.post(endpoint=self.Routes.SUBMIT, location_params={"type": run_type}, body={

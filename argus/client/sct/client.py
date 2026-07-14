@@ -32,7 +32,7 @@ class ArgusSCTClient(ArgusClient):
         SUBMIT_EVENTS = "/sct/$id/events/submit"
         SUBMIT_EVENT = "/sct/$id/event/submit"
         SUBMIT_JUNIT_REPORT = "/sct/$id/junit/submit"
-        SUBMIT_STRESS_CMD = "/sct/$id//stress_cmd/submit"
+        SUBMIT_STRESS_CMD = "/sct/$id/stress_cmd/submit"
         SUBMIT_EMAIL = "/testrun/report/email"
         SUBMIT_CONFIG = "/$id/config/submit"
 

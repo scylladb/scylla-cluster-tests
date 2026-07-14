@@ -43,11 +43,13 @@ SCTArgusEventKey = NewType("SCTArgusEventKey", Tuple[str, ...])
 
 class ArgusEventCollector(EventsProcessPipe[Tuple[str, Any], SCTArgusEvent]):
     def run(self) -> None:
-        # Resolved fresh per event rather than once at thread-start: this thread is
-        # started (via the autouse pytest event_system fixture / start_events_device())
-        # before TestConfig.start_argus_event_pipeline() calls Argus.init_global() in
-        # ClusterTester.setUp(), so a one-time check here would almost always see
-        # Argus.get() return None and cache run_id=None for the entire test.
+        # Resolved fresh per event rather than once at thread-start: this is a real
+        # ordering issue in production, not just under test doubles. ClusterTester's
+        # own `event_system` pytest fixture (sdcm/tester.py) starts this thread via
+        # start_events_device() before setUp() reaches init_argus_run() ->
+        # start_argus_event_pipeline() -> Argus.init_global() - so a one-time check here
+        # would almost always see Argus.get() return None and cache run_id=None for the
+        # entire test.
         for event_tuple in self.inbound_events():
             with verbose_suppress("ArgusEventCollector failed to process %s", event_tuple):
                 event_class, event = event_tuple  # try to unpack event from EventsDevice
