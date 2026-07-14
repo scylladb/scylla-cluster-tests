@@ -418,6 +418,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def __init__(self, methodName="runTest"):
         self.result = None
         super().__init__(methodName=methodName)
+        self.prepare_phase_active = threading.Event()
 
     def _init_test_duration(self):
         self._stress_duration: int = self.params.get("stress_duration")
