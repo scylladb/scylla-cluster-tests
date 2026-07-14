@@ -1,7 +1,7 @@
 import json
+from unittest.mock import MagicMock
 
 import pytest
-from unittest.mock import MagicMock
 
 from sdcm.cluster_gce import GCENode
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
@@ -33,6 +33,13 @@ def _make_gce_iface(ip, public_ip=None):
     else:
         iface.access_configs = []
     return iface
+
+
+class FakeRefreshNode:
+    def __init__(self, scylla_network_configuration=None, network_interfaces=None):
+        self.network_configuration = {"old": "data"}
+        self.scylla_network_configuration = scylla_network_configuration
+        self.network_interfaces = network_interfaces or []
 
 
 def test_gce_node_network_interfaces_with_remoter_and_device_names():
@@ -139,12 +146,7 @@ def test_gce_network_configuration_without_remoter():
 
 
 def test_gce_refresh_network_interfaces_info():
-    class FakeNode:
-        network_configuration = {"old": "data"}
-        scylla_network_configuration = MagicMock()
-        network_interfaces = [MagicMock()]
-
-    node = FakeNode()
+    node = FakeRefreshNode(scylla_network_configuration=MagicMock(), network_interfaces=[MagicMock()])
     GCENode.refresh_network_interfaces_info(node)
 
     assert not hasattr(node, "network_configuration") or "network_configuration" not in node.__dict__
@@ -152,11 +154,7 @@ def test_gce_refresh_network_interfaces_info():
 
 
 def test_gce_refresh_network_interfaces_info_no_scylla_config():
-    class FakeNode:
-        scylla_network_configuration = None
-        network_interfaces = []
-
-    node = FakeNode()
+    node = FakeRefreshNode(scylla_network_configuration=None)
     GCENode.refresh_network_interfaces_info(node)
 
 

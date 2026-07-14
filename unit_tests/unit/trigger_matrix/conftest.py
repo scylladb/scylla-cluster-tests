@@ -17,6 +17,11 @@ import yaml
 from sdcm.utils.trigger_matrix import JobConfig
 
 
+@pytest.fixture(autouse=True)
+def disable_trigger_matrix_email(monkeypatch):
+    monkeypatch.setattr("sdcm.utils.trigger_matrix.send_trigger_matrix_email", lambda *args, **kwargs: None)
+
+
 @pytest.fixture()
 def sample_matrix_yaml(tmp_path):
     """Create a sample YAML matrix file and return its path."""

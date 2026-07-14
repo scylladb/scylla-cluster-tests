@@ -23,7 +23,7 @@ from sdcm.utils.trigger_matrix import (
     load_matrix_config,
 )
 
-ROLLING_UPGRADE_YAML = Path(__file__).parent.parent.parent / "configurations" / "triggers" / "rolling-upgrade.yaml"
+ROLLING_UPGRADE_YAML = Path(__file__).parents[3] / "configurations" / "triggers" / "rolling-upgrade.yaml"
 
 
 @pytest.mark.parametrize(

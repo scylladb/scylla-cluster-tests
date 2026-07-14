@@ -17,7 +17,8 @@ import pytest
 
 from sdcm.utils.trigger_matrix import load_matrix_config
 
-TRIGGERS_DIR = Path(__file__).parent.parent.parent / "configurations" / "triggers"
+PROJECT_ROOT = Path(__file__).parents[3]
+TRIGGERS_DIR = PROJECT_ROOT / "configurations" / "triggers"
 
 
 @pytest.mark.parametrize(
@@ -57,7 +58,7 @@ def test_yaml_jobs_have_required_fields(filename):
     ],
 )
 def test_new_yaml_loads_successfully(filename):
-    path = Path(__file__).parent.parent.parent / filename
+    path = PROJECT_ROOT / filename
     if not path.exists():
         pytest.skip(f"{filename} not found")
     config = load_matrix_config(path)
@@ -65,7 +66,7 @@ def test_new_yaml_loads_successfully(filename):
 
 
 def test_scylla_doctor_gating_has_wait_true():
-    path = Path(__file__).parent.parent.parent / "configurations/triggers/scylla-doctor-gating.yaml"
+    path = PROJECT_ROOT / "configurations/triggers/scylla-doctor-gating.yaml"
     if not path.exists():
         pytest.skip("scylla-doctor-gating.yaml not found")
     config = load_matrix_config(path)
@@ -75,7 +76,7 @@ def test_scylla_doctor_gating_has_wait_true():
 
 
 def test_pgo_has_wait_false():
-    path = Path(__file__).parent.parent.parent / "configurations/triggers/pgo-offline-installer.yaml"
+    path = PROJECT_ROOT / "configurations/triggers/pgo-offline-installer.yaml"
     if not path.exists():
         pytest.skip("pgo-offline-installer.yaml not found")
     config = load_matrix_config(path)
