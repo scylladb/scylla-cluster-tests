@@ -17,7 +17,7 @@ from sdcm.provision.common.configuration_script import ConfigurationScriptBuilde
 from sdcm.sct_events import Severity
 from sdcm.sct_events.argus import enable_argus_posting, start_posting_argus_events
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.utils.argus import ArgusError, ReplayOnlyArgusSCTClient, get_argus_client
+from sdcm.utils.argus import Argus, ArgusError, ReplayOnlyArgusSCTClient, get_argus_client
 from sdcm.utils.ci_tools import get_job_name
 from sdcm.utils.net import get_my_ip
 from sdcm.utils.decorators import retrying
@@ -61,6 +61,7 @@ class TestConfig(metaclass=Singleton):
     _latency_results_file_path = None
     _tester_obj = None
     _argus_client: ArgusSCTClient | None = None
+    _argus_client_resolved: bool = False
 
     backup_azure_blob_credentials = {}
 
@@ -355,39 +356,96 @@ class TestConfig(metaclass=Singleton):
         return ReplayOnlyArgusSCTClient(run_id=run_id, log_dir=cls.logdir())
 
     @classmethod
-    def init_argus_client(cls, params: dict, test_id: str | None = None):
-        # A replay-only client may have been lazily created by argus_client();
-        # close it before replacing so its writer thread and atexit handler are
-        # not orphaned.
+    def _close_argus_client(cls) -> None:
+        # Closing avoids orphaning the client's replay-log writer thread and atexit handler.
         if cls._argus_client is not None:
             try:
                 cls._argus_client.close()
             except Exception:  # noqa: BLE001
-                LOGGER.warning("Failed to close existing Argus client before re-init", exc_info=True)
+                LOGGER.warning("Failed to close existing Argus client", exc_info=True)
             cls._argus_client = None
+
+    @classmethod
+    @retrying(n=3, sleep_time=5, allowed_exceptions=(ArgusError,))
+    def _connect_argus_client(cls, run_id: str, params: dict) -> ArgusSCTClient:
+        return get_argus_client(
+            run_id=run_id,
+            use_tunnel=params.get("argus_use_ssh_tunnel"),
+            log_dir=cls.logdir(),
+            # Argus.init_global() must only happen in start_argus_event_pipeline() -
+            # get_argus_client() defaults to wiring it as a side effect of a successful
+            # connection, which would prematurely wire the singleton from this method's
+            # caller (SCTConfiguration.update_argus_with_version(), during config
+            # resolution), even though that caller never wires the event pipeline itself.
+            init_global=False,
+        )
+
+    @classmethod
+    def init_argus_client(cls, params: dict, test_id: str | None = None) -> None:
+        """Resolve cls._argus_client once per process - real if Argus is enabled and
+        reachable, replay-only otherwise - and stick with that decision for good.
+
+        This is called from more than one place for the same test run
+        (SCTConfiguration.update_argus_with_version() during config resolution, then
+        ClusterTester.init_argus_run() at the actual start of the test); test_id is fixed
+        for the whole process before either call, so there's nothing to gain from
+        re-resolving on a later call - it would just be either a no-op re-connect to the
+        same run, or throwing away a working connection for no reason. A transient
+        connection failure is instead retried *within* this call (see
+        _connect_argus_client above); once that's exhausted, the run stays in
+        replay-only mode rather than trying again on a later call - every intended
+        submission is still captured in the replay log for later bulk push either way.
+        """
+        if cls._argus_client_resolved:
+            return
+
+        run_id = test_id or cls.test_id()
+        real_client = None
         if params.get("enable_argus") and get_job_name() != "local_run":
             LOGGER.info("Initializing Argus connection...")
             try:
-                cls._argus_client = get_argus_client(
-                    run_id=cls.test_id() if not test_id else test_id,
-                    use_tunnel=params.get("argus_use_ssh_tunnel"),
-                    log_dir=cls.logdir(),
-                )
-                enable_argus_posting()
-                start_posting_argus_events()
-                return
+                real_client = cls._connect_argus_client(run_id=run_id, params=params)
             except ArgusError as exc:
                 LOGGER.warning("Failed to initialize argus client, falling back to replay-only mode: %s", exc.message)
-            except RuntimeError as exc:
-                LOGGER.warning("Skipping setting up argus events: %s", exc)
-                return
 
-        # Argus is disabled by configuration or initialization failed —
-        # use replay-only mode so all intended API calls are still captured
-        cls._argus_client = cls._create_replay_only_client(test_id=test_id)
-        TestFrameworkEvent(
-            source=cls.__name__,
-            source_method="init_argus_client",
-            message="Argus is disabled by configuration, using replay-only mode",
-            severity=Severity.WARNING,
-        ).publish_or_dump()
+        # Replace whatever's there now - e.g. a replay-only client lazily created by
+        # argus_client() before this ran - closing it first so its writer thread and
+        # atexit handler aren't orphaned.
+        cls._close_argus_client()
+        cls._argus_client = real_client or cls._create_replay_only_client(test_id=run_id)
+        cls._argus_client_resolved = True
+
+    @classmethod
+    def start_argus_event_pipeline(cls) -> None:
+        """Wire the real-time event pipeline (collector/aggregator/postman) to whatever
+        client init_argus_client() resolved, so events raised during the run reach at
+        least the replay log for later bulk push - instead of being silently dropped, the
+        way they were when nothing wired the pipeline up in replay-only mode.
+
+        Call this once, at the actual start of a test (ClusterTester.init_argus_run()) -
+        not from init_argus_client()'s other caller (SCTConfiguration's config-resolution
+        path), which only needs a client for a couple of synchronous submissions and has
+        no business touching the live event pipeline.
+        """
+        try:
+            Argus.init_global(cls._argus_client)
+            enable_argus_posting()
+            start_posting_argus_events()
+        except (RuntimeError, AttributeError) as exc:
+            # RuntimeError: no default events-processes registry exists yet at all.
+            # AttributeError: the registry exists but the argus postman process isn't
+            # registered in it yet - get_events_process() returns None instead of raising,
+            # and enable_argus_posting()/start_posting_argus_events() call straight into it.
+            # Either way, the events pipeline isn't ready; skip wiring it rather than block
+            # setUp() waiting on it - in production the event_system fixture always starts
+            # it before init_argus_run() gets here (see ArgusEventCollector.run()), so this
+            # only fires for callers with a non-standard startup order.
+            LOGGER.warning("Skipping setting up argus events: %s", exc)
+
+        if isinstance(cls._argus_client, ReplayOnlyArgusSCTClient):
+            TestFrameworkEvent(
+                source=cls.__name__,
+                source_method="start_argus_event_pipeline",
+                message="Argus is disabled by configuration, using replay-only mode",
+                severity=Severity.WARNING,
+            ).publish_or_dump()
