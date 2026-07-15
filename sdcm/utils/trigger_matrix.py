@@ -77,6 +77,9 @@ FULL_VERSION_TAG_RE = re.compile(
     r"[~-][a-zA-Z0-9._~]+-?\d*\.\d{8}\.[0-9a-f]+(?:-\d+)?$"
 )
 
+# Regex for release version strings like: 2026.1.8, 2025.4.1 (three-part, specific release)
+RELEASE_VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
+
 # Regex for simple version strings like: 2025.4, 2025.4.0, 5.2.1
 SIMPLE_VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)(?:\.\d+)?$")
 
@@ -121,6 +124,9 @@ def resolve_to_full_version(
         TriggerMatrixError: If the version cannot be resolved.
     """
     if is_full_version_tag(scylla_version):
+        return scylla_version
+
+    if RELEASE_VERSION_RE.match(scylla_version):
         return scylla_version
 
     # For branch:qualifier or simple versions, resolve via AMI lookup
