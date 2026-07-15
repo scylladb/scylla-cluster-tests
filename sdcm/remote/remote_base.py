@@ -248,10 +248,10 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         try_scp = True
         if self.use_rsync():
             try:
-                remote_source = self._encode_remote_paths(src)
+                remote_sources = self._encode_rsync_remote_paths(src)
                 local_dest = quote(dst)
                 rsync = self._make_rsync_cmd(
-                    [remote_source], local_dest, delete_dst, preserve_symlinks, timeout, sudo=sudo
+                    remote_sources, local_dest, delete_dst, preserve_symlinks, timeout, sudo=sudo
                 )
                 result = LocalCmdRunner().run(rsync, timeout=timeout)
                 self.log.debug(result.exited)
@@ -364,7 +364,9 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         if self.use_rsync():
             try:
                 local_sources = [quote(os.path.expanduser(path)) for path in src]
-                rsync = self._make_rsync_cmd(local_sources, remote_dest, delete_dst, preserve_symlinks, sudo=sudo)
+                rsync = self._make_rsync_cmd(
+                    local_sources, self._encode_rsync_remote_paths([dst])[0], delete_dst, preserve_symlinks, sudo=sudo
+                )
                 LocalCmdRunner().run(rsync)
                 try_scp = False
             except (self.exception_failure, self.exception_unexpected) as details:
@@ -464,6 +466,18 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
         if escape:
             paths = [self._scp_remote_escape(path) for path in paths]
         return '%s@[%s]:"%s"' % (self.user, self.hostname, " ".join(paths))
+
+    def _encode_rsync_remote_paths(self, paths: List[str]) -> List[str]:
+        """
+        Build rsync remote path args, one per path:
+        - first path is full: user@[host]:path
+        - remaining paths are short: :path (same remote host)
+
+        quote() is applied to each full path for local shell safety.
+        """
+        first_path = f"{self.user}@[{self.hostname}]:{paths[0]}"
+        other_paths = (f":{path}" for path in paths[1:])
+        return [quote(spec) for spec in (first_path, *other_paths)]
 
     def _make_scp_cmd(self, src: str, dst: str, connect_timeout: int = 300, alive_interval: int = 300) -> str:
         """
@@ -623,7 +637,8 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
             sudo_cmd = "--rsync-path='sudo rsync'"
         else:
             sudo_cmd = ""
-        command = "rsync %s %s %s --timeout=%s --rsh='%s' -az %s %s"
+        # --secluded-args sends paths over the rsync protocol instead of the remote shell command line
+        command = "rsync --secluded-args %s %s %s --timeout=%s --rsh='%s' -az %s %s"
         return command % (symlink_flag, sudo_cmd, delete_flag, timeout, ssh_cmd, " ".join(src), dst)
 
     def _make_proxy_cmd(self):
