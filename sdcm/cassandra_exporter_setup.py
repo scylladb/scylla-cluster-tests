@@ -1,4 +1,5 @@
 from sdcm.remote import shell_script_cmd
+from sdcm.utils.curl import curl_with_retry
 
 CASSANDRA_EXPORTER_VERSION = "2.3.8"
 CASSANDRA_EXPORTER_PORT = 8080
@@ -18,11 +19,15 @@ class CassandraExporterSetup:
         assert node or remoter, "node or remoter must be passed to this function"
         if node:
             remoter = node.remoter
+        download_url = (
+            f"https://github.com/criteo/cassandra_exporter/releases/download/{CASSANDRA_EXPORTER_VERSION}/"
+            f"cassandra_exporter-{CASSANDRA_EXPORTER_VERSION}.jar"
+        )
+        download_cmd = curl_with_retry(download_url, follow_redirects=True, output="/opt/cassandra_exporter.jar")
         remoter.sudo(
             shell_script_cmd(f"""
             # Download Criteo cassandra_exporter
-            curl -L --retry 5 --retry-max-time 300 -o /opt/cassandra_exporter.jar \
-                https://github.com/criteo/cassandra_exporter/releases/download/{CASSANDRA_EXPORTER_VERSION}/cassandra_exporter-{CASSANDRA_EXPORTER_VERSION}.jar
+            {download_cmd}
 
             # Create config file
             cat > /etc/cassandra_exporter.yml <<'EXPORTER_CONFIG'

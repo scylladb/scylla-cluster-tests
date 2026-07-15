@@ -30,6 +30,7 @@ from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.remote.remote_file import remote_file, dict_to_yaml_file, yaml_file_to_dict
 from sdcm.sct_config import TestConfig
 from sdcm.utils.common import raise_exception_in_thread
+from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.decorators import log_run_info, optional_stage
 from sdcm.utils.raft import NoRaft
 
@@ -543,9 +544,15 @@ class BaseCassandraCluster:
         major = int(version.split(".")[0])
         minor = int(version.split(".")[1])
         dist_name = f"{major}{minor}x"  # e.g., "41x" for 4.1, "50x" for 5.0
+        cassandra_keys_curl = curl_with_retry(
+            "https://downloads.apache.org/cassandra/KEYS",
+            silent=True,
+            follow_redirects=True,
+            fail_early=True,
+            extra_flags="-S",
+        )
         node.remoter.sudo(
-            "bash -c 'curl -fsSL https://downloads.apache.org/cassandra/KEYS "
-            "| tee /etc/apt/trusted.gpg.d/cassandra.asc > /dev/null'",
+            f"bash -c '{cassandra_keys_curl} | tee /etc/apt/trusted.gpg.d/cassandra.asc > /dev/null'",
             retry=3,
         )
         node.remoter.sudo(

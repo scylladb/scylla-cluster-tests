@@ -29,7 +29,7 @@ from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.decorators import retrying
 from sdcm.nemesis.utils.indexes import create_index, verify_query_by_index_works, wait_for_index_to_be_built
-from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+from sdcm.utils.tablets.common import wait_tablets_balanced
 from threading import Thread
 
 
@@ -165,8 +165,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         self.db_cluster.set_seeds()
         self.db_cluster.update_seed_provider()
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
-        for node in self.db_cluster.nodes:
-            wait_no_tablets_migration_running(node, timeout=7200)
+        wait_tablets_balanced(self.db_cluster.data_nodes[0], timeout=7200)
 
     def get_compactions(self, node: BaseNode, interval: int) -> int:
         """

@@ -158,7 +158,7 @@ from sdcm.nemesis.utils.node_allocator import NemesisNodeAllocator, NemesisNodeA
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.sstable.sstable_utils import SstableUtils
-from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+from sdcm.utils.tablets.common import wait_tablets_balanced
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions, ComparableScyllaVersion
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
@@ -3872,7 +3872,7 @@ class NemesisRunner:
     def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:
         nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type)
         self.actions_log.info(f"New nodes added: {', '.join(node.name for node in nodes)}")
-        ParallelObject(objects=self.cluster.data_nodes, timeout=7200).run(wait_no_tablets_migration_running)
+        wait_tablets_balanced(self.cluster.data_nodes[0])
         return nodes
 
     @latency_calculator_decorator(legend="Decommission nodes: remove nodes from cluster")
@@ -4234,11 +4234,18 @@ class NemesisRunner:
         else:
             context_manager = contextlib.nullcontext()
 
+        # Build a regex pattern that handles multiple Scylla log formats across versions.
+        # Scylla may log the reloaded cert path in different ways:
+        #   - messaging_service - Reloaded {"/etc/scylla/ssl_conf/db.crt"}     (quoted, single file)
+        #   - messaging_service - Reloaded {/etc/scylla/ssl_conf/db.crt}       (unquoted)
+        #   - messaging_service - Reloaded {"/path/db.crt", "/path/db.key"}    (multiple files)
+        # Use re.escape on the path and match it anywhere after "Reloaded".
+        escaped_cert_path = re.escape(ssl_files_location)
+        ssl_reload_pattern = re.compile(rf"messaging_service - Reloaded.*{escaped_cert_path}", re.IGNORECASE)
+
         with context_manager:
             for node in self.cluster.nodes:
-                node_system_logs[node] = node.follow_system_log(
-                    patterns=[f'messaging_service - Reloaded {{"{ssl_files_location}"}}']
-                )
+                node_system_logs[node] = node.follow_system_log(patterns=[ssl_reload_pattern])
                 update_certificate(node)
                 node.remoter.send_files(src=str(node.ssl_conf_dir / TLSAssets.DB_CERT), dst="/tmp")
                 self.actions_log.info(f"Update certificate file on {node.name} node")
