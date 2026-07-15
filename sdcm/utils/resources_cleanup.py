@@ -31,7 +31,12 @@ from sdcm.provision.oci.constants import TAG_NAMESPACE
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
-from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
+from sdcm.utils.argus import (
+    ArgusError,
+    get_argus_client,
+    get_argus_use_tunnel_from_env,
+    terminate_resource_in_argus,
+)
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_region import GceRegion
@@ -72,9 +77,11 @@ from sdcm.utils.oci_utils import (
 LOGGER = logging.getLogger("utils")
 
 
-def init_argus_client(test_id: str):
+def init_argus_client(test_id: str, use_tunnel: bool | None = None):
+    if use_tunnel is None:
+        use_tunnel = get_argus_use_tunnel_from_env()
     try:
-        argus_client = get_argus_client(run_id=test_id)
+        argus_client = get_argus_client(run_id=test_id, use_tunnel=use_tunnel)
     except ArgusError as exc:
         LOGGER.warning("Unable to initialize Argus: %s", exc.message)
         argus_client = MagicMock()
