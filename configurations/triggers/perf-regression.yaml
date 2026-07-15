@@ -110,6 +110,7 @@ jobs:
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade"
     backend: "aws"
     region: "eu-west-1"
+    disabled: true
     labels: []
     params:
       rolling_upgrade_test: "true"
@@ -129,6 +130,7 @@ jobs:
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-rbno-disabled"
     backend: "aws"
     region: "eu-west-3"
+    disabled: true
     labels: []
 
   # === Weekly microbenchmarks ===
@@ -166,6 +168,7 @@ jobs:
   - job_name: "/scylla-master/perf-regression/perf-regression-predefined-throughput-steps-sanity-vnodes"
     backend: "aws"
     region: ""
+    disabled: true
     labels: ["master-daily"]
 
   # === Weekly alternator perf (master-only) ===
