@@ -701,6 +701,10 @@ def build_job_parameters(
     if job.region:
         params.setdefault("region", job.region)
 
+    is_rolling_upgrade = str(params.get("rolling_upgrade_test", "")).lower() == "true"
+    if is_rolling_upgrade:
+        params["scylla_version"] = ""
+
     # Resolve {branch} templates — use the original version (e.g., "master:latest")
     # not the resolved full tag (e.g., "2026.3.0~dev-...") which yields "2026.3".
     branch = _extract_branch_from_version(branch_source_version or scylla_version)

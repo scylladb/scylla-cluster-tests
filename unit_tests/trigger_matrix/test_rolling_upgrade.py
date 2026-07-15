@@ -160,3 +160,51 @@ def test_branch_source_version_none_falls_back_to_scylla_version():
     )
     params = build_job_parameters(job, {}, "2025.4.1-0.20250601.abc123def456-1", {}, branch_source_version=None)
     assert params["new_scylla_repo"] == "http://repo/2025.4/rpm/scylla.repo"
+
+
+def test_rolling_upgrade_test_clears_scylla_version():
+    """When rolling_upgrade_test is true, scylla_version is sent empty."""
+    job = JobConfig(
+        job_name="perf-regression/rolling-upgrade-test",
+        backend="aws",
+        region="eu-west-1",
+        params={
+            "rolling_upgrade_test": "true",
+            "new_scylla_repo": "http://downloads/{branch}/deb/scylla.list",
+        },
+    )
+    params = build_job_parameters(
+        job, {}, "2026.3.0~dev-0.20260710.9cda315bbab0", {}, branch_source_version="master:latest"
+    )
+    assert params["scylla_version"] == ""
+    assert params["new_scylla_repo"] == "http://downloads/master/deb/scylla.list"
+    assert params["rolling_upgrade_test"] == "true"
+
+
+def test_rolling_upgrade_test_keeps_base_versions_from_override():
+    """base_versions from CLI overrides is passed to rolling upgrade jobs."""
+    job = JobConfig(
+        job_name="perf-regression/rolling-upgrade-test",
+        backend="aws",
+        region="eu-west-1",
+        params={
+            "rolling_upgrade_test": "true",
+            "new_scylla_repo": "http://downloads/{branch}/deb/scylla.list",
+        },
+    )
+    overrides = {"base_versions": "2025.1,2025.2"}
+    params = build_job_parameters(job, {}, "master:latest", overrides)
+    assert params["scylla_version"] == ""
+    assert params["base_versions"] == "2025.1,2025.2"
+
+
+def test_non_rolling_upgrade_keeps_scylla_version():
+    """Non-rolling-upgrade jobs still get scylla_version set normally."""
+    job = JobConfig(
+        job_name="perf-regression/throughput-test",
+        backend="aws",
+        region="us-east-1",
+        params={"sub_tests": '["test_read"]'},
+    )
+    params = build_job_parameters(job, {}, "2026.3.0~dev-0.20260710.9cda315bbab0", {})
+    assert params["scylla_version"] == "2026.3.0~dev-0.20260710.9cda315bbab0"

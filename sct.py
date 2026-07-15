@@ -3219,6 +3219,14 @@ def hdr_investigate(
     type=str,
     help="Scylla repo URL for rolling-upgrade jobs (RPM .repo or DEB .list). Overrides per-job template values.",
 )
+@click.option(
+    "--base-versions",
+    default=None,
+    type=str,
+    help="Passed from scylla-pkg release triggers. Only relevant for rolling upgrade tests. "
+    "Comma-separated base versions to upgrade FROM (e.g., '2025.1,2025.2'). "
+    "When empty, the downstream job auto-selects base versions.",
+)
 @click.option("--dry-run", is_flag=True, default=False, help="Preview mode — do not trigger jobs")
 @click.option(
     "--use-job-throttling/--no-use-job-throttling",
@@ -3247,6 +3255,7 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
     oci_image_db,
     unified_package,
     new_scylla_repo,
+    base_versions,
     dry_run,
     use_job_throttling,
     requested_by_user,
@@ -3316,6 +3325,8 @@ def trigger_matrix_cmd(  # noqa: PLR0912, PLR0913
         overrides["unified_package"] = unified_package
     if new_scylla_repo:
         overrides["new_scylla_repo"] = new_scylla_repo
+    if base_versions:
+        overrides["base_versions"] = base_versions
     if use_job_throttling is not None:
         overrides["use_job_throttling"] = use_job_throttling
 
