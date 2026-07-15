@@ -43,15 +43,20 @@ SCTArgusEventKey = NewType("SCTArgusEventKey", Tuple[str, ...])
 
 class ArgusEventCollector(EventsProcessPipe[Tuple[str, Any], SCTArgusEvent]):
     def run(self) -> None:
-        if Argus.get() and (client := Argus.get().client):
-            run_id = client.run_id
-        else:
-            run_id = None
+        # Resolved fresh per event rather than once at thread-start: this is a real
+        # ordering issue in production, not just under test doubles. ClusterTester's
+        # own `event_system` pytest fixture (sdcm/tester.py) starts this thread via
+        # start_events_device() before setUp() reaches init_argus_run() ->
+        # start_argus_event_pipeline() -> Argus.init_global() - so a one-time check here
+        # would almost always see Argus.get() return None and cache run_id=None for the
+        # entire test.
         for event_tuple in self.inbound_events():
             with verbose_suppress("ArgusEventCollector failed to process %s", event_tuple):
                 event_class, event = event_tuple  # try to unpack event from EventsDevice
                 if not event.publish_to_argus:
                     continue
+                argus = Argus.get()
+                run_id = argus.client.run_id if argus and argus.client else None
                 evt = SCTArgusEvent(
                     {
                         "run_id": run_id,
