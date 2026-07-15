@@ -526,6 +526,26 @@ class TestGatherFailureStatistics:
         tester.teardown_events_processes()
 
 
+def test_teardown_without_params_runs_reduced_teardown(tmp_path, caplog):
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_teardown_no_params")
+    tester.logdir = str(tmp_path)
+    tester.clean_resources = MagicMock()
+
+    assert not hasattr(tester, "params"), "params must be unset to simulate an early setUp failure"
+
+    tester.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
+    try:
+        with caplog.at_level(logging.INFO):
+            tester.tearDown()
+        assert not tester.events["ERROR"], f"reduced teardown emitted errors: {tester.events['ERROR']}"
+    finally:
+        tester.teardown_events_processes()
+
+    assert "running reduced teardown" in caplog.text
+    tester.clean_resources.assert_not_called()
+
+
 class TestSaveSchema:
     """Tests for the save_schema functionality."""
 
