@@ -187,3 +187,13 @@ def test_pre_release_checks_resolved_version():
     assert len(result) == 1
     result = filter_jobs(jobs, scylla_version="2025.1:latest", resolved_version="2025.1.3-0.abc")
     assert len(result) == 0
+
+
+def test_disabled_jobs_are_skipped():
+    jobs = [
+        JobConfig(job_name="active-job", backend="aws", region=""),
+        JobConfig(job_name="disabled-job", backend="aws", region="", disabled=True),
+    ]
+    result = filter_jobs(jobs, scylla_version="2025.4")
+    assert len(result) == 1
+    assert result[0].job_name == "active-job"

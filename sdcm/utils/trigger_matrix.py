@@ -321,6 +321,7 @@ class JobConfig(BaseModel):
     job_name: str
     backend: Literal["aws", "gce", "azure", "docker", "oci"]
     region: str = ""
+    disabled: bool = False
     labels: list[str] = Field(default_factory=list)
     include_versions: list[str] = Field(default_factory=list)
     exclude_versions: list[str] = Field(default_factory=list)
@@ -525,6 +526,10 @@ def filter_jobs(
 
     result = []
     for job in jobs:
+        if job.disabled:
+            logger.debug("Skipping job '%s': disabled", job.job_name)
+            continue
+
         # Skip by name
         if job.job_name in skip_set:
             logger.debug("Skipping job '%s': in skip list", job.job_name)
