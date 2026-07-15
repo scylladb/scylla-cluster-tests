@@ -71,7 +71,12 @@ from sdcm.sct_runner import (
 
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
-from sdcm.utils.argus import argus_offline_collect_events, create_proxy_argus_s3_url, get_argus_client
+from sdcm.utils.argus import (
+    argus_offline_collect_events,
+    create_proxy_argus_s3_url,
+    get_argus_client,
+    get_argus_use_tunnel_from_env,
+)
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
@@ -1583,6 +1588,7 @@ def show_log(test_id, output_format, update_argus: bool):
                 test_id=test_id,
                 logs=reduce(lambda acc, log: acc[log["type"]].append(log["link"]) or acc, files, defaultdict(list)),
                 update=True,
+                use_tunnel=get_argus_use_tunnel_from_env(),
             )
         except Exception:  # noqa: BLE001
             LOGGER.error("Error updating logs in argus.", exc_info=True)
@@ -1945,16 +1951,22 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
     # Always send collected logs to Argus, even if there were collection errors
     if collector.test_id:
-        store_logs_in_argus(test_id=UUID(collector.test_id), logs=collected_logs)
+        store_logs_in_argus(
+            test_id=UUID(collector.test_id),
+            logs=collected_logs,
+            use_tunnel=config.get("argus_use_ssh_tunnel") or False,
+        )
 
     # Raise error only after logs have been sent to Argus
     if collection_error:
         raise RuntimeError(collection_error)
 
 
-def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]], update: bool = False):
+def store_logs_in_argus(
+    test_id: UUID, logs: dict[str, list[list[str] | str]], update: bool = False, use_tunnel: bool = False
+):
     try:
-        argus_client = get_argus_client(run_id=test_id)
+        argus_client = get_argus_client(run_id=test_id, use_tunnel=use_tunnel)
         log_links = []
         existing_links = [name for [name, _] in argus_client.get_run().get("logs", [])] if update else []
         for log_name, s3_links in logs.items():
@@ -2020,7 +2032,7 @@ def send_email(  # noqa: PLR0914, PLR0912
     sct_config = SCTConfiguration()
     if sct_config.get("enable_argus_email_report"):
         LOGGER.info("Sending email for test %s...", test_id)
-        client = init_argus_client(os.environ.get("SCT_TEST_ID"))
+        client = init_argus_client(os.environ.get("SCT_TEST_ID"), use_tunnel=get_argus_use_tunnel_from_env())
         run = client.get_run()
         title_template_data = {**dict(sct_config), **run}
 
