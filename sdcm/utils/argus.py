@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 import os
+import tempfile
 from pathlib import Path
 import threading
 from typing import Optional
@@ -36,7 +37,11 @@ class Argus:
     @classmethod
     def get(cls, init_default=False) -> "Argus":
         if init_default and not cls.INIT_DONE.is_set():
-            cls.init_global(get_argus_client(run_id=os.environ.get("SCT_TEST_ID"), init_global=False))
+            cls.init_global(
+                get_argus_client(
+                    run_id=os.environ.get("SCT_TEST_ID"), init_global=False, use_tunnel=get_argus_use_tunnel_from_env()
+                )
+            )
         return cls.INSTANCE
 
     @property
@@ -54,6 +59,11 @@ class ArgusError(Exception):
         return self._message
 
 
+def get_argus_use_tunnel_from_env() -> bool:
+    val = os.environ.get("SCT_ARGUS_USE_SSH_TUNNEL", "false")
+    return val.lower() in ("true", "yes", "y", "1")
+
+
 def is_uuid(uuid) -> bool:
     if isinstance(uuid, UUID):
         return True
@@ -65,13 +75,22 @@ def is_uuid(uuid) -> bool:
         return False
 
 
-def get_argus_client(run_id: UUID | str, init_global=True) -> ArgusSCTClient:
+def get_argus_client(
+    run_id: UUID | str, use_tunnel: bool, init_global=True, log_dir: str | None = None
+) -> ArgusSCTClient:
     if not is_uuid(run_id):
         raise ArgusError("Malformed UUID provided")
 
     creds = KeyStore().get_argus_rest_credentials_per_provider()
+    # 0.16.0 always creates a request replay log, so a log_dir is required; default it
+    # to a temp dir since SCT does not rely on the replay log on this branch.
     argus_client = ArgusSCTClient(
-        run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers")
+        run_id=run_id,
+        auth_token=creds["token"],
+        base_url=creds["baseUrl"],
+        extra_headers=creds.get("extra_headers"),
+        use_tunnel=use_tunnel,
+        log_dir=log_dir or tempfile.gettempdir(),
     )
 
     if init_global:
