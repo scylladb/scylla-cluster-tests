@@ -7,7 +7,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, TYPE_CHECKING
-from unittest.mock import MagicMock
+from uuid import uuid4
 
 from argus.client.sct.client import ArgusSCTClient
 
@@ -17,7 +17,7 @@ from sdcm.provision.common.configuration_script import ConfigurationScriptBuilde
 from sdcm.sct_events import Severity
 from sdcm.sct_events.argus import enable_argus_posting, start_posting_argus_events
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.utils.argus import ArgusError, get_argus_client
+from sdcm.utils.argus import ArgusError, ReplayOnlyArgusSCTClient, get_argus_client
 from sdcm.utils.ci_tools import get_job_name
 from sdcm.utils.net import get_my_ip
 from sdcm.utils.decorators import retrying
@@ -60,7 +60,7 @@ class TestConfig(metaclass=Singleton):
     _latency_results_file_name = "latency_results.json"
     _latency_results_file_path = None
     _tester_obj = None
-    _argus_client: ArgusSCTClient | MagicMock = MagicMock()
+    _argus_client: ArgusSCTClient | None = None
 
     backup_azure_blob_credentials = {}
 
@@ -338,30 +338,56 @@ class TestConfig(metaclass=Singleton):
         cls.TEST_DURATION = duration
 
     @classmethod
-    def argus_client(cls) -> ArgusSCTClient | MagicMock:
+    def argus_client(cls) -> ArgusSCTClient:
+        if cls._argus_client is None:
+            cls._argus_client = cls._create_replay_only_client()
         return cls._argus_client
 
     @classmethod
+    def _create_replay_only_client(cls, test_id: str | None = None) -> ReplayOnlyArgusSCTClient:
+        """Create a replay-only Argus client.
+
+        All API calls are recorded to a JSONL replay log but no HTTP requests
+        are made. This replaces the previous MagicMock fallback, ensuring that
+        all intended Argus submissions are captured for later replay.
+        """
+        run_id = test_id or cls.test_id() or str(uuid4())
+        return ReplayOnlyArgusSCTClient(run_id=run_id, log_dir=cls.logdir())
+
+    @classmethod
     def init_argus_client(cls, params: dict, test_id: str | None = None):
+        # A replay-only client may have been lazily created by argus_client();
+        # close it before replacing so its writer thread and atexit handler are
+        # not orphaned.
+        if cls._argus_client is not None:
+            try:
+                cls._argus_client.close()
+            except Exception:  # noqa: BLE001
+                LOGGER.warning("Failed to close existing Argus client before re-init", exc_info=True)
+            cls._argus_client = None
         if params.get("enable_argus") and get_job_name() != "local_run":
             LOGGER.info("Initializing Argus connection...")
             try:
                 cls._argus_client = get_argus_client(
                     run_id=cls.test_id() if not test_id else test_id,
                     use_tunnel=params.get("argus_use_ssh_tunnel"),
+                    log_dir=cls.logdir(),
                 )
                 enable_argus_posting()
                 start_posting_argus_events()
                 return
             except ArgusError as exc:
-                LOGGER.warning("Failed to initialize argus client: %s", exc.message)
+                LOGGER.warning("Failed to initialize argus client, falling back to replay-only mode: %s", exc.message)
             except RuntimeError as exc:
                 LOGGER.warning("Skipping setting up argus events: %s", exc)
                 return
 
+        # Argus is disabled by configuration or initialization failed —
+        # use replay-only mode so all intended API calls are still captured
+        cls._argus_client = cls._create_replay_only_client(test_id=test_id)
         TestFrameworkEvent(
             source=cls.__name__,
             source_method="init_argus_client",
-            message="Argus is disabled by configuration",
+            message="Argus is disabled by configuration, using replay-only mode",
             severity=Severity.WARNING,
         ).publish_or_dump()
