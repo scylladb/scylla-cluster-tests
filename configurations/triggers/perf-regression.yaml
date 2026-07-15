@@ -57,33 +57,37 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-vnodes"
     backend: "aws"
-    region: "us-east-1"
+    region: "eu-west-2"
     include_versions: ["master"]
     labels: ["master-monthly"]
+    job_throttle_category: "SCT-perf-eu-west-2-i8g"
     params:
       sub_tests: '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_write_gradual_increase_load", "test_read_disk_only_gradual_increase_load"]'
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-vnodes"
     backend: "aws"
-    region: "us-east-1"
+    region: "eu-west-2"
     exclude_versions: ["2025.2", "2025.1", "2024.2", "2024.1", "master"]
     labels: []
+    job_throttle_category: "SCT-perf-eu-west-2-i8g"
     params:
       sub_tests: '["test_mixed_gradual_increase_load"]'
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-vnodes"
     backend: "aws"
-    region: "us-east-2"
+    region: "eu-north-1"
     include_versions: ["master"]
     labels: ["master-monthly"]
+    job_throttle_category: "SCT-perf-eu-north-1-i8g"
     params:
       sub_tests: '["test_latency_mixed_with_nemesis", "test_latency_read_with_nemesis", "test_latency_write_with_nemesis"]'
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-vnodes"
     backend: "aws"
-    region: "us-east-2"
+    region: "eu-west-1"
     exclude_versions: ["2025.2", "2025.1", "2024.2", "2024.1", "master"]
     labels: []
+    job_throttle_category: "SCT-perf-eu-west-1-i8g"
     params:
       sub_tests: '["test_latency_mixed_with_nemesis"]'
 
@@ -208,14 +212,16 @@ jobs:
     region: "us-east-1"
     include_versions: ["master"]
     labels: ["master-weekly"]
+    job_throttle_category: "SCT-perf-us-east-1-i8g"
     params:
       sub_tests: '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_write_gradual_increase_load", "test_read_disk_only_gradual_increase_load"]'
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-i8g-tablets"
     backend: "aws"
-    region: "us-east-1"
+    region: "us-west-2"
     exclude_versions: ["2025.2", "2025.1", "2024.1", "2024.2", "master"]
     labels: []
+    job_throttle_category: "SCT-perf-us-west-2-i8g"
     params:
       sub_tests: '["test_read_gradual_increase_load", "test_mixed_gradual_increase_load", "test_write_gradual_increase_load", "test_read_disk_only_gradual_increase_load"]'
 
@@ -262,18 +268,20 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets"
     backend: "aws"
-    region: "us-west-2"
+    region: "us-east-2"
     include_versions: ["master"]
     labels: ["master-3weeks"]
+    job_throttle_category: "SCT-perf-us-east-2-i8g"
     params:
       sub_tests: '["test_latency_mixed_with_upgrade"]'
       rolling_upgrade_test: "true"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-i8g-tablets"
     backend: "aws"
-    region: "us-west-2"
+    region: "eu-west-2"
     exclude_versions: ["2025.2", "2025.1", "2024.2", "2024.1", "master"]
     labels: []
+    job_throttle_category: "SCT-perf-eu-west-2-i8g"
     params:
       sub_tests: '["test_latency_mixed_with_upgrade"]'
       rolling_upgrade_test: "true"
@@ -282,17 +290,19 @@ jobs:
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets"
     backend: "aws"
-    region: "us-east-2"
+    region: "eu-north-1"
     include_versions: ["master"]
     labels: ["master-3weeks"]
+    job_throttle_category: "SCT-perf-eu-north-1-i8g"
     params:
       sub_tests: '["test_latency_mixed_with_nemesis"]'
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-i8g-tablets"
     backend: "aws"
-    region: "us-east-2"
+    region: "eu-west-2"
     exclude_versions: ["2025.2", "2025.1", "2024.2", "2024.1", "master"]
     labels: []
+    job_throttle_category: "SCT-perf-eu-west-2-i8g"
     params:
       sub_tests: '["test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"]'
 

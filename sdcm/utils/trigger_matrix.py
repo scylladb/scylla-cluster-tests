@@ -326,6 +326,7 @@ class JobConfig(BaseModel):
     include_versions: list[str] = Field(default_factory=list)
     exclude_versions: list[str] = Field(default_factory=list)
     pre_release: list[str] = Field(default_factory=list)
+    job_throttle_category: str = ""
     params: dict = Field(default_factory=dict)
     wait: bool = False
     wait_timeout: int = WAIT_TIMEOUT
@@ -700,6 +701,8 @@ def build_job_parameters(
         params["scylla_version"] = scylla_version
     if job.region:
         params.setdefault("region", job.region)
+    if job.job_throttle_category:
+        params.setdefault("job_throttle_category", job.job_throttle_category)
 
     is_rolling_upgrade = str(params.get("rolling_upgrade_test", "")).lower() == "true"
     if is_rolling_upgrade:
