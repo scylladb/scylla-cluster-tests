@@ -23,7 +23,6 @@ import json
 from unittest.mock import MagicMock, PropertyMock
 
 
-from sdcm.utils.nvme_diagnostics import (
 from sdcm.cluster import BaseScyllaCluster
 from sdcm.sct_events import Severity
 from sdcm.utils.nvme_diagnostics import (

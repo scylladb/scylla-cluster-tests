@@ -38,6 +38,8 @@ data_volume_disk_iops: 10000 # depend on type iops could be 100-16000 for io2|io
 fallback_to_next_availability_zone: true
 fallback_to_next_region: true
 
+collect_nvme_diagnostics: true
+
 kms_key_rotation_interval: 60
 
 # TODO: this part should be moved to defaults/test_default.yaml when network interfaces configuration is supported for all backends

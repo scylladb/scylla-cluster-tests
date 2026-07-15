@@ -77,7 +77,7 @@ email_recipients: ['qa@scylladb.com']
 email_subject_postfix: ''
 
 collect_logs: false
-collect_nvme_diagnostics: true
+collect_nvme_diagnostics: false
 nvme_self_test_type: 1
 use_scylla_doctor_on_failure: true
 

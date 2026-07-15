@@ -16,7 +16,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
 
 from sdcm.teardown_validators.base import TeardownValidator
-from sdcm.utils.nvme_diagnostics import SelfTestType, check_nvme_health, run_self_test_on_all_devices
+from sdcm.utils.nvme_diagnostics import (
+    EXTENDED_SELF_TEST_TIMEOUT,
+    SHORT_SELF_TEST_TIMEOUT,
+    SelfTestType,
+    check_nvme_health,
+    run_self_test_on_all_devices,
+)
 
 if TYPE_CHECKING:
     from sdcm.sct_config import SCTConfiguration
@@ -60,17 +66,24 @@ class NvmeValidator(TeardownValidator):
         nodes = self.tester.db_cluster.nodes
         LOGGER.info("Running NVMe self-tests (type=%s) on %d DB nodes", test_type.name, len(nodes))
 
-        per_node_timeout = 300  # 5 minutes per node
+        per_device_timeout = SHORT_SELF_TEST_TIMEOUT if test_type == SelfTestType.SHORT else EXTENDED_SELF_TEST_TIMEOUT
+        # Allow extra margin for device discovery, multiple disks, and polling overhead
+        overall_timeout = per_device_timeout * 2
         with ThreadPoolExecutor(max_workers=min(len(nodes), 10)) as executor:
-            futures = {executor.submit(run_self_test_on_all_devices, node, test_type): node for node in nodes}
-            for future in as_completed(futures, timeout=per_node_timeout * 2):
-                node = futures[future]
-                try:
-                    future.result(timeout=per_node_timeout)
-                except TimeoutError:
-                    LOGGER.warning("NVMe self-test timed out on %s after %ds", node.name, per_node_timeout)
-                except Exception:  # noqa: BLE001
-                    LOGGER.warning("NVMe self-test failed on %s", node.name, exc_info=True)
+            futures = {
+                executor.submit(run_self_test_on_all_devices, node, test_type, per_device_timeout): node
+                for node in nodes
+            }
+            try:
+                for future in as_completed(futures, timeout=overall_timeout):
+                    node = futures[future]
+                    try:
+                        future.result()
+                    except Exception:  # noqa: BLE001
+                        LOGGER.warning("NVMe self-test failed on %s", node.name, exc_info=True)
+            except TimeoutError:
+                timed_out = [n.name for f, n in futures.items() if not f.done()]
+                LOGGER.warning("NVMe self-tests timed out after %ds on nodes: %s", overall_timeout, timed_out)
 
     def _collect_health(self):
         """Collect NVMe health data and publish events for anomalies."""
