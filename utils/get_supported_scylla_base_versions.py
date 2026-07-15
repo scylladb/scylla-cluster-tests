@@ -63,15 +63,12 @@ class UpgradeBaseVersion:
         """
         LOGGER.info("Getting scylla product and major version for upgrade versions listing...")
         if scylla_version is None:
-            try:
-                assert "unstable/" in self.scylla_repo, (
-                    "Did not find 'unstable/' in scylla_repo. Scylla repo: %s" % self.scylla_repo
-                )
-                version = self.scylla_repo.split("unstable/")[1].split("/")[1]
-                scylla_version = version.replace("branch-", "").replace("enterprise-", "")
-            except AssertionError:
+            if "unstable/" in self.scylla_repo:
+                version_part = self.scylla_repo.split("unstable/")[1].split("/")[1]
+                scylla_version = version_part.replace("branch-", "").replace("enterprise-", "")
+            else:
                 scylla_version = get_branch_version(self.scylla_repo)
-        LOGGER.info("Scylla major version used for upgrade versions listing: %s", version)
+        LOGGER.info("Scylla major version used for upgrade versions listing: %s", scylla_version)
         return scylla_version
 
     def set_start_support_version(self, backend: str = None) -> None:
