@@ -23,7 +23,7 @@ from mypy_boto3_ec2 import EC2Client
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.azure.provisioner import AzureProvisioner
-from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
+from sdcm.utils.argus import ArgusError, get_argus_client, get_argus_use_tunnel_from_env, terminate_resource_in_argus
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.common import (
     ParallelObject,
@@ -54,9 +54,11 @@ from sdcm.utils.gce_utils import (
 LOGGER = logging.getLogger("utils")
 
 
-def init_argus_client(test_id: str):
+def init_argus_client(test_id: str, use_tunnel: bool | None = None):
+    if use_tunnel is None:
+        use_tunnel = get_argus_use_tunnel_from_env()
     try:
-        argus_client = get_argus_client(run_id=test_id)
+        argus_client = get_argus_client(run_id=test_id, use_tunnel=use_tunnel)
     except ArgusError as exc:
         LOGGER.warning("Unable to initialize Argus: %s", exc.message)
         argus_client = MagicMock()
@@ -179,7 +181,7 @@ def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
     else:
         aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
     try:
-        argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
+        argus_client = get_argus_client(run_id=tags_dict.get("TestId"), use_tunnel=get_argus_use_tunnel_from_env())
     except ArgusError as exc:
         LOGGER.warning("Unable to initialize Argus: %s", exc.message)
         argus_client = MagicMock()
@@ -401,7 +403,7 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
         instance, tags_dict = instance_with_tags
         LOGGER.info("Going to delete: %s (%s project)", instance.name, os.environ.get("SCT_GCE_PROJECT"))
         try:
-            argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
+            argus_client = get_argus_client(run_id=tags_dict.get("TestId"), use_tunnel=get_argus_use_tunnel_from_env())
         except ArgusError as exc:
             LOGGER.warning("Unable to initialize Argus: %s", exc.message)
             argus_client = MagicMock()
@@ -429,7 +431,7 @@ def clean_instances_azure(tags_dict: dict, regions=None, dry_run=False):
     """
     assert tags_dict, "Running clean instances without tags would remove all SCT related resources in all regions"
     try:
-        argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
+        argus_client = get_argus_client(run_id=tags_dict.get("TestId"), use_tunnel=get_argus_use_tunnel_from_env())
     except ArgusError as exc:
         LOGGER.warning("Unable to initialize Argus: %s", exc.message)
         argus_client = MagicMock()
