@@ -1,4 +1,5 @@
 test_duration: 330
+argus_use_ssh_tunnel: true
 
 n_db_nodes: 6
 n_loaders: 2
