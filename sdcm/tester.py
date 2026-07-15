@@ -408,6 +408,7 @@ class ClusterTester(unittest.TestCase):
     def init_argus_run(self):
         try:
             self.test_config.init_argus_client(self.params)
+            self.test_config.start_argus_event_pipeline()
             git_status = get_git_status_info()
             self.test_config.argus_client().submit_sct_run(
                 job_name=get_job_name(),
