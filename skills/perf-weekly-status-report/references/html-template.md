@@ -268,7 +268,8 @@ Issues are split into two sections based on Jira creation date (user-classified)
 - **New Issues - Regression**: tickets created during the report period
 - **Reproduced Issues**: tickets that existed before the report period
 
-Both sections use the same HTML structure but different headings.
+Both sections use a 3-column table with columns: Issue | Issue Subject | Status (width=35%).
+The "Status" column contains the Jira custom field "Status Description" value for the issue.
 
 ### New Issues - Regression (shown only when new issues exist)
 
@@ -279,9 +280,18 @@ Both sections use the same HTML structure but different headings.
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333333;">
 <tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">New Issues - Regression</td></tr>
 </table>
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#555555;">
-<!-- Repeat for each new issue -->
-<tr><td style="padding:2px 0 2px 15px;">&#8226; <a href="{issue_url}" style="color:#007bff;text-decoration:none;">{ISSUE_KEY}</a>: {issue title}</td></tr>
+<table width="100%" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12px;border-color:#dee2e6;">
+<tr bgcolor="#343a40" style="background-color:#343a40;">
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Issue</th>
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Issue Subject</th>
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;" width="35%">Status</th>
+</tr>
+<!-- Repeat for each new issue, alternating bgcolor #ffffff / #f8f9fa -->
+<tr bgcolor="#ffffff" style="background-color:#ffffff;">
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="{issue_url}" style="color:#007bff;text-decoration:none;">{ISSUE_KEY}</a></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{issue_title}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{status_description}</td>
+</tr>
 <!-- ... more rows as needed ... -->
 </table>
 </td>
@@ -297,9 +307,18 @@ Both sections use the same HTML structure but different headings.
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333333;">
 <tr><td style="font-size:16px;font-weight:bold;padding-bottom:10px;">Reproduced Issues</td></tr>
 </table>
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#555555;">
-<!-- Repeat for each reproduced issue -->
-<tr><td style="padding:2px 0 2px 15px;">&#8226; <a href="{issue_url}" style="color:#007bff;text-decoration:none;">{ISSUE_KEY}</a>: {issue title}</td></tr>
+<table width="100%" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12px;border-color:#dee2e6;">
+<tr bgcolor="#343a40" style="background-color:#343a40;">
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Issue</th>
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;">Issue Subject</th>
+  <th style="border:1px solid #dee2e6;padding:6px 10px;text-align:left;color:#ffffff;font-weight:bold;" width="35%">Status</th>
+</tr>
+<!-- Repeat for each reproduced issue, alternating bgcolor #ffffff / #f8f9fa -->
+<tr bgcolor="#ffffff" style="background-color:#ffffff;">
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;"><a href="{issue_url}" style="color:#007bff;text-decoration:none;">{ISSUE_KEY}</a></td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{issue_title}</td>
+  <td style="border:1px solid #dee2e6;padding:4px 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;">{status_description}</td>
+</tr>
 <!-- ... more rows as needed ... -->
 </table>
 </td>
@@ -324,8 +343,10 @@ Both sections use the same HTML structure but different headings.
 
 Key details:
 - Each section is in its own white-background box with border
+- Issues are presented in a 3-column table: Issue (link) | Issue Subject | Status (width=35%)
+- The "Status" column contains the Jira "Status Description" custom field value
+- Since the Argus CLI does not expose this field, the agent must ask the user to provide the Status Description values, or leave them empty
 - Issue links use `color:#007bff;text-decoration:none;` style
-- Format: `&#8226; <a href="URL">KEY</a>: title text`
 - "New Issues - Regression" section is OMITTED entirely if there are no new issues
 - "Reproduced Issues" section is ALWAYS shown (with "No reproduced issues..." fallback text)
 
