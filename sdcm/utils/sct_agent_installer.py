@@ -16,6 +16,8 @@ import os
 import secrets
 from textwrap import dedent
 
+from sdcm.utils.curl import curl_with_retry
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -148,11 +150,19 @@ def install_agent_script(
     config_yaml = get_agent_config_yaml(api_keys, port, max_concurrent_jobs, log_level).replace("$", "\\$")
     service_content = get_agent_systemd_service(binary_path, config_path, log_file_path).replace("$", "\\$")
     logrotate_content = get_agent_logrotate_config(log_file_path).replace("$", "\\$")
+    binary_curl = curl_with_retry(
+        agent_binary_url,
+        silent=True,
+        follow_redirects=True,
+        fail_early=True,
+        output=binary_path,
+        extra_flags="-S",
+    )
 
     return f"""echo "Installing SCT agent..."
 
 echo "Downloading agent binary from {agent_binary_url}..."
-curl -fsSL -o {binary_path} {agent_binary_url}
+{binary_curl}
 chmod +x {binary_path}
 
 if ! {binary_path} --version >/dev/null 2>&1; then

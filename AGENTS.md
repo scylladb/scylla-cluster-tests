@@ -267,6 +267,16 @@ Nemesis are chaos operations that test database resilience. For a comprehensive 
 Separate each group with a blank line.
 Within each group, sort imports alphabetically.
 
+**HTTP/Curl Conventions:**
+- All `remoter.run("curl ...")` calls must use `curl_with_retry()` from `sdcm/utils/curl.py`
+- `curl_with_retry()` retries connection resets (curl exit 35/56, which plain `--retry` does NOT retry) by default: it adds `--retry-all-errors` through `RETRY_ALL_ERRORS_PROBE`, a runtime capability check that expands to nothing on distros with curl < 7.71 - safe on any node
+- Never write a bare `--retry-all-errors` literal in shell/userdata scripts - use the `RETRY_ALL_ERRORS_PROBE` constant (or its snippet verbatim in plain-string scripts); the bare flag hard-fails on curl < 7.71 (rhel7/8-family, ubuntu2004)
+- Keep the probe quote-free so it works inside both single-quoted and double-quoted command wrappers
+- For non-idempotent requests (POST/PUT/DELETE), always set `retry_all_errors=False`
+- All `requests` calls must go through a session with retry adapter (pattern: `sdcm/rest/rest_client.py`)
+- Localhost calls may use `retry=0` but must still use the utility for consistent `--connect-timeout`
+- Document any exceptions with `# no-retry: <reason>` comments
+
 ### Unit Testing Guidelines
 
 **IMPORTANT: Use pytest style, NOT unittest.TestCase**
