@@ -88,12 +88,13 @@ export UV_PYTHON_PREFERENCE=only-managed
 export UV_PROJECT_ENVIRONMENT=.venv-sct-$UV_PYTHON
 uv venv -p $UV_PYTHON $UV_PROJECT_ENVIRONMENT
 
-# activate the virtualenv after syncing; this puts the newly-installed
-# binaries on PATH.
+# put the venv's binaries on PATH after syncing. Use direnv's PATH_add rather than
+# `source .../bin/activate`: it's the direnv-native way and keeps the environment
+# reproducible so commands run against the venv without an activate step.
 venv_path=$(expand_path "${UV_PROJECT_ENVIRONMENT:-.venv}")
 if [[ -e $venv_path ]]; then
-  # shellcheck source=/dev/null
-  source "$venv_path/bin/activate"
+  export VIRTUAL_ENV="$venv_path"
+  PATH_add "$venv_path/bin"
 fi
 if [[ -e requirements.txt ]]; then
   # handle old branch, that we didn't used pyproject.toml yet
@@ -158,8 +159,8 @@ uv add --dev package-name
 ### Running tests
 
 ```bash
-# The environment is automatically activated when in the SCT directory
-python -m pytest tests/
+# Prefer `uv run` so commands always use the project's environment
+uv run pytest tests/
 
 # Or run SCT tests
 uv run python sct.py --help
