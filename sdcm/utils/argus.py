@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import os
+import tempfile
 from pathlib import Path
 import threading
 from typing import Optional
@@ -59,6 +60,20 @@ class ArgusError(Exception):
         return self._message
 
 
+class ReplayOnlyArgusSCTClient(ArgusSCTClient):
+    """ArgusSCTClient that records API calls to a replay log without making HTTP requests.
+
+    Prefer this over ArgusSCTClient(replay_log_only=True) — the type itself signals
+    replay-only mode, so callers can query capabilities via has_heartbeat instead of
+    reaching for the private _replay_log_only attribute.
+    """
+
+    has_heartbeat: bool = False
+
+    def __init__(self, run_id: UUID | str, log_dir: str, **kwargs) -> None:
+        super().__init__(run_id=run_id, auth_token="", base_url="", log_dir=log_dir, replay_log_only=True, **kwargs)
+
+
 def get_argus_use_tunnel_from_env() -> bool:
     val = os.environ.get("SCT_ARGUS_USE_SSH_TUNNEL", "false")
     return val.lower() in ("true", "yes", "y", "1")
@@ -71,21 +86,27 @@ def is_uuid(uuid) -> bool:
     try:
         UUID(uuid)
         return True
-    except (ValueError, AttributeError, TypeError):
+    except Exception:  # noqa: BLE001  # any parse failure means it isn't a UUID
         return False
 
 
-def get_argus_client(run_id: UUID | str, use_tunnel: bool, init_global=True) -> ArgusSCTClient:
+def get_argus_client(
+    run_id: UUID | str, use_tunnel: bool, init_global=True, log_dir: str | None = None
+) -> ArgusSCTClient:
     if not is_uuid(run_id):
         raise ArgusError("Malformed UUID provided")
 
     creds = KeyStore().get_argus_rest_credentials_per_provider()
+    # The replay log is always created, so a real log_dir is required. Callers that
+    # care where it lands (e.g. so logcollector picks it up) should pass log_dir
+    # explicitly; otherwise it falls back to a temp dir.
     argus_client = ArgusSCTClient(
         run_id=run_id,
         auth_token=creds["token"],
         base_url=creds["baseUrl"],
         extra_headers=creds.get("extra_headers"),
         use_tunnel=use_tunnel,
+        log_dir=log_dir or tempfile.gettempdir(),
     )
 
     if init_global:
