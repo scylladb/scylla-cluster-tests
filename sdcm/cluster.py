@@ -127,6 +127,7 @@ from sdcm.utils.common import (
 )
 from sdcm.utils.context_managers import DbNodeLogger
 from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.curl import curl_with_retry
 from sdcm.utils.database_query_utils import is_system_keyspace
 from sdcm.utils.distro import Distro
 from sdcm.utils.features import get_enabled_features, is_tablets_feature_enabled
@@ -2316,21 +2317,21 @@ class BaseNode(AutoSshContainerMixin):
             return
         if self.distro.is_rhel_like:
             repo_path = "/etc/yum.repos.d/scylla.repo"
-            self.remoter.sudo("curl --retry 5 --retry-max-time 300 -o %s -L %s" % (repo_path, scylla_repo))
+            self.remoter.sudo(curl_with_retry(scylla_repo, output=repo_path, follow_redirects=True), retry=3)
             self.remoter.sudo("chown root:root %s" % repo_path)
             self.remoter.sudo("chmod 644 %s" % repo_path)
             result = self.remoter.run("cat %s" % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
         elif self.distro.is_sles:
             repo_path = "/etc/zypp/repos.d/scylla.repo"
-            self.remoter.sudo("curl --retry 5 --retry-max-time 300 -o %s -L %s" % (repo_path, scylla_repo))
+            self.remoter.sudo(curl_with_retry(scylla_repo, output=repo_path, follow_redirects=True), retry=3)
             self.remoter.sudo("chown root:root %s" % repo_path)
             self.remoter.sudo("chmod 644 %s" % repo_path)
             result = self.remoter.run("cat %s" % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
         else:
             repo_path = "/etc/apt/sources.list.d/scylla.list"
-            self.remoter.sudo("curl --retry 5 --retry-max-time 300 -o %s -L %s" % (repo_path, scylla_repo))
+            self.remoter.sudo(curl_with_retry(scylla_repo, output=repo_path, follow_redirects=True), retry=3)
             result = self.remoter.run("cat %s" % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=False)
             self.install_package("gnupg2")
@@ -2345,7 +2346,7 @@ class BaseNode(AutoSshContainerMixin):
         else:
             repo_path = "/etc/apt/sources.list.d/scylla-manager.list"
         self.remoter.sudo(
-            f"curl -o {repo_path} -L {scylla_repo} --connect-timeout 10 --retry 5 --retry-max-time 100", retry=3
+            curl_with_retry(scylla_repo, output=repo_path, follow_redirects=True, retry_max_time=100), retry=3
         )
 
         # Prevent issue https://github.com/scylladb/scylla/issues/9683
@@ -2397,9 +2398,18 @@ class BaseNode(AutoSshContainerMixin):
                 # If all HKP keyservers failed, try HTTPS fallback
                 if not key_fetched:
                     https_url = f"https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x{apt_key}&options=mr"
+                    curl_cmd = curl_with_retry(
+                        f"'{https_url}'",
+                        silent=True,
+                        follow_redirects=True,
+                        fail_early=True,
+                        retry=3,
+                        retry_max_time=60,
+                        extra_flags="-S",
+                    )
                     result = self.remoter.sudo(
                         shell_script_cmd(
-                            f"curl --retry 3 --retry-max-time 60 --connect-timeout 10 -fsSL '{https_url}' | gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --import"
+                            f"{curl_cmd} | gpg --homedir /tmp --no-default-keyring --keyring {temp_keyring} --import"
                         ),
                         retry=1,
                         ignore_status=True,
@@ -2677,7 +2687,16 @@ class BaseNode(AutoSshContainerMixin):
                 )
 
         # Download unified package
-        self.remoter.run(f"curl -fL {unified_package} -o ./unified_package.tar.gz --retry 5 --retry-max-time 100")
+        self.remoter.run(
+            curl_with_retry(
+                unified_package,
+                follow_redirects=True,
+                fail_early=True,
+                output="./unified_package.tar.gz",
+                retry_max_time=100,
+            ),
+            retry=3,
+        )
 
         if not nonroot:
             self.install_package(package_name="xfsprogs mdadm")
@@ -2749,7 +2768,11 @@ class BaseNode(AutoSshContainerMixin):
         https://github.com/scylladb/scylla-web-install
         """
         version = assume_version(self.parent_cluster.params, scylla_version)
-        self.remoter.run(f"curl -sSf get.scylladb.com/server | sudo bash -s -- --scylla-version {version}")
+        self.remoter.run(
+            f"{curl_with_retry('https://get.scylladb.com/server', silent=True, fail_early=True)} "
+            f"| sudo bash -s -- --scylla-version {version}",
+            retry=3,
+        )
 
     def install_scylla_debuginfo(self) -> None:
         if ComparableScyllaVersion(self.scylla_version) > "2025.1.0~dev":
@@ -6995,7 +7018,7 @@ class BaseMonitorSet:
                 """)
             else:
                 install_docker_cmd = dedent("""
-                    curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
+                    curl -fsSL get.docker.com --retry 5 --retry-max-time 300 $(curl --retry-all-errors --version >/dev/null 2>&1 && echo --retry-all-errors) -o get-docker.sh
                     sh get-docker.sh
                 """)
             prereqs_script = dedent(f"""

@@ -108,6 +108,7 @@ from sdcm.utils.oci_utils import (
     import_image_from_object_storage,
 )
 from sdcm.utils.context_managers import environment
+from sdcm.utils.curl import curl_with_retry
 from sdcm.test_config import TestConfig
 from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE
@@ -290,6 +291,22 @@ class SctRunner(ABC):
         sync_script_b64 = base64.b64encode(_sync_script.encode()).decode()
         unit_file_b64 = base64.b64encode(_unit_file.encode()).decode()
 
+        docker_gpg_curl = curl_with_retry(
+            "https://download.docker.com/linux/ubuntu/gpg",
+            silent=True,
+            follow_redirects=True,
+            fail_early=True,
+            extra_flags="-S",
+        )
+        kubectl_stable_curl = curl_with_retry(
+            "https://dl.k8s.io/release/stable.txt", silent=True, follow_redirects=True
+        )
+        kubectl_curl = curl_with_retry(
+            f'"https://dl.k8s.io/release/$({kubectl_stable_curl})/bin/linux/amd64/kubectl"',
+            follow_redirects=True,
+            extra_flags="-O",
+        )
+
         result = remoter.sudo(
             shell_script_cmd(
                 quote="'",
@@ -347,7 +364,7 @@ class SctRunner(ABC):
             # Install Docker.
             apt-get -qq install --no-install-recommends \
                 apt-transport-https ca-certificates curl gnupg-agent software-properties-common
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+            {docker_gpg_curl} | apt-key add -
             add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
             apt-get -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io
             usermod -aG docker {login_user}
@@ -357,7 +374,7 @@ class SctRunner(ABC):
             printf "%s\n" "{{" "  \\"registry-mirrors\\": [" "    \\"https://mirror.gcr.io\\"" "  ]" "}}" > /etc/docker/daemon.json
 
             # Install kubectl.
-            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            {kubectl_curl}
             install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
             # Configure Jenkins user.
@@ -1485,13 +1502,18 @@ class OciSctRunner(SctRunner):
         LOGGER.info("Installing OCI CLI v%s using the official Oracle installer...", self.OCI_CLI_VERSION)
         remoter = self.get_remoter(host=public_ip, connect_timeout=connect_timeout)
 
+        oci_installer_curl = curl_with_retry(
+            "https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh",
+            silent=True,
+            follow_redirects=True,
+            fail_early=True,
+            output="/tmp/oci_install.sh",
+            extra_flags="-S",
+        )
         remoter.sudo(
             shell_script_cmd(
                 quote="'",
-                cmd=(
-                    "curl -fsSL https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh"
-                    " -o /tmp/oci_install.sh && chmod +x /tmp/oci_install.sh"
-                ),
+                cmd=f"{oci_installer_curl} && chmod +x /tmp/oci_install.sh",
             )
         )
         remoter.sudo(
