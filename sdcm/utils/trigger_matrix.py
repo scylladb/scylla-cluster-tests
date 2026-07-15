@@ -135,7 +135,7 @@ def resolve_to_full_version(
 
     if SIMPLE_VERSION_RE.match(scylla_version):
         # e.g., 2025.4 — try as branch:latest
-        version = _resolve_version_via_branched_ami(f"{scylla_version}:latest", lookup_region)
+        version = _resolve_version_via_branched_ami(scylla_version, lookup_region)
         if version:
             return version
 
