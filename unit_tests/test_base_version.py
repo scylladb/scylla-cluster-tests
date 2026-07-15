@@ -87,6 +87,7 @@ def test_2024_2():
     assert set(version_list) == {"6.0", "2024.1", "2024.2"}
 
 
+@pytest.mark.skip(reason="ScyllaDB 2024.2 is EOL")
 def test_2024_2_ubuntu():
     """Test that development branch of 2024.2 on ubuntu is returned correct versions"""
     scylla_repo = url_base + "-enterprise/enterprise-2024.2/deb/unified/latest/scylladb-2024.2/scylla.list"
