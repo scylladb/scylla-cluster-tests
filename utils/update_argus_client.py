@@ -9,7 +9,7 @@ from pathlib import Path
 def get_latest_tarball_url(package_name: str) -> tuple[str, str]:
     """Fetches the latest tarball URL and version from PyPI for the given package."""
     url = f"https://pypi.org/pypi/{package_name}/json"
-    response = requests.get(url)
+    response = requests.get(url, timeout=30)
     data = response.json()
     version = data["info"]["version"]
     for file_info in data["urls"]:
@@ -20,8 +20,8 @@ def get_latest_tarball_url(package_name: str) -> tuple[str, str]:
 
 def download_tarball(url: str, dest_folder: Path) -> Path:
     """Downloads the tarball to the destination folder."""
-    tarball_path = dest_folder / url.split("/")[-1]
-    response = requests.get(url, stream=True)
+    tarball_path = dest_folder / url.rsplit("/", maxsplit=1)[-1]
+    response = requests.get(url, stream=True, timeout=30)
     with open(tarball_path, "wb") as f:
         f.write(response.content)
     return tarball_path
@@ -58,6 +58,10 @@ def update_package(package_name: str, project_root: Path):
         temp_folder = Path(temp_dir)
         tarball_url, version = get_latest_tarball_url(package_name)
         tarball_path = download_tarball(tarball_url, temp_folder)
+        # Wipe the existing vendored client before extracting so files removed
+        # or renamed between releases don't linger (e.g. the flat tunnel_*.py
+        # modules left behind when the tunnel package was introduced).
+        remove_old_files(project_root)
         extract_core_files(tarball_path, project_root, version=version)
         create_version_file(project_root / "argus", version)
         create_how_to_update_file(project_root / "argus")
