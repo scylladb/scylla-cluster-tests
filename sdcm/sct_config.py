@@ -2364,6 +2364,12 @@ class SCTConfiguration(dict):
         ),
         dict(name="enable_argus", env="SCT_ENABLE_ARGUS", type=boolean, help="Control reporting to argus"),
         dict(
+            name="argus_use_ssh_tunnel",
+            env="SCT_ARGUS_USE_SSH_TUNNEL",
+            type=boolean,
+            help="Enable SSH tunnel support in the Argus client connection",
+        ),
+        dict(
             name="cs_populating_distribution",
             env="SCT_CS_POPULATING_DISTRIBUTION",
             type=str,
