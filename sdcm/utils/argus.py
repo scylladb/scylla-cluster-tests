@@ -5,7 +5,6 @@ import re
 import os
 import tempfile
 from pathlib import Path
-import threading
 from typing import Optional
 from uuid import UUID
 
@@ -22,22 +21,40 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Argus:
-    INSTANCE: Optional[ArgusSCTClient] = None
-    INIT_DONE = threading.Event()
+    """Process-wide handle to the current Argus client.
+
+    Exists so that low-level, thread-based consumers - namely ArgusEventCollector
+    (sdcm.sct_events.argus), which starts running before a client is available - can read
+    the current client without a direct reference to TestConfig, which owns it. Importing
+    TestConfig from here isn't an option: sdcm.test_config imports from
+    sdcm.sct_events.argus, so a reverse import would be circular.
+    """
+
+    INSTANCE: Optional["Argus"] = None
 
     def __init__(self, client: ArgusSCTClient):
         self._client = client
 
     @classmethod
     def init_global(cls, client: ArgusSCTClient):
-        if cls.INIT_DONE.is_set():
-            return
+        """(Re-)point the process-wide Argus singleton at *client*.
+
+        In a real SCT run this is only ever called once, from
+        TestConfig.start_argus_event_pipeline() (itself called once, from
+        ClusterTester.init_argus_run()). It always overwrites rather than guarding with a
+        one-shot flag purely so that repeated calls stay safe/idempotent for callers
+        outside that single-call path - e.g. tests that reuse the TestConfig class across
+        cases, or standalone scripts (resources_cleanup.py, Argus.get(init_default=True))
+        that construct a client directly via get_argus_client(init_global=True).
+        """
         cls.INSTANCE = cls(client)
-        cls.INIT_DONE.set()
 
     @classmethod
     def get(cls, init_default=False) -> "Argus":
-        if init_default and not cls.INIT_DONE.is_set():
+        # Only the lazy default below needs a "don't clobber an explicit client" guard;
+        # checking INSTANCE is None (rather than a separate one-shot flag) means an
+        # explicit init_global() call always wins, however many times it's called.
+        if init_default and cls.INSTANCE is None:
             cls.init_global(
                 get_argus_client(
                     run_id=os.environ.get("SCT_TEST_ID"), init_global=False, use_tunnel=get_argus_use_tunnel_from_env()
