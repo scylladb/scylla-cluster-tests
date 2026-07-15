@@ -41,5 +41,6 @@ class NodeExporterSetup:
             systemctl daemon-reload
             systemctl enable node_exporter.service
             systemctl start node_exporter.service
-        """)
+        """),
+            retry=3,
         )

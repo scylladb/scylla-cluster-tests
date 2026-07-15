@@ -13,6 +13,8 @@
 
 from textwrap import dedent
 
+from sdcm.utils.curl import curl_with_retry
+
 
 def configure_syslogng_target_script(hostname: str = "") -> str:
     return dedent(
@@ -256,10 +258,17 @@ def install_syslogng_service():
 
 
 def install_vector_service():
-    return dedent("""\
+    vector_setup_curl = curl_with_retry(
+        "https://setup.vector.dev",
+        silent=True,
+        follow_redirects=True,
+        fail_early=True,
+        extra_flags="-S",
+    )
+    return dedent(f"""\
         # install repo
         for n in 2 4 6 8 10 10 10 10; do # cloud-init is running it with set +o braceexpand
-            if bash -c "$(curl -L --retry 5 --retry-max-time 300 https://setup.vector.dev)"; then
+            if bash -c "$({vector_setup_curl})"; then
                 if yum --help 2>/dev/null 1>&2; then
                     if yum -y list vector >/dev/null 2>&1; then
                         break
@@ -307,8 +316,13 @@ def install_vector_service():
 
 
 def install_syslogng_exporter():
-    return dedent("""\
-    curl -L -O https://github.com/brandond/syslog_ng_exporter/releases/download/0.1.0/syslog_ng_exporter
+    exporter_curl = curl_with_retry(
+        "https://github.com/brandond/syslog_ng_exporter/releases/download/0.1.0/syslog_ng_exporter",
+        follow_redirects=True,
+        extra_flags="-O",
+    )
+    return dedent(f"""\
+    {exporter_curl}
     chmod +x syslog_ng_exporter
     mv syslog_ng_exporter /usr/local/bin
 
@@ -423,11 +437,19 @@ def install_vector_from_local_pkg(pkg_path: str) -> str:
 
 
 def install_docker_service():
-    return dedent("""\
+    get_docker_curl = curl_with_retry(
+        "get.docker.com",
+        silent=True,
+        follow_redirects=True,
+        fail_early=True,
+        output="get-docker.sh",
+        extra_flags="-S",
+    )
+    return dedent(f"""\
         # Install Docker
 
         for n in 1 2 3; do
-            if bash -c "$(curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh)"; then
+            if {get_docker_curl}; then
                 break
             fi
             sleep $(backoff $n)
@@ -443,11 +465,11 @@ def install_docker_service():
         # Configure Docker to use Google Container Registry mirrors
         mkdir -p /etc/docker
         cat > /etc/docker/daemon.json <<EOF
-        {
+        {{
           "registry-mirrors": [
             "https://mirror.gcr.io"
           ]
-        }
+        }}
         EOF
 
         systemctl enable docker.service
