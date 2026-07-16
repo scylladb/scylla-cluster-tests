@@ -566,28 +566,3 @@ class ArtifactsTest(ClusterTester):
                 if scylla_doctor.is_full_edition:
                     scylla_doctor.run_analysis_phase()
                     scylla_doctor.analyze_and_verify_analysis_results()
-
-    def get_email_data(self):
-        self.log.info("Prepare data for email")
-        email_data = self._get_common_email_data()
-        try:
-            node = self.node
-        except (ValueError, IndexError):
-            node = None
-        if node:
-            scylla_packages = node.scylla_packages_installed
-        else:
-            scylla_packages = None
-        if not scylla_packages:
-            scylla_packages = ["No scylla packages are installed. Please check log files."]
-        email_data.update(
-            {
-                "scylla_node_image": node.image if node else "Node has not been initialized",
-                "scylla_packages_installed": scylla_packages,
-                "unified_package": self.params.get("unified_package"),
-                "nonroot_offline_install": self.params.get("nonroot_offline_install"),
-                "scylla_repo": self.params.get("scylla_repo"),
-            }
-        )
-
-        return email_data

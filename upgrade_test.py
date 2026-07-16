@@ -1606,20 +1606,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 self.search_for_idx_token_error_after_upgrade(node=node, step=step)
         return schema_load_error_num
 
-    def get_email_data(self):
-        self.log.info("Prepare data for email")
-
-        email_data = self._get_common_email_data()
-        email_data.update(
-            {
-                "new_scylla_repo": self.params.get("new_scylla_repo"),
-                "new_version": self.new_ver,
-                "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
-            }
-        )
-
-        return email_data
-
     @cache
     def _update_argus_upgraded_version(self, node, new_version):
         try:

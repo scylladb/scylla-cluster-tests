@@ -28,17 +28,6 @@ class ScyllaOperatorFunctionalClusterTester(ClusterTester):
     test_data: dict = {}
     healthy_flag: bool = True
 
-    def get_email_data(self):
-        self.log.info("Prepare data for email")
-        email_data = self._get_common_email_data()
-        email_data.update(
-            {
-                "test_statuses": self.test_data,
-                "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
-            }
-        )
-        return email_data
-
     def update_test_status(self, test_name, status, error=None):
         self.test_data[test_name] = (status, error)
 
