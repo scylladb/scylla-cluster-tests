@@ -1,6 +1,8 @@
 test_duration: 600
 
-instance_type_db: 'i4i.2xlarge'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 8
+  memory: '>=64'
 
 region_name: us-east-1
 n_db_nodes: 3

@@ -7,9 +7,15 @@ n_db_nodes: "3 3"
 n_loaders: 1
 simulated_racks: 3
 
-gce_instance_type_db: 'n2-highmem-2'
-gce_instance_type_loader: 'e2-standard-2'
-gce_instance_type_monitor: 'n2-highmem-2'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
+sizing_loader:
+  vcpu: 2
+  memory: '>=8'
+sizing_monitor:
+  vcpu: 2
+  memory: '>=16'
 
 client_encrypt: true
 

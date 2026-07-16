@@ -1,7 +1,12 @@
 test_duration: 2880
 
-instance_type_db: 'i3en.3xlarge'
-instance_type_loader: 'c6i.2xlarge'
+sizing_db:
+  vcpu: '>=12'
+  memory: '>=96'
+  local_disk_gb: '>=3000'
+sizing_loader:
+  vcpu: 8
+  memory: '>=16'
 
 n_db_nodes: 3
 n_loaders: 4
