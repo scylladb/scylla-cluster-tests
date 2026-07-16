@@ -76,6 +76,7 @@ def vmarch_to_oci(arch: VmArch) -> str:
 SUPPORTED_REGIONS = [
     "us-ashburn-1",
     "us-phoenix-1",
+    "eu-frankfurt-1",
 ]
 
 
