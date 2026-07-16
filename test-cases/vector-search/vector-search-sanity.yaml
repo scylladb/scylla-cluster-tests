@@ -13,10 +13,12 @@ stress_cmd:
     --duration 300s -P recall_validation_duration=300 data_dir/latte/vector_search/vector_search_recall.rn
 
 n_db_nodes: 3
-instance_type_loader: 'c6i.2xlarge'
-instance_type_db: 'i4i.large'
-gce_instance_type_loader: 'n2-highmem-2'
-gce_instance_type_db: 'n2-highmem-2'
+sizing_loader:
+  vcpu: 8
+  memory: '>=16'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
 n_loaders: 1
 n_vector_store_nodes: 2
 

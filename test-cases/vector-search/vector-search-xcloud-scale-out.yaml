@@ -11,9 +11,12 @@ stress_read_cmd:
     -mode cql3 native -rate threads=10 -col 'n=FIXED(10) size=FIXED(900)' -pop seq=1..42000000 -log interval=5
 
 n_db_nodes: 3
-instance_type_db: 'i8g.large'
-gce_instance_type_loader: 'n2-highmem-2'
-gce_instance_type_db: 'n2-highmem-2'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
+sizing_loader:
+  vcpu: 2
+  memory: '>=16'
 n_loaders: 1
 n_vector_store_nodes: 2
 
