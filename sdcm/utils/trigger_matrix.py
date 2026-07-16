@@ -707,6 +707,10 @@ def build_job_parameters(
     is_rolling_upgrade = str(params.get("rolling_upgrade_test", "")).lower() == "true"
     if is_rolling_upgrade:
         params["scylla_version"] = ""
+    else:
+        # new_scylla_repo is only relevant for rolling-upgrade jobs; passing it
+        # to regular tests (e.g. perf) causes them to install wrong packages.
+        params.pop("new_scylla_repo", None)
 
     # Resolve {branch} templates — use the original version (e.g., "master:latest")
     # not the resolved full tag (e.g., "2026.3.0~dev-...") which yields "2026.3".
