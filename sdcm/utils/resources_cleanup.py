@@ -17,7 +17,6 @@ import os
 import time
 import ipaddress
 import tempfile
-from collections import defaultdict
 
 from botocore.exceptions import ClientError
 import boto3
