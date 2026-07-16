@@ -42,5 +42,6 @@ OCI_REGION_NAMES_MAPPING = {
     "us-ashburn-1": "us-ashburn-1",
     "phx": "us-phoenix-1",
     "us-phoenix-1": "us-phoenix-1",
-    # TODO: add key-values pairs for other regions
+    "fra": "eu-frankfurt-1",
+    "eu-frankfurt-1": "eu-frankfurt-1",
 }
