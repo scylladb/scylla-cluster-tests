@@ -4,6 +4,7 @@ import sys
 import re
 import os
 
+from sdcm.utils.parallel_object import ParallelObjectException
 from sdcm.utils.session import create_retry_session
 from sdcm.utils.version_utils import (
     is_enterprise,
@@ -237,7 +238,13 @@ class UpgradeBaseVersion:
         """
         LOGGER.info("Filtering rc versions from base version list...")
         base_version_list = sorted(list(set(base_version_list)), key=ComparableScyllaVersion)
-        filter_rc = [v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if "rc" not in v]
+        try:
+            filter_rc = [v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if "rc" not in v]
+        except (ValueError, ParallelObjectException):
+            # Repository for this version doesn't exist yet (e.g. new release announced
+            # but no rc0 packages published). Treat it as unavailable and skip it.
+            LOGGER.warning("Skipping version %s: repository doesn't fully exist yet", base_version_list[-1])
+            filter_rc = []
         if not filter_rc:
             # if the release only has rc versions, we don't want to test it as a base version
             base_version_list = base_version_list[:-1]
