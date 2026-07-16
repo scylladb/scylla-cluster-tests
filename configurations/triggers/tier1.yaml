@@ -38,7 +38,7 @@ jobs:
     region: "eu-west-1"
     labels:
       - "weekly"
-    include_versions: ["master", "2026.2"]
+    exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   - job_name: "tier1/longevity-2tb-5days-test"
     backend: "aws"
@@ -123,7 +123,7 @@ jobs:
     labels:
       - "weekly"
       - "aarch64"
-    include_versions: ["master", "2026.2"]
+    exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   # ==================== GCE ====================
 
