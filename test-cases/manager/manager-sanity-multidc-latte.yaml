@@ -8,8 +8,12 @@ stress_read_cmd:
   - >-
     latte run --function validate --duration 200000 data_dir/latte/mgmt_data_validation.rn
 
-instance_type_db: 'i8g.large'
-instance_type_loader: 'c6i.large'
+sizing_db:  # no OCI match (DenseIO min 16 vCPUs)
+  vcpu: 2
+  memory: '>=16'
+sizing_loader:
+  vcpu: 2
+  memory: '>=4'
 
 rack_aware_loader: true
 region_name: 'us-east-1 us-west-2'
