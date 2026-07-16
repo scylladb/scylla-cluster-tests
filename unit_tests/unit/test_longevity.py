@@ -49,7 +49,10 @@ class DummyLongevityTest(LongevityTest):
     def init_argus_run(self):
         pass
 
-    def save_email_data(self):
+    def collect_relocatable_package(self):
+        pass
+
+    def collect_grafana_screenshots(self):
         pass
 
     def argus_finalize_test_run(self):

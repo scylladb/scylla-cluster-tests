@@ -41,7 +41,7 @@ class SubtestAndTeardownFailsTest(ClusterTesterForTests):
         raise ValueError("Main test also failed")
 
     @silence()
-    def save_email_data(self):
+    def collect_relocatable_package(self):
         raise ValueError()
 
 
@@ -71,7 +71,7 @@ class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
         assert False, "Main test also failed"
 
     @silence()
-    def save_email_data(self):
+    def collect_relocatable_package(self):
         raise ValueError()
 
 
@@ -80,7 +80,7 @@ class TeardownFailsTest(ClusterTesterForTests):
         pass
 
     @silence()
-    def save_email_data(self):
+    def collect_relocatable_package(self):
         raise ValueError()
 
 
@@ -118,7 +118,11 @@ class SubtestsSuccessTest(ClusterTesterForTests):
         pytest.param(
             TeardownFailsTest,
             {"passed": 1},
-            ["EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}", "TEST_STATUS: FAILED", "ERROR 0: save_email_data (silenced)"],
+            [
+                "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
+                "TEST_STATUS: FAILED",
+                "ERROR 0: collect_relocatable_package (silenced)",
+            ],
             id="TeardownFailsTest",
         ),
         pytest.param(
@@ -158,7 +162,7 @@ class SubtestsSuccessTest(ClusterTesterForTests):
             [
                 "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
                 "TEST_STATUS: FAILED",
-                "ERROR 0: save_email_data (silenced)",
+                "ERROR 0: collect_relocatable_package (silenced)",
                 "E           ValueError: Subtest1 failed",
                 "E           ValueError: Subtest2 failed",
                 "E       ValueError: Main test also failed",
@@ -171,7 +175,7 @@ class SubtestsSuccessTest(ClusterTesterForTests):
             [
                 "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
                 "TEST_STATUS: FAILED",
-                "ERROR 0: save_email_data (silenced)",
+                "ERROR 0: collect_relocatable_package (silenced)",
                 "E           AssertionError: Subtest1 failed",
                 "E           AssertionError: Subtest2 failed",
                 "E       AssertionError: Main test also failed",

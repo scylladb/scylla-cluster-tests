@@ -45,21 +45,6 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
         - Backup file integrity validation across versions
     """
 
-    def get_email_data(self) -> dict:
-        self.log.info("Prepare data for email")
-        email_data = self._get_common_email_data()
-        email_data.update(
-            {
-                "manager_server_repo": self.params.get("scylla_mgmt_address"),
-                "manager_agent_repo": (
-                    self.params.get("scylla_mgmt_agent_address") or self.params.get("scylla_mgmt_address")
-                ),
-                "target_manager_server_repo": self.params.get("target_scylla_mgmt_server_address"),
-                "target_manager_agent_repo": self.params.get("target_scylla_mgmt_agent_address"),
-            }
-        )
-        return email_data
-
     def _create_simple_table(self, table_name: str, keyspace_name: str = "ks1") -> None:
         with self.db_cluster.cql_connection_patient(self.db_node) as session:
             session.execute(

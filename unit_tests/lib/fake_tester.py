@@ -91,7 +91,11 @@ class ClusterTesterForTests(ClusterTester):
         return None
 
     @silence()
-    def save_email_data(self):
+    def collect_relocatable_package(self):
+        pass
+
+    @silence()
+    def collect_grafana_screenshots(self):
         pass
 
     def argus_collect_manager_version(self):
