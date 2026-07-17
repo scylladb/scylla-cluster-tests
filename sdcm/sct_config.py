@@ -1469,6 +1469,17 @@ class SCTConfiguration(BaseModel):
               fresh capacity before giving up with a non-retryable error.
         """,
     )
+    azure_provision_stuck_vm_total_timeout: int = SctField(
+        gt=0,
+        description="""
+              Total timeout (seconds) for the whole stuck-VM recovery attempts.
+              Recovery stops with a non-retryable error when either this timeout or
+              'azure_provision_stuck_vm_recreate_attempts' is exhausted. This way a degraded Azure
+              region cannot keep provisioning running until the CI stage times out SCT.
+              This value must be at least 'azure_provision_stuck_vm_timeout', otherwise SCT may
+              give up during the initial wait without making even one recreate attempt.
+        """,
+    )
 
     # Oracle Cloud (OCI) options
     oci_region_name: StringOrList = SctField(
