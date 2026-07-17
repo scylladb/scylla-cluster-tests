@@ -25,11 +25,6 @@ class ClusterConfigurationTests(ClusterTester):
 
     default_params = {"timeout": 650000}
 
-    def get_email_data(self):
-        self.log.info("Prepare data for email")
-        email_data = self._get_common_email_data()
-        return email_data
-
     def test_build(self):
         """
         Build a Scylla cluster with params defined in data_dir/scylla.yaml
