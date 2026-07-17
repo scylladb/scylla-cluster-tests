@@ -85,7 +85,7 @@ Ordered steps; one PR, logically split commits (1–2 / 3 / 4–5 / 6).
 - `sdcm/utils/decorators.py` — `ProvisionUnrecoverableError` branches in both
   capacity-issue decorators (deferred import to avoid the circular import)
 - `unit_tests/unit/test_utils_decorators.py` — capacity-decorator tests for the
-  stuck-VM give-up (skip on balanced layout, critical on unbalanced, passthrough)
+  stuck-VM give-up (nemesis skip, critical event)
 
 ## Verification
 

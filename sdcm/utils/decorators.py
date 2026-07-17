@@ -408,6 +408,8 @@ def skip_on_capacity_issues(func: Callable | None = None, db_cluster: BaseCluste
     def decorator(inner_func):
         @wraps(inner_func)
         def wrapper(*args, **kwargs):
+            from sdcm.provision.provisioner import ProvisionUnrecoverableError  # noqa: PLC0415
+
             cluster = db_cluster
             # Try to get db_cluster from inner_func's bound instance if not provided
             if cluster is None and args:
@@ -441,6 +443,19 @@ def skip_on_capacity_issues(func: Callable | None = None, db_cluster: BaseCluste
                     ).publish()
                 else:
                     raise UnsupportedNemesis("Capacity Issue") from ex
+            except ProvisionUnrecoverableError as ex:
+                # Azure stuck-VM recovery gave up - a capacity/provisioning issue
+                if check_cluster_layout(cluster):
+                    raise UnsupportedNemesis("Capacity Issue") from ex
+
+                TestFrameworkEvent(
+                    source=inner_func.__name__,
+                    message=(
+                        f"Test failed due to capacity issues: {ex} cluster is unbalanced, "
+                        "continuing with test would yield unknown results"
+                    ),
+                    severity=Severity.CRITICAL,
+                ).publish()
 
         return wrapper
 
@@ -457,6 +472,8 @@ def critical_on_capacity_issues(func: callable) -> callable:
 
     @wraps(func)
     def wrapper(*args, **kwargs):
+        from sdcm.provision.provisioner import ProvisionUnrecoverableError  # noqa: PLC0415
+
         try:
             return func(*args, **kwargs)
         except ClientError as ex:
@@ -475,6 +492,15 @@ def critical_on_capacity_issues(func: callable) -> callable:
                 "cluster is probably unbalanced, continuing with test would yield unknown results",
                 severity=Severity.CRITICAL,
             ).publish()
+        except ProvisionUnrecoverableError as ex:
+            # Azure stuck-VM recovery gave up - a capacity/provisioning issue
+            TestFrameworkEvent(
+                source=func.__name__,
+                message=f"Test failed due to capacity issues: {ex} "
+                "cluster is probably unbalanced, continuing with test would yield unknown results",
+                severity=Severity.CRITICAL,
+            ).publish()
+            raise
 
     return wrapper
 
