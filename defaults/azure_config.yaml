@@ -11,6 +11,7 @@ azure_instance_type_monitor: ''
 
 azure_provision_stuck_vm_timeout: 900  # seconds before VM in 'creating' status is treated as stuck
 azure_provision_stuck_vm_recreate_attempts: 3
+azure_provision_stuck_vm_total_timeout: 4500  # total seconds budget for the whole stuck-VM recovery loop
 
 azure_image_loader: 'Canonical:ubuntu-24_04-lts:server:latest'
 azure_image_monitor: 'Canonical:ubuntu-24_04-lts:server:latest'
