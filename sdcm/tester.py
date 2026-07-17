@@ -1721,6 +1721,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     azure_provision_stuck_vm_recreate_attempts=self.params.get(
                         "azure_provision_stuck_vm_recreate_attempts"
                     ),
+                    azure_provision_stuck_vm_total_timeout=self.params.get("azure_provision_stuck_vm_total_timeout"),
                 )
             )
         if db_info["n_nodes"] is None:

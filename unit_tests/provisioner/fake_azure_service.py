@@ -477,15 +477,16 @@ class VMCreateBehavior:
     If ``stuck`` is True, the VM stays in the Azure stuck state instead of succeeding.
     If ``recover_after_polls`` is set, the VM recovers after that many instance-view polls.
     If it is ``None``, the VM stays stuck until it is deleted and recreated.
-    If ``redeploy_fails`` is True, a redeploy of this VM raises an error.
     If ``disappear_after_polls`` is set, the VM is deleted after that many instance-view polls so
     subsequent get() calls return 404 - simulating an Azure spot eviction during provisioning.
+    If ``transient_error_polls`` is set, the first N instance-view polls raise a transient (non-404)
+    AzureError - simulating ARM throttling / 5xx blips that must not abort the batch.
     """
 
     stuck: bool = False
     recover_after_polls: int | None = None
-    redeploy_fails: bool = False
     disappear_after_polls: int | None = None
+    transient_error_polls: int | None = None
 
 
 class FakeVirtualMachines:
@@ -587,6 +588,10 @@ class FakeVirtualMachines:
             return raw
 
         sim["polls_seen"] += 1
+        transient_error_polls = sim.get("transient_error_polls")
+        if transient_error_polls is not None and sim["polls_seen"] <= transient_error_polls:
+            self._write_raw(resource_group_name, vm_name, raw)
+            raise AzureError("transient throttling (429) while polling VM")
         disappear_after = sim.get("disappear_after_polls")
         if disappear_after is not None and sim["polls_seen"] >= disappear_after:
             os.remove(self._vm_path(resource_group_name, vm_name))
@@ -708,6 +713,7 @@ class FakeVirtualMachines:
                 "stuck": True,
                 "recover_after_polls": behavior.recover_after_polls,
                 "disappear_after_polls": behavior.disappear_after_polls,
+                "transient_error_polls": behavior.transient_error_polls,
                 "polls_seen": 0,
             }
         with open(self.path / resource_group_name / f"vm-{vm_name}.json", "w", encoding="utf-8") as file:
@@ -757,25 +763,6 @@ class FakeVirtualMachines:
         return self.get(resource_group_name, vm_name, expand="instanceView").instance_view
 
     def begin_restart(self, resource_group_name, vm_name) -> WaitableObject:
-        return WaitableObject()
-
-    def begin_redeploy(self, resource_group_name, vm_name) -> WaitableObject:
-        behavior = self._next_behavior(vm_name)
-        if behavior.redeploy_fails:
-            return WaitableObject(
-                error=AzureError("VMRedeploymentFailed: redeployment failed due to an internal error")
-            )
-        raw = self._read_raw(resource_group_name, vm_name)
-        raw["properties"]["provisioningState"] = "Creating" if behavior.stuck else "Succeeded"
-        if behavior.stuck:
-            raw["_simulation"] = {
-                "stuck": True,
-                "recover_after_polls": behavior.recover_after_polls,
-                "polls_seen": 0,
-            }
-        else:
-            raw.pop("_simulation", None)
-        self._write_raw(resource_group_name, vm_name, raw)
         return WaitableObject()
 
     def begin_run_command(self, resource_group_name, vm_name, parameters) -> ResultableObject:
