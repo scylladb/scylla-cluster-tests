@@ -439,22 +439,3 @@ class CDCReplicationTest(ClusterTester):
         res = loader_node.remoter.run(cmd=f"wget {REPLICATOR_URL} -O replicator.jar")
         if res.exit_status != 0:
             self.fail("Could not obtain CDC replicator.")
-
-    def get_email_data(self) -> dict:
-        self.log.info("Prepare data for email")
-
-        email_data = self._get_common_email_data()
-        email_data.update(
-            {
-                "nemesis_details": self.get_nemesises_stats(),
-                "nemesis_name": self.params.get("nemesis_class_name"),
-                "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
-                "number_of_oracle_nodes": self.params.get("n_test_oracle_db_nodes"),
-                "oracle_ami_id": self.params.get("ami_id_db_oracle"),
-                "oracle_db_version": self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else "N/A",
-                "oracle_instance_type": self.params.get("instance_type_db_oracle"),
-                "consistency_status": self.consistency_ok,
-            }
-        )
-
-        return email_data

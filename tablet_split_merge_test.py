@@ -174,16 +174,3 @@ class TabletSplitMergeTest(LongevityTest):
         res = self.loaders.nodes[0].remoter.run(cmd=replicator_script)
         if res.failed:
             self.fail("Could not start CDC replicator.")
-
-    def get_email_data(self) -> dict:
-        email_data = super().get_email_data()
-        if self.enable_cdc:
-            email_data.update(
-                {
-                    "number_of_oracle_nodes": self.params.get("n_test_oracle_db_nodes"),
-                    "oracle_ami_id": self.params.get("ami_id_db_oracle"),
-                    "oracle_db_version": self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else "N/A",
-                    "oracle_instance_type": self.params.get("instance_type_db_oracle"),
-                }
-            )
-        return email_data

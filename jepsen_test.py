@@ -109,15 +109,5 @@ class JepsenTest(ClusterTester):
 
         return jepsen_report.name
 
-    def get_email_data(self):
-        self.log.info("Prepare data for email")
-        email_data = self._get_common_email_data()
-        email_data.update(
-            {
-                "jepsen_report": self.save_jepsen_report(),
-                "jepsen_scylla_repo": self.params.get("jepsen_scylla_repo"),
-                "jepsen_test_cmd": self.params.get("jepsen_test_cmd"),
-                "scylla_repo": self.params.get("scylla_repo"),
-            }
-        )
-        return email_data
+    def collect_test_artifacts(self):
+        self.save_jepsen_report()

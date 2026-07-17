@@ -50,21 +50,3 @@ class ScaleUpTest(ClusterTester):
         node.remoter.sudo("find /var/lib/scylla/data/keyspace1/standard1-* -type f | sudo xargs rm -f")
         node.start_scylla_server()
         self.log.info("Data destroyed on node %s", node)
-
-    def get_email_data(self):
-        self.log.info("Prepare data for email")
-        email_data = {}
-
-        try:
-            email_data = self._get_common_email_data()
-        except Exception as error:
-            self.log.exception("Error in gathering common email data: Error:\n%s", error, exc_info=error)
-
-        email_data.update(
-            {
-                "ingest_time": self.ingest_time,
-                "rebuild_duration": self.rebuild_duration,
-                "subject": f"Scale up test results - {email_data['scylla_instance_type']}",
-            }
-        )
-        return email_data
