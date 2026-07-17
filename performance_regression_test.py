@@ -852,9 +852,6 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
 
 class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
-    def get_email_data(self):
-        return PerformanceRegressionTest.get_email_data(self)
-
     @latency_calculator_decorator(legend="Upgrade Node")
     def upgrade_node(self, node, hdr_tags: list[str]):
         # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator

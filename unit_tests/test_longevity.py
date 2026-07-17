@@ -79,7 +79,10 @@ def test_test_user_batch_custom_time(params, pytester):
             def _init_params(self):
                 pass
 
-            def save_email_data(self):
+            def collect_relocatable_package(self):
+                pass
+
+            def collect_grafana_screenshots(self):
                 pass
 
             def argus_finalize_test_run(self):

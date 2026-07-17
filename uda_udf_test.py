@@ -63,12 +63,6 @@ class UDAUDFTest(ClusterTester):
         self.verify_stress_thread(pre_thread)
         self.log.info("Database pre write completed")
 
-    def get_email_data(self):
-        self.log.info("Prepare data for email")
-        email_data = self._get_common_email_data()
-
-        return email_data
-
     def _verify_udf_functions(self):
         row_query = UDVerification(
             name="row_query",

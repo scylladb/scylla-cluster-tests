@@ -76,7 +76,11 @@ class ClusterTesterForTests(ClusterTester):
         return None
 
     @silence()
-    def save_email_data(self):
+    def collect_relocatable_package(self):
+        pass
+
+    @silence()
+    def collect_grafana_screenshots(self):
         pass
 
     def argus_collect_manager_version(self):
@@ -128,7 +132,7 @@ class SubtestAndTeardownFailsTest(ClusterTesterForTests):
         raise ValueError("Main test also failed")
 
     @silence()
-    def save_email_data(self):
+    def collect_relocatable_package(self):
         raise ValueError()
 
     @pytest.fixture(scope="function")
@@ -143,7 +147,7 @@ class SubtestAndTeardownFailsTest(ClusterTesterForTests):
 
         wait_for_summary()
         assert "Subtest1 failed" in self.events["ERROR"][1]
-        assert "save_email_data" in self.events["ERROR"][0]
+        assert "collect_relocatable_package" in self.events["ERROR"][0]
         assert self.final_event.test_status == "FAILED"
 
     def finalize_teardown(self):
@@ -190,7 +194,7 @@ class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
         assert False, "Main test also failed"
 
     @silence()
-    def save_email_data(self):
+    def collect_relocatable_package(self):
         raise ValueError()
 
     @pytest.fixture(autouse=True)
@@ -204,7 +208,7 @@ class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
             assert self.event_summary == {"NORMAL": 2, "ERROR": 3}
 
         wait_for_summary()
-        assert "save_email_data" in self.events["ERROR"][0]
+        assert "collect_relocatable_package" in self.events["ERROR"][0]
         assert "Subtest1 failed" in self.events["ERROR"][1]
         assert self.final_event.test_status == "FAILED"
 
@@ -217,7 +221,7 @@ class TeardownFailsTest(ClusterTesterForTests):
         pass
 
     @silence()
-    def save_email_data(self):
+    def collect_relocatable_package(self):
         raise ValueError()
 
     @pytest.fixture(autouse=True)
@@ -225,7 +229,7 @@ class TeardownFailsTest(ClusterTesterForTests):
         yield
 
         assert self.event_summary == {"NORMAL": 2, "ERROR": 1}
-        assert "save_email_data" in self.final_event.events["ERROR"][0]
+        assert "collect_relocatable_package" in self.final_event.events["ERROR"][0]
         assert self.final_event.test_status == "FAILED"
 
     def finalize_teardown(self):

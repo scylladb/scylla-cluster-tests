@@ -16,7 +16,6 @@ import importlib
 from collections import defaultdict
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict
 
 import random
 import logging
@@ -28,7 +27,7 @@ import traceback
 import unittest
 import unittest.mock
 from pathlib import Path
-from typing import NamedTuple, Optional, Union, List, Dict, Any
+from typing import NamedTuple, Optional, Union, List, Any
 from uuid import uuid4
 from functools import partial, wraps, cache
 import threading
@@ -112,7 +111,6 @@ from sdcm.utils.aws_utils import (
 )
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import (
-    format_timestamp,
     wait_ami_available,
     download_dir_from_cloud,
     get_post_behavior_actions,
@@ -3656,10 +3654,14 @@ class ClusterTester(unittest.TestCase):
         if self.params.get("collect_logs"):
             self.collect_logs()
         self.collect_ssl_conf()
+        # NOTE: collect artifacts before clean_resources() destroys db_cluster/monitors/loaders
+        self.collect_relocatable_package()
+        self.collect_grafana_screenshots()
+        with silence(parent=self, name="Collecting test artifacts"):
+            self.collect_test_artifacts()
+        time.sleep(1)  # Sleep is needed to let events from artifact collection being processed
         self.clean_resources()
         time.sleep(1)  # Sleep is needed to let final event being saved into files
-        self.save_email_data()
-        time.sleep(1)  # Sleep is needed to let events from save_email_data being processed
         self.argus_collect_gemini_results()
         self.destroy_localhost()
         if not self.test_config.KEEP_ALIVE_DB_NODES:
@@ -4260,162 +4262,35 @@ class ClusterTester(unittest.TestCase):
                 "Node {} ({}) used capacity is: {}".format(node.name, node.private_ip_address, used_capacity)
             )
 
-    def get_nemesises_stats(self):
-        nemesis_stats = {}
-        if self.db_cluster:
-            for nem in self.db_cluster.nemesis:
-                nemesis_stats.update(nem.stats)
-        else:
-            self.log.warning("No nemesises as cluster was not created")
+    @silence()
+    def collect_relocatable_package(self):
+        """Submits the relocatable package (unified installer) url to Argus, if resolvable.
 
-        if nemesis_stats:
-            for detail in nemesis_stats.values():
-                for run in detail.get("runs", []):
-                    run["start"] = format_timestamp(float(run["start"]))
-                    run["end"] = format_timestamp(float(run["end"]))
-                for failure in detail.get("failures", []):
-                    failure["start"] = format_timestamp(float(failure["start"]))
-                    failure["end"] = format_timestamp(float(failure["end"]))
-        return nemesis_stats
+        What is relocatable package:
+        https://docs.scylladb.com/stable/getting-started/install-scylla/unified-installer.html
+        """
+        alive_node = self._get_live_node()
+        scylla_version = alive_node.scylla_version_detailed if alive_node else None
+        if not scylla_version:
+            return
+        if relocatable_pkg := get_relocatable_pkg_url(scylla_version):
+            self.test_config.argus_client().submit_packages(
+                [Package(name="relocatable_pkg", date="", version=relocatable_pkg, revision_id="", build_id="")]
+            )
 
     @silence()
-    def save_email_data(self):
-        email_data = {}
-
-        try:
-            email_data = self.get_email_data()
-            self._argus_add_relocatable_pkg(email_data)
-        except Exception as exc:  # noqa: BLE001
-            self.log.error("Error while saving email data. Error: %s\nTraceback: %s", exc, traceback.format_exc())
-
-        grafana_screenshots = []
-        try:
-            grafana_screenshots = (
-                self.monitors.get_grafana_screenshots_from_all_monitors(self.start_time) if self.monitors else {}
-            )
-            self.argus_collect_screenshots(grafana_screenshots)
-        except Exception as exc:  # noqa: BLE001
-            self.log.exception("Error while collecting screenshots:", exc_info=exc)
+    def collect_grafana_screenshots(self):
+        grafana_screenshots = (
+            self.monitors.get_grafana_screenshots_from_all_monitors(self.start_time) if self.monitors else {}
+        )
+        self.argus_collect_screenshots(grafana_screenshots)
 
     def argus_collect_screenshots(self, grafana_screenshots: list) -> None:
         if grafana_screenshots:
             self.test_config.argus_client().submit_screenshots(grafana_screenshots)
 
-    def _argus_add_relocatable_pkg(self, email_data):
-        """Adds Package with url to relocatable package in Argus.
-
-        What is relocatable package:
-        https://docs.scylladb.com/stable/getting-started/install-scylla/unified-installer.html
-        """
-        if relocatable_pkg := email_data.get("relocatable_pkg"):
-            self.test_config.argus_client().submit_packages(
-                [Package(name="relocatable_pkg", date="", version=relocatable_pkg, revision_id="", build_id="")]
-            )
-
-    def get_email_data(self):
-        """prepare data to generate and send via email
-
-        Have to return the dict which is used to build the
-        html content with email template.
-        Required field:
-        - email_template: path to file with html template
-        - email_subject: subject of email
-        have to be implemented in child class.
-        """
-        return {}
-
-    def all_nodes_scylla_shards(self):
-        all_nodes_shards = defaultdict(list)
-        for node in self.db_cluster.nodes:
-            ipv6 = node.ipv6_ip_address if node.ip_address == node.ipv6_ip_address else ""
-            all_nodes_shards["live_nodes"].append(
-                {
-                    "name": node.name,
-                    "ip": f"{node.public_ip_address} | {node.private_ip_address}{f' | {ipv6}' if ipv6 else ''}",
-                    "shards": node.scylla_shards,
-                }
-            )
-
-        all_nodes_shards["dead_nodes"] = [asdict(node) for node in self.db_cluster.dead_nodes_list]
-
-        return all_nodes_shards
-
-    def _get_common_email_data(self) -> Dict[str, Any]:
-        """Helper for subclasses which extracts common data for email."""
-
-        if self.db_cluster:
-            nodes_shards = self.all_nodes_scylla_shards()
-        else:
-            nodes_shards = defaultdict(list)
-
-        alive_node = self._get_live_node() or None
-
-        start_time = format_timestamp(self.start_time)
-        config_file_name = ";".join(
-            os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params.get("config_files")
-        )
-        test_status = self.get_test_status()
-        backend = self.params.get("cluster_backend")
-        build_id = f"#{os.environ.get('BUILD_NUMBER')}" if os.environ.get("BUILD_NUMBER", "") else ""
-        scylla_version = alive_node.scylla_version_detailed if alive_node else "N/A"
-        kernel_version = alive_node.kernel_version if alive_node else "N/A"
-
-        if backend in ("aws", "aws-siren", "k8s-eks"):
-            scylla_instance_type = self.params.get("instance_type_db") or "Unknown"
-            region_name = self.params.region_names
-        elif backend in ("gce", "gce-siren", "k8s-gke"):
-            scylla_instance_type = self.params.get("gce_instance_type_db") or "Unknown"
-            region_name = self.params.get("gce_datacenter")
-        elif backend in ("azure"):
-            scylla_instance_type = self.params.get("azure_instance_type_db") or "Unknown"
-            region_name = self.params.get("azure_region_name")
-        elif backend in ("baremetal", "docker"):
-            scylla_instance_type = "N/A"
-            region_name = "N/A"
-        elif backend == "xcloud":
-            scylla_instance_type = self.params.get("cloud_instance_type_db") or "Unknown"
-            region_name = self.params.get("cloud_region")
-        else:
-            self.log.error("Don't know how to get instance type for the '%s' backend.", backend)
-            scylla_instance_type = "N/A"
-            region_name = "N/A"
-
-        job_name = os.environ.get("JOB_NAME").split("/")[-1] if os.environ.get("JOB_NAME") else config_file_name
-        restore_monitor_job_base_link = (
-            "https://jenkins.scylladb.com/view/QA/job/QA-tools/job/hydra-show-monitor/parambuild/?"
-        )
-        if build_id:
-            sct_branch = os.environ.get("GIT_BRANCH", "master").rsplit("/", maxsplit=1)[-1]
-            restore_monitor_job_base_link += f"sct_branch={sct_branch}&"
-
-        return {
-            "backend": backend,
-            "build_id": os.environ.get("BUILD_NUMBER", ""),
-            "job_url": os.environ.get("BUILD_URL"),
-            "end_time": format_timestamp(time.time()),
-            "events_summary": self.get_event_summary(),
-            "last_events": get_events_grouped_by_category(limit=100, _registry=self.events_processes_registry),
-            "nodes": [],
-            "number_of_db_nodes": self.params.get("n_db_nodes"),
-            "region_name": region_name,
-            "scylla_instance_type": scylla_instance_type,
-            "scylla_version": scylla_version,
-            "live_nodes_shards": nodes_shards.get("live_nodes"),
-            "dead_nodes_shards": nodes_shards.get("dead_nodes"),
-            "kernel_version": kernel_version,
-            "start_time": start_time,
-            "subject": f"{test_status}: {os.environ.get('JOB_NAME') or config_file_name}{build_id}: {start_time}",
-            "job_name": job_name,
-            "config_files": self.params["config_files"],
-            "test_id": self.test_id,
-            "test_name": self.id(),
-            "test_status": test_status,
-            "username": get_username(),
-            "shard_awareness_driver": self.is_shard_awareness_driver,
-            "rack_aware_policy": self.is_rack_aware_policy,
-            "restore_monitor_job_base_link": restore_monitor_job_base_link,
-            "relocatable_pkg": get_relocatable_pkg_url(scylla_version) or "",
-        }
+    def collect_test_artifacts(self):
+        """Hook for subclasses to collect test-type-specific artifacts during teardown."""
 
     def get_test_results(self, source, severity=None):
         output = []
@@ -4444,14 +4319,6 @@ class ClusterTester(unittest.TestCase):
         node.wait_ssh_up(verbose=False, timeout=50)
 
         return node
-
-    @property
-    def is_shard_awareness_driver(self) -> bool:
-        all_events = get_events_grouped_by_category()
-        for event_str in all_events["NORMAL"]:
-            if "type=ShardAwareDriver" in event_str:
-                return True
-        return False
 
     @property
     def is_rack_aware_policy(self) -> bool:
