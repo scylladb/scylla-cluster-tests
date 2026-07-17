@@ -2187,6 +2187,15 @@ How many times to recreate a stuck Azure VM (full node: VM, NIC and public IP) o
 **type:** int
 
 
+## **azure_provision_stuck_vm_total_timeout** / SCT_AZURE_PROVISION_STUCK_VM_TOTAL_TIMEOUT
+
+Total timeout (seconds) for the whole stuck-VM recovery attempts.<br>Recovery stops with a non-retryable error when either this timeout or<br>'azure_provision_stuck_vm_recreate_attempts' is exhausted. This way a degraded Azure<br>region cannot keep provisioning running until the CI stage times out SCT.<br>This value must be at least 'azure_provision_stuck_vm_timeout', otherwise SCT may<br>give up during the initial wait without making even one recreate attempt.
+
+**default:** N/A
+
+**type:** int
+
+
 ## **oci_region_name** / SCT_OCI_REGION_NAME
 
 OCI region where the resources will be deployed
