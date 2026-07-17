@@ -61,6 +61,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'oci': 'oci-sct-builders-us-ashburn-1-v2',
                           'oci-us-ashburn-1': 'oci-sct-builders-us-ashburn-1-v2',
                           'oci-us-phoenix-1': 'oci-sct-builders-us-phoenix-1-v2',
+                          'oci-eu-frankfurt-1': 'oci-sct-builders-eu-frankfurt-1-v2',
                           ]
 
     def cloud_provider = getCloudProviderFromBackend(backend)
@@ -82,7 +83,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
             supported_regions = ["eastus"]
             region = location
         } else if (cloud_provider == 'oci') {
-            supported_regions = ["us-ashburn-1", "us-phoenix-1"]
+            supported_regions = ["us-ashburn-1", "us-phoenix-1", "eu-frankfurt-1"]
             region = oci_region
         }
 
