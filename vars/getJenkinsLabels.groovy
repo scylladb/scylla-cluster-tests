@@ -56,9 +56,20 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'aws': 'aws-sct-builders-eu-west-1-v3-asg',
                           'azure-eastus': 'aws-sct-builders-us-east-1-v3-asg',
                           'aws-fips': 'aws-sct-builders-us-east-1-v4-fibs-CI-FIPS',
+<<<<<<< HEAD
                           'oci': 'oci-sct-builders-us-ashburn-1-v1',
                           'oci-us-ashburn-1': 'oci-sct-builders-us-ashburn-1-v1',
                           'oci-us-phoenix-1': 'oci-sct-builders-us-phoenix-1-v1',
+||||||| parent of 87fbe029f (ci(oci): add OCI eu-frankfurt-1 region support to the pipelines)
+                          'oci': 'oci-sct-builders-us-ashburn-1-v2',
+                          'oci-us-ashburn-1': 'oci-sct-builders-us-ashburn-1-v2',
+                          'oci-us-phoenix-1': 'oci-sct-builders-us-phoenix-1-v2',
+=======
+                          'oci': 'oci-sct-builders-us-ashburn-1-v2',
+                          'oci-us-ashburn-1': 'oci-sct-builders-us-ashburn-1-v2',
+                          'oci-us-phoenix-1': 'oci-sct-builders-us-phoenix-1-v2',
+                          'oci-eu-frankfurt-1': 'oci-sct-builders-eu-frankfurt-1-v2',
+>>>>>>> 87fbe029f (ci(oci): add OCI eu-frankfurt-1 region support to the pipelines)
                           ]
 
     def cloud_provider = getCloudProviderFromBackend(backend)
@@ -80,7 +91,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
             supported_regions = ["eastus"]
             region = location
         } else if (cloud_provider == 'oci') {
-            supported_regions = ["us-ashburn-1", "us-phoenix-1"]
+            supported_regions = ["us-ashburn-1", "us-phoenix-1", "eu-frankfurt-1"]
             region = oci_region
         }
 
