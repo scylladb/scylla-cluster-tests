@@ -203,23 +203,6 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
             node.update_manager_agent_backup_config(region=region_name)
         sleep(60)
 
-    def get_email_data(self):
-        self.log.info("Prepare data for email")
-
-        email_data = self._get_common_email_data()
-        email_data.update(
-            {
-                "manager_server_repo": self.params.get("scylla_mgmt_address"),
-                "manager_agent_repo": (
-                    self.params.get("scylla_mgmt_agent_address") or self.params.get("scylla_mgmt_address")
-                ),
-                "target_manager_server_repo": self.params.get("target_scylla_mgmt_server_address"),
-                "target_manager_agent_repo": self.params.get("target_scylla_mgmt_agent_address"),
-            }
-        )
-
-        return email_data
-
 
 def wait_until_task_finishes_return_details(task, wait=True, timeout=1000, step=10):
     if wait:
