@@ -13,10 +13,11 @@
 
 import logging
 import string
+import time
 from datetime import datetime, timezone
 from typing import Dict, List
 
-from azure.core.exceptions import AzureError, ResourceNotFoundError
+from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
 from azure.mgmt.resource.resources.models import ResourceGroup
 from invoke import Result
@@ -49,7 +50,7 @@ from sdcm.utils.azure_utils import AzureService
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_STUCK_VM_RECREATE_ATTEMPTS = 3
-DEFAULT_REDEPLOY_TIMEOUT = 300
+DEFAULT_STUCK_VM_TOTAL_TIMEOUT = 4500
 
 
 class AzureProvisioner(Provisioner):
@@ -67,6 +68,10 @@ class AzureProvisioner(Provisioner):
         stuck_vm_recreate_attempts = config.get("azure_provision_stuck_vm_recreate_attempts")
         self._stuck_vm_recreate_attempts = (
             stuck_vm_recreate_attempts if stuck_vm_recreate_attempts is not None else DEFAULT_STUCK_VM_RECREATE_ATTEMPTS
+        )
+        stuck_vm_total_timeout = config.get("azure_provision_stuck_vm_total_timeout")
+        self._stuck_vm_total_timeout = (
+            stuck_vm_total_timeout if stuck_vm_total_timeout is not None else DEFAULT_STUCK_VM_TOTAL_TIMEOUT
         )
         self._azure_service: AzureService = azure_service
         self._cache: Dict[str, VmInstance] = {}
@@ -177,32 +182,39 @@ class AzureProvisioner(Provisioner):
     def _provision_with_stuck_recreate(
         self, definitions: List[InstanceDefinition], pricing_model: PricingModel
     ) -> List[VirtualMachine]:
-        """Provision VMs and recover any that get stuck until retries are exhausted.
+        """Provision VMs and recover any that get stuck until the retry or time budget is exhausted.
 
-        A stuck VM is first redeployed to a new node (move of the VM onto another host that keeps,
-        its NIC and public IP). If redeploy does not succeed, the VM is deleted and provisioned
-        again from scratch.
+        A stuck VM is one that Azure accepts but does not reach ``Succeeded`` within the per-VM
+        timeout. In that case, the VM is deleted and created again on fresh capacity. Recovery stops
+        when either the number of recreate attempt is reached or the total recovery deadline is reached,
+        so SCT fails with a clear error instead of letting provisioning run until the Jenkins stage times out.
         """
+        deadline = time.monotonic() + self._stuck_vm_total_timeout
         attempt = 0
         while True:
             try:
-                return self._provision_resources(definitions, pricing_model)
+                return self._provision_resources(definitions, pricing_model, deadline=deadline)
             except OperationPreemptedError:
                 self._reset_resource_providers()
                 raise
             except StuckVMProvisioningError as exc:
-                if attempt >= self._stuck_vm_recreate_attempts:
+                # do not start another recovery round unless it can finish within the total timeout
+                budget_exhausted = time.monotonic() + self._stuck_vm_timeout > deadline
+                if attempt >= self._stuck_vm_recreate_attempts or budget_exhausted:
+                    if budget_exhausted:
+                        reason = f"exceeding the {self._stuck_vm_total_timeout}s total recovery budget"
+                    else:
+                        reason = f"{self._stuck_vm_recreate_attempts} recovery attempts"
                     for vm_name in exc.vm_names:
                         InstanceProvisionStuckEvent(
                             vm_name=vm_name,
                             attempt=attempt,
                             provisioning_state="Creating",
-                            message=f"giving up after {self._stuck_vm_recreate_attempts} recovery attempts",
+                            message=f"giving up after {reason}",
                             severity=Severity.WARNING,
                         ).publish_or_dump(default_logger=LOGGER)
                     raise ProvisionUnrecoverableError(
-                        f"Azure VM(s) {', '.join(exc.vm_names)} stuck in provisioning after "
-                        f"{self._stuck_vm_recreate_attempts} recovery attempts"
+                        f"Azure VM(s) {', '.join(exc.vm_names)} stuck in provisioning, giving up after {reason}"
                     ) from exc
                 attempt += 1
                 for vm_name in exc.vm_names:
@@ -210,32 +222,10 @@ class AzureProvisioner(Provisioner):
                         vm_name=vm_name,
                         attempt=attempt,
                         provisioning_state="Creating",
-                        message="recovering stuck VM (redeploy, recreate on failure)",
+                        message="recreating stuck VM on fresh capacity",
                         severity=Severity.NORMAL,
                     ).publish_or_dump(default_logger=LOGGER)
-                    if not self._redeploy_stuck_node(vm_name, pricing_model):
-                        LOGGER.warning(
-                            "Redeploy did not rescue VM %s; deleting it to recreate on fresh capacity", vm_name
-                        )
-                        self._delete_stuck_node(vm_name)
-
-    def _redeploy_stuck_node(self, name: str, pricing_model: PricingModel) -> bool:
-        """Redeploy VM to a new node.
-
-        Returns True if the VM reached the 'Succeeded' provisioning state; False if the redeploy
-        failed or did not complete within the timeout.
-        """
-        try:
-            LOGGER.info("Redeploying stuck VM %s to a new node", name)
-            poller = self._azure_service.compute.virtual_machines.begin_redeploy(self._resource_group_name, name)
-            poller.wait(timeout=DEFAULT_REDEPLOY_TIMEOUT)
-        except AzureError as err:
-            LOGGER.warning("Redeploy of stuck VM %s failed: %s", name, err)
-            return False
-        if not poller.done():
-            LOGGER.warning("Redeploy of stuck VM %s did not complete within %ss", name, DEFAULT_REDEPLOY_TIMEOUT)
-            return False
-        return self._vm_provider.recheck_provisioned(name, pricing_model) is not None
+                    self._delete_stuck_node(vm_name)
 
     def _delete_stuck_node(self, name: str) -> None:
         """Delete a stuck VM and its network resources."""
@@ -261,7 +251,7 @@ class AzureProvisioner(Provisioner):
         self._ip_provider.delete(ip_address)
 
     def _provision_resources(
-        self, definitions: List[InstanceDefinition], pricing_model: PricingModel
+        self, definitions: List[InstanceDefinition], pricing_model: PricingModel, deadline: float | None = None
     ) -> List[VirtualMachine]:
         """Provision all Azure resources needed for the given VM definitions."""
         self._rg_provider.get_or_create()
@@ -276,7 +266,9 @@ class AzureProvisioner(Provisioner):
             names=[definition.name for definition in definitions],
         )
         nics_ids = [self._nic_provider.get(definition.name).id for definition in definitions]
-        return self._vm_provider.get_or_create(definitions=definitions, nics_ids=nics_ids, pricing_model=pricing_model)
+        return self._vm_provider.get_or_create(
+            definitions=definitions, nics_ids=nics_ids, pricing_model=pricing_model, deadline=deadline
+        )
 
     def _reset_resource_providers(self) -> None:
         """Rebuild IP/NIC/VM providers so they rediscover live resources (caches may be stale)."""

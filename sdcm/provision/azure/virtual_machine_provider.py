@@ -35,8 +35,6 @@ from sdcm.provision.provisioner import (
 from sdcm.provision.user_data import UserDataBuilder
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.azure_utils import AzureService
-from sdcm.wait import wait_for
-from sdcm.exceptions import WaitForTimeoutError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -75,7 +73,11 @@ class VirtualMachineProvider:
             pass
 
     def get_or_create(
-        self, definitions: List[InstanceDefinition], nics_ids: List[str], pricing_model: PricingModel
+        self,
+        definitions: List[InstanceDefinition],
+        nics_ids: List[str],
+        pricing_model: PricingModel,
+        deadline: Optional[float] = None,
     ) -> List[VirtualMachine]:
         v_ms = []
         pollers = []
@@ -168,7 +170,7 @@ class VirtualMachineProvider:
             except AzureError as err:
                 LOGGER.error("Error when sending create vm request for VM %s: %s", definition.name, str(err))
                 error_to_raise = err
-        stuck_vm_names = []
+        pending_names = []
         for definition, poller in pollers:
             try:
                 # check for create-time errors quickly
@@ -183,13 +185,9 @@ class VirtualMachineProvider:
                 LOGGER.error("Error when waiting for creation of VM %s: %s", definition.name, str(err))
                 error_to_raise = err
                 continue
-            v_m = self._wait_until_provisioned(definition.name, pricing_model)
-            if v_m is None:
-                # accepted by Azure but never reached Succeeded within the timeout (i.e. stuck);
-                # do NOT cache or return it; the provisioner will redeploy it to a new node
-                LOGGER.warning("VM %s is stuck in provisioning, will be redeployed to a new node", definition.name)
-                stuck_vm_names.append(definition.name)
-                continue
+            pending_names.append(definition.name)
+        provisioned, stuck_vm_names = self._wait_all_provisioned(pending_names, pricing_model, deadline)
+        for v_m in provisioned:
             self._cache[v_m.name] = v_m
             v_ms.append(v_m)
         if error_to_raise:
@@ -198,40 +196,54 @@ class VirtualMachineProvider:
             raise StuckVMProvisioningError(stuck_vm_names)
         return v_ms
 
-    def _wait_until_provisioned(self, name: str, pricing_model: PricingModel) -> Optional[VirtualMachine]:
-        """Wait until the VM reaches ProvisioningState=Succeeded.
+    def _wait_all_provisioned(
+        self, names: List[str], pricing_model: PricingModel, deadline: Optional[float] = None
+    ) -> tuple[List[VirtualMachine], List[str]]:
+        """Wait for VMs to reach ``ProvisioningState=Succeeded`` within one shared timeout.
 
-        Returns the VM on success, or None if the stuck-VM timeout expires first.
-        Raises OperationPreemptedError if a spot VM vanishes (404): Azure accepts the create, then
-        deletes the VM on spot eviction / capacity-allocation failure (evictionPolicy=Delete), so
-        get() returns ResourceNotFound.
+        Returns two lists: provisioned VMs and still-pending VM names. All VMs share the same wait
+        window based on ``self._stuck_vm_timeout``, optionally capped by ``deadline``.
+
+        If a spot VM disappears during polling, ``OperationPreemptedError`` is raised by
+        ``_poll_provisioned_vm``. If a non-spot VM disappears, ``ResourceNotFoundError`` is re-raised.
+        Other Azure polling errors are logged and treated as transient until the timeout expires.
         """
+        wait_deadline = time.monotonic() + self._stuck_vm_timeout
+        if deadline is not None:
+            wait_deadline = min(wait_deadline, deadline)
 
-        def get_provisioned_vm() -> Optional[VirtualMachine]:
+        pending = list(names)
+        provisioned = []
+        while pending and time.monotonic() < wait_deadline:
+            for name in list(pending):
+                try:
+                    v_m = self._poll_provisioned_vm(name, pricing_model)
+                except ResourceNotFoundError:
+                    raise
+                except AzureError as err:
+                    LOGGER.warning("Transient error polling VM %s: %s; keeping it pending", name, err)
+                    continue
+
+                if v_m is not None:
+                    provisioned.append(v_m)
+                    pending.remove(name)
+            if pending and time.monotonic() < wait_deadline:
+                time.sleep(self._stuck_vm_poll_interval)
+
+        return provisioned, pending
+
+    def _poll_provisioned_vm(self, name: str, pricing_model: PricingModel) -> Optional[VirtualMachine]:
+        """Poll a VM once: return it if 'Succeeded', None otherwise.
+
+        Raises OperationPreemptedError (with a SpotTerminationEvent) if a spot VM vanished (404);
+        re-raises ResourceNotFoundError for a non-spot VM.
+        """
+        try:
             vm = self._azure_service.compute.virtual_machines.get(
                 self._resource_group_name,
                 name,
                 expand="instanceView",
             )
-            if vm.instance_view and vm.instance_view.statuses:
-                status_summary = ", ".join(
-                    f"{status.code}: {status.display_status}" for status in vm.instance_view.statuses
-                )
-                LOGGER.debug("VM %s instance state: %s", name, status_summary)
-            if vm.provisioning_state == "Succeeded":
-                return vm
-            return None
-
-        try:
-            return wait_for(
-                get_provisioned_vm,
-                step=self._stuck_vm_poll_interval,
-                timeout=self._stuck_vm_timeout,
-                throw_exc=True,
-                text=f"Waiting for VM {name} to reach Succeeded provisioning state",
-            )
-        except WaitForTimeoutError:
-            return None
         except ResourceNotFoundError as exc:
             if not pricing_model.is_spot():
                 raise
@@ -241,13 +253,14 @@ class VirtualMachineProvider:
             )
             SpotTerminationEvent(node=name, message=message).publish_or_dump(default_logger=LOGGER)
             raise OperationPreemptedError(f"spot VM {name} evicted during provisioning: {message}") from exc
-
-    def recheck_provisioned(self, name: str, pricing_model: PricingModel) -> Optional[VirtualMachine]:
-        """Re-poll a VM after an unplanned action (e.g. redeploy); cache and return it if it reaches 'Succeeded'."""
-        v_m = self._wait_until_provisioned(name, pricing_model)
-        if v_m is not None:
-            self._cache[v_m.name] = v_m
-        return v_m
+        if vm.instance_view and vm.instance_view.statuses:
+            status_summary = ", ".join(
+                f"{status.code}: {status.display_status}" for status in vm.instance_view.statuses
+            )
+            LOGGER.debug("VM %s instance state: %s", name, status_summary)
+        if vm.provisioning_state == "Succeeded":
+            return vm
+        return None
 
     def list(self):
         return list(self._cache.values())
