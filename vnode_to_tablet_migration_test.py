@@ -19,9 +19,16 @@ from collections.abc import Callable
 from enum import StrEnum
 
 from longevity_test import LongevityTest
-from sdcm.cluster import DB_LOG_PATTERN_RESHARDING_FINISH, DB_LOG_PATTERN_RESHARDING_START
+from sdcm.cluster import (
+    DB_LOG_PATTERN_RESHARDING_FINISH,
+    DB_LOG_PATTERN_RESHARDING_START,
+    BaseNode,
+    NodeSetupFailed,
+    NodeSetupTimeout,
+)
 from sdcm.sct_events.system import InfoEvent
-from sdcm.utils.decorators import latency_calculator_decorator
+from sdcm.sct_events.group_common_events import suppress_expected_unavailability_errors
+from sdcm.utils.decorators import latency_calculator_decorator, retrying
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
 from sdcm.wait import wait_for, wait_for_log_lines
 
@@ -321,6 +328,118 @@ class VnodeToTabletMigrationTest(LongevityTest):
 
         InfoEvent(message="Rollback finalized — cluster is back on vnodes").publish()
 
+    def _terminate_and_replace_node(self, node) -> BaseNode:
+        """Terminate a data node and replace it following the Replace Dead Node procedure.
+
+        Follows the same logic as NemesisRunner._terminate_and_replace_node:
+        1. Terminate the given node (destroy VM).
+        2. Wait 5 minutes for the cluster to detect the dead node.
+        3. Assert the node is DN in nodetool status.
+        4. Provision a new node with replacement_host_id set to the dead node's host_id
+           (SCT writes replace_node_first_boot into scylla.yaml before starting Scylla).
+        5. Wait for bootstrap to complete and node to be UP/Normal.
+        6. Wait for the old node to be removed from gossip.
+
+        Args:
+            node: The DB node to terminate and replace.
+        """
+        old_node_ip = node.ip_address
+        host_id = node.host_id
+
+        def get_node_state(node_ip: str) -> str | None:
+            """Gets node state by IP address from nodetool status response."""
+            status = self.db_cluster.get_nodetool_status()
+            states = [val["state"] for dc in status.values() for ip, val in dc.items() if ip == node_ip]
+            return states[0] if states else None
+
+        InfoEvent(message=f"StartEvent - Terminate node {node.name} and wait 5 minutes").publish()
+        with suppress_expected_unavailability_errors():
+            self.db_cluster.terminate_node(node)
+            time.sleep(300)  # Let the cluster live with a missing node for a while
+            assert get_node_state(old_node_ip) == "DN", "Terminated node state should be DN"
+            InfoEvent(message="FinishEvent - target_node was terminated, adding replacement node").publish()
+
+            new_node = self.db_cluster.add_nodes(
+                count=1, dc_idx=node.dc_idx, enable_auto_bootstrap=True, rack=node.rack
+            )[0]
+            self.monitors.reconfigure_scylla_monitoring()
+            new_node.replacement_host_id = host_id
+            try:
+                self.db_cluster.wait_for_init(node_list=[new_node], timeout=3600, check_node_health=False)
+            except (NodeSetupFailed, NodeSetupTimeout):
+                self.log.warning("Setup of replacement node '%s' failed, terminating it", new_node.name)
+                self.db_cluster.terminate_node(new_node)
+                raise
+            self.db_cluster.clean_replacement_node_options(new_node)
+            self.db_cluster.set_seeds()
+            self.db_cluster.update_seed_provider()
+            self.db_cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
+            new_node.wait_node_fully_start()
+            InfoEvent(message=f"FinishEvent - replacement node {new_node.name} is up and normal").publish()
+
+        # Wait until cluster removes the old node from gossip.
+        # Default ring_delay_ms is 300000 ms; retrying 20x with 20s sleep covers this window.
+        @retrying(n=20, sleep_time=20, allowed_exceptions=(AssertionError,))
+        def wait_for_old_node_to_be_removed():
+            state = get_node_state(old_node_ip)
+            if old_node_ip == new_node.ip_address:
+                assert state == "UN", f"New node with same IP as removed one should be UN but was: {state}"
+            else:
+                assert state is None, f"Old node should have been removed from status but it wasn't. State was: {state}"
+
+        wait_for_old_node_to_be_removed()
+        return new_node
+
+    def _terminate_node_during_resharding(self, node, keyspaces: list[str]) -> BaseNode:
+        """Upgrade a node to tablets, wait for resharding to start, then terminate and replace it.
+
+        This simulates a node failure during the resharding phase of the migration.
+        The node is upgraded and restarted, and once resharding begins (detected via
+        the scylla log) it is given 30 seconds to make progress before being terminated
+        and replaced using the Replace Dead Node procedure.
+
+        Args:
+            node: The DB node to upgrade, terminate mid-resharding, and replace.
+            keyspaces: User keyspaces being migrated.
+        """
+        self.log.info("Starting upgrade on %s before mid-resharding termination", node.name)
+        node.run_nodetool("migrate-to-tablets upgrade")
+        for ks in keyspaces:
+            migration_status = get_nodetool_migrate_to_tablets_status(node, ks)
+            assert migration_status[node.host_id] == NodeMigrationStatus.MIGRATING, (
+                f"[ks={ks}] Expected {NodeMigrationStatus.MIGRATING!r} for {node.host_id}, "
+                f"got {migration_status[node.host_id]!r}"
+            )
+
+        node.run_nodetool("drain")
+        node.stop_scylla(verify_down=True)
+
+        resharding_start_watcher = node.follow_system_log(patterns=[DB_LOG_PATTERN_RESHARDING_START])
+        node.start_scylla(verify_up=False, timeout=7200)
+
+        wait_for(
+            func=lambda: list(resharding_start_watcher),
+            step=5,
+            timeout=600,
+            text=f"Waiting for resharding to start on {node.name}",
+            throw_exc=True,
+        )
+        self.log.info("Resharding started on %s — waiting 30s before terminating", node.name)
+        time.sleep(30)
+
+        InfoEvent(message=f"Terminating node {node.name} mid-resharding").publish()
+        return self._terminate_and_replace_node(node)
+
+    def _common_test_setup(self) -> None:
+        """Shared setup for all vnode-to-tablet migration test methods"""
+        InfoEvent(message="Filling database with data before migration").publish()
+        self.run_pre_create_keyspace()
+        self.run_pre_create_schema()
+        self.run_prepare_write_cmd()
+
+        if not self.params.get("prepare_write_cmd") or not self.params.get("nemesis_during_prepare"):
+            self.db_cluster.start_nemesis()
+
     @latency_calculator_decorator(
         legend="Pre-migration baseline (vnodes)",
         cycle_name="pre_migration",
@@ -392,16 +511,6 @@ class VnodeToTabletMigrationTest(LongevityTest):
             self.verify_stress_thread(stress)
         return stress_queue
 
-    def _common_test_setup(self) -> None:
-        """Shared setup for all vnode-to-tablet migration test methods"""
-        InfoEvent(message="Filling database with data before migration").publish()
-        self.run_pre_create_keyspace()
-        self.run_pre_create_schema()
-        self.run_prepare_write_cmd()
-
-        if not self.params.get("prepare_write_cmd") or not self.params.get("nemesis_during_prepare"):
-            self.db_cluster.start_nemesis()
-
     def test_vnode_to_tablet_migration(self):
         """Test migration with a mid-flight single-node rollback before finalization.
 
@@ -468,6 +577,74 @@ class VnodeToTabletMigrationTest(LongevityTest):
             for node in reversed(data_nodes):
                 self._rollback_node_to_vnodes(node, keyspaces)
             self._finalize_rollback(keyspaces)
+
+        self.run_pre_migration_benchmark()
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
+        self.run_migration(migration_steps)
+        self.run_post_migration_benchmark()
+
+    def test_vnode_to_tablet_migration_with_node_replace(self):
+        """Test node replacement during all three phases of vnode-to-tablet migration.
+
+        Replaces a node at each stage to verify the migration procedure is resilient
+        to node failures throughout the process (SCYLLADB-2864):
+
+        1. Fill the database via prepare_write_cmd.
+        2. Pre-migration benchmark: stress on vnodes to establish a baseline.
+        3. Migration phase (concurrent mixed CL=QUORUM stress throughout):
+               a. Start migration for all user keyspaces.
+               b. Upgrade nodes[0..2] to tablets.
+               c. Phase 1 — replace a node BEFORE it is migrated (still on vnodes):
+                  terminate and replace nodes[3].
+               d. Upgrade nodes[4] to tablets.
+               e. Phase 2 — replace a node DURING resharding: start upgrade on
+                  nodes[5], wait for resharding to begin, wait 30 s, then
+                  terminate and replace mid-resharding.
+               f. Upgrade all replacement nodes that joined on vnodes.
+               g. Phase 3 — replace a node AFTER it is migrated (uses tablets,
+                  before finalize): terminate and replace the last data node.
+               h. Upgrade the Phase 3 replacement if needed.
+               i. Finalize migration.
+        4. Post-phase benchmark: stress on tablets after successful migration.
+
+        Each phase (pre, during, post) is wrapped with latency_calculator_decorator
+        which records HDR histograms and publishes P90/P99 latency and throughput
+        tables to Argus for before/during/after comparison.
+        """
+        self._common_test_setup()
+        keyspaces = self.db_cluster.get_test_keyspaces()
+        data_nodes = self.db_cluster.data_nodes
+
+        def migration_steps():
+            self._start_migration(keyspaces)
+
+            # Upgrade first 3 nodes normally
+            for node in data_nodes[:3]:
+                self._upgrade_node_to_tablets(node, keyspaces)
+
+            # Phase 1: Replace a node that has not been migrated yet (still on vnodes)
+            InfoEvent(message="Phase 1 - Replacing a node before migration (vnodes)").publish()
+            replacement_done_1 = self._terminate_and_replace_node(data_nodes[3])
+
+            # Upgrade nodes[4] normally
+            self._upgrade_node_to_tablets(data_nodes[4], keyspaces)
+
+            # Phase 2: Start upgrade on nodes[5], terminate mid-resharding, replace
+            InfoEvent(message="Phase 2 - Replacing a node during resharding").publish()
+            replacement_done_2 = self._terminate_node_during_resharding(data_nodes[5], keyspaces)
+
+            # Upgrade Phase 1 and Phase 2 replacements (both joined on vnodes)
+            self._upgrade_node_to_tablets(replacement_done_1, keyspaces)
+            self._upgrade_node_to_tablets(replacement_done_2, keyspaces)
+
+            # Phase 3: Replace a node that already uses tablets (before finalize)
+            InfoEvent(message="Phase 3 - Replacing a node after migration (tablets, pre-finalize)").publish()
+            replacement_done_3 = self._terminate_and_replace_node(self.db_cluster.data_nodes[-1])
+
+            # Upgrade the Phase 3 replacement
+            self._upgrade_node_to_tablets(replacement_done_3, keyspaces)
+
+            self._finalize_migration(keyspaces)
 
         self.run_pre_migration_benchmark()
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
