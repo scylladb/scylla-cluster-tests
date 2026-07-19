@@ -16,6 +16,8 @@ import pytest
 
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 
+from unit_tests.lib.dot_dict import DotDict
+
 
 @pytest.fixture(autouse=True)
 def reset_hosts():
@@ -24,11 +26,6 @@ def reset_hosts():
 
 @pytest.fixture(name="params")
 def params_fixture():
-    class DotDict(dict):
-        __getattr__ = dict.__getitem__
-        __setattr__ = dict.__setitem__
-        __delattr__ = dict.__delitem__
-
     return DotDict(
         {
             "test_id": "example-test-id",
