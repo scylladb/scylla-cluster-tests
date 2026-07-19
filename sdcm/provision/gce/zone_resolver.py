@@ -13,8 +13,9 @@
 
 import logging
 import random
-from typing import Callable
+from typing import Callable, Iterator
 
+from sdcm.provision.gce.constants import SUPPORTED_GCE_REGIONS
 from sdcm.utils.gce_utils import GceZoneResolver
 
 LOGGER = logging.getLogger(__name__)
@@ -157,6 +158,127 @@ class GceAZResolver:
             LOGGER.info(
                 "GceAZResolver: availability_zone '%s' already valid for regions %s", original_value, region_names
             )
+
+    def get_region_fallback_candidates(self) -> Iterator[tuple[str, list[str]]]:
+        """Yield ordered ``(region, az_letters)`` candidates for cluster region fallback.
+
+        A region is eligible only if it can supply the configured number of zones
+        that support all required machine types. The current region is excluded (it
+        is the starting point).
+
+        Candidates are yielded lazily: each region's zone/machine-type availability is
+        probed only when the consumer actually reaches it, so a fallback that succeeds on
+        the first candidate never pays to scan the remaining regions.
+
+        Unlike AWS there is NO peering check: the SCT GCE network is a single global
+        VPC, so every region's subnet is reachable, and GCE images are global, so no
+        per-region image re-resolution is needed.
+        """
+        region_names = self._region_names()
+        if not region_names:
+            return
+        current_region = region_names[0]
+        configured_letters = self._configured_az_letters()
+        cardinality = len(configured_letters) or 1
+        machine_types = self.required_machine_types()
+
+        for region in SUPPORTED_GCE_REGIONS:
+            if region == current_region:
+                continue
+            letters = self._common_supported_letters([region], configured_letters, machine_types)
+            if len(letters) < cardinality:
+                LOGGER.info(
+                    "Region fallback: skipping %s (only %d zone(s) support %s, need %d)",
+                    region,
+                    len(letters),
+                    machine_types,
+                    cardinality,
+                )
+                continue
+            yield region, letters[:cardinality]
+
+    def get_dc_fallback_candidates(self, dc_index: int) -> Iterator[tuple[str, list[str]]]:
+        """Yield ordered ``(region, az_letters)`` candidates to relocate the DC at ``dc_index``.
+
+        A region is eligible if no DC currently occupies it and it supports the *configured* zone
+        letters for all required machine types. Like the single-region variant there is NO peering or
+        image check (global VPC, global images).
+
+        Two properties the multi-DC fallback loop depends on:
+
+        * The in-use region set is re-read from live config before every candidate. The loop holds one
+          generator per DC for its whole lifetime while *other* DCs keep relocating, so a set
+          snapshotted on first use goes stale and can hand back a region a sibling DC has since moved
+          into - landing two DCs in the same region.
+        * Only regions supporting the configured letters qualify, and those same letters are yielded.
+          GCE ``availability_zone`` is a single global setting that DC relocation deliberately leaves
+          alone, so qualifying a region through some *alternative* letter would aim the retry at a
+          zone that region does not have.
+
+        Candidates are yielded lazily: each region is probed only when the consumer reaches it,
+        so a DC that relocates on its first candidate never scans the remaining regions.
+        """
+        if dc_index >= len(self._region_names()):
+            return
+        configured_letters = self._configured_az_letters()
+        cardinality = len(configured_letters) or 1
+        machine_types = self.required_machine_types()
+
+        for region in SUPPORTED_GCE_REGIONS:
+            # Re-read per candidate: sibling DCs may have relocated since the previous yield.
+            if region in set(self._region_names()):
+                continue
+            letters = self._common_supported_letters([region], configured_letters, machine_types)
+            if configured_letters:
+                if missing := [letter for letter in configured_letters if letter not in letters]:
+                    LOGGER.info(
+                        "Region fallback (DC %d): skipping %s (configured zone(s) %s do not support %s)",
+                        dc_index,
+                        region,
+                        ",".join(missing),
+                        machine_types,
+                    )
+                    continue
+                yield region, list(configured_letters)
+            elif len(letters) < cardinality:
+                LOGGER.info(
+                    "Region fallback (DC %d): skipping %s (only %d zone(s) support %s, need %d)",
+                    dc_index,
+                    region,
+                    len(letters),
+                    machine_types,
+                    cardinality,
+                )
+            else:
+                yield region, letters[:cardinality]
+
+    def get_az_fallback_candidates(self) -> Iterator[list[str]]:
+        """Yield alternative zone-letter sets within the currently configured region(s).
+
+        Backs `fallback_to_next_availability_zone` on the modern provisioning path: one exhausted zone
+        should retry the region's remaining zones before the cluster relocates to a different region.
+
+        Restricted to single-AZ configs, mirroring the legacy cluster path (:mod:`sdcm.cluster_gce`),
+        which only retries zones for single-node provisioning. With several configured letters there is
+        no way to tell which one the capacity error refers to without re-deriving the whole placement,
+        so nothing is yielded and region fallback takes over.
+        """
+        configured_letters = self._configured_az_letters()
+        if len(configured_letters) != 1:
+            LOGGER.info(
+                "Zone fallback: skipping, availability_zone '%s' is not a single zone",
+                ",".join(configured_letters) or "(unset)",
+            )
+            return
+        region_names = self._region_names()
+        if not region_names:
+            return
+
+        machine_types = self.required_machine_types()
+        for letter in self._common_supported_letters(region_names, configured_letters, machine_types):
+            if letter in configured_letters:
+                continue
+            yield [letter]
 
     def _common_supported_letters(
         self, region_names: list[str], configured_letters: list[str], machine_types: list[str]

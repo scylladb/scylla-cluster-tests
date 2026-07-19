@@ -16,6 +16,7 @@ Main GCE provisioner implementation.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import List, Dict
 
@@ -248,18 +249,24 @@ class GceProvisioner(Provisioner):
         """
         Clean up all resources for this test.
 
+        Instances are deleted concurrently, so a waited cleanup (``wait=True``) does not serialize the
+        slow per-instance deletions - all deletes are issued at once and awaited together.
+
         Args:
-            wait: Whether to wait for cleanup to complete
+            wait: Whether to wait for each deletion to complete
         """
         LOGGER.info("Cleaning up instances for test %s in zone %s", self.test_id, self.zone)
 
-        # Delete all cached instances
+        # Delete all cached instances concurrently (deletion is slow; serial wait=True would take minutes).
         instance_names = list(self._cache.keys())
-        for name in instance_names:
-            try:
-                self.terminate_instance(name, wait=wait)
-            except Exception as exc:  # noqa: BLE001
-                LOGGER.warning("Failed to terminate instance %s: %s", name, exc)
+        if instance_names:
+            with ThreadPoolExecutor(max_workers=min(len(instance_names), 10)) as executor:
+                futures = {executor.submit(self.terminate_instance, name, wait=wait): name for name in instance_names}
+                for future in as_completed(futures):
+                    try:
+                        future.result()
+                    except Exception as exc:  # noqa: BLE001
+                        LOGGER.warning("Failed to terminate instance %s: %s", futures[future], exc)
 
         # Clear cache
         self._cache.clear()
