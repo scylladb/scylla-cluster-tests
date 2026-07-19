@@ -4241,7 +4241,7 @@ Before provisioning, probe capacity by launching and terminating one on-demand i
 
 ## **fallback_to_next_region** / SCT_FALLBACK_TO_NEXT_REGION
 
-On capacity errors, after all AZs in the configured region are exhausted, relocate the entire cluster to the next eligible region (should be VPC-peered with the runner region with infra-prepared and AMI available). Only applies during initial setup, to single region tests. AWS-only.
+On capacity errors, after all AZs/zones in the configured region are exhausted, relocate the entire cluster to the next eligible region. On AWS the target region should be VPC-peered with the runner region with infra-prepared and AMI available; on GCE the global VPC and global images make any supported region eligible. Only applies during initial setup, to single region tests. Supported backends: AWS, GCE.
 
 **default:** False
 
