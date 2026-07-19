@@ -23,11 +23,7 @@ from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted
 from sdcm.sct_provision.aws.layout import SCTProvisionAWSLayout
 from sdcm.tester import ClusterTester
 
-
-class _DotDict(dict):
-    __getattr__ = dict.__getitem__
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
+from unit_tests.lib.dot_dict import DotDict
 
 
 def _capacity_error() -> ClientError:
@@ -38,7 +34,7 @@ def _capacity_error() -> ClientError:
 
 
 def _make_layout_params(**overrides):
-    params = _DotDict(
+    params = DotDict(
         {
             "cluster_backend": "aws",
             "region_name": "us-east-1",
@@ -223,8 +219,8 @@ def test_get_instances_returns_empty_when_az_idx_out_of_bounds(patched_ec2_for_g
     assert result == []
 
 
-def _make_tester_params(**overrides) -> _DotDict:
-    return _DotDict(
+def _make_tester_params(**overrides) -> DotDict:
+    return DotDict(
         {
             "region_name": "us-east-1",
             "availability_zone": "a",

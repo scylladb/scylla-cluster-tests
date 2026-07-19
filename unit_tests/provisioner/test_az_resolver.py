@@ -20,20 +20,16 @@ from sdcm.provision.aws.az_resolver import (
     AZResolver,
     NoValidAvailabilityZoneError,
     _node_count_positive,
-    is_az_fallback_enabled,
     run_pre_flight_capacity_probe,
 )
+from sdcm.provision.common.fallback import is_az_fallback_enabled
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted
 
-
-class _DotDict(dict):
-    __getattr__ = dict.__getitem__
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
+from unit_tests.lib.dot_dict import DotDict
 
 
 def _make_params(**overrides):
-    params = _DotDict(
+    params = DotDict(
         {
             "cluster_backend": "aws",
             "region_name": "us-east-1",
