@@ -8,6 +8,7 @@ description: >-
   throughput metrics per phase, building styled HTML tables with pass/fail color coding,
   and linking to Argus run pages. Applies to perf-regression, elasticity, and latency
   tests that use the latency_calculator_decorator.
+disable-model-invocation: true
 ---
 
 # Test Run Comparison Reports
