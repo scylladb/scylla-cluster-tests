@@ -353,7 +353,7 @@ pipeline {
                                                         if (curr_params.backend == 'xcloud') {
                                                             echo "Scylla Cloud backend selected: provisioning loader nodes only on ${curr_params.xcloud_provider} cloud provider"
                                                         }
-                                                        if (curr_params.backend == 'xcloud' || curr_params.backend == 'aws' || curr_params.backend == 'azure' || curr_params.backend == 'oci') {
+                                                        if (curr_params.backend == 'xcloud' || curr_params.backend == 'aws' || curr_params.backend == 'gce' || curr_params.backend == 'azure' || curr_params.backend == 'oci') {
                                                             provisionResources(curr_params, builder.region)
                                                         } else if (curr_params.backend.contains('docker')) {
                                                             sh """
