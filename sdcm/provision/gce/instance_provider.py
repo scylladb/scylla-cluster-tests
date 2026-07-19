@@ -13,6 +13,7 @@
 
 """VM instance management provider for GCE provisioning."""
 
+import os
 import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
@@ -45,6 +46,36 @@ ZONE_EXHAUSTED_MARKER = "ZONE_RESOURCE_POOL_EXHAUSTED"
 
 def _is_zone_exhausted(error: BaseException) -> bool:
     return ZONE_EXHAUSTED_MARKER in str(error)
+
+
+def _maybe_simulate_zone_exhaustion(zone: str) -> None:
+    """Testing hook: force a simulated GCE capacity stockout for selected zones.
+
+    Set ``BUILD_SIMULATE_GCE_EXHAUSTION`` to a comma-separated list of zone-name
+    substrings to make provisioning raise ``ZoneResourcesExhaustedError`` without
+    hitting real GCE capacity limits, so the AZ/region fallback path can be tested:
+
+    - ``us-east1-b``       -> exhaust a single AZ (exercises AZ fallback to a sibling zone)
+    - ``us-east1``         -> exhaust every zone in a region (exercises region fallback)
+    - ``us-east1-b,us-east1-c`` -> exhaust multiple specific zones
+
+    Leave the variable unset/empty to disable (normal provisioning).
+    """
+    simulate = os.environ.get("BUILD_SIMULATE_GCE_EXHAUSTION", "").strip()
+    if not simulate:
+        return
+    targets = [target.strip() for target in simulate.split(",") if target.strip()]
+    if any(target in zone for target in targets):
+        LOGGER.warning(
+            "BUILD_SIMULATE_GCE_EXHAUSTION=%s active: simulating %s for zone %s",
+            simulate,
+            ZONE_EXHAUSTED_MARKER,
+            zone,
+        )
+        raise ZoneResourcesExhaustedError(
+            f"Zone {zone} resource pool exhausted "
+            f"(simulated via BUILD_SIMULATE_GCE_EXHAUSTION): {ZONE_EXHAUSTED_MARKER}"
+        )
 
 
 class VirtualMachineProvider:
@@ -103,6 +134,8 @@ class VirtualMachineProvider:
 
         Uses retry logic to handle transient failures such as preemption or quota issues.
         """
+        _maybe_simulate_zone_exhaustion(self.zone)
+
         user_data_list = user_data_list or [""] * len(definitions)
         startup_script_list = startup_script_list or [""] * len(definitions)
 
