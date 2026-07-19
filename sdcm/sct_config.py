@@ -2275,7 +2275,372 @@ class SCTConfiguration(dict):
             'keep' - Keep instances running and leave credentials alone
             'keep-on-failure' - Keep instances if testrun failed
          """,
+<<<<<<< HEAD
             choices=("keep", "keep-on-failure", "destroy"),
+||||||| parent of 108a7b7ea (feature(provision/gce): add AZ + region + multi-DC capacity-exhaustion fallback)
+    )
+    post_behavior_loader_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+            Failure/post test behavior, i.e. what to do with the loader cloud instances at the end of the test.
+
+            'destroy' - Destroy instances and credentials (default)
+            'keep' - Keep instances running and leave credentials alone
+            'keep-on-failure' - Keep instances if testrun failed
+         """,
+    )
+    post_behavior_monitor_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+            Failure/post test behavior, i.e. what to do with the monitor cloud instances at the end of the test.
+         """,
+    )
+    post_behavior_k8s_cluster: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the k8s cluster at the end of the test.
+
+        'destroy' - Destroy k8s cluster and credentials (default)
+        'keep' - Keep k8s cluster running and leave credentials alone
+        'keep-on-failure' - Keep k8s cluster if testrun failed
+        """,
+    )
+    post_behavior_vector_store_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the vector store cloud instances at the end of the test.
+
+        'destroy' - Destroy instances and credentials (default)
+        'keep' - Keep instances running and leave credentials alone
+        'keep-on-failure' - Keep instances if testrun failed
+        """,
+    )
+    post_behavior_emr_cluster: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the EMR cluster at the end of the test.
+
+        'destroy' - Destroy EMR cluster (default)
+        'keep' - Keep EMR cluster running
+        'keep-on-failure' - Keep EMR cluster if testrun failed
+        """,
+    )
+    internode_compression: String = SctField(description="Scylla option: internode_compression.")
+    internode_encryption: String = SctField(
+        description="Scylla sub option of server_encryption_options: internode_encryption.",
+    )
+    jmx_heap_memory: int = SctField(
+        description="The total size of the memory allocated to JMX. Values in MB, so for 1GB enter 1024(MB).",
+    )
+
+    loader_swap_size: int = SctField(
+        description="The size of the swap file for the loaders. Its size in bytes calculated by x * 1MB",
+    )
+    monitor_swap_size: int = SctField(
+        description="The size of the swap file for the monitors. Its size in bytes calculated by x * 1MB",
+    )
+    append_scylla_setup_args: String = SctField(
+        description="More arguments to append to scylla_setup command line",
+    )
+    use_preinstalled_scylla: Boolean = SctField(
+        description="Don't install/update ScyllaDB on DB nodes",
+    )
+    stress_cdclog_reader_cmd: String = SctField(
+        description="""cdc-stressor command to read cdc_log table.
+                       You can specify everything but the -node, -keyspace, -table parameter, which is going to
+                       be provided by the test suite infrastructure.
+                       Multiple commands can be passed as a list.""",
+    )
+    store_cdclog_reader_stats_in_es: Boolean = SctField(
+        description="Add cdclog reader stats to ES for future performance result calculating",
+    )
+    stop_test_on_stress_failure: Boolean = SctField(
+        description="""If set to True the test will be stopped immediately when stress command failed.
+                       When set to False the test will continue to run even when there are errors in the
+                       stress process""",
+    )
+    stress_cdc_log_reader_batching_enable: Boolean = SctField(
+        description="""retrieving data from multiple streams in one poll""",
+    )
+    use_legacy_cluster_init: Boolean = SctField(
+        description="""Use legacy cluster initialization with autobootsrap disabled and parallel node setup""",
+    )
+    availability_zone: String = SctField(
+        description="""Availability zone to use. Specify multiple (comma separated) to deploy resources to multi az (works on AWS).
+              "Same for multi-region scenario.""",
+    )
+    aws_fallback_to_next_availability_zone: Boolean = SctField(
+        description="Deprecated alias of `fallback_to_next_availability_zone`. Kept for backward compatibility.",
+    )
+    fallback_to_next_availability_zone: Boolean = SctField(
+        description="On capacity errors, automatically retry provisioning in the next available AZ in the same region. "
+        "Backend-agnostic parameter; supersedes `aws_fallback_to_next_availability_zone`.",
+    )
+    pre_filter_unavailable_availability_zones: Boolean = SctField(
+        description="Filter availability zones upfront to only those that support all required instance types. "
+        "Replaces invalid AZs with valid alternatives in the same region before any provisioning attempt. "
+        "Supported backends: AWS, GCE.",
+    )
+    pre_flight_capacity_probe: Boolean = SctField(
+        description="Before provisioning, probe capacity by launching and terminating one on-demand instance per dynamic type "
+        "(`instance_type_db_target`, `nemesis_grow_shrink_instance_type`) in the chosen AZ. On capacity errors, raise to "
+        "trigger AZ/region fallback. Costs ~1 min per type. AWS-only.",
+    )
+    fallback_to_next_region: Boolean = SctField(
+        description="On capacity errors, after all AZs in the configured region are exhausted, relocate the entire cluster "
+        "to the next eligible region (should be VPC-peered with the runner region with infra-prepared and AMI available). "
+        "Only applies during initial setup, to single region tests. AWS-only.",
+    )
+    num_nodes_to_rollback: int = SctField(
+        description="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade",
+    )
+    upgrade_sstables: Boolean = SctField(
+        description="Whether to upgrade sstables as part of upgrade_node or not",
+    )
+    enable_truncate_checks_on_node_upgrade: Boolean = SctField(
+        description="Enables or disables truncate checks on each node upgrade and rollback",
+    )
+    stress_before_upgrade: StringOrList = SctField(
+        description="Stress command to be run before upgrade starts (preload/validation stage). "
+        "This workload runs before any nodes are upgraded and can use CL=ALL for data validation.",
+    )
+    large_partition_stress_during_upgrade: StringOrList = SctField(
+        description="Stress command to be run during rolling upgrade while nodes are being upgraded. "
+        "This workload cannot use CL=ALL as not all nodes may be available during the upgrade.",
+    )
+    stress_during_entire_upgrade: StringOrList = SctField(
+        description="Stress command to be run during the upgrade - user should take care for suitable duration",
+    )
+    stress_after_cluster_upgrade: StringOrList = SctField(
+        description="Stress command to be run after full upgrade - usually used to read the dataset for verification",
+    )
+
+    # Jepsen test.
+    jepsen_scylla_repo: String = SctField(
+        description="Link to the git repository with Jepsen Scylla tests",
+    )
+    jepsen_test_cmd: StringOrList = SctField(
+        description="Jepsen test command (e.g., 'test-all')",
+    )
+    jepsen_test_count: int = SctField(description="Possible number of reruns of single Jepsen test command")
+    jepsen_test_run_policy: Literal["most", "any", "all"] = SctField(
+        description="""
+        Jepsen test run policy (i.e., what we want to consider as passed for a single test)
+
+        'most' - most test runs are passed
+        'any'  - one pass is enough
+        'all'  - all test runs should pass
+        """,
+    )
+    max_events_severities: StringOrList = SctField(
+        default=[],
+        description="Limit severity level for event types",
+    )
+    scylla_rsyslog_setup: Boolean = SctField(
+        description="Configure rsyslog on Scylla nodes to send logs to monitoring nodes",
+    )
+    events_limit_in_email: int = SctField(
+        description="Limit number events in email reports",
+    )
+    data_volume_disk_num: int = SctField(
+        description="""Number of additional data volumes attached to instances
+         if data_volume_disk_num > 0, then data volumes (ebs on aws) will be
+         used for scylla data directory""",
+    )
+    data_volume_disk_type: Literal[
+        # AWS
+        "gp2",
+        "gp3",
+        "io2",
+        "io3",
+        "",
+        # OCI
+        "lower_cost",
+        "balanced",
+        "higher_performance",
+        "ultra",
+    ] = SctField(
+        description=(
+            "Type of additional volumes. AWS: gp2|gp3|io2|io3. OCI: lower_cost|balanced|higher_performance|ultra"
+=======
+    )
+    post_behavior_loader_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+            Failure/post test behavior, i.e. what to do with the loader cloud instances at the end of the test.
+
+            'destroy' - Destroy instances and credentials (default)
+            'keep' - Keep instances running and leave credentials alone
+            'keep-on-failure' - Keep instances if testrun failed
+         """,
+    )
+    post_behavior_monitor_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+            Failure/post test behavior, i.e. what to do with the monitor cloud instances at the end of the test.
+         """,
+    )
+    post_behavior_k8s_cluster: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the k8s cluster at the end of the test.
+
+        'destroy' - Destroy k8s cluster and credentials (default)
+        'keep' - Keep k8s cluster running and leave credentials alone
+        'keep-on-failure' - Keep k8s cluster if testrun failed
+        """,
+    )
+    post_behavior_vector_store_nodes: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the vector store cloud instances at the end of the test.
+
+        'destroy' - Destroy instances and credentials (default)
+        'keep' - Keep instances running and leave credentials alone
+        'keep-on-failure' - Keep instances if testrun failed
+        """,
+    )
+    post_behavior_emr_cluster: Literal["destroy", "keep", "keep-on-failure"] = SctField(
+        description="""
+        Failure/post test behavior, i.e. what to do with the EMR cluster at the end of the test.
+
+        'destroy' - Destroy EMR cluster (default)
+        'keep' - Keep EMR cluster running
+        'keep-on-failure' - Keep EMR cluster if testrun failed
+        """,
+    )
+    internode_compression: String = SctField(description="Scylla option: internode_compression.")
+    internode_encryption: String = SctField(
+        description="Scylla sub option of server_encryption_options: internode_encryption.",
+    )
+    jmx_heap_memory: int = SctField(
+        description="The total size of the memory allocated to JMX. Values in MB, so for 1GB enter 1024(MB).",
+    )
+
+    loader_swap_size: int = SctField(
+        description="The size of the swap file for the loaders. Its size in bytes calculated by x * 1MB",
+    )
+    monitor_swap_size: int = SctField(
+        description="The size of the swap file for the monitors. Its size in bytes calculated by x * 1MB",
+    )
+    append_scylla_setup_args: String = SctField(
+        description="More arguments to append to scylla_setup command line",
+    )
+    use_preinstalled_scylla: Boolean = SctField(
+        description="Don't install/update ScyllaDB on DB nodes",
+    )
+    stress_cdclog_reader_cmd: String = SctField(
+        description="""cdc-stressor command to read cdc_log table.
+                       You can specify everything but the -node, -keyspace, -table parameter, which is going to
+                       be provided by the test suite infrastructure.
+                       Multiple commands can be passed as a list.""",
+    )
+    store_cdclog_reader_stats_in_es: Boolean = SctField(
+        description="Add cdclog reader stats to ES for future performance result calculating",
+    )
+    stop_test_on_stress_failure: Boolean = SctField(
+        description="""If set to True the test will be stopped immediately when stress command failed.
+                       When set to False the test will continue to run even when there are errors in the
+                       stress process""",
+    )
+    stress_cdc_log_reader_batching_enable: Boolean = SctField(
+        description="""retrieving data from multiple streams in one poll""",
+    )
+    use_legacy_cluster_init: Boolean = SctField(
+        description="""Use legacy cluster initialization with autobootsrap disabled and parallel node setup""",
+    )
+    availability_zone: String = SctField(
+        description="""Availability zone to use. Specify multiple (comma separated) to deploy resources to multi az (works on AWS).
+              "Same for multi-region scenario.""",
+    )
+    aws_fallback_to_next_availability_zone: Boolean = SctField(
+        description="Deprecated alias of `fallback_to_next_availability_zone`. Kept for backward compatibility.",
+    )
+    fallback_to_next_availability_zone: Boolean = SctField(
+        description="On capacity errors, automatically retry provisioning in the next available AZ in the same region. "
+        "Backend-agnostic parameter; supersedes `aws_fallback_to_next_availability_zone`.",
+    )
+    pre_filter_unavailable_availability_zones: Boolean = SctField(
+        description="Filter availability zones upfront to only those that support all required instance types. "
+        "Replaces invalid AZs with valid alternatives in the same region before any provisioning attempt. "
+        "Supported backends: AWS, GCE.",
+    )
+    pre_flight_capacity_probe: Boolean = SctField(
+        description="Before provisioning, probe capacity by launching and terminating one on-demand instance per dynamic type "
+        "(`instance_type_db_target`, `nemesis_grow_shrink_instance_type`) in the chosen AZ. On capacity errors, raise to "
+        "trigger AZ/region fallback. Costs ~1 min per type. AWS-only.",
+    )
+    fallback_to_next_region: Boolean = SctField(
+        description="On capacity errors, after all AZs/zones in the configured region are exhausted, relocate to the next "
+        "eligible region: a single-region cluster moves as a whole, while in a multi-region test only the exhausted "
+        "datacenter is relocated (to a region no other datacenter occupies) and the cluster is retried. On AWS the target "
+        "region should be VPC-peered with the runner region with infra-prepared and AMI available; on GCE the global VPC "
+        "and global images make any supported region eligible. Only applies during initial setup. "
+        "Supported backends: AWS, GCE.",
+    )
+    num_nodes_to_rollback: int = SctField(
+        description="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade",
+    )
+    upgrade_sstables: Boolean = SctField(
+        description="Whether to upgrade sstables as part of upgrade_node or not",
+    )
+    enable_truncate_checks_on_node_upgrade: Boolean = SctField(
+        description="Enables or disables truncate checks on each node upgrade and rollback",
+    )
+    stress_before_upgrade: StringOrList = SctField(
+        description="Stress command to be run before upgrade starts (preload/validation stage). "
+        "This workload runs before any nodes are upgraded and can use CL=ALL for data validation.",
+    )
+    large_partition_stress_during_upgrade: StringOrList = SctField(
+        description="Stress command to be run during rolling upgrade while nodes are being upgraded. "
+        "This workload cannot use CL=ALL as not all nodes may be available during the upgrade.",
+    )
+    stress_during_entire_upgrade: StringOrList = SctField(
+        description="Stress command to be run during the upgrade - user should take care for suitable duration",
+    )
+    stress_after_cluster_upgrade: StringOrList = SctField(
+        description="Stress command to be run after full upgrade - usually used to read the dataset for verification",
+    )
+
+    # Jepsen test.
+    jepsen_scylla_repo: String = SctField(
+        description="Link to the git repository with Jepsen Scylla tests",
+    )
+    jepsen_test_cmd: StringOrList = SctField(
+        description="Jepsen test command (e.g., 'test-all')",
+    )
+    jepsen_test_count: int = SctField(description="Possible number of reruns of single Jepsen test command")
+    jepsen_test_run_policy: Literal["most", "any", "all"] = SctField(
+        description="""
+        Jepsen test run policy (i.e., what we want to consider as passed for a single test)
+
+        'most' - most test runs are passed
+        'any'  - one pass is enough
+        'all'  - all test runs should pass
+        """,
+    )
+    max_events_severities: StringOrList = SctField(
+        default=[],
+        description="Limit severity level for event types",
+    )
+    scylla_rsyslog_setup: Boolean = SctField(
+        description="Configure rsyslog on Scylla nodes to send logs to monitoring nodes",
+    )
+    events_limit_in_email: int = SctField(
+        description="Limit number events in email reports",
+    )
+    data_volume_disk_num: int = SctField(
+        description="""Number of additional data volumes attached to instances
+         if data_volume_disk_num > 0, then data volumes (ebs on aws) will be
+         used for scylla data directory""",
+    )
+    data_volume_disk_type: Literal[
+        # AWS
+        "gp2",
+        "gp3",
+        "io2",
+        "io3",
+        "",
+        # OCI
+        "lower_cost",
+        "balanced",
+        "higher_performance",
+        "ultra",
+    ] = SctField(
+        description=(
+            "Type of additional volumes. AWS: gp2|gp3|io2|io3. OCI: lower_cost|balanced|higher_performance|ultra"
+>>>>>>> 108a7b7ea (feature(provision/gce): add AZ + region + multi-DC capacity-exhaustion fallback)
         ),
         dict(
             name="post_behavior_k8s_cluster",
@@ -3818,6 +4183,183 @@ class SCTConfiguration(dict):
         self.log.debug("Total nodes: %s", total_nodes)
         return total_nodes
 
+<<<<<<< HEAD
+||||||| parent of 108a7b7ea (feature(provision/gce): add AZ + region + multi-DC capacity-exhaustion fallback)
+    def _apply_resolved_placement(self) -> None:
+        """Apply region/AZ selected in a previous provisioning step.
+
+        Provisioning and test execution can run in separate `hydra` invocations, so a region selected
+        by the 'region fallback' procedure at provisioning can be lost when config is reloaded during
+        test execution.
+        The provisioner writes the selected region to a test_id-keyed file, and this method applies
+        it in the loaded config.
+
+        The behavior can be disabled with `SCT_IGNORE_RESOLVED_PLACEMENT`.
+        """
+        self._resolved_placement_source_region = None
+        if os.environ.get("SCT_IGNORE_RESOLVED_PLACEMENT"):
+            return
+
+        test_id = self.get("reuse_cluster") or self.get("test_id")
+        if not test_id or test_id == "None":
+            return
+
+        placement = TestConfig.read_resolved_placement(test_id)
+        if not placement:
+            return
+
+        original_region_list = " ".join(self.region_names) if self.region_names else None
+        original_first_region = self.region_names[0] if self.region_names else None
+        region_name = placement.get("region_name")
+        availability_zone = placement.get("availability_zone")
+        amis = placement.get("amis")
+        if region_name:
+            os.environ["SCT_REGION_NAME"] = region_name
+            self["region_name"] = region_name
+            if amis:
+                for key, value in amis.items():
+                    self[key] = value
+            elif original_region_list and region_name != original_region_list:
+                self._resolved_placement_source_region = original_first_region
+        if availability_zone:
+            os.environ["SCT_AVAILABILITY_ZONE"] = availability_zone
+            self["availability_zone"] = availability_zone
+
+        self.log.info(
+            "Applied resolved placement for test_id=%s: region_name=%s availability_zone=%s amis=%s",
+            test_id,
+            region_name,
+            availability_zone,
+            bool(amis),
+        )
+
+    def resolve_amis(self, region_names: List[str], source_region: str | None = None) -> None:
+        """Re-resolve region-bound AWS AMI IDs for the given regions `region_names`."""
+        if self.get("cluster_backend") != "aws":
+            return
+
+        target_regions = list(region_names)
+        intent = getattr(self, "_ami_params_snapshot", None) or {}
+        for key in self.ami_id_params:
+            original = intent.get(key)
+            current = self.get(key)
+            if original and not original.split()[0].startswith("ami-"):
+                self[key] = convert_name_to_ami_if_needed(original, tuple(target_regions))
+            elif current and source_region:
+                self[key] = self._remap_amis_to_regions(current, source_region, target_regions, key)
+
+        if getattr(self, "target_db_image_ids", None) and source_region:
+            self.target_db_image_ids = [
+                self._remap_amis_to_regions(ami, source_region, target_regions, "instance_type_db_target")
+                for ami in self.target_db_image_ids
+            ]
+
+    @staticmethod
+    def _remap_amis_to_regions(value: str, source_region: str, region_names: List[str], key: str) -> str:
+        """Remap AMI IDs from `source_region` into each target region."""
+        remapped = []
+        for region in region_names:
+            for ami_id in value.split():
+                matches = find_equivalent_ami(ami_id, source_region, target_regions=[region])
+                if not matches:
+                    raise RegionAMINotFoundError(
+                        f"No equivalent AMI for {key}={ami_id} (from {source_region}) in {region}; region ineligible for fallback"
+                    )
+                remapped.append(matches[0]["ami_id"])
+        return " ".join(remapped)
+
+=======
+    def _apply_resolved_placement(self) -> None:
+        """Apply region/AZ selected in a previous provisioning step.
+
+        Provisioning and test execution can run in separate `hydra` invocations, so a region selected
+        by the 'region fallback' procedure at provisioning can be lost when config is reloaded during
+        test execution.
+        The provisioner writes the selected region to a test_id-keyed file, and this method applies
+        it in the loaded config.
+
+        The behavior can be disabled with `SCT_IGNORE_RESOLVED_PLACEMENT`.
+        """
+        self._resolved_placement_source_region = None
+        if os.environ.get("SCT_IGNORE_RESOLVED_PLACEMENT"):
+            return
+
+        test_id = self.get("reuse_cluster") or self.get("test_id")
+        if not test_id or test_id == "None":
+            return
+
+        placement = TestConfig.read_resolved_placement(test_id)
+        if not placement:
+            return
+
+        original_region_list = " ".join(self.region_names) if self.region_names else None
+        original_first_region = self.region_names[0] if self.region_names else None
+        region_name = placement.get("region_name")
+        availability_zone = placement.get("availability_zone")
+        amis = placement.get("amis")
+        if region_name:
+            if self.get("cluster_backend") == "gce":
+                # GCE has no AWS-style region_name or per-region AMIs: the relocated region is
+                # carried in gce_datacenter (env-first), so a split provision->run pipeline picks
+                # up the region chosen by region fallback instead of the original one.
+                os.environ["SCT_GCE_DATACENTER"] = region_name
+                self["gce_datacenter"] = region_name
+            else:
+                os.environ["SCT_REGION_NAME"] = region_name
+                self["region_name"] = region_name
+                if amis:
+                    for key, value in amis.items():
+                        self[key] = value
+                elif original_region_list and region_name != original_region_list:
+                    self._resolved_placement_source_region = original_first_region
+        if availability_zone:
+            os.environ["SCT_AVAILABILITY_ZONE"] = availability_zone
+            self["availability_zone"] = availability_zone
+
+        self.log.info(
+            "Applied resolved placement for test_id=%s: region_name=%s availability_zone=%s amis=%s",
+            test_id,
+            region_name,
+            availability_zone,
+            bool(amis),
+        )
+
+    def resolve_amis(self, region_names: List[str], source_region: str | None = None) -> None:
+        """Re-resolve region-bound AWS AMI IDs for the given regions `region_names`."""
+        if self.get("cluster_backend") != "aws":
+            return
+
+        target_regions = list(region_names)
+        intent = getattr(self, "_ami_params_snapshot", None) or {}
+        for key in self.ami_id_params:
+            original = intent.get(key)
+            current = self.get(key)
+            if original and not original.split()[0].startswith("ami-"):
+                self[key] = convert_name_to_ami_if_needed(original, tuple(target_regions))
+            elif current and source_region:
+                self[key] = self._remap_amis_to_regions(current, source_region, target_regions, key)
+
+        if getattr(self, "target_db_image_ids", None) and source_region:
+            self.target_db_image_ids = [
+                self._remap_amis_to_regions(ami, source_region, target_regions, "instance_type_db_target")
+                for ami in self.target_db_image_ids
+            ]
+
+    @staticmethod
+    def _remap_amis_to_regions(value: str, source_region: str, region_names: List[str], key: str) -> str:
+        """Remap AMI IDs from `source_region` into each target region."""
+        remapped = []
+        for region in region_names:
+            for ami_id in value.split():
+                matches = find_equivalent_ami(ami_id, source_region, target_regions=[region])
+                if not matches:
+                    raise RegionAMINotFoundError(
+                        f"No equivalent AMI for {key}={ami_id} (from {source_region}) in {region}; region ineligible for fallback"
+                    )
+                remapped.append(matches[0]["ami_id"])
+        return " ".join(remapped)
+
+>>>>>>> 108a7b7ea (feature(provision/gce): add AZ + region + multi-DC capacity-exhaustion fallback)
     @property
     def region_names(self) -> List[str]:
         region_names = self.environment.get("region_name")
