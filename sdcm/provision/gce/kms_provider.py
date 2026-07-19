@@ -10,10 +10,27 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class GcpKmsProvider:
+    """Resolve the GCP KMS keyring/key pool used for encryption at rest.
+
+    The keyring location is a fixed keystore value (`keyring_location`), deliberately *not* derived
+    from the region the test runs in. Cloud KMS is reached through a single global endpoint
+    (`cloudkms.googleapis.com`) and a key is addressed by its full resource path, so a VM in any
+    region can use a key in any location - only project-scoped IAM gates it. This is what makes GCE
+    region fallback (`fallback_to_next_region`) safe: relocating the cluster changes `gce_datacenter`
+    but leaves the key URI valid, and `prepare_gcp_kms` writes `gcp_location` explicitly (there is no
+    per-node `auto` resolution like the AWS `kms_hosts.*.aws_region`).
+
+    Keep it that way. Making the location follow the run region - or a data-residency org policy
+    (`constraints/gcp.resourceLocations`) forcing keys into the local region - would reintroduce the
+    AWS failure mode (SCT-718): a key provisioned in the originally configured region and a node
+    booting in the relocated one.
+    """
+
     def __post_init__(self):
         self._gcp_kms_config = KeyStore().get_gcp_kms_config()
         gcp_credentials = KeyStore().get_gcp_credentials()
         self._project_id = gcp_credentials["project_id"]
+        # Region-independent by design - see the class docstring before changing this.
         self._location = self._gcp_kms_config["keyring_location"]
 
     @classmethod
