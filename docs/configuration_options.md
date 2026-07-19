@@ -4218,7 +4218,7 @@ On capacity errors, automatically retry provisioning in the next available AZ in
 **type:** bool
 
 **backend overrides:**
-- `True`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+- `True`: aws, gce, aws-siren, gce-siren, k8s-local-kind-aws, k8s-gke, k8s-eks
 
 
 ## **pre_filter_unavailable_availability_zones** / SCT_PRE_FILTER_UNAVAILABLE_AVAILABILITY_ZONES
@@ -4248,7 +4248,7 @@ On capacity errors, after all AZs/zones in the configured region are exhausted, 
 **type:** bool
 
 **backend overrides:**
-- `True`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+- `True`: aws, gce, aws-siren, gce-siren, k8s-local-kind-aws, k8s-gke, k8s-eks
 
 
 ## **num_nodes_to_rollback** / SCT_NUM_NODES_TO_ROLLBACK
