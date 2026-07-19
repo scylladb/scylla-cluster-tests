@@ -2106,6 +2106,14 @@ class SCTConfiguration(BaseModel):
         "(`instance_type_db_target`, `nemesis_grow_shrink_instance_type`) in the chosen AZ. On capacity errors, raise to "
         "trigger AZ/region fallback. Costs ~1 min per type. AWS-only.",
     )
+    fallback_to_next_region: Boolean = SctField(
+        description="On capacity errors, after all AZs/zones in the configured region are exhausted, relocate to the next "
+        "eligible region: a single-region cluster moves as a whole, while in a multi-region test only the exhausted "
+        "datacenter is relocated (to a region no other datacenter occupies) and the cluster is retried. On AWS the target "
+        "region should be VPC-peered with the runner region with infra-prepared and AMI available; on GCE the global VPC "
+        "and global images make any supported region eligible. Only applies during initial setup. "
+        "Supported backends: AWS, GCE.",
+    )
     num_nodes_to_rollback: int = SctField(
         description="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade",
     )
@@ -2744,6 +2752,8 @@ class SCTConfiguration(BaseModel):
         add_severity_limit_rules(self.get("max_events_severities"))
         print_critical_events()
 
+        self._apply_resolved_placement()
+
         # 5) overwrite AMIs
         for key in self.ami_id_params:
             if param := self.get(key):
@@ -3318,6 +3328,61 @@ class SCTConfiguration(BaseModel):
 
         self.log.debug("Total nodes: %s", total_nodes)
         return total_nodes
+
+    def _apply_resolved_placement(self) -> None:
+        """Apply region/AZ selected in a previous provisioning step.
+
+        Provisioning and test execution can run in separate `hydra` invocations, so a region selected
+        by the 'region fallback' procedure at provisioning can be lost when config is reloaded during
+        test execution.
+        The provisioner writes the selected region to a test_id-keyed file, and this method applies
+        it in the loaded config.
+
+        The behavior can be disabled with `SCT_IGNORE_RESOLVED_PLACEMENT`.
+        """
+        self._resolved_placement_source_region = None
+        if os.environ.get("SCT_IGNORE_RESOLVED_PLACEMENT"):
+            return
+
+        test_id = self.get("reuse_cluster") or self.get("test_id")
+        if not test_id or test_id == "None":
+            return
+
+        placement = TestConfig.read_resolved_placement(test_id)
+        if not placement:
+            return
+
+        original_region_list = " ".join(self.region_names) if self.region_names else None
+        original_first_region = self.region_names[0] if self.region_names else None
+        region_name = placement.get("region_name")
+        availability_zone = placement.get("availability_zone")
+        amis = placement.get("amis")
+        if region_name:
+            if self.get("cluster_backend") == "gce":
+                # GCE has no AWS-style region_name or per-region AMIs: the relocated region is
+                # carried in gce_datacenter (env-first), so a split provision->run pipeline picks
+                # up the region chosen by region fallback instead of the original one.
+                os.environ["SCT_GCE_DATACENTER"] = region_name
+                self["gce_datacenter"] = region_name
+            else:
+                os.environ["SCT_REGION_NAME"] = region_name
+                self["region_name"] = region_name
+                if amis:
+                    for key, value in amis.items():
+                        self[key] = value
+                elif original_region_list and region_name != original_region_list:
+                    self._resolved_placement_source_region = original_first_region
+        if availability_zone:
+            os.environ["SCT_AVAILABILITY_ZONE"] = availability_zone
+            self["availability_zone"] = availability_zone
+
+        self.log.info(
+            "Applied resolved placement for test_id=%s: region_name=%s availability_zone=%s amis=%s",
+            test_id,
+            region_name,
+            availability_zone,
+            bool(amis),
+        )
 
     @property
     def region_names(self) -> List[str]:

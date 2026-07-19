@@ -302,10 +302,8 @@ def provision_resources(backend, test_name: str, config: str):
             layout = SCTProvisionLayout(params=params)
             layout.provision()
         elif backend in ("azure", "gce", "oci"):
-            if backend == "gce":
-                from sdcm.provision.gce.zone_resolver import GceAZResolver  # noqa: PLC0415
-
-                GceAZResolver(params).resolve()
+            # GCE region fallback + placement handoff live inside provision_sct_resources now, so all
+            # three backends share the same entry point (Azure/OCI simply have no fallback yet).
             provision_sct_resources(params=params, test_config=test_config)
         elif backend == "xcloud":
             cloud_provider = params.get("xcloud_provider").lower()
