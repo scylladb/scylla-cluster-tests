@@ -3396,7 +3396,19 @@ On capacity errors, automatically retry provisioning in the next available AZ in
 
 **default:** N/A
 
+<<<<<<< HEAD
 **type:** boolean
+||||||| parent of f1e24d836 (feature(provision/gce): enable AZ and region fallback by default for GCE)
+**type:** bool
+
+**backend overrides:**
+- `True`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+=======
+**type:** bool
+
+**backend overrides:**
+- `True`: aws, gce, aws-siren, gce-siren, k8s-local-kind-aws, k8s-gke, k8s-eks
+>>>>>>> f1e24d836 (feature(provision/gce): enable AZ and region fallback by default for GCE)
 
 
 ## **pre_filter_unavailable_availability_zones** / SCT_PRE_FILTER_UNAVAILABLE_AVAILABILITY_ZONES
@@ -3443,8 +3455,14 @@ On capacity errors, after all AZs/zones in the configured region are exhausted, 
 **type:** bool
 
 **backend overrides:**
+<<<<<<< HEAD
 - `True`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
 >>>>>>> 108a7b7ea (feature(provision/gce): add AZ + region + multi-DC capacity-exhaustion fallback)
+||||||| parent of f1e24d836 (feature(provision/gce): enable AZ and region fallback by default for GCE)
+- `True`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+=======
+- `True`: aws, gce, aws-siren, gce-siren, k8s-local-kind-aws, k8s-gke, k8s-eks
+>>>>>>> f1e24d836 (feature(provision/gce): enable AZ and region fallback by default for GCE)
 
 
 ## **num_nodes_to_rollback** / SCT_NUM_NODES_TO_ROLLBACK
