@@ -3446,7 +3446,7 @@ Before provisioning, probe capacity by launching and terminating one on-demand i
 
 On capacity errors, after all AZs/zones in the configured region are exhausted, relocate to the next eligible region: a single-region cluster moves as a whole, while in a multi-region test only the exhausted datacenter is relocated (to a region no other datacenter occupies) and the cluster is retried. On AWS the target region should be VPC-peered with the runner region with infra-prepared and AMI available; on GCE the global VPC and global images make any supported region eligible. Only applies during initial setup. Supported backends: AWS, GCE.
 
-**default:** False
+**default:** N/A
 
 **type:** boolean
 
