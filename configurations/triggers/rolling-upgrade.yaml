@@ -25,6 +25,8 @@ defaults:
   post_behavior_loader_nodes: "destroy"
   post_behavior_monitor_nodes: "destroy"
   gce_project: "gcp-sct-project-1"
+  rolling_upgrade_test: "true"
+  new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
 jobs:
   # ===========================================================================
