@@ -1108,6 +1108,65 @@ def test_resolved_placement_with_amis_applies_directly_and_skips_re_resolution(m
     assert conf["ami_id_db_scylla"] == "ami-persisted-west"
 
 
+def _set_gce_overlay_env(monkeypatch, test_id, original_datacenter):
+    """Env for a GCE run whose placement handoff should be picked up at config load."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    _set_gce_instance_types(monkeypatch)
+    monkeypatch.setenv(
+        "SCT_GCE_IMAGE_DB",
+        "https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9",
+    )
+    monkeypatch.setenv("SCT_GCE_DATACENTER", original_datacenter)
+    monkeypatch.setenv("SCT_TEST_ID", test_id)
+    monkeypatch.setenv("SCT_USE_MGMT", "false")
+    monkeypatch.delenv("SCT_IGNORE_RESOLVED_PLACEMENT", raising=False)
+
+
+def test_gce_resolved_placement_applies_relocated_datacenter(monkeypatch, placement_logdir):  # noqa: ARG001
+    """A GCE region-fallback relocation is picked up by the next hydra command (the Run Test step).
+
+    GCE carries the region in `gce_datacenter` rather than AWS's `region_name`/AMIs, and
+    `gce_datacenters` is env-first - so the overlay has to rewrite SCT_GCE_DATACENTER, not just the
+    config value, or the split provision->run pipeline snaps back to the original region.
+    """
+    test_id = "33333333-3333-3333-3333-333333333333"
+    _set_gce_overlay_env(monkeypatch, test_id, original_datacenter="us-east1")
+    TestConfig.write_resolved_placement(test_id, region_name="us-west1", availability_zone="c")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert os.environ["SCT_GCE_DATACENTER"] == "us-west1"
+    assert conf.gce_datacenters == ["us-west1"]
+    assert conf["availability_zone"] == "c"
+    assert os.environ["SCT_AVAILABILITY_ZONE"] == "c"
+
+
+def test_gce_resolved_placement_applies_relocated_multi_dc(monkeypatch, placement_logdir):  # noqa: ARG001
+    """The handoff round-trips a multi-DC placement, so per-DC relocation survives the step boundary."""
+    test_id = "44444444-4444-4444-4444-444444444444"
+    _set_gce_overlay_env(monkeypatch, test_id, original_datacenter="us-east1 us-west1")
+    TestConfig.write_resolved_placement(test_id, region_name="us-east1 us-east4", availability_zone="b")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.gce_datacenters == ["us-east1", "us-east4"]  # only the exhausted DC moved
+    assert os.environ["SCT_GCE_DATACENTER"] == "us-east1 us-east4"
+
+
+def test_gce_resolved_placement_ignored_when_disabled(monkeypatch, placement_logdir):  # noqa: ARG001
+    """SCT_IGNORE_RESOLVED_PLACEMENT keeps the configured GCE region, handoff file or not."""
+    test_id = "55555555-5555-5555-5555-555555555555"
+    _set_gce_overlay_env(monkeypatch, test_id, original_datacenter="us-east1")
+    TestConfig.write_resolved_placement(test_id, region_name="us-west1", availability_zone="c")
+    monkeypatch.setenv("SCT_IGNORE_RESOLVED_PLACEMENT", "1")
+
+    conf = sct_config.SCTConfiguration()
+
+    assert conf.gce_datacenters == ["us-east1"]
+    assert os.environ["SCT_GCE_DATACENTER"] == "us-east1"
+
+
 @pytest.mark.parametrize(
     "release_label, expected_error",
     [

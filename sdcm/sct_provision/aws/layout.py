@@ -20,10 +20,9 @@ from botocore.exceptions import ClientError
 from sdcm.exceptions import CapacityReservationError
 from sdcm.provision.aws.az_resolver import (
     AZResolver,
-    is_az_fallback_enabled,
-    is_region_fallback_enabled,
     run_pre_flight_capacity_probe,
 )
+from sdcm.provision.common.fallback import is_az_fallback_enabled, is_region_fallback_enabled
 from sdcm.provision.aws.capacity_errors import (
     ProvisioningCapacityExhausted,
     RegionAMINotFoundError,

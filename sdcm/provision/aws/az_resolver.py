@@ -93,22 +93,6 @@ class NoValidAvailabilityZoneError(Exception):
     """Raised when no AZ supports all required instance types in the configured region(s)."""
 
 
-def is_az_fallback_enabled(params) -> bool:
-    """Return True when AZ fallback on capacity errors is enabled.
-
-    Reads `fallback_to_next_availability_zone` (new, backend-agnostic).
-    Falls back to the deprecated `aws_fallback_to_next_availability_zone` alias.
-    """
-    if (value := params.get("fallback_to_next_availability_zone")) is not None:
-        return bool(value)
-    return bool(params.get("aws_fallback_to_next_availability_zone"))
-
-
-def is_region_fallback_enabled(params) -> bool:
-    """Return True when whole-cluster region fallback on capacity errors is enabled."""
-    return bool(params.get("fallback_to_next_region")) and params.get("cluster_backend") == "aws"
-
-
 class AZResolver:
     """Resolve `availability_zone` config to AZs supporting all required instance types."""
 
