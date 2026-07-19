@@ -18,9 +18,10 @@ def call(Map pipelineParams = [:]) {
     def cronSpec = pipelineParams.get('cron', '')
     def defaultLabelsSelector = pipelineParams.get('labels_selector', '')
 
-    // Only enable cron on production master triggers — never on staging, PRs, or release branches
-    if (cronSpec && env.JOB_NAME && !env.JOB_NAME.startsWith('scylla-master/')) {
-        println("Cron disabled: job '${env.JOB_NAME}' is not under scylla-master/")
+    // Only enable cron on production master triggers — never on staging, PRs, release branches,
+    // or releng-testing (which mirrors production jobs for pipeline development).
+    if (cronSpec && env.JOB_NAME && (!env.JOB_NAME.startsWith('scylla-master/') || env.JOB_NAME.contains('/releng-testing/'))) {
+        println("Cron disabled: job '${env.JOB_NAME}' is not a production scylla-master trigger")
         cronSpec = ''
     }
 
