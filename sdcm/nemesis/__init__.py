@@ -1258,7 +1258,10 @@ class NemesisRunner:
                 **add_node_func_args
             )
         if not new_nodes:
-            raise NodeSetupFailed(f"Failed to add {count} new node(s): add_nodes returned {new_nodes!r}")
+            raise NodeSetupFailed(
+                node=self.target_node,
+                error_msg=f"Failed to add {count} new node(s): add_nodes returned {new_nodes!r}",
+            )
         self.monitoring_set.reconfigure_scylla_monitoring()
         nodes_names = ",".join([new_node.name for new_node in new_nodes])
         try:

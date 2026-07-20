@@ -1,6 +1,9 @@
+from unittest.mock import MagicMock
+
 import pytest
 
 from argus.common.enums import NemesisStatus
+from sdcm.cluster import NodeSetupFailed
 from sdcm.exceptions import KillNemesis, UnsupportedNemesis
 from sdcm.sct_events import Severity
 
@@ -206,3 +209,12 @@ def test_execute_multiple_nemesis_in_sequence(nemesis, kill_nemesis, failing_nem
         assert nemesis_runner.operation_log[i]["start"] >= nemesis_runner.operation_log[i - 1]["start"], (
             f"operation_log[{i}] started before operation_log[{i - 1}]"
         )
+
+
+def test_add_and_init_new_cluster_nodes_raises_nodesetupfailed_when_add_nodes_returns_none(nemesis_runner):
+    """When add_nodes yields no nodes, the guard must raise a clear NodeSetupFailed, not a TypeError from bad args."""
+    nemesis_runner.set_target_node()
+    nemesis_runner.target_node.dc_idx = 0
+    nemesis_runner.cluster.add_nodes = MagicMock(return_value=None)
+    with pytest.raises(NodeSetupFailed):
+        nemesis_runner._add_and_init_new_cluster_nodes(count=1, rack=0)
