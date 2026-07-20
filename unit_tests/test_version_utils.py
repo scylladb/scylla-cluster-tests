@@ -13,6 +13,7 @@ from sdcm.utils.version_utils import (
     get_branch_version,
     get_branch_version_for_multiple_repositories,
     get_branched_repo,
+    get_gemini_version,
     get_git_tag_from_helm_chart_version,
     get_relocatable_pkg_url,
     get_scylla_urls_from_repository,
@@ -1098,3 +1099,24 @@ def test_docker_version_routing_logic(version, expected_repo):
     """Test Docker repo selection for various version formats."""
     repo = get_scylla_docker_repo_from_version(version)
     assert repo == expected_repo, f"Version '{version}' should route to '{expected_repo}', got '{repo}'"
+
+
+@pytest.mark.parametrize(
+    "output, expected",
+    (
+        pytest.param(
+            '{"gemini":{"version":"2.3.9","commit_date":"2026-05-08T13:55:22Z",'
+            '"commit_sha":"d139eca4bab10c1b2b7a8b73ca85787deadecc6b"},'
+            '"scylla-driver":{"version":"v1.18.0","commit_date":"2026-04-29T17:29:04Z",'
+            '"commit_sha":"51b5d22d574212cc61b46a794e0f2ca5bdad9431"}}',
+            "2.3.9",
+            id="version-json-current",
+        ),
+        pytest.param('{"gemini": {"version": "1.0.1"}}', "1.0.1", id="version-json-minimal"),
+        pytest.param('{"scylla-driver": {"version": "v1.0.0"}}', None, id="missing-gemini-key"),
+        pytest.param("garbage non-json output", None, id="non-json-returns-none"),
+        pytest.param("", None, id="empty-input"),
+    ),
+)
+def test_get_gemini_version(output, expected):
+    assert get_gemini_version(output) == expected

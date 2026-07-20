@@ -26,7 +26,6 @@ import sys
 import time
 import traceback
 import unittest
-import unittest.mock
 from pathlib import Path
 from typing import NamedTuple, Optional, Union, List, Any
 from uuid import uuid4
@@ -109,7 +108,7 @@ from sdcm.teardown_validators import teardown_validators_list
 from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
 from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
-from sdcm.utils.argus import report_scylla_yaml_to_argus
+from sdcm.utils.argus import ReplayOnlyArgusSCTClient, report_scylla_yaml_to_argus
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_utils import (
     init_monitoring_info_from_params,
@@ -167,7 +166,12 @@ from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEven
 from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
 from sdcm.sct_events.events_analyzer import stop_events_analyzer
 from sdcm.sct_events.grafana import start_posting_grafana_annotations
-from sdcm.stress_thread import CassandraStressThread, get_timeout_from_stress_cmd
+from sdcm.stress_thread import (
+    CassandraStressThread,
+    apply_gemini_stress_duration,
+    extract_gemini_seed,
+    get_timeout_from_stress_cmd,
+)
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
 from sdcm.utils.net import get_my_ip, get_sct_runner_ip
@@ -433,6 +437,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def init_argus_run(self):
         try:
             self.test_config.init_argus_client(self.params)
+            self.test_config.start_argus_event_pipeline()
             git_status = get_git_status_info()
             self.test_config.argus_client().submit_sct_run(
                 job_name=get_job_name(),
@@ -460,7 +465,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def start_argus_heartbeat_thread(self) -> threading.Event:
         def send_argus_heartbeat(client: ArgusSCTClient, stop_signal: threading.Event):
-            if isinstance(client, unittest.mock.MagicMock):
+            if isinstance(client, ReplayOnlyArgusSCTClient):
                 return
             fail_count = 0
             while not stop_signal.is_set():
@@ -667,11 +672,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             seed = self.params.get("gemini_seed")
             gemini_command, *_ = self.gemini_results["cmd"]
             if not seed:
-                seed_match = re.search(r"--seed (?P<seed>\d+) ", gemini_command)
-                if seed_match:
-                    seed = seed_match.groupdict().get("seed", -1)
-                else:
-                    seed = -1
+                seed = extract_gemini_seed(gemini_command)
 
             results = self.gemini_results["results"]
             results = results[0] if len(results) > 0 else None
@@ -1718,6 +1719,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     azure_provision_stuck_vm_recreate_attempts=self.params.get(
                         "azure_provision_stuck_vm_recreate_attempts"
                     ),
+                    azure_provision_stuck_vm_total_timeout=self.params.get("azure_provision_stuck_vm_total_timeout"),
                 )
             )
         if db_info["n_nodes"] is None:
@@ -3120,10 +3122,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def run_gemini(self, cmd, duration=None):
         if duration:
             timeout = self.get_duration(duration)
-        elif self._stress_duration and " --duration" in cmd:
+        elif self._stress_duration:
             timeout = self.get_duration(self._stress_duration)
-            cmd = re.sub(r"\s--duration\s+\d+[mhd]\s", f" --duration {self._stress_duration}m ", cmd)
-            cmd = re.sub(r"\s--warmup\s+\d+[mhd]\s", f" --warmup {int(self._stress_duration * 0.2)}m ", cmd)
+            cmd = apply_gemini_stress_duration(cmd, self._stress_duration)
         else:
             timeout = get_timeout_from_stress_cmd(cmd) or self.get_duration(duration)
         if self.create_stats:

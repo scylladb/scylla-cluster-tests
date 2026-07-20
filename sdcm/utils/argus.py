@@ -3,8 +3,8 @@ import json
 import logging
 import re
 import os
+import tempfile
 from pathlib import Path
-import threading
 from typing import Optional
 from uuid import UUID
 
@@ -21,23 +21,45 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Argus:
-    INSTANCE: Optional[ArgusSCTClient] = None
-    INIT_DONE = threading.Event()
+    """Process-wide handle to the current Argus client.
+
+    Exists so that low-level, thread-based consumers - namely ArgusEventCollector
+    (sdcm.sct_events.argus), which starts running before a client is available - can read
+    the current client without a direct reference to TestConfig, which owns it. Importing
+    TestConfig from here isn't an option: sdcm.test_config imports from
+    sdcm.sct_events.argus, so a reverse import would be circular.
+    """
+
+    INSTANCE: Optional["Argus"] = None
 
     def __init__(self, client: ArgusSCTClient):
         self._client = client
 
     @classmethod
     def init_global(cls, client: ArgusSCTClient):
-        if cls.INIT_DONE.is_set():
-            return
+        """(Re-)point the process-wide Argus singleton at *client*.
+
+        In a real SCT run this is only ever called once, from
+        TestConfig.start_argus_event_pipeline() (itself called once, from
+        ClusterTester.init_argus_run()). It always overwrites rather than guarding with a
+        one-shot flag purely so that repeated calls stay safe/idempotent for callers
+        outside that single-call path - e.g. tests that reuse the TestConfig class across
+        cases, or standalone scripts (resources_cleanup.py, Argus.get(init_default=True))
+        that construct a client directly via get_argus_client(init_global=True).
+        """
         cls.INSTANCE = cls(client)
-        cls.INIT_DONE.set()
 
     @classmethod
     def get(cls, init_default=False) -> "Argus":
-        if init_default and not cls.INIT_DONE.is_set():
-            cls.init_global(get_argus_client(run_id=os.environ.get("SCT_TEST_ID"), init_global=False))
+        # Only the lazy default below needs a "don't clobber an explicit client" guard;
+        # checking INSTANCE is None (rather than a separate one-shot flag) means an
+        # explicit init_global() call always wins, however many times it's called.
+        if init_default and cls.INSTANCE is None:
+            cls.init_global(
+                get_argus_client(
+                    run_id=os.environ.get("SCT_TEST_ID"), init_global=False, use_tunnel=get_argus_use_tunnel_from_env()
+                )
+            )
         return cls.INSTANCE
 
     @property
@@ -55,6 +77,25 @@ class ArgusError(Exception):
         return self._message
 
 
+class ReplayOnlyArgusSCTClient(ArgusSCTClient):
+    """ArgusSCTClient that records API calls to a replay log without making HTTP requests.
+
+    Prefer this over ArgusSCTClient(replay_log_only=True) — the type itself signals
+    replay-only mode, so callers can query capabilities via has_heartbeat instead of
+    reaching for the private _replay_log_only attribute.
+    """
+
+    has_heartbeat: bool = False
+
+    def __init__(self, run_id: UUID | str, log_dir: str, **kwargs) -> None:
+        super().__init__(run_id=run_id, auth_token="", base_url="", log_dir=log_dir, replay_log_only=True, **kwargs)
+
+
+def get_argus_use_tunnel_from_env() -> bool:
+    val = os.environ.get("SCT_ARGUS_USE_SSH_TUNNEL", "false")
+    return val.lower() in ("true", "yes", "y", "1")
+
+
 def is_uuid(uuid) -> bool:
     if isinstance(uuid, UUID):
         return True
@@ -62,17 +103,27 @@ def is_uuid(uuid) -> bool:
     try:
         UUID(uuid)
         return True
-    except (ValueError, AttributeError, TypeError):
+    except Exception:  # noqa: BLE001  # any parse failure means it isn't a UUID
         return False
 
 
-def get_argus_client(run_id: UUID | str, init_global=True) -> ArgusSCTClient:
+def get_argus_client(
+    run_id: UUID | str, use_tunnel: bool, init_global=True, log_dir: str | None = None
+) -> ArgusSCTClient:
     if not is_uuid(run_id):
         raise ArgusError("Malformed UUID provided")
 
     creds = KeyStore().get_argus_rest_credentials_per_provider()
+    # The replay log is always created, so a real log_dir is required. Callers that
+    # care where it lands (e.g. so logcollector picks it up) should pass log_dir
+    # explicitly; otherwise it falls back to a temp dir.
     argus_client = ArgusSCTClient(
-        run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers")
+        run_id=run_id,
+        auth_token=creds["token"],
+        base_url=creds["baseUrl"],
+        extra_headers=creds.get("extra_headers"),
+        use_tunnel=use_tunnel,
+        log_dir=log_dir or tempfile.gettempdir(),
     )
 
     if init_global:

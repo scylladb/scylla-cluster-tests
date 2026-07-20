@@ -1324,6 +1324,16 @@ class SCTConfiguration(dict):
             help="How many times to recreate a stuck Azure VM (full node: VM, NIC and public IP) onto fresh "
             "capacity before giving up with a non-retryable error.",
         ),
+        dict(
+            name="azure_provision_stuck_vm_total_timeout",
+            env="SCT_AZURE_PROVISION_STUCK_VM_TOTAL_TIMEOUT",
+            type=int,
+            help="Total timeout (seconds) for the whole stuck-VM recovery attempts. Recovery stops with a "
+            "non-retryable error when either this timeout or 'azure_provision_stuck_vm_recreate_attempts' is "
+            "exhausted. This way a degraded Azure region cannot keep provisioning running until the CI stage "
+            "times out SCT. This value must be at least 'azure_provision_stuck_vm_timeout', otherwise SCT may "
+            "give up during the initial wait without making even one recreate attempt.",
+        ),
         # Oracle Cloud (OCI) options
         dict(
             name="oci_region_name",
@@ -2579,6 +2589,12 @@ class SCTConfiguration(dict):
                   Supported for AWS only meanwhile""",
         ),
         dict(name="enable_argus", env="SCT_ENABLE_ARGUS", type=boolean, help="Control reporting to argus"),
+        dict(
+            name="argus_use_ssh_tunnel",
+            env="SCT_ARGUS_USE_SSH_TUNNEL",
+            type=boolean,
+            help="Enable SSH tunnel support in the Argus client connection",
+        ),
         dict(
             name="cs_populating_distribution",
             env="SCT_CS_POPULATING_DISTRIBUTION",

@@ -49,4 +49,5 @@ class AzureDefinitionBuilder(DefinitionBuilder):
         return {
             "azure_provision_stuck_vm_timeout": self.params.get("azure_provision_stuck_vm_timeout"),
             "azure_provision_stuck_vm_recreate_attempts": self.params.get("azure_provision_stuck_vm_recreate_attempts"),
+            "azure_provision_stuck_vm_total_timeout": self.params.get("azure_provision_stuck_vm_total_timeout"),
         }
