@@ -95,7 +95,8 @@ jobs:
   - job_name: "tier1/longevity-multidc-schema-topology-changes-12h-test"
     backend: "aws"
     region: '["eu-west-1", "eu-west-2"]'
-    availability_zone: "a,b,c"
+    params:
+      availability_zone: "a,b,c"
     labels:
       - "weekly"
 
@@ -130,7 +131,8 @@ jobs:
   - job_name: "tier1/longevity-large-partition-200k-pks-4days-gce-test"
     backend: "gce"
     region: "us-east1"
-    availability_zone: ""
+    params:
+      availability_zone: ""
     labels:
       - "weekly"
 
@@ -139,7 +141,8 @@ jobs:
   - job_name: "tier1/longevity-1tb-5days-azure-test"
     backend: "azure"
     region: "eastus"
-    availability_zone: ""
+    params:
+      availability_zone: ""
     labels:
       - "weekly"
     include_versions: ["2024.1", "2025.1", "2025.4", "2026.1", "2026.2"]
