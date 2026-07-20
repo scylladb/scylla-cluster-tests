@@ -1648,6 +1648,7 @@ class OciSctRunner(SctRunner):
         vnic_details = CreateVnicDetails(
             subnet_id=subnet.id,
             assign_public_ip=True,
+            assign_ipv6_ip=True,
             assign_private_dns_record=True,
             hostname_label=build_hostname_label(instance_name, "runner"),
             defined_tags={TAG_NAMESPACE: tags},

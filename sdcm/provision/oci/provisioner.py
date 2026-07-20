@@ -159,5 +159,38 @@ class OciProvisioner(Provisioner):
         """Adds tags to instance."""
         self._vm_provider.add_tags(name, tags)
 
+    def attach_secondary_vnics(self, name: str, nic_count: int, node_type: str) -> None:
+        """Attach secondary VNICs to an instance for multi-NIC network configuration."""
+        if nic_count <= 1:
+            return
+        oci_region = OciRegion(self.region)
+        nsg = oci_region.get_or_create_nsg(node_type)
+        self._vm_provider.attach_secondary_vnics(
+            oci_region=oci_region,
+            name_or_id=name,
+            nic_count=nic_count,
+            display_name_prefix=name,
+            nsg_id=nsg.id,
+        )
+
+    def get_vnic_attachments(self, name: str) -> list:
+        """Get VNIC attachments for an instance by name."""
+        instance = self._vm_provider._resolve_instance(name)  # noqa: SLF001
+        if not instance:
+            return []
+        return self._vm_provider.get_vnic_attachments(instance.id)
+
+    def get_vnic_details(self, vnic_id: str):
+        """Get VNIC details by VNIC ID."""
+        return self._vm_provider.get_vnic_details(vnic_id)
+
+    def get_vnic_private_dns_name(self, vnic_id: str) -> str:
+        """Get private DNS name for a VNIC."""
+        return self._vm_provider.get_vnic_private_dns_name(vnic_id)
+
+    def get_vnic_ipv6_addresses(self, vnic_id: str) -> list[str]:
+        """Get IPv6 addresses assigned to a VNIC."""
+        return self._vm_provider.get_vnic_ipv6_addresses(vnic_id)
+
     def run_command(self, name: str, command: str) -> Result:
         raise NotImplementedError()

@@ -212,7 +212,7 @@ def network_interfaces_count(params):
             nics.add(interface["nic"])
         return len(nics)
 
-    # For non-AWS clusters where new network configuration is not used and "extra_network_interface" parameter is not defined
+    # For clusters where new network configuration is not used and "extra_network_interface" parameter is not defined
     # Another case - jenkins builder
     return 1
 
@@ -226,5 +226,5 @@ def ssh_connection_ip_type(params):
             case "ipv4":
                 return "public" if ssh_ip_type["public"] else "private"
 
-    # TODO: Keep the "ip_ssh_connections" parameter for non-AWS clusters where new network configuration is not used
+    # TODO: Keep the "ip_ssh_connections" parameter for clusters where new network configuration is not used
     return params.get("ip_ssh_connections") or "private"

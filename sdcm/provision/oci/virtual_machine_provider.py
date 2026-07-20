@@ -18,6 +18,7 @@ from typing import Dict, List, Optional
 
 import oci
 from oci.core.models import (
+    AttachVnicDetails,
     LaunchInstanceDetails,
     LaunchInstanceShapeConfigDetails,
     CreateVnicDetails,
@@ -236,6 +237,7 @@ class VirtualMachineProvider:
         return CreateVnicDetails(
             subnet_id=subnet_id,
             assign_public_ip=definition.use_public_ip,
+            assign_ipv6_ip=True,
             assign_private_dns_record=True,
             hostname_label=build_hostname_label(definition.name, "node"),
             display_name=definition.name,
@@ -538,3 +540,107 @@ class VirtualMachineProvider:
             self._compute_client.instance_action(inst.id, action)
             if wait:
                 self._wait_for_state(inst.id, Instance.LIFECYCLE_STATE_RUNNING)
+
+    def attach_secondary_vnics(
+        self,
+        oci_region: OciRegion,
+        name_or_id: str,
+        nic_count: int,
+        display_name_prefix: str,
+        nsg_id: str,
+    ) -> None:
+        """Attach secondary VNICs (nic_index 1..nic_count-1) to an existing instance.
+
+        Each secondary VNIC is placed in a separate private subnet identified by nic_index.
+        """
+        instance = self._resolve_instance(name_or_id)
+        if not instance:
+            raise ProvisionError(f"Instance '{name_or_id}' not found for attaching secondary VNICs")
+
+        existing_attachments = self.get_vnic_attachments(instance.id)
+        existing_display_names = {a.display_name for a in existing_attachments}
+
+        for nic_index in range(1, nic_count):
+            vnic_display_name = f"{display_name_prefix}-nic{nic_index}"
+            if vnic_display_name in existing_display_names:
+                LOGGER.debug("Secondary VNIC '%s' already attached to '%s'", vnic_display_name, name_or_id)
+                continue
+
+            subnet = oci_region.subnet(public=False, nic_index=nic_index)
+            if not subnet:
+                subnet = oci_region.create_subnet(public=False, nic_index=nic_index)
+            if not subnet:
+                raise ProvisionError(
+                    f"Failed to find/create private subnet for nic_index={nic_index} in region '{oci_region.region_name}'"
+                )
+
+            hostname_label = build_hostname_label(vnic_display_name, "nic")
+            LOGGER.info(
+                "Attaching secondary VNIC (nic_index=%d) to instance '%s' in subnet '%s'",
+                nic_index,
+                name_or_id,
+                subnet.display_name,
+            )
+            attach_details = AttachVnicDetails(
+                instance_id=instance.id,
+                create_vnic_details=CreateVnicDetails(
+                    subnet_id=subnet.id,
+                    assign_public_ip=False,
+                    assign_ipv6_ip=True,
+                    assign_private_dns_record=True,
+                    hostname_label=hostname_label,
+                    display_name=vnic_display_name,
+                    nsg_ids=[nsg_id],
+                ),
+                display_name=vnic_display_name,
+                nic_index=nic_index,
+            )
+            response = self._compute_client.attach_vnic(attach_details)
+            # Wait for the VNIC attachment to reach ATTACHED state
+            oci.wait_until(
+                self._compute_client,
+                self._compute_client.get_vnic_attachment(response.data.id),
+                "lifecycle_state",
+                "ATTACHED",
+                max_wait_seconds=300,
+            )
+            LOGGER.info("Secondary VNIC (nic_index=%d) attached to '%s'", nic_index, name_or_id)
+
+    def get_vnic_attachments(self, instance_id: str) -> list:
+        """Get all VNIC attachments for an instance, sorted by nic_index."""
+        attachments = oci.pagination.list_call_get_all_results(
+            self._compute_client.list_vnic_attachments,
+            compartment_id=self._compartment_id,
+            instance_id=instance_id,
+        ).data
+        active = [a for a in attachments if a.lifecycle_state == "ATTACHED"]
+        active.sort(key=lambda a: (a.nic_index or 0))
+        return active
+
+    def get_vnic_details(self, vnic_id: str):
+        """Get VNIC details (IP addresses, hostname, etc.)."""
+        return self._network_client.get_vnic(vnic_id).data
+
+    def get_vnic_ipv6_addresses(self, vnic_id: str) -> list[str]:
+        """Get IPv6 addresses assigned to a VNIC via OCI API."""
+        try:
+            ipv6s = oci.pagination.list_call_get_all_results(
+                self._network_client.list_ipv6s,
+                vnic_id=vnic_id,
+            ).data
+            return [ipv6.ip_address for ipv6 in ipv6s if ipv6.ip_address]
+        except oci.exceptions.ServiceError:
+            return []
+
+    def get_vnic_private_dns_name(self, vnic_id: str) -> str:
+        """Build OCI private FQDN from a specific VNIC."""
+        vnic = self._network_client.get_vnic(vnic_id).data
+        if not (hostname_label := vnic.hostname_label):
+            return ""
+        subnet = self._network_client.get_subnet(vnic.subnet_id).data
+        if not (subnet_dns_label := subnet.dns_label):
+            return ""
+        vcn = self._network_client.get_vcn(subnet.vcn_id).data
+        if not (vcn_dns_label := vcn.dns_label):
+            return ""
+        return f"{hostname_label}.{subnet_dns_label}.{vcn_dns_label}.oraclevcn.com"
