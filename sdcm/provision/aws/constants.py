@@ -11,10 +11,10 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-SPOT_CNT_LIMIT = 20
+SPOT_CNT_LIMIT = 10
 # Limit of instances that AWS API can handle with single spot request
 
-SPOT_FLEET_LIMIT = 50
+SPOT_FLEET_LIMIT = 500
 # Limit of instances that AWS API can handle with single fleet request
 
 SPOT_REQUEST_TIMEOUT = 300
