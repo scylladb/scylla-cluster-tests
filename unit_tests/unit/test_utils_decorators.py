@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from google.api_core.exceptions import ServiceUnavailable
 
 from sdcm.exceptions import UnsupportedNemesis
 from sdcm.provision.provisioner import ProvisionUnrecoverableError
@@ -50,6 +51,10 @@ def _raise_stuck_vm_give_up():
     raise ProvisionUnrecoverableError("Azure VM(s) node-x stuck in provisioning, giving up after 3 recovery attempts")
 
 
+def _raise_service_unavailable():
+    raise ServiceUnavailable("GCE capacity issue")
+
+
 def test_skip_on_capacity_issues_converts_stuck_vm_give_up_to_nemesis_skip():
     """Stuck VM recovery give-up on a balanced cluster must skip the nemesis, not fail it."""
     with patch("sdcm.utils.decorators.check_cluster_layout", return_value=True):
@@ -57,10 +62,39 @@ def test_skip_on_capacity_issues_converts_stuck_vm_give_up_to_nemesis_skip():
             skip_on_capacity_issues(db_cluster=MagicMock())(_raise_stuck_vm_give_up)()
 
 
+def test_skip_on_capacity_issues_reraises_stuck_vm_give_up_on_unbalanced_cluster():
+    """On an unbalanced cluster the give-up must publish a CRITICAL event AND re-raise, never return None."""
+    with patch("sdcm.utils.decorators.check_cluster_layout", return_value=False):
+        with patch("sdcm.utils.decorators.TestFrameworkEvent") as event_mock:
+            with pytest.raises(ProvisionUnrecoverableError):
+                skip_on_capacity_issues(db_cluster=MagicMock())(_raise_stuck_vm_give_up)()
+    assert event_mock.call_args.kwargs["severity"] == Severity.CRITICAL
+    event_mock.return_value.publish.assert_called_once()
+
+
+def test_skip_on_capacity_issues_reraises_service_unavailable_on_unbalanced_cluster():
+    """A GCE ServiceUnavailable on an unbalanced cluster must publish a CRITICAL event AND re-raise."""
+    with patch("sdcm.utils.decorators.check_cluster_layout", return_value=False):
+        with patch("sdcm.utils.decorators.TestFrameworkEvent") as event_mock:
+            with pytest.raises(ServiceUnavailable):
+                skip_on_capacity_issues(db_cluster=MagicMock())(_raise_service_unavailable)()
+    assert event_mock.call_args.kwargs["severity"] == Severity.CRITICAL
+    event_mock.return_value.publish.assert_called_once()
+
+
 def test_critical_on_capacity_issues_publishes_critical_on_stuck_vm_give_up():
     """Stuck VM recovery give-up in a must-succeed topology change must raise a critical event."""
     with patch("sdcm.utils.decorators.TestFrameworkEvent") as event_mock:
         with pytest.raises(ProvisionUnrecoverableError):
             critical_on_capacity_issues(_raise_stuck_vm_give_up)()
+    assert event_mock.call_args.kwargs["severity"] == Severity.CRITICAL
+    event_mock.return_value.publish.assert_called_once()
+
+
+def test_critical_on_capacity_issues_reraises_on_service_unavailable():
+    """A GCE ServiceUnavailable in a must-succeed topology change must publish CRITICAL and re-raise."""
+    with patch("sdcm.utils.decorators.TestFrameworkEvent") as event_mock:
+        with pytest.raises(ServiceUnavailable):
+            critical_on_capacity_issues(_raise_service_unavailable)()
     assert event_mock.call_args.kwargs["severity"] == Severity.CRITICAL
     event_mock.return_value.publish.assert_called_once()
