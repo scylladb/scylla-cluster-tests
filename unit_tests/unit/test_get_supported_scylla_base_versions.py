@@ -112,3 +112,13 @@ def test_incomplete_new_release_repo_drops_version():
         result = _make_version_detector().filter_rc_only_version(list(BASE_VERSION_LIST))
 
     assert "2024.2" not in result
+
+
+def test_empty_base_version_list_returns_empty_without_crashing():
+    """An empty base_version_list must not crash on the base_version_list[-1] index lookup
+    -- there is nothing to filter, so it's returned as-is."""
+    with patch("utils.get_supported_scylla_base_versions.get_all_versions") as mocked_get_all_versions:
+        result = _make_version_detector().filter_rc_only_version([])
+
+    assert result == []
+    mocked_get_all_versions.assert_not_called()

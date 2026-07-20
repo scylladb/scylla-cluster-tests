@@ -237,6 +237,8 @@ class UpgradeBaseVersion:
         :param base_version_list: list of base versions to filter
         """
         LOGGER.info("Filtering rc versions from base version list...")
+        if not base_version_list:
+            return base_version_list
         base_version_list = sorted(list(set(base_version_list)), key=ComparableScyllaVersion)
         try:
             available_versions = get_all_versions(self.repo_maps[base_version_list[-1]])
