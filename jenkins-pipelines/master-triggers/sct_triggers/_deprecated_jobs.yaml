@@ -9,3 +9,5 @@ jobs:
     reason: "Replaced by oss/sct_triggers/tier1-trigger using triggerMatrixPipeline (configurations/triggers/tier1.yaml)"
   - name: "weekly-master-images-rolling-upgrades-trigger"
     reason: "Replaced by oss/sct_triggers/rolling-upgrade-trigger using triggerMatrixPipeline (configurations/triggers/rolling-upgrade.yaml)"
+  - name: "sct-agent-weekly-trigger"
+    reason: "Weekly sct-agent longevity is costly and should not run on a schedule; run on-demand via longevity/longevity-10gb-3h-agent-test"
