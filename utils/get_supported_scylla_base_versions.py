@@ -239,13 +239,39 @@ class UpgradeBaseVersion:
         LOGGER.info("Filtering rc versions from base version list...")
         base_version_list = sorted(list(set(base_version_list)), key=ComparableScyllaVersion)
         try:
-            filter_rc = [v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if "rc" not in v]
-        except (ValueError, ParallelObjectException):
-            # Repository for this version doesn't exist yet (e.g. new release announced
-            # but no rc0 packages published). Treat it as unavailable and skip it.
-            LOGGER.warning("Skipping version %s: repository doesn't fully exist yet", base_version_list[-1])
-            filter_rc = []
-        if not filter_rc:
+            available_versions = get_all_versions(self.repo_maps[base_version_list[-1]])
+        except (ValueError, ParallelObjectException) as exc:
+            underlying_errors = (
+                [res.exc for res in exc.results if res.exc is not None]
+                if isinstance(exc, ParallelObjectException)
+                else [exc]
+            )
+            if underlying_errors and all(
+                getattr(err, "s3_error_code", None) == "InvalidObjectState" for err in underlying_errors
+            ):
+                # this URL (or, for a per-arch Packages fetch, the repo file it was derived
+                # from) was already confirmed to exist as this version's own object in the
+                # bucket by the independent S3 listing that built self.repo_maps. S3's
+                # InvalidObjectState error code means that object is real but was moved to
+                # cold storage, not that the repository is broken or missing, so treat the
+                # version as a confirmed release rather than drop or crash on it.
+                LOGGER.warning(
+                    "Could not fetch package list for %s, its repository files may be archived: %s",
+                    base_version_list[-1],
+                    exc,
+                )
+                available_versions = None
+            else:
+                # repository for this version doesn't fully exist yet (eg. a new release
+                # announced but no rc0 packages published yet) or failed for a reason that
+                # doesn't carry S3's InvalidObjectState signal, so we can't confirm it's a
+                # real, already-published release. Treat it as unavailable and skip it
+                # rather than crash the whole matrix.
+                LOGGER.warning(
+                    "Skipping version %s: repository doesn't fully exist yet: %s", base_version_list[-1], exc
+                )
+                available_versions = []
+        if available_versions is not None and not [v for v in available_versions if "rc" not in v]:
             # if the release only has rc versions, we don't want to test it as a base version
             base_version_list = base_version_list[:-1]
         if self.scylla_version in ("master",) and not self.base_version_all_sts_versions:

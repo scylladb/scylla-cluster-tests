@@ -281,15 +281,36 @@ class ComparableScyllaOperatorVersion(ComparableScyllaVersion):
         )
 
 
+class RepositoryURLError(ValueError):
+    """A repository URL could not be fetched. Carries the HTTP status code and, when the
+    host is backed by S3/CloudFront, the `x-amz-error-code` response header (eg.
+    "InvalidObjectState" for an object archived to cold storage, "NoSuchKey" for a
+    genuinely missing one, "AccessDenied" for a broken ACL/policy) so callers can tell
+    those cases apart instead of treating every 403/404 alike."""
+
+    def __init__(self, message: str, status_code: int = None, s3_error_code: str = None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.s3_error_code = s3_error_code
+
+
 @lru_cache(maxsize=1024)
 @retrying(n=10, sleep_time=0.1)
 def get_url_content(url, return_url_data=True):
     response = requests.get(url=url)
     if response.status_code != 200:
-        raise ValueError(f"The following repository URL '{url}' is incorrect")
+        raise RepositoryURLError(
+            f"The following repository URL '{url}' is incorrect",
+            status_code=response.status_code,
+            s3_error_code=response.headers.get("x-amz-error-code"),
+        )
     response_data = response.text
     if not response_data:
-        raise ValueError(f"The repository URL '{url}' not contains any content")
+        raise RepositoryURLError(
+            f"The repository URL '{url}' not contains any content",
+            status_code=response.status_code,
+            s3_error_code=response.headers.get("x-amz-error-code"),
+        )
     if return_url_data:
         return response_data.split("\n")
     return []
