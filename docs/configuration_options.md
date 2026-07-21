@@ -4027,8 +4027,7 @@ Memory allocation for lightweight minicloud deployments
 
 **default:** 1.5GiB
 
-**type:** str
-* appendable
+**type:** str (appendable)
 
 
 ## **minicloud_s3_passthrough_buckets** / SCT_MINICLOUD_S3_PASSTHROUGH_BUCKETS
@@ -4037,8 +4036,7 @@ S3 buckets to pass through in minicloud deployments
 
 **default:** scylla-qa-keystore,cloudius-jenkins-test
 
-**type:** str | list[str]
-* appendable
+**type:** str | list[str] → list[str] (appendable)
 
 
 ## **logs_transport** / SCT_LOGS_TRANSPORT
