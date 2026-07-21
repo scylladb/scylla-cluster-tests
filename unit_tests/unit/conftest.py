@@ -59,7 +59,7 @@ def mock_cloud_services(tmp_path_factory):
     ssh_dir.mkdir()
     orig_home = os.environ.get("HOME")
     os.environ["HOME"] = str(fake_home)
-    for key_name in ("scylla_test_id_ed25519", "scylla-test"):
+    for key_name in ("scylla_test_id_ed25519",):
         (ssh_dir / key_name).touch(mode=0o600)
 
     def fake_find_scylla_repo(scylla_version, dist_type="centos", dist_version=None):
