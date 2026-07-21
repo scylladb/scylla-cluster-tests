@@ -44,7 +44,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
                    description: 'Azure location',
                    name: 'azure_region_name')
-            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
+            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-phoenix-1')}",
                    description: 'Oracle location',
                    name: 'oci_region_name')
             string(defaultValue: "${pipelineParams.get('availability_zone', '')}",
