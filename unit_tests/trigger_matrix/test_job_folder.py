@@ -27,6 +27,11 @@ from sdcm.utils.trigger_matrix import TriggerMatrixError, determine_job_folder, 
         pytest.param("5.2.1", "scylla-5.2", id="oss_version"),
         pytest.param("2024.2.5-0.20250221.cb9e2a54ae6d-1", "scylla-2024.2", id="full_tag"),
         pytest.param("2025.1.3-0.20260101.abcdef1234-1", "scylla-2025.1", id="full_tag_2025"),
+        pytest.param("2026.3.0.rc0.0.20260719.a64da1e635f3", "scylla-2026.3", id="rc_dot_separator"),
+        pytest.param("2026.3.0~rc0.0.20260719.a64da1e635f3", "scylla-2026.3", id="rc_tilde_separator"),
+        pytest.param("2026.3.0-rc0.0.20260719.a64da1e635f3", "scylla-2026.3", id="rc_dash_separator"),
+        pytest.param("2026.1.0.rc1.0.20260501.abcdef123456", "scylla-2026.1", id="rc1_dot_separator"),
+        pytest.param("2024.1.0.rc2.0.20231218.a063c2c16185.1", "scylla-2024.1", id="rc_with_revision"),
     ],
 )
 def test_version_to_folder(version, expected):
