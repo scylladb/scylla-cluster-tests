@@ -47,6 +47,8 @@ instance_type_monitor: 't3.small'
 
 alternator_port: 8080
 dynamodb_primarykey_type: HASH_AND_RANGE
+alternator_use_dns_routing: true
+alternator_loadbalancing: false
 
 user_prefix: 'perf-alternator'
 space_node_threshold: 644245094
