@@ -72,9 +72,11 @@ def _get_jenkins_client() -> tuple[jenkins_lib.Jenkins, str]:
 # Regex for full version tags like:
 #   2024.2.5-0.20250221.cb9e2a54ae6d-1 (release)
 #   2026.2.0~dev-0.20260322.f51126483167 (dev/nightly)
+#   2026.3.0.rc0.0.20260719.a64da1e635f3 (release candidate)
 FULL_VERSION_TAG_RE = re.compile(
     r"^(?P<major>\d{4})\.(?P<minor>\d+)\.(?P<patch>\d+)"
-    r"[~-][a-zA-Z0-9._~]+-?\d*\.\d{8}\.[0-9a-f]+(?:-\d+)?$"
+    r"(?:[~-][a-zA-Z0-9._~]+-?\d*\.\d{8}\.[0-9a-f]+(?:-\d+)?"
+    r"|\.rc\d+\.\d+\.\d{8}\.[0-9a-f]+(?:\.\d+)?)$"
 )
 
 # Regex for release version strings like: 2026.1.8, 2025.4.1 (three-part, specific release)
