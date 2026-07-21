@@ -25,7 +25,7 @@ import jenkins as jenkins_lib
 import pydantic
 import requests
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +260,117 @@ def _resolve_version_from_ami(ami_id: str, region: str) -> str:
     return ""
 
 
+def _aws_arch_to_vmarch(aws_arch: str):
+    """Convert AWS architecture string to VmArch enum.
+
+    Inverse of vmarch_to_aws: 'arm64' → VmArch.ARM, 'x86_64' → VmArch.X86.
+    """
+    from sdcm.provision.provisioner import VmArch  # noqa: PLC0415 - avoid circular import
+    from sdcm.utils.aws_utils import vmarch_to_aws  # noqa: PLC0415 - avoid circular import
+
+    for member in VmArch:
+        if vmarch_to_aws(member) == aws_arch:
+            return member
+    raise ValueError(f"Unknown AWS architecture: {aws_arch}")
+
+
+def resolve_architecture_from_ami(ami_id: str, region: str | None = None) -> str:
+    """Detect the CPU architecture of an AWS AMI.
+
+    Args:
+        ami_id: AWS AMI ID (e.g., ami-0123456789abcdef0).
+        region: AWS region. Defaults to DEFAULT_AWS_REGION.
+
+    Returns:
+        Normalized architecture string matching VmArch values ('x86_64' or 'aarch64'),
+        or empty string on failure.
+    """
+    region = region or DEFAULT_AWS_REGION
+    try:
+        import boto3  # noqa: PLC0415 - optional cloud dependency
+        from sdcm.utils.aws_utils import get_scylla_images_ec2_resource  # noqa: PLC0415 - circular import avoidance
+
+        # Try Scylla images account first (private AMIs) — uses STS role assumption
+        try:
+            ec2 = get_scylla_images_ec2_resource(region_name=region)
+            image = ec2.Image(ami_id)
+            image.reload()
+            if image.architecture:
+                arch = _aws_arch_to_vmarch(image.architecture)
+                logger.info("Resolved AMI %s → architecture=%s (raw: %s)", ami_id, arch, image.architecture)
+                return arch.value
+        except Exception as exc:  # noqa: BLE001 - fall through to default credentials
+            logger.debug("Scylla images account lookup failed for AMI %s: %s", ami_id, exc)
+
+        # Fallback: default credentials (QA account)
+        ec2 = boto3.resource("ec2", region_name=region)
+        image = ec2.Image(ami_id)
+        image.reload()
+        if image.architecture:
+            arch = _aws_arch_to_vmarch(image.architecture)
+            logger.info("Resolved AMI %s → architecture=%s (raw: %s)", ami_id, arch, image.architecture)
+            return arch.value
+    except Exception as exc:  # noqa: BLE001 - best-effort
+        logger.warning("Failed to resolve architecture from AMI %s: %s", ami_id, exc)
+    return ""
+
+
+def _arch_from_image_name(image_name: str) -> str:
+    """Infer architecture from image name/URL using SCT naming conventions.
+
+    SCT images across all clouds include 'aarch64' or 'arm64' in the name for ARM builds.
+    Returns VmArch-compatible value ('aarch64' or 'x86_64'), or empty string if indeterminate.
+    """
+    name_lower = image_name.lower()
+    if "aarch64" in name_lower or "arm64" in name_lower:
+        return "aarch64"
+    if "x86_64" in name_lower or "x86-64" in name_lower:
+        return "x86_64"
+    return ""
+
+
+def resolve_image_architecture(
+    scylla_ami_id: str | None = None,
+    gce_image_db: str | None = None,
+    azure_image_db: str | None = None,
+    oci_image_db: str | None = None,
+    region: str | None = None,
+) -> str:
+    """Resolve architecture from any cloud image parameter.
+
+    Tries each provided image parameter in order:
+    - AWS AMI: uses EC2 API to get the architecture attribute
+    - GCE/Azure/OCI: infers from image name (SCT naming convention includes arch)
+
+    Returns:
+        Normalized architecture string ('x86_64' or 'aarch64'), or empty string on failure.
+    """
+    if scylla_ami_id:
+        arch = resolve_architecture_from_ami(scylla_ami_id, region=region)
+        if arch:
+            return arch
+
+    if gce_image_db:
+        arch = _arch_from_image_name(gce_image_db)
+        if arch:
+            logger.info("Resolved GCE image %s → architecture=%s (from name)", gce_image_db, arch)
+            return arch
+
+    if azure_image_db:
+        arch = _arch_from_image_name(azure_image_db)
+        if arch:
+            logger.info("Resolved Azure image %s → architecture=%s (from name)", azure_image_db, arch)
+            return arch
+
+    if oci_image_db:
+        arch = _arch_from_image_name(oci_image_db)
+        if arch:
+            logger.info("Resolved OCI image %s → architecture=%s (from name)", oci_image_db, arch)
+            return arch
+
+    return ""
+
+
 def _resolve_version_from_gce_image(image_name: str) -> str:
     """Get scylla_version label from a GCE image.
 
@@ -323,6 +434,15 @@ class JobConfig(BaseModel):
     job_name: str
     backend: Literal["aws", "gce", "azure", "docker", "oci"]
     region: str = ""
+    arch: str = ""
+
+    @field_validator("arch")
+    @classmethod
+    def validate_arch(cls, value: str) -> str:
+        if value and value not in ("aarch64", "x86_64"):
+            raise ValueError(f"arch must be 'aarch64', 'x86_64', or empty; got '{value}'")
+        return value
+
     disabled: bool = False
     labels: list[str] = Field(default_factory=list)
     include_versions: list[str] = Field(default_factory=list)
@@ -505,8 +625,9 @@ def filter_jobs(
     labels_selector: str | None = None,
     backend: str | None = None,
     skip_jobs: list[str] | None = None,
+    image_arch: str | None = None,
 ) -> list[JobConfig]:
-    """Filter jobs based on version exclusion, labels, backend, and skip list.
+    """Filter jobs based on version exclusion, labels, backend, skip list, and architecture.
 
     Args:
         jobs: List of job configurations to filter.
@@ -517,6 +638,9 @@ def filter_jobs(
             When None, no label filtering is applied.
         backend: Filter by backend (e.g., 'aws', 'gce', 'azure').
         skip_jobs: List of job names to skip.
+        image_arch: Normalized CPU architecture from the provided image ('x86_64' or 'aarch64').
+            When set, filters jobs by architecture: aarch64 images only trigger jobs
+            with 'aarch64' label, x86_64 images skip jobs with 'aarch64' label.
 
     Returns:
         Filtered list of JobConfig objects.
@@ -542,6 +666,16 @@ def filter_jobs(
         if backend and job.backend != backend:
             logger.debug("Skipping job '%s': backend '%s' != '%s'", job.job_name, job.backend, backend)
             continue
+
+        # Skip by architecture (derived from supplied image)
+        if image_arch:
+            job_arch = job.arch or ("aarch64" if "aarch64" in job.labels else "x86_64")
+            if image_arch == "aarch64" and job_arch != "aarch64":
+                logger.debug("Skipping job '%s': ARM image but job arch is %s", job.job_name, job_arch)
+                continue
+            if image_arch == "x86_64" and job_arch == "aarch64":
+                logger.debug("Skipping job '%s': x86_64 image but job arch is %s", job.job_name, job_arch)
+                continue
 
         # Skip by version inclusion (prefix match — only run for listed versions)
         if job.include_versions and not _is_version_included(scylla_version, job.include_versions):
@@ -1169,6 +1303,7 @@ def trigger_matrix(  # noqa: PLR0914
     skip_jobs: str | None = None,
     dry_run: bool = False,
     email_recipients: list[str] | None = None,
+    image_arch: str | None = None,
     **overrides,
 ) -> dict:
     """Main entry point: load matrix, filter, build params, trigger jobs.
@@ -1214,6 +1349,7 @@ def trigger_matrix(  # noqa: PLR0914
         labels_selector=labels_selector,
         backend=backend,
         skip_jobs=skip_list,
+        image_arch=image_arch,
     )
 
     logger.info(

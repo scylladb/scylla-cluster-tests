@@ -95,6 +95,7 @@ jobs:
   - job_name: "rolling-upgrade/rolling-upgrade-ami-arm-test"
     backend: "aws"
     region: "eu-west-1"
+    arch: "aarch64"
     labels:
       - "weekly"
       - "image"
