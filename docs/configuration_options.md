@@ -2424,7 +2424,7 @@ OCI region where the resources will be deployed
 **type:** str | list[str] → list[str]
 
 **backend overrides:**
-- `['us-ashburn-1']`: oci
+- `['us-phoenix-1']`: oci
 
 
 ## **oci_instance_type_loader** / SCT_OCI_INSTANCE_TYPE_LOADER
