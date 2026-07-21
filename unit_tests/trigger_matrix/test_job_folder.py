@@ -22,11 +22,11 @@ from sdcm.utils.trigger_matrix import TriggerMatrixError, determine_job_folder, 
         pytest.param("master:latest", "scylla-master", id="master_latest"),
         pytest.param("master:all", "scylla-master", id="master_all"),
         pytest.param("master", "scylla-master", id="bare_master"),
-        pytest.param("2025.4", "branch-2025.4", id="two_part_version"),
-        pytest.param("2025.4.0", "branch-2025.4", id="three_part_version"),
-        pytest.param("5.2.1", "branch-5.2", id="oss_version"),
-        pytest.param("2024.2.5-0.20250221.cb9e2a54ae6d-1", "branch-2024.2", id="full_tag"),
-        pytest.param("2025.1.3-0.20260101.abcdef1234-1", "branch-2025.1", id="full_tag_2025"),
+        pytest.param("2025.4", "scylla-2025.4", id="two_part_version"),
+        pytest.param("2025.4.0", "scylla-2025.4", id="three_part_version"),
+        pytest.param("5.2.1", "scylla-5.2", id="oss_version"),
+        pytest.param("2024.2.5-0.20250221.cb9e2a54ae6d-1", "scylla-2024.2", id="full_tag"),
+        pytest.param("2025.1.3-0.20260101.abcdef1234-1", "scylla-2025.1", id="full_tag_2025"),
     ],
 )
 def test_version_to_folder(version, expected):
@@ -38,7 +38,7 @@ def test_explicit_override():
 
 
 def test_branch_qualifier():
-    assert determine_job_folder("branch-2019.1:all") == "branch-branch-2019.1"
+    assert determine_job_folder("branch-2019.1:all") == "scylla-branch-2019.1"
 
 
 def test_invalid_version_raises():
