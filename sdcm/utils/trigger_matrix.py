@@ -443,7 +443,7 @@ def determine_job_folder(scylla_version: str, job_folder: str | None = None) -> 
         job_folder: Explicit override — returned as-is if provided.
 
     Returns:
-        Jenkins job folder name (e.g., 'scylla-master', 'branch-2025.4').
+        Jenkins job folder name (e.g., 'scylla-master', 'scylla-2025.4').
 
     Examples:
         >>> determine_job_folder("master:latest")
@@ -451,11 +451,11 @@ def determine_job_folder(scylla_version: str, job_folder: str | None = None) -> 
         >>> determine_job_folder("master")
         'scylla-master'
         >>> determine_job_folder("2025.4")
-        'branch-2025.4'
+        'scylla-2025.4'
         >>> determine_job_folder("2025.4.1")
-        'branch-2025.4'
+        'scylla-2025.4'
         >>> determine_job_folder("2024.2.5-0.20250221.cb9e2a54ae6d-1")
-        'branch-2024.2'
+        'scylla-2024.2'
         >>> determine_job_folder("master:latest", job_folder="my-folder")
         'my-folder'
     """
@@ -471,21 +471,21 @@ def determine_job_folder(scylla_version: str, job_folder: str | None = None) -> 
     branch_match = BRANCH_VERSION_RE.match(scylla_version)
     if branch_match:
         branch = branch_match.group("branch")
-        return "scylla-master" if branch == "master" else f"branch-{branch}"
+        return "scylla-master" if branch == "master" else f"scylla-{branch}"
 
     # Handle full version tags (e.g., "2024.2.5-0.20250221.cb9e2a54ae6d-1")
     full_match = FULL_VERSION_TAG_RE.match(scylla_version)
     if full_match:
         major = full_match.group("major")
         minor = full_match.group("minor")
-        return f"branch-{major}.{minor}"
+        return f"scylla-{major}.{minor}"
 
     # Handle simple version strings (e.g., "2025.4", "2025.4.0")
     simple_match = SIMPLE_VERSION_RE.match(scylla_version)
     if simple_match:
         major = simple_match.group("major")
         minor = simple_match.group("minor")
-        return f"branch-{major}.{minor}"
+        return f"scylla-{major}.{minor}"
 
     # Handle bare "master"
     if scylla_version.strip().lower() == "master":
