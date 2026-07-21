@@ -877,6 +877,8 @@ class BaseNode(AutoSshContainerMixin):
                 if kms_host_data["aws_region"] == "auto":
                     append_scylla_yaml["kms_hosts"][kms_host_name]["aws_region"] = self.vm_region
             scylla_yml.update(append_scylla_yaml)
+        if self.parent_cluster.params.get("minicloud_lightweight"):
+            scylla_yml.developer_mode = True
         if self.parent_cluster.node_type == "oracle-db":
             scylla_yml.experimental_features = []  # Oracle Scylla does not use experimental features
         return scylla_yml
@@ -4505,7 +4507,7 @@ class BaseCluster:
         return [node.private_ip_address for node in self.nodes]
 
     def get_node_public_ips(self):
-        return [node.public_ip_address for node in self.nodes]
+        return [node.public_ip_address for node in self.nodes if node.public_ip_address]
 
     def get_node_cql_ips(self, nodes: list[BaseNode] | None = None):
         nodes = nodes if nodes else self.nodes

@@ -22,6 +22,7 @@ from functools import cached_property
 from typing import Any, List, Literal, TYPE_CHECKING
 
 import google.api_core.exceptions
+from google.api_core.client_options import ClientOptions
 from google.oauth2 import service_account
 from google.cloud import compute_v1
 from google.cloud.compute_v1 import Image
@@ -145,10 +146,16 @@ def get_alternative_zones(region: str, exhausted_zone: str, machine_types: list[
     return alternatives
 
 
+def _gce_client_options() -> dict:
+    if endpoint := os.environ.get("GCE_ENDPOINT_URL"):
+        return {"client_options": ClientOptions(api_endpoint=endpoint)}
+    return {}
+
+
 def get_gce_compute_instances_client() -> tuple[compute_v1.InstancesClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return compute_v1.InstancesClient(credentials=credentials), info
+    return compute_v1.InstancesClient(credentials=credentials, **_gce_client_options()), info
 
 
 def get_gce_service_accounts() -> list[dict] | None:
@@ -166,25 +173,28 @@ def get_gce_service_accounts() -> list[dict] | None:
 def get_gce_compute_images_client() -> tuple[compute_v1.ImagesClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return compute_v1.ImagesClient(credentials=credentials), info
+    return compute_v1.ImagesClient(credentials=credentials, **_gce_client_options()), info
 
 
 def get_gce_compute_addresses_client() -> tuple[compute_v1.AddressesClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return compute_v1.AddressesClient(credentials=credentials), info
+    return compute_v1.AddressesClient(credentials=credentials, **_gce_client_options()), info
 
 
 def get_gce_compute_regions_client() -> tuple[compute_v1.RegionsClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return compute_v1.RegionsClient(credentials=credentials), info
+    return compute_v1.RegionsClient(credentials=credentials, **_gce_client_options()), info
 
 
 def get_gce_storage_client() -> tuple[storage.Client, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return storage.Client(credentials=credentials), info
+    kwargs = {}
+    if endpoint := os.environ.get("GCE_ENDPOINT_URL"):
+        kwargs["client_options"] = {"api_endpoint": endpoint}
+    return storage.Client(credentials=credentials, **kwargs), info
 
 
 def create_gce_storage_bucket(name: str, region: str, object_lock_enabled: bool = False) -> storage.Bucket:
@@ -251,13 +261,13 @@ def gce_override_object_retention(bucket_name: str, path: str) -> None:
 def get_gce_compute_disks_client() -> tuple[compute_v1.DisksClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return compute_v1.DisksClient(credentials=credentials), info
+    return compute_v1.DisksClient(credentials=credentials, **_gce_client_options()), info
 
 
 def get_gce_compute_machine_types_client() -> tuple[compute_v1.MachineTypesClient, dict]:
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
-    return compute_v1.MachineTypesClient(credentials=credentials), info
+    return compute_v1.MachineTypesClient(credentials=credentials, **_gce_client_options()), info
 
 
 class GceZoneResolver:
@@ -569,7 +579,10 @@ class GceLoggingClient:
             f" logName : projects/{self.project_id}/logs/cloudaudit.googleapis.com%2Fsystem_event"
             f' timestamp > "{from_}" timestamp < "{until}"',
         }
-        with build("logging", "v2", credentials=self.credentials, cache_discovery=False) as service:
+        kwargs = {}
+        if endpoint := os.environ.get("GCE_ENDPOINT_URL"):
+            kwargs["client_options"] = {"api_endpoint": endpoint}
+        with build("logging", "v2", credentials=self.credentials, cache_discovery=False, **kwargs) as service:
             return self._get_log_entries(service, query)
 
     def _get_log_entries(self, service, query, page_token=None):
@@ -697,6 +710,7 @@ def create_instance(  # noqa: PLR0913
     network_tags: list = None,
     metadata: dict = None,
     service_accounts: list = None,
+    enable_nested_virtualization: bool = False,
 ) -> compute_v1.Instance:
     """
     Send an instance creation request to the Compute Engine API and wait for it to complete.
@@ -736,6 +750,8 @@ def create_instance(  # noqa: PLR0913
         network_tags: List of tags to apply to network labels
         metadata: dict of key values to add to metadata
         service_accounts: list of service account to attach to the instance
+        enable_nested_virtualization: enable nested virtualization (KVM passthrough) on the instance.
+            Supported on Haswell+ CPUs (N1, N2, N2D, C2, C2D families). Not supported on E2/T2D.
     Returns:
         Instance object.
     """
@@ -797,6 +813,11 @@ def create_instance(  # noqa: PLR0913
     if custom_hostname is not None:
         # Set the custom hostname for the instance
         instance.hostname = custom_hostname
+
+    if enable_nested_virtualization:
+        instance.advanced_machine_features = compute_v1.AdvancedMachineFeatures(
+            enable_nested_virtualization=True,
+        )
 
     if delete_protection:
         # Set the delete protection bit

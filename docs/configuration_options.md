@@ -51,6 +51,15 @@ backend that will be used, aws/gce/azure/oci/docker/xcloud
 **type:** str
 
 
+## **minicloud_endpoint_url** / SCT_MINICLOUD_ENDPOINT_URL
+
+EC2 API endpoint URL for minicloud. When set, SCT adapts for minicloud limitations (no spot, no EIP, graceful TerminateInstances). Example: http://localhost:5000
+
+**default:** N/A
+
+**type:** str
+
+
 ## **test_method** / SCT_TEST_METHOD
 
 class.method used to run the test. Filled automatically with run-test sct command.
@@ -4001,6 +4010,35 @@ An escape hatch to disable KMS for enterprise run, when needed. We enable KMS by
 **default:** False
 
 **type:** bool
+
+
+## **minicloud_lightweight** / SCT_MINICLOUD_LIGHTWEIGHT
+
+Enable lightweight mode for minicloud deployments
+
+**default:** True
+
+**type:** bool
+
+
+## **minicloud_lightweight_memory** / SCT_MINICLOUD_LIGHTWEIGHT_MEMORY
+
+Memory allocation for lightweight minicloud deployments
+
+**default:** 1.5GiB
+
+**type:** str
+* appendable
+
+
+## **minicloud_s3_passthrough_buckets** / SCT_MINICLOUD_S3_PASSTHROUGH_BUCKETS
+
+S3 buckets to pass through in minicloud deployments
+
+**default:** scylla-qa-keystore,cloudius-jenkins-test
+
+**type:** str | list[str]
+* appendable
 
 
 ## **logs_transport** / SCT_LOGS_TRANSPORT
