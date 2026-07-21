@@ -62,6 +62,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'oci-us-ashburn-1': 'oci-sct-builders-us-ashburn-1-v2',
                           'oci-us-phoenix-1': 'oci-sct-builders-us-phoenix-1-v2',
                           'oci-eu-frankfurt-1': 'oci-sct-builders-eu-frankfurt-1-v2',
+                          'minicloud': 'minicloud-kvm-builders-v1',
                           ]
 
     def cloud_provider = getCloudProviderFromBackend(backend)

@@ -1,0 +1,67 @@
+#! groovy
+
+// Standalone pipeline for minicloud artifact tests.
+// Runs directly on a KVM-capable host (not inside hydra/Docker).
+// Minicloud starts QEMU/KVM VMs locally to emulate AWS/GCE compute APIs.
+
+pipeline {
+    agent { label 'minicloud-kvm-builders-v1' }
+
+    options {
+        timeout(time: 60, unit: 'MINUTES')
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '50'))
+    }
+
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+        SCT_MINICLOUD_ENDPOINT_URL = 'http://localhost:5000'
+        SCT_USE_MGMT = 'false'
+        SCT_ENTERPRISE_DISABLE_KMS = 'true'
+        SCT_ENABLE_KMS_KEY_ROTATION = 'false'
+    }
+
+    parameters {
+        string(defaultValue: '', description: 'Scylla version to test (e.g. 2025.3.0)', name: 'scylla_version')
+        string(defaultValue: '', description: 'Specific AMI ID to test', name: 'scylla_ami_id')
+        choice(choices: ['--aws-only', '--gce-only', 'all'], description: 'Which backend tests to run', name: 'test_mode')
+    }
+
+    stages {
+        stage('Setup Runner') {
+            steps {
+                sh 'bash scripts/minicloud-runner-setup.sh'
+            }
+        }
+
+        stage('Run Minicloud Tests') {
+            steps {
+                sh """
+                    if [ -n "${params.scylla_version}" ]; then
+                        export SCT_SCYLLA_VERSION="${params.scylla_version}"
+                    else
+                        export SCT_SCYLLA_VERSION="2025.3.0"
+                    fi
+
+                    if [ -n "${params.scylla_ami_id}" ]; then
+                        export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
+                    fi
+
+                    bash scripts/run-minicloud-tests.sh ${params.test_mode}
+                """
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: '~/sct-results/latest/**/*.log', allowEmptyArchive: true
+            archiveArtifacts artifacts: '~/sct-results/latest/events_log/**', allowEmptyArchive: true
+            sh 'minicloud --version || true'
+        }
+        failure {
+            sh 'cat ~/sct-results/latest/minicloud.log || true'
+        }
+    }
+}
