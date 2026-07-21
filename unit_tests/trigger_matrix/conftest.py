@@ -83,3 +83,14 @@ def sample_jobs():
             job_name="job-d", backend="aws", region="us-east-1", labels=["master-weekly"], exclude_versions=["master"]
         ),
     ]
+
+
+@pytest.fixture()
+def sample_jobs_with_arm():
+    """Return sample jobs including aarch64-labeled ones for architecture filter tests."""
+    return [
+        JobConfig(job_name="job-x86", backend="aws", region="us-east-1", labels=["weekly"]),
+        JobConfig(job_name="job-arm", backend="aws", region="us-east-1", labels=["aarch64"]),
+        JobConfig(job_name="job-arm-weekly", backend="aws", region="us-east-1", labels=["aarch64", "weekly"]),
+        JobConfig(job_name="job-arm-no-label", backend="aws", region="us-east-1", arch="aarch64", labels=["weekly"]),
+    ]
