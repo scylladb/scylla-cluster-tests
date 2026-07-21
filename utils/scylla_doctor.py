@@ -311,7 +311,7 @@ class ScyllaDoctor:
         match = re.search(r"((?:us|eu|ap|sa|ca|me|af|il)-[a-z]+-\d+)$", bucket_name)
         if match:
             region = match.group(1)
-            LOGGER.info("Extracted region %s from bucket name %s", region, bucket_name)
+            LOGGER.info("Extracted region from bucket name suffix")
             return region
 
         try:
@@ -320,7 +320,7 @@ class ScyllaDoctor:
             # get_bucket_location returns None for us-east-1
             return location.get("LocationConstraint") or "us-east-1"
         except Exception:  # noqa: BLE001
-            LOGGER.warning("Could not determine region for bucket %s, defaulting to us-east-1", bucket_name)
+            LOGGER.warning("Could not determine region for bucket, defaulting to us-east-1")
             return "us-east-1"
 
     def _download_and_extract_tarball(self, url: str, description: str = "scylla-doctor"):
@@ -412,13 +412,13 @@ class ScyllaDoctor:
             custom_bucket, custom_key = self._parse_s3_url(full_tarball_url, default_bucket=bucket_name)
             if custom_bucket != bucket_name:
                 bucket_name = custom_bucket
-                LOGGER.info("Overriding bucket from full_tarball_url: %s", bucket_name)
+                LOGGER.info("Overriding bucket from full_tarball_url")
             package["Key"] = custom_key
-            LOGGER.info("Using custom full SD tarball — bucket: %s, key: %s", bucket_name, custom_key)
+            LOGGER.info("Using custom full SD tarball from configured URL")
 
         package_key = package["Key"]
         package_filename = package_key.split("/")[-1]
-        LOGGER.info("Downloading full scylla-doctor package %s from bucket %s...", package_filename, bucket_name)
+        LOGGER.info("Downloading full scylla-doctor package...")
 
         # Generate a short-lived pre-signed URL (300s) so the remote node can download without AWS creds.
         # IMPORTANT: The S3 client MUST be created with the bucket's actual region.
@@ -426,7 +426,7 @@ class ScyllaDoctor:
         # doesn't match the bucket's region, S3 returns a small XML error response
         # (e.g. SignatureDoesNotMatch / AccessDenied) instead of the file.
         bucket_region = self._get_bucket_region(bucket_name)
-        LOGGER.info("Bucket %s is in region %s", bucket_name, bucket_region)
+        LOGGER.info("Resolved bucket region")
         s3 = boto3.client("s3", region_name=bucket_region)
         download_url = s3.generate_presigned_url(
             ClientMethod="get_object",

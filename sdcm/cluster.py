@@ -5992,9 +5992,9 @@ class BaseScyllaCluster:
                 time.sleep(self.params.get("kms_key_rotation_interval") * 60)
                 try:
                     gcp_kms.rotate_key()
-                    self.log.info("GCP KMS key rotated for test %s: %s", test_id, key_name)
-                except GoogleCloudError as e:
-                    self.log.error("Failed to rotate GCP KMS key '%s': %s", key_name, e)
+                    self.log.info("GCP KMS key rotated")
+                except GoogleCloudError:
+                    self.log.error("Failed to rotate GCP KMS key")
 
         threading.Thread(target=_rotate, daemon=True, name="GcpKmsRotationThread").start()
         self.log.info("Started GCP KMS rotation thread for test: %s", test_id)
