@@ -1,8 +1,8 @@
 ---
-status: draft
+status: implemented
 domain: framework
 created: 2026-03-15
-last_updated: 2026-04-05
+last_updated: 2026-07-21
 owner: fruch
 ---
 # KeyStore Improvements Plan
