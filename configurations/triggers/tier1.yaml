@@ -40,13 +40,6 @@ jobs:
       - "weekly"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
-  - job_name: "tier1/longevity-2tb-5days-test"
-    backend: "aws"
-    region: "eu-west-1"
-    labels:
-      - "weekly"
-    exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
-
   - job_name: "tier1/longevity-mv-si-4days-streaming-test"
     backend: "aws"
     region: "eu-west-1"
@@ -116,7 +109,7 @@ jobs:
     labels:
       - "weekly"
       - "aarch64"
-    exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
+    exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1", "2026.2"]
 
   - job_name: "tier1/elasticity-90-percent-with-nemesis-test"
     backend: "aws"
