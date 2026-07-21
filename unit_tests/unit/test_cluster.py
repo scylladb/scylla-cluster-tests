@@ -53,7 +53,7 @@ class TestBaseNode:
                 name="test_node",
                 parent_cluster=None,
                 base_logdir=str(self._tmp_path),
-                ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
+                ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
             )
             self._node.parent_cluster = DummyDbCluster(nodes=[self._node])
             self._node.init()
@@ -270,7 +270,7 @@ class TestBaseNodeGetScyllaVersion:
             name="test_node",
             parent_cluster=None,
             base_logdir=self.temp_dir,
-            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
+            ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
         )
         self.node.parent_cluster = DummyDbCluster([self.node])
 
@@ -434,7 +434,7 @@ class TestBaseMonitorSet:
             name="test_node",
             parent_cluster=None,
             base_logdir=self.temp_dir,
-            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
+            ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
         )
         self.db_cluster = DummyDbCluster([self.node])
         self.monitor_cluster = BaseMonitorSet({"db_cluster": self.db_cluster}, params=SCTConfiguration())
@@ -712,7 +712,7 @@ def test_base_node_cpuset(cat_results, expected_core_number, tmp_path):
         name="dummy_node",
         parent_cluster=None,
         base_logdir=str(tmp_path),
-        ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
     )
     dummy_node.parent_cluster = DummyDbCluster([dummy_node])
     dummy_node.init()
@@ -746,7 +746,7 @@ def test_base_node_cpuset_not_configured(cat_results, tmp_path):
         name="dummy_node",
         parent_cluster=None,
         base_logdir=str(tmp_path),
-        ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
+        ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
     )
     dummy_node.parent_cluster = DummyDbCluster([dummy_node])
     dummy_node.init()

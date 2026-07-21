@@ -70,7 +70,9 @@ def mock_get_partition_keys():
 
 @pytest.fixture(scope="module")
 def node():
-    return DummyNode(name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla-test"))
+    return DummyNode(
+        name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519")
+    )
 
 
 class MockCqlConnectionPatient(MagicMock):
