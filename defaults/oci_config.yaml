@@ -7,7 +7,7 @@ backup_bucket_backend: 's3'
 
 instance_provision: "on_demand" # NOTE: DenseIO shapes cannot be 'spot'
 oci_region_name:
-  - us-ashburn-1
+  - us-phoenix-1
 
 oci_instance_type_db: ''
 oci_instance_type_db_oracle: ''

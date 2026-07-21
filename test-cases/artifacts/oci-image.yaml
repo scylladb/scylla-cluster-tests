@@ -1,5 +1,5 @@
 cluster_backend: "oci"
-oci_region_name: "us-ashburn-1"
+oci_region_name: "us-phoenix-1"
 use_preinstalled_scylla: true
 backtrace_decoding: false
 
