@@ -686,7 +686,9 @@ class AwsSctRunner(SctRunner):
 
         return aws_region.resource.Image(existing_amis[0]["ImageId"])
 
-    def _create_instance(
+    NESTED_VIRTUALIZATION_INSTANCE_FAMILIES = ("c8i", "m8i", "r8i")
+
+    def _create_instance(  # noqa: PLR0914
         self,
         instance_type: InstanceTypeType,
         base_image: Any,
@@ -730,21 +732,28 @@ class AwsSctRunner(SctRunner):
             ami_id_param=base_image, region_names=tuple([aws_region.region_name])
         )
 
-        result = aws_region.resource.create_instances(
-            ImageId=base_image,
-            InstanceType=instance_type,
-            MinCount=1,
-            MaxCount=1,
-            KeyName=aws_region.SCT_KEY_PAIR_NAME,
-            NetworkInterfaces=interfaces,
-            TagSpecifications=[
+        instance_family = instance_type.split(".")[0] if "." in instance_type else ""
+        nested_virt = instance_family in self.NESTED_VIRTUALIZATION_INSTANCE_FAMILIES
+        if nested_virt:
+            LOGGER.info(
+                "Enabling nested virtualization for instance type %s (family: %s)", instance_type, instance_family
+            )
+
+        create_kwargs = {
+            "ImageId": base_image,
+            "InstanceType": instance_type,
+            "MinCount": 1,
+            "MaxCount": 1,
+            "KeyName": aws_region.SCT_KEY_PAIR_NAME,
+            "NetworkInterfaces": interfaces,
+            "TagSpecifications": [
                 {
                     "ResourceType": "instance",
                     "Tags": [{"Key": key, "Value": value} for key, value in tags.items()]
                     + [{"Key": "Name", "Value": instance_name}],
                 }
             ],
-            BlockDeviceMappings=[
+            "BlockDeviceMappings": [
                 {
                     "DeviceName": ec2_ami_get_root_device_name(image_id=base_image, region_name=aws_region.region_name),
                     "Ebs": {
@@ -753,7 +762,11 @@ class AwsSctRunner(SctRunner):
                     },
                 }
             ],
-        )
+        }
+        if nested_virt:
+            create_kwargs["CpuOptions"] = {"NestedVirtualization": "enabled"}
+
+        result = aws_region.resource.create_instances(**create_kwargs)
         instance = result[0]
 
         LOGGER.info("Instance created. Waiting until it becomes running... ")
@@ -985,6 +998,11 @@ class GceSctRunner(SctRunner):
     FAMILY = "sct-runner-image"
     SCT_NETWORK = "qa-vpc"
 
+    # GCE nested virtualization: supported on N1, N2, N2D, C2, C2D, C3, C3D, M1, M2, M3 families
+    # NOT supported on E2, T2D, T2A (Arm), A2/A3 (GPU) families
+    # See: https://cloud.google.com/compute/docs/instances/nested-virtualization/enabling
+    NESTED_VIRTUALIZATION_INSTANCE_FAMILIES = ("n1", "n2", "n2d", "c2", "c2d", "c3", "c3d", "m1", "m2", "m3")
+
     def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration):
         availability_zone = availability_zone or params.get("availability_zone") or random_zone(region_name)
         assert availability_zone, "Availability zone is required for GCE"
@@ -1092,6 +1110,13 @@ class GceSctRunner(SctRunner):
         else:
             external_ipv4 = None
 
+        instance_family = instance_type.split("-")[0] if "-" in instance_type else ""
+        nested_virt = instance_family in self.NESTED_VIRTUALIZATION_INSTANCE_FAMILIES
+        if nested_virt:
+            LOGGER.info(
+                "Enabling nested virtualization for instance type %s (family: %s)", instance_type, instance_family
+            )
+
         instance = create_instance(
             project_id=self.project_name,
             zone=region_az,
@@ -1101,6 +1126,7 @@ class GceSctRunner(SctRunner):
             disks=disks,
             external_access=True,
             external_ipv4=external_ipv4,
+            enable_nested_virtualization=nested_virt,
             metadata=tags
             | {
                 "launch_time": get_current_datetime_formatted(),

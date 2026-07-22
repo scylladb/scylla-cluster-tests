@@ -133,6 +133,13 @@ from sdcm.utils.resources_cleanup import (
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login, running_in_podman
+from sdcm.utils.minicloud import (
+    MinicloudConfig,
+    MinicloudManager,
+    collect_minicloud_logs,
+    ensure_minicloud_ready,
+    is_minicloud_active,
+)
 from sdcm.monitorstack.restore import (
     restore_monitoring_stack,
     get_monitoring_stack_services,
@@ -267,47 +274,37 @@ def cli(ctx):
         docker_hub_login(remoter=LOCALRUNNER)
 
 
-def _report_provision_error_to_argus(backend: str, exc: Exception):
-    """Report a provision-stage failure to Argus with TEST_ERROR status."""
-    test_config = get_test_config()
-    try:
-        params = SCTConfiguration()
-        test_id = params.get("test_id")
-        if test_id and test_id != "None":
-            test_config.set_test_id_only(test_id)
-        test_config.init_argus_client(params)
-    except Exception:  # noqa: BLE001
-        LOGGER.warning("Failed to initialize Argus client for error reporting", exc_info=True)
-        return
+@cli.command(
+    "start-minicloud",
+    help="Start minicloud container and prepare region (must run before provision-resources/collect-logs/clean-resources)",
+)
+@click.option("-b", "--backend", type=click.Choice(available_backends), default="aws", help="Backend to emulate")
+@click.option(
+    "-c",
+    "--config",
+    multiple=True,
+    type=click.Path(exists=True),
+    help="Test config .yaml to use, can have multiple of those",
+)
+def start_minicloud(backend, config):
+    if config:
+        os.environ["SCT_CONFIG_FILES"] = str(list(config))
+    if backend:
+        os.environ["SCT_CLUSTER_BACKEND"] = backend
 
-    error_message = (
-        f"(TestFrameworkEvent Severity.CRITICAL) Failed to provision {backend} resources: {type(exc).__name__}: {exc}"
-    )
-    event_payload: RawEventPayload = {
-        "run_id": str(test_config.test_id()),
-        "severity": "CRITICAL",
-        "ts": time.time(),
-        "message": error_message,
-        "event_type": "TestFrameworkEvent",
-        "received_timestamp": None,
-        "nemesis_name": None,
-        "duration": None,
-        "node": None,
-        "target_node": None,
-        "known_issue": None,
-        "nemesis_status": None,
-    }
+    add_file_logger()
 
-    try:
-        test_config.argus_client().submit_event(event_payload)
-        LOGGER.info("Error event submitted to Argus successfully")
-    except Exception as argus_exc:  # noqa: BLE001
-        LOGGER.warning("Failed to submit error event to Argus: %s", argus_exc)
+    cfg = MinicloudConfig.from_env()
+    manager = MinicloudManager(cfg)
+    manager.keep_alive = True
+    manager.preflight_check()
+    manager.start()
 
-    try:
-        test_config.argus_client().set_sct_run_status(TestStatus.TEST_ERROR)
-    except Exception:  # noqa: BLE001
-        LOGGER.warning("Failed to set TEST_ERROR status in Argus", exc_info=True)
+    if backend in ("aws", "aws-siren"):
+        manager.prepare_region()
+
+    click.echo(f"Minicloud started (endpoint: http://localhost:{cfg.port}, region: {cfg.region})")
+    click.echo(f"Logs: {cfg.log_file}")
 
 
 @cli.command("provision-resources", help="Provision resources for the test")
@@ -340,6 +337,9 @@ def provision_resources(backend, test_name: str, config: str):
             raise ValueError("No test_id was provided. Aborting provisioning.")
         test_config.set_test_id_only(test_id)
         localhost = LocalHost(user_prefix=params.get("user_prefix"), test_id=test_config.test_id())
+
+        if is_minicloud_active():
+            ensure_minicloud_ready(backend=backend or "aws")
 
         if params.get("logs_transport") == "syslog-ng":
             click.echo("Provision syslog-ng logging service")
@@ -545,6 +545,9 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
     Also you can add --dry-run option to see what should be cleaned.
     """
     add_file_logger()
+
+    if is_minicloud_active():
+        ensure_minicloud_ready(backend=backend or "aws")
 
     if clean_runners and not user and not test_id:
         click.echo(
@@ -2288,6 +2291,9 @@ def run_test(argv, backend, config, logdir):
     if backend:
         os.environ["SCT_CLUSTER_BACKEND"] = backend
 
+    if is_minicloud_active():
+        ensure_minicloud_ready(backend=backend or "aws")
+
     if logdir:
         os.environ["_SCT_LOGDIR"] = logdir
 
@@ -2386,6 +2392,10 @@ def cloud_usage_report(emails, report_type, user, billing_project):
 @click.option("--config-file", type=str, help="config test file path")
 def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
     add_file_logger()
+
+    if is_minicloud_active():
+        ensure_minicloud_ready(backend=backend or "aws")
+        collect_minicloud_logs(get_test_config().logdir())
 
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     if backend is None:

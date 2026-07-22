@@ -1,0 +1,12 @@
+#!groovy
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+minicloudPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: 'test-cases/minicloud-provision-test.yaml',
+    provision_type: 'on_demand',
+    post_behavior_db_nodes: 'destroy',
+)
