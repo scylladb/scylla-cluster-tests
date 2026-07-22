@@ -374,7 +374,10 @@ class EC2ClientWrapper:
 
         assert tag_specifications, "Tag specifications is a must for all instances creation api"
 
-        tag_specifications[0]["ResourceType"] = "spot-fleet-request"  # Ensure tags are applied to correct resource type
+        # Tags here live inside the fleet's LaunchSpecifications[].TagSpecifications, where AWS only accepts
+        # ResourceType="instance". "spot-fleet-request" is only valid at the top level of the fleet request config
+        # and causes InvalidSpotFleetRequestConfig here.
+        tag_specifications[0]["ResourceType"] = "instance"
 
         request_id = self._request_spot_fleet(
             instance_type,
