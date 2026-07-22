@@ -3564,6 +3564,9 @@ class SCTConfiguration(dict):
         if self.get("cluster_backend") == "azure":
             # for Azure need to shorten it more due longer region names
             prefix_max_len -= 2
+        if self.get("cluster_backend") == "oci":
+            # OCI node names include region (up to 14 chars) and must fit X.509 CN 64-char limit
+            prefix_max_len -= 10
         if (self.get("simulated_regions") or 0) > 1:
             # another shortening for simulated regions due added simulated dc suffix
             prefix_max_len -= 3
