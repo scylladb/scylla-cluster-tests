@@ -74,6 +74,24 @@ def test_10_longevity(monkeypatch):
 
 
 @pytest.mark.integration
+def test_10_oci_user_prefix_fits_x509_cn_limit(monkeypatch):
+    """OCI node names include region; user_prefix must be short enough for the full name to fit X.509 CN 64-char limit."""
+    user_prefix = "longevity-5gb-1h-ToggleAuditRulesNemesisSyslog"
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "oci")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+    monkeypatch.setenv("SCT_USER_PREFIX", user_prefix)
+    monkeypatch.setenv("SCT_OCI_IMAGE_DB", "ocid1.image.oc1.iad.fake")
+    monkeypatch.setenv("SCT_OCI_IMAGE_USERNAME", "ubuntu")
+    monkeypatch.setenv("SCT_OCI_INSTANCE_TYPE_DB", "VM.DenseIO.E5.Flex:8")
+    monkeypatch.setenv("SCT_OCI_INSTANCE_TYPE_LOADER", "VM.Standard.E4.Flex:2")
+    monkeypatch.setenv("SCT_OCI_INSTANCE_TYPE_MONITOR", "VM.Standard.E4.Flex:2")
+    monkeypatch.setenv("SCT_OCI_REGION_NAME", "eu-frankfurt-1")
+    conf = sct_config.SCTConfiguration()
+    conf.verify_configuration()
+    assert conf.user_prefix == user_prefix[:25]  # 35 - 10
+
+
+@pytest.mark.integration
 def test_10_mananger_regression(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
     monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy ami-dummy2")
