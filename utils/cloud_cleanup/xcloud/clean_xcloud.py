@@ -35,9 +35,7 @@ def should_delete_cluster(cluster: dict, now: datetime.datetime) -> tuple[bool, 
 
 
 def print_cluster(cluster: dict, msg: str):
-    print(
-        f"Cluster {cluster.get('clusterName')} (ID: {cluster.get('id')}) created at {cluster.get('createdAt')}: {msg}"
-    )
+    print(f"Cluster cleanup: {msg}")
 
 
 def delete_cluster(cluster: dict, api_client: ScyllaCloudAPIClient, account_id: int):
