@@ -8,6 +8,6 @@ longevityPipeline(
     region: 'eu-west-1',
     availability_zone: 'c',
     test_name: 'vnode_to_tablet_migration_test.VnodeToTabletMigrationTest.test_vnode_to_tablet_migration',
-    test_config: """['test-cases/longevity/longevity-50-percent-utilization-4h.yaml', 'configurations/tablets_disabled.yaml', 'configurations/nemesis/exclude-vnode-to-tablet-migration-limitations.yaml']""",
+    test_config: """['test-cases/longevity/longevity-50-percent-utilization-4h.yaml', 'configurations/tablets_disabled.yaml', 'configurations/exclude-vnode-to-tablet-migration-limitations.yaml']""",
     instance_provision_fallback_on_demand: true
 )

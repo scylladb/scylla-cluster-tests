@@ -9,12 +9,15 @@
 #
 # Stress (stress_cmd, 240m mixed):
 #   Reused across all three migration phases:
-#     - Pre-migration benchmark: run for 60m by vnode_to_tablet_migration_test
-#     - Migration:               run for full 240m concurrently with migration
-#     - Post-migration benchmark: run for 60m by vnode_to_tablet_migration_test
+#     - Pre-migration benchmark
+#     - Migration:
+#     - Post-migration benchmark
 
 test_duration: 600
 
+# 6 DB nodes across 3 simulated racks (2 nodes per rack). With migration running
+# concurrently with disruptive nemesis, at least 2 nodes per rack are required to
+# keep quorum (RF=3) available while one node per rack is unavailable.
 n_db_nodes: 6
 n_loaders: 2
 seeds_num: 3
@@ -23,16 +26,13 @@ simulated_racks: 3
 round_robin: true
 
 instance_type_db: 'i8g.xlarge'
-append_scylla_setup_args: ' --no-ec2-check '
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_interval: 15
 
 user_prefix: 'longevity-50-percent-utilization-4h'
-space_node_threshold: 64424
 
 pre_create_schema: true
-sstable_size: 100
 
 server_encrypt: true
 client_encrypt: true

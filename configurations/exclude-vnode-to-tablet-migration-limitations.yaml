@@ -8,7 +8,8 @@
 # Limitation: "No topology changes" — do not add, remove, decommission, or replace nodes
 # Limitation: "No TRUNCATE" on tables in migrating keyspace
 # Limitation: Only CQL base tables — no MV, secondary indexes, CDC, or Alternator tables
-# Limitation: Nodetool refresh - RefreshBigMonkey
+# Limitation: Rebuild and repair do not work properly during the migration
+# Limitation: Backup and restore support during migration is not verified
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: >-
@@ -56,9 +57,20 @@ nemesis_selector: >-
   and not IsolateNodeWithIptableRuleNemesis
   and not TruncateMonkey
   and not TruncateLargeParititionMonkey
+  and not ToggleAuditRulesNemesisSyslog
+  and not SplitMergeTabletsWithAlter
   and not KillMVBuildingCoordinator
   and not CreateIndexNemesis
   and not CDCStressorMonkey
-  and not RefreshBigMonkey
   and not NodeRestartWithResharding
-  and not RefreshMonkey
+  and not CorruptThenRebuildMonkey
+  and not CorruptThenRepairMonkey
+  and not MgmtRepair
+  and not MgmtCorruptThenRepair
+  and not RebuildStreamingErrMonkey
+  and not RepairStreamingErrMonkey
+  and not RestartThenRepairNodeMonkey
+  and not MgmtBackup
+  and not MgmtBackupSpecificKeyspaces
+  and not MgmtRestore
+  and not NemesisSequence

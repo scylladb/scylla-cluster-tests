@@ -13,6 +13,7 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+import logging
 import re
 import time
 from enum import StrEnum
@@ -21,8 +22,10 @@ from longevity_test import LongevityTest
 from sdcm.cluster import DB_LOG_PATTERN_RESHARDING_FINISH, DB_LOG_PATTERN_RESHARDING_START
 from sdcm.sct_events.system import InfoEvent
 from sdcm.utils.decorators import latency_calculator_decorator
-from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+from sdcm.utils.tablets.common import wait_tablets_balanced
 from sdcm.wait import wait_for, wait_for_log_lines
+
+LOGGER = logging.getLogger(__name__)
 
 
 class NodeMigrationStatus(StrEnum):
@@ -63,10 +66,10 @@ def get_nodetool_migrate_to_tablets_status(node, keyspace: str) -> dict[str, Nod
     return status
 
 
-def get_pow2_convergence_status(node, keyspace: str) -> dict[str, TableConvergenceStatus]:
+def is_keyspace_pow2_converged(node, keyspace: str) -> bool:
     """
     Run 'nodetool migrate-to-tablets status <keyspace> --with-tablet-status' and return
-    per-table pow2 convergence status.
+    whether all tables in the keyspace have converged to the pow2 tablet layout.
 
     Only valid after finalization (keyspace Status: tablets). Example output:
 
@@ -82,7 +85,7 @@ def get_pow2_convergence_status(node, keyspace: str) -> dict[str, TableConvergen
         t2      converging   2176      2048
         t3      converged    2048      -
 
-    Returns: dict of table_name -> TableConvergenceStatus.
+    Returns: True if all tables are converged, False otherwise.
     """
     res = node.run_nodetool(f"migrate-to-tablets status {keyspace} --with-tablet-status")
     table_statuses: dict[str, TableConvergenceStatus] = {}
@@ -91,7 +94,15 @@ def get_pow2_convergence_status(node, keyspace: str) -> dict[str, TableConvergen
         match = pattern.match(line.strip())
         if match:
             table_statuses[match.group("table")] = TableConvergenceStatus(match.group("status"))
-    return table_statuses
+
+    if not table_statuses:
+        raise AssertionError(f"No table convergence statuses found for keyspace {keyspace}: {res.stdout}")
+
+    converged = all(s == TableConvergenceStatus.CONVERGED for s in table_statuses.values())
+    LOGGER.info(
+        "Keyspace %s pow2 convergence %s: %s", keyspace, "complete" if converged else "in progress", table_statuses
+    )
+    return converged
 
 
 class VnodeToTabletMigrationTest(LongevityTest):
@@ -135,9 +146,9 @@ class VnodeToTabletMigrationTest(LongevityTest):
         1. Start migration for all user keyspaces.
         2. Rolling restart — for each node: run migrate-to-tablets upgrade, drain/stop/start.
         3. Finalize migration for all user keyspaces.
-        4. Wait for all tablet topology operations to quiesce.
-        5. Verify migrated keyspaces use tablets via system.tablets.
-        6. Wait for pow2 tablet layout convergence to complete.
+        4. Verify migrated keyspaces use tablets via system.tablets.
+        5. Wait for pow2 tablet layout convergence to complete.
+        6. Wait for all tablet topology operations to quiesce.
         """
         coordinator_node = self.db_cluster.data_nodes[0]
         keyspaces = self.db_cluster.get_test_keyspaces()
@@ -194,10 +205,6 @@ class VnodeToTabletMigrationTest(LongevityTest):
         for ks in keyspaces:
             coordinator_node.run_nodetool(f"migrate-to-tablets finalize {ks}")
 
-        InfoEvent(message="Waiting for tablet migration to fully complete").publish()
-        for migration_node in self.db_cluster.data_nodes:
-            wait_no_tablets_migration_running(migration_node, timeout=7200)
-
         InfoEvent(message="Verifying migrated keyspaces have tablets in system.tablets").publish()
         with self.db_cluster.cql_connection_patient(coordinator_node, connect_timeout=600) as session:
             result = session.execute("SELECT keyspace_name FROM system.tablets")
@@ -207,33 +214,17 @@ class VnodeToTabletMigrationTest(LongevityTest):
             assert ks in tablet_keyspaces, f"Keyspace {ks} not found in system.tablets after migration"
 
         InfoEvent(message="Waiting for pow2 tablet layout convergence to complete").publish()
-        for ks in keyspaces:
 
-            def _all_converged(k=ks):
-                statuses = get_pow2_convergence_status(coordinator_node, k)
-                if not statuses:
-                    self.log.warning("No table convergence status found for keyspace %s yet", k)
-                    return False
-                not_converged = {t: s for t, s in statuses.items() if s != TableConvergenceStatus.CONVERGED}
-                if not_converged:
-                    self.log.info(
-                        "Keyspace %s pow2 convergence in progress: %d/%d tables still converging: %s",
-                        k,
-                        len(not_converged),
-                        len(statuses),
-                        not_converged,
-                    )
-                    return False
-                self.log.info("Keyspace %s pow2 convergence complete: all %d tables converged", k, len(statuses))
-                return True
+        wait_for(
+            func=lambda: all([is_keyspace_pow2_converged(coordinator_node, ks) for ks in keyspaces]),
+            step=60,
+            timeout=7200,
+            text="Waiting for pow2 tablet layout convergence on all keyspaces",
+            throw_exc=True,
+        )
 
-            wait_for(
-                func=_all_converged,
-                step=60,
-                timeout=7200,
-                text=f"Waiting for pow2 tablet layout convergence on keyspace {ks}",
-                throw_exc=True,
-            )
+        InfoEvent(message="Waiting for tablet migration to fully complete").publish()
+        wait_tablets_balanced(self.db_cluster.data_nodes[0], timeout=7200)
 
     @latency_calculator_decorator(
         legend="Pre-migration baseline (vnodes)",
@@ -247,8 +238,9 @@ class VnodeToTabletMigrationTest(LongevityTest):
         and reports P90/P99 latencies and throughput to Argus.
         """
         stress_queue = []
+        round_robin = self.params.get("round_robin")
         for cmd in self.params.get("stress_cmd"):
-            stress_queue.append(self.run_stress_thread(stress_cmd=cmd, duration=30))
+            stress_queue.append(self.run_stress_thread(stress_cmd=cmd, duration=60, round_robin=round_robin))
         for stress in stress_queue:
             self.verify_stress_thread(stress)
         return stress_queue
@@ -269,6 +261,7 @@ class VnodeToTabletMigrationTest(LongevityTest):
             stress_queue, self.params.get("stress_cmd"), self.params.get("keyspace_num")
         )
         self._perform_migration_steps()
+        self.kill_stress_thread()
         for stress in stress_queue:
             self.verify_stress_thread(stress)
         return stress_queue
@@ -285,8 +278,9 @@ class VnodeToTabletMigrationTest(LongevityTest):
         and reports P90/P99 latencies and throughput to Argus.
         """
         stress_queue = []
+        round_robin = self.params.get("round_robin")
         for cmd in self.params.get("stress_cmd"):
-            stress_queue.append(self.run_stress_thread(stress_cmd=cmd, duration=30))
+            stress_queue.append(self.run_stress_thread(stress_cmd=cmd, duration=60, round_robin=round_robin))
         for stress in stress_queue:
             self.verify_stress_thread(stress)
         return stress_queue
