@@ -68,7 +68,7 @@ def _definition(name: str) -> InstanceDefinition:
         image_id="OpenLogic:CentOS:7_9:latest",
         type="Standard_L8s_v4",
         user_name="tester",
-        ssh_key=KeyStore().get_ec2_ssh_key_pair(),
+        ssh_key=KeyStore().get_ssh_key_pair(name="scylla_test_id_ed25519"),
         tags={"NodeType": "scylla-db"},
         user_data=None,
         use_public_ip=True,

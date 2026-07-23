@@ -3246,6 +3246,24 @@ Failure/post test behavior, i.e. what to do with the k8s cluster at the end of t
 **type:** str (appendable)
 
 
+## **keystore_backend** / SCT_KEYSTORE_BACKEND
+
+Credential storage backend for KeyStore: 's3' (default) or 'secretsmanager'
+
+**default:** s3
+
+**type:** str (appendable)
+
+
+## **keystore_sm_prefix** / SCT_KEYSTORE_SM_PREFIX
+
+AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (default: 'sct/')
+
+**default:** sct/
+
+**type:** str (appendable)
+
+
 ## **internode_compression** / SCT_INTERNODE_COMPRESSION
 
 scylla option: internode_compression
