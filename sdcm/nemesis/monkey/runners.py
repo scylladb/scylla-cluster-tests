@@ -8,6 +8,7 @@ from typing import Callable, List, Set, Tuple
 
 from sdcm.mgmt.common import ObjectStorageUploadMode
 from sdcm.nemesis import NemesisRunner
+from sdcm.nemesis.monkey.manager import manager_backup
 
 
 class SisyphusMonkey(NemesisRunner):
@@ -120,7 +121,7 @@ class ManagerRcloneBackup(NemesisRunner):
     supports_high_disk_utilization = False
 
     def call_next_nemesis(self):
-        self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.RCLONE, label="rclone_backup")
+        manager_backup(self, object_storage_upload_mode=ObjectStorageUploadMode.RCLONE, label="rclone_backup")
 
 
 class ManagerNativeBackup(NemesisRunner):
@@ -129,7 +130,7 @@ class ManagerNativeBackup(NemesisRunner):
     supports_high_disk_utilization = False
 
     def call_next_nemesis(self):
-        self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.NATIVE, label="native_backup")
+        manager_backup(self, object_storage_upload_mode=ObjectStorageUploadMode.NATIVE, label="native_backup")
 
 
 class EnableDisableTableEncryptionAwsKmsProviderMonkey(NemesisRunner):
