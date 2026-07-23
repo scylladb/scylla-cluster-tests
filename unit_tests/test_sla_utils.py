@@ -97,7 +97,9 @@ class FakeSession:
 
 class TestSlaUtilsTest(unittest.TestCase, SlaUtils):
     def test_less_operations_than_expected_error(self):
-        node = DummyNode(name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla-test"))
+        node = DummyNode(
+            name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519")
+        )
 
         db_cluster = DummyDbCluster(nodes=[node])
         prometheus_stats = FakePrometheus()
