@@ -735,7 +735,7 @@ class AwsRegion:
         pair doesn't exist yet.
         """
         ks = KeyStore()
-        sct_key_pair = ks.get_ec2_ssh_key_pair()
+        sct_key_pair = ks.get_ssh_key_pair(name=self.SCT_KEY_PAIR_NAME)
         s3_fingerprint = self._compute_public_key_fingerprint(sct_key_pair.public_key)
         ec2_fingerprint = self._get_ec2_key_fingerprint()
 

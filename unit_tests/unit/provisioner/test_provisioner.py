@@ -71,7 +71,7 @@ def definition(image_id, image_type):
         image_id=image_id,
         type=image_type,
         user_name="tester",
-        ssh_key=KeyStore().get_ec2_ssh_key_pair(),
+        ssh_key=KeyStore().get_ssh_key_pair(name="scylla_test_id_ed25519"),
         tags={"test-tag": "test_value"},
         user_data=[PrintingTestUserDataObject()],
         use_public_ip=True,
