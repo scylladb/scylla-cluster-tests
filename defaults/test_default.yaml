@@ -337,3 +337,9 @@ argus_email_report_template: email_report_template_basic.yaml
 
 c_s_driver_version: '3'
 cs_extra_jvm_opts: ''
+
+# KeyStore backend for credential retrieval.
+#   s3             - Legacy: fetch from the scylla-qa-keystore S3 bucket.
+#   secretsmanager - Read from AWS Secrets Manager under the configured prefix.
+keystore_backend: 's3'
+keystore_sm_prefix: 'sct/'
