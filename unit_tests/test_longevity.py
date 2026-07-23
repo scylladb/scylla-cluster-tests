@@ -57,7 +57,9 @@ class DummyLongevityTest(LongevityTest):
         pass
 
     def init_resources(self):
-        node = DummyNode(name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla-test"))
+        node = DummyNode(
+            name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519")
+        )
         node.parent_cluster = DummyDbCluster([node], params=self.params)
         node.parent_cluster.nemesis_termination_event = threading.Event()
         node.parent_cluster.nemesis = []
