@@ -1637,6 +1637,19 @@ class SCTConfiguration(dict):
             help="""number of tables to create for template user c-s""",
         ),
         dict(
+            name="keystore_backend",
+            env="SCT_KEYSTORE_BACKEND",
+            type=str,
+            choices=["s3", "secretsmanager"],
+            help="""Credential storage backend for KeyStore: 's3' (default) or 'secretsmanager'""",
+        ),
+        dict(
+            name="keystore_sm_prefix",
+            env="SCT_KEYSTORE_SM_PREFIX",
+            type=str,
+            help="""AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (default: 'sct/')""",
+        ),
+        dict(
             name="add_cs_user_profiles_extra_tables",
             env="SCT_ADD_CS_USER_PROFILES_EXTRA_TABLES",
             type=boolean,
@@ -3480,6 +3493,16 @@ class SCTConfiguration(dict):
         if self.get("c_s_driver_version") == "random":
             self["c_s_driver_version"] = random.choice(["4", "3"])
             self.log.debug("Using random cassandra-stress driver version: %s", self["c_s_driver_version"])
+
+        # Propagate keystore settings to env vars so KeyStore instances created
+        # later (including from utility code that doesn't hold an SCTConfiguration
+        # reference) pick up the config-file / CLI-overridden values.  An
+        # explicit SCT_KEYSTORE_* env var always wins since we don't overwrite.
+        for _param in ("keystore_backend", "keystore_sm_prefix"):
+            _env_name = f"SCT_{_param.upper()}"
+            _value = self.get(_param)
+            if _value and _env_name not in os.environ:
+                os.environ[_env_name] = str(_value)
 
     def load_docker_images_defaults(self):
         docker_images_dir = pathlib.Path(sct_abs_path("defaults/docker_images"))

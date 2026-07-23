@@ -442,7 +442,7 @@ class DummyNode(BaseNode):
             base_logdir=base_logdir,
             parent_cluster=parent_cluster,
             name="node-" + str(node_num),
-            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
+            ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
         )
 
     def init(self):
