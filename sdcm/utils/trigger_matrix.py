@@ -1009,9 +1009,7 @@ def wait_for_builds(
                     if not build_data.get("building", True):
                         result = build_data.get("result", "UNKNOWN")
                         build_url = f"{jenkins_url}/job/{build.job_url_path}/{build.build_number}"
-                        logger.info(
-                            "Build %s #%d completed: %s — %s", build.job_name, build.build_number, result, build_url
-                        )
+                        logger.info("Build %s #%d completed: %s", str(build.job_name), build.build_number, str(result))
                         artifacts = _collect_artifacts(
                             jenkins_url, build.job_url_path, build.build_number, client, build.collect_results
                         )

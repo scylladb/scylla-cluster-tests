@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import json
 import logging
 import ipaddress
 from enum import Enum
@@ -103,7 +102,7 @@ class ScyllaCloudAPIClient:
         if error := self.get_error(response):
             raise self.exception_class(error)
 
-        LOGGER.debug("Got response:\n%s", json.dumps(response, indent=4))
+        LOGGER.debug("Got API response")
         return self._parse_response_data(response)
 
     @staticmethod
