@@ -38,7 +38,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
-            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
+            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-phoenix-1')}",
                    description: 'Oracle Cloud Region',
                    name: 'oci_region_name')
             string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
