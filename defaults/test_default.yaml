@@ -315,3 +315,9 @@ adaptive_timeout_store_metrics: true
 
 enable_argus_email_report : false
 argus_email_report_template: email_report_template_basic.yaml
+
+# KeyStore backend for credential retrieval.
+#   s3             - Legacy: fetch from the scylla-qa-keystore S3 bucket.
+#   secretsmanager - Read from AWS Secrets Manager under the configured prefix.
+keystore_backend: 's3'
+keystore_sm_prefix: 'sct/'
