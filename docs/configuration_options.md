@@ -3595,4 +3595,28 @@ Whether or not to send email using argus instead of SCT.
 
 **default:** N/A
 
+<<<<<<< HEAD
 **type:** bool
+||||||| parent of 8239266be (feature(keystore): add caching, retry, logging, and Secrets Manager backend)
+**type:** sdcm.test_metadata.TestMetadata
+=======
+**type:** sdcm.test_metadata.TestMetadata
+
+
+## **keystore_backend** / SCT_KEYSTORE_BACKEND
+
+Credential storage backend for KeyStore: 's3' (default) or 'secretsmanager'
+
+**default:** s3
+
+**type:** Literal['s3', 'secretsmanager']
+
+
+## **keystore_sm_prefix** / SCT_KEYSTORE_SM_PREFIX
+
+AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (default: 'sct/')
+
+**default:** sct/
+
+**type:** str (appendable)
+>>>>>>> 8239266be (feature(keystore): add caching, retry, logging, and Secrets Manager backend)

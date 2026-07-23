@@ -23,6 +23,7 @@ pyzmq==22.3.0
 tenacity==8.0.1
 pytest==7.2.0
 pytest-random-order==1.0.4
+moto==5.2.2  # AWS mocking for keystore unit tests
 tcconfig==0.29.1
 mysql-connector-python==9.1.0
 docker==7.1.0
