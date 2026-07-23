@@ -18,6 +18,7 @@ n_loaders: 2
 # AWS
 instance_type_db: 'i7i.large'
 instance_type_loader: 'c6i.xlarge'
+instance_provision_fallback_on_demand: false
 
 # GCP
 gce_instance_type_db: 'n2-highmem-2'
