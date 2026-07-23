@@ -2418,6 +2418,24 @@ number of tables to create for template user c-s
 **type:** int
 
 
+## **keystore_backend** / SCT_KEYSTORE_BACKEND
+
+Credential storage backend for KeyStore: 's3' (default) or 'secretsmanager'
+
+**default:** s3
+
+**type:** str (appendable)
+
+
+## **keystore_sm_prefix** / SCT_KEYSTORE_SM_PREFIX
+
+AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (default: 'sct/')
+
+**default:** sct/
+
+**type:** str (appendable)
+
+
 ## **add_cs_user_profiles_extra_tables** / SCT_ADD_CS_USER_PROFILES_EXTRA_TABLES
 
 extra tables to create for template user c-s, in addition to pre-created tables
