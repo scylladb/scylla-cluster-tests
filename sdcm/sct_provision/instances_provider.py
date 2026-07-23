@@ -30,8 +30,15 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying
+from sdcm.utils.parallel_object import ParallelObject
 
 LOGGER = logging.getLogger(__name__)
+
+# Max number of nodes to wait on concurrently. Caps threads/SSH sessions on very large clusters.
+MAX_PROVISION_WAIT_WORKERS = 50
+# Overall timeout (seconds) for waiting on cloud-init across all nodes. wait_cloud_init_completes
+# itself retries for up to ~20*10s plus a 5min SSH is_up per node, so this leaves ample headroom.
+CLOUD_INIT_WAIT_TIMEOUT = 30 * 60
 
 
 @retrying(n=3, sleep_time=5, allowed_exceptions=(ProvisionError,))
@@ -56,7 +63,9 @@ def provision_instances_with_fallback(
             raise
 
     provisioned_instances = provisioner.get_or_create_instances(definitions=definitions)
-    for definition, v_m in zip(definitions, provisioned_instances):
+
+    def wait_instance_ready(definition_and_vm: tuple[InstanceDefinition, VmInstance]) -> None:
+        definition, v_m = definition_and_vm
         if definition.use_public_ip:
             hostname = v_m.public_ip_address if v_m.public_ip_address else v_m.private_ip_address
         else:
@@ -69,6 +78,19 @@ def provision_instances_with_fallback(
         remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
         wait_cloud_init_completes(remoter=remoter, instance=v_m)
         # todo: wait for scylla-machine-image service to complete if instance is scylla-db?
+
+    # Instances are created in parallel by the provisioner, but each node still needs an SSH
+    # connection and a (potentially multi-minute) cloud-init wait. Doing that serially made
+    # provisioning time grow linearly with cluster size, so wait for all nodes concurrently.
+    instance_pairs = list(zip(definitions, provisioned_instances))
+    if instance_pairs:
+        # ignore_exceptions=False so any cloud-init failure still propagates (provisioning must fail
+        # if a node did not come up correctly), while ParallelObject surfaces it after all workers run.
+        ParallelObject(
+            objects=instance_pairs,
+            timeout=CLOUD_INIT_WAIT_TIMEOUT,
+            num_workers=min(len(instance_pairs), MAX_PROVISION_WAIT_WORKERS),
+        ).run(wait_instance_ready, ignore_exceptions=False)
     return provisioned_instances
 
 
