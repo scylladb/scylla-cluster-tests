@@ -1094,6 +1094,7 @@ class BaseSCTLogCollector(LogCollector):
         FileLog(name="cdc-replicator.log", search_locally=True),
         FileLog(name="scylla-migrate.log", search_locally=True),
         FileLog(name="argus.log", search_locally=True),
+        FileLog(name="argus_replay_log_*.jsonl", search_locally=True),
         FileLog(name="actions.log", search_locally=True),
         FileLog(name=r"*debug.json", search_locally=True),
         FileLog(name="result_gradual_increase.log", search_locally=True),

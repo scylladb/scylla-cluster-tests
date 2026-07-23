@@ -25,7 +25,6 @@ import sys
 import time
 import traceback
 import unittest
-import unittest.mock
 from pathlib import Path
 from typing import NamedTuple, Optional, Union, List, Any
 from uuid import uuid4
@@ -99,7 +98,7 @@ from sdcm.teardown_validators import teardown_validators_list
 from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
 from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
-from sdcm.utils.argus import report_scylla_yaml_to_argus
+from sdcm.utils.argus import ReplayOnlyArgusSCTClient, report_scylla_yaml_to_argus
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import (
@@ -409,6 +408,7 @@ class ClusterTester(unittest.TestCase):
     def init_argus_run(self):
         try:
             self.test_config.init_argus_client(self.params)
+            self.test_config.start_argus_event_pipeline()
             git_status = get_git_status_info()
             self.test_config.argus_client().submit_sct_run(
                 job_name=get_job_name(),
@@ -436,7 +436,7 @@ class ClusterTester(unittest.TestCase):
 
     def start_argus_heartbeat_thread(self) -> threading.Event:
         def send_argus_heartbeat(client: ArgusSCTClient, stop_signal: threading.Event):
-            if isinstance(client, unittest.mock.MagicMock):
+            if isinstance(client, ReplayOnlyArgusSCTClient):
                 return
             fail_count = 0
             while not stop_signal.is_set():

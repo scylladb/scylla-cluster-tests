@@ -3372,6 +3372,15 @@ Control reporting to argus
 **type:** boolean
 
 
+## **argus_use_ssh_tunnel** / SCT_ARGUS_USE_SSH_TUNNEL
+
+Enable SSH tunnel support in the Argus client connection
+
+**default:** True
+
+**type:** boolean
+
+
 ## **cs_populating_distribution** / SCT_CS_POPULATING_DISTRIBUTION
 
 set c-s parameter '-pop' with gauss/uniform distribution for<br>performance gradual throughtput grow tests
