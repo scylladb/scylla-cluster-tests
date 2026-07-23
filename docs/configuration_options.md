@@ -3059,7 +3059,7 @@ num_tokens value to configure in cassandra.yaml.
 
 Cassandra version for the oracle cluster, i.e. '4.1' or '5.0'
 
-**default:** 4.1
+**default:** N/A
 
 **type:** str (appendable)
 
