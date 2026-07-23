@@ -1,9 +1,9 @@
 ---
-status: draft
-domain: testing
+status: in_progress
+domain: cluster
 created: 2026-03-11
-last_updated: 2026-03-17
-owner: null
+last_updated: 2026-07-23
+owner: fruch
 ---
 # Minicloud Local Testing Integration
 
@@ -16,420 +16,304 @@ Running AMI artifact tests (`artifacts_test.py::ArtifactsTest::test_scylla_servi
 - **Access barriers**: Developers need AWS credentials, correct IAM permissions, and VPN/network access
 - **CI dependency**: Artifact tests can only run in Jenkins pipelines with cloud access, not on developer machines
 
-[minicloud](https://github.com/scylladb/minicloud) is a local AWS EC2 emulator backed by QEMU/KVM that implements a subset of the EC2 Query API. It can launch real Linux VMs from AMI images locally, with NVMe storage, TAP networking, and IMDS metadata — making it a viable backend for running AMI artifact tests without AWS.
+[minicloud](https://github.com/scylladb/minicloud) is a local cloud emulator backed by QEMU/KVM that implements a subset of the EC2 Query API and GCE Compute API. It launches real Linux VMs from AMI/GCE images locally, with NVMe storage, userspace-switch networking, and IMDS metadata — making it a viable target for running AMI artifact tests without cloud costs.
 
-### Key constraint
+### Architecture decision: server-side routing
 
-AMI image resolution (`DescribeImages`, `convert_name_to_ami_if_needed`) and other read-only AWS metadata operations must continue to hit real AWS. Only instance-lifecycle operations (`RunInstances`, `DescribeInstances`, VPC/subnet/security-group setup) should be routed to minicloud. This selective routing is critical because minicloud downloads AMI images via the EBS Direct API on first use, but does not implement `DescribeImages` or image-scanning APIs.
+An earlier revision of this plan proposed *client-side* selective endpoint routing in SCT: a centralized boto3 client factory that would send instance-lifecycle calls to minicloud while keeping AMI resolution on real AWS. That approach was dropped — minicloud handles the routing itself, server-side:
+
+- **Emulated locally**: instance lifecycle (`RunInstances`, `DescribeInstances`, `TerminateInstances`), VPC/subnet/SG/IGW/route-table creation, key pairs, IMDS
+- **Passthrough to real AWS** (static allowlist, SigV4 re-signing): `DescribeImages`, SSM `GetParameter` (`resolve:ssm:` AMI lookups), STS, SecretsManager, opt-in S3 buckets, and further EC2 actions (full list in section 2's API inventory)
+- **Rejected**: any action not on either list returns `UnsupportedOperation` — passthrough is not a silent fallback
+
+Consequently SCT needs **no routing layer and no changes to the AWS backend code**: it only points the AWS SDK at minicloud (`AWS_ENDPOINT_URL`) once the emulator is confirmed healthy. `sdcm/cluster_aws.py` is untouched by the implementation ([#14875](https://github.com/scylladb/scylla-cluster-tests/pull/14875)).
 
 ## 2. Current State
 
-### Backend selection
+### Reference minicloud version
 
-Backend is chosen via `cluster_backend` config parameter in `sdcm/sct_config.py:475`:
+Everything in this section is stated against **minicloud v0.1.0** (released 2026-07-16, first tagged release). Minicloud publishes:
 
-```python
-cluster_backend: String = SctField(
-    description="backend that will be used, aws/gce/azure/oci/docker/xcloud",
-)
-```
+- Docker images: `ghcr.io/scylladb/minicloud` and `docker.io/scylladb/minicloud` (tags: `X.Y.Z`, `latest`, `dev` = every master merge, `master-<shortsha>`)
+- Binary tarball: `https://qa-minicloud-releases.s3.amazonaws.com/minicloud-{version}-linux-amd64.tar.gz`
 
-The `init_resources()` method in `sdcm/tester.py:2524` dispatches to backend-specific methods:
+The SCT integration consumes minicloud strictly as a container (`MinicloudManager` supports only docker mode); the tarball is a general minicloud distribution artifact, not used by the integration.
 
-```python
-if cluster_backend in ("aws", "aws-siren"):
-    self.get_cluster_aws(...)
-elif cluster_backend == "docker":
-    self.get_cluster_docker()
-```
+The integration must pin a release tag. `scylladb/minicloud:dev` is a moving target — several capabilities discussed below exist only in unmerged minicloud PRs and must not be assumed present in `dev` or `latest`.
 
-### AWS cluster implementation
+### Integration state (implementation PR #14875)
 
-- `sdcm/cluster_aws.py:81` — `AWSCluster(cluster.BaseCluster)`: provisions instances via `EC2ClientWrapper`
-- `sdcm/cluster_aws.py:539` — `AWSNode(cluster.BaseNode)`: wraps `ec2.Instance`, provides SSH access
-- `sdcm/cluster_aws.py:1047` — `ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster)`: Scylla-specific DB cluster
-- `sdcm/cluster_aws.py:1235` — `LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster)`: loader nodes
-- `sdcm/cluster_aws.py:1275` — `MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster)`: monitor nodes
+The SCT side is implemented in [#14875](https://github.com/scylladb/scylla-cluster-tests/pull/14875) (branch `feature/minicloud-integration`, draft):
 
-### EC2 client usage
+| Component | Files | Status |
+|-----------|-------|--------|
+| MinicloudManager (container lifecycle, health checks, env-var config) | `sdcm/utils/minicloud.py` | done |
+| Test integration (setUp/tearDown hooks) | `sdcm/tester.py` | done |
+| Nested virt on sct-runner (AWS `CpuOptions` for c8i/m8i/r8i, GCE `enableNestedVirtualization`) | `sdcm/sct_runner.py` | done |
+| Hydra (SCT's dockerized CLI wrapper) env-var forwarding (`MINICLOUD_*`) | `docker/env/hydra.sh` | done |
+| Start/packaging/runner-setup scripts | `scripts/start-minicloud.sh`, `scripts/minicloud-package.sh`, `scripts/minicloud-runner-setup.sh`, `scripts/test-minicloud-*.sh` | done |
+| Test config (3× `i4i.large`, KMS disabled, 2.5 GiB/VM lightweight mode) | `test-cases/minicloud-provision-test.yaml` | done |
+| Jenkins pipeline | `vars/minicloudPipeline.groovy`, `jenkins-pipelines/oss/minicloud/*.jenkinsfile`, `jenkins-pipelines/oss/artifacts/artifacts-minicloud.jenkinsfile` | done, not green yet |
+| Log collection (skip SSH-dependent collectors under minicloud) | `sdcm/logcollector.py` | done |
+| Shutdown hang prevention (event system) | `sdcm/sct_events/` | done |
+| GCE DNS names support | `sdcm/cluster_gce.py` (`use_dns_names`) | done |
+| Unit tests | `unit_tests/unit/test_minicloud.py` (52 tests) | done |
 
-`sdcm/ec2_client.py:55` — `EC2ClientWrapper` creates boto3 clients directly:
+**Open item — configuration mechanism (Needs Decision)**: #14875 both forwards `MINICLOUD_*` environment variables (no `SCT_` prefix, hence no `sct_config.py` involvement) *and* adds a `minicloud_endpoint_url` parameter to `sdcm/sct_config.py` + `defaults/test_default.yaml`. The endpoint helpers currently ignore the config parameter (only `AWS_ENDPOINT_URL` containing "localhost" is honored). One mechanism should be chosen and the other removed — tracked in [QAINFRA-86](https://scylladb.atlassian.net/browse/QAINFRA-86).
 
-```python
-class EC2ClientWrapper:
-    def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None):
-        self._client = self._get_ec2_client(region_name)
-        self._resource = boto3.resource("ec2", region_name=region_name)
+### minicloud capabilities (as of v0.1.0)
 
-    def _get_ec2_client(self, region_name=None) -> EC2Client:
-        return boto3.client(service_name="ec2", region_name=region_name)
-```
-
-There are 40+ direct `boto3.client("ec2", ...)` and `boto3.resource("ec2", ...)` calls scattered across:
-- `sdcm/ec2_client.py` — instance lifecycle (RunInstances, spot requests)
-- `sdcm/utils/aws_region.py:45` — `AwsRegion` class (VPC/subnet/SG management)
-- `sdcm/utils/aws_utils.py:74` — cleanup, tagging, device mappings
-- `sdcm/utils/common.py` — AMI lookups (`convert_name_to_ami_if_needed`, `get_ami_images`)
-- `sdcm/provision/aws/utils.py:87` — provisioner EC2 clients
-- `sdcm/provision/aws/capacity_reservation.py` — capacity reservations
-- `sdcm/provision/aws/dedicated_host.py` — dedicated hosts
-
-### AMI artifact test
-
-- `artifacts_test.py:52` — `ArtifactsTest(ClusterTester)`: main test class
-- `test-cases/artifacts/ami.yaml` — config: `cluster_backend: 'aws'`, `instance_type_db: 'i4i.large'`, `n_db_nodes: 1`, `n_loaders: 0`, `n_monitor_nodes: 0`
-- Test method `test_scylla_service` (`artifacts_test.py:356`) verifies: ENA support, IO params, NVMe write cache, XFS discard, snitch, node health, CQL, cassandra-stress, stop/start/restart, housekeeping, perftune, time sync services
-
-### AMI resolution flow
-
-`sdcm/sct_config.py:2469` resolves AMI names to IDs during config validation:
-
-```python
-self[key] = convert_name_to_ami_if_needed(param, tuple(self.region_names))
-```
-
-This calls `sdcm/utils/common.py:1449` which uses `boto3.resource("ec2").images.filter()` — a `DescribeImages` call that **must** hit real AWS.
-
-### minicloud capabilities (from README)
-
-- **API**: Subset of EC2 Query API on `localhost:5000` — supports `CreateVpc`, `CreateSubnet`, `CreateSecurityGroup`, `CreateKeyPair`, `RunInstances`, `DescribeInstances`, `DescribeKeyPairs`
-- **VMs**: QEMU/KVM with NVMe controllers, TAP networking, IMDS v2 metadata
-- **Instance type**: Only `i4i.large` (2 vCPU, 16 GiB RAM; `--lightweight` mode: 1 vCPU, 1.5 GiB)
-- **Networking**: Linux bridges per VPC, TAP devices, host connectivity via `minicloud-setup.sh`
-- **AMI download**: Uses EBS Direct API to download real AMI images on first use
-- **Missing**: `TerminateInstances`, `StopInstances`, `DescribeImages`, EBS volume management
-- **Not enforced**: Security group rules (stored but not enforced in v1)
+- **EC2 API — emulated locally**: `RunInstances` (param allowlist incl. `NetworkInterface(s).`, `BlockDeviceMapping.`, `TagSpecification.` prefixes; `ClientToken` idempotency), `DescribeInstances`, `TerminateInstances` (graceful QEMU shutdown, idempotent), `CreateVpc`, `ModifyVpcAttribute`, `CreateSubnet`, `ModifySubnetAttribute`, `CreateInternetGateway`, `AttachInternetGateway`, `CreateRouteTable`, `CreateRoute`, `AssociateRouteTable`, `CreateSecurityGroup`, `AuthorizeSecurityGroupIngress` (rules stored, **not enforced**), `CreateKeyPair`, `DescribeKeyPairs`, `CreateVpcEndpoint` (stub)
+- **EC2 API — passthrough to real AWS**: `DescribeImages`, `DescribeInstanceStatus`, `StopInstances`, `StartInstances`, `DescribeSecurityGroups`, `DescribeInternetGateways`, `DescribeInstanceTypeOfferings`, `DescribeAvailabilityZones`, `DescribeRegions`, `DescribeVpcAttribute`, `RequestSpotInstances`, Delete*/Detach*/Disassociate* teardown actions. **Caveat**: passthrough of actions that reference minicloud-local resource IDs (instance/SG/IGW IDs) hits real AWS and returns NotFound — these are passthrough for API compatibility, not emulation
+- **Instance lifecycle**: `RunInstances` returns `pending` (as real EC2 does) and the instance transitions to `running` once QEMU starts ("running" means the QEMU process is up, not that the guest booted). Background AMI download on first use, then launch
+- **AMI download**: `DescribeImages` resolves against the real AWS catalog; image bytes are fetched via the EBS Direct API (`ebs:ListSnapshotBlocks`/`GetSnapshotBlock`), converted to qcow2 and cached in `~/.cache/minicloud/amis/`. Public/cross-account snapshots are rejected by EBS Direct — CopyImage fallback tracked in [QATOOLS-283](https://scylladb.atlassian.net/browse/QATOOLS-283)
+- **VMs**: QEMU/KVM, UEFI/OVMF boot, NVMe controllers with EC2-like model strings, SMBIOS spoofing so cloud-init detects EC2, IMDSv2, serial log. NVMe model strings require a patched QEMU (`avikivity/qemu` commit `8c70589`); with stock QEMU the root disk falls back to virtio-blk
+- **Instance types**: only `i4i.large` (AWS) and `n2-highmem-2` (GCP); anything else is rejected. A full instance-type catalog (159 AWS + 89 GCE types, backs `DescribeInstanceTypes`) is in review upstream
+- **Networking**: userspace Ethernet switch, per-VM socketpair netdevs, DHCP/ARP/IPv6-RA, IMDS DNAT. Host connectivity via a persistent TUN device (`minicloud0`) created once by `sudo ./minicloud-setup.sh`. Public IP is reported equal to the private IP (host-routable, no NAT)
+- **GCE API**: networks, subnetworks, firewalls, instances, operations, metadata server, image downloads (same QEMU backend)
+- **Not implemented / gaps** (tracked in Jira):
+  - `CreateTags` after resource creation ([QATOOLS-284](https://scylladb.atlassian.net/browse/QATOOLS-284)); tag *filtering* in `DescribeInstances` is silently ignored (all instances returned), and subnet/SG/IGW Describe* drop tags ([QATOOLS-296](https://scylladb.atlassian.net/browse/QATOOLS-296)) — fixes WIP upstream
+  - `DescribeVpcs` ([QATOOLS-340](https://scylladb.atlassian.net/browse/QATOOLS-340)), `DescribeSubnets` ([QATOOLS-319](https://scylladb.atlassian.net/browse/QATOOLS-319)), `DescribeRouteTables` ([QATOOLS-284](https://scylladb.atlassian.net/browse/QATOOLS-284)) — fixes WIP upstream
+  - `RequestSpotInstances` is passthrough and forwards minicloud-local subnet IDs to real AWS (`InvalidSubnetID.NotFound`) — local mock in [QATOOLS-291](https://scylladb.atlassian.net/browse/QATOOLS-291), blocking the passthrough until then in [QATOOLS-321](https://scylladb.atlassian.net/browse/QATOOLS-321)
+  - KMS (no emulation; SCT config must disable KMS) — [QATOOLS-282](https://scylladb.atlassian.net/browse/QATOOLS-282)
+  - EIP management (`AllocateAddress`/`AssociateAddress`) — not needed while public IP == private IP
+  - GCE: label filtering in `instances.list` ([QATOOLS-297](https://scylladb.atlassian.net/browse/QATOOLS-297), fix WIP upstream); local-ssd NVMe missing from the distributed binary ([QATOOLS-312](https://scylladb.atlassian.net/browse/QATOOLS-312))
 
 ### EC2 API inventory for artifact test flow
 
-The table below lists every EC2 API action SCT calls during the AMI artifact test (`test_scylla_service` with `ami.yaml`: 1 db node, 0 loaders, 0 monitors). This inventory is needed to evaluate minicloud compatibility before implementation begins — each operation must either be supported by minicloud, handled by real AWS (selective routing), or have a minicloud issue filed.
+Every EC2 API action SCT calls during the AMI artifact test (`test_scylla_service`, 1 db node, 0 loaders, 0 monitors), with its minicloud v0.1.0 status:
 
-| EC2 API Action | SCT File | Flow Phase | minicloud status |
-|----------------|----------|------------|-----------------|
-| **Config / AMI resolution — always routed to real AWS** |
-| DescribeImages (filter by name/tag) | sdcm/utils/common.py:1494 | config | real AWS (selective routing) |
-| DescribeImages (SSM resolve) | sdcm/utils/common.py:1475 | config | real AWS (selective routing) |
-| DescribeInstanceTypes | sdcm/utils/aws_utils.py:511 | config | real AWS (selective routing) |
-| **VPC / network setup — routed to minicloud** |
-| DescribeVpcs | sdcm/utils/aws_region.py:57 | network | supported |
-| CreateVpc | sdcm/utils/aws_region.py:73 | network | supported |
-| ModifyVpcAttribute (DNS hostnames) | sdcm/utils/aws_region.py:76 | network | **needs investigation** |
-| CreateTags (VPC, subnet, SG, IGW, RT) | sdcm/utils/aws_region.py (multiple) | network | **needs investigation** |
-| DescribeAvailabilityZones | sdcm/utils/aws_region.py:84 | network | **needs investigation** |
-| DescribeInstanceTypeOfferings | sdcm/utils/aws_region.py:89 | network | **needs investigation** |
-| DescribeSubnets | sdcm/utils/aws_region.py:120 | network | **needs investigation** |
-| CreateSubnet | sdcm/utils/aws_region.py:139 | network | supported |
-| ModifySubnetAttribute (public IP, IPv6) | sdcm/utils/aws_region.py:149 | network | **needs investigation** |
-| DescribeInternetGateways | sdcm/utils/aws_region.py:218 | network | **needs investigation** |
-| CreateInternetGateway | sdcm/utils/aws_region.py:240 | network | **needs investigation** |
-| AttachInternetGateway | sdcm/utils/aws_region.py:250 | network | **needs investigation** |
-| DescribeRouteTables | sdcm/utils/aws_region.py:183 | network | **needs investigation** |
-| CreateRouteTable | sdcm/utils/aws_region.py:295 | network | **needs investigation** |
-| CreateRoute (IPv4/IPv6 to IGW) | sdcm/utils/aws_region.py:302 | network | **needs investigation** |
-| AssociateRouteTable | sdcm/utils/aws_region.py:189 | network | **needs investigation** |
-| DescribeSecurityGroups | sdcm/utils/aws_region.py:336 | network | supported (implied by CreateSecurityGroup) |
-| CreateSecurityGroup | sdcm/utils/aws_region.py:364 | network | supported |
-| AuthorizeSecurityGroupIngress | sdcm/utils/aws_region.py:374 | network | supported (stored, not enforced) |
-| DescribeKeyPairs | sdcm/utils/aws_region.py:673 | network | supported |
-| ImportKeyPair | sdcm/utils/aws_region.py:692 | network | supported (via CreateKeyPair) |
-| **Instance lifecycle — routed to minicloud** |
-| RunInstances | sdcm/cluster_aws.py:183 | instance | supported |
-| DescribeInstances | sdcm/ec2_client.py (multiple) | instance | supported |
-| CreateTags (instance) | sdcm/ec2_client.py:277 | instance | **needs investigation** |
-| AllocateAddress (EIP) | sdcm/cluster_aws.py:818 | instance | skip in minicloud mode (single NIC) |
-| AssociateAddress (EIP) | sdcm/cluster_aws.py:821 | instance | skip in minicloud mode (single NIC) |
-| **Teardown — routed to minicloud** |
-| TerminateInstances | sdcm/cluster_aws.py:990 | teardown | **not supported — file minicloud issue** |
-| ReleaseAddress (EIP) | sdcm/cluster_aws.py:975 | teardown | skip in minicloud mode (no EIP) |
-| **Not called in artifact test (spot disabled)** |
-| RequestSpotInstances | sdcm/ec2_client.py:120 | instance | not needed (on_demand forced) |
-| RequestSpotFleet | sdcm/ec2_client.py:164 | instance | not needed (on_demand forced) |
-| DescribeSpotInstanceRequests | sdcm/ec2_client.py:174 | instance | not needed (on_demand forced) |
-| CancelSpotInstanceRequests | sdcm/ec2_client.py:199 | instance | not needed (on_demand forced) |
-| **Not called in artifact test (0 monitors)** |
-| No monitoring-specific EC2 calls | — | — | — |
+| EC2 API Action | SCT usage | Flow phase | minicloud v0.1.0 status |
+|----------------|-----------|------------|-------------------------|
+| **Config / AMI resolution** | | | |
+| DescribeImages (filter by name/tag) | `sdcm/utils/common.py` (`convert_name_to_ami_if_needed`, `get_ami_images`) | config | passthrough to real AWS |
+| DescribeImages (SSM resolve) | `sdcm/utils/common.py` | config | SSM `GetParameter` passthrough |
+| DescribeInstanceTypes | `sdcm/utils/aws_utils.py` | config | **UnsupportedOperation** — instance catalog WIP upstream |
+| **VPC / network setup** | | | |
+| DescribeVpcs | `sdcm/utils/aws_region.py` | network | **not implemented** — [QATOOLS-340](https://scylladb.atlassian.net/browse/QATOOLS-340) (WIP) |
+| CreateVpc | `sdcm/utils/aws_region.py` | network | emulated |
+| ModifyVpcAttribute (DNS hostnames) | `sdcm/utils/aws_region.py` | network | emulated |
+| CreateTags (VPC, subnet, SG, IGW, RT) | `sdcm/utils/aws_region.py` | network | **not implemented post-creation** (creation-time `TagSpecification` works) — [QATOOLS-284](https://scylladb.atlassian.net/browse/QATOOLS-284) |
+| DescribeAvailabilityZones | `sdcm/utils/aws_region.py` | network | passthrough to real AWS |
+| DescribeInstanceTypeOfferings | `sdcm/utils/aws_region.py` | network | passthrough to real AWS |
+| DescribeSubnets | `sdcm/utils/aws_region.py` | network | **not implemented** — [QATOOLS-319](https://scylladb.atlassian.net/browse/QATOOLS-319) (WIP) |
+| CreateSubnet | `sdcm/utils/aws_region.py` | network | emulated |
+| ModifySubnetAttribute (public IP, IPv6) | `sdcm/utils/aws_region.py` | network | emulated |
+| DescribeInternetGateways | `sdcm/utils/aws_region.py` | network | passthrough — tag filters missing ([QATOOLS-296](https://scylladb.atlassian.net/browse/QATOOLS-296)) |
+| CreateInternetGateway / AttachInternetGateway | `sdcm/utils/aws_region.py` | network | emulated |
+| DescribeRouteTables | `sdcm/utils/aws_region.py` | network | **not implemented** — [QATOOLS-284](https://scylladb.atlassian.net/browse/QATOOLS-284) (WIP) |
+| CreateRouteTable / CreateRoute / AssociateRouteTable | `sdcm/utils/aws_region.py` | network | emulated |
+| DescribeSecurityGroups | `sdcm/utils/aws_region.py` | network | passthrough — tag filters missing ([QATOOLS-296](https://scylladb.atlassian.net/browse/QATOOLS-296)) |
+| CreateSecurityGroup / AuthorizeSecurityGroupIngress | `sdcm/utils/aws_region.py` | network | emulated (rules stored, not enforced) |
+| DescribeKeyPairs / CreateKeyPair | `sdcm/utils/aws_region.py` | network | emulated |
+| ImportKeyPair | `sdcm/utils/aws_region.py` | network | **not implemented** — [QATOOLS-338](https://scylladb.atlassian.net/browse/QATOOLS-338) (fix WIP upstream) |
+| **Instance lifecycle** | | | |
+| RunInstances | `sdcm/cluster_aws.py` | instance | emulated (incl. `NetworkInterfaces` format, `TagSpecification`) |
+| DescribeInstances | `sdcm/ec2_client.py` | instance | emulated; **tag/state filters silently ignored** — [QATOOLS-296](https://scylladb.atlassian.net/browse/QATOOLS-296) (WIP) |
+| CreateTags (instance) | `sdcm/ec2_client.py` | instance | **not implemented post-creation** — [QATOOLS-284](https://scylladb.atlassian.net/browse/QATOOLS-284) |
+| AllocateAddress / AssociateAddress (EIP) | `sdcm/cluster_aws.py` | instance | not needed — public IP == private IP, use `ip_ssh_connections: 'private'` |
+| **Teardown** | | | |
+| TerminateInstances | `sdcm/cluster_aws.py` | teardown | emulated |
+| ReleaseAddress (EIP) | `sdcm/cluster_aws.py` | teardown | not needed (no EIP) |
+| **Spot (disabled for minicloud runs)** | | | |
+| RequestSpotInstances / RequestSpotFleet | `sdcm/ec2_client.py` | instance | **do not enable** — passthrough leaks local subnet IDs to real AWS; [QATOOLS-291](https://scylladb.atlassian.net/browse/QATOOLS-291)/[QATOOLS-321](https://scylladb.atlassian.net/browse/QATOOLS-321) |
 
-**Key finding**: The test itself (`test_scylla_service`) makes zero EC2 API calls — all Scylla checks are via SSH/CQL. The EC2 surface is entirely in setup and teardown.
-
-**Action items from inventory**:
-1. Operations marked **needs investigation** must be tested against minicloud to determine if they work, return stubs, or fail. For unsupported operations, file minicloud issues and evaluate whether SCT can skip them in minicloud mode.
-2. `TerminateInstances` is the most critical missing operation — file a minicloud issue as a priority.
-3. Network setup has ~27 distinct API calls. Many may already work or return acceptable stubs. A quick smoke test against minicloud (calling `AwsRegion.configure()` with minicloud endpoint) will reveal which ones need work.
+**Key finding**: the test itself makes zero EC2 API calls — all Scylla checks go via SSH/CQL. The EC2 surface is entirely in setup and teardown.
 
 ## 3. Goals
 
-1. **Run AMI artifact test locally** against minicloud-managed VMs with zero AWS instance costs
-2. **Selective endpoint routing**: AMI resolution and image scanning hit real AWS; instance lifecycle operations (`RunInstances`, `DescribeInstances`, VPC/subnet/SG setup) route to minicloud
-3. **Reuse existing AWS backend code** — no separate backend class; minicloud is a deployment mode of the `aws` backend
-4. **Zero impact on existing backends** — changes are opt-in via configuration; default behavior is unchanged
-5. **Developer experience**: a developer can run `uv run sct.py run-test artifacts_test.ArtifactsTest.test_scylla_service --backend aws --config test-cases/artifacts/ami.yaml` with minicloud running locally and a single config override
+1. **Run AMI artifact test locally** against minicloud-managed VMs with zero AWS instance costs — core subtests pass; hardware-specific subtests get skip/relaxed paths
+2. **Transparent integration**: minicloud routes API calls server-side; SCT only sets the endpoint URL after a health check — **zero changes to AWS backend code** (`sdcm/cluster_aws.py` untouched)
+3. **Zero impact on existing backends** — the integration is opt-in via environment configuration; default behavior is unchanged
+4. **CI validation**: the `minicloud-provision-test` Jenkins pipeline (builder → KVM-capable sct-runner → hydra) passes end-to-end: AMI download → 3 KVM VMs → Scylla cluster up → provision test green
+5. **GCE parity (stretch)**: the same integration works for the GCE backend against minicloud's Compute API emulation (in progress on both sides; blocked upstream by [QATOOLS-312](https://scylladb.atlassian.net/browse/QATOOLS-312))
+6. **Developer experience**: a developer can run the artifact test locally with a pinned minicloud release and a documented setup ([SCT-686](https://scylladb.atlassian.net/browse/SCT-686))
 
 ## 4. Implementation Phases
 
-### Phase 1: Centralize EC2 client creation — Importance: HIGH
-
-**Objective**: Create a single factory function for EC2 boto3 clients/resources so that endpoint routing can be injected in one place instead of patching 40+ call sites.
-
-**Implementation**:
-- Add a new module `sdcm/utils/ec2_services.py` with factory functions:
-  ```python
-  def get_ec2_client(region_name: str, endpoint_url: str | None = None) -> EC2Client:
-      return boto3.client("ec2", region_name=region_name, endpoint_url=endpoint_url)
-
-  def get_ec2_resource(region_name: str, endpoint_url: str | None = None) -> EC2ServiceResource:
-      return boto3.resource("ec2", region_name=region_name, endpoint_url=endpoint_url)
-  ```
-- Migrate `EC2ClientWrapper` (`sdcm/ec2_client.py:55`) to use the factory
-- Migrate `AwsRegion` (`sdcm/utils/aws_region.py:45`) to use the factory
-- Migrate `sdcm/provision/aws/utils.py:87` to use the factory
-
-**Definition of Done**:
-- [ ] All EC2 client creation in `sdcm/ec2_client.py`, `sdcm/utils/aws_region.py`, and `sdcm/provision/aws/utils.py` goes through the factory
-- [ ] Existing unit tests pass unchanged
-- [ ] No behavioral change (endpoint_url defaults to None = real AWS)
-
-**Dependencies**: None
+| Phase | Objective | Status |
+|-------|-----------|--------|
+| 1 | Minicloud configuration and activation | in progress — config decision and release pin open |
+| 2 | VPC/subnet/security-group setup via minicloud | in progress — upstream API gaps |
+| 3 | Instance provisioning and lifecycle | done |
+| 4 | Test config and end-to-end validation | in progress — CI not green |
+| 5 | Documentation and developer guide | pending |
+| 6 | GCE backend support | in progress |
 
 ---
 
-### Phase 2: Add minicloud configuration and activation — Importance: HIGH
+### Phase 1: Minicloud configuration and activation — In progress
 
-**Objective**: Add SCT config parameters to enable minicloud mode, define how the minicloud binary is obtained, and add the activation entry point that will be used by Phase 3 and Phase 4 to prepare the environment.
+**Importance**: High
 
-**Implementation**:
-- Add to `sdcm/sct_config.py`:
-  ```python
-  minicloud_endpoint_url: String = SctField(
-      description="""EC2 API endpoint URL for minicloud. When set, instance-lifecycle
-          operations (RunInstances, DescribeInstances, VPC/subnet/SG management) are
-          routed to this endpoint. AMI resolution and image scanning always use real AWS.
-          Example: http://localhost:5000""",
-      appendable=False,
-  )
-  ```
-- Add default `minicloud_endpoint_url: ''` in `defaults/test_default.yaml`
-- Support env var override: `SCT_MINICLOUD_ENDPOINT_URL=http://localhost:5000`
-- **Minicloud version sourcing**: Document the expected minicloud version/commit in a pinned reference (e.g. `defaults/minicloud.yaml` or a constant in `sdcm/utils/minicloud.py`). Initially, developers build minicloud from source at a pinned commit. Future work: provide a pre-built binary via GitHub releases or an SCT helper script (`sct.py setup-minicloud`).
-- **SCT activation entry point**: Add `sdcm/utils/minicloud.py` with a `prepare_minicloud_environment()` function. This phase implements only the skeleton and the minicloud reachability check (HTTP health check to the endpoint). The actual VPC/subnet/SG preparation logic is implemented in Phase 3, and the selective endpoint routing is implemented in Phase 4. This function is called early in `get_cluster_aws()` before instance provisioning begins.
+- `sdcm/utils/minicloud.py` — `MinicloudManager`: starts/stops the minicloud container (`docker` with `/dev/kvm` + `/dev/net/tun` passthrough), health-checks the endpoint, and only then exports `AWS_ENDPOINT_URL` for the test process
+- Configuration via `MINICLOUD_*` environment variables (forwarded into hydra by `docker/env/hydra.sh`), not `SCT_`-prefixed options
+- Version sourcing: minicloud is consumed as a container image (see section 2)
 
 **Definition of Done**:
-- [ ] Parameter is recognized by `SCTConfiguration` and can be set via env var, config file, or CLI
-- [ ] Empty string (default) means no minicloud routing
-- [ ] `uv run sct.py conf` shows the new parameter
-- [ ] Minicloud version/commit is pinned in a documented location
-- [ ] `sdcm/utils/minicloud.py` exists with `prepare_minicloud_environment()` skeleton that verifies minicloud reachability
-- [ ] Unit test validates parameter loading and reachability check
-
-**Dependencies**: None (can be done in parallel with Phase 1)
+- [x] Container lifecycle management with health check before endpoint activation
+- [x] `MINICLOUD_*` env vars forwarded through hydra
+- [x] Unit tests for manager behavior (`unit_tests/unit/test_minicloud.py`)
+- [ ] **Needs Decision**: reconcile `minicloud_endpoint_url` in `sct_config.py` vs `MINICLOUD_*` env vars — one mechanism must win (currently the config parameter is added but ignored by the endpoint helpers; [QAINFRA-86](https://scylladb.atlassian.net/browse/QAINFRA-86))
+- [ ] Pin a minicloud release tag (v0.1.0+) instead of `dev`
 
 ---
 
-### Phase 3: VPC/Subnet/SecurityGroup setup via minicloud — Importance: HIGH
+### Phase 2: VPC/subnet/security-group setup via minicloud — In progress
 
-**Objective**: Make the AWS region/network setup work against minicloud. This is a prerequisite for all instance-lifecycle operations — VPC, subnet, and security group must exist before `RunInstances` can be called.
+**Importance**: High
 
-**Implementation**:
-- Implement the VPC/subnet/SG preparation logic inside `prepare_minicloud_environment()` (skeleton from Phase 2). This function uses `AwsRegion` with its EC2 client pointed at minicloud (via the factory from Phase 1) to create VPC, subnets, security groups, and key pairs. The created resource IDs are stored in the test config so that `AWSCluster` uses them for `RunInstances`.
-- `AwsRegion` (`sdcm/utils/aws_region.py:30`) creates VPCs, subnets, security groups, internet gateways, and key pairs — all supported by minicloud
-- The existing `create_sct_vpc()`, `create_sct_subnets()`, `create_sct_security_group()`, and `create_sct_key_pair()` methods should work against minicloud's API with minimal changes
-- Handle minicloud stubs: `AuthorizeSecurityGroupIngress` stores rules but doesn't enforce them (acceptable for testing)
-- **Note**: `AwsRegion.__init__` calls `all_aws_regions(cached=True)` (`sdcm/utils/common.py:473`) to compute VPC CIDR from region index. The `cached=True` path uses a hardcoded region list (no AWS API call), so this is safe with minicloud. However, if the configured `region_name` is not in the hardcoded list, the `.index()` call will raise `ValueError`. Verify that `us-east-1` (the default for minicloud) is in the list.
-- Verify that any `AwsRegion` methods calling unsupported minicloud APIs (e.g. `ModifyVpcAttribute` for DNS hostnames, `CreateVpcEndpoint`) are handled gracefully — catch errors and skip non-essential operations when minicloud is active
+`AwsRegion` (`sdcm/utils/aws_region.py`) works against minicloud for all Create*/Modify* operations. Remaining blockers are upstream minicloud API gaps, all tracked and with WIP fixes:
+
+- `DescribeVpcs`/`DescribeSubnets`/`DescribeRouteTables` return `UnsupportedOperation` — breaks `AwsRegion` re-discovery of SCT-prepared resources ([QATOOLS-340](https://scylladb.atlassian.net/browse/QATOOLS-340), [QATOOLS-319](https://scylladb.atlassian.net/browse/QATOOLS-319), [QATOOLS-284](https://scylladb.atlassian.net/browse/QATOOLS-284))
+- `CreateTags` post-creation and tag filtering ([QATOOLS-284](https://scylladb.atlassian.net/browse/QATOOLS-284), [QATOOLS-296](https://scylladb.atlassian.net/browse/QATOOLS-296))
 
 **Definition of Done**:
-- [ ] VPC, subnet, security group, internet gateway, and key pair creation succeeds against minicloud
-- [ ] Network interfaces are correctly attached to instances
-- [ ] Unsupported VPC operations (DNS attributes, VPC endpoints) fail gracefully in minicloud mode
+- [x] VPC, subnet, security group, internet gateway, route table, and key pair creation succeeds against minicloud
+- [ ] `AwsRegion.configure()` full flow (create + re-discover by tags) passes once the upstream fixes merge and a release containing them is pinned
 
-**Dependencies**: Phase 1, Phase 2 (can run in parallel with Phase 4 — both depend on Phase 1 + 2 but not on each other)
+**Dependencies**: upstream fixes for QATOOLS-340/QATOOLS-319/QATOOLS-284/QATOOLS-296, landing in a tagged minicloud release.
 
 ---
 
-### Phase 4: Selective endpoint routing in EC2 factory — Importance: HIGH
+### Phase 3: Instance provisioning and lifecycle — Done
 
-**Objective**: When `minicloud_endpoint_url` is configured, route instance-lifecycle EC2 calls to minicloud while keeping AMI/image calls on real AWS.
+**Importance**: High
 
-**Implementation**:
-- Extend the factory from Phase 1 to accept a `use_minicloud: bool` parameter:
-  ```python
-  def get_ec2_client(region_name: str, use_minicloud: bool = False) -> EC2Client:
-      endpoint_url = _get_minicloud_endpoint() if use_minicloud else None
-      return boto3.client("ec2", region_name=region_name, endpoint_url=endpoint_url)
-  ```
-- In `EC2ClientWrapper.__init__`, pass `use_minicloud=True` — this class handles `RunInstances`, `DescribeInstances`, spot requests
-- In `AwsRegion.__init__`, pass `use_minicloud=True` — this class handles VPC, subnet, SG creation
-- In AMI resolution code (`sdcm/utils/common.py:1449` `convert_name_to_ami_if_needed`), do NOT pass `use_minicloud` — these calls always go to real AWS
-- AMI lookup functions in `sdcm/sct_config.py:2489` remain unchanged (real AWS)
+`AWSCluster`/`AWSNode` run unmodified against minicloud:
+
+- Instance state machine: instances transition `pending` → `running` once QEMU starts, so `wait_until_running` behaves as on real AWS
+- Teardown: `TerminateInstances` shuts VMs down gracefully and idempotently
+- SSH: standard `AWSNode` init flow; minicloud reports the host-routable private IP as public IP, tests use `ip_ssh_connections: 'private'`
+- Spot: **must stay disabled** (`instance_provision: 'on_demand'`) until [QATOOLS-291](https://scylladb.atlassian.net/browse/QATOOLS-291)/[QATOOLS-321](https://scylladb.atlassian.net/browse/QATOOLS-321) are resolved — the passthrough currently leaks local subnet IDs to real AWS
 
 **Definition of Done**:
-- [ ] With `minicloud_endpoint_url` unset, all behavior is identical to current
-- [ ] With `minicloud_endpoint_url` set, `EC2ClientWrapper` and `AwsRegion` create clients pointing to minicloud
-- [ ] `convert_name_to_ami_if_needed` and `get_ami_images` still use real AWS regardless
-- [ ] Unit tests with mocked boto3 verify correct endpoint routing
+- [x] `RunInstances` via minicloud provisions the cluster with the standard on-demand path
+- [x] `AWSNode` resolves IPs and establishes SSH without bypasses
+- [x] No changes to `sdcm/cluster_aws.py`
+- [x] Teardown terminates instances cleanly
 
-**Dependencies**: Phase 1, Phase 2 (can run in parallel with Phase 3 — both depend on Phase 1 + 2 but not on each other)
+**Dependencies**: Phase 1.
 
 ---
 
-### Phase 5: Adapt AWSCluster for minicloud instance lifecycle — Importance: HIGH
+### Phase 4: Test config and end-to-end validation — In progress
 
-**Objective**: Make `AWSCluster` and `AWSNode` work with minicloud's subset of EC2 API.
+**Importance**: High
 
-**Implementation**:
-- `AWSCluster._create_on_demand_instances` (`sdcm/cluster_aws.py:150`): minicloud does not support spot instances, capacity reservations, dedicated hosts, or placement groups. When minicloud is active:
-  - Force `instance_provision: "on_demand"` (skip spot logic)
-  - Skip `add_capacity_reservation_param` and `add_host_id_param`
-  - Skip `add_placement_group_name_param`
-- `AWSNode`: minicloud VMs are reachable via their private IP from the host (after `minicloud-setup.sh`). The existing SSH logic should work since `AWSNode` already resolves IP from the EC2 instance metadata.
-- Skip EIP allocation logic when using minicloud
-- Handle missing `TerminateInstances` — **Needs Investigation**: minicloud does not yet support `TerminateInstances`. The graceful error handling must be guarded so it only applies when `minicloud_endpoint_url` is set — real AWS teardown must never silently skip termination. Track a minicloud issue for `TerminateInstances` support and work to implement it there. Workaround: catch `UnsupportedOperation` only in minicloud mode, log warning, document that minicloud process restart cleans up VMs.
+- Test config: `test-cases/minicloud-provision-test.yaml` (3× `i4i.large` DB nodes, KMS disabled; minicloud lightweight mode — VM resources capped below the real instance-type specs — at 2.5 GiB/VM, since 1.5 GiB causes Scylla per-shard OOM; Argus reporting disabled until CI is stable)
+- Jenkins: `vars/minicloudPipeline.groovy` + `jenkins-pipelines/oss/minicloud/minicloud-provision-test.jenkinsfile`, `minicloud-artifact-test.jenkinsfile`, `jenkins-pipelines/oss/artifacts/artifacts-minicloud.jenkinsfile`. Builder node → KVM-capable sct-runner (`m8i.large`, nested virt) → hydra `--execute-on-runner`
+- CI simulation scripts: `scripts/test-minicloud-*.sh`
+
+```text
+Jenkins builder ──ssh──► sct-runner (m8i.large, nested KVM)
+                           └─► hydra (SCT CLI container)
+                                 └─► MinicloudManager ──docker──► minicloud container (:5000 API, :5100 IMDS)
+                                       ├─► QEMU/KVM VMs (3× emulated i4i.large, Scylla)
+                                       └─► real AWS (passthrough: DescribeImages, SSM, STS)
+```
+
+**Current status**: the staging job (`scylla-staging/fruch/oss/minicloud/minicloud-provision-test-test`) is **not green** — last run failed (build #23, 2026-06-10) and needs re-validation against a pinned minicloud release once the Phase 2 upstream gaps land.
+
+Hardware-specific subtests under minicloud:
+
+- **ENA check**: guests use virtio-net — the check must be skipped or given an alternative path under minicloud
+- **NVMe write cache / IO params**: NVMe device model strings require a patched QEMU (`avikivity/qemu` `8c70589`); with stock QEMU the root disk is virtio-blk, which scylla-machine-image's NVMe-only disk scan ignores. Needs either the patched QEMU in the minicloud image or a relaxed check path
+- **perftune / XFS discard**: expected to differ on QEMU; relaxed checks acceptable
+- **node_exporter liveness**: skipped (`n_monitor_nodes: 0`)
 
 **Definition of Done**:
-- [ ] `AWSCluster._create_on_demand_instances` successfully calls minicloud's `RunInstances`
-- [ ] `AWSNode` resolves IP and establishes SSH to the minicloud VM
-- [ ] Spot instance, capacity reservation, dedicated host, and EIP logic is skipped
-- [ ] Graceful handling of missing `TerminateInstances` — only when minicloud is active (never on real AWS)
+- [x] Test config and Jenkins pipeline exist and execute (not yet green)
+- [ ] Full pipeline green: AMI download → 3 KVM VMs → Scylla cluster up → provision test pass
+- [ ] Hardware-specific subtests have documented minicloud-aware paths (skip/relaxed) with clear messages
+- [ ] Run is reproducible against a pinned minicloud release tag
 
-**Dependencies**: Phase 3, Phase 4
+**Dependencies**: Phase 2 (upstream API gaps), minicloud release containing the fixes.
 
 ---
 
-### Phase 6: AMI artifact test config and end-to-end validation — Importance: HIGH
+### Phase 5: Documentation and developer guide — Pending
 
-**Objective**: Create a test configuration for running the AMI artifact test against minicloud and validate end-to-end.
+**Importance**: Medium
 
-**Implementation**:
-- Create `test-cases/artifacts/ami-minicloud.yaml`:
-  ```yaml
-  root_disk_size_db: 50
-  backtrace_decoding: false
-  cluster_backend: 'aws'
-  instance_type_db: 'i4i.large'
-  instance_provision: 'on_demand'
-  n_db_nodes: 1
-  n_loaders: 0
-  n_monitor_nodes: 0
-  nemesis_class_name: 'NoOpMonkey'
-  region_name: 'us-east-1'
-  scylla_linux_distro: 'centos'
-  test_duration: 60
-  user_prefix: 'artifacts-ami-minicloud'
-  minicloud_endpoint_url: 'http://localhost:5000'
-  ip_ssh_connections: 'private'
-  ```
-- Validate test subtests that are expected to work:
-  - `check_scylla` (nodetool status, cassandra-stress)
-  - `check_cqlsh`
-  - `verify_snitch` (should use `Ec2Snitch` since backend is `aws`)
-  - `verify_node_health`
-  - `check Scylla server after stop/start` and `after restart`
-- Subtests expected to need different paths in the artifact test when running under minicloud:
-  - `check ENA support` — **Needs Investigation**: QEMU may not expose ENA; may need to skip or use an alternative check
-  - `check Scylla IO Params` (IOTuneValidator) — may produce different results on QEMU NVMe; artifact test can have a minicloud-aware path
-  - `verify_nvme_write_cache` — QEMU NVMe may not expose write_cache sysfs; skip or adapt
-  - `verify_xfs_online_discard_enabled` — depends on VM image setup
-  - `check node_exporter liveness` — requires Prometheus; skipped when `n_monitor_nodes: 0`
-  - `check perftune` — may differ on QEMU; artifact test can use a relaxed check under minicloud
+Tracked as [SCT-686](https://scylladb.atlassian.net/browse/SCT-686). Deliverables:
 
-**Definition of Done**:
-- [ ] `artifacts_test.ArtifactsTest.test_scylla_service` runs against minicloud
-- [ ] Core subtests pass: Scylla starts, CQL works, cassandra-stress runs, stop/start/restart works
-- [ ] Hardware-specific subtests (ENA, NVMe cache, IO params) have minicloud-aware paths with clear messages
-- [ ] Documentation: README section or `docs/minicloud-testing.md` with setup instructions
-
-**Dependencies**: Phase 5
-
----
-
-### Phase 7: Migrate remaining scattered boto3.client("ec2") calls — Importance: MEDIUM
-
-**Objective**: Migrate the remaining direct `boto3.client("ec2", ...)` calls to use the centralized factory, for consistency and future-proofing.
-
-**Implementation**:
-- Migrate calls in:
-  - `sdcm/cluster_aws.py:817,973` (EIP allocation, network interface management)
-  - `sdcm/provision/aws/capacity_reservation.py` (6 calls)
-  - `sdcm/provision/aws/dedicated_host.py` (5 calls)
-  - `sdcm/utils/common.py` (AMI-related calls — these should NOT use minicloud endpoint)
-  - `sdcm/utils/aws_utils.py` (cleanup, tagging)
-  - `sdcm/utils/resources_cleanup.py` (5 calls)
-- Each call site must be evaluated: does it deal with instance lifecycle (-> minicloud) or metadata/AMI/cleanup (-> real AWS)?
-
-**Definition of Done**:
-- [ ] All `boto3.client("ec2")` and `boto3.resource("ec2")` calls go through the factory
-- [ ] Each call site correctly chooses minicloud vs real AWS
-- [ ] Existing unit tests pass
-
-**Dependencies**: Phase 1
-
----
-
-### Phase 8: Documentation and developer guide — Importance: MEDIUM
-
-**Objective**: Document minicloud setup, usage, and known limitations for developers.
-
-**Implementation**:
-- Create `docs/minicloud-testing.md` covering:
-  - Prerequisites (Linux, KVM, QEMU, Rust toolchain for building minicloud)
-  - Building and running minicloud (pinned version/commit reference)
-  - Running `minicloud-setup.sh` for host connectivity
-  - Running the AMI artifact test locally
-  - Known limitations and skipped subtests
-  - Troubleshooting (AppArmor on Ubuntu 24.04+, KVM access)
+- `docs/minicloud-testing.md`: prerequisites (Linux, KVM), pinned release install (container), one-time host setup (`sudo ./minicloud-setup.sh` — persistent TUN device, no per-run sudo), `MINICLOUD_*` env var reference, running the artifact test locally, known limitations and skipped subtests, troubleshooting (AppArmor on Ubuntu 24.04+, KVM access, IAM permissions for EBS Direct AMI download)
 - Update `AGENTS.md` backends section to mention minicloud
 
 **Definition of Done**:
-- [ ] `docs/minicloud-testing.md` exists with complete setup guide
-- [ ] A developer can follow the guide from scratch and run the artifact test
+- [ ] A developer can follow the guide from scratch and run the artifact test locally
 
-**Dependencies**: Phase 6
+**Dependencies**: Phase 4 (CI green first, so the guide documents a working flow).
+
+---
+
+### Phase 6: GCE backend support — In progress
+
+**Importance**: Medium
+
+Minicloud emulates a subset of the GCE Compute API (instances, networks, subnetworks, firewalls, metadata server, image downloads), and #14875 already contains the SCT-side pieces (`sdcm/cluster_gce.py` `use_dns_names`, `sdcm/utils/gce_region.py`, `sdcm/utils/gce_utils.py`, GCE nested-virt in `sct_runner.py`).
+
+**Blockers**:
+- Local-ssd NVMe support is missing from the distributed minicloud binary ([QATOOLS-312](https://scylladb.atlassian.net/browse/QATOOLS-312)) — GCE instances come up but `scylla_create_devices` finds no NVMe disks
+- GCE label filtering in `instances.list`/aggregated ([QATOOLS-297](https://scylladb.atlassian.net/browse/QATOOLS-297))
+- Empty-subnetwork auto-resolve ([QATOOLS-319](https://scylladb.atlassian.net/browse/QATOOLS-319)) — fixed on minicloud master, pending a tagged release
+
+**Definition of Done**:
+- [ ] GCE provision test passes against minicloud end-to-end
+
+**Dependencies**: upstream fixes for QATOOLS-312/QATOOLS-297 in an NVMe-capable tagged minicloud release.
 
 ## 5. Testing Requirements
 
 ### Unit Tests
 
-| Phase | Test | What it verifies |
-|-------|------|-----------------|
-| 1 | `test_ec2_factory_default_endpoint` | Factory returns client with no endpoint_url by default |
-| 1 | `test_ec2_factory_custom_endpoint` | Factory passes endpoint_url to boto3 when provided |
-| 2 | `test_minicloud_config_from_env` | `SCT_MINICLOUD_ENDPOINT_URL` is loaded correctly |
-| 2 | `test_prepare_minicloud_reachability_check` | `prepare_minicloud_environment()` raises clear error when minicloud is unreachable |
-| 3 | `test_vpc_creation_against_minicloud` | `AwsRegion` VPC/subnet/SG creation works with minicloud endpoint |
-| 4 | `test_selective_routing_instance_lifecycle` | `EC2ClientWrapper` uses minicloud endpoint when configured |
-| 4 | `test_selective_routing_ami_resolution` | `convert_name_to_ami_if_needed` always uses real AWS |
-| 5 | `test_create_instances_skips_spot_for_minicloud` | On-demand is forced when minicloud is active |
-| 5 | `test_terminate_graceful_when_unsupported` | Teardown doesn't crash when `TerminateInstances` fails (minicloud only) |
+Implemented in #14875: `unit_tests/unit/test_minicloud.py` (52 tests) covering `MinicloudManager` — container lifecycle, health checks, env-var configuration, endpoint activation/deactivation, failure paths (minicloud unreachable, container start failure).
 
-### Integration Tests
+Additional coverage needed:
 
-| Phase | Test | Service |
-|-------|------|---------|
-| 6 | `test_minicloud_ami_artifact_e2e` | minicloud (QEMU/KVM) |
+| Area | What it verifies |
+|------|-----------------|
+| Endpoint restore on stop | previous `AWS_ENDPOINT_URL` is restored, not deleted (review finding on #14875) |
+| Config mechanism | whichever of `minicloud_endpoint_url` / `MINICLOUD_*` wins the Phase 1 decision is actually honored |
 
-This test requires minicloud running locally and KVM access. It should be marked `@pytest.mark.integration` with a `skipif` guard for minicloud availability.
+### Integration / CI Tests
+
+| Test | Service | Status |
+|------|---------|--------|
+| `minicloud-provision-test` Jenkins pipeline (3-node provision, CQL, teardown) | minicloud (QEMU/KVM on sct-runner) | exists, not green |
+| `artifacts-minicloud` pipeline (AMI artifact test) | minicloud | exists, pending validation |
+| `scripts/test-minicloud-*.sh` CI simulation | minicloud container | passing locally |
 
 ### Manual Testing
 
-| Phase | Procedure |
-|-------|-----------|
-| 6 | Start minicloud with `--lightweight`, run artifact test, verify Scylla starts and CQL works |
-| 6 | Run artifact test with `minicloud_endpoint_url` unset — verify zero behavioral change on real AWS |
+| Procedure |
+|-----------|
+| Run the provision test locally against a pinned minicloud release; verify Scylla starts, CQL works, teardown leaves no orphan QEMU processes |
+| Run any AWS-backend test with minicloud disabled — verify zero behavioral change |
 
 ## 6. Success Criteria
 
-- [ ] AMI artifact test (`test_scylla_service`) core subtests pass against minicloud with zero AWS instance costs
-- [ ] AMI resolution still uses real AWS `DescribeImages` (selective routing works)
-- [ ] Existing AWS backend tests pass with no behavioral changes when `minicloud_endpoint_url` is unset
-- [ ] Developer can set up minicloud and run the artifact test locally following the documentation
-- [ ] No new `boto3.client("ec2")` calls are added without going through the centralized factory (enforced by grep in pre-commit or documented convention)
+- [ ] All phase Definition of Done items are met (Phases 1–6)
+- [ ] AMI resolution works through minicloud's passthrough (real AWS `DescribeImages`/SSM) with no SCT-side routing code — `sdcm/cluster_aws.py` stays untouched
+- [ ] Zero behavioral change for all backends when minicloud is not activated
 
 ## 7. Risk Mitigation
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| minicloud API incompatibilities (missing parameters, different response shapes) | High | Medium | Start with the simplest flow (on-demand, single node, no spot). Add compatibility shims in the factory layer, not in business logic. For non-trivial incompatibilities, raise issues on the [minicloud repo](https://github.com/scylladb/minicloud) and fix them there — only add shims in SCT for things that are easy to emulate locally. |
-| Missing `TerminateInstances` causes teardown failures | High | Medium | Catch `UnsupportedOperation` errors in teardown **only when `minicloud_endpoint_url` is set** — real AWS teardown must never silently skip termination. File a minicloud issue for `TerminateInstances` support and work to implement it upstream. Interim workaround: minicloud process restart cleans up VMs. |
-| QEMU NVMe behavior differs from real EC2 NVMe | Medium | Low | Hardware-specific subtests (ENA, NVMe cache, IO params, perftune) get different paths in the artifact test when `minicloud_endpoint_url` is set — e.g. relaxed checks, alternative validations, or graceful skips. These are not the core value of local testing. |
-| Scattered `boto3.client("ec2")` calls bypass the factory | Medium | Low | Phase 7 migrates remaining calls. Add a grep-based lint check or document the convention. |
-| AMI first-download via EBS Direct API requires AWS credentials | Low | Low | This is a one-time cost. Document that developers need `ebs:ListSnapshotBlocks` + `ebs:GetSnapshotBlock` permissions. Cached AMIs are reused across runs. |
-| minicloud is under active development — API surface may change | Medium | Medium | Pin to a specific minicloud version/commit in `defaults/minicloud.yaml` or a constant in `sdcm/utils/minicloud.py`. The SCT activation code (Phase 2) checks minicloud reachability at startup and uses `AwsRegion` to prepare the VPC/network environment before any instance operations. Abstract minicloud-specific workarounds behind the factory layer so updates are localized. Future: add an `sct.py setup-minicloud` command that downloads/builds the pinned version. |
+| Minicloud API gaps (missing Describe*/tag operations) block SCT flows | High | Medium | Gaps are audited ([QATOOLS-308](https://scylladb.atlassian.net/browse/QATOOLS-308)) and tracked per-gap in QATOOLS; fixes land upstream in minicloud, never as shims in SCT business logic |
+| Running against `scylladb/minicloud:dev` makes results non-reproducible; capability claims drift from the released version | High | Medium | Pin a release tag (v0.1.0+) in `MinicloudManager`/pipeline; state the validated minicloud version in this plan and in test reports; bump the pin deliberately |
+| Passthrough actions referencing minicloud-local IDs reach real AWS (spot: `InvalidSubnetID.NotFound`; Describe*/Stop/Start: NotFound) | High | Medium | Keep spot disabled in minicloud configs ([QATOOLS-321](https://scylladb.atlassian.net/browse/QATOOLS-321) blocks the passthrough upstream; [QATOOLS-291](https://scylladb.atlassian.net/browse/QATOOLS-291) implements the local mock); treat NotFound from passthrough Describe* as a known failure signature |
+| QEMU NVMe/network fidelity differs from real EC2 (ENA absent, NVMe needs patched QEMU) | High | Low | Hardware-specific subtests get minicloud-aware skip/relaxed paths; ship the patched QEMU in the minicloud image where NVMe fidelity matters |
+| AMI first-download via EBS Direct API requires AWS credentials and fails on public/cross-account snapshots | Medium | Low | One-time cost, cached afterwards; document required IAM permissions; CopyImage fallback tracked in [QATOOLS-283](https://scylladb.atlassian.net/browse/QATOOLS-283) |
+| Host setup requires sudo (KVM, TUN device) | Medium | Low | One-time `sudo ./minicloud-setup.sh` creates a persistent TUN device — no per-run sudo; runner AMIs/images pre-provision KVM access ([QATOOLS-311](https://scylladb.atlassian.net/browse/QATOOLS-311) covers distribution) |
+| Event-system/container shutdown hangs on teardown | Medium | Medium | Hang-proof shutdown implemented in #14875 (`sdcm/sct_events/`); orphan-QEMU check runs at the end of minicloud CI smoke tests |
+
+## Tracking
+
+- SCT integration epic: [QAINFRA-83](https://scylladb.atlassian.net/browse/QAINFRA-83)
+- Minicloud ownership/development epic: [QATOOLS-304](https://scylladb.atlassian.net/browse/QATOOLS-304); API-gap audit: [QATOOLS-308](https://scylladb.atlassian.net/browse/QATOOLS-308); release/distribution: [QATOOLS-311](https://scylladb.atlassian.net/browse/QATOOLS-311)
+- Implementation PR: [#14875](https://github.com/scylladb/scylla-cluster-tests/pull/14875)
+- minicloud repo: <https://github.com/scylladb/minicloud> (issues migrated to Jira QATOOLS, 2026-07-16)
+- CI job: `scylla-staging/fruch/oss/minicloud/minicloud-provision-test-test`
