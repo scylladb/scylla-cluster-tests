@@ -72,7 +72,7 @@ class TestSeedSelector(unittest.TestCase):
                     name="node%d" % i,
                     parent_cluster=self.cluster,
                     base_logdir=self.temp_dir,
-                    ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
+                    ssh_login_info=dict(key_file="~/.ssh/scylla_test_id_ed25519"),
                 )
             )
         for node in self.cluster.nodes:
