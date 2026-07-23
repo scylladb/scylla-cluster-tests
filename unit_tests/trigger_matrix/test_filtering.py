@@ -197,3 +197,28 @@ def test_disabled_jobs_are_skipped():
     result = filter_jobs(jobs, scylla_version="2025.4")
     assert len(result) == 1
     assert result[0].job_name == "active-job"
+
+
+def test_arm64_image_keeps_only_aarch64_jobs(sample_jobs_with_arm):
+    result = filter_jobs(sample_jobs_with_arm, scylla_version="2025.4", image_arch="aarch64")
+    assert {j.job_name for j in result} == {"job-arm", "job-arm-weekly", "job-arm-no-label"}
+
+
+def test_x86_64_image_excludes_aarch64_jobs(sample_jobs_with_arm):
+    result = filter_jobs(sample_jobs_with_arm, scylla_version="2025.4", image_arch="x86_64")
+    assert {j.job_name for j in result} == {"job-x86"}
+
+
+def test_no_image_arch_preserves_all_jobs(sample_jobs_with_arm):
+    result = filter_jobs(sample_jobs_with_arm, scylla_version="2025.4", image_arch=None)
+    assert len(result) == 4
+
+
+def test_arch_field_takes_precedence_over_missing_label():
+    jobs = [
+        JobConfig(job_name="arm-via-field", backend="aws", region="", arch="aarch64", labels=["weekly"]),
+        JobConfig(job_name="x86-via-field", backend="aws", region="", arch="x86_64", labels=["weekly"]),
+        JobConfig(job_name="arm-via-label", backend="aws", region="", labels=["aarch64"]),
+    ]
+    result = filter_jobs(jobs, scylla_version="2025.4", image_arch="aarch64")
+    assert {j.job_name for j in result} == {"arm-via-field", "arm-via-label"}
