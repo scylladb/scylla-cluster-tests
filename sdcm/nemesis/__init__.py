@@ -67,7 +67,6 @@ from sdcm.cluster_k8s import (
     KubernetesOps,
     PodCluster,
 )
-from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
 from sdcm.logcollector import save_kallsyms_map
 from sdcm.mgmt.common import TaskStatus, ScyllaManagerError, get_persistent_snapshots, ObjectStorageUploadMode
@@ -98,7 +97,6 @@ from sdcm.sct_events.group_common_events import (
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent
-from sdcm.sla.sla_tests import SlaTests
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
@@ -137,7 +135,7 @@ from sdcm.utils.k8s.chaos_mesh import (
     DiskError,
 )
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
-from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
+
 
 from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS, DefaultValue, node_operations, unique_disruption_name
 from sdcm.nemesis.utils.indexes import (
@@ -177,7 +175,6 @@ from sdcm.exceptions import (
     WatcherCallableException,
     UnsupportedNemesis,
     CdcStreamsWasNotUpdated,
-    NemesisSubTestFailure,
     AuditLogTestFailure,
     BootstrapStreamErrorFailure,
     QuotaConfigurationFailure,
@@ -191,7 +188,6 @@ from test_lib.compaction import (
     GcMode,
 )
 from test_lib.cql_types import CQLTypeBuilder
-from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
 
 if TYPE_CHECKING:
@@ -1858,43 +1854,6 @@ class NemesisRunner:
             self.actions_log.info(f"Restarting scylla on {node.name}")
             node.restart_scylla_server()
             node.wait_db_up()
-
-    def disrupt_remove_service_level_while_load(self):
-        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
-        if not self.cluster.params.get("sla"):
-            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
-
-        if not self.cluster.nodes[0].is_enterprise:
-            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
-
-        if not self.cluster.params.get("authenticator"):
-            raise UnsupportedNemesis("SLA feature can't work without authenticator")
-
-        if not getattr(self.tester, "roles", None):
-            raise UnsupportedNemesis("This nemesis is supported with Service Level and role are pre-defined")
-
-        role = self.tester.roles[0]
-
-        with self.cluster.cql_connection_patient(
-            node=self.cluster.nodes[0], user=DEFAULT_USER, password=DEFAULT_USER_PASSWORD
-        ) as session:
-            self.log.info("Drop service level %s", role.attached_service_level_name)
-            removed_shares = role.attached_service_level.shares
-            role.attached_service_level.session = session
-            role.session = session
-            try:
-                self.actions_log.info(f"Dropping service level {role.attached_service_level_name}")
-                role.attached_service_level.drop(if_exists=False)
-                time.sleep(300)  # let load to run without service level for 5 minutes
-            finally:
-                self.actions_log.info(f"Re-creating service level {role.attached_service_level_name}")
-                role.attach_service_level(
-                    ServiceLevel(
-                        session=session,
-                        name=SERVICE_LEVEL_NAME_TEMPLATE % (removed_shares, random.randint(0, 10)),
-                        shares=removed_shares,
-                    ).create()
-                )
 
     # Nemesis running code
     def execute_nemesis(self, nemesis: NemesisBaseClass):
@@ -4468,214 +4427,6 @@ class NemesisRunner:
         else:
             assert actual_cdc_settings == cdc_settings, (
                 f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}"
-            )
-
-    def get_cassandra_stress_write_cmds(self):
-        write_cmds = self.tester.params.get("prepare_write_cmd")
-        if not write_cmds:
-            return None
-
-        stress_cmds = [cmd for cmd in write_cmds if " profile=" not in cmd and " n=" in cmd]
-        if not stress_cmds:
-            return None
-
-        return stress_cmds
-
-    def get_cassandra_stress_definition(self, stress_cmds, default_data_set_size=5000000):
-        stress_cmd = stress_cmds[0]
-        self.log.debug("Stress commands to get cassandra_stress_definition: %s", stress_cmd)
-        column_definition = self.tester.get_c_s_column_definition(cs_cmd=stress_cmd)
-        # Set small amount rows 5000000 when can not recognize a real dataset size, suppose that this amount should be
-        # inserted in any case
-        data_set_size = self.tester.get_data_set_size(stress_cmd) or default_data_set_size
-
-        self.log.debug("Dataset size for nemesis: %s", data_set_size)
-        self.log.debug("Cassandra-stress column definition for nemesis: %s", column_definition)
-        return column_definition, data_set_size
-
-    def disrupt_sla_increase_shares_during_load(self):
-        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
-        if not self.cluster.params.get("sla"):
-            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
-
-        if not self.cluster.nodes[0].is_enterprise:
-            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
-
-        if not self.cluster.params.get("authenticator"):
-            raise UnsupportedNemesis("SLA feature can't work without authenticator")
-
-        if not (stress_cmds := self.get_cassandra_stress_write_cmds()):
-            raise UnsupportedNemesis(
-                "SLA nemesis needs cassandra-stress default table 'keyspace1.standard1' is created and prefilled"
-            )
-
-        column_definition, dataset_size = self.get_cassandra_stress_definition(stress_cmds)
-
-        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
-        sla_tests = SlaTests()
-        error_events = sla_tests.test_increase_shares_during_load(
-            tester=self.tester,
-            prometheus_stats=prometheus_stats,
-            num_of_partitions=dataset_size,
-            cassandra_stress_column_definition=column_definition,
-        )
-        self.format_error_for_sla_test_and_raise(error_events=error_events)
-
-    def disrupt_sla_decrease_shares_during_load(self):
-        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
-        if not self.cluster.params.get("sla"):
-            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
-
-        if not self.cluster.nodes[0].is_enterprise:
-            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
-
-        if not self.cluster.params.get("authenticator"):
-            raise UnsupportedNemesis("SLA feature can't work without authenticator")
-
-        if not (stress_cmds := self.get_cassandra_stress_write_cmds()):
-            raise UnsupportedNemesis(
-                "SLA nemesis needs cassandra-stress default table 'keyspace1.standard1' is created and prefilled"
-            )
-
-        column_definition, dataset_size = self.get_cassandra_stress_definition(stress_cmds)
-
-        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
-        sla_tests = SlaTests()
-        error_events = sla_tests.test_decrease_shares_during_load(
-            tester=self.tester,
-            prometheus_stats=prometheus_stats,
-            num_of_partitions=dataset_size,
-            cassandra_stress_column_definition=column_definition,
-        )
-        self.format_error_for_sla_test_and_raise(error_events=error_events)
-
-    def disrupt_replace_service_level_using_detach_during_load(self):
-        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
-        if not self.cluster.params.get("sla"):
-            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
-
-        if not self.cluster.nodes[0].is_enterprise:
-            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
-
-        if not self.cluster.params.get("authenticator"):
-            raise UnsupportedNemesis("SLA feature can't work without authenticator")
-
-        if not (stress_cmds := self.get_cassandra_stress_write_cmds()):
-            raise UnsupportedNemesis(
-                "SLA nemesis needs cassandra-stress default table 'keyspace1.standard1' is created and prefilled"
-            )
-
-        column_definition, dataset_size = self.get_cassandra_stress_definition(stress_cmds)
-
-        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
-        sla_tests = SlaTests()
-        error_events = sla_tests.test_replace_service_level_using_detach_during_load(
-            tester=self.tester,
-            prometheus_stats=prometheus_stats,
-            num_of_partitions=dataset_size,
-            cassandra_stress_column_definition=column_definition,
-        )
-        self.format_error_for_sla_test_and_raise(error_events=error_events)
-
-    def disrupt_replace_service_level_using_drop_during_load(self):
-        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
-        if not self.cluster.params.get("sla"):
-            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
-
-        if not self.cluster.nodes[0].is_enterprise:
-            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
-
-        if not self.cluster.params.get("authenticator"):
-            raise UnsupportedNemesis("SLA feature can't work without authenticator")
-
-        if not (stress_cmds := self.get_cassandra_stress_write_cmds()):
-            raise UnsupportedNemesis(
-                "SLA nemesis needs cassandra-stress default table 'keyspace1.standard1' is created and prefilled"
-            )
-
-        column_definition, dataset_size = self.get_cassandra_stress_definition(stress_cmds)
-
-        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
-        sla_tests = SlaTests()
-        error_events = sla_tests.test_replace_service_level_using_drop_during_load(
-            tester=self.tester,
-            prometheus_stats=prometheus_stats,
-            num_of_partitions=dataset_size,
-            cassandra_stress_column_definition=column_definition,
-        )
-
-        self.format_error_for_sla_test_and_raise(error_events=error_events)
-
-    def disrupt_increase_shares_by_attach_another_sl_during_load(self):
-        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
-        if not self.cluster.params.get("sla"):
-            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
-
-        if not self.cluster.nodes[0].is_enterprise:
-            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
-
-        if not self.cluster.params.get("authenticator"):
-            raise UnsupportedNemesis("SLA feature can't work without authenticator")
-
-        if not (stress_cmds := self.get_cassandra_stress_write_cmds()):
-            raise UnsupportedNemesis(
-                "SLA nemesis needs cassandra-stress default table 'keyspace1.standard1' is created and prefilled"
-            )
-
-        column_definition, dataset_size = self.get_cassandra_stress_definition(stress_cmds)
-
-        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
-        sla_tests = SlaTests()
-        error_events = sla_tests.test_increase_shares_by_attach_another_sl_during_load(
-            tester=self.tester,
-            prometheus_stats=prometheus_stats,
-            num_of_partitions=dataset_size,
-            cassandra_stress_column_definition=column_definition,
-        )
-
-        self.format_error_for_sla_test_and_raise(error_events=error_events)
-
-    def disrupt_maximum_allowed_sls_with_max_shares_during_load(self):
-        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
-        if not self.cluster.params.get("sla"):
-            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
-
-        if not self.cluster.nodes[0].is_enterprise:
-            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
-
-        if not self.cluster.params.get("authenticator"):
-            raise UnsupportedNemesis("SLA feature can't work without authenticator")
-
-        if not (stress_cmds := self.get_cassandra_stress_write_cmds()):
-            raise UnsupportedNemesis(
-                "SLA nemesis needs cassandra-stress default table 'keyspace1.standard1' is created and prefilled"
-            )
-
-        column_definition, dataset_size = self.get_cassandra_stress_definition(stress_cmds)
-
-        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
-        sla_tests = SlaTests()
-        with self.cluster.cql_connection_patient(
-            node=self.cluster.nodes[0], user=DEFAULT_USER, password=DEFAULT_USER_PASSWORD
-        ) as session:
-            # Get amount of existing service levels plus default "cassandra"
-            created_service_levels = len(ServiceLevel(session=session, name="dummy").list_all_service_levels()) + 1
-
-        error_events = sla_tests.test_maximum_allowed_sls_with_max_shares_during_load(
-            tester=self.tester,
-            prometheus_stats=prometheus_stats,
-            num_of_partitions=dataset_size,
-            cassandra_stress_column_definition=column_definition,
-            service_levels_amount=MAX_ALLOWED_SERVICE_LEVELS - created_service_levels,
-        )
-
-        self.format_error_for_sla_test_and_raise(error_events=error_events)
-
-    @staticmethod
-    def format_error_for_sla_test_and_raise(error_events):
-        if any(error_events):
-            raise NemesisSubTestFailure(
-                "\n".join(f"Step: {error.step}. Error:\n - {error}" for error in error_events if error)
             )
 
     def disrupt_create_index(self):
