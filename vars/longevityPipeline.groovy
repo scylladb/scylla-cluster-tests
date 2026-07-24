@@ -124,7 +124,7 @@ def call(Map pipelineParams) {
             // Manager Configuration
             separator(name: 'MANAGER_CONFIG', sectionHeader: 'Manager Configuration')
             string(defaultValue: "${pipelineParams.get('manager_version', '')}",
-                   description: 'master_latest|3.10|3.9',
+                   description: 'master_latest|3.11|3.10',
                    name: 'manager_version')
 
             string(defaultValue: '',
