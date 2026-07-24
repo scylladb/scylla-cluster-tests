@@ -1,0 +1,37 @@
+# LWT Light Vnodes - predefined throughput steps: gradual-load config + latency thresholds
+
+perf_gradual_threads: {"read": 468, "write": 468, "mixed": 468}
+perf_gradual_throttle_steps: {"read": ['207900'], "write": ['20000'], "mixed": ['32600']}
+perf_gradual_step_duration: {"read": '30m', "write": '30m', "mixed": '30m'}
+
+latency_decorator_error_thresholds:
+  write:
+    "20000":
+      P90 write:
+        fixed_limit: 209.32
+      P99 write:
+        fixed_limit: 677.38
+      Throughput write:
+        fixed_limit: 19000
+
+  read:
+    "207900":
+      P90 read:
+        fixed_limit: 5.07
+      P99 read:
+        fixed_limit: 139.98
+      Throughput read:
+        fixed_limit: 198000
+
+  mixed:
+    "32600":
+      P90 write:
+        fixed_limit: 179.18
+      P90 read:
+        fixed_limit: 114.62
+      P99 write:
+        fixed_limit: 597.69
+      P99 read:
+        fixed_limit: 450.36
+      Throughput write:
+        fixed_limit: 31000

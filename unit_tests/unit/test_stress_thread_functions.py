@@ -126,6 +126,27 @@ def test_get_timeout_from_stress_cmd(stress_cmd, timeout):
             (False, True),
             id="scan_operation",
         ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml 'ops(write_stmt-insert-if-not-exists=1)' -rate threads=10",
+            (True, False),
+            id="write_prefix",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml 'ops(read_stmt-select=1)' -rate threads=10",
+            (False, True),
+            id="read_prefix",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml 'ops(mix_lwt-insert-and-select=1)' -rate threads=10",
+            (True, True),
+            id="mix_prefix",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/test.yaml 'ops(write_stmt-update-if-cond=1,read_stmt-select=1)'"
+            " -rate threads=10",
+            (True, True),
+            id="write_and_read_prefixes",
+        ),
     ),
 )
 def test_classify_user_profile_ops(stress_cmd, expected):
@@ -223,6 +244,49 @@ def _make_hdr_tag_stub():
             " -mode cql3 native -rate 'fixed=100/s threads=10'",
             ["WRITE-rt"],
             id="user_profile_insert_throttled",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(write_stmt-insert-if-not-exists=1)'"
+            " no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100",
+            ["WRITE-st"],
+            id="write_prefix_unthrottled",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(write_stmt-update-if-cond=1)'"
+            " no-warmup cl=QUORUM duration=10m -mode cql3 native -rate 'fixed=1000/s threads=100'",
+            ["WRITE-rt"],
+            id="write_prefix_throttled",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(read_stmt-select=1)'"
+            " no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100",
+            ["READ-st"],
+            id="read_prefix_unthrottled",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(read_stmt-select=1)'"
+            " no-warmup cl=QUORUM duration=10m -mode cql3 native -rate 'fixed=1000/s threads=100'",
+            ["READ-rt"],
+            id="read_prefix_throttled",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml"
+            " 'ops(write_stmt-insert-if-not-exists=1,read_stmt-select=1)'"
+            " no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100",
+            ["WRITE-st", "READ-st"],
+            id="mixed_write_and_read_prefixes",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(mix_lwt-insert-and-select=1)'"
+            " no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100",
+            ["WRITE-st", "READ-st"],
+            id="mix_prefix_emits_both_tags",
+        ),
+        pytest.param(
+            "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(mix_lwt-insert-and-select=1)'"
+            " no-warmup cl=QUORUM duration=10m -mode cql3 native -rate 'fixed=1000/s threads=100'",
+            ["WRITE-rt", "READ-rt"],
+            id="mix_prefix_throttled_emits_both_tags",
         ),
     ),
 )

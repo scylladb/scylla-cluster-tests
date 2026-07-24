@@ -1,0 +1,95 @@
+# LWT Light Predefined Throughput Steps test — 3-node cluster
+#
+# Workload: Light LWT operations using cs_lwt_perf_small.yaml profile
+#   write  (stress_cmd_w)  — INSERT ... IF NOT EXISTS  (light: single-PK, narrow row ~76 bytes)
+#   read   (stress_cmd_r)  — SELECT by primary key     (non-LWT QUORUM read baseline)
+#   mixed  (stress_cmd_m)  — INSERT IF NOT EXISTS + SELECT  (50/50 mix)
+#
+# connectionsPerHost=1000 — targets ~1000 connections per shard per node.
+# Calculation: 1000 conns/host × 7 loaders = 7000 per node ÷ 7 shards = 1000/shard (i4i.2xlarge).
+#
+# Used by:
+#   scylla-enterprise-perf-regression-predefined-throughput-steps-lwt-light-vnodes.jenkinsfile
+#   scylla-enterprise-perf-regression-predefined-throughput-steps-lwt-light-tablets.jenkinsfile
+
+test_duration: 500
+
+# Keyspace and table come from cs_lwt_perf_small.yaml profile
+perf_stress_keyspace: ks
+perf_stress_table: targettable
+
+round_robin: true
+
+n_db_nodes: 3
+n_loaders: 7
+
+instance_type_db: 'i4i.2xlarge'
+instance_type_loader: 'c7i.xlarge'
+instance_type_monitor: 't3.large'
+use_capacity_reservation: true
+use_placement_group: true
+nemesis_add_node_cnt: 0
+
+use_preinstalled_scylla: true
+
+user_prefix: 'perf-predefined-steps-lwt-light'
+argus_email_report_template: email_report_performance.yaml
+
+backtrace_decoding: true
+backtrace_stall_decoding: false
+
+use_mgmt: false
+email_recipients: ['scylla-perf-results@scylladb.com']
+
+use_hdrhistogram: true
+
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+append_scylla_yaml:
+  auto_snapshot: false
+
+use_prepared_loaders: false
+
+adaptive_timeout_store_metrics: false
+
+stop_test_on_stress_failure: false
+
+teardown_validators:
+  test_error_events:
+    enabled: true
+
+prepare_stress_cmd: "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(insert=1)' no-warmup cl=ALL n=1 -mode connectionsPerHost=64 cql3 native -rate 'threads=1'"
+
+prepare_write_cmd: [
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(insert=1)' no-warmup cl=ALL n=30000000 -mode connectionsPerHost=64 cql3 native -rate threads=50 -pop seq=1..30000000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(insert=1)' no-warmup cl=ALL n=30000000 -mode connectionsPerHost=64 cql3 native -rate threads=50 -pop seq=30000001..60000000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(insert=1)' no-warmup cl=ALL n=30000000 -mode connectionsPerHost=64 cql3 native -rate threads=50 -pop seq=60000001..90000000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(insert=1)' no-warmup cl=ALL n=30000000 -mode connectionsPerHost=64 cql3 native -rate threads=50 -pop seq=90000001..120000000"
+]
+
+stress_cmd_w: [
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(write_stmt-insert-if-not-exists=1)' cl=QUORUM serial-cl=LOCAL_SERIAL duration=$duration -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads $throttle' -pop seq=1..30000000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(write_stmt-insert-if-not-exists=1)' cl=QUORUM serial-cl=LOCAL_SERIAL duration=$duration -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads $throttle' -pop seq=30000001..60000000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(write_stmt-insert-if-not-exists=1)' cl=QUORUM serial-cl=LOCAL_SERIAL duration=$duration -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads $throttle' -pop seq=60000001..90000000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(write_stmt-insert-if-not-exists=1)' cl=QUORUM serial-cl=LOCAL_SERIAL duration=$duration -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads $throttle' -pop seq=90000001..120000000"
+]
+
+stress_cmd_r: [
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(read_stmt-select=1)' no-warmup cl=QUORUM duration=$duration -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads $throttle' -pop seq=1..7500000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(read_stmt-select=1)' no-warmup cl=QUORUM duration=$duration -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads $throttle' -pop seq=7500001..15000000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(read_stmt-select=1)' no-warmup cl=QUORUM duration=$duration -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads $throttle' -pop seq=15000001..22500000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(read_stmt-select=1)' no-warmup cl=QUORUM duration=$duration -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads $throttle' -pop seq=22500001..30000000"
+]
+
+stress_cmd_cache_warmup: [
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(read_stmt-select=1)' no-warmup cl=ALL n=7500000 -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads' -pop seq=1..7500000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(read_stmt-select=1)' no-warmup cl=ALL n=7500000 -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads' -pop seq=7500001..15000000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(read_stmt-select=1)' no-warmup cl=ALL n=7500000 -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads' -pop seq=15000001..22500000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(read_stmt-select=1)' no-warmup cl=ALL n=7500000 -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads' -pop seq=22500001..30000000"
+]
+
+stress_cmd_m: [
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(write_stmt-insert-if-not-exists=1,read_stmt-select=1)' no-warmup cl=QUORUM serial-cl=LOCAL_SERIAL duration=$duration -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads $throttle' -pop seq=1..7500000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(write_stmt-insert-if-not-exists=1,read_stmt-select=1)' no-warmup cl=QUORUM serial-cl=LOCAL_SERIAL duration=$duration -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads $throttle' -pop seq=7500001..15000000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(write_stmt-insert-if-not-exists=1,read_stmt-select=1)' no-warmup cl=QUORUM serial-cl=LOCAL_SERIAL duration=$duration -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads $throttle' -pop seq=15000001..22500000",
+    "cassandra-stress user profile=/tmp/cs_lwt_perf_small.yaml 'ops(write_stmt-insert-if-not-exists=1,read_stmt-select=1)' no-warmup cl=QUORUM serial-cl=LOCAL_SERIAL duration=$duration -mode connectionsPerHost=1000 cql3 native -rate 'threads=$threads $throttle' -pop seq=22500001..30000000"
+]
