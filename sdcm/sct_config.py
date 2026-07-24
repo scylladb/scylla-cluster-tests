@@ -2049,6 +2049,14 @@ class SCTConfiguration(BaseModel):
     collect_logs: Boolean = SctField(
         description="Collect logs from instances and sct runner",
     )
+    collect_nvme_diagnostics: Boolean = SctField(
+        description="Collect NVMe SMART logs, error logs, and self-test results from DB nodes during test teardown. "
+        "Requires nvme-cli to be installed on the nodes. Skipped gracefully on backends without NVMe devices.",
+    )
+    nvme_self_test_type: int = SctField(
+        description="NVMe device self-test type to run: 1 (short, ~2 min) or 2 (extended, may take hours). "
+        "Only used when collect_nvme_diagnostics is enabled.",
+    )
     use_scylla_doctor_on_failure: Boolean = SctField(
         description="Run scylla-doctor on test failure to collect additional diagnostics",
     )
@@ -3881,6 +3889,9 @@ class SCTConfiguration(BaseModel):
 
         self._verify_migrator_source_params()
         self._verify_emr_spark_mode()
+
+        if (nvme_test_type := self.get("nvme_self_test_type")) not in (1, 2):
+            raise ValueError(f"nvme_self_test_type must be 1 (short) or 2 (extended), got {nvme_test_type!r}")
 
     def _get_normalized_arch(self, instance_type: str, region_name: str, default: str = "x86_64") -> str:
         """Detect architecture from AWS instance type and normalize to Scylla package naming.

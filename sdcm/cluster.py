@@ -159,6 +159,7 @@ from sdcm.utils.version_utils import (
 )
 from sdcm.utils.net import get_my_ip, to_inet_ntop_format
 from sdcm.utils.node import build_node_api_command
+from sdcm.utils.nvme_diagnostics import install_nvme_cli, collect_all_smart_logs
 from sdcm.wait import wait_for_log_lines
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent, add_severity_limit_rules, max_severity
@@ -6187,6 +6188,37 @@ class BaseScyllaCluster:
 
         if self.params.get("use_mgmt") and self.node_type == "scylla-db":
             self.install_scylla_manager(node)
+
+        if self.params.get("collect_nvme_diagnostics"):
+            self._setup_nvme_diagnostics(node)
+
+    def _setup_nvme_diagnostics(self, node: BaseNode) -> None:
+        """Install nvme-cli and collect baseline SMART logs for NVMe data disks.
+
+        Skips gracefully when nvme-cli cannot be installed or no NVMe data
+        disks are found (e.g. docker backend, EBS-only instances).
+        """
+        if not install_nvme_cli(node):
+            node.log.info("NVMe diagnostics: nvme-cli not available, skipping")
+            return
+
+        baseline_logs = collect_all_smart_logs(node)
+        if not baseline_logs:
+            node.log.info("NVMe diagnostics: no NVMe data disks found, skipping")
+            return
+
+        for smart_log in baseline_logs:
+            node.log.info(
+                "NVMe baseline SMART for %s: temperature=%d°C, available_spare=%d%%, "
+                "percentage_used=%d%%, media_errors=%d, error_log_entries=%d, power_on_hours=%d",
+                smart_log.device_path,
+                smart_log.temperature_celsius,
+                smart_log.available_spare,
+                smart_log.percentage_used,
+                smart_log.media_errors,
+                smart_log.num_err_log_entries,
+                smart_log.power_on_hours,
+            )
 
     def node_startup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):
         if not self.test_config.REUSE_CLUSTER:

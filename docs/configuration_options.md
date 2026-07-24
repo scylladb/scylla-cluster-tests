@@ -1744,7 +1744,7 @@ Flag to run a thread that checks commit logs
 
 Validators to use during teardown phase
 
-**default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}, 'rackaware': {'enabled': False}}
+**default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}, 'rackaware': {'enabled': False}, 'nvme': {'enabled': False}}
 
 **type:** dict | YAML/JSON string → dict
 
@@ -4022,6 +4022,27 @@ Collect logs from instances and sct runner
 **default:** False
 
 **type:** bool
+
+
+## **collect_nvme_diagnostics** / SCT_COLLECT_NVME_DIAGNOSTICS
+
+Collect NVMe SMART logs, error logs, and self-test results from DB nodes during test teardown. Requires nvme-cli to be installed on the nodes. Skipped gracefully on backends without NVMe devices.
+
+**default:** False
+
+**type:** bool
+
+**backend overrides:**
+- `True`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+
+
+## **nvme_self_test_type** / SCT_NVME_SELF_TEST_TYPE
+
+NVMe device self-test type to run: 1 (short, ~2 min) or 2 (extended, may take hours). Only used when collect_nvme_diagnostics is enabled.
+
+**default:** 1
+
+**type:** int
 
 
 ## **use_scylla_doctor_on_failure** / SCT_USE_SCYLLA_DOCTOR_ON_FAILURE
