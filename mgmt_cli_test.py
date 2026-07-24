@@ -238,7 +238,7 @@ class ManagerBackupTests(ManagerRestoreTests):
         self.log.info("starting test_backup_purge_removes_orphan_files")
 
         mgr_cluster = self.db_cluster.get_cluster_manager()
-        snapshot_file_list_pre_test = self.get_all_snapshot_files(cluster_id=mgr_cluster.id)
+        snapshot_file_list_pre_test = self.get_cluster_bucket_files(cluster_id=mgr_cluster.id)
 
         backup_task = mgr_cluster.create_backup_task(
             location_list=self.locations, retention=1, method=self.backup_method
@@ -253,7 +253,7 @@ class ManagerBackupTests(ManagerRestoreTests):
         with ctx:
             backup_task.stop()
 
-        snapshot_file_list_post_task_stopping = self.get_all_snapshot_files(cluster_id=mgr_cluster.id)
+        snapshot_file_list_post_task_stopping = self.get_cluster_bucket_files(cluster_id=mgr_cluster.id)
         orphan_files_pre_rerun = snapshot_file_list_post_task_stopping.difference(snapshot_file_list_pre_test)
         assert orphan_files_pre_rerun, "SCT could not create orphan snapshots by stopping a backup task"
 
@@ -271,7 +271,7 @@ class ManagerBackupTests(ManagerRestoreTests):
             backup_task.start(continue_task=False)
             backup_task.wait_and_get_final_status(step=10)
 
-        snapshot_file_list_post_purge = self.get_all_snapshot_files(cluster_id=mgr_cluster.id)
+        snapshot_file_list_post_purge = self.get_cluster_bucket_files(cluster_id=mgr_cluster.id)
         orphan_files_post_rerun = snapshot_file_list_post_purge.intersection(orphan_files_pre_rerun)
         assert not orphan_files_post_rerun, "orphan files were not deleted!"
 
@@ -374,7 +374,7 @@ class ManagerBackupTests(ManagerRestoreTests):
             task_status = backup_task.wait_and_get_final_status(timeout=1500)
             assert task_status == TaskStatus.DONE, f"Backup task ended in {task_status} instead of {TaskStatus.DONE}"
 
-            snapshot_files = self.get_all_snapshot_files(
+            snapshot_files = self.get_cluster_bucket_files(
                 cluster_id=mgr_cluster.id,
                 bucket_location=worm_bucket_name,
                 only_sstables=False,

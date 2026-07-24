@@ -46,6 +46,9 @@ from sdcm.wait import WaitForTimeoutError
 
 LOGGER = logging.getLogger(__name__)
 
+# node_id -> keyspace -> table -> list of S3 backup file paths
+BackupFilesByNode = dict[str, dict[str, dict[str, list[str]]]]
+
 STATUS_DONE = "done"
 STATUS_ERROR = "error"
 SSL_CONF_DIR = Path("/tmp/ssl_conf")
@@ -894,20 +897,24 @@ class ManagerCluster(ScyllaManagerBase):
         if not res:
             raise ScyllaManagerError(f"Unknown failure for sctool {cmd} command")
 
-    def get_backup_files_dict(self, snapshot_tag, location=None, all_clusters=None):
+    def _get_backup_files(self, snapshot_tag, location=None, all_clusters=None) -> list[str]:
         location_flag = f" --location {location}" if location else ""
         all_clusters_flag = "--all-clusters" if all_clusters else ""
         command = f" -c {self.id} backup files --snapshot-tag {snapshot_tag} {location_flag} {all_clusters_flag}"
-        # The sctool backup files command prints the s3 paths of all of the files that are required to restore the
-        # cluster from the backup
+
         snapshot_files = self.sctool.run(command)
-        snapshot_file_list = [file_path_list[0] for file_path_list in snapshot_files]
         # sctool.run returns a list of lists, each of them is a 1 length list that contains the row.
         # This list comprehension turns the list into a list of strings (rows) instead
-        return self.snapshot_files_to_dict(snapshot_file_list)
+        return [file_path_list[0] for file_path_list in snapshot_files]
+
+    def get_backup_files_dict(self, *args, **kwargs) -> BackupFilesByNode:
+        return self.snapshot_files_to_dict(self._get_backup_files(*args, **kwargs))
+
+    def get_backup_files_set(self, *args, **kwargs) -> set[str]:
+        return {file.split(" ")[0].strip() for file in self._get_backup_files(*args, **kwargs)}
 
     @staticmethod
-    def snapshot_files_to_dict(snapshot_file_lines):
+    def snapshot_files_to_dict(snapshot_file_lines) -> BackupFilesByNode:
         per_node_keyspaces_and_tables_backup_files = {}
         for line in snapshot_file_lines:
             s3_file_path, keyspace_and_table = [string.strip() for string in line.split(" ")]
