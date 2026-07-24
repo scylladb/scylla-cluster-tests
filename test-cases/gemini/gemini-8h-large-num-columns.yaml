@@ -1,4 +1,19 @@
 test_duration: 500
+test_metadata:
+  description: >-
+    Gemini fuzz test using wide-schema tables (up to 100 columns, 20 clustering
+    keys) against a single self-consistent Scylla cluster over ~7h, with large
+    local-disk sizing and the full SisyphusMonkey nemesis set (excluding ENOSPC
+    and node-isolation disruptions), to validate consistency with many columns.
+  test_type: gemini
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - gemini
+  workload: mixed
+  team_ownership: qa-tools
 n_db_nodes: 6
 n_test_oracle_db_nodes: 1
 n_loaders: 1

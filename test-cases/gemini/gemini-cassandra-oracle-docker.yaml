@@ -1,4 +1,18 @@
 test_duration: 10
+test_metadata:
+  description: >-
+    Minimal single-node Gemini fuzz test on Docker comparing Scylla against a
+    Cassandra 4.1 oracle container over ~5 minutes with a tiny schema, used as a
+    quick local check of Scylla/Cassandra semantic compatibility.
+  test_type: gemini
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - docker
+  stress_tools:
+    - gemini
+  workload: mixed
+  team_ownership: qa-tools
 n_db_nodes: 1
 n_test_oracle_db_nodes: 1
 n_loaders: 1

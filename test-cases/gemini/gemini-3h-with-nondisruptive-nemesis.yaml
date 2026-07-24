@@ -1,4 +1,19 @@
 test_duration: 500
+test_metadata:
+  description: >-
+    Gemini fuzz test comparing a 3-node Scylla cluster against an oracle DB under
+    mixed load for ~3h of active stress, with a non-disruptive SisyphusMonkey
+    nemesis subset (excluding disruptive disruptions) to validate consistency
+    without hard node failures.
+  test_type: gemini
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - gemini
+  workload: mixed
+  team_ownership: qa-tools
 n_db_nodes: 3
 n_test_oracle_db_nodes: 1
 n_loaders: 1
