@@ -24,6 +24,7 @@ from sdcm.sct_provision.common.types import NodeTypeType
 
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 from sdcm.sct_provision.user_data_objects.apt_daily_triggers import DisableAptTriggersUserDataObject
+from sdcm.sct_provision.user_data_objects.nvme_fault_inject import NvmeFaultInjectUserDataObject
 from sdcm.sct_provision.user_data_objects.scylla import ScyllaUserDataObject
 from sdcm.sct_provision.user_data_objects.sshd import SshdUserDataObject
 from sdcm.sct_provision.user_data_objects.syslog_ng import SyslogNgUserDataObject, SyslogNgExporterUserDataObject
@@ -235,6 +236,7 @@ class DefinitionBuilder(abc.ABC):
             SshdUserDataObject,
             EnableWaLinuxAgent,
             ScyllaUserDataObject,
+            NvmeFaultInjectUserDataObject,
             DockerUserDataObject,
             SctAgentUserDataObject,
         ]

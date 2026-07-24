@@ -2265,6 +2265,20 @@ class SCTConfiguration(BaseModel):
     raid_level: int = SctField(
         description="Number of of raid level: 0 - RAID0, 5 - RAID5",
     )
+    nvme_rescan_repro: Boolean = SctField(
+        description="""Inject a fault that unbinds the local/ephemeral NVMe device's PCI function before
+        scylla-image-setup.service on the next boot, reproducing the "NVMe controller present, namespace
+        missing" boot race that scylla-machine-image's rescan_nvme_controllers() fix recovers from. See
+        docs/plans/testing/nvme-namespace-rescan-repro-test.md. Only for db nodes; test-case only.""",
+    )
+    nvme_rescan_repro_mode: String = SctField(
+        description="""Fault primitive for the NVMe namespace-rescan repro test (needs nvme_rescan_repro).
+        'unbind' (default) unbinds the local NVMe PCI function's driver - the "controller present, namespace
+        missing" repro. 'remove' deletes the PCI device entirely - the NVMe-root repro where the local
+        controller is absent from PCI enumeration and only an unconditional PCI-bus rescan can rediscover it
+        (validated on Azure Standard_L8s_v4/Hyper-V vPCI only). See
+        docs/plans/testing/nvme-namespace-rescan-repro-test.md.""",
+    )
     bare_loaders: Boolean = SctField(
         description="Don't install anything but node_exporter to the loaders during cluster setup",
     )

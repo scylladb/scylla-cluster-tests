@@ -4480,6 +4480,24 @@ Number of of raid level: 0 - RAID0, 5 - RAID5
 **type:** int
 
 
+## **nvme_rescan_repro** / SCT_NVME_RESCAN_REPRO
+
+Inject a fault that unbinds the local/ephemeral NVMe device's PCI function before<br>scylla-image-setup.service on the next boot, reproducing the "NVMe controller present, namespace<br>missing" boot race that scylla-machine-image's rescan_nvme_controllers() fix recovers from. See<br>docs/plans/testing/nvme-namespace-rescan-repro-test.md. Only for db nodes; test-case only.
+
+**default:** False
+
+**type:** bool
+
+
+## **nvme_rescan_repro_mode** / SCT_NVME_RESCAN_REPRO_MODE
+
+Fault primitive for the NVMe namespace-rescan repro test (needs nvme_rescan_repro).<br>'unbind' (default) unbinds the local NVMe PCI function's driver - the "controller present, namespace<br>missing" repro. 'remove' deletes the PCI device entirely - the NVMe-root repro where the local<br>controller is absent from PCI enumeration and only an unconditional PCI-bus rescan can rediscover it<br>(validated on Azure Standard_L8s_v4/Hyper-V vPCI only). See<br>docs/plans/testing/nvme-namespace-rescan-repro-test.md.
+
+**default:** unbind
+
+**type:** str (appendable)
+
+
 ## **bare_loaders** / SCT_BARE_LOADERS
 
 Don't install anything but node_exporter to the loaders during cluster setup

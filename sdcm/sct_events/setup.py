@@ -41,6 +41,7 @@ from sdcm.sct_events.events_processes import (
     EVENTS_GRAFANA_POSTMAN_ID,
     EventsProcessesRegistry,
     create_default_events_process_registry,
+    destroy_default_events_process_registry,
     get_events_process,
     EVENTS_HANDLER_ID,
     EVENTS_COUNTER_ID,
@@ -102,6 +103,10 @@ def stop_events_device(_registry: Optional[EventsProcessesRegistry] = None) -> N
 
     if events_stat:
         LOGGER.info("Statistics of sent/received events (by device): %s", json.dumps(events_stat, indent=4))
+
+    # Let a later test in the same pytest process create a fresh default registry - a no-op
+    # when `_registry` isn't the tracked default (e.g. a multi-tenant registry).
+    destroy_default_events_process_registry(_registry=_registry)
 
 
 def enable_default_filters(sct_config: SCTConfiguration):
