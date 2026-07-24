@@ -1,5 +1,4 @@
 import time
-from abc import abstractmethod
 from pathlib import Path
 
 import pytest
@@ -83,123 +82,106 @@ class CoredumpExportFileTestThread(CoredumpExportFileThread):
         return Pickler.save_to_file(filepath, self._localize_results())
 
 
-@pytest.mark.usefixtures("events")
-class CoredumpExportTestBase:
-    maxDiff = None
-    test_data_folder: str = None
-
-    @pytest.fixture(autouse=True)
-    def inject_test_data_dir(self, test_data_dir):
-        self.test_data_dir = test_data_dir
-
-    @pytest.fixture(autouse=True)
-    def inject_tmp_path(self, tmp_path):
-        self._tmp_path = tmp_path
-
-    @abstractmethod
-    def _init_target_coredump_class(self, test_name: str) -> CoredumpThreadBase:
-        pass
-
-    def _run_coredump_with_fake_remoter(self, test_name: str):
-        coredump_thread = self._init_target_coredump_class(test_name)
-        coredump_thread.start()
-        time.sleep(1)
-        coredump_thread.stop()
-        coredump_thread.join(20)
-        assert not coredump_thread.is_alive(), "CoredumpExportThread thread did not stop in 20 seconds"
-        results = coredump_thread.get_results()
-        expected_results = coredump_thread.load_expected_results(
-            str(self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_results.json"))
-        )
-        for coredump_status, expected_coredump_list in expected_results.items():
-            result_coredump_list = results[coredump_status]
-            try:
-                assert expected_coredump_list == result_coredump_list
-            except Exception as exc:  # noqa: BLE001
-                raise AssertionError(
-                    f"Got unexpected results for {coredump_status}: {result_coredump_list!s}\n{exc!s}"
-                ) from exc
-
-
-class CoredumpExportExceptionTest(CoredumpExportTestBase):
-    maxDiff = None
-    test_data_folder = "systemd"
-
-    def _init_target_coredump_class(self, test_name: str) -> CoredumpExportSystemdTestThread:
-        coredump_thread = CoredumpExportSystemdTestThread(
+@pytest.fixture
+def systemd_coredump_thread_factory(test_data_dir, tmp_path):
+    def make_thread(test_name: str) -> CoredumpExportSystemdTestThread:
+        return CoredumpExportSystemdTestThread(
             FakeNode(
-                MockRemoter(
-                    responses=str(
-                        self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_remoter.json")
-                    )
-                ),
-                str(self._tmp_path / "logdir"),
+                MockRemoter(responses=str(test_data_dir / "test_coredump" / "systemd" / (test_name + "_remoter.json"))),
+                str(tmp_path / "logdir"),
             ),
             5,
         )
+
+    return make_thread
+
+
+@pytest.fixture
+def systemd_exception_coredump_thread_factory(systemd_coredump_thread_factory):
+    def make_thread(test_name: str) -> CoredumpExportSystemdTestThread:
+        coredump_thread = systemd_coredump_thread_factory(test_name)
         coredump_thread.max_coredump_thread_exceptions = 2
         return coredump_thread
 
-    def test_with_exceptions_limit_reached(self):
-        self._run_coredump_with_fake_remoter("exceptions_limit_reached_test")
-
-    def test_with_exceptions_limit_not_reached(self):
-        self._run_coredump_with_fake_remoter("exceptions_limit_not_reached_test")
+    return make_thread
 
 
-class CoredumpExportSystemdTest(CoredumpExportTestBase):
-    maxDiff = None
-    test_data_folder = "systemd"
-
-    def _init_target_coredump_class(self, test_name: str) -> CoredumpExportSystemdTestThread:
-        return CoredumpExportSystemdTestThread(
-            FakeNode(
-                MockRemoter(
-                    responses=str(
-                        self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_remoter.json")
-                    )
-                ),
-                str(self._tmp_path / "logdir"),
-            ),
-            5,
-        )
-
-    def test_success_test(self):
-        self._run_coredump_with_fake_remoter("success_test")
-
-    def test_success_test_systemd_248(self):
-        self._run_coredump_with_fake_remoter("success_test_systemd_248")
-
-    def test_fail_upload_test(self):
-        self._run_coredump_with_fake_remoter("fail_upload_test")
-
-    def test_fail_get_list_test(self):
-        self._run_coredump_with_fake_remoter("fail_get_list_test")
-
-
-class CoredumpExportFileTest(CoredumpExportTestBase):
-    maxDiff = None
-    test_data_folder = "filebased"
-
-    def _init_target_coredump_class(self, test_name: str) -> CoredumpExportFileTestThread:
+@pytest.fixture
+def file_coredump_thread_factory(test_data_dir, tmp_path):
+    def make_thread(test_name: str) -> CoredumpExportFileTestThread:
         return CoredumpExportFileTestThread(
             FakeNode(
                 MockRemoter(
-                    responses=str(
-                        self.test_data_dir / "test_coredump" / self.test_data_folder / (test_name + "_remoter.json")
-                    )
+                    responses=str(test_data_dir / "test_coredump" / "filebased" / (test_name + "_remoter.json"))
                 ),
-                str(self._tmp_path / "logdir"),
+                str(tmp_path / "logdir"),
             ),
             5,
             coredump_directories=["/var/lib/scylla/coredumps"],
         )
 
-    def test_success_test(self):
-        self._run_coredump_with_fake_remoter("success_test")
+    return make_thread
 
-    def test_fail_upload_test(self):
-        self._run_coredump_with_fake_remoter("fail_upload_test")
 
-    def test_fail_get_list_test(self):
-        self._run_coredump_with_fake_remoter("fail_get_list_test")
+def run_coredump_export_case(
+    test_data_dir: Path, test_data_folder: str, coredump_thread: CoredumpThreadBase, test_name: str
+):
+    coredump_thread.start()
+    time.sleep(1)
+    coredump_thread.stop()
+    coredump_thread.join(20)
+    assert not coredump_thread.is_alive(), "CoredumpExportThread thread did not stop in 20 seconds"
+    results = coredump_thread.get_results()
+    expected_results = coredump_thread.load_expected_results(
+        str(test_data_dir / "test_coredump" / test_data_folder / (test_name + "_results.json"))
+    )
+    for coredump_status, expected_coredump_list in expected_results.items():
+        result_coredump_list = results[coredump_status]
+        try:
+            assert expected_coredump_list == result_coredump_list
+        except Exception as exc:  # noqa: BLE001
+            raise AssertionError(
+                f"Got unexpected results for {coredump_status}: {result_coredump_list!s}\n{exc!s}"
+            ) from exc
+
+
+@pytest.mark.usefixtures("events")
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        pytest.param("exceptions_limit_reached_test", id="exceptions-limit-reached"),
+        pytest.param("exceptions_limit_not_reached_test", id="exceptions-limit-not-reached"),
+    ],
+)
+def test_coredump_export_systemd_exception_case(test_data_dir, systemd_exception_coredump_thread_factory, test_name):
+    coredump_thread = systemd_exception_coredump_thread_factory(test_name)
+    run_coredump_export_case(test_data_dir, "systemd", coredump_thread, test_name)
+
+
+@pytest.mark.usefixtures("events")
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        pytest.param("success_test", id="success"),
+        pytest.param("success_test_systemd_248", id="success-systemd-248"),
+        pytest.param("fail_upload_test", id="fail-upload"),
+        pytest.param("fail_get_list_test", id="fail-get-list"),
+    ],
+)
+def test_coredump_export_systemd_case(test_data_dir, systemd_coredump_thread_factory, test_name):
+    coredump_thread = systemd_coredump_thread_factory(test_name)
+    run_coredump_export_case(test_data_dir, "systemd", coredump_thread, test_name)
+
+
+@pytest.mark.usefixtures("events")
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        pytest.param("success_test", id="success"),
+        pytest.param("fail_upload_test", id="fail-upload"),
+        pytest.param("fail_get_list_test", id="fail-get-list"),
+    ],
+)
+def test_coredump_export_file_case(test_data_dir, file_coredump_thread_factory, test_name):
+    coredump_thread = file_coredump_thread_factory(test_name)
+    run_coredump_export_case(test_data_dir, "filebased", coredump_thread, test_name)
