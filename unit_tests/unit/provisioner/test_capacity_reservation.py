@@ -17,6 +17,8 @@ import pytest
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.exceptions import CapacityReservationError
 
+from unit_tests.lib.dot_dict import DotDict
+
 
 @pytest.fixture(autouse=True)
 def reset_reservations():
@@ -25,11 +27,6 @@ def reset_reservations():
 
 @pytest.fixture(name="params")
 def params_fixture():
-    class DotDict(dict):
-        __getattr__ = dict.__getitem__
-        __setattr__ = dict.__setitem__
-        __delattr__ = dict.__delitem__
-
     return DotDict(
         {
             "test_id": "example-test-id",

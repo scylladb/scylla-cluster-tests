@@ -13,8 +13,9 @@
 
 import logging
 import random
-from typing import Callable
+from typing import Callable, Iterator
 
+from sdcm.provision.gce.constants import SUPPORTED_GCE_REGIONS
 from sdcm.utils.gce_utils import GceZoneResolver
 
 LOGGER = logging.getLogger(__name__)
@@ -157,6 +158,78 @@ class GceAZResolver:
             LOGGER.info(
                 "GceAZResolver: availability_zone '%s' already valid for regions %s", original_value, region_names
             )
+
+    def get_region_fallback_candidates(self) -> Iterator[tuple[str, list[str]]]:
+        """Yield ordered ``(region, az_letters)`` candidates for cluster region fallback.
+
+        A region is eligible only if it can supply the configured number of zones
+        that support all required machine types. The current region is excluded (it
+        is the starting point).
+
+        Candidates are yielded lazily: each region's zone/machine-type availability is
+        probed only when the consumer actually reaches it, so a fallback that succeeds on
+        the first candidate never pays to scan the remaining regions.
+
+        Unlike AWS there is NO peering check: the SCT GCE network is a single global
+        VPC, so every region's subnet is reachable, and GCE images are global, so no
+        per-region image re-resolution is needed.
+        """
+        region_names = self._region_names()
+        if not region_names:
+            return
+        current_region = region_names[0]
+        configured_letters = self._configured_az_letters()
+        cardinality = len(configured_letters) or 1
+        machine_types = self.required_machine_types()
+
+        for region in SUPPORTED_GCE_REGIONS:
+            if region == current_region:
+                continue
+            letters = self._common_supported_letters([region], configured_letters, machine_types)
+            if len(letters) < cardinality:
+                LOGGER.info(
+                    "Region fallback: skipping %s (only %d zone(s) support %s, need %d)",
+                    region,
+                    len(letters),
+                    machine_types,
+                    cardinality,
+                )
+                continue
+            yield region, letters[:cardinality]
+
+    def get_dc_fallback_candidates(self, dc_index: int) -> Iterator[tuple[str, list[str]]]:
+        """Yield ordered ``(region, az_letters)`` candidates to relocate the DC at ``dc_index``.
+
+        A region is eligible if it is not already used by another DC and can supply the configured
+        number of zones that support all required machine types. Like the single-region variant there
+        is NO peering or image check (global VPC, global images).
+
+        Candidates are yielded lazily: each region is probed only when the consumer reaches it,
+        so a DC that relocates on its first candidate never scans the remaining regions.
+        """
+        region_names = self._region_names()
+        if dc_index >= len(region_names):
+            return
+        in_use_regions = set(region_names)
+        configured_letters = self._configured_az_letters()
+        cardinality = len(configured_letters) or 1
+        machine_types = self.required_machine_types()
+
+        for region in SUPPORTED_GCE_REGIONS:
+            if region in in_use_regions:
+                continue
+            letters = self._common_supported_letters([region], configured_letters, machine_types)
+            if len(letters) < cardinality:
+                LOGGER.info(
+                    "Region fallback (DC %d): skipping %s (only %d zone(s) support %s, need %d)",
+                    dc_index,
+                    region,
+                    len(letters),
+                    machine_types,
+                    cardinality,
+                )
+                continue
+            yield region, letters[:cardinality]
 
     def _common_supported_letters(
         self, region_names: list[str], configured_letters: list[str], machine_types: list[str]

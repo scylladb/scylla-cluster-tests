@@ -28,11 +28,7 @@ from sdcm.provision.aws.region_fallback import switch_region
 from sdcm.sct_provision.aws.layout import SCTProvisionAWSLayout
 from sdcm.tester import ClusterTester
 
-
-class _DotDict(dict):
-    __getattr__ = dict.__getitem__
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
+from unit_tests.lib.dot_dict import DotDict
 
 
 def _capacity_error() -> ClientError:
@@ -43,7 +39,7 @@ def _capacity_error() -> ClientError:
 
 
 def _make_layout_params(**overrides):
-    params = _DotDict(
+    params = DotDict(
         {
             "cluster_backend": "aws",
             "region_name": "us-east-1",
@@ -228,8 +224,8 @@ def test_get_instances_returns_empty_when_az_idx_out_of_bounds(patched_ec2_for_g
     assert result == []
 
 
-def _make_tester_params(**overrides) -> _DotDict:
-    return _DotDict(
+def _make_tester_params(**overrides) -> DotDict:
+    return DotDict(
         {
             "region_name": "us-east-1",
             "availability_zone": "a",
@@ -343,7 +339,7 @@ def test_provision_legacy_with_az_fallback_non_capacity_error_propagates():
     assert stub._provision_legacy_aws_clusters.call_count == 1
 
 
-class _RegionParams(_DotDict):
+class _RegionParams(DotDict):
     """Params stub that derives `region_names` from `region_name` like `SCTConfiguration`."""
 
     ami_id_params = ["ami_id_db_scylla", "ami_id_loader"]
@@ -563,7 +559,7 @@ def test_legacy_region_fallback_relocates_on_exhaustion(restore_region_env):  # 
 
 
 def test_switch_region_sets_placement_resolves_amis_and_invalidates(restore_region_env):  # noqa: ARG001
-    params = _DotDict({"region_name": "us-east-1", "availability_zone": "a"})
+    params = DotDict({"region_name": "us-east-1", "availability_zone": "a"})
     params.region_names = ["us-east-1"]
     params.resolve_amis = MagicMock()
     invalidate = MagicMock()

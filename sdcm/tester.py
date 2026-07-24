@@ -80,10 +80,9 @@ from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThre
 from sdcm.mgmt import get_scylla_manager_tool
 from sdcm.provision.aws.az_resolver import (
     AZResolver,
-    is_az_fallback_enabled,
-    is_region_fallback_enabled,
     run_pre_flight_capacity_probe,
 )
+from sdcm.provision.common.fallback import is_az_fallback_enabled, is_region_fallback_enabled
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, RegionAMINotFoundError, is_capacity_error
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.region_fallback import (
@@ -99,6 +98,7 @@ from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.gce.provisioner import GceProvisioner
+from sdcm.provision.gce import region_fallback as gce_region_fallback
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.oci.provisioner import OciProvisioner
 from sdcm.provision.provisioner import ProvisionError, ProvisionUnrecoverableError, provisioner_factory
@@ -1634,7 +1634,49 @@ class ClusterTester(unittest.TestCase):
         self.log.debug("Nemesis threads %s", nemesis_threads)
         return nemesis_threads
 
-    def get_cluster_gce(self, loader_info, db_info, monitor_info):  # noqa: PLR0912, PLR0914
+    def get_cluster_gce(self, loader_info, db_info, monitor_info):
+        """Provision GCE cluster with optional region fallback (whole-cluster or per-DC)."""
+        if is_region_fallback_enabled(self.params):
+            self._get_cluster_gce_with_region_fallback(loader_info, db_info, monitor_info)
+            return
+        self._get_cluster_gce_once(loader_info, db_info, monitor_info)
+
+    def _get_cluster_gce_with_region_fallback(self, loader_info, db_info, monitor_info):
+        """Provision via the centralized GCE fallback router.
+
+        Single-region configs relocate the whole cluster on capacity exhaustion; multi-region configs
+        relocate the exhausted DC. GCE images are global and the SCT network is a single global VPC, so
+        relocation is a plain region switch with no image re-resolution or peering checks.
+        """
+        gce_region_fallback.provision_with_fallback(
+            params=self.params,
+            test_id=str(TestConfig().test_id()),
+            network_name=self.params.get("gce_network"),
+            provision_once=lambda: self._get_cluster_gce_once(loader_info, db_info, monitor_info),
+            partial_cleanup=self._cleanup_legacy_partial_gce_clusters,
+            error_factory=CriticalTestFailure,
+        )
+
+    def _cleanup_legacy_partial_gce_clusters(self) -> None:
+        """Destroy GCE clusters created during a failed region attempt and drop stale references.
+
+        Resetting each attribute to None (and clearing credentials) mirrors the AWS cleanup so a later
+        fallback retry - or the test teardown, if fallback fails entirely - does not touch a destroyed
+        cluster or append duplicate credentials on each retry.
+        """
+        for attr in ("db_cluster", "cs_db_cluster", "loaders", "monitors"):
+            cluster = getattr(self, attr, None)
+            if cluster is None or isinstance(cluster, NoMonitorSet):
+                continue
+            try:
+                cluster.destroy()
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Region fallback: failed to destroy %s during cleanup: %s", attr, exc)
+            setattr(self, attr, None)
+
+        self.credentials = []
+
+    def _get_cluster_gce_once(self, loader_info, db_info, monitor_info):  # noqa: PLR0912, PLR0914
         GceAZResolver(self.params).resolve()
 
         datacenters = self.params.gce_datacenters

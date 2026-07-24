@@ -2167,9 +2167,10 @@ class SCTConfiguration(BaseModel):
         "trigger AZ/region fallback. Costs ~1 min per type. AWS-only.",
     )
     fallback_to_next_region: Boolean = SctField(
-        description="On capacity errors, after all AZs in the configured region are exhausted, relocate the entire cluster "
-        "to the next eligible region (should be VPC-peered with the runner region with infra-prepared and AMI available). "
-        "Only applies during initial setup, to single region tests. AWS-only.",
+        description="On capacity errors, after all AZs/zones in the configured region are exhausted, relocate the entire "
+        "cluster to the next eligible region. On AWS the target region should be VPC-peered with the runner region with "
+        "infra-prepared and AMI available; on GCE the global VPC and global images make any supported region eligible. "
+        "Only applies during initial setup, to single region tests. Supported backends: AWS, GCE.",
     )
     num_nodes_to_rollback: int = SctField(
         description="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade",
@@ -3359,13 +3360,20 @@ class SCTConfiguration(BaseModel):
         availability_zone = placement.get("availability_zone")
         amis = placement.get("amis")
         if region_name:
-            os.environ["SCT_REGION_NAME"] = region_name
-            self["region_name"] = region_name
-            if amis:
-                for key, value in amis.items():
-                    self[key] = value
-            elif original_region_list and region_name != original_region_list:
-                self._resolved_placement_source_region = original_first_region
+            if self.get("cluster_backend") == "gce":
+                # GCE has no AWS-style region_name or per-region AMIs: the relocated region is
+                # carried in gce_datacenter (env-first), so a split provision->run pipeline picks
+                # up the region chosen by region fallback instead of the original one.
+                os.environ["SCT_GCE_DATACENTER"] = region_name
+                self["gce_datacenter"] = region_name
+            else:
+                os.environ["SCT_REGION_NAME"] = region_name
+                self["region_name"] = region_name
+                if amis:
+                    for key, value in amis.items():
+                        self[key] = value
+                elif original_region_list and region_name != original_region_list:
+                    self._resolved_placement_source_region = original_first_region
         if availability_zone:
             os.environ["SCT_AVAILABILITY_ZONE"] = availability_zone
             self["availability_zone"] = availability_zone

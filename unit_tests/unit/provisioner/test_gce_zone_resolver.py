@@ -18,15 +18,11 @@ import pytest
 from sdcm.provision.gce.zone_resolver import GceAZResolver, NoValidAvailabilityZoneError, _node_count_positive
 from sdcm.utils.gce_utils import get_alternative_zones
 
-
-class _DotDict(dict):
-    __getattr__ = dict.__getitem__
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
+from unit_tests.lib.dot_dict import DotDict
 
 
 def _make_params(**overrides):
-    params = _DotDict(
+    params = DotDict(
         {
             "cluster_backend": "gce",
             "gce_datacenter": "us-east1",
