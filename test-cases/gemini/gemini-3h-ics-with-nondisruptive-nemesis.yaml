@@ -1,4 +1,18 @@
 test_duration: 500
+test_metadata:
+  description: >-
+    Gemini fuzz test validating Scylla tables using IncrementalCompactionStrategy
+    against an oracle DB over ~3h of write-only load on AWS, with a non-disruptive
+    SisyphusMonkey nemesis subset (excluding disruptive and ENOSPC disruptions).
+  test_type: gemini
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - gemini
+  workload: write
+  team_ownership: qa-tools
 n_db_nodes: 6
 n_test_oracle_db_nodes: 1
 n_loaders: 1

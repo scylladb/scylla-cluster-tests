@@ -5,6 +5,22 @@
 # take longer to complete.
 # Results from previous runs documented in: https://docs.google.com/document/d/1tCyYgwGWww0qVfu-lf80ytesw0Q1uYpgikPz2kEhamQ/edit#
 test_duration: 880
+test_metadata:
+  description: >-
+    Streaming-features test measuring cluster/query latency during topology
+    operations (via SisyphusMonkey's NemesisSequence) with
+    stream_io_throughput_mb_per_sec capped at 300, comparing results against the
+    unthrottled latency-250gb-with-nemesis baseline to quantify the
+    latency/duration tradeoff of limiting streaming IO.
+  test_type: features
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: mixed
+  team_ownership: qa-tools
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=62500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..62500000",
                     "cassandra-stress write no-warmup cl=ALL n=62500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=62500001..125000000",
                     "cassandra-stress write no-warmup cl=ALL n=62500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=125000001..187500000",

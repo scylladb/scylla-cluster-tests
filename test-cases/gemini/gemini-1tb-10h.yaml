@@ -1,4 +1,20 @@
 test_duration: 780
+test_metadata:
+  description: >-
+    Large-scale Gemini fuzz test comparing a 6-node mixed Scylla/oracle cluster
+    against a 1TB dataset, running ~8h of active Gemini stress with a large
+    IO-worker pool and SisyphusMonkey nemesis (excluding ENOSPC and
+    node-isolation disruptions), to validate data consistency under sustained
+    mixed load and chaos at scale.
+  test_type: gemini
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - gemini
+  workload: mixed
+  team_ownership: qa-tools
 n_db_nodes: 6
 n_test_oracle_db_nodes: 1
 n_loaders: 1
