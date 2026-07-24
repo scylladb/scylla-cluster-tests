@@ -21,7 +21,8 @@ from sdcm.utils.parallel_object import ParallelObject
 
 
 if TYPE_CHECKING:
-    from sdcm.cluster import BaseCluster, BaseNode
+    from sdcm.cluster import BaseCluster, BaseNode, BaseMonitorSet
+    from sdcm.sct_config import SCTConfiguration
 
 LOGGER = logging.getLogger(__name__)
 
@@ -112,3 +113,42 @@ def clear_snapshot_nodes(cluster):
         for node in cluster.data_nodes
     ]
     ParallelObject(objects=triggers, timeout=1200).call_objects()
+
+
+def expand_cluster_heterogeneous(
+    db_cluster: BaseCluster,
+    monitors: BaseMonitorSet,
+    params: SCTConfiguration,
+) -> list[BaseNode]:
+    """Add nodes with different instance types to the cluster.
+
+    This function adds nodes using the instance type specified by 'nemesis_grow_shrink_instance_type'
+    configuration parameter. The number of nodes to add is controlled by 'nemesis_add_node_cnt'.
+    This is useful for creating heterogeneous clusters with mixed instance types.
+
+    Args:
+        db_cluster: The database cluster to expand.
+        monitors: The monitor set to reconfigure after adding nodes.
+        params: The SCT configuration parameters.
+
+    Returns:
+        List of newly added nodes.
+    """
+    # Import here to avoid circular imports
+    from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP  # noqa: PLC0415
+    from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations  # noqa: PLC0415
+
+    new_nodes = db_cluster.add_nodes(
+        count=params.get("nemesis_add_node_cnt"),
+        instance_type=params.get("nemesis_grow_shrink_instance_type"),
+        enable_auto_bootstrap=True,
+        rack=None,
+    )
+    monitors.reconfigure_scylla_monitoring()
+    up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
+    with adaptive_timeout(Operations.NEW_NODE, node=db_cluster.data_nodes[0], timeout=up_timeout):
+        db_cluster.wait_for_init(node_list=new_nodes, timeout=up_timeout, check_node_health=False)
+    db_cluster.set_seeds()
+    db_cluster.update_seed_provider()
+    db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
+    return new_nodes
