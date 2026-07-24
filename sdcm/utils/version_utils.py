@@ -838,7 +838,7 @@ class scylla_versions:
     Limitations:
         - Can't work if the same method name in the same file is used in different classes
         - Can't work with 'static' and 'class' methods. Only 'class instance' ones.
-        - Depends on the 'params' or 'cluster.params' attributes presence
+        - Depends on the 'params', 'cluster.params' or 'runner.cluster.params' attributes presence
           which store SCT configuration.
     Example:
         # Having "scylla_version" be set to "4.4.4" in the sct config
@@ -884,7 +884,11 @@ class scylla_versions:
         def inner(*args, **kwargs):
             cls_self = args[0]
             try:
-                cluster_object = getattr(cls_self, "cluster", cls_self)
+                cluster_object = (
+                    getattr(cls_self, "cluster", None)
+                    or getattr(getattr(cls_self, "runner", None), "cluster", None)
+                    or cls_self
+                )
                 scylla_version = cluster_object.params.get("scylla_version")
                 if not scylla_version or scylla_version.endswith(":latest"):
                     # NOTE: in case we run Scylla cluster with "latest" version then we need
