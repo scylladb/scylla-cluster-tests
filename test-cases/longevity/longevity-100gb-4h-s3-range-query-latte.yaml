@@ -1,0 +1,81 @@
+test_duration: 720
+
+n_db_nodes: 6
+n_loaders: 1
+seeds_num: 3
+simulated_racks: 3
+
+instance_type_db: 'r8gd.xlarge'
+round_robin: true
+
+nemesis_class_name: 'NoOpMonkey'
+
+user_prefix: 'longevity-s3-range'
+space_node_threshold: 64424
+
+server_encrypt: true
+client_encrypt: true
+
+sstable_size: 100
+
+hinted_handoff: 'enabled'
+parallel_node_operations: true
+
+prepare_write_cmd:
+  - >-
+    latte run --function=insert --tag=latte-s3-write --consistency=ALL --threads=2 --concurrency=24
+    --duration=40000000 --start-cycle=1 --end-cycle=40000001
+    --request-timeout=300 --retry-interval='2s,10s' --retry-number=10
+    data_dir/latte/s3_range_query.rn
+
+stress_cmd:
+  - >-
+    latte run --function=multi_pk_read --tag=latte-s3-range-read --consistency=QUORUM --threads=1 --concurrency=24
+    --duration=60m --start-cycle=1 --end-cycle=40000001
+    --request-timeout=60 --retry-interval='2s,10s' --retry-number=5
+    data_dir/latte/s3_range_query.rn
+  - >-
+    latte run --function=range_read --tag=latte-s3-range-read-range --consistency=QUORUM --threads=1 --concurrency=24
+    --duration=60m --start-cycle=1 --end-cycle=40000001
+    --request-timeout=60 --retry-interval='2s,10s' --retry-number=5
+    data_dir/latte/s3_range_query.rn
+  - >-
+    latte run --function=count_read --tag=latte-s3-range-read-count --consistency=QUORUM --threads=1 --concurrency=24
+    --duration=1
+    --request-timeout=300 --retry-interval='2s,10s' --retry-number=5
+    data_dir/latte/s3_range_query.rn
+  - >-
+    latte run --function=full_scan --tag=latte-s3-range-read-fullscan --consistency=QUORUM --threads=1 --concurrency=24
+    --duration=1
+    --request-timeout=300 --retry-interval='2s,10s' --retry-number=5
+    data_dir/latte/s3_range_query.rn
+  - >-
+    latte run --function=partition_scan --tag=latte-s3-range-read-partition --consistency=QUORUM --threads=1 --concurrency=24
+    --duration=60m --start-cycle=1 --end-cycle=40000001
+    --request-timeout=60 --retry-interval='2s,10s' --retry-number=5
+    data_dir/latte/s3_range_query.rn
+  - >-
+    latte run --function=partition_scan_lt --tag=latte-s3-range-read-partition-lt --consistency=QUORUM --threads=1 --concurrency=24
+    --duration=60m --start-cycle=1 --end-cycle=40000001
+    --request-timeout=60 --retry-interval='2s,10s' --retry-number=5
+    data_dir/latte/s3_range_query.rn
+  - >-
+    latte run --function=partition_scan_gt --tag=latte-s3-range-read-partition-gt --consistency=QUORUM --threads=1 --concurrency=24
+    --duration=60m --start-cycle=1 --end-cycle=40000001
+    --request-timeout=60 --retry-interval='2s,10s' --retry-number=5
+    data_dir/latte/s3_range_query.rn
+  - >-
+    latte run --function=partition_scan_range --tag=latte-s3-range-read-partition-range --consistency=QUORUM --threads=1 --concurrency=24
+    --duration=60m --start-cycle=1 --end-cycle=40000001
+    --request-timeout=60 --retry-interval='2s,10s' --retry-number=5
+    data_dir/latte/s3_range_query.rn
+  - >-
+    latte run --function=partition_group_by_ck --tag=latte-s3-range-read-partition-groupby --consistency=QUORUM --threads=1 --concurrency=24
+    --duration=60m --start-cycle=1 --end-cycle=40000001
+    --request-timeout=60 --retry-interval='2s,10s' --retry-number=5
+    data_dir/latte/s3_range_query.rn
+  - >-
+    latte run --function=partition_max_ck --tag=latte-s3-range-read-partition-maxck --consistency=QUORUM --threads=1 --concurrency=24
+    --duration=60m --start-cycle=1 --end-cycle=40000001
+    --request-timeout=60 --retry-interval='2s,10s' --retry-number=5
+    data_dir/latte/s3_range_query.rn

@@ -1,0 +1,272 @@
+// Latte workload for S3 keyspace range query testing.
+//
+// Schema with partition key + clustering key, designed for range scans
+// that exercise S3 read path heavily (multiple data blocks per query).
+//
+// Create schema (keyspace must be pre-created with S3 storage by SCT):
+//   latte schema data_dir/latte/s3_range_query.rn -- <hosts>
+//
+// Populate data:
+//   latte run data_dir/latte/s3_range_query.rn --rate 10000 -d 7200 -f insert -- <hosts>
+//
+// Run range reads:
+//   latte run data_dir/latte/s3_range_query.rn --concurrency 80 -d 7200 -f range_read -- <hosts>
+//
+// Run multi-pk IN reads:
+//   latte run data_dir/latte/s3_range_query.rn --concurrency 80 -d 7200 -f multi_pk_read -P num_pks=10 -- <hosts>
+//
+// Run full table scan (SELECT * LIMIT):
+//   latte run data_dir/latte/s3_range_query.rn --concurrency 80 -d 7200 -f full_scan -- <hosts>
+//
+// Run partition scan (ORDER BY ck DESC, no CK filter):
+//   latte run data_dir/latte/s3_range_query.rn --concurrency 80 -d 7200 -f partition_scan -- <hosts>
+//
+// Run partition scan with ck < upper bound:
+//   latte run data_dir/latte/s3_range_query.rn --concurrency 80 -d 7200 -f partition_scan_lt -- <hosts>
+//
+// Run partition scan with ck > lower bound:
+//   latte run data_dir/latte/s3_range_query.rn --concurrency 80 -d 7200 -f partition_scan_gt -- <hosts>
+//
+// Run partition scan with ck > lower and ck < upper (range):
+//   latte run data_dir/latte/s3_range_query.rn --concurrency 80 -d 7200 -f partition_scan_range -- <hosts>
+//
+// Run aggregate GROUP BY per partition:
+//   latte run data_dir/latte/s3_range_query.rn --concurrency 80 -d 7200 -f partition_group_by_ck -- <hosts>
+//
+// Run count(*) + max(ck) per partition:
+//   latte run data_dir/latte/s3_range_query.rn --concurrency 80 -d 7200 -f partition_max_ck -- <hosts>
+
+use latte::*;
+
+const KEYSPACE = latte::param!("keyspace", "s3_range_test");
+const TABLE = latte::param!("table", "range_test");
+const VALUE_SIZE = latte::param!("value_size", 512);
+const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
+const S3_ENDPOINT = latte::param!("s3_endpoint", "s3.us-east-1.amazonaws.com");
+const S3_BUCKET = latte::param!("s3_bucket", "manager-backup-tests-us-east-1");
+
+// ROW_COUNT / ROWS_PER_PARTITION are sized to produce ~200k partitions × 100 rows each.
+const ROW_COUNT = latte::param!("row_count", 20000000);
+const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 100);
+const PARTITION_SIZES = latte::param!("partition_sizes", "100:1");
+
+const NUM_PKS = latte::param!("num_pks", 10);
+const RANGE_LIMIT = latte::param!("range_limit", 2000000);
+const SCAN_TIMEOUT = latte::param!("scan_timeout", "600s");
+
+const P_WRITE = "latte_prep_stmt__write";
+const P_RANGE_READ = "latte_prep_stmt__range_read";
+const P_COUNT = "latte_prep_stmt__count";
+const P_MULTI_PK_READ = "latte_prep_stmt__multi_pk_read";
+const P_FULL_SCAN = "latte_prep_stmt__full_scan";
+const P_PARTITION_SCAN = "latte_prep_stmt__partition_scan";
+const P_PARTITION_SCAN_LT = "latte_prep_stmt__partition_scan_lt";
+const P_PARTITION_SCAN_GT = "latte_prep_stmt__partition_scan_gt";
+const P_PARTITION_SCAN_RANGE = "latte_prep_stmt__partition_scan_range";
+const P_PARTITION_GROUP_BY_CK = "latte_prep_stmt__partition_group_by_ck";
+const P_PARTITION_MAX_CK = "latte_prep_stmt__partition_max_ck";
+
+pub async fn schema(db) {
+    db.execute(`CREATE KEYSPACE IF NOT EXISTS ${KEYSPACE} WITH replication = {
+        'class': 'NetworkTopologyStrategy', 'replication_factor': ${REPLICATION_FACTOR}
+    } AND storage = {
+        'type': 'S3', 'endpoint': '${S3_ENDPOINT}', 'bucket': '${S3_BUCKET}'
+    }`).await?;
+
+    db.execute(`CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE} (
+        pk bigint,
+        ck bigint,
+        value1 blob,
+        value2 blob,
+        value3 blob,
+        value4 blob,
+        value5 blob,
+        value6 blob,
+        value7 blob,
+        value8 blob,
+        value9 blob,
+        value10 blob,
+        PRIMARY KEY (pk, ck)
+    ) WITH compaction = {'class': 'IncrementalCompactionStrategy'}`).await?;
+}
+
+pub async fn erase(db) {
+    db.execute(`TRUNCATE TABLE ${KEYSPACE}.${TABLE}`).await?;
+}
+
+pub async fn prepare(db) {
+    println!("debug: Keyspace: {keyspace}", keyspace=KEYSPACE);
+
+    db.init_partition_row_distribution_preset(
+        "load", ROW_COUNT, ROWS_PER_PARTITION, PARTITION_SIZES,
+    ).await?;
+
+    db.prepare(
+        P_WRITE,
+        `INSERT INTO ${KEYSPACE}.${TABLE} (pk, ck, value1, value2, value3, value4, value5, value6, value7, value8, value9, value10) VALUES (:pk, :ck, :value1, :value2, :value3, :value4, :value5, :value6, :value7, :value8, :value9, :value10)`
+    ).await?;
+
+    // SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk AND ck >= :ck_start AND ck < :ck_end BYPASS CACHE
+    db.prepare(
+        P_RANGE_READ,
+        `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk AND ck >= :ck_start AND ck < :ck_end BYPASS CACHE`
+    ).await?;
+
+    // SELECT count(*) FROM ${KEYSPACE}.${TABLE} BYPASS CACHE USING TIMEOUT <scan_timeout>
+    db.prepare(
+        P_COUNT,
+        `SELECT count(*) FROM ${KEYSPACE}.${TABLE} BYPASS CACHE USING TIMEOUT ${SCAN_TIMEOUT}`
+    ).await?;
+
+    // SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk IN (?, ?, ...) BYPASS CACHE
+    // Prepare multi-pk IN query: NUM_PKS positional placeholders for pk IN (?, ?, ...)
+    let pk_placeholders = "";
+    for j in 0..=NUM_PKS-1 {
+        if j > 0 {
+            pk_placeholders += ", ";
+        }
+        pk_placeholders += "?";
+    }
+    db.prepare(
+        P_MULTI_PK_READ,
+        `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk IN (${pk_placeholders}) BYPASS CACHE`
+    ).await?;
+
+    db.prepare(
+        P_FULL_SCAN,
+        `SELECT * FROM ${KEYSPACE}.${TABLE} LIMIT ${RANGE_LIMIT} BYPASS CACHE`
+    ).await?;
+
+    db.prepare(
+        P_PARTITION_SCAN,
+        `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk ORDER BY ck DESC BYPASS CACHE`
+    ).await?;
+
+    db.prepare(
+        P_PARTITION_SCAN_LT,
+        `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk AND ck < :ck_upper ORDER BY ck DESC BYPASS CACHE`
+    ).await?;
+
+    db.prepare(
+        P_PARTITION_SCAN_GT,
+        `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk AND ck > :ck_lower ORDER BY ck DESC BYPASS CACHE`
+    ).await?;
+
+    db.prepare(
+        P_PARTITION_SCAN_RANGE,
+        `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk AND ck > :ck_lower AND ck < :ck_upper ORDER BY ck DESC BYPASS CACHE`
+    ).await?;
+
+    db.prepare(
+        P_PARTITION_GROUP_BY_CK,
+        `SELECT pk, ck, count(*) FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk GROUP BY pk, ck`
+    ).await?;
+
+    db.prepare(
+        P_PARTITION_MAX_CK,
+        `SELECT count(*), max(ck) FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk`
+    ).await?;
+}
+
+// INSERT INTO ${KEYSPACE}.${TABLE} (pk, ck, value1, ..., value10) VALUES (:pk, :ck, :value1, ..., :value10)
+pub async fn insert(db, i) {
+    let idx = i % ROW_COUNT;
+    let partition_idx = db.get_partition_idx("load", idx).await;
+    let pk = hash(partition_idx);
+    let ck = i as i64;
+    let value1 = blob(idx, VALUE_SIZE);
+    let value2 = blob(idx + 1, VALUE_SIZE);
+    let value3 = blob(idx + 2, VALUE_SIZE);
+    let value4 = blob(idx + 3, VALUE_SIZE);
+    let value5 = blob(idx + 4, VALUE_SIZE);
+    let value6 = blob(idx + 5, VALUE_SIZE);
+    let value7 = blob(idx + 6, VALUE_SIZE);
+    let value8 = blob(idx + 7, VALUE_SIZE);
+    let value9 = blob(idx + 8, VALUE_SIZE);
+    let value10 = blob(idx + 9, VALUE_SIZE);
+    db.execute_prepared(P_WRITE, [pk, ck, value1, value2, value3, value4, value5, value6, value7, value8, value9, value10]).await?
+}
+
+// SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk AND ck >= :ck_start AND ck < :ck_end BYPASS CACHE
+pub async fn range_read(db, i) {
+    let idx = i % ROW_COUNT;
+    let partition_idx = db.get_partition_idx("load", idx).await;
+    let pk = hash(partition_idx);
+    let ck_start = i as i64;
+    let ck_end = ck_start + RANGE_LIMIT as i64;
+    db.execute_prepared(P_RANGE_READ, [pk, ck_start, ck_end]).await?
+}
+
+// SELECT count(*) FROM ${KEYSPACE}.${TABLE} BYPASS CACHE
+pub async fn count_read(db, i) {
+    db.execute_prepared(P_COUNT, []).await?
+}
+
+// SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk IN (?, ?, ...) BYPASS CACHE
+pub async fn multi_pk_read(db, i) {
+    // Fetch NUM_PKS distinct partitions starting at cycle i and execute a single IN query.
+    let pks = [];
+    for j in 0..=NUM_PKS-1 {
+        let idx = (i + j) % ROW_COUNT;
+        let partition_idx = db.get_partition_idx("load", idx).await;
+        pks.push(hash(partition_idx));
+    }
+    db.execute_prepared(P_MULTI_PK_READ, pks).await?
+}
+
+// SELECT * FROM ${KEYSPACE}.${TABLE} LIMIT ${RANGE_LIMIT} BYPASS CACHE
+pub async fn full_scan(db, i) {
+    db.execute_prepared(P_FULL_SCAN, []).await?
+}
+
+// SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk ORDER BY ck DESC BYPASS CACHE
+pub async fn partition_scan(db, i) {
+    let idx = i % ROW_COUNT;
+    let partition_idx = db.get_partition_idx("load", idx).await;
+    let pk = hash(partition_idx);
+    db.execute_prepared(P_PARTITION_SCAN, [pk]).await?
+}
+
+// SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk AND ck < :ck_upper ORDER BY ck DESC BYPASS CACHE
+pub async fn partition_scan_lt(db, i) {
+    let idx = i % ROW_COUNT;
+    let partition_idx = db.get_partition_idx("load", idx).await;
+    let pk = hash(partition_idx);
+    let ck_upper = i as i64;
+    db.execute_prepared(P_PARTITION_SCAN_LT, [pk, ck_upper]).await?
+}
+
+// SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk AND ck > :ck_lower ORDER BY ck DESC BYPASS CACHE
+pub async fn partition_scan_gt(db, i) {
+    let idx = i % ROW_COUNT;
+    let partition_idx = db.get_partition_idx("load", idx).await;
+    let pk = hash(partition_idx);
+    let ck_lower = i as i64;
+    db.execute_prepared(P_PARTITION_SCAN_GT, [pk, ck_lower]).await?
+}
+
+// SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk AND ck > :ck_lower AND ck < :ck_upper ORDER BY ck DESC BYPASS CACHE
+pub async fn partition_scan_range(db, i) {
+    let idx = i % ROW_COUNT;
+    let partition_idx = db.get_partition_idx("load", idx).await;
+    let pk = hash(partition_idx);
+    let ck_lower = i as i64;
+    let ck_upper = ck_lower + RANGE_LIMIT as i64;
+    db.execute_prepared(P_PARTITION_SCAN_RANGE, [pk, ck_lower, ck_upper]).await?
+}
+
+// SELECT pk, ck, count(*) FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk GROUP BY pk, ck
+pub async fn partition_group_by_ck(db, i) {
+    let idx = i % ROW_COUNT;
+    let partition_idx = db.get_partition_idx("load", idx).await;
+    let pk = hash(partition_idx);
+    db.execute_prepared(P_PARTITION_GROUP_BY_CK, [pk]).await?
+}
+
+// SELECT count(*), max(ck) FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk
+pub async fn partition_max_ck(db, i) {
+    let idx = i % ROW_COUNT;
+    let partition_idx = db.get_partition_idx("load", idx).await;
+    let pk = hash(partition_idx);
+    db.execute_prepared(P_PARTITION_MAX_CK, [pk]).await?
+}
