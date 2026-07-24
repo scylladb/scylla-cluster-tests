@@ -441,8 +441,8 @@ def skip_on_capacity_issues(func: Callable | None = None, db_cluster: BaseCluste
                         message=f"Test failed due to service availability issues: {ex} cluster is unbalanced, continuing with test would yield unknown results",
                         severity=Severity.CRITICAL,
                     ).publish()
-                else:
-                    raise UnsupportedNemesis("Capacity Issue") from ex
+                    raise
+                raise UnsupportedNemesis("Capacity Issue") from ex
             except ProvisionUnrecoverableError as ex:
                 # Azure stuck-VM recovery gave up - a capacity/provisioning issue
                 if check_cluster_layout(cluster):
@@ -456,6 +456,7 @@ def skip_on_capacity_issues(func: Callable | None = None, db_cluster: BaseCluste
                     ),
                     severity=Severity.CRITICAL,
                 ).publish()
+                raise
 
         return wrapper
 
@@ -492,6 +493,7 @@ def critical_on_capacity_issues(func: callable) -> callable:
                 "cluster is probably unbalanced, continuing with test would yield unknown results",
                 severity=Severity.CRITICAL,
             ).publish()
+            raise
         except ProvisionUnrecoverableError as ex:
             # Azure stuck-VM recovery gave up - a capacity/provisioning issue
             TestFrameworkEvent(
