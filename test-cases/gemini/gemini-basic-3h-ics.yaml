@@ -1,4 +1,18 @@
 test_duration: 500
+test_metadata:
+  description: >-
+    Baseline Gemini fuzz test (no nemesis) validating Scylla tables using
+    IncrementalCompactionStrategy against an oracle DB over ~3h of mixed load on
+    AWS, establishing an ICS consistency baseline without chaos disruptions.
+  test_type: gemini
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+  stress_tools:
+    - gemini
+  workload: mixed
+  team_ownership: qa-tools
 n_db_nodes: 3
 n_test_oracle_db_nodes: 1
 n_loaders: 1

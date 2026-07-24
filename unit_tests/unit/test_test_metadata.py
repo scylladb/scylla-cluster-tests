@@ -137,6 +137,22 @@ def test_all_valid_workloads(workload):
     assert m.workload == workload
 
 
+def test_invalid_team_ownership():
+    with pytest.raises(ValueError, match="Invalid team_ownership"):
+        TestMetadata(team_ownership="not-a-team")
+
+
+@pytest.mark.parametrize("team", ["core-test-infra", "core-qa", "storage-qa", "cloud-qa", "qa-tools"])
+def test_all_valid_team_ownership(team):
+    m = TestMetadata(team_ownership=team)
+    assert m.team_ownership == team
+
+
+def test_team_ownership_none_by_default():
+    m = TestMetadata()
+    assert m.team_ownership is None
+
+
 def test_from_dict():
     data = {
         "description": "Upgrade test with TLS.",

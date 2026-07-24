@@ -1,4 +1,20 @@
 test_duration: 240
+test_metadata:
+  description: >-
+    Streaming-features test measuring how capping compaction_throughput_mb_per_sec
+    at several fractions of measured disk write bandwidth affects write latency
+    and throughput versus an unlimited baseline; flags any missing improvement
+    via an InfoEvent. Compaction bandwidth adherence itself is verified via
+    monitoring dashboards, not asserted by this test.
+  test_type: features
+  tier: tier1
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - cassandra-stress
+  workload: write
+  team_ownership: qa-tools
 
 stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM n=20000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -pop seq=1..20000000 -col 'n=FIXED(10) size=FIXED(256)' -log interval=5"
 

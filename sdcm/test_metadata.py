@@ -25,6 +25,7 @@ _TIERS: set[str] = set(_TAXONOMY["tier"]["values"].keys())
 _DURATION_CLASSES: set[str] = set(_TAXONOMY["duration_class"]["values"].keys())
 _STRESS_TOOLS: set[str] = set(_TAXONOMY["stress_tools"]["values"])
 _WORKLOADS: set[str] = set(_TAXONOMY["workload"]["values"])
+_TEAM_OWNERSHIP: set[str] = set(_TAXONOMY["team_ownership"]["values"])
 
 
 def _get_valid_backends() -> set[str]:
@@ -49,6 +50,7 @@ class TestMetadata(BaseModel):
     stress_tools: list[str] = Field(default_factory=list)
     workload: str | None = Field(default=None)
     features: list[str] = Field(default_factory=list)
+    team_ownership: str | None = Field(default=None)
 
     @field_validator("test_type", mode="before")
     @classmethod
@@ -108,4 +110,11 @@ class TestMetadata(BaseModel):
         for feature in v:
             if feature not in valid:
                 raise ValueError(f"Invalid feature '{feature}'. Valid: {sorted(valid)}")
+        return v
+
+    @field_validator("team_ownership", mode="before")
+    @classmethod
+    def validate_team_ownership(cls, v):
+        if v is not None and v not in _TEAM_OWNERSHIP:
+            raise ValueError(f"Invalid team_ownership '{v}'. Valid: {sorted(_TEAM_OWNERSHIP)}")
         return v
