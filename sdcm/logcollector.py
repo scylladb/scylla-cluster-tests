@@ -1598,6 +1598,24 @@ class SSLConfCollector(BaseSCTLogCollector):
     cluster_log_type = "ssl-conf"
 
 
+class DiagnosticsLogCollector(BaseSCTLogCollector):
+    log_entities = [
+        DirLog(name="diagnostics/*", search_locally=True),
+    ]
+    cluster_log_type = "diagnostics"
+
+    def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
+        # Diagnostics artifacts are optional - they are produced only when a diagnostics collector
+        # (e.g. MV/SI collector) runs during the test. Unlike other BaseSCTLogCollector subclasses,
+        # absence of these files is not a failure, so don't raise when nothing was collected.
+        for ent in self.log_entities:
+            ent.collect(None, self.local_dir, None, local_search_path=local_search_path)
+        if not os.listdir(self.local_dir):
+            LOGGER.debug("No diagnostics artifacts found - nothing to collect for %s", self.cluster_log_type)
+            return []
+        return self.create_archive_and_upload()
+
+
 class Collector:
     """Collector instance
 
@@ -1654,6 +1672,7 @@ class Collector:
             VectorStoreLogCollector: self.vector_store_set,
             SSTablesCollector: self.db_cluster,
             JepsenLogCollector: self.loader_set,
+            DiagnosticsLogCollector: self.sct_set,
         }
         if self.params.get("server_encrypt") or self.params.get("client_encrypt"):
             self.cluster_log_collectors[SSLConfCollector] = self.sct_set

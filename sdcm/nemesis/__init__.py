@@ -193,6 +193,8 @@ from test_lib.compaction import (
 from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
+from sdcm.utils.diagnostic_collector.manager import collect_diagnostics
+from sdcm.utils.diagnostic_collector.views import MVDiagnosticCollector
 
 if TYPE_CHECKING:
     from sdcm.audit import AuditStore
@@ -4693,7 +4695,10 @@ class NemesisRunner:
             if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
                 raise UnsupportedNemesis("MV/SI for tablets are not supported for Scylla 2025.3 and older versions")
 
-        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+        with (
+            self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session,
+            collect_diagnostics(MVDiagnosticCollector(session)),
+        ):
             ks_cf_list = self.cluster.get_non_system_ks_cf_list(self.target_node, filter_out_mv=True)
             if not ks_cf_list:
                 raise UnsupportedNemesis("No table found to create index on")
@@ -4767,7 +4772,10 @@ class NemesisRunner:
             view_name = f"{base_table_name}_view"
             with suppress_expected_unavailability_errors():
                 self.target_node.stop_scylla()
-            with self.cluster.cql_connection_patient(node=cql_query_executor_node, connect_timeout=600) as session:
+            with (
+                self.cluster.cql_connection_patient(node=cql_query_executor_node, connect_timeout=600) as session,
+                collect_diagnostics(MVDiagnosticCollector(session)),
+            ):
                 try:
                     create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
                 except Exception as error:
@@ -5272,23 +5280,26 @@ class NemesisRunner:
         except NemesisNodeAllocationError:
             raise UnsupportedNemesis(f"Coordinator node is busy with {coordinator_node.running_nemesis}")
 
-        with self.node_allocator.run_nemesis(
-            node_list=self.cluster.nodes, nemesis_label="Verification node for MV"
-        ) as working_node:
+        with (
+            self.node_allocator.run_nemesis(
+                node_list=self.cluster.nodes, nemesis_label="Verification node for MV"
+            ) as working_node,
+            self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session,
+            collect_diagnostics(MVDiagnosticCollector(session)),
+        ):
             ks_name, base_table_name = self.random.choice(ks_cfs).split(".")
             view_name = f"{base_table_name}_view_{str(uuid4())[:8]}"
-            with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
-                try:
-                    create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
-                    wait_materialized_view_building_tasks_started(session, ks_name, view_name)
-                except ViewFinishedBuildingException:
-                    drop_materialized_view(session, ks_name, view_name)
-                    raise UnsupportedNemesis(
-                        f"Skip nemesis because view {ks_name}.{view_name} has already finished building"
-                    )
-                except Exception as error:  # pylint: disable=broad-except
-                    self.log.error("Failed creating a materialized view: %s", error)
-                    raise
+            try:
+                create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
+                wait_materialized_view_building_tasks_started(session, ks_name, view_name)
+            except ViewFinishedBuildingException:
+                drop_materialized_view(session, ks_name, view_name)
+                raise UnsupportedNemesis(
+                    f"Skip nemesis because view {ks_name}.{view_name} has already finished building"
+                )
+            except Exception as error:  # pylint: disable=broad-except
+                self.log.error("Failed creating a materialized view: %s", error)
+                raise
             try:
                 num_of_restarts = len(self.cluster.nodes) // 2
                 self.log.debug("Number of serial restart of topology coordinator: %s", num_of_restarts)
@@ -5310,14 +5321,12 @@ class NemesisRunner:
                 with adaptive_timeout(operation=Operations.CREATE_MV, node=working_node, timeout=14400) as timeout:
                     wait_for_view_to_be_built(working_node, ks_name, view_name, timeout=timeout * 2)
 
-                with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
-                    result = list(
-                        session.execute(SimpleStatement(f"SELECT * FROM {ks_name}.{view_name} limit 1", fetch_size=10))
-                    )
-                    assert len(result) >= 1, f"MV {ks_name}.{view_name} was not built"
+                result = list(
+                    session.execute(SimpleStatement(f"SELECT * FROM {ks_name}.{view_name} limit 1", fetch_size=10))
+                )
+                assert len(result) >= 1, f"MV {ks_name}.{view_name} was not built"
             finally:
-                with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
-                    drop_materialized_view(session, ks_name, view_name)
+                drop_materialized_view(session, ks_name, view_name)
 
     def disrupt_trigger_split_merge_tablets_with_alter(self):
         """
