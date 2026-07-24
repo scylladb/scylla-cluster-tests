@@ -13,7 +13,9 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import os
 import random
+import re
 import shutil
 import threading
 import time
@@ -53,6 +55,7 @@ from sdcm.utils.alternator.table_setup import alternator_backuped_tables
 from sdcm.utils.aws_utils import AwsIAM
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
+from sdcm.utils.file import File
 from sdcm.utils.time_utils import ExecutionTimer
 from sdcm.mgmt.operations import ManagerTestFunctionsMixIn, SnapshotData
 from sdcm.sct_events.system import InfoEvent
@@ -1199,6 +1202,43 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         extra_params = self.params.get("mgmt_restore_extra_params")
         return extra_params if extra_params else None
 
+    def _detect_actual_restore_method(self, manager_backup_restore_method=None) -> str:
+        """Detect the actual restore method used by Scylla Manager from its log.
+
+        The requested method (e.g. 'native') can be internally overridden by SM
+        (e.g. to 'tablet' when the cluster supports tablets). This method reads the
+        locally-collected SM log to determine the real mode used.
+
+        Note: The entire SM log is scanned without timestamp or task-id filtering.
+        This assumes a single restore task per test run. If multiple restore tasks
+        are ever executed in the same session, earlier tablet-aware entries could
+        cause false positives.
+
+        Once SM fully supports exposing the actual method via its CLI or task
+        properties, this log-parsing workaround can be replaced with a simpler
+        getter from the task/progress output.
+
+        Returns:
+            One of "Tablet", "Native", or "Rclone".
+        """
+        monitor_node = self.monitors.nodes[0]
+        sm_log_path = os.path.join(monitor_node.logdir, "scylla_manager.log")
+        try:
+            with File(sm_log_path) as sm_log:
+                tablet_lines = list(sm_log.read_lines_filtered(re.compile(r"tablet aware restore")))
+        except OSError as err:
+            self.log.warning("Could not read SM log at %s: %s", sm_log_path, err)
+            tablet_lines = []
+
+        if tablet_lines:
+            return "Tablet"
+
+        method_value = manager_backup_restore_method.value if manager_backup_restore_method else None
+
+        if method_value == "rclone":
+            return "Rclone"
+        return "Native"
+
     def _get_restore_results(self, task: RestoreTask, node) -> dict:
         """Extract restore results from a RestoreTask.
 
@@ -1304,6 +1344,7 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
 
         manager_version_timestamp = manager_tool.sctool.client_version_timestamp
         results = self._get_restore_results(task, node=self.db_cluster.nodes[0])
+        results["method"] = self._detect_actual_restore_method(manager_backup_restore_method)
         self._send_restore_results_to_argus(results, manager_version_timestamp)
 
         self.run_verification_read_stress()
@@ -1381,6 +1422,7 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
 
             # Get restore results including backup dataset size
             results = self._get_restore_results(task, node=self.db_cluster.nodes[0])
+            results["method"] = self._detect_actual_restore_method(manager_backup_restore_method)
             self._send_restore_results_to_argus(results, manager_version_timestamp, dataset_label=snapshot_name)
 
         self.manager_test_metrics.restore_time = restore_time
