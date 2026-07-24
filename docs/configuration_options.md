@@ -3613,6 +3613,15 @@ Threads amount of stress load for gradual performance test per sub-test. Example
 **type:** dict | YAML/JSON string → dict
 
 
+## **perf_gradual_connections_per_host** / SCT_PERF_GRADUAL_CONNECTIONS_PER_HOST
+
+Number of cassandra-stress connections per host ('connectionsPerHost') for gradual performance tests. Either a single int applied to all workloads, or a dict per workload type. Substituted into the '$connections_per_host' placeholder of the stress commands. Example: 8 or {'read': 8, 'write': 8, 'mixed': 8, 'read_disk_only': 8}
+
+**default:** N/A
+
+**type:** int | dict | YAML/JSON string → dict | int
+
+
 ## **perf_gradual_throttle_steps** / SCT_PERF_GRADUAL_THROTTLE_STEPS
 
 Used for gradual performance test. Define throttle for load step in ops. Supports three formats: 1) String/int list (cassandra-stress): {'read': ['100000', '150000'], 'mixed': [100, 200]} 2) Dict list (latte/multi-param): {'read': [{'threads': 10, 'concurrency': 128, 'rate': '100000'}, ...]} Dict format allows specifying threads, concurrency, and rate per step. Integers are automatically converted to strings for backward compatibility.

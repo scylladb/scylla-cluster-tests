@@ -306,6 +306,28 @@ DictOrStr = Annotated[
 ]
 
 
+def dict_or_str_or_int(value: dict | str | int | None) -> dict | int | None:
+    # bool is a subclass of int, so guard against it being silently accepted as 0/1.
+    if value is None or (isinstance(value, (dict, int)) and not isinstance(value, bool)):
+        return value
+    if isinstance(value, str):
+        try:
+            result = ast.literal_eval(value)  # "8" -> 8 ; "{'read': 8}" -> dict
+            if isinstance(result, (dict, int)) and not isinstance(result, bool):
+                return result
+        except Exception:  # noqa: BLE001
+            pass
+    raise ValueError(f'"{value}" isn\'t a dict or int')
+
+
+#: Config type that returns int or dict. Accepts int, dict, or string parseable as int/dict (via literal_eval).
+DictOrStrOrInt = Annotated[
+    dict | int,
+    BeforeValidator(dict_or_str_or_int),
+    InputType("int | dict | YAML/JSON string"),
+]
+
+
 class AdaptiveTimeoutMultipliers(RootModel):
     """Per-operation multipliers for adaptive timeouts.
 
@@ -1907,6 +1929,12 @@ class SCTConfiguration(BaseModel):
     perf_gradual_threads: DictOrStr = SctField(
         description="Threads amount of stress load for gradual performance test per sub-test. "
         "Example: {'read': 100, 'write': [200, 300], 'mixed': 300}",
+    )
+    perf_gradual_connections_per_host: DictOrStrOrInt = SctField(
+        description="Number of cassandra-stress connections per host ('connectionsPerHost') for gradual "
+        "performance tests. Either a single int applied to all workloads, or a dict per workload type. "
+        "Substituted into the '$connections_per_host' placeholder of the stress commands. "
+        "Example: 8 or {'read': 8, 'write': 8, 'mixed': 8, 'read_disk_only': 8}",
     )
     perf_gradual_throttle_steps: DictOrStr = SctField(
         description="Used for gradual performance test. Define throttle for load step in ops. "
