@@ -1866,6 +1866,28 @@ class SCTConfiguration(BaseModel):
             be provided by the test suite infrastructure.
             multiple commands can passed as a list""",
     )
+    effective_compression_ratio: confloat(gt=0, le=1.0) = SctField(
+        description=(
+            "Effective compression ratio used for Jinja stress command templating. "
+            "Defined as on_disk_bytes / logical_uncompressed_bytes. "
+            "This estimates how much disk space Scylla uses after compression relative to the logical "
+            "uncompressed dataset size. For example, 1.0 means no effective compression and 0.68 means the "
+            "data is expected to occupy about 68% of its logical uncompressed size on disk. Used together "
+            "with the effective_disk_size_bytes template variable to calculate row counts that fill a target "
+            "fraction of available disk capacity. You can estimate this ratio from Grafana in Keyspace -> "
+            "Compression metrics; a compression value of 0% corresponds to effective_compression_ratio=1.0. "
+            "Must be in range (0, 1.0]."
+        ),
+    )
+    stress_template_context: DictOrStr = SctField(
+        description=(
+            "Shared runtime-only Jinja variables for stress command templating. "
+            "Entries are resolved in declaration order and may reference earlier context entries as well as "
+            "built-in stress template variables such as effective_disk_size_bytes and db_node_count_per_dc. "
+            "These values are available to stress commands rendered by SCT, but are not evaluated during config "
+            "load or validation."
+        ),
+    )
     prepare_write_cmd: StringOrList = SctField(
         description="cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure. Multiple commands can be passed as a list",
     )
