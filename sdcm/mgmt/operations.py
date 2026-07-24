@@ -321,7 +321,7 @@ class SnapshotOperations(ClusterTester):
         return snapshot_data
 
     @staticmethod
-    def _get_all_snapshot_files_s3(bucket_name: str, region_name: str, prefixes: list[str]) -> set[str]:
+    def _get_cluster_bucket_files_s3(bucket_name: str, region_name: str, prefixes: list[str]) -> set[str]:
         file_set = set()
         s3_client = boto3.client("s3", region_name=region_name)
         paginator = s3_client.get_paginator("list_objects")
@@ -335,7 +335,7 @@ class SnapshotOperations(ClusterTester):
         return file_set
 
     @staticmethod
-    def _get_all_snapshot_files_gce(bucket_name: str, prefixes: list[str]) -> set[str]:
+    def _get_cluster_bucket_files_gce(bucket_name: str, prefixes: list[str]) -> set[str]:
         file_set = set()
         storage_client, _ = get_gce_storage_client()
         for prefix in prefixes:
@@ -346,7 +346,7 @@ class SnapshotOperations(ClusterTester):
         return file_set
 
     @staticmethod
-    def _get_all_snapshot_files_azure(bucket_name: str, prefixes: list[str]) -> set[str]:
+    def _get_cluster_bucket_files_azure(bucket_name: str, prefixes: list[str]) -> set[str]:
         file_set = set()
         azure_service = AzureService()
         container_client = azure_service.blob.get_container_client(container=bucket_name)
@@ -356,7 +356,7 @@ class SnapshotOperations(ClusterTester):
                 file_set.add(listing_object.name)
         return file_set
 
-    def get_all_snapshot_files(
+    def get_cluster_bucket_files(
         self,
         cluster_id: str,
         bucket_location: str | None = None,
@@ -373,20 +373,51 @@ class SnapshotOperations(ClusterTester):
         Returns:
             Set of object path strings found in the bucket.
         """
+        backend = self.params.get("backup_bucket_backend")
         region_name = next(iter(self.params.region_names), "")
         bucket_name = bucket_location or self.params.get("backup_bucket_location")[0].format(region=region_name)
 
         file_type_prefixes = ("backup/sst",) if only_sstables else self.BACKUP_FILE_PREFIXES
         prefixes = [f"{p}/cluster/{cluster_id}" for p in file_type_prefixes]
 
-        if self.params.get("backup_bucket_backend") == "s3":
-            return self._get_all_snapshot_files_s3(bucket_name=bucket_name, region_name=region_name, prefixes=prefixes)
-        elif self.params.get("backup_bucket_backend") == "gcs":
-            return self._get_all_snapshot_files_gce(bucket_name=bucket_name, prefixes=prefixes)
-        elif self.params.get("backup_bucket_backend") == "azure":
-            return self._get_all_snapshot_files_azure(bucket_name=bucket_name, prefixes=prefixes)
+        if backend == "s3":
+            return self._get_cluster_bucket_files_s3(
+                bucket_name=bucket_name, region_name=region_name, prefixes=prefixes
+            )
+        elif backend == "gcs":
+            return self._get_cluster_bucket_files_gce(bucket_name=bucket_name, prefixes=prefixes)
+        elif backend == "azure":
+            return self._get_cluster_bucket_files_azure(bucket_name=bucket_name, prefixes=prefixes)
         else:
-            raise ValueError(f'"{self.params.get("backup_bucket_backend")}" not supported')
+            raise ValueError(f"'{backend}' backend is not supported")
+
+    def get_snapshot_files(
+        self,
+        snapshot_tag: str,
+        bucket_location: str | None = None,
+        remove_prefix: bool = True,
+    ) -> set[str]:
+        """Return backup object paths that belong to a specific snapshot.
+
+        Args:
+            snapshot_tag: Snapshot tag to fetch files for, for example, 'sm_20240816185129UTC'.
+            bucket_location: Bucket name; falls back to `backup_bucket_location` param.
+            remove_prefix: If True, remove the bucket prefix (`<backend>://<bucket_name>/`) from the file paths.
+
+        Returns:
+            Set of object path strings (relative to the bucket) that belong to the given snapshot.
+        """
+        backend = self.params.get("backup_bucket_backend")
+        region_name = next(iter(self.params.region_names), "")
+        bucket_name = bucket_location or self.params.get("backup_bucket_location")[0].format(region=region_name)
+        location = f"{backend}:{bucket_name}"
+
+        mgr_cluster = self.db_cluster.get_cluster_manager()
+        files = mgr_cluster.get_backup_files_set(snapshot_tag=snapshot_tag, location=location)
+
+        if remove_prefix:
+            return {file_path.removeprefix(f"{backend}://{bucket_name}/") for file_path in files}
+        return files
 
 
 class SnapshotPreparerOperations(ClusterTester):
