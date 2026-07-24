@@ -13,13 +13,19 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+import logging
 import re
+import time
 from enum import StrEnum
 
 from longevity_test import LongevityTest
+from sdcm.cluster import DB_LOG_PATTERN_RESHARDING_FINISH, DB_LOG_PATTERN_RESHARDING_START
 from sdcm.sct_events.system import InfoEvent
+from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.tablets.common import wait_tablets_balanced
-from sdcm.wait import wait_for
+from sdcm.wait import wait_for, wait_for_log_lines
+
+LOGGER = logging.getLogger(__name__)
 
 
 class NodeMigrationStatus(StrEnum):
@@ -28,16 +34,25 @@ class NodeMigrationStatus(StrEnum):
     USES_TABLETS = "uses tablets"
 
 
+class TableConvergenceStatus(StrEnum):
+    CONVERGING = "converging"
+    CONVERGED = "converged"
+
+
 def get_nodetool_migrate_to_tablets_status(node, keyspace: str) -> dict[str, NodeMigrationStatus]:
     """
     Run 'nodetool migrate-to-tablets status <keyspace>' on the given node and return
     migration status for all nodes in the cluster.
 
     Example output:
+        Keyspace: ks
+        Status: migrating_to_tablets
+
         Nodes:
         Host ID                              Status
         dc1c5a03-8878-49da-a6f3-bd27d6a2d85d uses vnodes
         b1428349-2154-41c9-a5c1-dd33c71bd571 migrating to tablets
+        017dd39a-3d06-4c8a-8ac4-379f9e595607 uses vnodes
 
     Returns: dict of host_id -> NodeMigrationStatus.
     """
@@ -51,45 +66,90 @@ def get_nodetool_migrate_to_tablets_status(node, keyspace: str) -> dict[str, Nod
     return status
 
 
+def is_keyspace_pow2_converged(node, keyspace: str) -> bool:
+    """
+    Run 'nodetool migrate-to-tablets status <keyspace> --with-tablet-status' and return
+    whether all tables in the keyspace have converged to the pow2 tablet layout.
+
+    Only valid after finalization (keyspace Status: tablets). Example output:
+
+        Keyspace: ks
+        Status: tablets
+
+        Tablet info:
+          Pow2 tablet layout convergence: in progress
+          Tables converging: 2/3
+
+        Table   Status       Tablets   Target
+        t1      converging   2301      2048
+        t2      converging   2176      2048
+        t3      converged    2048      -
+
+    Returns: True if all tables are converged, False otherwise.
+    """
+    res = node.run_nodetool(f"migrate-to-tablets status {keyspace} --with-tablet-status")
+    table_statuses: dict[str, TableConvergenceStatus] = {}
+    pattern = re.compile(r"^(?P<table>\S+)\s+(?P<status>converging|converged)\s+\d+\s+\S+$")
+    for line in res.stdout.splitlines():
+        match = pattern.match(line.strip())
+        if match:
+            table_statuses[match.group("table")] = TableConvergenceStatus(match.group("status"))
+
+    if not table_statuses:
+        raise AssertionError(f"No table convergence statuses found for keyspace {keyspace}: {res.stdout}")
+
+    converged = all(s == TableConvergenceStatus.CONVERGED for s in table_statuses.values())
+    LOGGER.info(
+        "Keyspace %s pow2 convergence %s: %s", keyspace, "complete" if converged else "in progress", table_statuses
+    )
+    return converged
+
+
 class VnodeToTabletMigrationTest(LongevityTest):
     """Test vnode to tablet migration scenarios."""
 
-    def test_vnode_to_tablet_migration(self):
-        """
-        Test vnode to tablet migration procedure:
+    def restart_node_after_migration(self, node) -> None:
+        """Restart a node after migrate-to-tablets upgrade, waiting for resharding to complete.
 
-        1. Fill the database with data via prepare_write_cmd.
-        2. Launch main stress load (stress_cmd) in the background — runs concurrently with migration.
-        3. Start migration for all user keyspaces:
-               nodetool migrate-to-tablets start <ks>  (once per keyspace)
-        4. Rolling restart - for each node in order:
-               nodetool migrate-to-tablets upgrade      (cluster-wide, run on each node)
-               drain + stop + start node
-        5. Finalize migration for all user keyspaces:
-               nodetool migrate-to-tablets finalize <ks>  (once per keyspace)
+        After the upgrade the node reshards all data on startup. For large datasets
+        (hundreds of GB) this can take 15+ minutes. This method monitors the scylla
+        log for resharding start/finish and logs the elapsed duration so slow reshards
+        are visible in test output.
+
+        Args:
+            node: The DB node to restart.
+        """
+        reshard_timeout = 3600
+        self.log.info(
+            "Restarting node %s after migrate-to-tablets upgrade (reshard_timeout=%ds)", node.name, reshard_timeout
+        )
+        node.run_nodetool("drain")
+        node.stop_scylla(verify_down=True)
+
+        with wait_for_log_lines(
+            node=node,
+            start_line_patterns=[DB_LOG_PATTERN_RESHARDING_START],
+            end_line_patterns=[DB_LOG_PATTERN_RESHARDING_FINISH],
+            start_timeout=600,
+            end_timeout=reshard_timeout,
+            error_msg_ctx=f"Resharding on {node.name} after tablet migration",
+        ):
+            node.start_scylla(verify_up=False, timeout=reshard_timeout * 2)
+
+        node.wait_db_up(timeout=reshard_timeout)
+        self.db_cluster.wait_for_nodes_up_and_normal(nodes=[node], timeout=reshard_timeout)
+        node.wait_node_fully_start(timeout=reshard_timeout)
+
+    def _perform_migration_steps(self) -> None:
+        """Execute the full vnode-to-tablet migration procedure.
+
+        1. Start migration for all user keyspaces.
+        2. Rolling restart — for each node: run migrate-to-tablets upgrade, drain/stop/start.
+        3. Finalize migration for all user keyspaces.
+        4. Verify migrated keyspaces use tablets via system.tablets.
+        5. Wait for pow2 tablet layout convergence to complete.
         6. Wait for all tablet topology operations to quiesce.
-        7. Verify migrated keyspaces use tablets via system.tablets metrics.
-        8. Wait for main stress load to finish.
         """
-        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
-
-        prepare_write_cmd = self.params.get("prepare_write_cmd")
-
-        InfoEvent(message="Step 1 - Filling database with data before migration").publish()
-        self.run_pre_create_keyspace()
-        self.run_pre_create_schema()
-        self.run_prepare_write_cmd()
-
-        if not prepare_write_cmd or not self.params.get("nemesis_during_prepare"):
-            self.db_cluster.start_nemesis()
-
-        keyspace_num = self.params.get("keyspace_num")
-
-        InfoEvent(message="Step 2 - Starting main stress load concurrently with migration").publish()
-        stress_queue = []
-        stress_cmd = self.params.get("stress_cmd")
-        self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
-
         coordinator_node = self.db_cluster.data_nodes[0]
         keyspaces = self.db_cluster.get_test_keyspaces()
         if not keyspaces:
@@ -98,7 +158,7 @@ class VnodeToTabletMigrationTest(LongevityTest):
             )
         self.log.info("User keyspaces to migrate to tablets: %s", keyspaces)
 
-        InfoEvent(message=f"Step 3 - Starting tablet migration for keyspaces: {keyspaces}").publish()
+        InfoEvent(message=f"Starting tablet migration for keyspaces: {keyspaces}").publish()
         for ks in keyspaces:
             coordinator_node.run_nodetool(f"migrate-to-tablets start {ks}")
             migration_status = get_nodetool_migrate_to_tablets_status(coordinator_node, ks)
@@ -107,7 +167,7 @@ class VnodeToTabletMigrationTest(LongevityTest):
                     f"[ks={ks}] Expected {NodeMigrationStatus.USES_VNODES!r} for {node.host_id}, got {migration_status[node.host_id]!r}"
                 )
 
-        InfoEvent(message="Step 4 - Rolling restart with migrate-to-tablets upgrade").publish()
+        InfoEvent(message="Rolling restart with migrate-to-tablets upgrade").publish()
         for node in self.db_cluster.data_nodes:
             wait_for(
                 func=lambda n=node: not n.running_nemesis,
@@ -124,12 +184,7 @@ class VnodeToTabletMigrationTest(LongevityTest):
                     assert migration_status[node.host_id] == NodeMigrationStatus.MIGRATING, (
                         f"[ks={ks}] Expected {NodeMigrationStatus.MIGRATING!r} for {node.host_id}, got {migration_status[node.host_id]!r}"
                     )
-                node.run_nodetool("drain")
-                self.log.info("Restarting node %s after prepare-node", node.name)
-                node.stop_scylla(verify_down=True)
-                node.start_scylla(verify_up=True)
-                self.db_cluster.wait_for_nodes_up_and_normal(nodes=[node])
-                node.wait_node_fully_start()
+                self.restart_node_after_migration(node)
                 self.log.info("Node %s is back up and normal after restart", node.name)
 
             self.log.info("Waiting for node %s status to change to 'uses tablets'", node.name)
@@ -143,14 +198,14 @@ class VnodeToTabletMigrationTest(LongevityTest):
                     throw_exc=True,
                 )
 
-        InfoEvent(message="Step 5 - Finalizing tablet migration").publish()
+            self.log.info("Waiting 300 seconds for cluster to stabilize before migrating next node")
+            time.sleep(300)
+
+        InfoEvent(message="Finalizing tablet migration").publish()
         for ks in keyspaces:
             coordinator_node.run_nodetool(f"migrate-to-tablets finalize {ks}")
 
-        InfoEvent(message="Step 6 - Waiting for tablet migration to fully complete").publish()
-        wait_tablets_balanced(self.db_cluster.data_nodes[0], timeout=7200)
-
-        InfoEvent(message="Step 7 - Verifying migrated keyspaces have tablets in system.tablets").publish()
+        InfoEvent(message="Verifying migrated keyspaces have tablets in system.tablets").publish()
         with self.db_cluster.cql_connection_patient(coordinator_node, connect_timeout=600) as session:
             result = session.execute("SELECT keyspace_name FROM system.tablets")
             tablet_keyspaces = {row.keyspace_name for row in result}
@@ -158,6 +213,103 @@ class VnodeToTabletMigrationTest(LongevityTest):
         for ks in keyspaces:
             assert ks in tablet_keyspaces, f"Keyspace {ks} not found in system.tablets after migration"
 
-        InfoEvent(message="Step 8 - Waiting for main stress load to finish").publish()
+        InfoEvent(message="Waiting for pow2 tablet layout convergence to complete").publish()
+
+        wait_for(
+            func=lambda: all([is_keyspace_pow2_converged(coordinator_node, ks) for ks in keyspaces]),
+            step=60,
+            timeout=7200,
+            text="Waiting for pow2 tablet layout convergence on all keyspaces",
+            throw_exc=True,
+        )
+
+        InfoEvent(message="Waiting for tablet migration to fully complete").publish()
+        wait_tablets_balanced(self.db_cluster.data_nodes[0], timeout=7200)
+
+    @latency_calculator_decorator(
+        legend="Pre-migration baseline (vnodes)",
+        cycle_name="pre_migration",
+        workload_type="mixed",
+    )
+    def run_pre_migration_benchmark(self):
+        """Run stress on vnodes to establish a performance baseline before migration.
+
+        The latency_calculator_decorator collects HDR histogram data for this time window
+        and reports P90/P99 latencies and throughput to Argus.
+        """
+        stress_queue = []
+        round_robin = self.params.get("round_robin")
+        for cmd in self.params.get("stress_cmd"):
+            stress_queue.append(self.run_stress_thread(stress_cmd=cmd, duration=60, round_robin=round_robin))
         for stress in stress_queue:
             self.verify_stress_thread(stress)
+        return stress_queue
+
+    @latency_calculator_decorator(
+        legend="During vnode-to-tablet migration",
+        cycle_name="during_migration",
+        workload_type="mixed",
+    )
+    def run_migration(self):
+        """Run stress concurrently with migration and measure the performance impact.
+
+        Stress starts first so the cluster is under load throughout the migration.
+        The latency_calculator_decorator captures the full migration window in HDR.
+        """
+        stress_queue = []
+        self.assemble_and_run_all_stress_cmd(
+            stress_queue, self.params.get("stress_cmd"), self.params.get("keyspace_num")
+        )
+        self._perform_migration_steps()
+        self.kill_stress_thread()
+        for stress in stress_queue:
+            self.verify_stress_thread(stress)
+        return stress_queue
+
+    @latency_calculator_decorator(
+        legend="Post-migration (tablets)",
+        cycle_name="post_migration",
+        workload_type="mixed",
+    )
+    def run_post_migration_benchmark(self):
+        """Run stress on tablets after migration to compare with the pre-migration baseline.
+
+        The latency_calculator_decorator collects HDR histogram data for this time window
+        and reports P90/P99 latencies and throughput to Argus.
+        """
+        stress_queue = []
+        round_robin = self.params.get("round_robin")
+        for cmd in self.params.get("stress_cmd"):
+            stress_queue.append(self.run_stress_thread(stress_cmd=cmd, duration=60, round_robin=round_robin))
+        for stress in stress_queue:
+            self.verify_stress_thread(stress)
+        return stress_queue
+
+    def test_vnode_to_tablet_migration(self):
+        """
+        Test vnode to tablet migration procedure with performance measurement.
+
+        1. Fill the database with data via prepare_write_cmd.
+        2. Run pre-migration benchmark: stress on vnodes to establish a baseline.
+        3. Run migration with concurrent stress:
+               nodetool migrate-to-tablets start <ks>  (once per keyspace)
+               rolling restart with migrate-to-tablets upgrade per node
+               nodetool migrate-to-tablets finalize <ks>  (once per keyspace)
+               wait for all tablet topology operations to quiesce
+               verify migrated keyspaces use tablets via system.tablets
+        4. Run post-migration benchmark: stress on tablets to compare with baseline.
+
+        Each phase (pre, during, post) is wrapped with latency_calculator_decorator
+        which records HDR histograms and publishes P90/P99 latency and throughput
+        tables to Argus for before/during/after comparison.
+        """
+        InfoEvent(message="Filling database with data before migration").publish()
+        self.run_pre_create_keyspace()
+        self.run_pre_create_schema()
+        self.run_prepare_write_cmd()
+
+        self.run_pre_migration_benchmark()
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
+        self.db_cluster.start_nemesis()
+        self.run_migration()
+        self.run_post_migration_benchmark()
