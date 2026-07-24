@@ -97,7 +97,7 @@ from sdcm.sct_events.group_common_events import (
 
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
-from sdcm.sct_events.system import InfoEvent
+from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.sla.sla_tests import SlaTests
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
@@ -253,6 +253,29 @@ class NemesisBaseClass(NemesisFlags, ABC):
     def __init__(self, runner: "NemesisRunner"):
         super().__init__()
         self.runner: "NemesisRunner" = runner
+
+    def precheck(self, node: BaseNode) -> str | None:
+        """
+        Static feasibility check evaluated ONCE before the nemesis is scheduled.
+
+        Return None  -> nemesis is runnable and kept in the rotation.
+        Return a str -> human-readable skip reason; nemesis is permanently excluded
+                        from the disruption list and will not run during this test.
+
+        Use ONLY for conditions that do not change during the test run:
+          - Test config, backend, or product edition
+            (e.g. cluster.params.get(...), _is_it_on_kubernetes(), node.is_enterprise)
+          - Scylla version, feature flags, or cluster-uniform node attributes
+            (e.g. ComparableScyllaVersion checks, is_tablets_feature_enabled(), node.distro)
+
+        No target node is selected yet — use the provided representative live
+        node for any cluster-wide probes.
+
+        Do NOT check dynamic state (data presence, live node counts, whether a
+        specific target node is busy or alone in its rack) — those belong in
+        disrupt().
+        """
+        return None
 
     @abstractmethod
     def disrupt(self):
@@ -412,6 +435,20 @@ class NemesisRunner:
         if interval:
             self.interval = interval * 60
         self.log.info("Interval: %s s", self.interval)
+        excluded = self.precheck_nemesis()
+        if excluded and not self.disruptions_list:
+            reason_list = "; ".join(f"{name}: {reason}" for name, reason in excluded)
+            selector_message = f" Selector: {self.nemesis_selector!r}." if self.nemesis_selector else ""
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                severity=Severity.CRITICAL,
+                message=(
+                    f"No runnable nemesis remain after precheck. "
+                    f"All {len(excluded)} selected nemesis were excluded before execution.{selector_message} "
+                    f"Exclusions: {reason_list}"
+                ),
+            ).publish()
+            return
         try:
             while not self.termination_event.is_set():
                 if cycles_count == 0:
@@ -2019,6 +2056,63 @@ class NemesisRunner:
             except Exception as e:  # noqa: BLE001
                 self.log.warning(f"Error while initializing nemesis {subclass.__name__}, ignoring: {e}")
         return disruptions
+
+    def precheck_nemesis(self) -> list[tuple[str, str]]:
+        """Evaluate precheck() on every nemesis in disruptions_list, prune the
+        infeasible ones, and report each exclusion.
+
+        Called once from run() before the execution loop starts. A nemesis whose
+        precheck(node) returns a reason string is excluded and reported as SKIPPED; one
+        whose precheck(node) raises is excluded and reported as FAILED (a broken
+        precheck() is a test error, not an intentional skip).
+
+        Updates self.disruptions_list in place to keep only runnable nemesis and
+        returns the list of (name, reason) exclusions. Each class is evaluated and
+        reported at most once — when nemesis_multiply_factor > 1 the disruptions_list
+        may contain multiple instances of the same class, but precheck() is invariant
+        so only the first instance triggers the report; subsequent copies are silently
+        pruned without duplicate Argus calls.
+        """
+        runnable = []
+        excluded: list[tuple[str, str]] = []
+        reported: set[str] = set()  # classes already reported to avoid duplicates
+        start_time = time.time()
+        precheck_node = self.cluster.nodes[0]
+        for nemesis in self.disruptions_list:
+            name = nemesis.__class__.__name__
+            captured_tb = ""
+            is_error = False
+            try:
+                skip_reason = nemesis.precheck(node=precheck_node)
+            except Exception as e:  # noqa: BLE001
+                skip_reason = str(e)
+                captured_tb = traceback.format_exc()
+                is_error = True
+            if skip_reason is None:
+                runnable.append(nemesis)
+                continue
+            # Prune this instance regardless of whether we already reported the class.
+            if name in reported:
+                continue
+            reported.add(name)
+            self.log.warning("Nemesis %s excluded by precheck: %s", name, skip_reason)
+            excluded.append((name, skip_reason))
+            with (
+                DisruptionEvent(nemesis_name=name, node=None, publish_event=True) as event,
+                self.argus_submit(
+                    nemesis_name=name,
+                    start_time=start_time,
+                    nemesis_event=event,
+                    description=nemesis.__class__.__doc__,
+                    node=precheck_node,
+                ),
+            ):
+                if is_error:
+                    event.add_simple_error(skip_reason, captured_tb)
+                else:
+                    event.skip(skip_reason=skip_reason)
+        self.disruptions_list = runnable
+        return excluded
 
     def build_disruptions_by_name(self, disrupt_methods: List[str]):
         """Builds list of available disruptions according to class names"""
@@ -5391,8 +5485,20 @@ class NemesisRunner:
 
     @contextlib.contextmanager
     def argus_submit(
-        self, nemesis_name: str, start_time: int | float, nemesis_event: DisruptionEvent, description: str | None = None
+        self,
+        nemesis_name: str,
+        start_time: int | float,
+        nemesis_event: DisruptionEvent,
+        description: str | None = None,
+        node: "BaseNode | None" = None,
     ):
+        """Submit and finalize a nemesis run in Argus.
+
+        The optional *node* parameter allows callers that have not yet selected a
+        target node (e.g. precheck_nemesis) to pass a representative node
+        explicitly instead of relying on self.target_node.
+        """
+        effective_node = node if node is not None else self.target_node
         argus_client = None
         submitted = False
         try:
@@ -5401,9 +5507,9 @@ class NemesisRunner:
                 name=nemesis_name,
                 class_name=self.get_class_name(),
                 start_time=int(start_time),
-                target_name=self.target_node.name,
-                target_ip=self.target_node.public_ip_address,
-                target_shards=self.target_node.scylla_shards,
+                target_name=effective_node.name,
+                target_ip=effective_node.public_ip_address,
+                target_shards=effective_node.scylla_shards,
                 description=description,
             )
             submitted = True

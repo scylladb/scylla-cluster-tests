@@ -145,10 +145,20 @@ export SCT_REUSE_CLUSTER=$(cat ~/sct-results/latest/test_id)
 Nemesis are chaos operations that test database resilience. For a comprehensive guide, see [docs/nemesis.md](docs/nemesis.md).
 
 **Architecture:**
-- `NemesisBaseClass` — Abstract base for individual disruptions (a.k.a. "Monkeys"). Each subclass sets boolean flags and implements `disrupt()`.
+- `NemesisBaseClass` — Abstract base for individual disruptions (a.k.a. "Monkeys"). Each subclass sets boolean flags, implements `disrupt()`, and optionally `precheck()`.
 - `NemesisRunner` — Orchestrator that contains all `disrupt_*` methods (the actual disruption logic), handles node selection, metrics, and error reporting.
 - `NemesisRegistry` — Discovery mechanism that filters nemesis using boolean flag expressions (e.g. `"not disruptive"`, `"topology_changes and not limited"`).
 - `NemesisNodeAllocator` — Thread-safe singleton preventing conflicting nemesis on the same node.
+
+**Static skip checks (`precheck()`):**
+
+`NemesisBaseClass.precheck(node) -> str | None` is evaluated **once** before the nemesis execution loop starts. Return `None` to keep the nemesis in the rotation; return a string (the skip reason) to permanently exclude it. The `node` argument is a representative live node for static version, feature-flag, and cluster-uniform attribute checks. Use this for static conditions that do not change during the test:
+- Test config / backend / product edition (`cluster.params.get(...)`, `_is_it_on_kubernetes()`, `node.is_enterprise`)
+- Scylla version / feature flags / cluster-uniform node attributes (`ComparableScyllaVersion`, `is_tablets_feature_enabled()`, `node.distro`)
+
+**Do not** use `precheck(node)` for dynamic state (data presence, live node counts, target-node state) — those belong in `disrupt()`.
+
+A pruned nemesis emits exactly one `SKIPPED` Argus row at precheck time. If every selected nemesis is pruned, one `CRITICAL` event is published and the test fails.
 
 **Common nemesis categories:**
 - Node operations (stop/start, reboot, terminate, decommission)
