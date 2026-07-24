@@ -1,4 +1,19 @@
 test_duration: 300
+test_metadata:
+  description: >-
+    Standard Gemini fuzz test comparing a 6-node Scylla cluster against an oracle
+    DB under mixed read/write load for ~3h, with the full SisyphusMonkey nemesis
+    set (excluding ENOSPC and node-isolation disruptions) to validate consistency
+    under chaos.
+  test_type: gemini
+  tier: tier1
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - gemini
+  workload: mixed
+  team_ownership: qa-tools
 n_db_nodes: 6
 n_test_oracle_db_nodes: 1
 n_loaders: 1

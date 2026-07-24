@@ -1,4 +1,20 @@
 test_duration: 500
+test_metadata:
+  description: >-
+    Baseline Gemini fuzz test (no nemesis) comparing a 3-node Scylla cluster
+    against an oracle DB over ~3h of mixed read/write load, establishing a
+    consistency baseline without chaos disruptions. Also run on OCI via the
+    configurations/oci/gemini-basic-3h.yaml sizing overlay.
+  test_type: gemini
+  tier: tier1
+  duration_class: medium
+  supported_backends:
+    - aws
+    - oci
+  stress_tools:
+    - gemini
+  workload: mixed
+  team_ownership: qa-tools
 n_db_nodes: 3
 n_test_oracle_db_nodes: 1
 n_loaders: 1

@@ -1,4 +1,18 @@
 test_duration: 30
+test_metadata:
+  description: >-
+    Short Gemini fuzz test on AWS comparing Scylla against a Cassandra 4.1 oracle
+    cluster with a small schema (3 tables, 8 columns) over ~20 minutes, validating
+    Scylla/Cassandra semantic compatibility with no nemesis.
+  test_type: gemini
+  tier: ondemand
+  duration_class: short
+  supported_backends:
+    - aws
+  stress_tools:
+    - gemini
+  workload: mixed
+  team_ownership: qa-tools
 n_db_nodes: 3
 n_test_oracle_db_nodes: 1
 n_loaders: 1
