@@ -873,10 +873,16 @@ class SCTConfiguration(BaseModel):
          """,
     )
     seeds_selector: Literal["random", "first", "all"] = SctField(
-        description="""How to select the seeds. Expected values: random/first/all""",
+        description="""How to select the seeds. Expected values: random/first/all.
+        According to ScyllaDB docs (https://opensource.docs.scylladb.com/stable/kb/seed-nodes.html),
+        since ScyllaDB OSS 4.3 / Enterprise 2021.1 seeds are only used as the initial contact point
+        for nodes joining the cluster (gossip convergence assistance was removed). Once joined,
+        seed nodes have no special role. 'first' (the default) selects a minimal fixed set of seeds,
+        which is the recommended approach. 'all' marks every node as a seed, which is unnecessary
+        overhead and was forbidden in older ScyllaDB versions.""",
     )
     seeds_num: int = SctField(
-        description="""Number of seeds to select""",
+        description="""Number of seeds to select (used when seeds_selector is 'first' or 'random')""",
     )
     email_recipients: StringOrList = SctField(
         description="""list of email of send the performance regression test to""",
@@ -4089,13 +4095,6 @@ class SCTConfiguration(BaseModel):
     def _validate_seeds_number(self):
         seeds_num = self.get("seeds_num")
         assert seeds_num > 0, "Seed number should be at least one"
-
-        num_of_db_nodes = sum(
-            self.get("n_db_nodes") if isinstance(self.get("n_db_nodes"), list) else [self.get("n_db_nodes")]
-        )
-        assert not num_of_db_nodes or seeds_num <= num_of_db_nodes, (
-            f"Seeds number ({seeds_num}) should be not more then nodes number ({num_of_db_nodes})"
-        )
 
     def _validate_nemesis_can_run_on_non_seed(self) -> None:
         if self.get("nemesis_filter_seeds") is False or self.get("nemesis_class_name") == ["NoOpMonkey"]:
