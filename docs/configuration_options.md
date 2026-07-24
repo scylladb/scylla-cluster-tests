@@ -3014,7 +3014,7 @@ Time to wait for compaction to finish at the end of prepare stage. Use only when
 
 Compaction strategy to use for pre-created schema
 
-**default:** SizeTieredCompactionStrategy
+**default:** IncrementalCompactionStrategy
 
 **type:** str
 * appendable
