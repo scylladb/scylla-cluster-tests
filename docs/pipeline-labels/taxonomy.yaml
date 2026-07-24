@@ -102,3 +102,12 @@ features:
     - twcs
     - zero-token-nodes
     - alternator-streams
+
+team_ownership:
+  description: "QA team responsible for maintaining this test"
+  values:
+    - core-test-infra
+    - core-qa
+    - storage-qa
+    - cloud-qa
+    - qa-tools

@@ -33,3 +33,7 @@ tls-ssl, multi-dc, cdc, tablets, vnodes, alternator, encryption-at-rest, ldap, a
 
 ## supported_backends
 aws, gce, azure, docker, k8s-eks, k8s-gke, k8s-local-kind, baremetal, xcloud, oci
+
+## team_ownership
+core-test-infra, core-qa, storage-qa, cloud-qa, qa-tools — the QA team responsible
+for maintaining this test.
