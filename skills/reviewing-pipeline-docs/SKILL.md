@@ -40,8 +40,12 @@ It flows to Argus at test runtime.
 | `supported_backends` | list | no | null = all backends |
 | `stress_tools` | list | no | tool names from stress commands |
 | `workload` | Literal | no | write/read/mixed/scan/counter |
-| `nemesis_labels` | list | no | nemesis class names used |
 | `features` | list | no | tls-ssl, multi-dc, cdc, etc. |
+| `team_ownership` | Literal | no | QA team responsible for maintaining this test |
+
+Note: `nemesis_labels` appears in older examples but is not currently a validated
+`TestMetadata` field (no taxonomy/pydantic support) — omit it from new
+`test_metadata:` blocks rather than add unenforced data.
 
 For the full list of valid values per field, see `references/taxonomy-values.md`.
 The authoritative source is always `docs/pipeline-labels/taxonomy.yaml`.
@@ -64,15 +68,13 @@ test_metadata:
   stress_tools:
     - cassandra-stress
   workload: write
-  nemesis_labels:
-    - SisyphusMonkey
   features: []
+  team_ownership: core-test-infra
 ```
 
 ## Cross-Reference Rules
 
 When filling in metadata, cross-check against the YAML config:
-- `nemesis_labels` must include `nemesis_class_name` value
 - `stress_tools` must include tools found in `stress_cmd*` fields
 - `duration_class` must match `test_duration` (in minutes): short <360, medium 360-1440, long >1440
 - `features` must include `multi-dc` if `n_db_nodes` has multiple values
