@@ -1,6 +1,7 @@
 import logging
 import random
 import threading
+import time
 from enum import Enum
 from contextlib import contextmanager
 from collections.abc import Iterable
@@ -190,6 +191,7 @@ class NemesisNodeAllocator(metaclass=Singleton):
                 if self.active_nemesis_on_nodes[node] == nemesis_name:
                     del self.active_nemesis_on_nodes[node]
                     node.running_nemesis = None
+                    node.last_nemesis_finish_time = time.time()
                     LOGGER.info("%s: unset running nemesis for node %s.", nemesis_name, node.name)
                 else:
                     TestFrameworkEvent(
@@ -224,6 +226,7 @@ class NemesisNodeAllocator(metaclass=Singleton):
                 for node in nodes_to_release:
                     del self.active_nemesis_on_nodes[node]
                     node.running_nemesis = None
+                    node.last_nemesis_finish_time = time.time()
 
     def switch_target_node(self, old_node: "BaseNode", new_node: "BaseNode", nemesis_name: str) -> bool:
         """

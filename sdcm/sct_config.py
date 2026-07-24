@@ -1794,6 +1794,22 @@ class SCTConfiguration(BaseModel):
         "Values above 10 are not recommended (diminishing returns, risk of API rate limiting). "
         "Default: 5.",
     )
+    cluster_health_check_interval: int = SctField(
+        description="Seconds between background health check cycles. Default: 60.",
+    )
+    cluster_health_check_deadline: int = SctField(
+        description="Max total time for one full cluster health check cycle (seconds). Default: 600.",
+    )
+    cluster_health_check_nemesis_grace_period: int = SctField(
+        description="Seconds to wait after nemesis finishes before checking the node. Default: 60.",
+    )
+    cluster_health_check_node_retries: int = SctField(
+        description="Number of retries for a single node health check within one cycle. Default: 3.",
+    )
+    cluster_health_check_connect_timeout: int = SctField(
+        description="CQL connect_timeout for health check sessions (seconds). Default: 30. "
+        "Lower than production default (100s) to bound abandoned thread lifetime.",
+    )
     data_validation: String = SctField(
         description="Specify the type of data validation to perform",
     )
