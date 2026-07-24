@@ -956,25 +956,6 @@ class SlaPerUserTest(LongevityTest):
         self._es.create_doc(index="workload_types", doc_id=self.test_id, body=es_body)
         self.log.info("C-s comparison uploaded to ES.")
 
-    def get_email_data(self):
-        self.log.info("Prepare data for email for SLA test")
-        email_data = {}
-
-        try:
-            email_data = self._get_common_email_data()
-        except Exception as error:  # noqa: BLE001
-            self.log.error("Error in gathering common email data: Error:\n%s", error)
-
-        email_data.update(
-            {
-                "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
-                "region": self.params.get("region_name") or "-",
-                "workload_comparison": self._comparison_results if self._comparison_results else {},
-            }
-        )
-
-        return email_data
-
     def get_test_status(self) -> str:
         if self._comparison_results:
             try:

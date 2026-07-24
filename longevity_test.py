@@ -539,25 +539,6 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         for node in self.db_cluster.nodes:
             node.run_nodetool("flush")
 
-    def get_email_data(self):
-        self.log.info("Prepare data for email")
-
-        email_data = self._get_common_email_data()
-
-        benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
-        # If cluster was not created, not need to collect nemesis stats - they do not exist
-        nemeses_stats = self.get_nemesises_stats() if self.db_cluster else {}
-
-        email_data.update(
-            {
-                "node_benchmarks": benchmarks_results,
-                "nemesis_details": nemeses_stats,
-                "nemesis_name": self.params.get("nemesis_class_name"),
-                "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
-            }
-        )
-        return email_data
-
     def create_templated_user_stress_params(self, idx, cs_profile) -> List[Dict]:
         params_list = []
         cs_duration = self.params.get("cs_duration")

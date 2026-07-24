@@ -203,22 +203,19 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
             node.update_manager_agent_backup_config(region=region_name)
         sleep(60)
 
-    def get_email_data(self):
-        self.log.info("Prepare data for email")
-
-        email_data = self._get_common_email_data()
-        email_data.update(
-            {
-                "manager_server_repo": self.params.get("scylla_mgmt_address"),
-                "manager_agent_repo": (
-                    self.params.get("scylla_mgmt_agent_address") or self.params.get("scylla_mgmt_address")
-                ),
-                "target_manager_server_repo": self.params.get("target_scylla_mgmt_server_address"),
-                "target_manager_agent_repo": self.params.get("target_scylla_mgmt_agent_address"),
-            }
-        )
-
-        return email_data
+    def _create_simple_table(self, table_name: str, keyspace_name: str = "ks1") -> None:
+        with self.db_cluster.cql_connection_patient(self.db_node) as session:
+            session.execute(
+                f"""CREATE KEYSPACE IF NOT EXISTS {keyspace_name}
+                    WITH replication = {{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}}"""
+            )
+            session.execute(
+                f"""CREATE TABLE IF NOT EXISTS {keyspace_name}.{table_name} (
+                        key varchar PRIMARY KEY,
+                        c1 text,
+                        c2 text
+                )"""
+            )
 
 
 def wait_until_task_finishes_return_details(task, wait=True, timeout=1000, step=10):
