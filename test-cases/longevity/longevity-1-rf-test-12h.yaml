@@ -22,6 +22,10 @@ n_db_nodes: 3
 n_loaders: 2
 round_robin: true
 
+# Disable simulated racks for RF=1 — rack simulation is meaningless with a single replica.
+# See: https://scylladb.atlassian.net/browse/SCYLLADB-2896
+simulated_racks: 0
+
 instance_type_db: 'i4i.xlarge'
 instance_type_loader: 'c6i.4xlarge'
 
