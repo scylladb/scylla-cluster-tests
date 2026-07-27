@@ -4,6 +4,9 @@ import sys
 import re
 import os
 
+import requests
+
+from sdcm.utils.decorators import retrying
 from sdcm.utils.version_utils import (
     is_enterprise,
     get_all_versions,
@@ -212,3 +215,41 @@ class UpgradeBaseVersion:
         version_list = self.get_supported_scylla_base_versions(supported_versions)
         LOGGER.info("Got supported releases version list: %s", version_list)
         return supported_versions, version_list
+
+
+SUPPORTED_VERSIONS_URL = (
+    "https://raw.githubusercontent.com/scylladb/scylladb-docs-homepage/main/docs/_static/data/supported_versions.json"
+)
+
+
+@retrying(n=3, sleep_time=5, allowed_exceptions=(requests.RequestException,), message="Retrying fetching versions...")
+def fetch_official_supported_versions(url: str = SUPPORTED_VERSIONS_URL) -> list[str]:
+    """Fetch officially supported ScyllaDB versions from the scylladb-docs-homepage repository.
+
+    Reads the supported_versions.json file, filters entries with status "Supported",
+    and extracts the version number (e.g. "ScyllaDB 2026.1" -> "2026.1").
+
+    Args:
+        url: URL to the supported_versions.json file.
+
+    Returns:
+        List of supported version strings, e.g. ["2026.1", "2025.4", "2025.1"].
+    """
+    LOGGER.info("Fetching official supported versions from %s", url)
+    response = requests.get(url, timeout=30)
+    response.raise_for_status()
+    data = response.json()
+
+    supported = []
+    for entry in data.get("data", []):
+        status = entry.get("status", "").strip()
+        if status != "Supported":
+            continue
+        version_str = entry.get("version", "")
+        # Extract version number from strings like "ScyllaDB 2026.1" or "ScyllaDB 2025.1 (LTS)"
+        match = re.search(r"(\d{4}\.\d+)", version_str)
+        if match:
+            supported.append(match.group(1))
+
+    LOGGER.info("Official supported versions: %s", supported)
+    return supported
