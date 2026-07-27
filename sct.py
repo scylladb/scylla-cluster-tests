@@ -3263,8 +3263,19 @@ def hdr_investigate(
 )
 @click.option("--skip-jobs", default=None, type=str, help="Comma-separated job names to skip")
 @click.option("--stress-duration", default=None, type=str, help="Override stress_duration parameter")
-@click.option("--region", default=None, type=str, help="Override region for all jobs")
-@click.option("--availability-zone", default=None, type=str, help="Override availability zone for all jobs")
+@click.option(
+    "--region",
+    default=None,
+    type=str,
+    help="Region for jobs that don't set one in the matrix. Jobs with their own 'region' param keep it",
+)
+@click.option(
+    "--availability-zone",
+    default=None,
+    type=str,
+    help="Availability zone for jobs that don't set one in the matrix. "
+    "Jobs with their own 'availability_zone' param keep it",
+)
 @click.option(
     "--provision-type",
     default=None,

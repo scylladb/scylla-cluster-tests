@@ -54,9 +54,9 @@ def call(Map pipelineParams = [:]) {
             string(name: 'stress_duration', defaultValue: '',
                    description: 'Override stress duration for all jobs')
             string(name: 'region', defaultValue: '',
-                   description: 'Override region for all jobs')
+                   description: 'Region for jobs that do not set one in the matrix. Jobs with their own "region" param (including multi-region ones) keep it.')
             string(name: 'availability_zone', defaultValue: '',
-                   description: 'Override availability zone for all jobs')
+                   description: 'Availability zone for jobs that do not set one in the matrix. Jobs with their own "availability_zone" param keep it.')
             string(name: 'provision_type', defaultValue: '',
                    description: 'spot | on_demand | spot_fleet')
             string(name: 'scylla_ami_id', defaultValue: '',

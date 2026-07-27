@@ -195,7 +195,6 @@ def test_default_scylla_version_used_when_empty(tmp_path):
             {
                 "job_name": "/scylla-enterprise/perf-regression/perf-test",
                 "backend": "aws",
-                "region": "us-east-1",
                 "labels": [],
                 "exclude_versions": [],
                 "params": {"unified_package": "https://example.com/scylla-unified.tar.gz"},
@@ -221,19 +220,16 @@ def test_duplicate_job_names_deduplicated(tmp_path):
             {
                 "job_name": "tier1/longevity-twcs-48h-test",
                 "backend": "aws",
-                "region": "us-east-1",
                 "labels": ["weekly"],
             },
             {
                 "job_name": "tier1/longevity-twcs-48h-test",
                 "backend": "aws",
-                "region": "us-east-1",
                 "labels": ["weekly", "aarch64"],
             },
             {
                 "job_name": "tier1/longevity-2tb-5days-test",
                 "backend": "aws",
-                "region": "eu-west-1",
                 "labels": ["weekly"],
             },
         ],

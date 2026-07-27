@@ -2,6 +2,70 @@
 
 Manual testing procedures for the `sct.py trigger-matrix` command and the YAML trigger matrix system.
 
+## Matrix YAML Layout
+
+A job entry has two kinds of keys, and putting one in the other's place is rejected at load time.
+
+**Job-level keys** decide *whether and how* the job is triggered — they are consumed by the trigger itself:
+
+`job_name`, `backend`, `arch`, `disabled`, `labels`, `include_versions`, `exclude_versions`, `pre_release`,
+`job_throttle_category`, `params`, `wait`, `wait_timeout`, `fail_on_error`, `collect_results`
+
+One exception: `job_throttle_category` is *also* forwarded to Jenkins as a build parameter of the same
+name (via `setdefault`, so a `params:` entry of the same name wins). Every other job-level key stops at
+the trigger.
+
+**Everything else is a Jenkins job parameter and belongs under `params:`** — including `region` and
+`availability_zone`, which used to sit at job level.
+
+```yaml
+jobs:
+  - job_name: "tier1/longevity-multidc-schema-topology-changes-12h-test"
+    backend: "aws"
+    params:
+      region: '["eu-west-1", "eu-west-2"]'   # multi-region: a JSON *string*, not a YAML list
+      availability_zone: "a,b,c"
+    labels:
+      - "weekly"
+```
+
+### Migrating an existing matrix
+
+`region` and `availability_zone` used to be job-level keys. Moving them under `params:` is a breaking
+layout change — a matrix still using the old form fails to load. To migrate:
+
+1. Move every job-level `region:` / `availability_zone:` line under that job's `params:`, creating the
+   `params:` block if the job doesn't have one.
+2. Drop empty ones (`region: ""`). They were a no-op before, and keeping them would start passing an
+   empty region to Jenkins.
+3. Quote multi-valued parameters as JSON *strings* — a YAML list is rejected.
+4. Validate: `uv run python -c "from sdcm.utils.trigger_matrix import load_matrix_config; load_matrix_config('<matrix>.yaml')"`
+
+```yaml
+# before                                    # after
+- job_name: "tier1/multidc-test"            - job_name: "tier1/multidc-test"
+  backend: "aws"                              backend: "aws"
+  region: '["eu-west-1", "eu-west-2"]'        params:
+  params:                                       region: '["eu-west-1", "eu-west-2"]'
+    availability_zone: "a,b,c"                  availability_zone: "a,b,c"
+  labels:                                     labels:
+    - "weekly"                                  - "weekly"
+```
+
+`load_matrix_config()` validates the layout and reports every problem at once, naming the offending job:
+
+- unknown job-level key → `job 'tier1/foo' (jobs[3]): unknown job-level key 'region' — Jenkins job parameters belong under 'params:'`
+- job-level key nested under `params:` → `'labels' is a job-level key and must not be nested under 'params:'`
+- near-miss key names get a `did you mean 'labels'?` hint
+- non-scalar values in `params`/`defaults`/`cron_triggers[].params` → every Jenkins parameter is a string,
+  so multi-valued ones (multi-region, `sub_tests`) must be quoted JSON strings
+
+Check a file after editing it:
+
+```bash
+uv run python -c "from sdcm.utils.trigger_matrix import load_matrix_config; load_matrix_config('configurations/triggers/tier1.yaml')"
+```
+
 ## Prerequisites
 
 - SCT environment set up (`uv sync`)
@@ -97,7 +161,16 @@ uv run sct.py trigger-matrix \
 
 **Expected**: Each `[DRY-RUN]` log line shows the overridden parameters in the parameter output.
 
-Note: `--region` overrides all job-specific regions. If a job has `region: eu-west-1` in YAML and you pass `--region us-west-2`, the job runs in `us-west-2`.
+Note: **`--region` and `--availability-zone` do not override jobs that pin their own value.** They are location parameters — a job that declares `region:` under its `params:` owns it, and the CLI value only fills in for jobs that don't. Everything else (`--provision-type`, `--stress-duration`, `--new-scylla-repo`, ...) overrides per-job values as usual.
+
+Precedence, highest first:
+
+| Parameter | Precedence |
+|-----------|------------|
+| `region`, `availability_zone` | job `params` → CLI flag → matrix `defaults` |
+| everything else | CLI flag → job `params` → matrix `defaults` |
+
+This is what keeps a multi-DC job configured with `region: '["eu-west-1", "eu-west-2"]'` from collapsing into a single region when a trigger run passes `--region us-east-1` (SCT-693).
 
 ### Job Folder Resolution
 

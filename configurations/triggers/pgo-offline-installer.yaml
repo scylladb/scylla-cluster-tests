@@ -24,45 +24,45 @@ jobs:
   # --- x86_64 microbenchmarks ---
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64"
     backend: "aws"
-    region: "us-east-1"
     wait: false
     labels:
       - "pgo-x86"
     exclude_versions: []
     params:
+      region: "us-east-1"
       unified_package: "{unified_package}"
       nonroot_offline_install: "false"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64-write"
     backend: "aws"
-    region: "us-east-1"
     wait: false
     labels:
       - "pgo-x86"
     exclude_versions: []
     params:
+      region: "us-east-1"
       unified_package: "{unified_package}"
       nonroot_offline_install: "false"
 
   # --- ARM64 microbenchmarks ---
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64"
     backend: "aws"
-    region: "us-east-1"
     wait: false
     labels:
       - "pgo-arm"
     exclude_versions: []
     params:
+      region: "us-east-1"
       unified_package: "{unified_package}"
       nonroot_offline_install: "false"
 
   - job_name: "/scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-write"
     backend: "aws"
-    region: "us-east-1"
     wait: false
     labels:
       - "pgo-arm"
     exclude_versions: []
     params:
+      region: "us-east-1"
       unified_package: "{unified_package}"
       nonroot_offline_install: "false"

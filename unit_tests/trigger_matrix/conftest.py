@@ -32,32 +32,30 @@ def sample_matrix_yaml(tmp_path):
             {
                 "job_name": "tier1/longevity-50gb-3days-test",
                 "backend": "aws",
-                "region": "eu-west-1",
                 "labels": ["weekly"],
                 "exclude_versions": [],
-                "params": {"stress_duration": "4320"},
+                "params": {"region": "eu-west-1", "stress_duration": "4320"},
             },
             {
                 "job_name": "tier1/longevity-1tb-5days-azure-test",
                 "backend": "azure",
-                "region": "eastus",
                 "labels": ["weekly"],
                 "exclude_versions": ["2024.1"],
+                "params": {"region": "eastus"},
             },
             {
                 "job_name": "longevity/longevity-10gb-3h-gce-test",
                 "backend": "gce",
-                "region": "us-east1",
                 "labels": [],
                 "exclude_versions": [],
+                "params": {"region": "us-east1"},
             },
             {
                 "job_name": "/scylla-enterprise/perf-regression/perf-test",
                 "backend": "aws",
-                "region": "us-east-1",
                 "labels": ["master-weekly", "additional"],
                 "exclude_versions": ["master"],
-                "params": {"sub_tests": '["test_read"]'},
+                "params": {"region": "us-east-1", "sub_tests": '["test_read"]'},
             },
         ],
     }
@@ -70,17 +68,23 @@ def sample_matrix_yaml(tmp_path):
 def sample_jobs():
     """Return a list of sample JobConfig objects for filter tests."""
     return [
-        JobConfig(job_name="job-a", backend="aws", region="eu-west-1", labels=["weekly"], exclude_versions=[]),
+        JobConfig(
+            job_name="job-a", backend="aws", labels=["weekly"], exclude_versions=[], params={"region": "eu-west-1"}
+        ),
         JobConfig(
             job_name="job-b",
             backend="azure",
-            region="eastus",
             labels=["weekly", "additional"],
             exclude_versions=["2024.1"],
+            params={"region": "eastus"},
         ),
-        JobConfig(job_name="job-c", backend="gce", region="us-east1", labels=[], exclude_versions=[]),
+        JobConfig(job_name="job-c", backend="gce", labels=[], exclude_versions=[], params={"region": "us-east1"}),
         JobConfig(
-            job_name="job-d", backend="aws", region="us-east-1", labels=["master-weekly"], exclude_versions=["master"]
+            job_name="job-d",
+            backend="aws",
+            labels=["master-weekly"],
+            exclude_versions=["master"],
+            params={"region": "us-east-1"},
         ),
     ]
 
@@ -89,8 +93,16 @@ def sample_jobs():
 def sample_jobs_with_arm():
     """Return sample jobs including aarch64-labeled ones for architecture filter tests."""
     return [
-        JobConfig(job_name="job-x86", backend="aws", region="us-east-1", labels=["weekly"]),
-        JobConfig(job_name="job-arm", backend="aws", region="us-east-1", labels=["aarch64"]),
-        JobConfig(job_name="job-arm-weekly", backend="aws", region="us-east-1", labels=["aarch64", "weekly"]),
-        JobConfig(job_name="job-arm-no-label", backend="aws", region="us-east-1", arch="aarch64", labels=["weekly"]),
+        JobConfig(job_name="job-x86", backend="aws", labels=["weekly"], params={"region": "us-east-1"}),
+        JobConfig(job_name="job-arm", backend="aws", labels=["aarch64"], params={"region": "us-east-1"}),
+        JobConfig(
+            job_name="job-arm-weekly", backend="aws", labels=["aarch64", "weekly"], params={"region": "us-east-1"}
+        ),
+        JobConfig(
+            job_name="job-arm-no-label",
+            backend="aws",
+            arch="aarch64",
+            labels=["weekly"],
+            params={"region": "us-east-1"},
+        ),
     ]
