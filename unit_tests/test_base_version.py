@@ -104,8 +104,8 @@ def live_supported_versions():
     Fetched at execution time (never at import/collection) so that test collection stays identical
     across xdist workers regardless of the network outcome, and so nothing runs when the integration
     marker is deselected. ``fetch_official_supported_versions`` already retries transient HTTP
-    failures internally (it uses ``create_retry_session``); anything it still raises is propagated,
-    and an empty result is an error - the test must fail rather than run over an empty list.
+    failures internally; anything it still raises is propagated, and an empty result is an error -
+    the test must fail rather than run over an empty list.
     """
     versions = fetch_official_supported_versions()
     assert versions, "no officially supported ScyllaDB versions were returned - cannot verify base versions"
