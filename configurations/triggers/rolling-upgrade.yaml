@@ -35,12 +35,12 @@ jobs:
 
   - job_name: "rolling-upgrade/rolling-upgrade-rocky10-test"
     backend: "gce"
-    region: "us-central1"
     labels:
       - "weekly"
       - "rpm"
     exclude_versions: []
     params:
+      region: "us-central1"
       new_scylla_repo: "http://downloads.scylladb.com/unstable/scylla/{branch}/rpm/centos/latest/scylla.repo"
 
   # ===========================================================================
@@ -49,32 +49,32 @@ jobs:
 
   - job_name: "rolling-upgrade/rolling-upgrade-debian13-test"
     backend: "gce"
-    region: "us-central1"
     labels:
       - "weekly"
       - "deb"
     exclude_versions: []
     params:
+      region: "us-central1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   - job_name: "rolling-upgrade/rolling-upgrade-ubuntu2404-test"
     backend: "gce"
-    region: "us-central1"
     labels:
       - "weekly"
       - "deb"
     exclude_versions: []
     params:
+      region: "us-central1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   - job_name: "rolling-upgrade/rolling-upgrade-ubuntu2604-test"
     backend: "gce"
-    region: "us-central1"
     labels:
       - "weekly"
       - "deb"
     exclude_versions: []
     params:
+      region: "us-central1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   # ===========================================================================
@@ -83,18 +83,17 @@ jobs:
 
   - job_name: "rolling-upgrade/rolling-upgrade-ami-test"
     backend: "aws"
-    region: "eu-west-1"
     labels:
       - "weekly"
       - "image"
       - "ami"
     exclude_versions: []
     params:
+      region: "eu-west-1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   - job_name: "rolling-upgrade/rolling-upgrade-ami-arm-test"
     backend: "aws"
-    region: "eu-west-1"
     arch: "aarch64"
     labels:
       - "weekly"
@@ -102,28 +101,29 @@ jobs:
       - "ami"
     exclude_versions: []
     params:
+      region: "eu-west-1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   - job_name: "rolling-upgrade/rolling-upgrade-gce-image-test"
     backend: "gce"
-    region: "us-central1"
     labels:
       - "weekly"
       - "image"
       - "gce"
     exclude_versions: []
     params:
+      region: "us-central1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   - job_name: "rolling-upgrade/rolling-upgrade-azure-image-test"
     backend: "azure"
-    region: "eastus"
     labels:
       - "weekly"
       - "image"
       - "azure"
     exclude_versions: []
     params:
+      region: "eastus"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   # ===========================================================================
@@ -132,83 +132,83 @@ jobs:
 
   - job_name: "rolling-upgrade/rolling-upgrade-alternator-test"
     backend: "gce"
-    region: "us-east1"
     labels:
       - "weekly"
       - "deb"
     exclude_versions: []
     params:
+      region: "us-east1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   # --- Non-weekly jobs (triggered by scylla-pkg on release only) ---
 
   - job_name: "rolling-upgrade/rolling-upgrade-multidc-test"
     backend: "aws"
-    region: "eu-west-1"
     labels:
       - "release"
       - "deb"
     exclude_versions: []
     params:
+      region: "eu-west-1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   - job_name: "rolling-upgrade/rolling-upgrade-with-sla-test"
     backend: "gce"
-    region: "us-east1"
     labels:
       - "release"
       - "deb"
     exclude_versions: []
     params:
+      region: "us-east1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   - job_name: "rolling-upgrade/rolling-upgrade-with-sla-no-shares-test"
     backend: "gce"
-    region: "us-east1"
     labels:
       - "release"
       - "deb"
     exclude_versions: []
     params:
+      region: "us-east1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   - job_name: "rolling-upgrade/rolling-upgrade-with-null-inserts-test"
     backend: "gce"
-    region: "us-east1"
     labels:
       - "release"
       - "deb"
     exclude_versions: []
     params:
+      region: "us-east1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   - job_name: "rolling-upgrade/rolling-upgrade-with-enable-tablets-test"
     backend: "gce"
-    region: "us-east1"
     labels:
       - "release"
       - "image"
       - "gce"
     exclude_versions: []
     params:
+      region: "us-east1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   - job_name: "rolling-upgrade/rolling-upgrade-debian11-test"
     backend: "gce"
-    region: "us-central1"
     labels:
       - "release"
       - "deb"
     exclude_versions: []
     params:
+      region: "us-central1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"
 
   - job_name: "rolling-upgrade/rolling-upgrade-ubuntu22.04-ldap-authorization-test"
     backend: "gce"
-    region: "us-east1"
     labels:
       - "release"
       - "deb"
     exclude_versions: []
     params:
+      region: "us-east1"
       new_scylla_repo: "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list"

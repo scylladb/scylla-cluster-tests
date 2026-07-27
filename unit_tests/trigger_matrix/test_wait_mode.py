@@ -20,7 +20,7 @@ from sdcm.utils.trigger_matrix import JobConfig, JenkinsTriggerError, load_matri
 
 
 def test_job_config_wait_defaults_false():
-    job = JobConfig(job_name="test", backend="aws", region="eu-west-1")
+    job = JobConfig(job_name="test", backend="aws")
     assert job.wait is False
     assert job.fail_on_error is False
     assert job.collect_results == []
@@ -32,7 +32,6 @@ def test_load_yaml_with_wait_fields(tmp_path):
             {
                 "job_name": "artifacts/artifacts-ami",
                 "backend": "aws",
-                "region": "eu-west-1",
                 "wait": True,
                 "fail_on_error": True,
                 "collect_results": ["scylla_doctor_*_analysis.json"],
@@ -53,7 +52,6 @@ def test_dry_run_wait_mode(tmp_path, caplog):
             {
                 "job_name": "artifacts/artifacts-ami",
                 "backend": "aws",
-                "region": "eu-west-1",
                 "wait": True,
                 "fail_on_error": True,
                 "collect_results": ["*.json"],
@@ -79,14 +77,12 @@ def test_fail_on_error_aborts_remaining(tmp_path, monkeypatch):
             {
                 "job_name": "/gating/job-1",
                 "backend": "aws",
-                "region": "eu-west-1",
                 "wait": True,
                 "fail_on_error": True,
             },
             {
                 "job_name": "/gating/job-2",
                 "backend": "aws",
-                "region": "eu-west-1",
                 "wait": False,
             },
         ],

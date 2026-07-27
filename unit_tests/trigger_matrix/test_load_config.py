@@ -24,9 +24,8 @@ def test_load_valid_yaml(sample_matrix_yaml):
     assert len(config.jobs) == 4
     assert config.jobs[0].job_name == "tier1/longevity-50gb-3days-test"
     assert config.jobs[0].backend == "aws"
-    assert config.jobs[0].region == "eu-west-1"
     assert config.jobs[0].labels == ["weekly"]
-    assert config.jobs[0].params == {"stress_duration": "4320"}
+    assert config.jobs[0].params == {"region": "eu-west-1", "stress_duration": "4320"}
 
 
 def test_load_defaults(sample_matrix_yaml):
@@ -93,7 +92,6 @@ def test_load_minimal_job(tmp_path):
     path = tmp_path / "minimal.yaml"
     path.write_text(yaml.dump({"jobs": [{"job_name": "test", "backend": "aws"}]}))
     config = load_matrix_config(path)
-    assert config.jobs[0].region == ""
     assert config.jobs[0].labels == []
     assert config.jobs[0].exclude_versions == []
     assert config.jobs[0].params == {}

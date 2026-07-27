@@ -46,7 +46,6 @@ def test_branch_template_resolved_in_params():
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
-        region="us-central1",
         params={
             "rolling_upgrade_test": "true",
             "new_scylla_repo": "http://downloads.scylladb.com/unstable/scylla/{branch}/rpm/centos/latest/scylla.repo",
@@ -63,7 +62,6 @@ def test_branch_template_from_simple_version():
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
-        region="us-central1",
         params={
             "rolling_upgrade_test": "true",
             "new_scylla_repo": "http://repo/{branch}/deb/scylla.list",
@@ -77,7 +75,6 @@ def test_branch_template_from_full_version_tag():
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="aws",
-        region="eu-west-1",
         params={
             "rolling_upgrade_test": "true",
             "new_scylla_repo": "http://repo/{branch}/rpm/scylla.repo",
@@ -91,7 +88,6 @@ def test_no_template_no_change():
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="aws",
-        region="eu-west-1",
         params={
             "rolling_upgrade_test": "true",
             "new_scylla_repo": "http://explicit-repo/scylla.repo",
@@ -105,7 +101,6 @@ def test_cli_override_wins_over_template():
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
-        region="us-central1",
         params={
             "rolling_upgrade_test": "true",
             "new_scylla_repo": "http://downloads/{branch}/rpm/scylla.repo",
@@ -119,7 +114,6 @@ def test_empty_version_no_resolution():
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
-        region="us-central1",
         params={
             "rolling_upgrade_test": "true",
             "new_scylla_repo": "http://downloads/{branch}/rpm/scylla.repo",
@@ -152,7 +146,6 @@ def test_branch_source_version_overrides_resolved_version():
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
-        region="us-central1",
         params={
             "rolling_upgrade_test": "true",
             "new_scylla_repo": "http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch}/scylla.list",
@@ -172,7 +165,6 @@ def test_branch_source_version_none_falls_back_to_scylla_version():
     job = JobConfig(
         job_name="rolling-upgrade/test",
         backend="gce",
-        region="us-central1",
         params={
             "rolling_upgrade_test": "true",
             "new_scylla_repo": "http://repo/{branch}/rpm/scylla.repo",
@@ -187,7 +179,6 @@ def test_rolling_upgrade_test_clears_scylla_version():
     job = JobConfig(
         job_name="perf-regression/rolling-upgrade-test",
         backend="aws",
-        region="eu-west-1",
         params={
             "rolling_upgrade_test": "true",
             "new_scylla_repo": "http://downloads/{branch}/deb/scylla.list",
@@ -206,7 +197,6 @@ def test_rolling_upgrade_test_keeps_base_versions_from_override():
     job = JobConfig(
         job_name="perf-regression/rolling-upgrade-test",
         backend="aws",
-        region="eu-west-1",
         params={
             "rolling_upgrade_test": "true",
             "new_scylla_repo": "http://downloads/{branch}/deb/scylla.list",
@@ -223,7 +213,6 @@ def test_non_rolling_upgrade_keeps_scylla_version():
     job = JobConfig(
         job_name="perf-regression/throughput-test",
         backend="aws",
-        region="us-east-1",
         params={"sub_tests": '["test_read"]'},
     )
     params = build_job_parameters(job, {}, "2026.3.0~dev-0.20260710.9cda315bbab0", {})
@@ -235,7 +224,6 @@ def test_non_rolling_upgrade_strips_new_scylla_repo_from_overrides():
     job = JobConfig(
         job_name="perf-regression/throughput-test",
         backend="aws",
-        region="us-east-1",
         params={"sub_tests": '["test_read"]'},
     )
     overrides = {"new_scylla_repo": "http://downloads/master/rpm/scylla.repo"}
@@ -249,7 +237,6 @@ def test_non_rolling_upgrade_strips_new_scylla_repo_from_defaults():
     job = JobConfig(
         job_name="perf-regression/latency-test",
         backend="aws",
-        region="eu-west-1",
         params={},
     )
     defaults = {"new_scylla_repo": "http://downloads/master/rpm/scylla.repo"}

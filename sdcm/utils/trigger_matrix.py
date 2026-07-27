@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2026 ScyllaDB
 
+import difflib
 import fnmatch
 import json
 import logging
@@ -25,7 +26,7 @@ import jenkins as jenkins_lib
 import pydantic
 import requests
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,12 @@ DEFAULT_AWS_REGION = "eu-west-1"
 WAIT_POLL_INTERVAL = 30
 WAIT_TIMEOUT = 14400
 DEFAULT_EMAIL_RECIPIENTS = ["qa@scylladb.com"]
+
+# Parameters that describe *where* a job runs. They are per-job by nature: a job that
+# declares them in its `params` owns them, and a global CLI value only fills in for the
+# jobs that don't. Without this, `--region us-east-1` would silently collapse a multi-DC
+# job configured with region: '["eu-west-1", "eu-west-2"]' into a single region (SCT-693).
+PER_JOB_LOCATION_PARAMS = ("region", "availability_zone")
 
 
 def is_full_version_tag(version: str) -> bool:
@@ -424,16 +431,33 @@ def _resolve_version_from_azure_image(image_id: str) -> str:
 class CronTriggerConfig(BaseModel):
     """Configuration for a cron-based trigger schedule."""
 
+    model_config = ConfigDict(extra="forbid")
+
     schedule: str
     params: dict = Field(default_factory=dict)
 
 
+class JenkinsfileEntry(BaseModel):
+    """A Jenkinsfile generated from this matrix by generate_trigger_jenkinsfiles.py."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    labels_selector: str = ""
+
+
 class JobConfig(BaseModel):
-    """Configuration for a single Jenkins job in the trigger matrix."""
+    """Configuration for a single Jenkins job in the trigger matrix.
+
+    The fields here are *structural* — they decide whether and how the job is triggered.
+    Everything the Jenkins job itself receives (region, availability_zone,
+    instance types, sub_tests, ...) belongs under `params`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     job_name: str
     backend: Literal["aws", "gce", "azure", "docker", "oci"]
-    region: str = ""
     arch: str = ""
 
     @field_validator("arch")
@@ -459,11 +483,20 @@ class JobConfig(BaseModel):
 class MatrixConfig(BaseModel):
     """Full trigger matrix configuration loaded from YAML."""
 
+    model_config = ConfigDict(extra="forbid")
+
     jobs: list[JobConfig]
     defaults: dict = Field(default_factory=dict)
     default_scylla_version: str = ""
     cron_triggers: list[CronTriggerConfig] = Field(default_factory=list)
     email_recipients: list[str] = Field(default_factory=list)
+    jenkinsfiles: list[JenkinsfileEntry] = Field(default_factory=list)
+
+
+# Keys allowed directly on a job entry — anything else is a Jenkins parameter and
+# must live under `params`.
+JOB_LEVEL_KEYS = frozenset(JobConfig.model_fields)
+MATRIX_LEVEL_KEYS = frozenset(MatrixConfig.model_fields)
 
 
 class TriggerMatrixError(Exception):
@@ -517,6 +550,90 @@ def get_parameterized_cron(path: str | Path) -> str:
     return "\n".join(lines)
 
 
+def _did_you_mean(key: str, candidates: frozenset[str]) -> str:
+    """Return a ' — did you mean ...' hint when `key` looks like a typo of a known key."""
+    close = difflib.get_close_matches(key, sorted(candidates), n=1, cutoff=0.8)
+    return f" — did you mean '{close[0]}'?" if close else ""
+
+
+def _validate_params_block(params: object, where: str, errors: list[str]) -> None:
+    """Validate a `params`/`defaults` mapping: no job-level keys, scalar values only.
+
+    Every entry ends up as a Jenkins StringParameterValue, so nested lists/mappings
+    are always a mistake — multi-valued parameters are passed as JSON strings.
+    """
+    if not isinstance(params, dict):
+        errors.append(f"{where}: must be a mapping of Jenkins parameters, got {type(params).__name__}")
+        return
+
+    for key, value in params.items():
+        if key in JOB_LEVEL_KEYS:
+            errors.append(
+                f"{where}: '{key}' is a job-level key and must not be nested under 'params:' — "
+                f"move it up, next to 'job_name:'"
+            )
+        if isinstance(value, (list, dict)):
+            hint = (
+                f' (for a multi-region job use a JSON string: {key}: \'["eu-west-1", "eu-west-2"]\')'
+                if key == "region"
+                else " (pass multi-valued parameters as a JSON string)"
+            )
+            errors.append(
+                f"{where}: '{key}' must be a scalar — Jenkins parameters are strings, got {type(value).__name__}{hint}"
+            )
+
+
+def _validate_job_entry(index: int, job: object, errors: list[str]) -> None:
+    """Validate a single raw job entry before pydantic parsing, for locatable errors."""
+    if not isinstance(job, dict):
+        errors.append(f"jobs[{index}]: must be a mapping, got {type(job).__name__}")
+        return
+
+    where = f"job '{job.get('job_name', '<missing job_name>')}' (jobs[{index}])"
+    for key in job:
+        if key not in JOB_LEVEL_KEYS:
+            errors.append(
+                f"{where}: unknown job-level key '{key}' — Jenkins job parameters belong under 'params:'"
+                f"{_did_you_mean(key, JOB_LEVEL_KEYS)}"
+            )
+
+    if "params" in job:
+        _validate_params_block(job["params"], f"{where}: params", errors)
+
+
+def validate_matrix_layout(raw: dict) -> None:
+    """Check that every key in a raw matrix mapping sits where it belongs.
+
+    Pydantic already rejects unknown keys, but its errors don't say *where* a key
+    should have gone. This pass collects all misplacements at once so a YAML with
+    several mistakes reports them in one go.
+
+    Raises:
+        MatrixValidationError: If any key is unknown or in the wrong section.
+    """
+    errors: list[str] = []
+
+    for key in raw:
+        if key not in MATRIX_LEVEL_KEYS:
+            errors.append(
+                f"unknown top-level key '{key}' — expected one of: {', '.join(sorted(MATRIX_LEVEL_KEYS))}"
+                f"{_did_you_mean(key, MATRIX_LEVEL_KEYS)}"
+            )
+
+    if "defaults" in raw:
+        _validate_params_block(raw["defaults"], "defaults", errors)
+
+    for index, cron in enumerate(raw.get("cron_triggers") or []):
+        if isinstance(cron, dict) and "params" in cron:
+            _validate_params_block(cron["params"], f"cron_triggers[{index}]: params", errors)
+
+    for index, job in enumerate(raw.get("jobs") or []):
+        _validate_job_entry(index, job, errors)
+
+    if errors:
+        raise MatrixValidationError("Invalid trigger matrix layout:\n  - " + "\n  - ".join(errors))
+
+
 def load_matrix_config(path: str | Path) -> MatrixConfig:
     """Load and validate a trigger matrix YAML file.
 
@@ -551,10 +668,12 @@ def load_matrix_config(path: str | Path) -> MatrixConfig:
     if isinstance(raw_email, str):
         raw["email_recipients"] = [e.strip() for e in raw_email.split(",") if e.strip()]
 
+    validate_matrix_layout(raw)
+
     try:
         return MatrixConfig.model_validate(raw)
     except pydantic.ValidationError as exc:
-        raise MatrixValidationError(str(exc)) from exc
+        raise MatrixValidationError(f"Invalid trigger matrix {path}:\n{exc}") from exc
 
 
 def determine_job_folder(scylla_version: str, job_folder: str | None = None) -> str:
@@ -808,7 +927,12 @@ def build_job_parameters(
 ) -> dict:
     """Build final parameter dict for a Jenkins job.
 
-    Priority: cli_overrides > job.params > defaults.
+    Priority: cli_overrides > job.params > defaults, except for the location
+    parameters in PER_JOB_LOCATION_PARAMS (region, availability_zone), where a
+    job's own value wins over the CLI: cli_overrides > job.params is inverted to
+    job.params > cli_overrides > defaults. A global `--region` must not collapse a
+    multi-DC job into a single region (SCT-693).
+
     Always includes scylla_version. Downstream jobs resolve their
     own backend-specific images from the version.
 
@@ -828,15 +952,19 @@ def build_job_parameters(
     Returns:
         Merged parameter dictionary.
     """
-    params = dict(defaults)
-    params.update(job.params)
-    params.update({k: v for k, v in cli_overrides.items() if v is not None})
+    overrides = {k: v for k, v in cli_overrides.items() if v is not None}
+    # Location overrides are applied *under* the job's own params — they fill in for
+    # jobs that don't pin a region/AZ instead of overwriting the ones that do.
+    location_overrides = {k: overrides.pop(k) for k in PER_JOB_LOCATION_PARAMS if k in overrides}
 
-    # Always set scylla_version (if provided) and region
+    params = dict(defaults)
+    params.update(location_overrides)
+    params.update(job.params)
+    params.update(overrides)
+
+    # Always set scylla_version (if provided)
     if scylla_version:
         params["scylla_version"] = scylla_version
-    if job.region:
-        params.setdefault("region", job.region)
     if job.job_throttle_category:
         params.setdefault("job_throttle_category", job.job_throttle_category)
 

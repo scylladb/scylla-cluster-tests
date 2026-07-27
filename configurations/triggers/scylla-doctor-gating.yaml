@@ -20,7 +20,6 @@ defaults:
 jobs:
   - job_name: "/scylla-doctor/oss/artifacts/artifacts-ami-test"
     backend: "aws"
-    region: "eu-west-1"
     wait: true
     wait_timeout: 7200
     fail_on_error: true
@@ -29,11 +28,11 @@ jobs:
     labels:
       - "gating"
     params:
+      region: "eu-west-1"
       scylla_doctor_edition: "full"
 
   - job_name: "/scylla-doctor/oss/artifacts/artifacts-ami-arm-test"
     backend: "aws"
-    region: "eu-west-1"
     wait: true
     wait_timeout: 7200
     fail_on_error: true
@@ -42,11 +41,11 @@ jobs:
     labels:
       - "gating"
     params:
+      region: "eu-west-1"
       scylla_doctor_edition: "full"
 
   - job_name: "/scylla-doctor/oss/artifacts/artifacts-docker-test"
     backend: "aws"
-    region: "eu-west-1"
     wait: true
     wait_timeout: 3600
     fail_on_error: true
@@ -55,6 +54,7 @@ jobs:
     labels:
       - "gating"
     params:
+      region: "eu-west-1"
       scylla_doctor_edition: "full"
 
 email_recipients: "qa@scylladb.com"

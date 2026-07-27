@@ -35,60 +35,68 @@ jobs:
 
   - job_name: "tier1/gemini-1tb-10h-test"
     backend: "aws"
-    region: "eu-west-1"
+    params:
+      region: "eu-west-1"
     labels:
       - "weekly"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   - job_name: "tier1/longevity-mv-si-4days-streaming-test"
     backend: "aws"
-    region: "eu-west-1"
+    params:
+      region: "eu-west-1"
     labels:
       - "weekly"
 
   - job_name: "tier1/longevity-schema-topology-changes-12h-test"
     backend: "aws"
-    region: "eu-west-1"
+    params:
+      region: "eu-west-1"
     labels:
       - "weekly"
 
   - job_name: "tier1/scale-schema-5000-tables-latte-test"
     backend: "aws"
-    region: "eu-west-1"
+    params:
+      region: "eu-west-1"
     labels:
       - "weekly"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   - job_name: "tier1/longevity-twcs-48h-test"
     backend: "aws"
-    region: "us-east-1"
+    params:
+      region: "us-east-1"
     labels:
       - "weekly"
 
   - job_name: "tier1/longevity-50gb-3days-test"
     backend: "aws"
-    region: "eu-west-1"
+    params:
+      region: "eu-west-1"
     labels:
       - "weekly"
     include_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   - job_name: "tier1/longevity-150gb-asymmetric-cluster-12h-test"
     backend: "aws"
-    region: "us-east-1"
+    params:
+      region: "us-east-1"
     labels:
       - "weekly"
 
   - job_name: "tier1/elasticity-90-percent-with-nemesis-test"
     backend: "aws"
-    region: "us-east-1"
+    params:
+      region: "us-east-1"
     labels:
       - "weekly"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   - job_name: "tier1/longevity-multidc-schema-topology-changes-12h-test"
     backend: "aws"
-    region: '["eu-west-1", "eu-west-2"]'
     params:
+      region: '["eu-west-1", "eu-west-2"]'
       availability_zone: "a,b,c"
     labels:
       - "weekly"
@@ -97,7 +105,8 @@ jobs:
 
   - job_name: "tier1/longevity-twcs-48h-test"
     backend: "aws"
-    region: "us-east-1"
+    params:
+      region: "us-east-1"
     labels:
       - "weekly"
       - "aarch64"
@@ -105,7 +114,8 @@ jobs:
 
   - job_name: "tier1/longevity-2tb-5days-test"
     backend: "aws"
-    region: "eu-west-1"
+    params:
+      region: "eu-west-1"
     labels:
       - "weekly"
       - "aarch64"
@@ -113,7 +123,8 @@ jobs:
 
   - job_name: "tier1/elasticity-90-percent-with-nemesis-test"
     backend: "aws"
-    region: "us-east-1"
+    params:
+      region: "us-east-1"
     labels:
       - "weekly"
       - "aarch64"
@@ -123,8 +134,8 @@ jobs:
 
   - job_name: "tier1/longevity-large-partition-200k-pks-4days-gce-test"
     backend: "gce"
-    region: "us-east1"
     params:
+      region: "us-east1"
       availability_zone: ""
     labels:
       - "weekly"
@@ -133,8 +144,8 @@ jobs:
 
   - job_name: "tier1/longevity-1tb-5days-azure-test"
     backend: "azure"
-    region: "eastus"
     params:
+      region: "eastus"
       availability_zone: ""
     labels:
       - "weekly"
