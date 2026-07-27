@@ -25,3 +25,16 @@ class RaftApi(RemoteCurlClient):
     def read_barrier(self, group_id: str) -> str:
         path = f"read_barrier?group_id={group_id}"
         return self.run_remoter_curl(method="POST", path=path, params={}, timeout=30).stdout.strip()
+
+    def get_group0_leader_host_id(self) -> str:
+        """Return the current group0 Raft leader host id (the live topology coordinator).
+
+        No group_id param is passed, so the endpoint defaults to group0. The response is a
+        JSON-quoted UUID string (e.g. '"<uuid>"'); when no leader is known during an
+        election/stepdown, the response contains the nil UUID
+        ('"00000000-0000-0000-0000-000000000000"'), not an empty string, because Scylla
+        serializes current_leader() via server_id::to_sstring(). The raw stdout is returned
+        unparsed - the caller must parse it and handle that transient sentinel.
+        """
+        path = "leader_host"
+        return self.run_remoter_curl(method="GET", path=path, params={}, timeout=30).stdout.strip()

@@ -2,7 +2,6 @@ import logging
 import contextlib
 import time
 import traceback
-import re
 
 from typing import Iterable, Callable
 from functools import partial
@@ -18,12 +17,17 @@ from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.raft import get_node_status_from_system_by, NodeState
 from sdcm.cluster import BaseMonitorSet, NodeSetupFailed, BaseScyllaCluster, BaseNode
 from sdcm.exceptions import RaftTopologyCoordinatorNotFound
+from sdcm.rest.raft_api import RaftApi
 from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.utils.decorators import retrying
 
 
 LOGGER = logging.getLogger(__name__)
-UUID_REGEX = re.compile(r"([0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12})")
+
+# Scylla's GET /raft/leader_host serializes current_leader() via server_id::to_sstring(). When no
+# leader is known (election/stepdown in progress) current_leader() is a null server_id, which is
+# serialized as this nil UUID rather than an empty string. See scylladb api/raft.cc.
+NULL_LEADER_HOST_ID = "00000000-0000-0000-0000-000000000000"
 
 
 class RaftException(Exception):
@@ -56,24 +60,26 @@ def validate_raft_on_nodes(nodes: list[BaseNode]) -> None:
     n=3, allowed_exceptions=(RaftTopologyCoordinatorNotFound,), message="Waiting topology coordinator election ..."
 )
 def get_topology_coordinator_node(node: BaseNode) -> BaseNode:
+    """Return the node that is the current topology coordinator.
+
+    The topology coordinator fiber runs only on the group0 Raft leader, so the current topology
+    coordinator is the current group0 leader - a live fact exposed by the /raft/leader_host REST
+    endpoint. This avoids depending on system.group0_history retention, which is short-lived
+    (see scylladb PR #30395: group0_history GC shortened from 1 week to 1 hour).
+    """
     active_nodes: list[BaseNode] = node.parent_cluster.get_nodes_up_and_normal(node)
-    stm = "select description from system.group0_history where key = 'history' and \
-            description LIKE 'Starting new topology coordinator%' ALLOW FILTERING;"
-    with node.parent_cluster.cql_connection_patient(node) as session:
-        result = list(session.execute(stm))
-    coordinators_ids = []
-    for row in result:
-        if match := UUID_REGEX.search(row.description):
-            coordinators_ids.append(match.group(1))
-    if not coordinators_ids:
-        raise RaftTopologyCoordinatorNotFound("No host ids were found in raft group0 history")
-    LOGGER.debug("All coordinators history ids: %s", coordinators_ids)
+    # query any healthy up node: /raft/leader_host fans out internally, so it is safe even when
+    # the coordinator node itself is being restarted.
+    leader_host_id = loads(RaftApi(node).get_group0_leader_host_id() or '""')
+    if not leader_host_id or leader_host_id == NULL_LEADER_HOST_ID:
+        raise RaftTopologyCoordinatorNotFound("Group0 leader host id is unknown (election/stepdown in progress)")
+    LOGGER.debug("Group0 leader host id: %s", leader_host_id)
     for active_node in active_nodes:
         node_hostid = loads(StorageServiceClient(active_node).get_local_hostid().stdout)
         LOGGER.debug("Node %s host id is %s", active_node.name, node_hostid)
-        if node_hostid == coordinators_ids[0]:
+        if node_hostid == leader_host_id:
             return active_node
-    raise RaftTopologyCoordinatorNotFound(f"The node with host id {coordinators_ids[0]} was not found")
+    raise RaftTopologyCoordinatorNotFound(f"Leader host {leader_host_id} not found among active nodes")
 
 
 class NodeBootstrapAbortManager:
