@@ -1,5 +1,9 @@
+// AUTO-GENERATED from configurations/triggers/rolling-upgrade.yaml — do not edit manually.
+// Run: python utils/build_system/generate_trigger_jenkinsfiles.py
+
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 triggerMatrixPipeline(
     matrix_file: 'configurations/triggers/rolling-upgrade.yaml',
-    cron: '00 06 * * 6 % scylla_version={branch}:latest;labels_selector=weekly;requested_by_user=fruch'
+    cron: '''00 06 1-7,15-21,29-31 * 6 % scylla_version={branch}:latest;labels_selector=weekly,week-b;requested_by_user=fruch
+00 06 8-14,22-28 * 6 % scylla_version={branch}:latest;labels_selector=weekly,week-a;requested_by_user=fruch'''
 )

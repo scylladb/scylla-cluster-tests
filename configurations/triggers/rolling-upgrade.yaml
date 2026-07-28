@@ -1,3 +1,6 @@
+jenkinsfiles:
+  - path: "jenkins-pipelines/oss/sct_triggers/rolling-upgrade-trigger.jenkinsfile"
+
 # Rolling upgrade trigger matrix — single source of truth for all rolling-upgrade jobs.
 #
 # Replaces:
@@ -8,15 +11,41 @@
 # and/or image params.
 #
 # Usage patterns:
-#   Weekly (cron):    scylla_version={branch}:latest, labels_selector=weekly
+#   Weekly (cron):    scylla_version={branch}:latest, labels_selector=weekly,week-{a,b}
 #   Release (manual): new_scylla_repo=<url>, scylla_version=<tag>
 #   Image-based:      scylla_ami_id=<id>, backend=aws (or gce_image_db, azure_image_db)
+#
+# Biweekly alternation (SCT-716)
+# ------------------------------
+# Every "weekly" job also carries exactly one of "week-a" / "week-b", and the two cron
+# lines below select one half each — so a job runs roughly every 2 weeks. The halves are
+# balanced on estimated cost (`sct.py sizing preview`), ~$114 vs ~$120 per run.
+#
+# "weekly" on its own still selects the FULL set (labels are AND-matched), so the
+# scylla-pkg release path is unaffected. The "release"-labelled jobs below are not
+# cron-driven and deliberately carry no week label.
+#
+# The phase is deliberately OPPOSITE to tier1.yaml: tier1's heavy half (week-a) shares a
+# weekend with rolling-upgrade's lighter half, spreading concurrent cloud usage.
 
 cron_triggers:
-  - schedule: "00 06 * * 6"  # Saturday 6am UTC — same as old trigger
+  # 1st, 3rd and 5th Saturday of the month, 06:00 UTC.
+  #
+  # Cron has no "every 2 weeks" — there is no week-number field. The alternation is
+  # a day-of-month window AND-ed with day-of-week, which works because Jenkins ANDs
+  # those two fields (standard Vixie cron ORs them). Same idiom as
+  # perf-regression.yaml's "13 6 8-14 * 2" == 2nd Tuesday of the month.
+  # Days 29-31 are attached here so no Saturday is ever left idle.
+  - schedule: "00 06 1-7,15-21,29-31 * 6"
     params:
       scylla_version: "{branch}:latest"
-      labels_selector: "weekly"
+      labels_selector: "weekly,week-b"
+      requested_by_user: "fruch"
+  # 2nd and 4th Saturday of the month, 06:00 UTC.
+  - schedule: "00 06 8-14,22-28 * 6"
+    params:
+      scylla_version: "{branch}:latest"
+      labels_selector: "weekly,week-a"
       requested_by_user: "fruch"
 
 defaults:
@@ -37,6 +66,7 @@ jobs:
     backend: "gce"
     labels:
       - "weekly"
+      - "week-a"
       - "rpm"
     exclude_versions: []
     params:
@@ -51,6 +81,7 @@ jobs:
     backend: "gce"
     labels:
       - "weekly"
+      - "week-b"
       - "deb"
     exclude_versions: []
     params:
@@ -61,6 +92,7 @@ jobs:
     backend: "gce"
     labels:
       - "weekly"
+      - "week-b"
       - "deb"
     exclude_versions: []
     params:
@@ -71,6 +103,7 @@ jobs:
     backend: "gce"
     labels:
       - "weekly"
+      - "week-a"
       - "deb"
     exclude_versions: []
     params:
@@ -85,6 +118,7 @@ jobs:
     backend: "aws"
     labels:
       - "weekly"
+      - "week-b"
       - "image"
       - "ami"
     exclude_versions: []
@@ -97,6 +131,7 @@ jobs:
     arch: "aarch64"
     labels:
       - "weekly"
+      - "week-a"
       - "image"
       - "ami"
     exclude_versions: []
@@ -108,6 +143,7 @@ jobs:
     backend: "gce"
     labels:
       - "weekly"
+      - "week-a"
       - "image"
       - "gce"
     exclude_versions: []
@@ -119,6 +155,7 @@ jobs:
     backend: "azure"
     labels:
       - "weekly"
+      - "week-b"
       - "image"
       - "azure"
     exclude_versions: []
@@ -134,6 +171,7 @@ jobs:
     backend: "gce"
     labels:
       - "weekly"
+      - "week-b"
       - "deb"
     exclude_versions: []
     params:

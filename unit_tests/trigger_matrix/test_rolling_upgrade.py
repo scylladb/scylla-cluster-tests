@@ -126,7 +126,11 @@ def test_empty_version_no_resolution():
 def test_rolling_upgrade_yaml_loads():
     config = load_matrix_config(ROLLING_UPGRADE_YAML)
     assert len(config.jobs) > 0
-    assert config.cron_triggers[0].schedule == "00 06 * * 6"
+    # Two biweekly cron lines, both at Saturday 06:00 UTC (SCT-716).
+    assert [cron.schedule for cron in config.cron_triggers] == [
+        "00 06 1-7,15-21,29-31 * 6",
+        "00 06 8-14,22-28 * 6",
+    ]
 
 
 def test_all_jobs_have_new_scylla_repo():

@@ -13,13 +13,42 @@ jenkinsfiles:
 # Related PRs that move tier1 jobs between backends (must align after merge):
 #   - #14629: move longevity-150gb-asymmetric to GCE (12x n2-highmem-4)
 #   - #14594: replace Azure 1TB 5-day test with AWS i8g alternative
+#
+# Biweekly alternation (SCT-716)
+# ------------------------------
+# Every job keeps its "weekly" label and additionally carries exactly one of
+# "week-a" / "week-b". The two cron lines below select one half each, so a job
+# runs roughly every 2 weeks instead of every week. The halves are balanced on
+# estimated cost (`sct.py sizing preview`), ~$970 vs ~$966 per run.
+#
+# "weekly" on its own still selects the FULL set — labels are AND-matched, so
+# release / scylla-pkg triggers passing labels_selector=weekly are unaffected.
+#
+# NOTE: entries that resolve to the same Jenkins job (the x86 + aarch64 twins of
+# longevity-twcs-48h-test and elasticity-90-percent-with-nemesis-test) MUST share
+# the same week label. Only the first match is triggered (dedup by resolved path),
+# so twins on different weeks would make the job fire every week again.
 
 cron_triggers:
-  - schedule: "00 06 * * 6"  # Saturday 6am UTC
+  # 1st, 3rd and 5th Saturday of the month, 06:00 UTC.
+  #
+  # Cron has no "every 2 weeks" — there is no week-number field. The alternation is
+  # a day-of-month window AND-ed with day-of-week, which works because Jenkins ANDs
+  # those two fields (standard Vixie cron ORs them). Same idiom as
+  # perf-regression.yaml's "13 6 8-14 * 2" == 2nd Tuesday of the month.
+  # Days 29-31 are attached here so no Saturday is ever left idle.
+  - schedule: "00 06 1-7,15-21,29-31 * 6"
     params:
       scylla_version: "{branch}:latest"
       job_folder: "scylla-master"
-      labels_selector: "weekly"
+      labels_selector: "weekly,week-a"
+      requested_by_user: "pehala"
+  # 2nd and 4th Saturday of the month, 06:00 UTC.
+  - schedule: "00 06 8-14,22-28 * 6"
+    params:
+      scylla_version: "{branch}:latest"
+      job_folder: "scylla-master"
+      labels_selector: "weekly,week-b"
       requested_by_user: "pehala"
 
 defaults:
@@ -39,6 +68,7 @@ jobs:
       region: "eu-west-1"
     labels:
       - "weekly"
+      - "week-b"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   - job_name: "tier1/longevity-mv-si-4days-streaming-test"
@@ -47,6 +77,7 @@ jobs:
       region: "eu-west-1"
     labels:
       - "weekly"
+      - "week-a"
 
   - job_name: "tier1/longevity-schema-topology-changes-12h-test"
     backend: "aws"
@@ -54,6 +85,7 @@ jobs:
       region: "eu-west-1"
     labels:
       - "weekly"
+      - "week-a"
 
   - job_name: "tier1/scale-schema-5000-tables-latte-test"
     backend: "aws"
@@ -61,6 +93,7 @@ jobs:
       region: "eu-west-1"
     labels:
       - "weekly"
+      - "week-b"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   - job_name: "tier1/longevity-twcs-48h-test"
@@ -69,6 +102,7 @@ jobs:
       region: "us-east-1"
     labels:
       - "weekly"
+      - "week-b"
 
   - job_name: "tier1/longevity-50gb-3days-test"
     backend: "aws"
@@ -76,6 +110,7 @@ jobs:
       region: "eu-west-1"
     labels:
       - "weekly"
+      - "week-a"
     include_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   - job_name: "tier1/longevity-150gb-asymmetric-cluster-12h-test"
@@ -84,6 +119,7 @@ jobs:
       region: "us-east-1"
     labels:
       - "weekly"
+      - "week-b"
 
   - job_name: "tier1/elasticity-90-percent-with-nemesis-test"
     backend: "aws"
@@ -91,6 +127,7 @@ jobs:
       region: "us-east-1"
     labels:
       - "weekly"
+      - "week-a"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
   - job_name: "tier1/longevity-multidc-schema-topology-changes-12h-test"
@@ -100,6 +137,7 @@ jobs:
       availability_zone: "a,b,c"
     labels:
       - "weekly"
+      - "week-b"
 
   # ==================== AWS aarch64 ====================
 
@@ -109,6 +147,7 @@ jobs:
       region: "us-east-1"
     labels:
       - "weekly"
+      - "week-b"  # must match the x86 twin above
       - "aarch64"
     exclude_versions: ["2024.1", "2025.1"]
 
@@ -118,6 +157,7 @@ jobs:
       region: "eu-west-1"
     labels:
       - "weekly"
+      - "week-b"
       - "aarch64"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1", "2026.2"]
 
@@ -127,6 +167,7 @@ jobs:
       region: "us-east-1"
     labels:
       - "weekly"
+      - "week-a"  # must match the x86 twin above
       - "aarch64"
     exclude_versions: ["2024.1", "2025.1", "2025.4", "2026.1"]
 
@@ -139,6 +180,7 @@ jobs:
       availability_zone: ""
     labels:
       - "weekly"
+      - "week-a"
 
   # ==================== Azure ====================
 
@@ -149,4 +191,5 @@ jobs:
       availability_zone: ""
     labels:
       - "weekly"
+      - "week-b"
     include_versions: ["2024.1", "2025.1", "2025.4", "2026.1", "2026.2"]
