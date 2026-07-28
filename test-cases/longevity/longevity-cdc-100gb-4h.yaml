@@ -8,6 +8,7 @@ stress_cmd: [ "cassandra-stress user no-warmup profile=/tmp/cdc_profile.yaml ops
              ]
 
 availability_zone: 'a,b,c'
+simulated_racks: 0
 n_db_nodes: 6
 n_loaders: 2
 
