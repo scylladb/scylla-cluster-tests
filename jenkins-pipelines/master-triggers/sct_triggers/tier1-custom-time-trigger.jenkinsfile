@@ -4,5 +4,6 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 triggerMatrixPipeline(
     matrix_file: 'configurations/triggers/tier1.yaml',
-    cron: '00 06 * * 6 % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=weekly;requested_by_user=pehala'
+    cron: '''00 06 1-7,15-21,29-31 * 6 % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=weekly,week-a;requested_by_user=pehala
+00 06 8-14,22-28 * 6 % scylla_version={branch}:latest;job_folder=scylla-master;labels_selector=weekly,week-b;requested_by_user=pehala'''
 )

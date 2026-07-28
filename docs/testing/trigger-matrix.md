@@ -120,6 +120,53 @@ uv run sct.py trigger-matrix \
 
 Labels use AND logic: `--labels-selector "weekly,additional"` requires jobs to have **both** labels.
 
+### Biweekly alternation: `week-a` / `week-b`
+
+`tier1.yaml` and `rolling-upgrade.yaml` halve their weekly load (SCT-716). Every `weekly` job also
+carries exactly one of `week-a` / `week-b`, and each matrix has **two cron lines** — same time of day,
+one per half — so a job runs roughly every 2 weeks instead of weekly. The halves are balanced on
+estimated cost via `sct.py sizing preview`.
+
+```bash
+# just the half that runs on the 1st/3rd/5th Saturday of the month
+uv run sct.py trigger-matrix \
+    --matrix configurations/triggers/tier1.yaml \
+    --scylla-version "master:latest" \
+    --labels-selector "weekly,week-a" \
+    --dry-run
+```
+
+`--labels-selector weekly` (no week label) still selects the **full** set — that is what the scylla-pkg
+release path uses, so releases keep testing everything.
+
+Two invariants are enforced by `unit_tests/trigger_matrix/test_biweekly_split.py`:
+
+- **Every `weekly` job has exactly one week label.** None means it never runs; both means it runs weekly.
+- **Entries that resolve to the same Jenkins job share a week label.** The x86 and `aarch64` twins of
+  `longevity-twcs-48h-test` / `elasticity-90-percent-with-nemesis-test` are deduplicated by resolved path,
+  so twins on different weeks would make the job fire on *both* weeks — silently undoing the alternation.
+
+**Why the cron expressions look odd.** Cron has no "every 2 weeks" — there is no week-number field, and
+`*/14` in day-of-month restarts each month (days 1, 15, 29), so AND-ed with Saturday it fires only when
+the 1st/15th/29th happens to be a Saturday. The alternation is therefore a day-of-month window AND-ed
+with day-of-week:
+
+| schedule | fires on |
+|---|---|
+| `00 06 1-7,15-21,29-31 * 6` | 1st, 3rd, 5th Saturday, 06:00 UTC |
+| `00 06 8-14,22-28 * 6` | 2nd, 4th Saturday, 06:00 UTC |
+
+This works because **Jenkins ANDs the day-of-month and day-of-week fields** — standard Vixie cron ORs
+them, where `1-7 * 6` would mean "days 1-7 *or* any Saturday". `perf-regression.yaml` already relies on
+this with `13 6 8-14 * 2` (2nd Tuesday). Days 29-31 are attached to the first window so no Saturday is
+idle; the cost is that `week-a` occasionally runs on two consecutive Saturdays across a month boundary.
+Over a year the split is ~28 / ~24 Saturdays. Jenkins shows an advisory *"Short cycles in the
+day-of-month field will behave oddly near the end of a month"* for any day-of-month range — it is benign
+and already present on the perf-regression trigger.
+
+The two matrices are deliberately in **opposite phase**: tier1's heavier half shares a weekend with
+rolling-upgrade's lighter half.
+
 ### Backend Filtering
 
 ```bash
