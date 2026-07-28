@@ -455,7 +455,7 @@ def send_iotune_results_to_argus(argus_client: ArgusClient, results: dict, node,
         return
 
     run = argus_client.get_run()
-    if not run["test_id"]:
+    if not run.get("test_id"):
         LOGGER.warning("No test exists for this run, skipping submitting results")
         return
 
