@@ -4528,9 +4528,9 @@ cassandra-stress driver version to use: 3|4|random
 
 ## **keystore_backend** / SCT_KEYSTORE_BACKEND
 
-Credential storage backend for KeyStore: 's3' (default) or 'secretsmanager'
+Credential storage backend for KeyStore: 'secretsmanager' (default) or 's3' (legacy)
 
-**default:** s3
+**default:** secretsmanager
 
 **type:** Literal['s3', 'secretsmanager']
 
