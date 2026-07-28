@@ -13,8 +13,16 @@ S3 fallback stays in sync.
 | SCT config file | `keystore_backend` | `secretsmanager` (default) or `s3` |
 | Environment variable | `SCT_KEYSTORE_SM_PREFIX` | default: `sct/` |
 | SCT config file | `keystore_sm_prefix` | default: `sct/` |
+| Environment variable | `SCT_KEYSTORE_SM_REGION` | default: `us-east-1` |
+| SCT config file | `keystore_sm_region` | default: `us-east-1` |
 
 The environment variable takes precedence.
+
+The region must be pinned explicitly: S3 has a global endpoint so boto3 falls
+back to `us-east-1` on its own, but Secrets Manager is strictly regional and
+raises `NoRegionError` when neither `AWS_DEFAULT_REGION` nor an explicit region
+is set. `KeyStore` therefore always passes `region_name`, defaulting to
+`us-east-1` where the `sct/*` secrets live.
 
 ## Managed credentials
 
