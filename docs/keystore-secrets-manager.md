@@ -9,8 +9,8 @@ S3 fallback stays in sync.
 
 | Source | Key | Value |
 |---|---|---|
-| Environment variable | `SCT_KEYSTORE_BACKEND` | `s3` (default) or `secretsmanager` |
-| SCT config file | `keystore_backend` | `s3` or `secretsmanager` |
+| Environment variable | `SCT_KEYSTORE_BACKEND` | `secretsmanager` (default) or `s3` |
+| SCT config file | `keystore_backend` | `secretsmanager` (default) or `s3` |
 | Environment variable | `SCT_KEYSTORE_SM_PREFIX` | default: `sct/` |
 | SCT config file | `keystore_sm_prefix` | default: `sct/` |
 
