@@ -107,14 +107,25 @@ gcloud iam service-accounts keys create "/tmp/${NEW_PROJECT_ID}.json" \
     --project="$NEW_PROJECT_ID"
 ```
 
-### Upload Credentials to S3 Keystore
+### Upload Credentials to the Keystore
+
+The keystore reads from AWS Secrets Manager by default, with S3 as the
+legacy backend — upload to **both** (see
+[keystore-secrets-manager.md](keystore-secrets-manager.md)).
 
 ```bash
-# Upload the service account key to the SCT keystore
+# Upload the service account key to the SCT keystore (S3)
 aws s3 cp "/tmp/${NEW_PROJECT_ID}.json" "s3://scylla-qa-keystore/${NEW_PROJECT_ID}.json"
 
+# Mirror into Secrets Manager (the default backend)
+aws secretsmanager create-secret --region us-east-1 \
+    --name "sct/${NEW_PROJECT_ID}.json" \
+    --description "GCP service account: ${NEW_PROJECT_ID}" \
+    --secret-string "file:///tmp/${NEW_PROJECT_ID}.json" \
+    --tags Key=team,Value=sct Key=secret_type,Value=cloud_creds Key=rotation_tier,Value=tier2
+
 # Clean up local key
-rm "/tmp/${NEW_PROJECT_ID}.json"
+shred -u "/tmp/${NEW_PROJECT_ID}.json"
 ```
 
 ---
@@ -226,9 +237,15 @@ cat > "/tmp/${NEW_PROJECT_ID}_service_accounts.json" << 'EOF'
 ]
 EOF
 
-# Upload to keystore
+# Upload to keystore (S3)
 aws s3 cp "/tmp/${NEW_PROJECT_ID}_service_accounts.json" \
     "s3://scylla-qa-keystore/${NEW_PROJECT_ID}_service_accounts.json"
+
+# Mirror into Secrets Manager (the default backend)
+aws secretsmanager create-secret --region us-east-1 \
+    --name "sct/${NEW_PROJECT_ID}_service_accounts.json" \
+    --secret-string "file:///tmp/${NEW_PROJECT_ID}_service_accounts.json" \
+    --tags Key=team,Value=sct Key=secret_type,Value=config
 ```
 
 > **Note:** The `https://www.googleapis.com/auth/cloud-platform` scope is automatically appended
@@ -523,8 +540,8 @@ hydra run-test longevity_test.LongevityTest.test_custom_time --backend gce --con
 
 - [ ] Project created and billing linked
 - [ ] All required APIs enabled
-- [ ] Main service account created with key uploaded to S3 keystore
-- [ ] Service accounts scopes JSON uploaded to S3 keystore
+- [ ] Main service account created with key uploaded to S3 keystore **and** mirrored to `sct/<project-id>.json` in Secrets Manager
+- [ ] Service accounts scopes JSON uploaded to S3 keystore **and** mirrored to `sct/<project-id>_service_accounts.json` in Secrets Manager
 - [ ] IAM roles assigned (especially `roles/storage.admin` for object retention)
 - [ ] `qa-vpc` network created
 - [ ] Firewall rules configured (or let SCT auto-create on first run)
@@ -554,12 +571,18 @@ gcloud projects add-iam-policy-binding "$NEW_PROJECT_ID" \
 
 ### Credential File Not Found
 
-Ensure the service account key is uploaded to S3 with the correct filename:
-- Main credentials: `s3://scylla-qa-keystore/<project-id>.json`
-- Service account scopes: `s3://scylla-qa-keystore/<project-id>_service_accounts.json`
+Ensure the service account key is uploaded with the correct name to **both** backends:
+
+| | Secrets Manager (default) | S3 (legacy) |
+|---|---|---|
+| Main credentials | `sct/<project-id>.json` | `s3://scylla-qa-keystore/<project-id>.json` |
+| Service account scopes | `sct/<project-id>_service_accounts.json` | `s3://scylla-qa-keystore/<project-id>_service_accounts.json` |
 
 The `KeyStore.get_gcp_credentials()` method in `sdcm/keystore.py` resolves the filename from
 `SCT_GCE_PROJECT` environment variable (defaults to `gcp-sct-project-1`).
+A `ResourceNotFoundException` for `sct/<project-id>.json` means the entry exists in S3 but was
+never mirrored into Secrets Manager — see
+[keystore-secrets-manager.md](keystore-secrets-manager.md#gcp-projects).
 
 ### Quota Issues
 
