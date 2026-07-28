@@ -12,6 +12,7 @@ n_loaders: '2 2 2'
 
 rack_aware_loader: true
 region_aware_loader: true
+availability_zone: 'a,b,c'
 simulated_racks: 0
 
 nemesis_class_name: 'SisyphusMonkey'
