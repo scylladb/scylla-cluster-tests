@@ -18,6 +18,7 @@ legacy tester path (`tester.ClusterTester.get_cluster_aws`) relocate the full cl
 region when region capacity is exhausted. This module shares their common placement and cleanup logic.
 """
 
+import logging
 import os
 from collections.abc import Callable
 
@@ -26,6 +27,8 @@ from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.utils import cleanup_abandoned_region
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.common import convert_name_to_ami_if_needed, find_equivalent_ami
+
+LOGGER = logging.getLogger(__name__)
 
 
 def enforce_single_region_gate(params) -> None:
@@ -161,4 +164,7 @@ def cleanup_region(test_id: str, region: str | None, partial_cleanup: Callable[[
     partial_cleanup()
     if region:
         cleanup_abandoned_region(test_id, region)
-        AwsKms(region_names=[region]).delete_alias(f"alias/testid-{test_id}", tolerate_errors=True)
+        try:
+            AwsKms(region_names=[region]).delete_alias(f"alias/testid-{test_id}", tolerate_errors=True)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Abandoned-region belt: failed to delete KMS alias for %s in %s: %s", test_id, region, exc)

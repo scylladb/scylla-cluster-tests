@@ -603,6 +603,20 @@ def test_cleanup_region_deletes_abandoned_kms_alias():
     mock_aws_kms.return_value.delete_alias.assert_called_once_with("alias/testid-t-1", tolerate_errors=True)
 
 
+def test_cleanup_region_tolerates_kms_delete_failure():
+    partial_cleanup = MagicMock()
+
+    with (
+        patch("sdcm.provision.aws.region_fallback.cleanup_abandoned_region"),
+        patch("sdcm.provision.aws.region_fallback.AwsKms") as mock_aws_kms,
+    ):
+        mock_aws_kms.return_value.delete_alias.side_effect = RuntimeError("no credentials")
+        cleanup_region("t-1", "us-east-1", partial_cleanup=partial_cleanup)
+
+    partial_cleanup.assert_called_once()
+    mock_aws_kms.return_value.delete_alias.assert_called_once_with("alias/testid-t-1", tolerate_errors=True)
+
+
 def test_cleanup_region_skips_kms_cleanup_without_region():
     partial_cleanup = MagicMock()
 
