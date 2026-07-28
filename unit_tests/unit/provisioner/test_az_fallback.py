@@ -24,7 +24,7 @@ from sdcm.exceptions import CapacityReservationError
 from sdcm.provision.aws import utils as aws_utils
 from sdcm.provision.aws.az_resolver import AZResolver
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, RegionAMINotFoundError
-from sdcm.provision.aws.region_fallback import switch_region
+from sdcm.provision.aws.region_fallback import cleanup_region, switch_region
 from sdcm.sct_provision.aws.layout import SCTProvisionAWSLayout
 from sdcm.tester import ClusterTester
 
@@ -538,6 +538,7 @@ def _make_region_tester_stub(**param_overrides):
     stub._switch_region_legacy = bind(ClusterTester._switch_region_legacy)
     stub._restore_region_legacy = bind(ClusterTester._restore_region_legacy)
     stub._cleanup_region_legacy = MagicMock()
+    stub.prepare_kms_host = MagicMock()
     return stub
 
 
@@ -560,6 +561,60 @@ def test_legacy_region_fallback_relocates_on_exhaustion(restore_region_env):  # 
     assert stub.params.get("resolve_amis_calls") == [(["eu-west-1"], "us-east-1")]
     stub._cleanup_region_legacy.assert_called_once()
     stub.test_config.persist_resolved_placement_if_changed.assert_called_once()
+    stub.prepare_kms_host.assert_called_once_with()
+
+
+def test_switch_region_legacy_re_preps_kms_host_for_target_region(restore_region_env):  # noqa: ARG001
+    stub = _make_region_tester_stub()
+
+    stub._switch_region_legacy("eu-west-1", ["a"], "us-east-1", {}, {}, {})
+
+    assert stub.params["region_name"] == "eu-west-1"
+    stub.prepare_kms_host.assert_called_once_with()
+
+
+def test_legacy_region_fallback_restores_region_when_switch_region_kms_prep_fails(restore_region_env):  # noqa: ARG001
+    stub = _make_region_tester_stub()
+    stub.prepare_kms_host.side_effect = RuntimeError("KMS alias creation throttled")
+    stub._attempt_region_legacy = MagicMock(return_value=(True, _capacity_error(), [["a"]]))
+
+    with (
+        patch.object(AZResolver, "get_region_fallback_candidates", return_value=[("eu-west-1", ["a"])]),
+        pytest.raises(RuntimeError, match="KMS alias creation throttled"),
+    ):
+        ClusterTester._get_cluster_aws_with_region_fallback(stub, {}, {}, {})
+
+    assert stub.params["region_name"] == "us-east-1"
+    assert stub.params["availability_zone"] == "a"
+
+
+def test_cleanup_region_deletes_abandoned_kms_alias():
+    partial_cleanup = MagicMock()
+
+    with (
+        patch("sdcm.provision.aws.region_fallback.cleanup_abandoned_region") as mock_cleanup_abandoned_region,
+        patch("sdcm.provision.aws.region_fallback.AwsKms") as mock_aws_kms,
+    ):
+        cleanup_region("t-1", "us-east-1", partial_cleanup=partial_cleanup)
+
+    partial_cleanup.assert_called_once()
+    mock_cleanup_abandoned_region.assert_called_once_with("t-1", "us-east-1")
+    mock_aws_kms.assert_called_once_with(region_names=["us-east-1"])
+    mock_aws_kms.return_value.delete_alias.assert_called_once_with("alias/testid-t-1", tolerate_errors=True)
+
+
+def test_cleanup_region_skips_kms_cleanup_without_region():
+    partial_cleanup = MagicMock()
+
+    with (
+        patch("sdcm.provision.aws.region_fallback.cleanup_abandoned_region") as mock_cleanup_abandoned_region,
+        patch("sdcm.provision.aws.region_fallback.AwsKms") as mock_aws_kms,
+    ):
+        cleanup_region("t-1", None, partial_cleanup=partial_cleanup)
+
+    partial_cleanup.assert_called_once()
+    mock_cleanup_abandoned_region.assert_not_called()
+    mock_aws_kms.assert_not_called()
 
 
 def test_switch_region_sets_placement_resolves_amis_and_invalidates(restore_region_env):  # noqa: ARG001
