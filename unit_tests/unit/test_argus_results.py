@@ -14,9 +14,15 @@
 import json
 from unittest.mock import MagicMock, call
 
+import pytest
 from argus.client.generic_result import Cell, Status
 
-from sdcm.argus_results import ReactorStallStatsResult, send_result_to_argus, LatencyCalculatorMixedResult
+from sdcm.argus_results import (
+    ReactorStallStatsResult,
+    send_iotune_results_to_argus,
+    send_result_to_argus,
+    LatencyCalculatorMixedResult,
+)
 
 
 def test_send_latency_decorator_result_to_argus(test_data_dir):
@@ -78,3 +84,14 @@ def test_send_latency_decorator_result_to_argus(test_data_dir):
         ),
     ]
     argus_mock.submit_results.assert_has_calls(expected_calls, any_order=True)
+
+
+@pytest.mark.parametrize("run", [{}, {"test_id": None}], ids=["no-run-registered", "empty-test-id"])
+def test_send_iotune_results_to_argus_skips_when_no_run(run):
+    """In replay-log-only mode get_run() returns an empty payload, it should be skipped, not raise."""
+    argus_mock = MagicMock()
+    argus_mock.get_run = MagicMock(return_value=run)
+
+    send_iotune_results_to_argus(argus_client=argus_mock, results={}, node=MagicMock(), params={})
+
+    argus_mock.submit_results.assert_not_called()
