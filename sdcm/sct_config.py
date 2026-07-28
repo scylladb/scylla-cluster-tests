@@ -88,10 +88,19 @@ from sdcm.kafka.kafka_config import SctKafkaConfiguration
 from sdcm.mgmt.common import AgentBackupParameters
 from sdcm.utils.version_utils import parse_scylla_version_tag
 
-# SCT_KEYSTORE_* env var names this process exported itself (see the keystore
-# propagation in verify_configuration).  Tracked so a later SCTConfiguration can
-# refresh them without mistaking them for a user-supplied override.
-_KEYSTORE_ENV_EXPORTED: set[str] = set()
+# SCT_KEYSTORE_* env vars this process exported itself (see the keystore
+# propagation at the end of SCTConfiguration.__init__), mapped to the value we
+# wrote.  The value matters, not just the name: environment variables outrank
+# config files, so a value this process leaked into os.environ would otherwise
+# beat a later config file asking for a different backend.  Comparing against
+# the tracked value lets `_load_environment_variables` ignore our own export
+# while still honouring a value the user changed behind our back.
+_KEYSTORE_ENV_EXPORTED: dict[str, str] = {}
+
+
+def _is_self_exported_keystore_env(env_name: str) -> bool:
+    """True if os.environ[env_name] is still the value this process exported."""
+    return env_name in _KEYSTORE_ENV_EXPORTED and os.environ.get(env_name) == _KEYSTORE_ENV_EXPORTED[env_name]
 
 
 def _str(value: str) -> str:
@@ -3795,9 +3804,9 @@ class SCTConfiguration(dict):
         for _param in ("keystore_backend", "keystore_sm_prefix", "keystore_sm_region"):
             _env_name = f"SCT_{_param.upper()}"
             _value = self.get(_param)
-            if _value and (_env_name not in os.environ or _env_name in _KEYSTORE_ENV_EXPORTED):
+            if _value and (_env_name not in os.environ or _is_self_exported_keystore_env(_env_name)):
                 os.environ[_env_name] = str(_value)
-                _KEYSTORE_ENV_EXPORTED.add(_env_name)
+                _KEYSTORE_ENV_EXPORTED[_env_name] = str(_value)
 
     def load_docker_images_defaults(self):
         docker_images_dir = pathlib.Path(sct_abs_path("defaults/docker_images"))
@@ -3908,6 +3917,12 @@ class SCTConfiguration(dict):
     def _load_environment_variables(self):
         environment_vars = {}
         for opt in self.config_options:
+            # Env vars this process exported itself are not user input, so they must
+            # not be given environment-variable precedence over a config file.  Only
+            # skip them while they still hold the value we wrote -- a value the user
+            # changed since is a genuine override.
+            if _is_self_exported_keystore_env(opt["env"]):
+                continue
             if opt["env"] in os.environ:
                 try:
                     raw_value = os.environ[opt["env"]]
