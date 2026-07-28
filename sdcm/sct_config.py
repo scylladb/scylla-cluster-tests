@@ -2294,7 +2294,7 @@ class SCTConfiguration(dict):
             name="keystore_backend",
             env="SCT_KEYSTORE_BACKEND",
             type=str,
-            help="Credential storage backend for KeyStore: 's3' (default) or 'secretsmanager'",
+            help="Credential storage backend for KeyStore: 'secretsmanager' (default) or 's3' (legacy)",
             choices=("s3", "secretsmanager"),
         ),
         dict(
