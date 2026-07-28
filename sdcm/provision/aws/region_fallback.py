@@ -24,6 +24,7 @@ from collections.abc import Callable
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.utils import cleanup_abandoned_region
+from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.common import convert_name_to_ami_if_needed, find_equivalent_ami
 
 
@@ -160,3 +161,4 @@ def cleanup_region(test_id: str, region: str | None, partial_cleanup: Callable[[
     partial_cleanup()
     if region:
         cleanup_abandoned_region(test_id, region)
+        AwsKms(region_names=[region]).delete_alias(f"alias/testid-{test_id}", tolerate_errors=True)

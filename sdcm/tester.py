@@ -1955,6 +1955,9 @@ class ClusterTester(unittest.TestCase):
                     last_error = exc
                     self.log.warning("Region '%s' ineligible (no equivalent AMI): %s", target_region, exc)
                     continue
+                except Exception:
+                    self._restore_region_legacy(original_region, original_az, original_env_region)
+                    raise
                 source_region = target_region
 
             try:
@@ -1996,6 +1999,9 @@ class ClusterTester(unittest.TestCase):
                 info["device_mappings"] = None
 
         switch_region(self.params, region, az_letters, source_region, invalidate_caches=reset_info_device_mappings)
+        # region_names is env-first (see switch_region) and this path is gated to a single region,
+        # so self.params.region_names already resolves to [region] here.
+        self.prepare_kms_host()
 
     def _restore_region_legacy(self, region, availability_zone, env_region):
         restore_region(self.params, region, availability_zone, env_region)
