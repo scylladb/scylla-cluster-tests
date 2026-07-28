@@ -2416,7 +2416,7 @@ class SCTConfiguration(BaseModel):
         ),
     )
     keystore_backend: Literal["s3", "secretsmanager"] = SctField(
-        description="Credential storage backend for KeyStore: 's3' (default) or 'secretsmanager'",
+        description="Credential storage backend for KeyStore: 'secretsmanager' (default) or 's3' (legacy)",
     )
     keystore_sm_prefix: String = SctField(
         description="AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (default: 'sct/')",
