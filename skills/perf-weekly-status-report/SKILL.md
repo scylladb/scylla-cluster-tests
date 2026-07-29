@@ -25,7 +25,23 @@ Release builds (`2026.1.5`) run on stable branches and represent prior releases.
 
 **The `argus` binary (Go CLI) is the data source -- not the Python argus client library.**
 
-The Go-based `argus` CLI (`/home/juliayakovlev/.local/bin/argus`) provides `run list` and `run results` subcommands that return JSON. This is faster and more reliable than the Python library for batch data collection. Always use `--url https://argus.scylladb.com` to target the production Argus instance.
+The Go-based `argus` CLI provides `run list` and `run results` subcommands that return JSON. This is faster and more reliable than the Python library for batch data collection. Always use `--url https://argus.scylladb.com` to target the production Argus instance.
+
+Resolve the binary from `PATH` (`which argus`) -- do **not** hardcode a path under any particular user's home directory. A typical install lives in `~/.local/bin/argus`.
+
+> **Name collision:** `argus --version` is not a valid flag. Verify with `argus --help` and confirm `run` and `issue` subcommands are listed.
+
+### Authenticate Argus Before Collecting
+
+**The first `argus` call opens a browser and blocks on `Waiting for login...`.**
+
+This violates the repo-wide rule that commands must be non-interactive, and in a headless or automated run it hangs until timeout. Do a cheap pre-flight call before the batch collection so the login happens once, visibly, at a predictable moment:
+
+```bash
+argus run list --test-id <ANY_TEST_ID> --limit 1 --url https://argus.scylladb.com
+```
+
+If the output contains `Waiting for login...`, tell the user a browser login is required and wait for it to complete before proceeding. Never launch the 16-test collection loop as the first Argus call -- a login prompt mid-fan-out produces confusing partial failures.
 
 ### Gmail-Compatible HTML
 
@@ -50,6 +66,30 @@ Gmail only supports inline CSS styles on elements. Never use `<style>` tags, `<l
 
 **Status column format:** Show just the status badge (PASSED/FAILED/ERROR) of the latest run for that workload. No counts.
 
+### Runs With No Results: Recover the Workload From Jenkins
+
+**A `test_error` run often has ZERO result tables, so its workload cannot be read from table names. Do not drop these runs.**
+
+This is common and can dominate a week: a run that dies during provisioning has `end_time` of `1970-01-01`, an empty `results` array, and no field anywhere in the run object naming its workload. Since the skill's normal path derives workload from table names (`"<workload> - <step> - latencies"`), these runs would silently vanish from the overview -- making a week of failures look like a week with few runs.
+
+Recover the workload from the Jenkins build that produced the run:
+
+1. Each run object has `build_id` and `build_number`. Fetch that build's parameters (Jenkins MCP `get_build_parameters`, or the Jenkins REST API).
+2. The `sub_tests` parameter is an ordered JSON list of the workloads that build ran, e.g.
+   `["test_read_gradual_increase_load", "test_write_gradual_increase_load"]`.
+3. Sub-tests execute **sequentially**, each creating one Argus run. Sort that build's runs by `start_time` and zip them positionally against `sub_tests`.
+4. **Validate the mapping** against the runs in the same build that *do* have tables -- their table-name workload must match the position they were assigned. If it doesn't, stop and report the ambiguity rather than guessing.
+
+Map sub-test names to workload labels: `test_read_gradual_increase_load` -> `read`, `test_write_gradual_increase_load` -> `write`, `test_mixed_gradual_increase_load` -> `mixed`, `test_read_disk_only_gradual_increase_load` -> `read_disk_only`, `test_latency_mixed_with_nemesis` -> `mixed`.
+
+Also determine *why* the run produced nothing, and say so in the Conclusion -- a provisioning abort is not a performance result. Grep the Jenkins console for the cause; the common one is AWS capacity:
+
+```
+sdcm.exceptions.CapacityReservationError: Failed to create capacity reservation in any availability zone.
+```
+
+State the real reason (e.g. `InsufficientInstanceCapacity` for a given instance type and region) rather than reporting a bare `ERROR`. Do **not** list these runs as rows in the Failed Results table -- they have no metrics to show; the Conclusion carries them.
+
 ### Version Display
 
 **Show full version with build date AND revision hash: `2026.3.0.dev-20260612.91ada5517d59`.**
@@ -57,6 +97,8 @@ Gmail only supports inline CSS styles on elements. Never use `<style>` tags, `<l
 The full version is constructed from the `packages[]` array: take `scylla-server-target` package's `version` field (normalize `~` to `.`), append `.` + the `date` field, append `.` + the `revision_id` field. Example: version=`2026.3.0~dev`, date=`20260612`, revision_id=`91ada5517d59` becomes `2026.3.0.dev.20260612.91ada5517d59`.
 
 The "short version" (e.g., `2026.3.0.dev`) is derived by normalizing `~` to `.` in the `scylla_version` field.
+
+**When the period spans more than one build** (common -- e.g. most tests on `...20260723.4fc12a81b3c5` but a nemesis run on `...20260720.a78d406c2ed8`), the Summary title takes the version covering the **most runs**; break ties with the most recent build date. Every per-run version still appears in the Detailed Results `Version` column, and the detailed test sub-heading uses that test's own version -- so a test built from a different revision is never mislabelled with the Summary's version.
 
 ### Detailed Results: Argus Links and Throughput
 
@@ -109,7 +151,7 @@ This provides better readability for tables with multiple columns.
 
 **The report file (`perf-weekly-status-report.html`) must NOT be saved into the SCT repository.**
 
-Write it to `/tmp/opencode/perf-weekly-status-report.html` or the user's home directory. Never commit it to the repo.
+Write it anywhere outside the working tree -- the agent's own scratchpad/temp directory is the natural choice, or the user's home directory. Never commit it to the repo. (`/tmp/opencode/` also works but is specific to one agent harness; don't treat it as required.)
 
 ## When to Use
 
@@ -148,6 +190,10 @@ These are the enterprise performance tests tracked in the weekly report:
 | simple-query-weekly-microbenchmark_arm64-write | dcc1afa0-2225-468c-9f45-5cfc8486f7f8 | Microbenchmarks |
 | simple-query-weekly-microbenchmark_x86_64 | 03464849-60e8-46c8-91b9-955cdeb07ea6 | Microbenchmarks |
 | simple-query-weekly-microbenchmark_x86_64-write | 6e745123-cb53-482b-836c-0609bd36a4e6 | Microbenchmarks |
+
+**Most of this registry is usually empty for a given week, and that is expected.** These tests are not all scheduled weekly, and several run predominantly on release branches -- their runs get filtered out by the master-only rule. It is normal for whole categories (i8g Vnodes, i4i Tablets, i4i Vnodes) to contribute zero rows because they only ran release builds such as `2026.2.2` / `2026.1.9`.
+
+Do not treat a mostly-empty result as a collection failure, and do not list tests with no runs in the report. Do state in the Conclusion which categories had no master runs, so readers can tell "passed" apart from "never ran".
 
 ## Input Parameters
 
@@ -212,7 +258,18 @@ Returns JSON array of issue objects. Key fields:
 - `state` -- Jira state ("new", "todo", "done", "duplicate")
 - `url` -- Direct Jira link
 
-Note: Does NOT expose Jira creation dates. Agent must ask user to classify new vs reproduced.
+Note: the Argus payload does NOT include Jira creation dates -- but you can look them up directly instead of asking the user (see below).
+
+**`argus issue list` frequently returns `[]` even for failed runs.** Linking a run to a Jira ticket is a manual step in Argus, so an unlinked failure is normal, not a collection bug. When every failed run returns no issues, do not conclude there are no relevant issues -- ask the user whether a known ticket covers the failure, and say plainly in your summary that the attribution came from them rather than from Argus.
+
+### Resolve new vs reproduced from Jira, not from the user
+
+Fetch each issue's `created` field via the Atlassian MCP `getJiraIssue` tool (`fields: ["summary","status","created","resolution"]`) and compare it to the report window:
+
+- `created` **inside** the window -> **New Issues - Regression**
+- `created` **before** the window -> **Reproduced Issues**
+
+Use `status` / `resolution` for the State column, and to support any "no progress since last week" statement -- an issue whose `updated` timestamp predates the previous report genuinely has had no activity. Only fall back to asking the user if Jira is unreachable.
 
 ## Report Structure
 
@@ -221,7 +278,7 @@ The output HTML file must contain:
 1. **Header** -- Report title, date range, "Master (~dev) builds only" indicator
 2. **Summary** -- Title format: "Summary for Scylla version {full_version}" where full_version includes build date and revision hash (e.g., "2026.3.0.dev.20260612.91ada5517d59"). Body: Total tests run, passed count, failed count, error count. **Counts are per run, not per test group.** Each workload is a separate run, so a test with 4 workloads (mixed, read, write, read_disk_only) counts as 4 runs. Microbenchmark tests count as 1 run each. This ensures that Total = Passed + Failed/Error always holds.
 3. **Conclusion** -- Hierarchical bullet-point lines summarizing weekly results. Structure: top-level items are test names in bold (prefixed with `- `), sub-items are specific observations (prefixed with `&#8226;`). The agent MUST print the generated conclusion text to the user and ask for confirmation or edits BEFORE saving it into the final HTML report file. This ensures the user can review and adjust the conclusion wording.
-4. **New Issues - Regression** -- Shown after Conclusion when new issues exist. Lists Jira issues whose tickets were created during the report period (i.e., newly filed regressions). Since Argus CLI doesn't expose Jira creation dates, the agent MUST present the collected issues to the user and ask them to identify which are new vs reproduced BEFORE saving the report. If no new issues, this section is omitted.
+4. **New Issues - Regression** -- Shown after Conclusion when new issues exist. Lists Jira issues whose tickets were created during the report period (i.e., newly filed regressions). Classify by fetching each issue's `created` date from Jira (Atlassian MCP `getJiraIssue`) and comparing it to the report window; only ask the user if Jira is unreachable. If no new issues, this section is omitted.
 5. **Reproduced Issues** -- Always shown after New Issues (or after Conclusion if no new issues). Lists issues linked to runs whose Jira tickets were created before the report period. If no reproduced issues, displays "No reproduced issues in this period."
 6. **Overview Table** -- Grouped by category, then test, then workload. Columns: Category | Test | Workload | Status | Link. Microbenchmarks use "-" as workload.
 7. **Detailed Results** -- **ONLY shown when there are actual failures.** When all tests pass, this section is completely omitted. When failures exist, shows per-category breakdown of failed steps with P99/throughput, and optionally a Max Throughput table for failed predefined-throughput-steps tests where the unthrottled step itself has FAIL/ERROR status.
@@ -259,8 +316,18 @@ A valid weekly status report:
 - [ ] Groups tests by platform category in detailed results
 - [ ] States the reporting period in the header
 - [ ] Table width is 700px
-- [ ] Output file is NOT saved into the SCT repository (use /tmp/opencode/ or home dir)
+- [ ] Output file is NOT saved into the SCT repository (scratchpad/temp dir or home dir)
 - [ ] Conclusion text is printed to the user for review/editing BEFORE being saved into the HTML report
 - [ ] Conclusion uses hierarchical format: bold test names as top-level items, specific observations as sub-bullets
 - [ ] Issues are split into "New Issues - Regression" (created during period) and "Reproduced Issues" (pre-existing)
-- [ ] Agent asks user to classify issues as new vs reproduced BEFORE saving the report
+- [ ] Issue classification comes from Jira `created` dates; the user is asked only for unlinked failures or if Jira is unreachable
+- [ ] `argus` resolved from PATH, not a hardcoded home directory; login handled by a pre-flight call
+- [ ] Every master run in the window is accounted for, including `test_error` runs with zero result tables
+- [ ] Workload for runs with no result tables recovered from the Jenkins `sub_tests` order and validated against runs that do have tables
+- [ ] Runs that produced nothing state the actual cause (e.g. `CapacityReservationError`) rather than a bare ERROR
+- [ ] Categories with no master runs are named in the Conclusion, so "passed" is distinguishable from "never ran"
+- [ ] Summary version chosen by run count when the period spans multiple builds; per-run versions shown in Detailed Results
+- [ ] Data tables use `border="1"` plus per-cell borders (CSS-only cell borders get stripped)
+- [ ] Status badges use `bgcolor` on a `<td>`, not a bare `<span>`
+- [ ] Rendering verified visually in a browser before any email draft is created
+- [ ] Email step (if requested) creates a DRAFT only -- never sends
