@@ -8,10 +8,8 @@ test_metadata:
     throughput when hot partitions are stressed. Uses scylla-bench instead of
     cassandra-stress to avoid retry storms.
   test_type: features
-  tier: tier1
+  tier: ondemand
   duration_class: short
-  supported_backends:
-    - aws
   stress_tools:
     - scylla-bench
   workload: mixed
