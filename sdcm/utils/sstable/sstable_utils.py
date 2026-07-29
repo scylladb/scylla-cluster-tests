@@ -22,6 +22,11 @@ class SstableUtils:
 
     REMOTE_SSTABLEDUMP_PATH = "/var/tmp/sstabledump.json"
 
+    # How many sstables to pass to a single "scylla sstable dump-statistics --sstables ..." call.
+    # Bounds the command-line length and the size of the returned JSON while still amortizing the
+    # process/SSH startup cost across many sstables.
+    SSTABLE_DUMP_BATCH_SIZE = 100
+
     def __init__(
         self,
         propagation_delay_in_seconds: int = 0,
@@ -247,6 +252,10 @@ class SstableUtils:
         return True  # Successfully dumped SSTable
 
     def _are_tombstones_in_sstabledump(self, sstable: str, remote_json_path: str = REMOTE_SSTABLEDUMP_PATH) -> bool:
+        # Operates on an already-dumped "Data.db" JSON (see `_run_sstabledump`); it exists for the
+        # data-dump callers that also need the tombstone contents. For a cheap yes/no check over many
+        # sstables (no full data dump), prefer `filter_out_sstables_with_tombstones`, which reads only
+        # "Statistics.db".
         # Check if tombstones exist in the dumped sstable JSON
         check_tombstones_cmd = f"sudo jq -e '.. | .tombstone? | select(. != null)' {remote_json_path} > /dev/null"
         result = self.db_node.remoter.run(check_tombstones_cmd, verbose=False, ignore_status=True)
@@ -366,6 +375,74 @@ class SstableUtils:
                 self.log.debug("Invalid deletion_time format: %s", tombstone_info["deletion_time"])
                 raise
         return None  # No deletion_time found
+
+    def filter_out_sstables_with_tombstones(self, sstables: list) -> list:
+        """
+        Return the subset of ``sstables`` that contains no tombstones.
+
+        Read from the small "Statistics.db" component via ``scylla sstable dump-statistics``: its
+        "estimated_tombstone_drop_time" histogram is populated for tombstones/deletions and for
+        expiring (TTL) cells, so an empty histogram means the sstable is clean.
+
+        Offline check by contract - the caller must guarantee the sstable set cannot change while it
+        runs (stop Scylla on the node, or at least disable autocompaction for the table). Unexpected
+        output therefore raises instead of degrading silently.
+
+        Used to keep destroy/corruption-then-repair nemeses from resurrecting shadowed data:
+        https://scylladb.atlassian.net/browse/SCT-750
+
+        :param sstables: List of sstable "-Data.db" file paths.
+        :return: The subset of ``sstables`` with no tombstones.
+        """
+        if not sstables:
+            return []
+        status_by_sstable = self._get_sstables_tombstone_status(sstables)
+        filtered = [sstable for sstable in sstables if not status_by_sstable[sstable]]
+        self.log.debug(
+            "Filtered sstables without tombstones for %s: %s of %s", self.ks_cf, len(filtered), len(sstables)
+        )
+        return filtered
+
+    def _get_sstables_tombstone_status(self, sstables: list) -> dict:
+        """
+        Resolve, for each sstable, whether it contains tombstones.
+
+        Processed in chunks of ``SSTABLE_DUMP_BATCH_SIZE`` to bound the command-line length and the
+        size of the dumped JSON.
+
+        :param sstables: List of sstable "-Data.db" file paths.
+        :return: Mapping of sstable path -> bool (True if it contains tombstones).
+        """
+        status = {}
+        for start in range(0, len(sstables), self.SSTABLE_DUMP_BATCH_SIZE):
+            chunk = sstables[start : start + self.SSTABLE_DUMP_BATCH_SIZE]
+            status.update(self._dump_statistics_chunk(chunk))
+        return status
+
+    def _dump_statistics_chunk(self, sstables: list) -> dict:
+        """
+        Run one batched ``dump-statistics`` and classify every sstable in ``sstables``.
+
+        Parses exactly the format the ``scylla sstable`` tool of the version under test emits: entries
+        under a top-level "sstables" wrapper, keyed by the path as passed on the command line, with the
+        "estimated_tombstone_drop_time" histogram under "stats" - empty means clean. A failing dump,
+        non-JSON output or a missing key raises. A full sample of the expected format is pinned by
+        ``batch_statistics_json`` in unit_tests/unit/test_sstable_tombstone_filter.py - update it when
+        a Scylla version changes the output.
+
+        :param sstables: List of sstable "-Data.db" file paths (a single batch).
+        :return: Mapping of sstable path -> bool (True if it contains tombstones).
+        """
+        dump_cmd = _generate_sstable_dump_command(self.db_node, "dump-statistics", self.keyspace, self.table)
+        result = self.db_node.remoter.run(f'sudo bash -c "{dump_cmd} {" ".join(sstables)}"', verbose=False)
+        dumped = json.loads(result.stdout, strict=False)["sstables"]
+        return {sstable: self._entry_has_tombstones(sstable, dumped[sstable]) for sstable in sstables}
+
+    def _entry_has_tombstones(self, sstable: str, entry: dict) -> bool:
+        """Classify a single dumped statistics ``entry`` by its "estimated_tombstone_drop_time"."""
+        has_tombstones = bool(entry["stats"]["estimated_tombstone_drop_time"])
+        self.log.debug("SSTable %s contains tombstones: %s", sstable, has_tombstones)
+        return has_tombstones
 
     def corrupt_sstables(self, sstables_to_corrupt_count: int = 1):
         """
