@@ -143,19 +143,25 @@ Key details:
 
 ## Status Badges
 
+A badge carries **white text**, so its colour must never be droppable -- if a client strips the
+`background-color`, the label becomes white-on-white and the status is invisible. `bgcolor` is not a
+valid attribute on `<span>`, so wrap the badge in a one-cell table and put `bgcolor` on the `<td>`
+alongside the style. This is also what the "always pair `bgcolor` with `background-color`" rule
+above requires.
+
 ```html
 <!-- Passed -->
-<span style="background-color:#28a745;color:#ffffff;padding:2px 8px;font-size:11px;font-weight:bold;display:inline-block;">PASSED</span>
+<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>
+  <td bgcolor="#28a745" align="center" style="background-color:#28a745;padding:3px 10px;font-size:11px;font-weight:bold;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">PASSED</td>
+</tr></table>
 
-<!-- Failed -->
-<span style="background-color:#dc3545;color:#ffffff;padding:2px 8px;font-size:11px;font-weight:bold;display:inline-block;">FAILED</span>
-
-<!-- Error -->
-<span style="background-color:#fd7e14;color:#ffffff;padding:2px 8px;font-size:11px;font-weight:bold;display:inline-block;">ERROR</span>
-
-<!-- No Runs -->
-<span style="background-color:#6c757d;color:#ffffff;padding:2px 8px;font-size:11px;font-weight:bold;display:inline-block;">NO_RUNS</span>
+<!-- Failed: bgcolor="#dc3545" / background-color:#dc3545 -->
+<!-- Error:  bgcolor="#fd7e14" / background-color:#fd7e14 -->
+<!-- No Runs: bgcolor="#6c757d" / background-color:#6c757d -->
 ```
+
+Avoid the older single-`<span>` form (`<span style="background-color:#28a745;color:#ffffff;...">`) --
+it renders in most clients but has no fallback when the background is stripped.
 
 ## Data Tables
 
