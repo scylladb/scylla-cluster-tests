@@ -41,7 +41,7 @@ class NemesisJobGenerator:
     BACKEND_TO_REGION = {
         "aws": "eu-west-1",
         "gce": "us-east1",
-        "oci": "us-ashburn-1",
+        "oci": "us-phoenix-1",
         "azure": "eastus",
         "docker": "eu-west-1",
     }
