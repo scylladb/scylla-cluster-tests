@@ -62,19 +62,20 @@ is set. `KeyStore` therefore always passes `region_name`, defaulting to
 
 ## Optional entries
 
-Some keys are resolved from a runtime value, so which ones are needed depends on
-what a job is pointed at. A missing entry here does **not** fail loudly, which
-makes it the easiest kind of gap to miss:
+Some keys are resolved from a runtime value, so the name isn't visible at the call
+site and a gap only shows up on the job that happens to need it. All of these are
+mirrored today; the "on a miss" column is what to expect if a *new* value gets
+introduced without mirroring it.
 
 | Key pattern | Resolved from | Consumers | On a miss |
 |---|---|---|---|
-| `argus_rest_credentials_sct_{provider}.json` | detected cloud provider | `KeyStore.get_argus_rest_credentials_per_provider()` | falls back to `argus_rest_credentials.json`, logged at debug. Only `aws` is mirrored today. |
-| `scylla_cloud_sct_api_creds_{env}.json` | `xcloud_env` | `xcloud` runs, `utils/cloud_cleanup/xcloud/clean_xcloud.py`, `sdcm/utils/cloud_monitor/resources/xcloud.py` | **hard failure** for a run: `cloud_env_credentials` is read from `SCTConfiguration.__init__` via the release-tag lookup. Cleanup and cloud-monitor instead catch it, warn and skip that environment — leaked clusters. Every xcloud pipeline here uses `xcloud_env: 'staging'`. |
-| `{s3_baremetal_config}.json` | `s3_baremetal_config` | baremetal provisioning + log collection | hard failure at provisioning, via `get_cluster_baremetal()`. Values in use: `baremetal_config_example`, `baremetal_credentials`, `oci_baremetal_config`. |
+| `argus_rest_credentials_sct_{provider}.json` | detected cloud provider | `KeyStore.get_argus_rest_credentials_per_provider()` | falls back to `argus_rest_credentials.json`, logged at debug. Only `aws` has a dedicated entry; every other provider takes the fallback by design. |
+| `scylla_cloud_sct_api_creds_{env}.json` | `xcloud_env` | `xcloud` runs, `utils/cloud_cleanup/xcloud/clean_xcloud.py`, `sdcm/utils/cloud_monitor/resources/xcloud.py` | **hard failure** for a run: `cloud_env_credentials` is read from `SCTConfiguration.__init__` via the release-tag lookup. Cleanup and cloud-monitor instead catch it, warn and skip that environment — leaked clusters. Mirrored: `lab`, `staging`, `prod`. |
+| `{s3_baremetal_config}.json` | `s3_baremetal_config` | baremetal provisioning + log collection | hard failure at provisioning, via `get_cluster_baremetal()`. Mirrored: `baremetal_config_example`, `baremetal_credentials`, `oci_baremetal_config`. |
 
-Mirror the entry for any environment/provider/config a job actually uses before
-pointing it at the `secretsmanager` backend. Run the [validation](#validation)
-snippet below to see which are still missing.
+When adding an environment, provider or baremetal config, mirror its entry in the
+same change — nothing in CI enforces this. Run the [validation](#validation)
+snippet to check the current state.
 
 ## Not mirrored: bulk data caches
 
@@ -131,7 +132,13 @@ id to `SUPPORTED_PROJECTS`.
 
 ## Adding or updating credentials
 
-Always update **both** S3 and Secrets Manager.
+Always update **both** S3 and Secrets Manager. Secrets Manager is regional, so
+pass `--region` explicitly rather than relying on the ambient one — writing to the
+wrong region creates a secret SCT will never read.
+
+Stage the file on RAM-backed tmpfs (`/dev/shm`) under `umask 077` so the plaintext
+never reaches persistent storage; see the note on `shred` in
+[gcp_create_new_project.md](gcp_create_new_project.md).
 
 ### JSON credential
 
@@ -141,12 +148,13 @@ aws s3 cp /path/to/new_cred.json s3://scylla-qa-keystore/new_cred.json
 
 # 2. Upload to Secrets Manager (create or update)
 #    First time:
-aws secretsmanager create-secret \
+aws secretsmanager create-secret --region "${SCT_KEYSTORE_SM_REGION:-us-east-1}" \
     --name sct/new_cred.json \
+    --description "SCT keystore entry migrated from s3://scylla-qa-keystore/new_cred.json" \
     --secret-string file:///path/to/new_cred.json \
-    --tags Key=team,Value=sct
+    --tags Key=team,Value=sct Key=secret_type,Value=config
 #    Update existing:
-aws secretsmanager put-secret-value \
+aws secretsmanager put-secret-value --region "${SCT_KEYSTORE_SM_REGION:-us-east-1}" \
     --secret-id sct/new_cred.json \
     --secret-string file:///path/to/new_cred.json
 
@@ -161,12 +169,24 @@ shred -u /path/to/new_cred.json
 aws s3 cp /path/to/key s3://scylla-qa-keystore/scylla_test_id_ed25519
 
 # 2. Upload to Secrets Manager
-aws secretsmanager put-secret-value \
+aws secretsmanager put-secret-value --region "${SCT_KEYSTORE_SM_REGION:-us-east-1}" \
     --secret-id sct/scylla_test_id_ed25519 \
     --secret-binary fileb:///path/to/key
 
 # 3. Clean up
 shred -u /path/to/key
+```
+
+To verify a mirror landed intact without printing the material, compare byte
+counts:
+
+```bash
+name=new_cred.json
+aws s3api head-object --bucket scylla-qa-keystore --key "$name" \
+    --query ContentLength --output text
+aws secretsmanager get-secret-value --secret-id "sct/$name" \
+    --region "${SCT_KEYSTORE_SM_REGION:-us-east-1}" \
+    --query 'length(SecretString)' --output text
 ```
 
 SCT detects rotation via ETag (S3) or VersionId sidecar (SM) and
@@ -176,15 +196,15 @@ re-downloads automatically on the next run.
 
 ```bash
 # From Secrets Manager (JSON)
-aws secretsmanager get-secret-value \
+aws secretsmanager get-secret-value --region "${SCT_KEYSTORE_SM_REGION:-us-east-1}" \
     --secret-id sct/email_config.json \
     --query SecretString --output text | jq .
 
-# From Secrets Manager (binary)
-aws secretsmanager get-secret-value \
+# From Secrets Manager (binary) -- /dev/shm is tmpfs, so the key stays in RAM
+(umask 077 && aws secretsmanager get-secret-value \
+    --region "${SCT_KEYSTORE_SM_REGION:-us-east-1}" \
     --secret-id sct/scylla_test_id_ed25519 \
-    --query SecretBinary --output text | base64 -d > /tmp/key
-chmod 600 /tmp/key
+    --query SecretBinary --output text | base64 -d > /dev/shm/key)
 
 # From S3
 aws s3 cp s3://scylla-qa-keystore/email_config.json -
@@ -211,7 +231,9 @@ required="scylla_test_id_ed25519 scylla_test_id_ed25519.pub
           github_access.json jenkins.json scylla_doctor_full.json
           CA.pem SCYLLADB.pem hytrust-kmip-cacert.pem hytrust-kmip-scylla.pem"
 
-# Needed only by the jobs that use them -- see "Optional entries" above.
+# Needed only by the jobs that use them -- see "Optional entries" above.  The
+# per-provider argus tokens are the exception: only `aws` has one, and the others
+# are meant to fall back to the shared token, so a GAP there is expected.
 optional="argus_rest_credentials_sct_aws.json
           argus_rest_credentials_sct_gce.json
           argus_rest_credentials_sct_azure.json
@@ -236,6 +258,9 @@ check() {
 check MISS "$required"   # any MISS breaks runs on the secretsmanager backend
 check GAP  "$optional"   # a GAP only breaks the jobs that need that entry
 ```
+
+As of the `secretsmanager` default switch this reports `OK` for everything except
+`argus_rest_credentials_sct_{gce,azure}.json`, which are intentionally absent.
 
 The `issues/` cache is intentionally absent from both lists — see
 [Not mirrored: bulk data caches](#not-mirrored-bulk-data-caches).
