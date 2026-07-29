@@ -1018,10 +1018,17 @@ class NemesisRunner:
 
         return file_for_destroy if return_one_file else all_files
 
-    def get_all_sstables(self, tables: list[str], node: BaseNode = None):
+    def get_all_sstables(self, tables: list[str], node: BaseNode = None, skip_sstables_with_tombstones: bool = False):
         """
         :param tables: list of tables. Format of name: <keyspace_name.table_name>
         :param node: get SStables from the node
+        :param skip_sstables_with_tombstones: when True, exclude sstables that contain tombstones.
+            Required for destroy/corruption flows that are followed by a repair, since deleting a
+            tombstone-bearing sstable can resurrect the data it shadows and the repair would then
+            propagate the resurrected data to the other replicas.
+            The filtering is an offline check - the caller must make sure the sstable set cannot
+            change while it runs (stop Scylla on the node, or at least disable autocompaction for
+            the tables). See `SstableUtils.filter_out_sstables_with_tombstones`.
         """
         node = node or self.target_node
 
@@ -1029,6 +1036,8 @@ class NemesisRunner:
         for ks_cf in tables:
             sstable_util = SstableUtils(db_node=node, ks_cf=ks_cf)
             ks_cf_sstables = sstable_util.get_sstables()
+            if skip_sstables_with_tombstones:
+                ks_cf_sstables = sstable_util.filter_out_sstables_with_tombstones(ks_cf_sstables)
             sstables.extend(ks_cf_sstables)
 
         self.log.debug("All Sstables are: %s", sstables)
@@ -1036,7 +1045,12 @@ class NemesisRunner:
         return sstables
 
     @decorate_with_context(suppress_expected_unavailability_errors)
-    def _destroy_data_and_restart_scylla(self, keyspaces_for_destroy: list = None, sstables_to_destroy_perc: int = 50):
+    def _destroy_data_and_restart_scylla(
+        self,
+        keyspaces_for_destroy: list = None,
+        sstables_to_destroy_perc: int = 50,
+        skip_sstables_with_tombstones: bool = False,
+    ):
         tables = self.cluster.get_non_system_ks_cf_list(
             db_node=self.target_node, filter_empty_tables=False, filter_by_keyspace=keyspaces_for_destroy
         )
@@ -1050,15 +1064,28 @@ class NemesisRunner:
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
 
         try:
-            # Remove data files
-            if not (all_files_to_destroy := self.get_all_sstables(tables=tables, node=self.target_node)):
-                raise UnsupportedNemesis("SStables for destroy are not found. The nemesis can't be run")
+            # Remove data files - when skip_sstables_with_tombstones=True, deleting a tombstone-bearing
+            # sstable can resurrect shadowed data, so only tombstone-free sstables are returned as
+            # destroy candidates. The target percentage is then applied to this filtered pool.
+            # Scylla is already stopped above, so the sstable set is frozen while it is inspected.
+            if not (
+                all_files_to_destroy := self.get_all_sstables(
+                    tables=tables, node=self.target_node, skip_sstables_with_tombstones=skip_sstables_with_tombstones
+                )
+            ):
+                msg = (
+                    "All sstables contain tombstones - none is safe to destroy. The nemesis can't be run"
+                    if skip_sstables_with_tombstones
+                    else "SStables for destroy are not found. The nemesis can't be run"
+                )
+                raise UnsupportedNemesis(msg)
 
-            # How many SStables are going to be deleted
             sstables_amount_to_destroy = int(len(all_files_to_destroy) * sstables_to_destroy_perc / 100)
+
             self.log.debug(
-                "SStables amount to destroy (%s percent of all SStables): %s",
+                "SStables amount to destroy (%s percent of %s SStables): %s",
                 sstables_to_destroy_perc,
+                "tombstone-free" if skip_sstables_with_tombstones else "all",
                 sstables_amount_to_destroy,
             )
 
@@ -1104,7 +1131,9 @@ class NemesisRunner:
     def disrupt_destroy_data_then_repair(self):
         """repair at the beginning added to avoid c-s failure 'data wasn't validated'"""
         self.run_repair()
-        self._destroy_data_and_restart_scylla()
+        # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
+        # following repair would then propagate the resurrected data to the other replicas.
+        self._destroy_data_and_restart_scylla(skip_sstables_with_tombstones=True)
         # try to save the node
         self.run_repair()
 
@@ -3189,7 +3218,9 @@ class NemesisRunner:
     def disrupt_mgmt_corrupt_then_repair(self):
         if not self.cluster.params.get("use_mgmt") and not self.cluster.params.get("use_cloud_manager"):
             raise UnsupportedNemesis("Scylla-manager configuration is not defined!")
-        self._destroy_data_and_restart_scylla()
+        # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
+        # following manager repair would then propagate the resurrected data to the other replicas.
+        self._destroy_data_and_restart_scylla(skip_sstables_with_tombstones=True)
         self.run_repair_manager()
 
     def disrupt_abort_repair(self):
@@ -3800,7 +3831,9 @@ class NemesisRunner:
         3. Stop it with a hard reboot once the repair starts.
         4. Trigger a rebuild on the target node after the reboot.
         """
-        self._destroy_data_and_restart_scylla()
+        # Skip sstables with tombstones: deleting them could resurrect shadowed data, and the
+        # following repair would then propagate the resurrected data to the other replicas.
+        self._destroy_data_and_restart_scylla(skip_sstables_with_tombstones=True)
         trigger = partial(
             self.target_node.run_nodetool,
             sub_cmd="repair",
