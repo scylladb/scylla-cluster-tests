@@ -87,12 +87,18 @@ class KeyStore:
     environment variable (``secretsmanager`` by default, ``s3`` for the
     legacy scylla-qa-keystore bucket).  ``SCT_KEYSTORE_SM_REGION``
     overrides the region the secrets are read from.
+
+    Args:
+        backend: Pin this instance to a backend, ignoring
+            ``SCT_KEYSTORE_BACKEND``.  Needed for entries that only exist
+            in S3 and cannot be mirrored -- see the ``issues/`` bulk cache
+            in :mod:`sdcm.utils.issues`.  Leave unset for credentials.
     """
 
-    def __init__(self):
+    def __init__(self, backend: str | None = None):
         self._cache: dict[str, bytes] = {}
         self._cache_lock = threading.Lock()
-        self._backend = os.environ.get("SCT_KEYSTORE_BACKEND") or "secretsmanager"
+        self._backend = backend or os.environ.get("SCT_KEYSTORE_BACKEND") or "secretsmanager"
         self._sm_prefix = os.environ.get("SCT_KEYSTORE_SM_PREFIX") or "sct/"
         self._sm_region = os.environ.get("SCT_KEYSTORE_SM_REGION") or KEYSTORE_SM_REGION
 
@@ -337,9 +343,16 @@ class KeyStore:
                 return self.get_json(f"argus_rest_credentials_sct_{cloud_provider}.json")
             except ClientError as e:
                 # Per-provider credentials are optional; fall through to the shared
-                # ones when this provider has no dedicated entry.
+                # ones when this provider has no dedicated entry.  Only `aws` is
+                # currently mirrored, so this is the normal path for every other
+                # provider -- log it so a *deleted* entry is still traceable.
                 if not is_not_found_error(e):
                     raise
+                LOGGER.debug(
+                    "no argus_rest_credentials_sct_%s.json in %s backend, using shared argus_rest_credentials.json",
+                    cloud_provider,
+                    self._backend,
+                )
 
         return self.get_json("argus_rest_credentials.json")
 
