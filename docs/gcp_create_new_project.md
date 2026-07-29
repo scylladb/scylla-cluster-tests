@@ -128,6 +128,11 @@ aws secretsmanager create-secret --region us-east-1 \
 shred -u "/tmp/${NEW_PROJECT_ID}.json"
 ```
 
+> `shred` overwrites before unlinking, which only means something on a real
+> block device. On a tmpfs `/tmp` (common in containers and on CI runners) the
+> overwrite is a no-op and `-u` merely deletes the file — which is fine here,
+> because nothing reached persistent storage to begin with.
+
 ---
 
 ## Step 4: Assign IAM Roles to Service Account
