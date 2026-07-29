@@ -118,7 +118,7 @@ legacy backend — upload to **both** (see
 aws s3 cp "/tmp/${NEW_PROJECT_ID}.json" "s3://scylla-qa-keystore/${NEW_PROJECT_ID}.json"
 
 # Mirror into Secrets Manager (the default backend)
-aws secretsmanager create-secret --region us-east-1 \
+aws secretsmanager create-secret --region "${SCT_KEYSTORE_SM_REGION:-us-east-1}" \
     --name "sct/${NEW_PROJECT_ID}.json" \
     --description "GCP service account: ${NEW_PROJECT_ID}" \
     --secret-string "file:///tmp/${NEW_PROJECT_ID}.json" \
@@ -247,7 +247,7 @@ aws s3 cp "/tmp/${NEW_PROJECT_ID}_service_accounts.json" \
     "s3://scylla-qa-keystore/${NEW_PROJECT_ID}_service_accounts.json"
 
 # Mirror into Secrets Manager (the default backend)
-aws secretsmanager create-secret --region us-east-1 \
+aws secretsmanager create-secret --region "${SCT_KEYSTORE_SM_REGION:-us-east-1}" \
     --name "sct/${NEW_PROJECT_ID}_service_accounts.json" \
     --secret-string "file:///tmp/${NEW_PROJECT_ID}_service_accounts.json" \
     --tags Key=team,Value=sct Key=secret_type,Value=config
