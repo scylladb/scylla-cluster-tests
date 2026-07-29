@@ -7,10 +7,8 @@ test_metadata:
     via an InfoEvent. Compaction bandwidth adherence itself is verified via
     monitoring dashboards, not asserted by this test.
   test_type: features
-  tier: tier1
+  tier: ondemand
   duration_class: short
-  supported_backends:
-    - aws
   stress_tools:
     - cassandra-stress
   workload: write

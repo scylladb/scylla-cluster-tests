@@ -13,10 +13,8 @@ test_metadata:
     unthrottled latency-250gb-with-nemesis baseline to quantify the
     latency/duration tradeoff of limiting streaming IO.
   test_type: features
-  tier: tier1
+  tier: ondemand
   duration_class: medium
-  supported_backends:
-    - aws
   stress_tools:
     - cassandra-stress
   workload: mixed
