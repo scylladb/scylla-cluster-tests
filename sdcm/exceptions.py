@@ -99,6 +99,10 @@ class Group0LimitedVotersFeatureNotEnableOnNodes(Exception):
     """Raise if feature group0_limited_voters is enabled on nodes"""
 
 
+class DatacenterNotResolvedError(Exception):
+    """Raise when a node's datacenter name could not be resolved from cluster metadata"""
+
+
 class TestFailedByEvents(Exception):
     """
     Exception raised when a test fails due to events.
