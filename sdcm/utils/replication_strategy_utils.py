@@ -1,7 +1,6 @@
 import ast
 import logging
 import re
-import time
 
 from contextlib import ContextDecorator
 from typing import Callable, Dict, TYPE_CHECKING
@@ -9,7 +8,14 @@ from typing import Callable, Dict, TYPE_CHECKING
 from sdcm.exceptions import DatacenterNotResolvedError
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import is_system_keyspace, LOGGER
+<<<<<<< HEAD
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+||||||| parent of b20dbc7d7 (fix(nemesis): use existing retry/decorator machinery instead of a hand-rolled loop)
+from sdcm.utils.tablets.common import wait_tablets_balanced
+=======
+from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.tablets.common import wait_tablets_balanced
+>>>>>>> b20dbc7d7 (fix(nemesis): use existing retry/decorator machinery instead of a hand-rolled loop)
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
@@ -161,15 +167,24 @@ class DataCenterTopologyRfControl:
 
     @staticmethod
     def _resolve_datacenter(node: "BaseNode") -> str | None:
-        # Retry on a falsy value only: an exception from node.datacenter is a real failure
-        # and must propagate immediately, not be masked behind a retry-then-None fallback.
-        deadline = time.monotonic() + DATACENTER_RESOLVE_RETRY_TIMEOUT
-        while True:
-            datacenter = node.datacenter
-            if datacenter or time.monotonic() >= deadline:
+        def read_datacenter():
+            # Raise the sentinel Retry only on a falsy value: a real exception from
+            # node.datacenter is a genuine failure and must propagate immediately, not be
+            # masked behind a retry-then-None fallback.
+            if datacenter := node.datacenter:
                 return datacenter
-            LOGGER.debug("Datacenter of node %s not resolved yet, retrying...", node.name)
-            time.sleep(DATACENTER_RESOLVE_RETRY_STEP)
+            raise Retry
+
+        # retrying()'s timeout param doesn't reliably stop the loop when raise_on_exceeded is
+        # False (see sdcm/utils/decorators.py), so bound retries via `n` instead.
+        n = max(int(DATACENTER_RESOLVE_RETRY_TIMEOUT / DATACENTER_RESOLVE_RETRY_STEP), 2)
+        return retrying(
+            n=n,
+            sleep_time=DATACENTER_RESOLVE_RETRY_STEP,
+            allowed_exceptions=(Retry,),
+            message=f"Waiting for datacenter of node {node.name} to resolve",
+            raise_on_exceeded=False,
+        )(read_datacenter)()
 
     def _get_original_nodes_number(self, node: "BaseNode") -> int:
         # Get the original number of nodes in the data center
