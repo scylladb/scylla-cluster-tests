@@ -21,6 +21,7 @@ import pytest
 import yaml
 
 from sdcm import sct_config
+from sdcm.keystore import KeyStore
 from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_latest_scylla_release
@@ -1112,3 +1113,57 @@ def test_keystore_env_changed_after_export_is_a_user_override(
 
     monkeypatch.setenv(env_name, other_value)
     assert sct_config.SCTConfiguration().get(param) == other_value
+
+
+@pytest.mark.parametrize("param, default_value, other_value", KEYSTORE_PARAM_CASES)
+def test_keystore_marker_is_dropped_once_the_user_overrides(
+    monkeypatch,
+    tmp_path,
+    clean_keystore_exports,  # noqa: ARG001
+    param,
+    default_value,
+    other_value,
+):
+    """A user override must not be re-armed as a self-export by matching the old value.
+
+    Without dropping the marker, setting the env var back to the value SCT once
+    exported would make it look like our own leak again, so a config file would
+    silently win over what the user explicitly asked for.
+    """
+    env_name = f"SCT_{param.upper()}"
+    sct_config.SCTConfiguration()
+    assert sct_config._KEYSTORE_ENV_EXPORTED[env_name] == default_value
+
+    # The user takes over, then happens to set it back to the exported value.
+    monkeypatch.setenv(env_name, other_value)
+    sct_config.SCTConfiguration()
+    assert env_name not in sct_config._KEYSTORE_ENV_EXPORTED
+
+    monkeypatch.setenv(env_name, default_value)
+    monkeypatch.setenv("SCT_CONFIG_FILES", _write_keystore_conf(tmp_path, param, other_value))
+    assert sct_config.SCTConfiguration().get(param) == default_value
+
+
+def test_keystore_env_is_exported_before_init_resolves_xcloud_version(monkeypatch, tmp_path, clean_keystore_exports):  # noqa: ARG001
+    """A config-file `keystore_backend` must apply to KeyStore calls made *during* __init__.
+
+    `_resolve_xcloud_version_tag` reaches `cloud_env_credentials` -> bare `KeyStore()`
+    from inside __init__.  While the export ran at the end of __init__, that fetch
+    still saw the default backend, so the documented `keystore_backend: 's3'` opt-out
+    was a no-op for exactly the path that needs it most.
+    """
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "xcloud")
+    monkeypatch.setenv("SCT_XCLOUD_PROVIDER", "aws")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", "release:latest")
+    monkeypatch.setenv("SCT_CONFIG_FILES", _write_keystore_conf(tmp_path, "keystore_backend", "s3"))
+
+    seen = []
+    monkeypatch.setattr(
+        sct_config.SCTConfiguration,
+        "_resolve_xcloud_version_tag",
+        lambda self, version_tag: seen.append(KeyStore()._backend),
+    )
+
+    sct_config.SCTConfiguration()
+
+    assert seen == ["s3"], f"KeyStore built during __init__ saw {seen}, config file asked for s3"

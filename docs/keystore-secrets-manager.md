@@ -69,11 +69,12 @@ makes it the easiest kind of gap to miss:
 | Key pattern | Resolved from | Consumers | On a miss |
 |---|---|---|---|
 | `argus_rest_credentials_sct_{provider}.json` | detected cloud provider | `KeyStore.get_argus_rest_credentials_per_provider()` | falls back to `argus_rest_credentials.json`, logged at debug. Only `aws` is mirrored today. |
-| `scylla_cloud_sct_api_creds_{env}.json` | `xcloud_env` | `xcloud` runs, `utils/cloud_cleanup/xcloud/clean_xcloud.py`, `sdcm/utils/cloud_monitor/resources/xcloud.py` | both cleanup and cloud-monitor catch it, log a warning and **skip that environment** — leaked clusters, no hard failure. `lab` is mirrored; `staging` and `prod` are **not**. |
-| `{s3_baremetal_config}.json` | `s3_baremetal_config` | baremetal provisioning + log collection | hard failure at provisioning. Not mirrored (`baremetal_config_example.json`, `baremetal_credentials.json`, `oci_baremetal_config.json` exist in S3 only) — baremetal jobs must set `keystore_backend: 's3'` until they are. |
+| `scylla_cloud_sct_api_creds_{env}.json` | `xcloud_env` | `xcloud` runs, `utils/cloud_cleanup/xcloud/clean_xcloud.py`, `sdcm/utils/cloud_monitor/resources/xcloud.py` | **hard failure** for a run: `cloud_env_credentials` is read from `SCTConfiguration.__init__` via the release-tag lookup. Cleanup and cloud-monitor instead catch it, warn and skip that environment — leaked clusters. Every xcloud pipeline here uses `xcloud_env: 'staging'`. |
+| `{s3_baremetal_config}.json` | `s3_baremetal_config` | baremetal provisioning + log collection | hard failure at provisioning, via `get_cluster_baremetal()`. Values in use: `baremetal_config_example`, `baremetal_credentials`, `oci_baremetal_config`. |
 
 Mirror the entry for any environment/provider/config a job actually uses before
-pointing it at the `secretsmanager` backend.
+pointing it at the `secretsmanager` backend. Run the [validation](#validation)
+snippet below to see which are still missing.
 
 ## Not mirrored: bulk data caches
 
@@ -216,12 +217,16 @@ optional="argus_rest_credentials_sct_aws.json
           argus_rest_credentials_sct_azure.json
           scylla_cloud_sct_api_creds_lab.json
           scylla_cloud_sct_api_creds_staging.json
-          scylla_cloud_sct_api_creds_prod.json"
+          scylla_cloud_sct_api_creds_prod.json
+          baremetal_config_example.json
+          baremetal_credentials.json
+          oci_baremetal_config.json"
 
 check() {
     for name in $2; do
         if aws secretsmanager describe-secret --secret-id "sct/$name" \
-             --region us-east-1 --output text --query Name >/dev/null 2>&1; then
+             --region "${SCT_KEYSTORE_SM_REGION:-us-east-1}" \
+             --output text --query Name >/dev/null 2>&1; then
             echo "OK   sct/$name"
         else
             echo "$1 sct/$name"
