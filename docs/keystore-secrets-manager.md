@@ -40,8 +40,14 @@ is set. `KeyStore` therefore always passes `region_name`, defaulting to
 | `docker.json` | json | Docker Hub credentials |
 | `email_config.json` | json | SMTP config |
 | `ldap_ms_ad.json` | json | LDAP / AD config |
-| `argus_rest_credentials.json` | json | Argus API token |
+| `argus_rest_credentials.json` | json | Argus API token (shared fallback) |
+| `argus_rest_credentials_sct_{provider}.json` | json | Argus API token per cloud provider; optional, falls back to the shared one (see [optional entries](#optional-entries)) |
+| `scylla_cloud_sct_api_creds_{env}.json` | json | Scylla Cloud REST API creds per `xcloud_env` (see [optional entries](#optional-entries)) |
 | `scylladb_jira.json` | json | Jira API token |
+| `CA.pem` | binary | Encryption-at-rest CA cert |
+| `SCYLLADB.pem` | binary | Encryption-at-rest cert |
+| `hytrust-kmip-cacert.pem` | binary | HyTrust KMIP CA cert |
+| `hytrust-kmip-scylla.pem` | binary | HyTrust KMIP client cert |
 | `housekeeping-db.json` | json | Internal DB credentials |
 | `backup_azure_blob.json` | json | Azure Blob backup credentials |
 | `azure_kms_config.json` | json | Azure KMS config |
@@ -53,6 +59,39 @@ is set. `KeyStore` therefore always passes `region_name`, defaulting to
 | `github_access.json` | json | GitHub API token |
 | `jenkins.json` | json | Jenkins API credentials |
 | `scylla_doctor_full.json` | json | scylla-doctor credentials |
+
+## Optional entries
+
+Some keys are resolved from a runtime value, so which ones are needed depends on
+what a job is pointed at. A missing entry here does **not** fail loudly, which
+makes it the easiest kind of gap to miss:
+
+| Key pattern | Resolved from | Consumers | On a miss |
+|---|---|---|---|
+| `argus_rest_credentials_sct_{provider}.json` | detected cloud provider | `KeyStore.get_argus_rest_credentials_per_provider()` | falls back to `argus_rest_credentials.json`, logged at debug. Only `aws` is mirrored today. |
+| `scylla_cloud_sct_api_creds_{env}.json` | `xcloud_env` | `xcloud` runs, `utils/cloud_cleanup/xcloud/clean_xcloud.py`, `sdcm/utils/cloud_monitor/resources/xcloud.py` | both cleanup and cloud-monitor catch it, log a warning and **skip that environment** — leaked clusters, no hard failure. `lab` is mirrored; `staging` and `prod` are **not**. |
+| `{s3_baremetal_config}.json` | `s3_baremetal_config` | baremetal provisioning + log collection | hard failure at provisioning. Not mirrored (`baremetal_config_example.json`, `baremetal_credentials.json`, `oci_baremetal_config.json` exist in S3 only) — baremetal jobs must set `keystore_backend: 's3'` until they are. |
+
+Mirror the entry for any environment/provider/config a job actually uses before
+pointing it at the `secretsmanager` backend.
+
+## Not mirrored: bulk data caches
+
+The `issues/` prefix in `scylla-qa-keystore` holds the Jira/GitHub issue caches
+that `sdcm/utils/issues.py` reads. These are **not** credentials and are
+deliberately **not** mirrored:
+
+- they exceed the 64 KB Secrets Manager secret limit (largest is >1 MB);
+- they are rewritten every 6 hours by `.github/workflows/cache-issues.yaml` and
+  `cache-jira-issues.yaml`, which upload to S3 only.
+
+`CachedJiraIssues` and `CachedGitHubIssues` therefore construct
+`KeyStore(backend="s3")` explicitly and ignore `keystore_backend`. Without that
+pin, every issue lookup misses the cache and falls back to the live API — the
+GitHub rate limit the cache exists to avoid — while only emitting a warning.
+
+Use `KeyStore(backend="s3")` for any future non-credential bulk data; do not try
+to mirror it.
 
 ## GCP projects
 
@@ -152,28 +191,49 @@ aws s3 cp s3://scylla-qa-keystore/email_config.json -
 
 ## Validation
 
-Quick check that all entries are readable in Secrets Manager:
+Quick check that all entries are readable in Secrets Manager. `describe-secret`
+is enough to prove existence and — unlike `get-secret-value` — never pulls the
+secret material onto the machine running the check:
 
 ```bash
-for name in scylla_test_id_ed25519 scylla_test_id_ed25519.pub \
-            gcp-sct-project-1.json gcp-sct-project-1_service_accounts.json \
-            gcp-local-ssd-latency.json gcp-local-ssd-latency_service_accounts.json \
-            azure.json oci.json docker.json \
-            email_config.json ldap_ms_ad.json \
-            argus_rest_credentials.json scylladb_jira.json \
-            housekeeping-db.json backup_azure_blob.json \
-            azure_kms_config.json gcp_kms_config.json \
-            scylladb_upload.json qa_users.json bucket-users.json \
-            gcp-scylladbaaslab.json aws_images_role.json \
-            github_access.json jenkins.json scylla_doctor_full.json; do
-    if aws secretsmanager get-secret-value --secret-id "sct/$name" \
-         --region us-east-1 --output text --query Name >/dev/null 2>&1; then
-        echo "OK   sct/$name"
-    else
-        echo "MISS sct/$name"
-    fi
-done
+# Required for every run.
+required="scylla_test_id_ed25519 scylla_test_id_ed25519.pub
+          gcp-sct-project-1.json gcp-sct-project-1_service_accounts.json
+          gcp-local-ssd-latency.json gcp-local-ssd-latency_service_accounts.json
+          azure.json oci.json docker.json
+          email_config.json ldap_ms_ad.json
+          argus_rest_credentials.json scylladb_jira.json
+          housekeeping-db.json backup_azure_blob.json
+          azure_kms_config.json gcp_kms_config.json
+          scylladb_upload.json qa_users.json bucket-users.json
+          gcp-scylladbaaslab.json aws_images_role.json
+          github_access.json jenkins.json scylla_doctor_full.json
+          CA.pem SCYLLADB.pem hytrust-kmip-cacert.pem hytrust-kmip-scylla.pem"
+
+# Needed only by the jobs that use them -- see "Optional entries" above.
+optional="argus_rest_credentials_sct_aws.json
+          argus_rest_credentials_sct_gce.json
+          argus_rest_credentials_sct_azure.json
+          scylla_cloud_sct_api_creds_lab.json
+          scylla_cloud_sct_api_creds_staging.json
+          scylla_cloud_sct_api_creds_prod.json"
+
+check() {
+    for name in $2; do
+        if aws secretsmanager describe-secret --secret-id "sct/$name" \
+             --region us-east-1 --output text --query Name >/dev/null 2>&1; then
+            echo "OK   sct/$name"
+        else
+            echo "$1 sct/$name"
+        fi
+    done
+}
+check MISS "$required"   # any MISS breaks runs on the secretsmanager backend
+check GAP  "$optional"   # a GAP only breaks the jobs that need that entry
 ```
+
+The `issues/` cache is intentionally absent from both lists — see
+[Not mirrored: bulk data caches](#not-mirrored-bulk-data-caches).
 
 ## Access policy
 
