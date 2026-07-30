@@ -6,7 +6,16 @@ def completed_stages = [:]
 (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
+    // Captured locals - see the same block in longevityPipeline for why these come from
+    // pipelineParams and must never be read back off `params` in a guard.
+    def minicloudEnabled = pipelineParams.get('minicloud', false)
+    // Rolling upgrade keeps both topologies, like longevity: a nested-virtualization cloud
+    // sct-runner by default, a KVM-capable Jenkins agent with `local_agent: true`.
+    def localAgent = pipelineParams.get('local_agent', false)
+
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter,
+                                   params.azure_region_name, params.oci_region_name,
+                                   (minicloudEnabled && localAgent) ? [minicloud: true] : null)
 
     // since this is a boolean param, we need to handle its default value upfront, we can't do it in the parameters section
     // we'll keep it as boolean to simplify its usage later on
@@ -58,6 +67,20 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'on_demand|spot_fleet|spot',
                    name: 'provision_type')
+            // Minicloud Configuration
+            // Only has an effect when the jenkinsfile opts in with `minicloud: true`; see
+            // vars/startMinicloud.groovy. Everything else minicloud needs - KMS off, a
+            // KVM-capable instance_type_runner - is test-case configuration, not a job knob.
+            separator(name: 'MINICLOUD_CONFIG', sectionHeader: 'Minicloud Configuration')
+            string(defaultValue: "${pipelineParams.get('minicloud_docker', '')}",
+                   description: 'Minicloud Docker image reference (e.g. ghcr.io/scylladb/minicloud:master-4bd3fb6). ' +
+                                'Empty leaves minicloud_docker_image at its defaults/test_default.yaml value. ' +
+                                'Ignored unless the jenkinsfile sets `minicloud: true`',
+                   name: 'minicloud_docker')
+            string(defaultValue: '',
+                   description: 'Pin this build to a specific Jenkins agent label, e.g. a lab machine. ' +
+                                'Empty picks the usual builder for the backend/region',
+                   name: 'jenkins_label')
             separator(name: 'POST_BEHAVIOR', sectionHeader: 'Post Behavior Configuration')
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
@@ -254,6 +277,10 @@ def call(Map pipelineParams) {
                                                         timeout(time: 5, unit: 'MINUTES') {
                                                             script {
                                                                 loadEnvFromString(params.extra_environment_variables)
+                                                                // Opt in from the jenkinsfile with `minicloud: true`. Must come
+                                                                // after extra_environment_variables is loaded (a per-run override
+                                                                // wins) and before anything talks to a cloud API.
+                                                                startMinicloud.exportEnv(params, pipelineParams)
                                                                 wrap([$class: 'BuildUser']) {
                                                                     dir('scylla-cluster-tests') {
                                                                         checkout scm
@@ -278,11 +305,40 @@ def call(Map pipelineParams) {
                                                         }
                                                     }
                                                 }
-                                                stage("Create SCT Runner for ${base_version}") {
-                                                    wrap([$class: 'BuildUser']) {
+                                                // On a local agent the test runs right here, so there is
+                                                // nothing to provision - and minicloudReclaim is then the
+                                                // only thing clearing a stale ./sct_runner_ip out of a
+                                                // persistent workspace.
+                                                if (!localAgent) {
+                                                    stage("Create SCT Runner for ${base_version}") {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                timeout(time: 5, unit: 'MINUTES') {
+                                                                    createSctRunner(params_mapping[base_version], runnerTimeout, builder.region)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                } else if (minicloudEnabled) {
+                                                    stage("Minicloud Agent Preflight for ${base_version}") {
                                                         dir('scylla-cluster-tests') {
-                                                            timeout(time: 5, unit: 'MINUTES') {
-                                                                createSctRunner(params_mapping[base_version], runnerTimeout, builder.region)
+                                                            timeout(time: 10, unit: 'MINUTES') {
+                                                                minicloudReclaim()
+                                                                minicloudPreflight()
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                // Must run before 'Provision Resources': that stage calls the
+                                                // EC2/GCE API, which in minicloud mode means localhost:5000 on
+                                                // the runner, so the container has to be up first.
+                                                if (startMinicloud.active(pipelineParams)) {
+                                                    stage("Start Minicloud for ${base_version}") {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                timeout(time: 10, unit: 'MINUTES') {
+                                                                    startMinicloud(params_mapping[base_version])
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -367,12 +423,16 @@ def call(Map pipelineParams) {
                                                         }
                                                     }
                                                 }
-                                                stage('Clean SCT Runners') {
-                                                    catchError(stageResult: 'FAILURE') {
-                                                        wrap([$class: 'BuildUser']) {
-                                                            dir('scylla-cluster-tests') {
-                                                                cleanSctRunners(params_mapping[base_version], currentBuild)
-                                                                completed_stages[base_version]['clean_sct_runner'] = true
+                                                // Nothing was provisioned on a local agent, so there is
+                                                // nothing to reclaim.
+                                                if (!localAgent) {
+                                                    stage('Clean SCT Runners') {
+                                                        catchError(stageResult: 'FAILURE') {
+                                                            wrap([$class: 'BuildUser']) {
+                                                                dir('scylla-cluster-tests') {
+                                                                    cleanSctRunners(params_mapping[base_version], currentBuild)
+                                                                    completed_stages[base_version]['clean_sct_runner'] = true
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -444,12 +504,29 @@ def call(Map pipelineParams) {
                                                         }
                                                     }
                                                 }
-                                                if (!completed_stages[base_version]['clean_sct_runner']) {
+                                                // `!localAgent` and not just the completed_stages check: the
+                                                // stage above is skipped on a local agent, which would leave
+                                                // this recovery path hunting for a runner that never existed.
+                                                if (!localAgent && !completed_stages[base_version]['clean_sct_runner']) {
                                                     catchError {
                                                         script {
                                                             wrap([$class: 'BuildUser']) {
                                                                 dir('scylla-cluster-tests') {
                                                                   cleanSctRunners(params_mapping[base_version], currentBuild)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                // Deliberately the last teardown step: `docker rm -f` kills
+                                                // every guest with the container, and the log collection
+                                                // above needs them alive.
+                                                if (minicloudEnabled) {
+                                                    catchError {
+                                                        script {
+                                                            dir('scylla-cluster-tests') {
+                                                                timeout(time: 10, unit: 'MINUTES') {
+                                                                    stopMinicloud()
                                                                 }
                                                             }
                                                         }

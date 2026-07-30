@@ -1,0 +1,24 @@
+#!groovy
+
+// Provision-and-smoke-test job: brings a 3-node cluster up through minicloud, writes to it, and
+// runs a non-disruptive nemesis. It is a longevity test (test_custom_time) with a short config, so
+// it runs on longevityPipeline with `minicloud: true` - it used to have a pipeline of its own,
+// minicloudPipeline.groovy, which was a fork of longevityPipeline and drifted from it.
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: '''["test-cases/minicloud-provision-test.yaml", "configurations/minicloud.yaml"]''',
+    minicloud: true,
+
+    // A released version, not master:latest - minicloud reads the AMI's snapshot over the EBS
+    // direct API, and dev-AMI snapshots are not shared with the QA account. See
+    // longevity-minicloud-10gb-1h.jenkinsfile for the full reasoning.
+    scylla_version: '2026.3.0-rc0',
+
+    provision_type: 'on_demand',
+    post_behavior_db_nodes: 'destroy',
+)
