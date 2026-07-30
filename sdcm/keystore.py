@@ -37,6 +37,12 @@ LOGGER = logging.getLogger(__name__)
 
 KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
 
+# Region holding the mirrored `sct/*` secrets.  Unlike S3 (whose global
+# endpoint lets boto3 fall back to us-east-1), Secrets Manager is strictly
+# regional and raises NoRegionError when no region is configured, so the
+# client must always be pinned explicitly.
+KEYSTORE_SM_REGION = "us-east-1"
+
 SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
 
 BOTO3_CLIENT_CREATION_LOCK = threading.Lock()
@@ -65,7 +71,8 @@ class KeyStore:
 
     Backend selection is controlled by the ``SCT_KEYSTORE_BACKEND``
     environment variable (``secretsmanager`` by default, ``s3`` for the
-    legacy scylla-qa-keystore bucket).
+    legacy scylla-qa-keystore bucket).  ``SCT_KEYSTORE_SM_REGION``
+    overrides the region the secrets are read from.
     """
 
     def __init__(self):
@@ -73,6 +80,7 @@ class KeyStore:
         self._cache_lock = threading.Lock()
         self._backend = os.environ.get("SCT_KEYSTORE_BACKEND") or "secretsmanager"
         self._sm_prefix = os.environ.get("SCT_KEYSTORE_SM_PREFIX") or "sct/"
+        self._sm_region = os.environ.get("SCT_KEYSTORE_SM_REGION") or KEYSTORE_SM_REGION
 
     @property
     def s3(self) -> S3ServiceResource:
@@ -82,6 +90,11 @@ class KeyStore:
     def s3_client(self) -> S3Client:
         with BOTO3_CLIENT_CREATION_LOCK:
             return boto3.client("s3")
+
+    @property
+    def sm_client(self):
+        with BOTO3_CLIENT_CREATION_LOCK:
+            return boto3.client("secretsmanager", region_name=self._sm_region)
 
     @tenacity.retry(
         retry=tenacity.retry_if_exception(_is_transient_error),
@@ -102,8 +115,7 @@ class KeyStore:
     )
     def _fetch_from_secrets_manager(self, file_name):
         """Fetch a secret from AWS Secrets Manager with automatic retry."""
-        with BOTO3_CLIENT_CREATION_LOCK:
-            sm = boto3.client("secretsmanager")
+        sm = self.sm_client
         secret_name = f"{self._sm_prefix}{file_name}"
         resp = sm.get_secret_value(SecretId=secret_name)
         if "SecretBinary" in resp:
@@ -410,8 +422,7 @@ class KeyStore:
     )
     def get_sm_version_id(self, key):
         """Return the current VersionId of a Secrets Manager secret."""
-        with BOTO3_CLIENT_CREATION_LOCK:
-            sm = boto3.client("secretsmanager")
+        sm = self.sm_client
         secret_name = f"{self._sm_prefix}{key}"
         resp = sm.describe_secret(SecretId=secret_name)
         for version_id, stages in resp.get("VersionIdsToStages", {}).items():

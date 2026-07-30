@@ -96,6 +96,11 @@ from sdcm.utils.cloud_catalog.instance_matcher import NoMatchingInstanceError, s
 
 _SIZING_RESOLUTION_CACHE: dict[tuple, str] = {}
 
+# SCT_KEYSTORE_* env var names this process exported itself (see the keystore
+# propagation in verify_configuration).  Tracked so a later SCTConfiguration can
+# refresh them without mistaking them for a user-supplied override.
+_KEYSTORE_ENV_EXPORTED: set[str] = set()
+
 
 class IgnoredType:
     pass
@@ -2293,6 +2298,9 @@ class SCTConfiguration(BaseModel):
     keystore_sm_prefix: String = SctField(
         description="AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (default: 'sct/')",
     )
+    keystore_sm_region: String = SctField(
+        description="AWS region holding the KeyStore secrets when keystore_backend=secretsmanager (default: 'us-east-1')",
+    )
 
     required_params: Annotated[list, IgnoredType] = [
         "cluster_backend",
@@ -3191,13 +3199,16 @@ class SCTConfiguration(BaseModel):
 
         # Propagate keystore settings to env vars so KeyStore instances created
         # later (including from utility code that doesn't hold an SCTConfiguration
-        # reference) pick up the config-file / CLI-overridden values.  An
-        # explicit SCT_KEYSTORE_* env var always wins since we don't overwrite.
-        for _param in ("keystore_backend", "keystore_sm_prefix"):
+        # reference) pick up the config-file / CLI-overridden values.  A value we
+        # exported ourselves is refreshed, but an env var the user actually set is
+        # never overwritten -- otherwise the first instance's value would leak and
+        # outrank the config file of every later instance in the same process.
+        for _param in ("keystore_backend", "keystore_sm_prefix", "keystore_sm_region"):
             _env_name = f"SCT_{_param.upper()}"
             _value = self.get(_param)
-            if _value and _env_name not in os.environ:
+            if _value and (_env_name not in os.environ or _env_name in _KEYSTORE_ENV_EXPORTED):
                 os.environ[_env_name] = str(_value)
+                _KEYSTORE_ENV_EXPORTED.add(_env_name)
 
     def load_docker_images_defaults(self):
         docker_images_dir = pathlib.Path(sct_abs_path("defaults/docker_images"))
