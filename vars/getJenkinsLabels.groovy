@@ -8,6 +8,11 @@ def call(String backend, String region=null, String datacenter=null, String loca
     if (overrides == null){
         overrides = [:]
     }
+    // NOTE: `params` here has no `def`, so in a shared-library script this writes the build's
+    // *global* binding and the merge below leaks out of this function. That makes an override
+    // like `minicloud` *appear* to work as `params.minicloud` in a later `when {}` guard - do
+    // not rely on it. Guards elsewhere must read a captured local. Left as-is rather than
+    // localised because callers have depended on the leak for years.
     params += overrides // merge, overrides take precedence
 
     if (!backend) {
@@ -62,7 +67,35 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'oci-us-ashburn-1': 'oci-sct-builders-us-ashburn-1-v2',
                           'oci-us-phoenix-1': 'oci-sct-builders-us-phoenix-1-v2',
                           'oci-eu-frankfurt-1': 'oci-sct-builders-eu-frankfurt-1-v2',
+                          'minicloud': 'minicloud-kvm-builders-v1',
                           ]
+
+    // Both early returns below deliberately sit after the JSON-list unwrapping (so `region` is a
+    // plain string) and before the region->builder mapping: a build that runs on a local agent has
+    // no region builder to find, and for minicloud the region is the one it *emulates*.
+
+    // Pin this build to a named Jenkins agent, on any backend. Declaring the `jenkins_label`
+    // parameter in a pipeline is the entire integration - this function already reads the global
+    // `params` binding. Empty on build #1, where params is not yet populated, so the normal
+    // mapping applies there and nothing changes for the ~1100 jobs that never set it.
+    def pinnedLabel = params.jenkins_label?.trim()
+    if (pinnedLabel) {
+        println("Pinned to Jenkins agent label: " + pinnedLabel)
+        return [ "label": pinnedLabel, "region": region ?: 'eu-west-1' ]
+    }
+
+    // minicloud boots QEMU/KVM guests on the agent itself, so it needs a KVM-capable node rather
+    // than a region builder. Comes through `overrides` rather than `params` because there is no
+    // params.minicloud on build #1, which is when the agent label is first evaluated.
+    if (overrides.minicloud) {
+        if (region == 'random' || datacenter == 'random' || location == 'random') {
+            throw new Exception("=================== minicloud needs a fixed region, not 'random': it " +
+                                "validates uncached AMIs against its own --aws-region ===================")
+        }
+        def minicloudLabel = jenkins_labels['minicloud']
+        println("minicloud run: using KVM-capable agent label " + minicloudLabel)
+        return [ "label": minicloudLabel, "region": region ?: 'eu-west-1' ]
+    }
 
     def cloud_provider = getCloudProviderFromBackend(backend)
 
