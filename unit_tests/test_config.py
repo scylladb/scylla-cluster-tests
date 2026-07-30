@@ -1086,13 +1086,31 @@ def fixture_clean_keystore_exports(monkeypatch):
         os.environ.pop(env_name, None)
 
 
-def _write_keystore_conf(tmp_path, backend):
-    conf_file = tmp_path / f"keystore_{backend}.yaml"
-    conf_file.write_text(f"keystore_backend: '{backend}'\n", encoding="utf-8")
+def _write_keystore_conf(tmp_path, param, value):
+    conf_file = tmp_path / f"keystore_{param}_{value.replace('/', '')}.yaml"
+    conf_file.write_text(f"{param}: '{value}'\n", encoding="utf-8")
     return str(conf_file)
 
 
-def test_keystore_export_does_not_outrank_a_later_config_file(monkeypatch, tmp_path, clean_keystore_exports):  # noqa: ARG001
+# All three keystore params share one propagation loop, so each case exercises the
+# same code path -- but only `keystore_backend` was covered while the other two
+# (both new) went through it untested.
+KEYSTORE_PARAM_CASES = [
+    pytest.param("keystore_backend", "secretsmanager", "s3", id="backend"),
+    pytest.param("keystore_sm_prefix", "sct/", "other/", id="sm_prefix"),
+    pytest.param("keystore_sm_region", "us-east-1", "eu-west-1", id="sm_region"),
+]
+
+
+@pytest.mark.parametrize("param, default_value, other_value", KEYSTORE_PARAM_CASES)
+def test_keystore_export_does_not_outrank_a_later_config_file(
+    monkeypatch,
+    tmp_path,
+    clean_keystore_exports,  # noqa: ARG001
+    param,
+    default_value,
+    other_value,
+):
     """A keystore value this process exported must not win over a later config file.
 
     SCTConfiguration writes the resolved keystore settings into os.environ so bare
@@ -1100,32 +1118,52 @@ def test_keystore_export_does_not_outrank_a_later_config_file(monkeypatch, tmp_p
     without the self-export bookkeeping the first instance's default would silently
     beat every later instance's config file in the same process.
     """
+    env_name = f"SCT_{param.upper()}"
+
     first = sct_config.SCTConfiguration()
-    assert first.get("keystore_backend") == "secretsmanager"
-    assert os.environ["SCT_KEYSTORE_BACKEND"] == "secretsmanager"
+    assert first.get(param) == default_value
+    assert os.environ[env_name] == default_value
 
-    monkeypatch.setenv("SCT_CONFIG_FILES", _write_keystore_conf(tmp_path, "s3"))
+    monkeypatch.setenv("SCT_CONFIG_FILES", _write_keystore_conf(tmp_path, param, other_value))
     second = sct_config.SCTConfiguration()
-    assert second.get("keystore_backend") == "s3"
+    assert second.get(param) == other_value
     # and the export is refreshed so KeyStore() agrees with the config file
-    assert os.environ["SCT_KEYSTORE_BACKEND"] == "s3"
+    assert os.environ[env_name] == other_value
 
 
-def test_keystore_user_env_var_still_beats_config_file(monkeypatch, tmp_path, clean_keystore_exports):  # noqa: ARG001
+@pytest.mark.parametrize("param, default_value, other_value", KEYSTORE_PARAM_CASES)
+def test_keystore_user_env_var_still_beats_config_file(
+    monkeypatch,
+    tmp_path,
+    clean_keystore_exports,  # noqa: ARG001
+    param,
+    default_value,  # noqa: ARG001
+    other_value,
+):
     """An env var the user set is a real override: it outranks the config file and is never rewritten."""
-    monkeypatch.setenv("SCT_KEYSTORE_BACKEND", "s3")
-    monkeypatch.setenv("SCT_CONFIG_FILES", _write_keystore_conf(tmp_path, "secretsmanager"))
+    env_name = f"SCT_{param.upper()}"
+    monkeypatch.setenv(env_name, other_value)
+    monkeypatch.setenv("SCT_CONFIG_FILES", _write_keystore_conf(tmp_path, param, default_value))
 
     conf = sct_config.SCTConfiguration()
-    assert conf.get("keystore_backend") == "s3"
-    assert os.environ["SCT_KEYSTORE_BACKEND"] == "s3"
-    assert "SCT_KEYSTORE_BACKEND" not in sct_config._KEYSTORE_ENV_EXPORTED
+    assert conf.get(param) == other_value
+    assert os.environ[env_name] == other_value
+    assert env_name not in sct_config._KEYSTORE_ENV_EXPORTED
 
 
-def test_keystore_env_changed_after_export_is_a_user_override(monkeypatch, clean_keystore_exports):  # noqa: ARG001
+@pytest.mark.parametrize("param, default_value, other_value", KEYSTORE_PARAM_CASES)
+def test_keystore_env_changed_after_export_is_a_user_override(
+    monkeypatch,
+    clean_keystore_exports,  # noqa: ARG001
+    param,
+    default_value,
+    other_value,
+):
     """Only the exact value we exported is ignored; a value changed since is honoured."""
+    env_name = f"SCT_{param.upper()}"
     sct_config.SCTConfiguration()
-    assert sct_config._KEYSTORE_ENV_EXPORTED["SCT_KEYSTORE_BACKEND"] == "secretsmanager"
+    assert sct_config._KEYSTORE_ENV_EXPORTED[env_name] == default_value
 
-    monkeypatch.setenv("SCT_KEYSTORE_BACKEND", "s3")
-    assert sct_config.SCTConfiguration().get("keystore_backend") == "s3"
+    monkeypatch.setenv(env_name, other_value)
+    assert sct_config.SCTConfiguration().get(param) == other_value
+
