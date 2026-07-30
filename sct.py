@@ -441,7 +441,7 @@ def _report_provision_error_to_argus(
         # params not available (config init failed) — create client directly
         # bypassing enable_argus check since we must report the critical error
         try:
-            argus_client = get_argus_client(run_id=test_id)
+            argus_client = get_argus_client(run_id=test_id, use_tunnel=get_argus_use_tunnel_from_env())
         except Exception as init_exc:  # noqa: BLE001
             LOGGER.warning("Failed to initialize Argus client: %s", init_exc)
             return
