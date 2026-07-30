@@ -15,6 +15,8 @@
 
 import os
 from unittest.mock import MagicMock, patch
+
+import pytest
 from click.testing import CliRunner
 
 
@@ -93,13 +95,20 @@ def test_provision_resources_sends_error_event_to_argus():
         mock_argus_client.finalize_sct_run.assert_called_once()
 
 
-def test_provision_resources_reports_config_init_failure_to_argus():
+@pytest.mark.parametrize(
+    ("use_ssh_tunnel_env", "expected_use_tunnel"),
+    [("false", False), ("true", True)],
+)
+def test_provision_resources_reports_config_init_failure_to_argus(use_ssh_tunnel_env, expected_use_tunnel):
     """Test that provision_resources reports to Argus when init_and_verify_sct_config fails.
 
     This covers the scenario where the unified package download fails with 404,
     raising a FileNotFoundError before provisioning even begins.
     When params is None, get_argus_client is used directly to bypass the
     enable_argus check that would silently swallow the error with MagicMock.
+    Since no params are available, 'use_tunnel' must be derived from the
+    'SCT_ARGUS_USE_SSH_TUNNEL' env var - omitting it raises a TypeError that
+    the surrounding except block swallows, losing the error report.
     """
 
     with (
@@ -107,7 +116,10 @@ def test_provision_resources_reports_config_init_failure_to_argus():
         patch("sct.get_test_config") as mock_test_config,
         patch("sct.get_argus_client") as mock_get_argus_client,
         patch("sct.add_file_logger"),
-        patch.dict(os.environ, {"SCT_TEST_ID": "test-id-67890"}),
+        patch.dict(
+            os.environ,
+            {"SCT_TEST_ID": "test-id-67890", "SCT_ARGUS_USE_SSH_TUNNEL": use_ssh_tunnel_env},
+        ),
     ):
         # init_and_verify_sct_config raises FileNotFoundError (unified package 404)
         config_error = FileNotFoundError(
@@ -135,7 +147,8 @@ def test_provision_resources_reports_config_init_failure_to_argus():
         assert result.exit_code == 1
 
         # Verify get_argus_client was called directly with test_id (not via test_config.init_argus_client)
-        mock_get_argus_client.assert_called_once_with(run_id="test-id-67890")
+        # and with 'use_tunnel' derived from the 'SCT_ARGUS_USE_SSH_TUNNEL' env var
+        mock_get_argus_client.assert_called_once_with(run_id="test-id-67890", use_tunnel=expected_use_tunnel)
 
         # Verify test_config.init_argus_client was NOT called (params is None)
         test_config_instance.init_argus_client.assert_not_called()
