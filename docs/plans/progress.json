@@ -184,10 +184,10 @@
       "id": "minicloud-local-testing",
       "title": "MiniCloud Local Testing",
       "domain": "testing",
-      "status": "pending_pr",
-      "pr": 14009,
-      "phases_total": null,
-      "phases_done": 0
+      "status": "complete",
+      "pr": 14875,
+      "phases_total": 7,
+      "phases_done": 7
     },
     {
       "id": "unit-integration-test-separation",

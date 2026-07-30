@@ -132,5 +132,66 @@ The container's own log is the emulator's view of the run: `docker logs miniclou
 
 ## Running in Jenkins
 
-See the pipeline documentation - this section is filled in by the pipeline-integration change
-that adds the `minicloud: true` opt-in to the regular SCT pipelines.
+`minicloud: true` in a jenkinsfile is the whole opt-in; the regular pipelines
+(`artifactsPipeline`, `longevityPipeline`, `rollingUpgradePipeline`) do the rest. There is no
+dedicated minicloud pipeline - there used to be a fork, and it drifted.
+
+### Two topologies
+
+- **artifacts: local agent, mandatorily.** `minicloud: true` schedules the job on a KVM-capable
+  Jenkins agent (label `minicloud-kvm-builders-v1`) and everything runs there - no sct-runner
+  exists, so there is exactly one topology and nothing to get wrong. The build runs
+  *Minicloud Reclaim → Minicloud Preflight → Start Minicloud → test*, with *Stop Minicloud*
+  guaranteed last via try/finally.
+- **longevity / rolling-upgrade: both.** The default stays a nested-virtualization cloud
+  sct-runner (c8i/m8i/r8i on AWS, N1/N2/C2/C3-family on GCE - E2 has no nested virt), sized by
+  `instance_type_runner` in the test-case yaml. `local_agent: true` opts into the lab agent
+  instead, skipping the runner stages. The cloud runner remains the only option for anyone
+  without access to a lab machine.
+
+Any pipeline build can also be pinned to a named agent with the `jenkins_label` job parameter -
+that is backend-agnostic and independent of minicloud. See
+[sct-pipelines](./sct-pipelines.md).
+
+### The jobs
+
+Under `jenkins-pipelines/oss/minicloud/`:
+
+| job | covers |
+|---|---|
+| `minicloud-artifact-ami` | AWS AMI boot, preinstalled Scylla |
+| `minicloud-artifact-gce-image` | GCE image boot, preinstalled Scylla |
+| `minicloud-artifact-deb-aws` | `.deb` install onto stock Ubuntu, AWS backend |
+| `minicloud-artifact-rpm-gce` | `.rpm` install onto stock Rocky, GCE backend |
+| `minicloud-provision-test` | 3-node provision + write smoke + non-disruptive nemesis |
+| `longevity-minicloud-10gb-1h` | a regular longevity test-case end to end |
+
+Job knobs: `minicloud_docker` selects the image for one run
+(`-s minicloud_docker=ghcr.io/scylladb/minicloud:master-<sha>` via `staging_trigger.py`), and a
+per-run `extra_environment_variables` override always beats the jenkinsfile's defaults.
+
+### Triggering from staging_trigger.py
+
+`generate` and `trigger` work on these jobs like any other. One gotcha: the `artifacts` preset
+injects `scylla_version: master:latest`, which **overrides the jenkinsfile** - and dev AMIs do
+not work on the AWS path (snapshot sharing, see above). Pass a released version explicitly for
+the preinstalled-image jobs:
+
+```bash
+python staging_trigger.py -f scylla-staging/<user> trigger -b <branch> \
+    -s scylla_version=2026.3.0-rc0 oss/minicloud/minicloud-artifact-ami-test
+```
+
+The deb/rpm jobs are fine with `master:latest` - they install over the network from
+`downloads.scylladb.com`.
+
+### Agent prerequisites
+
+A lab agent serving `minicloud-kvm-builders-v1` needs: the agent user in `kvm` and `docker`
+groups (restart the agent process after `usermod`, reconnecting is not enough); `minicloud0`
+pre-created by a boot-time unit (preferred - no sudo needed at run time) or passwordless sudo;
+`USER`/`HOME` set and `$HOME` writable with >=80 GiB free; `numExecutors=1` + exclusive mode,
+which is what serialises the host singletons (port 5000, the container name, `minicloud0`);
+egress to docker.io, ghcr.io, github.com, amazonaws.com, argus.scylladb.com,
+downloads.scylladb.com. The *Minicloud Preflight* stage verifies all of this in one pass and
+reports every problem at once, so a misconfigured agent costs one build to diagnose.

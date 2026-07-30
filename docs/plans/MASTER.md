@@ -95,7 +95,7 @@ For plan writing guidelines, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
 
 | Plan | Status | File / PR |
 |------|--------|-----------|
-| MiniCloud Local Testing | `pending_pr` | [#14009](https://github.com/scylladb/scylla-cluster-tests/pull/14009) |
+| MiniCloud Local Testing | `complete` | [docs/minicloud.md](../minicloud.md), [#14875](https://github.com/scylladb/scylla-cluster-tests/pull/14875) |
 | Unit/Integration Test Separation | `complete` | [unit-integration-test-separation.md](testing/unit-integration-test-separation.md), [#14172](https://github.com/scylladb/scylla-cluster-tests/pull/14172) |
 
 ## Cross-Plan Dependencies
