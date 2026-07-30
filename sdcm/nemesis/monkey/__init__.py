@@ -718,28 +718,6 @@ class StartStopValidationCompaction(NemesisBaseClass):
         self.runner.disrupt_start_stop_validation_compaction()
 
 
-@target_data_nodes
-class CreateIndexNemesis(NemesisBaseClass):
-    disruptive = False
-    schema_changes = True
-    free_tier_set = True
-    supports_high_disk_utilization = False  # Creating an Index consumes disk space
-
-    def disrupt(self):
-        self.runner.disrupt_create_index()
-
-
-@target_data_nodes
-class AddRemoveMvNemesis(NemesisBaseClass):
-    disruptive = True
-    schema_changes = True
-    free_tier_set = True
-    supports_high_disk_utilization = False  # Creating an MV consumes disk space
-
-    def disrupt(self):
-        self.runner.disrupt_add_remove_mv()
-
-
 class ToggleAuditNemesisSyslog(NemesisBaseClass):
     disruptive = True
     schema_changes = True
@@ -813,16 +791,6 @@ class IsolateNodeWithIptableRuleNemesis(NemesisBaseClass):
 
     def disrupt(self):
         self.runner.disrupt_refuse_connection_with_block_scylla_ports_on_banned_node()
-
-
-@target_all_nodes
-class KillMVBuildingCoordinator(NemesisBaseClass):
-    disruptive = True
-    topology_changes = True
-    supports_high_disk_utilization = False  # Creating an MV consumes disk space
-
-    def disrupt(self):
-        self.runner.disrupt_kill_mv_building_coordinator()
 
 
 @target_all_nodes
