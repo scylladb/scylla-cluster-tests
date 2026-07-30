@@ -2871,6 +2871,10 @@ class SCTConfiguration(dict):
         # 3) overwrite with environment variables
         merge_dicts_append_strings(self, env)
 
+        # All keystore sources are now merged, so export them before any of the
+        # resolution below can construct a KeyStore (xcloud's release tag lookup does).
+        self._propagate_keystore_env()
+
         if not self.get("billing_project"):
             if job_name := os.environ.get("JOB_NAME"):
                 release_folder = job_name.split("/")[0]
@@ -3197,18 +3201,35 @@ class SCTConfiguration(dict):
                     "Config of zero token nodes is not equal config of data nodes for multi dc"
                 )
 
-        # Propagate keystore settings to env vars so KeyStore instances created
-        # later (including from utility code that doesn't hold an SCTConfiguration
-        # reference) pick up the config-file / CLI-overridden values.  A value we
-        # exported ourselves is refreshed, but an env var the user actually set is
-        # never overwritten -- otherwise the first instance's value would leak and
-        # outrank the config file of every later instance in the same process.
-        for _param in ("keystore_backend", "keystore_sm_prefix", "keystore_sm_region"):
-            _env_name = f"SCT_{_param.upper()}"
-            _value = self.get(_param)
-            if _value and (_env_name not in os.environ or _is_self_exported_keystore_env(_env_name)):
-                os.environ[_env_name] = str(_value)
-                _KEYSTORE_ENV_EXPORTED[_env_name] = str(_value)
+    def _propagate_keystore_env(self):
+        """Export the resolved keystore settings so bare ``KeyStore()`` callers agree.
+
+        KeyStore reads ``SCT_KEYSTORE_*`` from the environment, so utility code that
+        doesn't hold an SCTConfiguration reference needs the config-file / CLI values
+        mirrored there.  A value we exported ourselves is refreshed, but an env var
+        the user actually set is never overwritten -- otherwise the first instance's
+        value would leak and outrank the config file of every later instance in the
+        same process.
+
+        Must run as soon as the config sources are merged and *before* anything in
+        ``__init__`` can construct a KeyStore: xcloud's ``release:latest`` path
+        reaches ``cloud_env_credentials`` -> ``KeyStore()`` from inside __init__, so
+        exporting at the end of __init__ left that fetch on the wrong backend and
+        made the documented ``keystore_backend: 's3'`` opt-out a no-op for it.
+        """
+        for param in ("keystore_backend", "keystore_sm_prefix", "keystore_sm_region"):
+            env_name = f"SCT_{param.upper()}"
+            value = self.get(param)
+            if not value:
+                continue
+            if env_name not in os.environ or _is_self_exported_keystore_env(env_name):
+                os.environ[env_name] = str(value)
+                _KEYSTORE_ENV_EXPORTED[env_name] = str(value)
+            else:
+                # A user override we must not touch.  Drop our marker so that
+                # setting the env var back to the value we once exported still
+                # reads as a real override rather than as our own leak.
+                _KEYSTORE_ENV_EXPORTED.pop(env_name, None)
 
     def load_docker_images_defaults(self):
         docker_images_dir = pathlib.Path(sct_abs_path("defaults/docker_images"))
