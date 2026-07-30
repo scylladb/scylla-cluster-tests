@@ -337,6 +337,186 @@ def provision_resources(backend, test_name: str, config: str):
         sys.exit(1)
 
 
+<<<<<<< HEAD
+||||||| parent of 8ce5bc2af (fix(argus): pass use_tunnel to get_argus_client in provision error fallback path)
+def _report_provision_error_to_argus(
+    exc: Exception,
+    params: "SCTConfiguration | None",
+    test_config: object | None,
+    backend: str,
+) -> None:
+    """Report a provisioning error to Argus.
+
+    Handles scenarios where params or test_config may not be available yet
+    (e.g., when init_and_verify_sct_config() itself fails).
+    """
+    if test_config is None:
+        test_config = get_test_config()
+
+    # Determine test_id: prefer params, fall back to environment variable
+    test_id = None
+    if params:
+        test_id = params.get("test_id")
+    if not test_id or test_id == "None":
+        test_id = os.environ.get("SCT_TEST_ID")
+
+    if not test_id or test_id == "None":
+        LOGGER.warning("No test_id available - cannot report error to Argus")
+        return
+
+    test_config.set_test_id_only(test_id)
+
+    if params:
+        # params available — use standard init which checks enable_argus
+        try:
+            test_config.init_argus_client(params)
+        except Exception as init_exc:  # noqa: BLE001
+            LOGGER.warning("Failed to initialize Argus client: %s", init_exc)
+            return
+        argus_client = test_config.argus_client()
+    else:
+        # params not available (config init failed) — create client directly
+        # bypassing enable_argus check since we must report the critical error
+        try:
+            argus_client = get_argus_client(run_id=test_id)
+        except Exception as init_exc:  # noqa: BLE001
+            LOGGER.warning("Failed to initialize Argus client: %s", init_exc)
+            return
+
+    # Create and submit error event to Argus
+    error_message = (
+        f"(TestFrameworkEvent Severity.CRITICAL) Failed to provision {backend} resources: {type(exc).__name__}: {exc}"
+    )
+    event_payload: RawEventPayload = {
+        "run_id": str(test_id),
+        "severity": "CRITICAL",
+        "ts": time.time(),
+        "message": error_message,
+        "event_type": "TestFrameworkEvent",
+        "received_timestamp": None,
+        "nemesis_name": None,
+        "duration": None,
+        "node": None,
+        "target_node": None,
+        "known_issue": None,
+        "nemesis_status": None,
+    }
+
+    try:
+        argus_client.submit_event(event_payload)
+        LOGGER.info("Error event submitted to Argus successfully")
+    except Exception as argus_exc:  # noqa: BLE001
+        LOGGER.warning("Failed to submit error event to Argus: %s", argus_exc)
+
+    # Submit events summary so the error appears in the Argus events tab
+    try:
+        events_summary = [EventsInfo(severity="CRITICAL", total_events=1, messages=[error_message])]
+        argus_client.submit_events(events_summary)
+        LOGGER.info("Events summary submitted to Argus successfully")
+    except Exception as summary_exc:  # noqa: BLE001
+        LOGGER.warning("Failed to submit events summary to Argus: %s", summary_exc)
+
+    try:
+        argus_client.set_sct_run_status(TestStatus.TEST_ERROR)
+    except Exception as status_exc:  # noqa: BLE001
+        LOGGER.warning("Failed to set Argus run status: %s", status_exc)
+
+    try:
+        argus_client.finalize_sct_run()
+    except Exception as finalize_exc:  # noqa: BLE001
+        LOGGER.warning("Failed to finalize Argus run: %s", finalize_exc)
+
+
+=======
+def _report_provision_error_to_argus(
+    exc: Exception,
+    params: "SCTConfiguration | None",
+    test_config: object | None,
+    backend: str,
+) -> None:
+    """Report a provisioning error to Argus.
+
+    Handles scenarios where params or test_config may not be available yet
+    (e.g., when init_and_verify_sct_config() itself fails).
+    """
+    if test_config is None:
+        test_config = get_test_config()
+
+    # Determine test_id: prefer params, fall back to environment variable
+    test_id = None
+    if params:
+        test_id = params.get("test_id")
+    if not test_id or test_id == "None":
+        test_id = os.environ.get("SCT_TEST_ID")
+
+    if not test_id or test_id == "None":
+        LOGGER.warning("No test_id available - cannot report error to Argus")
+        return
+
+    test_config.set_test_id_only(test_id)
+
+    if params:
+        # params available — use standard init which checks enable_argus
+        try:
+            test_config.init_argus_client(params)
+        except Exception as init_exc:  # noqa: BLE001
+            LOGGER.warning("Failed to initialize Argus client: %s", init_exc)
+            return
+        argus_client = test_config.argus_client()
+    else:
+        # params not available (config init failed) — create client directly
+        # bypassing enable_argus check since we must report the critical error
+        try:
+            argus_client = get_argus_client(run_id=test_id, use_tunnel=get_argus_use_tunnel_from_env())
+        except Exception as init_exc:  # noqa: BLE001
+            LOGGER.warning("Failed to initialize Argus client: %s", init_exc)
+            return
+
+    # Create and submit error event to Argus
+    error_message = (
+        f"(TestFrameworkEvent Severity.CRITICAL) Failed to provision {backend} resources: {type(exc).__name__}: {exc}"
+    )
+    event_payload: RawEventPayload = {
+        "run_id": str(test_id),
+        "severity": "CRITICAL",
+        "ts": time.time(),
+        "message": error_message,
+        "event_type": "TestFrameworkEvent",
+        "received_timestamp": None,
+        "nemesis_name": None,
+        "duration": None,
+        "node": None,
+        "target_node": None,
+        "known_issue": None,
+        "nemesis_status": None,
+    }
+
+    try:
+        argus_client.submit_event(event_payload)
+        LOGGER.info("Error event submitted to Argus successfully")
+    except Exception as argus_exc:  # noqa: BLE001
+        LOGGER.warning("Failed to submit error event to Argus: %s", argus_exc)
+
+    # Submit events summary so the error appears in the Argus events tab
+    try:
+        events_summary = [EventsInfo(severity="CRITICAL", total_events=1, messages=[error_message])]
+        argus_client.submit_events(events_summary)
+        LOGGER.info("Events summary submitted to Argus successfully")
+    except Exception as summary_exc:  # noqa: BLE001
+        LOGGER.warning("Failed to submit events summary to Argus: %s", summary_exc)
+
+    try:
+        argus_client.set_sct_run_status(TestStatus.TEST_ERROR)
+    except Exception as status_exc:  # noqa: BLE001
+        LOGGER.warning("Failed to set Argus run status: %s", status_exc)
+
+    try:
+        argus_client.finalize_sct_run()
+    except Exception as finalize_exc:  # noqa: BLE001
+        LOGGER.warning("Failed to finalize Argus run: %s", finalize_exc)
+
+
+>>>>>>> 8ce5bc2af (fix(argus): pass use_tunnel to get_argus_client in provision error fallback path)
 @cli.command("clean-aws-kms-aliases", help="clean AWS KMS old aliases")
 @click.option("-r", "--regions", type=CloudRegion(cloud_provider="aws"), multiple=True, help="List of regions to cover")
 @click.option("--time-delta-h", type=int, required=False, help="Time delta in hours. Used to detect 'old' aliases.")
