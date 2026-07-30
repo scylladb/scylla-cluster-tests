@@ -46,6 +46,10 @@ is set. `KeyStore` therefore always passes `region_name`, defaulting to
 | `scylladb_upload.json` | json | Upload API token |
 | `qa_users.json` | json | QA user roster |
 | `bucket-users.json` | json | ACL grantees |
+| `aws_images_role.json` | json | AWS role for image copying |
+| `github_access.json` | json | GitHub API token |
+| `jenkins.json` | json | Jenkins API credentials |
+| `scylla_doctor_full.json` | json | scylla-doctor credentials |
 
 ## Adding or updating credentials
 
@@ -120,9 +124,10 @@ for name in scylla_test_id_ed25519 scylla_test_id_ed25519.pub \
             housekeeping-db.json backup_azure_blob.json \
             azure_kms_config.json gcp_kms_config.json \
             scylladb_upload.json qa_users.json bucket-users.json \
-            gcp-scylladbaaslab.json; do
+            gcp-scylladbaaslab.json aws_images_role.json \
+            github_access.json jenkins.json scylla_doctor_full.json; do
     if aws secretsmanager get-secret-value --secret-id "sct/$name" \
-         --output text --query Name >/dev/null 2>&1; then
+         --region us-east-1 --output text --query Name >/dev/null 2>&1; then
         echo "OK   sct/$name"
     else
         echo "MISS sct/$name"
