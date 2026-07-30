@@ -61,6 +61,20 @@ def _is_transient_error(exception):
     return code in _TRANSIENT_S3_ERROR_CODES or code in _TRANSIENT_SM_ERROR_CODES
 
 
+# "Key/secret does not exist" is reported with a different code per backend:
+# S3 says NoSuchKey, Secrets Manager says ResourceNotFoundException.  Callers
+# that treat a missing entry as a soft miss must accept both, otherwise their
+# fallback silently stops working when the backend changes.
+_NOT_FOUND_ERROR_CODES = frozenset({"NoSuchKey", "404", "ResourceNotFoundException"})
+
+
+def is_not_found_error(exception) -> bool:
+    """Return True if the exception means the requested key/secret does not exist."""
+    if not isinstance(exception, ClientError):
+        return False
+    return exception.response.get("Error", {}).get("Code") in _NOT_FOUND_ERROR_CODES
+
+
 class KeyStore:
     """Credential store backed by AWS Secrets Manager or S3.
 
@@ -252,7 +266,9 @@ class KeyStore:
             try:
                 return self.get_json(f"argus_rest_credentials_sct_{cloud_provider}.json")
             except ClientError as e:
-                if not e.response["Error"]["Code"] == "NoSuchKey":
+                # Per-provider credentials are optional; fall through to the shared
+                # ones when this provider has no dedicated entry.
+                if not is_not_found_error(e):
                     raise
 
         return self.get_json("argus_rest_credentials.json")
