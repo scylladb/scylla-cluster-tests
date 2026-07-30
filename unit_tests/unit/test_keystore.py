@@ -920,6 +920,29 @@ class TestSecretsManagerBackend:
         ks = KeyStore()
         assert ks._backend == "s3"
 
+    @pytest.mark.parametrize("env_backend", ["secretsmanager", "s3", None])
+    def test_constructor_backend_wins_over_env(self, mocked_s3, monkeypatch, env_backend):
+        """A constructor-pinned backend ignores SCT_KEYSTORE_BACKEND entirely.
+
+        The `issues/` bulk cache exists in S3 only -- it is too large for a
+        Secrets Manager secret and is written by a workflow that uploads to S3
+        -- so its readers pin `backend="s3"` and must not follow the config.
+        """
+        if env_backend is None:
+            monkeypatch.delenv("SCT_KEYSTORE_BACKEND", raising=False)
+        else:
+            monkeypatch.setenv("SCT_KEYSTORE_BACKEND", env_backend)
+        assert KeyStore(backend="s3")._backend == "s3"
+
+    def test_s3_pinned_instance_reads_from_s3_under_sm_default(self, mocked_s3, monkeypatch):
+        """The pin has to change where bytes actually come from, not just `_backend`."""
+        monkeypatch.delenv("SCT_KEYSTORE_BACKEND", raising=False)
+        boto3.client("s3").put_object(
+            Bucket=KEYSTORE_S3_BUCKET, Key="issues/scylladb_scylladb.csv", Body=b"1,open,bug,title\n"
+        )
+        # No sct/issues/... secret exists, so an unpinned KeyStore would miss here.
+        assert KeyStore(backend="s3").get_file_contents("issues/scylladb_scylladb.csv") == b"1,open,bug,title\n"
+
     def test_sm_region_defaults_without_aws_region_env(self, mocked_s3, monkeypatch):
         """Secrets Manager is regional; the client must not depend on AWS_DEFAULT_REGION.
 
