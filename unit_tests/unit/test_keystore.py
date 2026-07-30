@@ -40,6 +40,7 @@ from sdcm.keystore import (
     KEYSTORE_SM_REGION,
     KeyStore,
     SSHKey,
+    is_not_found_error,
     materialize_ssh_key,
     pub_key_from_private_key_file,
 )
@@ -434,6 +435,41 @@ class TestArgusCredentials:
                     with pytest.raises(ClientError) as exc_info:
                         ks.get_argus_rest_credentials_per_provider()
                     assert exc_info.value.response["Error"]["Code"] == "AccessDenied"
+
+    def test_jenkins_fallback_on_secrets_manager_resource_not_found(self, ks):
+        """A provider with no dedicated secret must fall back, not blow up.
+
+        Secrets Manager reports a missing secret as ResourceNotFoundException
+        rather than S3's NoSuchKey. Only recognising NoSuchKey made every
+        non-AWS provider fail to initialise its Argus client.
+        """
+        with patch.dict(os.environ, {"JOB_NAME": "test-job"}):
+            with patch("sdcm.keystore.provider", return_value="gce"):
+                real_get_json = ks.get_json
+                error_resp = {"Error": {"Code": "ResourceNotFoundException", "Message": "can't find secret"}}
+
+                def fake_get_json(name):
+                    if name == "argus_rest_credentials_sct_gce.json":
+                        raise ClientError(error_resp, "GetSecretValue")
+                    return real_get_json(name)
+
+                with patch.object(ks, "get_json", side_effect=fake_get_json):
+                    assert ks.get_argus_rest_credentials_per_provider() == FAKE_ARGUS_CREDS
+
+
+class TestIsNotFoundError:
+    @pytest.mark.parametrize("code", ["NoSuchKey", "404", "ResourceNotFoundException"])
+    def test_recognises_missing_entry_codes_from_both_backends(self, code):
+        err = ClientError({"Error": {"Code": code, "Message": "missing"}}, "Get")
+        assert is_not_found_error(err) is True
+
+    @pytest.mark.parametrize("code", ["AccessDenied", "ThrottlingException", "InternalError"])
+    def test_other_codes_are_not_not_found(self, code):
+        err = ClientError({"Error": {"Code": code, "Message": "nope"}}, "Get")
+        assert is_not_found_error(err) is False
+
+    def test_non_client_error_is_not_not_found(self):
+        assert is_not_found_error(ValueError("boom")) is False
 
 
 # ---------------------------------------------------------------------------
