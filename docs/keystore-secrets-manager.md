@@ -30,7 +30,10 @@ is set. `KeyStore` therefore always passes `region_name`, defaulting to
 |---|---|---|
 | `scylla_test_id_ed25519` | binary | SSH private key |
 | `scylla_test_id_ed25519.pub` | binary | SSH public key |
-| `gcp-sct-project-1.json` | json | GCP service account |
+| `gcp-sct-project-1.json` | json | GCP service account (see [GCP projects](#gcp-projects)) |
+| `gcp-sct-project-1_service_accounts.json` | json | GCP instance service accounts |
+| `gcp-local-ssd-latency.json` | json | GCP service account (see [GCP projects](#gcp-projects)) |
+| `gcp-local-ssd-latency_service_accounts.json` | json | GCP instance service accounts |
 | `gcp-scylladbaaslab.json` | json | GCP service account (DBaaS lab) |
 | `azure.json` | json | Azure credentials |
 | `oci.json` | json | OCI credentials |
@@ -50,6 +53,41 @@ is set. `KeyStore` therefore always passes `region_name`, defaulting to
 | `github_access.json` | json | GitHub API token |
 | `jenkins.json` | json | Jenkins API credentials |
 | `scylla_doctor_full.json` | json | scylla-doctor credentials |
+
+## GCP projects
+
+GCP credentials are keyed by project id, not by a fixed name.
+`KeyStore.get_gcp_credentials()` and `KeyStore.get_gcp_service_accounts()`
+resolve the project from `SCT_GCE_PROJECT` (defaulting to
+`gcp-sct-project-1`) and fetch:
+
+- `{project}.json` — the service-account key used to authenticate to GCP
+- `{project}_service_accounts.json` — the service accounts attached to
+  provisioned instances
+
+The set of project ids SCT may be pointed at is
+`SUPPORTED_PROJECTS` in `sdcm/utils/gce_utils.py`. **Every project in
+`SUPPORTED_PROJECTS` needs both entries present in Secrets Manager**, or
+any run / cleanup / cloud-monitor pass that iterates the project set
+fails with `ResourceNotFoundException` for the missing one. Current set:
+
+| Project id | Required secrets |
+|---|---|
+| `gcp-sct-project-1` | `sct/gcp-sct-project-1.json`, `sct/gcp-sct-project-1_service_accounts.json` |
+| `gcp-local-ssd-latency` | `sct/gcp-local-ssd-latency.json`, `sct/gcp-local-ssd-latency_service_accounts.json` |
+
+When adding a project (see [gcp_create_new_project.md](gcp_create_new_project.md)),
+mirror both entries into Secrets Manager in the same change that adds the
+id to `SUPPORTED_PROJECTS`.
+
+> **Backporting note.** The Secrets Manager mirror only holds the
+> projects listed above. Release branches that still carry extra project
+> ids in `SUPPORTED_PROJECTS` — the legacy `gcp` project is present on
+> `branch-2022.2` through `branch-2024.2` — must have those ids dropped
+> as part of backporting the `secretsmanager` default, otherwise
+> `sct.py`/cleanup will look up `sct/gcp.json`, which does not exist.
+> Branches `branch-2025.1` and newer, plus `branch-perf-v17`, already
+> carry exactly the two projects above and need no adjustment.
 
 ## Adding or updating credentials
 
@@ -118,7 +156,9 @@ Quick check that all entries are readable in Secrets Manager:
 
 ```bash
 for name in scylla_test_id_ed25519 scylla_test_id_ed25519.pub \
-            gcp-sct-project-1.json azure.json oci.json docker.json \
+            gcp-sct-project-1.json gcp-sct-project-1_service_accounts.json \
+            gcp-local-ssd-latency.json gcp-local-ssd-latency_service_accounts.json \
+            azure.json oci.json docker.json \
             email_config.json ldap_ms_ad.json \
             argus_rest_credentials.json scylladb_jira.json \
             housekeeping-db.json backup_azure_blob.json \
