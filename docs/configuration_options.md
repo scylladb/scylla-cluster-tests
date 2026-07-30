@@ -4543,3 +4543,13 @@ AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (def
 
 **type:** str
 * appendable
+
+
+## **keystore_sm_region** / SCT_KEYSTORE_SM_REGION
+
+AWS region holding the KeyStore secrets when keystore_backend=secretsmanager (default: 'us-east-1')
+
+**default:** us-east-1
+
+**type:** str
+* appendable
