@@ -2355,6 +2355,15 @@ AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (def
 **type:** str (appendable)
 
 
+## **keystore_sm_region** / SCT_KEYSTORE_SM_REGION
+
+AWS region holding the KeyStore secrets when keystore_backend=secretsmanager (default: 'us-east-1')
+
+**default:** us-east-1
+
+**type:** str (appendable)
+
+
 ## **scylla_mgmt_upgrade_to_repo** / SCT_SCYLLA_MGMT_UPGRADE_TO_REPO
 
 Url to the repo of scylla manager version to upgrade to for management tests

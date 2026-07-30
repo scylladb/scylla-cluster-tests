@@ -322,3 +322,4 @@ argus_email_report_template: email_report_template_basic.yaml
 #   s3             - Legacy: fetch from the scylla-qa-keystore S3 bucket.
 keystore_backend: 'secretsmanager'
 keystore_sm_prefix: 'sct/'
+keystore_sm_region: 'us-east-1'
