@@ -1,0 +1,26 @@
+#!groovy
+
+// The regular GCE image artifacts test, run against minicloud instead of real GCE.
+//
+// The GCE counterpart of minicloud-artifact-ami.jenkinsfile: same switch, same shape, minicloud
+// emulating the GCE compute API rather than EC2, and the same KVM-capable Jenkins agent hosting it.
+// configurations/minicloud/gce.yaml drops the local-SSD count the GCE test-cases ask for, which
+// minicloud's qcow2-backed guests cannot provide.
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    backend: 'gce',
+    gce_datacenter: 'us-east1',
+    test_config: '''["test-cases/artifacts/gce-image.yaml", "configurations/minicloud.yaml", "configurations/minicloud/gce.yaml"]''',
+    minicloud: true,
+
+    // A released version rather than master:latest, for the same reason as the AMI job: minicloud
+    // builds the guest disk from the published image, and dev images are not shared as widely as
+    // released ones.
+    scylla_version: '2026.3.0-rc0',
+
+    provision_type: 'on_demand',
+    timeout: [time: 60, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+)

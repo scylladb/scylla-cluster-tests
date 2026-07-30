@@ -1,0 +1,6 @@
+# GCE-backend overlay for minicloud runs. Layer it after configurations/minicloud.yaml.
+#
+# The GCE test-cases ask for local SSDs the guests do not have: minicloud backs each VM with a
+# qcow2 image on the agent's disk, not with NVMe passthrough. One keeps the disk layout SCT
+# expects without asking for eight devices that cannot appear.
+gce_n_local_ssd_disk_db: 1

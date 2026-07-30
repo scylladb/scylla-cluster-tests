@@ -1,0 +1,27 @@
+#!groovy
+
+// Install ScyllaDB from the .rpm repository onto a stock Rocky Linux 9 guest, on minicloud with
+// the GCE backend.
+//
+// The rpm half of the package-install coverage; minicloud-artifact-deb-aws.jenkinsfile is the deb
+// half. Reuses the upstream test-cases/artifacts/rocky9.yaml, which is already a GCE
+// use_preinstalled_scylla: false test-case, so the only minicloud-specific parts are the two
+// overlays. Runs on a KVM-capable Jenkins agent, no sct-runner.
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    backend: 'gce',
+    gce_datacenter: 'us-east1',
+    test_config: '''["test-cases/artifacts/rocky9.yaml", "configurations/minicloud.yaml", "configurations/minicloud/gce.yaml"]''',
+    minicloud: true,
+
+    // Resolves to the matching rpm repository. Override per build to test a specific repo with
+    // the scylla_repo parameter instead.
+    scylla_version: '2026.3.0-rc0',
+
+    provision_type: 'on_demand',
+    // Longer than the image jobs: this one installs Scylla rather than booting it preinstalled.
+    timeout: [time: 90, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+)

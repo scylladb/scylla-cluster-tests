@@ -1,7 +1,18 @@
 #! groovy
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
+    // Captured local, read from pipelineParams rather than params: this is evaluated at
+    // pipeline-definition time, where `params` is still empty on build #1 but the agent label has
+    // to be decided already. Never read params.minicloud - getJenkinsLabels merges `overrides` into
+    // an un-def'd global `params`, so it would look like it works and then not.
+    def minicloudEnabled = pipelineParams.get('minicloud', false)
+
+    // minicloud runs its guests on the agent itself, so it needs the KVM-capable label rather than
+    // a region builder. This is also what makes a local agent *mandatory* for minicloud artifacts
+    // runs: there is no sct-runner stage to fall back to, so there is only ever one topology.
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter,
+                                   params.azure_region_name, params.oci_region_name,
+                                   minicloudEnabled ? [minicloud: true] : null)
 
     pipeline {
         agent none
@@ -67,7 +78,7 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: "a Scylla docker image to run against (for docker backend.) Should be `scylladb/scylla' for official images",
                    name: 'scylla_docker_image')
-            string(defaultValue: '',
+            string(defaultValue: "${pipelineParams.get('scylla_version', '')}",
                    description: 'a Scylla version to run against (mostly for docker backend)',
                    name: 'scylla_version')
             string(defaultValue: "${pipelineParams.get('test_config', 'test-cases/artifacts/centos9.yaml')}",
@@ -86,10 +97,26 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'on_demand|spot|spot_fleet',
                    name: 'provision_type')
+            // Minicloud Configuration
+            // Only has an effect when the jenkinsfile opts in with `minicloud: true`, which on
+            // artifacts also means the job runs on a KVM-capable Jenkins agent with no sct-runner
+            // - see vars/startMinicloud.groovy. KMS off and the rest are test-case configuration
+            // (configurations/minicloud.yaml), not job knobs.
+            separator(name: 'MINICLOUD_CONFIG', sectionHeader: 'Minicloud Configuration')
+            string(defaultValue: "${pipelineParams.get('minicloud_docker', '')}",
+                   description: 'Minicloud Docker image reference (e.g. ghcr.io/scylladb/minicloud:master-4bd3fb6). ' +
+                                'Empty leaves minicloud_docker_image at its defaults/test_default.yaml value. ' +
+                                'Ignored unless the jenkinsfile sets `minicloud: true`',
+                   name: 'minicloud_docker')
             separator(name: 'MISC_CONFIG', sectionHeader: 'Miscellaneous Configuration')
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                description: 'Gce project to use',
                name: 'gce_project')
+            string(defaultValue: '',
+               description: 'Pin this build to a specific Jenkins agent label, e.g. a lab machine. ' +
+                            'Empty picks the usual builder for the backend/region. Takes precedence ' +
+                            'over the minicloud agent label',
+               name: 'jenkins_label')
             separator(name: 'EMAIL_REPORT', sectionHeader: 'Email Report Configuration')
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
@@ -157,7 +184,15 @@ def call(Map pipelineParams) {
                                         stage("Checkout (${instance_type})") {
                                             script {
                                                 loadEnvFromString(params.extra_environment_variables)
-                                                tagBuilder()
+                                                // Opt in from the jenkinsfile with `minicloud: true`. Must come after
+                                                // extra_environment_variables is loaded (a per-run override wins) and
+                                                // before anything talks to a cloud API.
+                                                startMinicloud.exportEnv(params, pipelineParams)
+                                                // Nothing to tag on a local agent: tagBuilder spends 5-8s on DMI
+                                                // reads and four IMDS curls before no-opping with UNKNOWN.
+                                                if (!minicloudEnabled) {
+                                                    tagBuilder()
+                                                }
                                             }
                                             dir('scylla-cluster-tests') {
                                                 timeout(time: 10, unit: 'MINUTES') {
@@ -165,6 +200,41 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                             dockerLogin(params)
+                                        }
+                                        // Everything from here on is wrapped so the minicloud container is always
+                                        // torn down. There is no post{} available inside a parallel branch, so
+                                        // try/finally is the only place teardown can live.
+                                        try {
+                                        // minicloud boots QEMU/KVM guests on this agent, so the whole run stays
+                                        // local: no sct-runner is created and every stage takes the builder-local
+                                        // branch it already takes today, selected by the absence of
+                                        // ./sct_runner_ip. The agent is guaranteed KVM-capable because
+                                        // getJenkinsLabels resolved the label from `minicloud: true` above.
+                                        if (minicloudEnabled) {
+                                            stage("Minicloud Reclaim (${instance_type})") {
+                                                dir('scylla-cluster-tests') {
+                                                    timeout(time: 10, unit: 'MINUTES') {
+                                                        minicloudReclaim()
+                                                    }
+                                                }
+                                            }
+                                            // Fail here, before Argus registration and the hydra pull, rather than
+                                            // 20 minutes in. Not wrapped in catchError: an agent that cannot host
+                                            // minicloud must stop the build, not proceed to talk to the real cloud.
+                                            stage("Minicloud Preflight (${instance_type})") {
+                                                dir('scylla-cluster-tests') {
+                                                    timeout(time: 5, unit: 'MINUTES') {
+                                                        minicloudPreflight()
+                                                    }
+                                                }
+                                            }
+                                            stage("Start Minicloud (${instance_type})") {
+                                                dir('scylla-cluster-tests') {
+                                                    timeout(time: 15, unit: 'MINUTES') {
+                                                        startMinicloud(params)
+                                                    }
+                                                }
+                                            }
                                         }
                                         stage('Create Argus Test Run') {
                                             catchError(stageResult: 'FAILURE') {
@@ -339,6 +409,22 @@ def call(Map pipelineParams) {
                                                     dir('scylla-cluster-tests') {
                                                         timeout(time: 10, unit: 'MINUTES') {
                                                             runSendEmail(params, currentBuild)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        } finally {
+                                            // Last, deliberately: removing the container kills every guest with it
+                                            // (QEMU shares its PID namespace), and 'Collect log data' above needs
+                                            // them alive. Runs on abort and on failure too, which is the point.
+                                            if (minicloudEnabled) {
+                                                stage("Stop Minicloud (${instance_type})") {
+                                                    catchError(stageResult: 'FAILURE') {
+                                                        dir('scylla-cluster-tests') {
+                                                            timeout(time: 10, unit: 'MINUTES') {
+                                                                stopMinicloud()
+                                                            }
                                                         }
                                                     }
                                                 }
