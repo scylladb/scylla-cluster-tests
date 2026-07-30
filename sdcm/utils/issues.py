@@ -108,10 +108,16 @@ class CachedJiraIssues:
     This class provides a cache for issue data retrieved from an S3 bucket
 
     The cache is automatically populated by the `.github/workflows/cache-jira-issues.yaml` workflow every 6 hours.
+
+    The KeyStore is pinned to `s3` regardless of `keystore_backend`: these CSVs are
+    bulk data rather than credentials, they exceed the 64 KB Secrets Manager secret
+    limit (the largest is >1 MB), and only the workflow above writes them -- to S3.
+    Reading them through Secrets Manager can only ever miss, which silently degrades
+    every issue lookup to a live API call.
     """
 
     def __init__(self):
-        self.storage = KeyStore()
+        self.storage = KeyStore(backend="s3")
 
     @lru_cache
     def get_project(self, project: str) -> dict[str, Issue]:
@@ -176,10 +182,15 @@ class CachedGitHubIssues:
     every 6 hours.
 
     it's main goal is to make sure we don't reach the rate limit of the github api
+
+    Pinned to the `s3` backend for the same reason as :class:`CachedJiraIssues`:
+    bulk CSVs, too large for Secrets Manager, written to S3 only.  A cache miss
+    here falls back to the live GitHub API, i.e. straight into the rate limit
+    this cache exists to avoid.
     """
 
     def __init__(self):
-        self.storage = KeyStore()
+        self.storage = KeyStore(backend="s3")
 
     @lru_cache
     def get_repo(self, owner: str, repo: str) -> dict[int, Issue]:
