@@ -21,6 +21,7 @@ from sdcm.provision.aws.az_resolver import (
     NoValidAvailabilityZoneError,
     _node_count_positive,
     is_az_fallback_enabled,
+    is_region_fallback_enabled,
     run_pre_flight_capacity_probe,
 )
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted
@@ -285,9 +286,41 @@ def test_resolve_with_unset_availability_zone_stays_unset(mock_aws_region_cls, a
         (False, True, False),
     ],
 )
-def test_is_az_fallback_enabled(new_param, alias, expected):
+def test_is_az_fallback_enabled(new_param, alias, expected, monkeypatch):
+    monkeypatch.setattr("sdcm.provision.aws.az_resolver.is_minicloud_active", lambda: False)
     params = _make_params(fallback_to_next_availability_zone=new_param, aws_fallback_to_next_availability_zone=alias)
     assert is_az_fallback_enabled(params) is expected
+
+
+def test_is_region_fallback_enabled(monkeypatch):
+    monkeypatch.setattr("sdcm.provision.aws.az_resolver.is_minicloud_active", lambda: False)
+    params = _make_params(fallback_to_next_region=True, cluster_backend="aws")
+    assert is_region_fallback_enabled(params) is True
+
+
+@pytest.mark.parametrize("check", [is_az_fallback_enabled, is_region_fallback_enabled])
+def test_fallback_disabled_on_minicloud(check, monkeypatch):
+    """minicloud has no capacity limits, so a fallback can only mask a real bug."""
+    monkeypatch.setattr("sdcm.provision.aws.az_resolver.is_minicloud_active", lambda: True)
+    params = _make_params(
+        fallback_to_next_availability_zone=True,
+        aws_fallback_to_next_availability_zone=True,
+        fallback_to_next_region=True,
+        cluster_backend="aws",
+    )
+    assert check(params) is False
+
+
+@pytest.mark.parametrize("check", [is_az_fallback_enabled, is_region_fallback_enabled])
+def test_fallback_disabled_when_aws_endpoint_is_local(check, monkeypatch):
+    """The real gate: an AWS_ENDPOINT_URL pointing at localhost means minicloud."""
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://localhost:5000")
+    params = _make_params(
+        fallback_to_next_availability_zone=True,
+        fallback_to_next_region=True,
+        cluster_backend="aws",
+    )
+    assert check(params) is False
 
 
 def test_get_fallback_candidates_single_az(mock_aws_region_cls):

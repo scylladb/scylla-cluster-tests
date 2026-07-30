@@ -48,6 +48,7 @@ from sdcm.kernel_panic_checker import GCPKernelPanicChecker
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
+from sdcm.utils.minicloud import is_minicloud_active
 from sdcm.nemesis.utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import resolve_ip_to_dns
 
@@ -352,6 +353,8 @@ class GCENode(cluster.BaseNode):
 
     @cached_property
     def image(self):
+        if not self._instance.disks:
+            return self.parent_cluster.params.get("gce_image_db") or "unknown"
         disk_client, _ = get_gce_compute_disks_client()
         disk = disk_client.get(disk=self._instance.disks[0].source.split("/")[-1], project=self.project, zone=self.zone)
         return disk.source_image
@@ -365,7 +368,10 @@ class GCENode(cluster.BaseNode):
 
     @cached_property
     def public_dns_name(self) -> str:
-        return resolve_ip_to_dns(self.public_ip_address)
+        try:
+            return resolve_ip_to_dns(self.public_ip_address)
+        except ValueError:
+            return self.public_ip_address
 
 
 class GCECluster(cluster.BaseCluster):
@@ -447,7 +453,16 @@ class GCECluster(cluster.BaseCluster):
         """Return True when AZ fallback on capacity errors is enabled.
 
         Reads `fallback_to_next_availability_zone`.
+
+        Always disabled on minicloud, mirroring the AWS resolver: the emulator never
+        runs out of capacity, so a fallback can only fire on a genuine bug. Worse, the
+        retry reuses the instance name, so the next zone answers `409 ... already
+        exists` and that 409 is what surfaces - hiding whatever actually went wrong on
+        the first attempt.
         """
+        if is_minicloud_active():
+            LOGGER.debug("minicloud is active; GCE AZ fallback disabled")
+            return False
         if (value := self.params.get("fallback_to_next_availability_zone")) is not None:
             return bool(value)
         return False

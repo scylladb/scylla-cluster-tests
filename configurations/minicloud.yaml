@@ -1,0 +1,20 @@
+# Overlay for any test run against minicloud instead of a real cloud. Layer it after the
+# test-case yaml, e.g.
+#
+#   test_config: '''["test-cases/artifacts/ami.yaml", "configurations/minicloud.yaml"]'''
+#
+# The pipelines deliberately set none of this (see vars/startMinicloud.groovy). It is
+# configuration, so a single run can override any of it, and none of it needs a pipeline
+# change once minicloud grows the missing feature.
+
+# minicloud implements no KMS endpoint, and its QEMU guests hold no cloud IAM credentials to
+# reach a real one. Both lines go away once minicloud implements KMS.
+enterprise_disable_kms: true
+enable_kms_key_rotation: false
+
+# There is no spot market to be interrupted by: every "instance" is a local QEMU guest.
+instance_provision: 'on_demand'
+
+# Guests live on minicloud's userspace switch and are reachable only from the host running
+# them, which is where SCT itself runs.
+ip_ssh_connections: 'private'

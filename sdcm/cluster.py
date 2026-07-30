@@ -134,6 +134,7 @@ from sdcm.utils.distro import Distro
 from sdcm.utils.features import get_enabled_features, is_tablets_feature_enabled
 from sdcm.utils.install import InstallMode
 from sdcm.utils.issues import SkipPerIssues
+from sdcm.utils.minicloud import is_minicloud_active
 from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
 from sdcm.utils.health_checker import (
     check_nodes_status,
@@ -877,6 +878,8 @@ class BaseNode(AutoSshContainerMixin):
                 if kms_host_data["aws_region"] == "auto":
                     append_scylla_yaml["kms_hosts"][kms_host_name]["aws_region"] = self.vm_region
             scylla_yml.update(append_scylla_yaml)
+        if self.parent_cluster.params.get("minicloud_lightweight"):
+            scylla_yml.developer_mode = True
         if self.parent_cluster.node_type == "oracle-db":
             scylla_yml.experimental_features = []  # Oracle Scylla does not use experimental features
         return scylla_yml
@@ -4158,7 +4161,17 @@ class BaseCluster:
         self.log = SDCMAdapter(LOGGER, extra={"prefix": str(self)})
         self.log.info("Init nodes")
         self.nodes: List[BaseNode] = []
-        self.instance_provision = params.get("instance_provision")
+        if is_minicloud_active():
+            # minicloud emulates no spot market and answers RequestSpotInstances with a
+            # 400, so spot only costs a wasted round-trip before the on-demand fallback.
+            # This has to happen here rather than via the SCT_INSTANCE_PROVISION override
+            # in minicloud.set_env_overrides(): that runs after SCTConfiguration is built,
+            # so the env var never reaches params. The value is spelled out instead of
+            # reusing cluster_aws.INSTANCE_PROVISION_ON_DEMAND because importing it would
+            # close an import cycle (cluster_aws imports this module).
+            self.instance_provision = "on_demand"
+        else:
+            self.instance_provision = params.get("instance_provision")
         self.params = params
         self.datacenter = region_names or []
         self.dead_nodes_list = []
@@ -4505,7 +4518,7 @@ class BaseCluster:
         return [node.private_ip_address for node in self.nodes]
 
     def get_node_public_ips(self):
-        return [node.public_ip_address for node in self.nodes]
+        return [node.public_ip_address for node in self.nodes if node.public_ip_address]
 
     def get_node_cql_ips(self, nodes: list[BaseNode] | None = None):
         nodes = nodes if nodes else self.nodes

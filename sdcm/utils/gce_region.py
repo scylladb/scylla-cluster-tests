@@ -12,12 +12,14 @@
 # Copyright (c) 2022 ScyllaDB
 
 import logging
+import os
 import time
 from functools import cached_property
 from typing import Optional
 
 import googleapiclient.errors
 from googleapiclient.discovery import build
+from google.api_core.client_options import ClientOptions
 from google.oauth2 import service_account
 import google.api_core.exceptions
 from google.cloud import storage
@@ -42,17 +44,30 @@ class GceRegion:
 
         credentials = service_account.Credentials.from_service_account_info(info)
 
-        self.iam = build("iam", "v1", credentials=credentials, cache_discovery=False)
+        compute_kwargs = {}
+        storage_kwargs = {}
+        if endpoint := os.environ.get("GCE_ENDPOINT_URL"):
+            compute_kwargs["client_options"] = ClientOptions(api_endpoint=endpoint)
+            storage_kwargs["client_options"] = {"api_endpoint": endpoint}
 
-        self.network_client = compute_v1.NetworksClient(credentials=credentials)
-        self.firewall_client = compute_v1.FirewallsClient(credentials=credentials)
-        self.subnets_client = compute_v1.SubnetworksClient(credentials=credentials)
-        self.routes_client = compute_v1.RoutesClient(credentials=credentials)
-        self.storage_client = storage.Client(credentials=credentials)
+        iam_kwargs = {}
+        if endpoint := os.environ.get("GCE_ENDPOINT_URL"):
+            iam_kwargs["client_options"] = {"api_endpoint": endpoint}
+        self.iam = build("iam", "v1", credentials=credentials, cache_discovery=False, **iam_kwargs)
+
+        self.network_client = compute_v1.NetworksClient(credentials=credentials, **compute_kwargs)
+        self.firewall_client = compute_v1.FirewallsClient(credentials=credentials, **compute_kwargs)
+        self.subnets_client = compute_v1.SubnetworksClient(credentials=credentials, **compute_kwargs)
+        self.routes_client = compute_v1.RoutesClient(credentials=credentials, **compute_kwargs)
+        self.storage_client = storage.Client(credentials=credentials, **storage_kwargs)
 
     @property
     def backup_storage_bucket_name(self):
         return f"manager-backup-tests-{self.project}-{self.region_name}"
+
+    @property
+    def _is_minicloud(self) -> bool:
+        return bool(os.environ.get("GCE_ENDPOINT_URL"))
 
     @cached_property
     def network(self) -> compute_v1.Network:
@@ -254,8 +269,9 @@ class GceRegion:
     def configure(self):
         LOGGER.info("Configuring '%s' region...", self.region_name)
         self.configure_firewall()
-        self.create_backup_service_account()
-        self.configure_backup_storage()
+        if not self._is_minicloud:
+            self.create_backup_service_account()
+            self.configure_backup_storage()
         LOGGER.info("Region configured successfully.")
 
     def add_network_peering(

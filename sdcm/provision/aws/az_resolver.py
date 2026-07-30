@@ -22,6 +22,7 @@ from sdcm.sct_config import AWS_SUPPORTED_REGIONS
 from sdcm.test_config import TestConfig
 from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.minicloud import is_minicloud_active
 
 LOGGER = logging.getLogger(__name__)
 
@@ -98,14 +99,30 @@ def is_az_fallback_enabled(params) -> bool:
 
     Reads `fallback_to_next_availability_zone` (new, backend-agnostic).
     Falls back to the deprecated `aws_fallback_to_next_availability_zone` alias.
+
+    Always disabled on minicloud: the emulator never runs out of capacity, so a
+    fallback can only fire on a genuine bug - and retrying the same failure in another
+    AZ buries the real error behind a chain of identical ones.
     """
+    if is_minicloud_active():
+        LOGGER.debug("minicloud is active; AZ fallback disabled")
+        return False
     if (value := params.get("fallback_to_next_availability_zone")) is not None:
         return bool(value)
     return bool(params.get("aws_fallback_to_next_availability_zone"))
 
 
 def is_region_fallback_enabled(params) -> bool:
-    """Return True when whole-cluster region fallback on capacity errors is enabled."""
+    """Return True when whole-cluster region fallback on capacity errors is enabled.
+
+    Always disabled on minicloud. Beyond the "no capacity errors to recover from"
+    argument above, candidate regions are ranked by VPC peering with the current one,
+    and minicloud rejects DescribeVpcPeeringConnections with UnsupportedOperation - so
+    every candidate is discarded as unpeered and the whole scan is wasted work.
+    """
+    if is_minicloud_active():
+        LOGGER.debug("minicloud is active; region fallback disabled")
+        return False
     return bool(params.get("fallback_to_next_region")) and params.get("cluster_backend") == "aws"
 
 

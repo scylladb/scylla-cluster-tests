@@ -52,6 +52,8 @@ seeds_num: 1
 
 instance_provision: "spot"
 
+minicloud_endpoint_url: ""
+
 execute_post_behavior: false
 post_behavior_db_nodes: "destroy"
 post_behavior_loader_nodes: "destroy"
@@ -380,6 +382,20 @@ download_from_s3: []
 manager_backup_restore_method: ''
 
 argus_email_report_template: email_report_template_basic.yaml
+
+# minicloud params
+# A master-<sha> tag, not a release: the newest release (v0.1.1) predates minicloud#140,
+# which region-scopes EC2 resources and adds the tag/attribute-filtered Describe* that
+# AwsRegion.configure() calls (DescribeSecurityGroups/InternetGateways/RouteTables,
+# DescribeAvailabilityZones, DescribeInstanceTypeOfferings). Region prep fails without it.
+# Move back to a release tag once one ships that includes #140.
+minicloud_docker_image: 'ghcr.io/scylladb/minicloud:master-4bd3fb6'
+minicloud_lightweight: true
+# Lightweight VMs get 1 vCPU and this much RAM regardless of the requested instance type.
+# Scylla needs >1 GiB per shard on top of the ~1.7 GiB it reserves for the guest OS, so
+# anything under ~3 GiB fails to boot with "memory per shard too low". This is per VM.
+minicloud_lightweight_memory: '4GiB'
+minicloud_s3_passthrough_buckets: 'scylla-qa-keystore,cloudius-jenkins-test,downloads.scylladb.com'
 
 # SCT agent defaults
 agent:
