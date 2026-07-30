@@ -13,8 +13,9 @@
 
 """Unit test to verify provision_resources sends error events to Argus."""
 
-import os
 from unittest.mock import MagicMock, patch
+
+import pytest
 from click.testing import CliRunner
 
 
@@ -49,8 +50,7 @@ def test_provision_resources_sends_error_event_to_argus():
         provision_error = Exception("InsufficientInstanceCapacity: Not enough instances available")
         mock_layout.return_value.provision.side_effect = provision_error
 
-        # Set environment variables
-        os.environ["SCT_CLUSTER_BACKEND"] = "aws"
+        # SCT_CLUSTER_BACKEND is set via --backend flag, no env var needed
 
         # Use Click's CliRunner to invoke the command
         from sct import provision_resources  # noqa: PLC0415
@@ -93,21 +93,30 @@ def test_provision_resources_sends_error_event_to_argus():
         mock_argus_client.finalize_sct_run.assert_called_once()
 
 
-def test_provision_resources_reports_config_init_failure_to_argus():
+@pytest.mark.parametrize(
+    "tunnel_env_val,expected_use_tunnel",
+    [
+        ("true", True),
+        ("false", False),
+    ],
+)
+def test_provision_resources_reports_config_init_failure_to_argus(monkeypatch, tunnel_env_val, expected_use_tunnel):
     """Test that provision_resources reports to Argus when init_and_verify_sct_config fails.
 
     This covers the scenario where the unified package download fails with 404,
     raising a FileNotFoundError before provisioning even begins.
     When params is None, get_argus_client is used directly to bypass the
     enable_argus check that would silently swallow the error with MagicMock.
+    Verifies use_tunnel is derived from SCT_ARGUS_USE_SSH_TUNNEL env var.
     """
+    monkeypatch.setenv("SCT_TEST_ID", "test-id-67890")
+    monkeypatch.setenv("SCT_ARGUS_USE_SSH_TUNNEL", tunnel_env_val)
 
     with (
         patch("sct.init_and_verify_sct_config") as mock_config,
         patch("sct.get_test_config") as mock_test_config,
         patch("sct.get_argus_client") as mock_get_argus_client,
         patch("sct.add_file_logger"),
-        patch.dict(os.environ, {"SCT_TEST_ID": "test-id-67890"}),
     ):
         # init_and_verify_sct_config raises FileNotFoundError (unified package 404)
         config_error = FileNotFoundError(
@@ -134,8 +143,8 @@ def test_provision_resources_reports_config_init_failure_to_argus():
         # Verify command exited with error code 1
         assert result.exit_code == 1
 
-        # Verify get_argus_client was called directly with test_id (not via test_config.init_argus_client)
-        mock_get_argus_client.assert_called_once_with(run_id="test-id-67890")
+        # Verify get_argus_client was called directly with test_id and use_tunnel (not via test_config.init_argus_client)
+        mock_get_argus_client.assert_called_once_with(run_id="test-id-67890", use_tunnel=expected_use_tunnel)
 
         # Verify test_config.init_argus_client was NOT called (params is None)
         test_config_instance.init_argus_client.assert_not_called()
@@ -173,18 +182,15 @@ def test_provision_resources_reports_config_init_failure_to_argus():
         mock_argus_client.finalize_sct_run.assert_called_once()
 
 
-def test_provision_resources_no_argus_report_without_test_id():
+def test_provision_resources_no_argus_report_without_test_id(monkeypatch):
     """Test that Argus reporting is skipped when no test_id is available."""
+    monkeypatch.delenv("SCT_TEST_ID", raising=False)
 
     with (
         patch("sct.init_and_verify_sct_config") as mock_config,
         patch("sct.get_test_config") as mock_test_config,
         patch("sct.add_file_logger"),
-        patch.dict(os.environ, {}, clear=False),
     ):
-        # Ensure SCT_TEST_ID is not set
-        os.environ.pop("SCT_TEST_ID", None)
-
         # init_and_verify_sct_config raises an error
         mock_config.side_effect = FileNotFoundError("Package not found")
 
