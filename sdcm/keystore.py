@@ -56,21 +56,21 @@ def _is_transient_error(exception):
 
 
 class KeyStore:
-    """Credential store backed by S3 or AWS Secrets Manager.
+    """Credential store backed by AWS Secrets Manager or S3.
 
     Fetches credentials (JSON configs, SSH keys, API tokens) from a
     configurable backend.  Results are cached in a thread-safe dict for
     the lifetime of the instance.
 
     Backend selection is controlled by the ``SCT_KEYSTORE_BACKEND``
-    environment variable (``s3`` by default, ``secretsmanager`` for
-    AWS Secrets Manager).
+    environment variable (``secretsmanager`` by default, ``s3`` for the
+    legacy scylla-qa-keystore bucket).
     """
 
     def __init__(self):
         self._cache: dict[str, bytes] = {}
         self._cache_lock = threading.Lock()
-        self._backend = os.environ.get("SCT_KEYSTORE_BACKEND") or "s3"
+        self._backend = os.environ.get("SCT_KEYSTORE_BACKEND") or "secretsmanager"
         self._sm_prefix = os.environ.get("SCT_KEYSTORE_SM_PREFIX") or "sct/"
 
     @property

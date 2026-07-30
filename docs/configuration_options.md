@@ -2337,6 +2337,24 @@ number of tables to create for template user c-s
 **type:** int
 
 
+## **keystore_backend** / SCT_KEYSTORE_BACKEND
+
+Credential storage backend for KeyStore: 'secretsmanager' (default) or 's3' (legacy)
+
+**default:** secretsmanager
+
+**type:** str (appendable)
+
+
+## **keystore_sm_prefix** / SCT_KEYSTORE_SM_PREFIX
+
+AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (default: 'sct/')
+
+**default:** sct/
+
+**type:** str (appendable)
+
+
 ## **scylla_mgmt_upgrade_to_repo** / SCT_SCYLLA_MGMT_UPGRADE_TO_REPO
 
 Url to the repo of scylla manager version to upgrade to for management tests
@@ -3604,28 +3622,4 @@ Whether or not to send email using argus instead of SCT.
 
 **default:** N/A
 
-<<<<<<< HEAD
 **type:** bool
-||||||| parent of 8239266be (feature(keystore): add caching, retry, logging, and Secrets Manager backend)
-**type:** sdcm.test_metadata.TestMetadata
-=======
-**type:** sdcm.test_metadata.TestMetadata
-
-
-## **keystore_backend** / SCT_KEYSTORE_BACKEND
-
-Credential storage backend for KeyStore: 's3' (default) or 'secretsmanager'
-
-**default:** s3
-
-**type:** Literal['s3', 'secretsmanager']
-
-
-## **keystore_sm_prefix** / SCT_KEYSTORE_SM_PREFIX
-
-AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (default: 'sct/')
-
-**default:** sct/
-
-**type:** str (appendable)
->>>>>>> 8239266be (feature(keystore): add caching, retry, logging, and Secrets Manager backend)
