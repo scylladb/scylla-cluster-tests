@@ -344,3 +344,4 @@ cs_extra_jvm_opts: ''
 #   s3             - Legacy: fetch from the scylla-qa-keystore S3 bucket.
 keystore_backend: 'secretsmanager'
 keystore_sm_prefix: 'sct/'
+keystore_sm_region: 'us-east-1'

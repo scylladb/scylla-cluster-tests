@@ -2436,6 +2436,15 @@ AWS Secrets Manager secret name prefix when keystore_backend=secretsmanager (def
 **type:** str (appendable)
 
 
+## **keystore_sm_region** / SCT_KEYSTORE_SM_REGION
+
+AWS region holding the KeyStore secrets when keystore_backend=secretsmanager (default: 'us-east-1')
+
+**default:** us-east-1
+
+**type:** str (appendable)
+
+
 ## **add_cs_user_profiles_extra_tables** / SCT_ADD_CS_USER_PROFILES_EXTRA_TABLES
 
 extra tables to create for template user c-s, in addition to pre-created tables
