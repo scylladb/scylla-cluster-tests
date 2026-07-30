@@ -39,6 +39,7 @@ from moto import mock_aws
 from sdcm import keystore as keystore_module
 from sdcm.keystore import (
     KEYSTORE_S3_BUCKET,
+    KEYSTORE_SM_REGION,
     KeyStore,
     SSHKey,
     materialize_ssh_key,
@@ -100,6 +101,20 @@ def mock_cloud_services():
     for name, value in saved.items():
         if value is not None:
             setattr(KeyStore, name, value)
+
+
+@pytest.fixture(autouse=True)
+def default_to_s3_backend():
+    """Pin the S3 backend for the legacy-path tests in this module.
+
+    `secretsmanager` is the real default, but most tests here exercise the S3
+    code path against the moto bucket -- including ones that never touch a
+    KeyStore directly (e.g. `materialize_ssh_key`), so they can't opt in
+    themselves. Tests that care about the true default or about Secrets Manager
+    override this env var explicitly.
+    """
+    with patch.dict(os.environ, {"SCT_KEYSTORE_BACKEND": "s3"}):
+        yield
 
 
 # --- Test data constants ---------------------------------------------------
@@ -192,7 +207,7 @@ def mocked_s3():
 
 @pytest.fixture
 def ks(mocked_s3):
-    """Return a fresh KeyStore inside the moto context."""
+    """Return a fresh KeyStore inside the moto context (S3 backend, see autouse fixture)."""
     return KeyStore()
 
 
@@ -766,10 +781,34 @@ class TestSecretsManagerBackend:
             ks = KeyStore()
             assert ks.get_json("email_config.json") == FAKE_EMAIL_CONFIG
 
-    def test_s3_backend_is_default(self, mocked_s3, monkeypatch):
+    def test_sm_backend_is_default(self, mocked_s3, monkeypatch):
         monkeypatch.delenv("SCT_KEYSTORE_BACKEND", raising=False)
         ks = KeyStore()
+        assert ks._backend == "secretsmanager"
+
+    def test_s3_backend_via_explicit_override(self, mocked_s3, monkeypatch):
+        monkeypatch.setenv("SCT_KEYSTORE_BACKEND", "s3")
+        ks = KeyStore()
         assert ks._backend == "s3"
+
+    def test_sm_region_defaults_without_aws_region_env(self, mocked_s3, monkeypatch):
+        """Secrets Manager is regional; the client must not depend on AWS_DEFAULT_REGION.
+
+        `boto3.client("s3")` silently falls back to us-east-1, but Secrets Manager
+        raises NoRegionError, so the region has to be pinned by KeyStore itself.
+        """
+        monkeypatch.delenv("SCT_KEYSTORE_BACKEND", raising=False)
+        monkeypatch.delenv("SCT_KEYSTORE_SM_REGION", raising=False)
+        monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+        monkeypatch.delenv("AWS_REGION", raising=False)
+        ks = KeyStore()
+        assert ks._sm_region == KEYSTORE_SM_REGION
+        assert ks.sm_client.meta.region_name == KEYSTORE_SM_REGION
+
+    def test_sm_region_env_override(self, mocked_s3, monkeypatch):
+        monkeypatch.setenv("SCT_KEYSTORE_SM_REGION", "eu-west-1")
+        ks = KeyStore()
+        assert ks.sm_client.meta.region_name == "eu-west-1"
 
     def test_download_file_from_sm(self, sm_ks, tmp_path):
         dest = str(tmp_path / "key")
