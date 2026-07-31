@@ -47,6 +47,11 @@ pub const ROW_COUNT = latte::param!("row_count", 1_000_000);
 pub const OFFSET = latte::param!("offset", 0);
 const GAUSS_MEAN = latte::param!("gauss_mean", 0);
 const GAUSS_STDDEV = latte::param!("gauss_stddev", 0);
+// Key access distribution: "sequential" (default) walks keys in cycle order (i % ROW_COUNT),
+// "random" scatters keys uniformly via hash_range(i, ROW_COUNT). Use "random" together with an
+// unbounded cycle range (no --end-cycle) so the key sequence never repeats within a timed run.
+// "gauss"/normal distribution is controlled separately via gauss_mean/gauss_stddev.
+const DISTRIBUTION = latte::param!("distribution", "sequential");
 
 pub const P_STMT_WRITE = "latte_prep_stmt__write";
 pub const P_STMT_READ = "latte_prep_stmt__read";
@@ -193,12 +198,15 @@ async fn prepare_gauss_distribution(db) {
 async fn get_partition_idx(db, i) {
     if db.data.gauss_enabled {
         let current_idx = normal(i, db.data.gauss_mean, db.data.gauss_stddev) as i64;
-        if current_idx > OFFSET + ROW_COUNT {
+        if current_idx >= OFFSET + ROW_COUNT {
             current_idx = OFFSET + ROW_COUNT - 1;
         } else if current_idx < OFFSET {
             current_idx = OFFSET;
         }
         return current_idx;
+    } else if DISTRIBUTION == "random" {
+        // Uniform random: hash the (monotonically increasing) cycle id into [0, ROW_COUNT).
+        return OFFSET + hash_range(i, ROW_COUNT);
     } else {
         return i % ROW_COUNT + OFFSET;
     }

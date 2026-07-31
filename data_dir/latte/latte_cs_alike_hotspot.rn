@@ -33,6 +33,10 @@ use latte::*;
 
 const HOTSET_ITEMS = latte::param!("hotset_items", 5000000);
 const HOTSET_CHANCE = latte::param!("hotset_chance", 55);
+// Key access distribution: "sequential" (default) selects hot/cold and in-region keys in cycle
+// order; "random" uses decoupled hashes so the hot/cold coin flip and the in-region key index are
+// uncorrelated. Use "random" with an unbounded cycle range (no --end-cycle) for timed runs.
+const DISTRIBUTION = latte::param!("distribution", "sequential");
 
 pub async fn schema(db) {
     latte_cs_alike::schema(db).await;
@@ -64,10 +68,20 @@ pub async fn prepare(db) {
 
 /// Hotspot index: HOTSET_CHANCE% of ops target HOTSET_ITEMS keys, rest spread across remaining
 fn get_hotspot_idx(i) {
-    if i % 100 < HOTSET_CHANCE {
-        OFFSET + (i % HOTSET_ITEMS)
+    if DISTRIBUTION == "random" {
+        // Decoupled seeds: hash_range(i, 100) picks the hot/cold region; hash(i)/hash2(i, 1)
+        // seed independent uniform draws for the in-region key so the flip and index don't correlate.
+        if hash_range(i, 100) < HOTSET_CHANCE {
+            OFFSET + hash_range(hash(i), HOTSET_ITEMS)
+        } else {
+            OFFSET + HOTSET_ITEMS + hash_range(hash2(i, 1), ROW_COUNT - HOTSET_ITEMS)
+        }
     } else {
-        OFFSET + HOTSET_ITEMS + (i % (ROW_COUNT - HOTSET_ITEMS))
+        if i % 100 < HOTSET_CHANCE {
+            OFFSET + (i % HOTSET_ITEMS)
+        } else {
+            OFFSET + HOTSET_ITEMS + (i % (ROW_COUNT - HOTSET_ITEMS))
+        }
     }
 }
 
