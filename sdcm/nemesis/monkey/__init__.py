@@ -4,7 +4,6 @@ Classes can be used in nemesis_selector
 """
 
 from sdcm.nemesis import target_all_nodes, NemesisBaseClass, target_data_nodes
-from sdcm.nemesis.utils import NEMESIS_TARGET_POOLS
 
 
 @target_all_nodes
@@ -87,26 +86,6 @@ class StopStartMonkey(NemesisBaseClass):
 
     def disrupt(self):
         self.runner.disrupt_stop_start_scylla_server()
-
-
-@target_all_nodes
-class EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey(NemesisBaseClass):
-    disruptive = True
-    kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
-
-    def disrupt(self):
-        self.runner.disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation()
-
-
-@target_all_nodes
-class EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(NemesisBaseClass):
-    disruptive = True
-    kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
-
-    target_pool = NEMESIS_TARGET_POOLS.all_nodes
-
-    def disrupt(self):
-        self.runner.disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation()
 
 
 @target_all_nodes
