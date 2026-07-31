@@ -45,14 +45,17 @@ const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
 const S3_ENDPOINT = latte::param!("s3_endpoint", "s3.us-east-1.amazonaws.com");
 const S3_BUCKET = latte::param!("s3_bucket", "manager-backup-tests-us-east-1");
 
-// ROW_COUNT / ROWS_PER_PARTITION are sized to produce ~200k partitions × 100 rows each.
-const ROW_COUNT = latte::param!("row_count", 20000000);
-const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 100);
+// ROW_COUNT / ROWS_PER_PARTITION defaults give ~200k partitions × 100 rows (~20M rows).
+// Override them from the test config (latte_schema_parameters) to match the cycle count
+// the prepare command runs: 'idx = i % ROW_COUNT' wraps once cycles exceed ROW_COUNT, which
+// repeats blob payloads instead of adding unique data.
+const ROW_COUNT = latte::param!("row_count", 40000000);
+const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 200);
 const PARTITION_SIZES = latte::param!("partition_sizes", "100:1");
 
 const NUM_PKS = latte::param!("num_pks", 10);
 const RANGE_LIMIT = latte::param!("range_limit", 2000000);
-const SCAN_TIMEOUT = latte::param!("scan_timeout", "600s");
+const SCAN_TIMEOUT = latte::param!("scan_timeout", "3600s");
 
 const P_WRITE = "latte_prep_stmt__write";
 const P_RANGE_READ = "latte_prep_stmt__range_read";
