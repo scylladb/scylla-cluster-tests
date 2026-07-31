@@ -27,9 +27,6 @@
 // Run partition scan with ck > lower bound:
 //   latte run data_dir/latte/s3_range_query.rn --concurrency 80 -d 7200 -f partition_scan_gt -- <hosts>
 //
-// Run partition scan with ck > lower and ck < upper (range):
-//   latte run data_dir/latte/s3_range_query.rn --concurrency 80 -d 7200 -f partition_scan_range -- <hosts>
-//
 // Run aggregate GROUP BY per partition:
 //   latte run data_dir/latte/s3_range_query.rn --concurrency 80 -d 7200 -f partition_group_by_ck -- <hosts>
 //
@@ -45,14 +42,17 @@ const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
 const S3_ENDPOINT = latte::param!("s3_endpoint", "s3.us-east-1.amazonaws.com");
 const S3_BUCKET = latte::param!("s3_bucket", "manager-backup-tests-us-east-1");
 
-// ROW_COUNT / ROWS_PER_PARTITION are sized to produce ~200k partitions × 100 rows each.
-const ROW_COUNT = latte::param!("row_count", 20000000);
-const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 100);
+// ROW_COUNT / ROWS_PER_PARTITION defaults give ~200k partitions × 100 rows (~20M rows).
+// Override them from the test config (latte_schema_parameters) to match the cycle count
+// the prepare command runs: 'idx = i % ROW_COUNT' wraps once cycles exceed ROW_COUNT, which
+// repeats blob payloads instead of adding unique data.
+const ROW_COUNT = latte::param!("row_count", 40000000);
+const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 200);
 const PARTITION_SIZES = latte::param!("partition_sizes", "100:1");
 
 const NUM_PKS = latte::param!("num_pks", 10);
 const RANGE_LIMIT = latte::param!("range_limit", 2000000);
-const SCAN_TIMEOUT = latte::param!("scan_timeout", "600s");
+const SCAN_TIMEOUT = latte::param!("scan_timeout", "3600s");
 
 const P_WRITE = "latte_prep_stmt__write";
 const P_RANGE_READ = "latte_prep_stmt__range_read";
@@ -62,7 +62,6 @@ const P_FULL_SCAN = "latte_prep_stmt__full_scan";
 const P_PARTITION_SCAN = "latte_prep_stmt__partition_scan";
 const P_PARTITION_SCAN_LT = "latte_prep_stmt__partition_scan_lt";
 const P_PARTITION_SCAN_GT = "latte_prep_stmt__partition_scan_gt";
-const P_PARTITION_SCAN_RANGE = "latte_prep_stmt__partition_scan_range";
 const P_PARTITION_GROUP_BY_CK = "latte_prep_stmt__partition_group_by_ck";
 const P_PARTITION_MAX_CK = "latte_prep_stmt__partition_max_ck";
 
@@ -153,11 +152,6 @@ pub async fn prepare(db) {
     ).await?;
 
     db.prepare(
-        P_PARTITION_SCAN_RANGE,
-        `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk AND ck > :ck_lower AND ck < :ck_upper ORDER BY ck DESC BYPASS CACHE`
-    ).await?;
-
-    db.prepare(
         P_PARTITION_GROUP_BY_CK,
         `SELECT pk, ck, count(*) FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk GROUP BY pk, ck`
     ).await?;
@@ -243,16 +237,6 @@ pub async fn partition_scan_gt(db, i) {
     let pk = hash(partition_idx);
     let ck_lower = i as i64;
     db.execute_prepared(P_PARTITION_SCAN_GT, [pk, ck_lower]).await?
-}
-
-// SELECT * FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk AND ck > :ck_lower AND ck < :ck_upper ORDER BY ck DESC BYPASS CACHE
-pub async fn partition_scan_range(db, i) {
-    let idx = i % ROW_COUNT;
-    let partition_idx = db.get_partition_idx("load", idx).await;
-    let pk = hash(partition_idx);
-    let ck_lower = i as i64;
-    let ck_upper = ck_lower + RANGE_LIMIT as i64;
-    db.execute_prepared(P_PARTITION_SCAN_RANGE, [pk, ck_lower, ck_upper]).await?
 }
 
 // SELECT pk, ck, count(*) FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk GROUP BY pk, ck

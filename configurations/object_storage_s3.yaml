@@ -1,6 +1,3 @@
-experimental_features:
-  - keyspace-storage-options
-
 append_scylla_yaml:
   auto_snapshot: false
   object_storage_endpoints:
