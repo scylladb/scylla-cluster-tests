@@ -337,12 +337,14 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     scylla_pkg_ver += f" {scylla_pkg}-machine-image"
             with self.actions_log.action_scope("updating packages"):
                 if node.distro.is_rhel_like:
-                    node.remoter.run(rf"sudo yum update {scylla_pkg_ver}\* -y")
+                    node.remoter.run(rf"sudo yum update {scylla_pkg_ver}\* -y", retry=3, timeout=600)
                 else:
-                    node.remoter.sudo("apt-get update")
+                    node.remoter.sudo("apt-get update", retry=3)
                     node.remoter.sudo(
                         f"DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade {scylla_pkg_ver} -y"
-                        f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+                        f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"',
+                        retry=3,
+                        timeout=600,
                     )
 
         node.remoter.sudo(
@@ -486,20 +488,22 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 scylla_pkg_ver += f" {scylla_pkg_ver}-machine-image"
 
             if node.distro.is_rhel_like:
-                node.remoter.run(r"sudo yum remove scylla\* -y")
-                node.remoter.run(rf"sudo yum install {scylla_pkg_ver} -y")
+                node.remoter.run(r"sudo yum remove scylla\* -y", retry=3)
+                node.remoter.run(rf"sudo yum install {scylla_pkg_ver} -y", retry=3, timeout=600)
             else:
-                node.remoter.sudo(r"apt-get remove scylla\* -y")
+                node.remoter.sudo(r"apt-get remove scylla\* -y", retry=3)
                 node.remoter.sudo(
                     rf"DEBIAN_FRONTEND=noninteractive apt-get install {scylla_pkg_ver} -y"
-                    rf' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+                    rf' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"',
+                    retry=3,
+                    timeout=600,
                 )
             recover_conf(node)
             node.remoter.run("sudo systemctl daemon-reload")
         elif self.upgrade_rollback_mode == "minor_release":
-            node.remoter.run(r"sudo yum downgrade scylla\*%s-\* -y" % self.orig_ver.split("-")[0])
+            node.remoter.run(r"sudo yum downgrade scylla\*%s-\* -y" % self.orig_ver.split("-")[0], retry=3, timeout=600)
         else:
-            node.remoter.run(r"sudo yum downgrade scylla\* -y")
+            node.remoter.run(r"sudo yum downgrade scylla\* -y", retry=3, timeout=600)
             recover_conf(node)
             node.remoter.run("sudo systemctl daemon-reload")
 
