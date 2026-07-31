@@ -45,8 +45,16 @@ pub const COLUMN_SIZE = latte::param!("column_size", 128);
 pub const COLUMN_COUNT = latte::param!("column_count", 8);
 pub const ROW_COUNT = latte::param!("row_count", 1_000_000);
 pub const OFFSET = latte::param!("offset", 0);
+// Used only when 'distribution' is set to "gauss"/"normal"
 const GAUSS_MEAN = latte::param!("gauss_mean", 0);
 const GAUSS_STDDEV = latte::param!("gauss_stddev", 0);
+// Key access distribution:
+// - "sequential" (default) walks keys in cycle order (i % ROW_COUNT).
+// - "random" scatters keys uniformly via hash_range(i, ROW_COUNT). Use it together with an
+//   unbounded cycle range (no --end-cycle) so the key sequence never repeats within a timed run.
+// - "gauss" (alias "normal") samples keys from a normal distribution defined by the
+//   'gauss_mean' and 'gauss_stddev' params.
+pub const DISTRIBUTION = latte::param!("distribution", "sequential");
 
 pub const P_STMT_WRITE = "latte_prep_stmt__write";
 pub const P_STMT_READ = "latte_prep_stmt__read";
@@ -162,36 +170,47 @@ pub async fn prepare(db) {
         db.prepare(P_STMT_COUNTER_READ, `SELECT * FROM ${KEYSPACE}.${COUNTER_TABLE} WHERE key = :key`).await?;
     }
 
-    prepare_gauss_distribution(db).await
+    validate_distribution(db).await
 }
 
 ///////////////////////
 // UTILITY FUNCTIONS //
 ///////////////////////
 
-/// Utility function that enables and validates the gauss/normal distribution
-async fn prepare_gauss_distribution(db) {
-    if GAUSS_MEAN > 0 && GAUSS_STDDEV > 0 {
+/// Utility function that validates the 'distribution' param and its dependent params
+pub async fn validate_distribution(db) {
+    if DISTRIBUTION == "gauss" || DISTRIBUTION == "normal" {
+        if GAUSS_MEAN <= 0 || GAUSS_STDDEV <= 0 {
+            return Err(format!(
+                "'distribution'='{distribution}' requires 'gauss_mean' and 'gauss_stddev' " +
+                "to be set in range of '{min}..{max}' (offset..(offset+row_count))",
+                distribution=DISTRIBUTION, min=OFFSET, max=OFFSET+ROW_COUNT))
+        }
+        // Convert once here instead of in each 'get_partition_idx' call
         db.data.gauss_mean = GAUSS_MEAN as f64;
         db.data.gauss_stddev = GAUSS_STDDEV as f64;
-        db.data.gauss_enabled = true;
         println!(
             "debug: Gauss/normal distribution is enabled: mean='{mean}', stddev='{stddev}'",
-            mean=db.data.gauss_mean, stddev=db.data.gauss_stddev);
-    } else if GAUSS_MEAN == 0 && GAUSS_STDDEV == 0 {
-        db.data.gauss_enabled = false;
-        println!("debug: Gauss/normal distribution is disabled");
+            mean=GAUSS_MEAN, stddev=GAUSS_STDDEV);
+    } else if DISTRIBUTION == "sequential" || DISTRIBUTION == "random" {
+        if GAUSS_MEAN != 0 || GAUSS_STDDEV != 0 {
+            return Err(format!(
+                "'gauss_mean' and 'gauss_stddev' are set, but 'distribution' is " +
+                "'{distribution}'. Set 'distribution' to 'gauss'/'normal' to use them.",
+                distribution=DISTRIBUTION))
+        }
+        println!("debug: '{distribution}' distribution is enabled", distribution=DISTRIBUTION);
     } else {
         Err(format!(
-            "'gauss_mean' and 'gauss_stddev' both must be either '0' (disabled) " +
-            "or in range of '{min}..{max}' (offset..(offset+row_count))",
-            min=OFFSET, max=OFFSET+ROW_COUNT))
+            "Unsupported 'distribution' value: '{distribution}'. " +
+            "Supported values are 'sequential', 'random' and 'gauss'/'normal'.",
+            distribution=DISTRIBUTION))
     }
 }
 
 /// Utility function which generates partition index based on the cycle id and distribution type
 async fn get_partition_idx(db, i) {
-    if db.data.gauss_enabled {
+    if DISTRIBUTION == "gauss" || DISTRIBUTION == "normal" {
         let current_idx = normal(i, db.data.gauss_mean, db.data.gauss_stddev) as i64;
         if current_idx >= OFFSET + ROW_COUNT {
             current_idx = OFFSET + ROW_COUNT - 1;
@@ -199,6 +218,9 @@ async fn get_partition_idx(db, i) {
             current_idx = OFFSET;
         }
         return current_idx;
+    } else if DISTRIBUTION == "random" {
+        // Uniform random: hash the (monotonically increasing) cycle id into [0, ROW_COUNT).
+        return OFFSET + hash_range(i, ROW_COUNT);
     } else {
         return i % ROW_COUNT + OFFSET;
     }

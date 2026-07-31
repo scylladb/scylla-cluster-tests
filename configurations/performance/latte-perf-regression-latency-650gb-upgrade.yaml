@@ -33,7 +33,7 @@ stress_cmd_w: >-
     -P replication_factor=3 --threads=7 --concurrency=21 --consistency=QUORUM
     -P key_size=16 -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=0
     --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
-    -P gauss_mean=325000000 -P gauss_stddev=9750000
+    -P distribution=\"gauss\" -P gauss_mean=325000000 -P gauss_stddev=9750000
     data_dir/latte/latte_cs_alike.rn
 
 stress_cmd_r: >-
@@ -41,7 +41,7 @@ stress_cmd_r: >-
     -P replication_factor=3 --threads=7 --concurrency=21 --consistency=QUORUM
     -P key_size=16 -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=0
     --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
-    -P gauss_mean=325000000 -P gauss_stddev=9750000
+    -P distribution=\"gauss\" -P gauss_mean=325000000 -P gauss_stddev=9750000
     data_dir/latte/latte_cs_alike.rn
 
 stress_cmd_m: >-
@@ -49,5 +49,5 @@ stress_cmd_m: >-
     -P replication_factor=3 --threads=7 --concurrency=21 --consistency=QUORUM
     -P key_size=16 -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=0
     --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
-    -P gauss_mean=325000000 -P gauss_stddev=9750000
+    -P distribution=\"gauss\" -P gauss_mean=325000000 -P gauss_stddev=9750000
     data_dir/latte/latte_cs_alike.rn

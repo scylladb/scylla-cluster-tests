@@ -1,13 +1,16 @@
 # Logstor uniform distribution workload configuration
-# Uses latte_cs_alike.rn with write/read functions (uniform: i % ROW_COUNT + OFFSET)
+# Uses latte_cs_alike.rn with write/read functions.
+# Populate: sequential (i % ROW_COUNT + OFFSET) for full 500M-row coverage.
+# Measured step: random uniform selection (distribution="random" -> hash_range(i, ROW_COUNT))
+# over an unbounded cycle range (no --end-cycle) so the key sequence never repeats within the run.
 # Schema: 10 columns x 200 bytes each (matching kv_uniform.rn reference)
-# Only mixed (write:30,read:70) workload at 600k ops/s for 60m
+# Mixed (write:30,read:70) workload ramps to 600k ops/s before the 60m measured step
 # This test is a part of the benchmark done by Aerospike
 # https://aerospike.com/files/benchmarks/aerospike-vs-scylladb-performance-and-cost-at-multi-terabyte-scale.pdf
 
 perf_gradual_throttle_steps:
   mixed:
-    - {threads: 12, concurrency: 128, rate: '600000'}
+    - {threads: 64, concurrency: 48, rate: '600000', write_rate: '180000', read_rate: '420000', duration: '60m'}
 
 perf_gradual_step_duration: {"mixed": '60m'}
 
@@ -23,19 +26,26 @@ prepare_stress_cmd: >-
 prepare_write_cmd:
   - >-
     latte run --function write --consistency ALL --duration 500000000
-    --threads 32 --concurrency 32 --rate 93750
+    --threads 32 --concurrency 32 --rate 250000
     --start-cycle 1 --end-cycle 500000000
     -P row_count=500000000 -P offset=0
     -P column_count=10 -P column_size=200 -P key_size=48
     data_dir/latte/latte_cs_alike.rn
 
-# Mixed workload: uniform write:30,read:70 for $duration
+# Mixed workload: uniform write:30,read:70 for $duration, split to use different consistency levels
 stress_cmd_m:
   - >-
-    latte run --function write:30,read:70 --consistency QUORUM --duration $duration
-    --threads $threads --concurrency $concurrency $throttle
-    --start-cycle 1 --end-cycle 500000000
-    -P row_count=500000000 -P offset=0
+    latte run --function write --consistency QUORUM --duration $duration
+    --threads $threads --concurrency $concurrency --rate $write_rate
+    --start-cycle 1
+    -P row_count=500000000 -P offset=0 -P distribution=\"random\"
+    -P column_count=10 -P column_size=200 -P key_size=48
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function read --consistency ONE --duration $duration
+    --threads $threads --concurrency $concurrency --rate $read_rate
+    --start-cycle 1
+    -P row_count=500000000 -P offset=0 -P distribution=\"random\"
     -P column_count=10 -P column_size=200 -P key_size=48
     data_dir/latte/latte_cs_alike.rn
 
@@ -48,7 +58,10 @@ latte_schema_parameters:
   key_size: 48
   speculative_retry: 'NONE'
   storage_engine: 'logstor'
-  min_per_shard_tablet_count: 32
+  min_per_shard_tablet_count: 64
 
 perf_stress_keyspace: keyspace1
 perf_stress_table: standard1
+
+# Disable rack-aware loader so latte commands are not pinned to a rack (no --rack flag)
+rack_aware_loader: false
