@@ -1,3 +1,5 @@
+# Quarantined: using Cassandra as a Gemini oracle was never a validated test
+# target and has never actually been run. See test-cases/quarantined/README.md.
 test_duration: 30
 test_metadata:
   description: >-
