@@ -70,6 +70,6 @@ stress_cmd:
     latte run --function=read --tag=latte-read --duration=30m
     -P replication_factor=1 --threads=7 --concurrency=21 --consistency=ONE
     -P column_size=128 -P column_count=8 -P row_count=2000000000 -P offset=0
-    -P gauss_mean=1000000000 -P gauss_stddev=30000000
+    -P distribution=\"gauss\" -P gauss_mean=1000000000 -P gauss_stddev=30000000
     --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
     data_dir/latte/latte_cs_alike.rn
