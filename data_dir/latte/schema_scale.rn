@@ -25,8 +25,14 @@ const DATA_VALIDATION = latte::param!("data_validation", true);
 const ROW_COUNT_PER_TABLE = latte::param!("row_count_per_table", 20);
 const TEXT_COL_SIZE = latte::param!("text_col_size", 128);
 const BLOB_COL_SIZE = latte::param!("blob_col_size", 128);
+// Used only when 'distribution' is set to "gauss"/"normal"
 const GAUSS_MEAN = latte::param!("gauss_mean", 0);
 const GAUSS_STDDEV = latte::param!("gauss_stddev", 0);
+// Key access distribution:
+// - "sequential" (default) walks row indexes in cycle order (i % ROW_COUNT_PER_TABLE).
+// - "gauss" (alias "normal") samples row indexes from a normal distribution defined by the
+//   'gauss_mean' and 'gauss_stddev' params.
+const DISTRIBUTION = latte::param!("distribution", "sequential");
 // NOTE: 'table_group_size', 'table_shift_count' and 'table_shift_interval_s' work together.
 // When we have a big amount of tables
 // we want to have a smooth workload all over them with adequate cache hit/miss ratio.
@@ -45,8 +51,8 @@ const GAUSS_STDDEV = latte::param!("gauss_stddev", 0);
 // |              5|---*****------------
 // |              6|------*****---------
 //
-// And if we use gauss data distribution params ('gauss_mean', 'gauss_stddev')
-// we control the cache hit/miss ratio completely.
+// And if we use the gauss data distribution ('distribution'="gauss" with the
+// 'gauss_mean' and 'gauss_stddev' params) we control the cache hit/miss ratio completely.
 //
 // NOTE: 'TABLE_GROUP_SIZE' defines 'how big subset of tables' we use for making queries.
 const TABLE_GROUP_SIZE = latte::param!("table_group_size", 10);
@@ -92,7 +98,7 @@ pub async fn prepare(db) {
         panic!("Either set 'table_shift_count' and 'table_shift_interval_s' both to be '0' or both to be non-zero.");
     }
     assert!(TABLE_GROUP_SIZE <= db.data.total_tables, "'table_group_size' cannot be bigger than total table count");
-    prepare_gauss_distribution(db).await; // needed only for data manipulation rune functions
+    validate_distribution(db).await; // needed only for data manipulation rune functions
     db.data.p_stmt = [];
     db.data.ks_table_mapping = [];
     for ks_i in 0..KEYSPACE_COUNT {
@@ -242,29 +248,40 @@ pub async fn create_schema(db, i) { // user fn to be run in a 'latte run -f ...'
 // // USER DATA MANIPULATION FUNCTIONS //
 // //////////////////////////////////////
 
-/// Utility function that enables and validates the gauss/normal distribution
-async fn prepare_gauss_distribution(db) {
-    if GAUSS_MEAN > 0 && GAUSS_STDDEV > 0 {
+/// Utility function that validates the 'distribution' param and its dependent params
+async fn validate_distribution(db) {
+    if DISTRIBUTION == "gauss" || DISTRIBUTION == "normal" {
+        if GAUSS_MEAN <= 0 || GAUSS_STDDEV <= 0 {
+            panic!(
+                "'distribution'='{distribution}' requires 'gauss_mean' and 'gauss_stddev' " +
+                "to be set in range of '{min}..{max}' (0..row_count_per_table)",
+                distribution=DISTRIBUTION, min=0, max=ROW_COUNT_PER_TABLE)
+        }
+        // Convert once here instead of in each 'get_idx' call
         db.data.gauss_mean = GAUSS_MEAN as f64;
         db.data.gauss_stddev = GAUSS_STDDEV as f64;
-        db.data.gauss_enabled = true;
         println!(
             "debug: Gauss/normal distribution is enabled: mean='{mean}', stddev='{stddev}'",
             mean=db.data.gauss_mean, stddev=db.data.gauss_stddev);
-    } else if GAUSS_MEAN == 0 && GAUSS_STDDEV == 0 {
-        db.data.gauss_enabled = false;
-        println!("debug: Gauss/normal distribution is disabled");
+    } else if DISTRIBUTION == "sequential" {
+        if GAUSS_MEAN != 0 || GAUSS_STDDEV != 0 {
+            panic!(
+                "'gauss_mean' and 'gauss_stddev' are set, but 'distribution' is " +
+                "'{distribution}'. Set 'distribution' to 'gauss'/'normal' to use them.",
+                distribution=DISTRIBUTION)
+        }
+        println!("debug: '{distribution}' distribution is enabled", distribution=DISTRIBUTION);
     } else {
         panic!(
-            "'gauss_mean' and 'gauss_stddev' both must be either '0' (disabled) " +
-            "or in range of '{min}..{max}' (0..row_count_per_table)",
-            min=0, max=ROW_COUNT_PER_TABLE)
+            "Unsupported 'distribution' value: '{distribution}'. " +
+            "Supported values are 'sequential' and 'gauss'/'normal'.",
+            distribution=DISTRIBUTION)
     }
 }
 
 /// Utility function which generates partition index based on the cycle id and distribution type
 async fn get_idx(db, i) {
-    if db.data.gauss_enabled {
+    if DISTRIBUTION == "gauss" || DISTRIBUTION == "normal" {
         let current_idx = normal(i, db.data.gauss_mean, db.data.gauss_stddev) as i64;
         if current_idx < 0 {
             current_idx = 0;

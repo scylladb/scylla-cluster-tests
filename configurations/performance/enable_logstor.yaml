@@ -5,6 +5,7 @@ append_scylla_yaml:
   logstor_disk_size_in_mb: 80000
   logstor_separator_max_memory_in_mb: 256
   logstor_format_on_startup: true
+  force_capacity_based_balancing: true
 
 # Append --task-quota-ms 0.2 to existing append_scylla_args (++ prefix appends instead of replacing)
 append_scylla_args: '++ --task-quota-ms 0.2'

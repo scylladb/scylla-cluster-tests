@@ -63,8 +63,6 @@ prepare_verify_cmd:
     -P row_count_per_table=200000
     -P blob_col_size=128
     -P text_col_size=128
-    -P gauss_mean=0
-    -P gauss_stddev=0
     -P table_group_size=5000
     -P table_shift_count=0
     -P table_shift_interval_s=0
@@ -81,6 +79,7 @@ stress_cmd:
     -P row_count_per_table=200000
     -P blob_col_size=128
     -P text_col_size=128
+    -P distribution=\"gauss\"
     -P gauss_mean=100000
     -P gauss_stddev=20000
     -P table_group_size=100
