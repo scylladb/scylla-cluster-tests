@@ -183,3 +183,36 @@ def test_get_test_table_name_non_latte_ignores_schema_params():
             {"latte_schema_parameters": {"keyspace": "my_latte_ks", "table": "my_latte_tbl"}},
             ["cassandra-stress write cl=QUORUM n=1000"],
         )
+
+
+# ---------------------------------------------------------------------------
+# _aggregate_ops_rate: round-robin vs. additive command patterns
+# ---------------------------------------------------------------------------
+
+
+def _aggregate_ops_rate(results, num_loaders, num_commands):
+    return gradual_grow_module.PerformanceRegressionPredefinedStepsTest._aggregate_ops_rate(
+        results, num_loaders, num_commands
+    )
+
+
+def test_aggregate_ops_rate_round_robin_uses_average_times_loaders():
+    """num_commands == num_loaders: one partition-slice command per loader, avg × loaders."""
+    results = [{"op rate": "100"}, {"op rate": "200"}]
+    assert _aggregate_ops_rate(results, num_loaders=2, num_commands=2) == 150 * 2
+
+
+def test_aggregate_ops_rate_additive_commands_are_summed():
+    """num_commands != num_loaders: distinct concurrent commands (write + read) are additive."""
+    results = [{"op rate": "100"}, {"op rate": "50"}]
+    assert _aggregate_ops_rate(results, num_loaders=1, num_commands=2) == 150 * 1
+
+
+def test_aggregate_ops_rate_ignores_bad_values():
+    """Non-numeric 'op rate' entries are treated as 0 rather than raising."""
+    results = [{"op rate": "100"}, {"op rate": "not-a-number"}, {}]
+    assert _aggregate_ops_rate(results, num_loaders=1, num_commands=3) == 100
+
+
+def test_aggregate_ops_rate_empty_results():
+    assert _aggregate_ops_rate([], num_loaders=2, num_commands=2) == 0.0
