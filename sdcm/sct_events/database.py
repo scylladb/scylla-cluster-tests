@@ -30,6 +30,7 @@ LOGGER = logging.getLogger(__name__)
 class DatabaseLogEvent(LogEvent, abstract=True):
     OVERSIZED_ALLOCATION: Type[LogEventProtocol]
     WARNING: Type[LogEventProtocol]
+    INFO: Type[LogEventProtocol]
     NO_SPACE_ERROR: Type[LogEventProtocol]
     UNKNOWN_VERB: Type[LogEventProtocol]
     CLIENT_DISCONNECT: Type[LogEventProtocol]
@@ -88,6 +89,8 @@ class ReactorStalledMixin(Generic[T_log_event]):
         return super().add_info(node=node, line=line, line_number=line_number)
 
 
+# NOTE: definition order here is irrelevant; matching precedence is the order of SYSTEM_ERROR_EVENTS below.
+
 # cause this is warning level, it's need to be before WARNING being suppressed
 DatabaseLogEvent.add_subevent_type(
     "OVERSIZED_ALLOCATION", severity=Severity.ERROR, regex="seastar_memory - oversized allocation:"
@@ -95,6 +98,14 @@ DatabaseLogEvent.add_subevent_type(
 DatabaseLogEvent.add_subevent_type(
     "WARNING", severity=Severity.SUPPRESS, regex=r"(^WARN(ING)?|!\s*?WARN(ING)?).*\[shard.*\]"
 )
+# Scylla logs plenty of lines at INFO level that describe an error it already handled/ignored, e.g.:
+#   !INFO | scylla[12796]  [shard 0: gms] rpc - client 10.0.0.9:7000: ignoring error response:
+#   seastar::rpc::remote_verb_error (std::runtime_error (Got stream_blob_cmd::error from peer ...))
+# Content-only regexes like RUNTIME_ERROR's "std::runtime_error" turn those into ERROR events.
+# Same approach as WARNING above: suppress by the log level Scylla itself reported
+# instead of chasing message variants. Placed in SYSTEM_ERROR_EVENTS after every WARNING/NORMAL/
+# DEBUG subevent (so INFO-level lines keep those classifications) and before every ERROR/CRITICAL one.
+DatabaseLogEvent.add_subevent_type("INFO", severity=Severity.SUPPRESS, regex=r"(^INFO|!\s*?INFO).*\[shard.*\]")
 DatabaseLogEvent.add_subevent_type("NO_SPACE_ERROR", severity=Severity.ERROR, regex="No space left on device")
 DatabaseLogEvent.add_subevent_type(
     "UNKNOWN_VERB", severity=Severity.WARNING, regex="(unknown verb exception|unknown_verb_error)"
@@ -210,10 +221,22 @@ DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR, regex=r
 DatabaseLogEvent.add_subevent_type("TABLET_SPLIT", severity=Severity.DEBUG, regex=r"Detected tablet split for table")
 DatabaseLogEvent.add_subevent_type("TABLET_MERGE", severity=Severity.DEBUG, regex=r"Detected tablet merge for table")
 
+# Matching precedence: DbLogReader stops at the first pattern that matches a line.
+# The list is partitioned by log level:
+#   1. WARN-level handling: OVERSIZED_ALLOCATION is the one WARN-level line we do want as ERROR, so it goes
+#      before WARNING suppresses the rest.
+#   2. Every WARNING/NORMAL/DEBUG subevent. These may legitimately match INFO-level lines (GATE_CLOSED,
+#      COMPACTION_STOPPED, TABLET_*, ...) and must keep their classification, so they come before INFO.
+#      REACTOR_STALLED belongs here too: it is DEBUG by default and escalates itself to ERROR for long stalls.
+#   3. INFO suppresses whatever INFO-level line is left - by construction it could only have matched an
+#      ERROR/CRITICAL subevent below, which is exactly the misclassification we want to stop.
+#   4. Every ERROR/CRITICAL subevent, i.e. content-only regexes that should fire only on non-INFO lines.
+# Relative order inside each group is unchanged from before the partitioning.
 SYSTEM_ERROR_EVENTS = (
+    # 1. WARN-level
     DatabaseLogEvent.OVERSIZED_ALLOCATION(),
     DatabaseLogEvent.WARNING(),
-    DatabaseLogEvent.NO_SPACE_ERROR(),
+    # 2. WARNING/NORMAL/DEBUG
     DatabaseLogEvent.UNKNOWN_VERB(),
     DatabaseLogEvent.CLIENT_DISCONNECT(),
     DatabaseLogEvent.SEMAPHORE_TIME_OUT(),
@@ -224,30 +247,34 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT(),
     DatabaseLogEvent.EMPTY_NESTED_EXCEPTION(),
     DatabaseLogEvent.COMPACTION_STOPPED(),
-    DatabaseLogEvent.BAD_ALLOC(),
-    DatabaseLogEvent.SCHEMA_FAILURE(),
-    DatabaseLogEvent.RUNTIME_ERROR(),
     DatabaseLogEvent.DIRECTORY_NOT_EMPTY(),
-    DatabaseLogEvent.FILESYSTEM_ERROR(),
-    DatabaseLogEvent.DISK_ERROR(),
-    DatabaseLogEvent.STACKTRACE(),
     DatabaseLogEvent.RAFT_TRANSFER_SNAPSHOT_ERROR(),
-    DatabaseLogEvent.RAFT_TOPOLOGY_SENDING_ERROR(),
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     DatabaseLogEvent.REACTOR_STALLED(),
     DatabaseLogEvent.KERNEL_CALLSTACK(),
+    DatabaseLogEvent.SUPPRESSED_MESSAGES(),
+    DatabaseLogEvent.RPC_CONNECTION(),
+    DatabaseLogEvent.TABLET_SPLIT(),
+    DatabaseLogEvent.TABLET_MERGE(),
+    # 3. INFO-level
+    DatabaseLogEvent.INFO(),
+    # 4. ERROR/CRITICAL
+    DatabaseLogEvent.NO_SPACE_ERROR(),
+    DatabaseLogEvent.BAD_ALLOC(),
+    DatabaseLogEvent.SCHEMA_FAILURE(),
+    DatabaseLogEvent.RUNTIME_ERROR(),
+    DatabaseLogEvent.FILESYSTEM_ERROR(),
+    DatabaseLogEvent.DISK_ERROR(),
+    DatabaseLogEvent.STACKTRACE(),
+    DatabaseLogEvent.RAFT_TOPOLOGY_SENDING_ERROR(),
     DatabaseLogEvent.ABORTING_ON_SHARD(),
     DatabaseLogEvent.SEGMENTATION(),
     DatabaseLogEvent.CORRUPTED_SSTABLE(),
     DatabaseLogEvent.INTEGRITY_CHECK(),
-    DatabaseLogEvent.SUPPRESSED_MESSAGES(),
     DatabaseLogEvent.stream_exception(),
-    DatabaseLogEvent.RPC_CONNECTION(),
     DatabaseLogEvent.TOO_LONG_QUEUE_ACCUMULATED(),
     DatabaseLogEvent.DATABASE_ERROR(),
     DatabaseLogEvent.BACKTRACE(),
-    DatabaseLogEvent.TABLET_SPLIT(),
-    DatabaseLogEvent.TABLET_MERGE(),
 )
 SYSTEM_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = [
     (re.compile(event.regex, re.IGNORECASE), event) for event in SYSTEM_ERROR_EVENTS
