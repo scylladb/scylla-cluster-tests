@@ -439,6 +439,36 @@ class ScyllaCloudAPIClient:
         """Delete Vector Search nodes from an existing cluster"""
         return self.request("DELETE", f"/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search")
 
+    def update_dc_scaling_policy(
+        self,
+        *,
+        account_id: int,
+        cluster_id: int,
+        dc_id: int,
+        instance_type_ids: list[int] | None = None,
+        instance_families: list[str] | None = None,
+        policies: dict[str, Any] | None = None,
+        mode: str = "xcloud",
+    ) -> dict[str, Any]:
+        """Update datacenter scaling policy
+
+        :param account_id: ID of the account
+        :param cluster_id: ID of the cluster to scale
+        :param dc_id: ID of the DC to scale
+        :param instance_type_ids: explicit instance type IDs to scale to
+        :param instance_families: instance families to scale within
+        :param policies: scaling policies, e.g. {"storage": {"targetUtilization": 0.8}, "vcpu": {}}
+        :param mode: scaling mode, e.g. "xcloud"
+        """
+        return self.request(
+            "PUT",
+            f"/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/scaling",
+            instanceTypeIDs=instance_type_ids or [],
+            instanceFamilies=instance_families or [],
+            policies=policies or {},
+            mode=mode,
+        )
+
     ### Account cluster network related APIs ###
     def create_fw_rule(self, *, account_id: int, cluster_id: int, ip_address: str) -> dict[str, Any]:
         """Create a CIDR formatted firewall rule for a given cluster"""
