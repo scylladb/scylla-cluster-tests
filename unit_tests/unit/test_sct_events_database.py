@@ -13,6 +13,7 @@
 
 import re
 
+import pytest
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
@@ -177,6 +178,76 @@ def test_drop_table_during_repair_gate_closed_line_matches_database_error():
 
     assert matched_event is not None
     assert matched_event.type == DatabaseLogEvent.DATABASE_ERROR.type
+
+
+def _classify(line: str):
+    for pattern, event in SYSTEM_ERROR_EVENTS_PATTERNS:
+        if pattern.search(line):
+            return event
+    return None
+
+
+def test_system_error_events_partitioned_by_log_level():
+    """INFO must sit after every WARNING/NORMAL/DEBUG subevent and before every ERROR/CRITICAL one.
+
+    That ordering is what guarantees an INFO-level Scylla line can never turn into an ERROR event while
+    keeping the lower-severity classifications (GATE_CLOSED, COMPACTION_STOPPED, TABLET_*, ...) intact.
+    OVERSIZED_ALLOCATION/WARNING are the pre-existing WARN-level pair and are exempt.
+    """
+    types = [event.type for event in SYSTEM_ERROR_EVENTS]
+    info_idx = types.index("INFO")
+    before = [e for e in SYSTEM_ERROR_EVENTS[:info_idx] if e.type not in ("OVERSIZED_ALLOCATION", "WARNING")]
+    after = SYSTEM_ERROR_EVENTS[info_idx + 1 :]
+
+    error = Severity.ERROR.value
+    assert all(e.severity.value < error for e in before), [e.type for e in before if e.severity.value >= error]
+    assert all(e.severity.value >= error for e in after), [e.type for e in after if e.severity.value < error]
+
+
+def test_info_level_runtime_error_line_is_suppressed():
+    """Real example (scylladb/scylla-cluster-tests#15606) that used to become RUNTIME_ERROR/ERROR."""
+    line = (
+        "2026-07-30T11:37:43.815 longevity-10gb-3h-master-db-node-41da73ad-eastus-1  !INFO | scylla[12796]  "
+        "[shard 0: gms] rpc - client 10.0.0.9:7000: ignoring error response: seastar::rpc::remote_verb_error "
+        "(std::runtime_error (Got stream_blob_cmd::error from peer 7336616b-4533-4c59-a3d1-f6d825de4d8a))"
+    )
+    event = _classify(line)
+    assert event.type == DatabaseLogEvent.INFO.type
+    assert event.severity == Severity.SUPPRESS
+
+
+def test_error_level_runtime_error_line_still_classified():
+    line = (
+        "2026-07-30T11:37:43.815 db-node-1 !ERR | scylla[12796]  [shard 0: gms] raft_topology - "
+        "topology change coordinator fiber got error std::runtime_error (connection is closed)"
+    )
+    assert _classify(line).type == DatabaseLogEvent.RUNTIME_ERROR.type
+
+
+@pytest.mark.parametrize(
+    "line,expected",
+    [
+        pytest.param(
+            "2021-11-26T05:05:08+00:00 db-node-1 !    INFO |  [shard 0] rpc - client 10.0.2.7:62608 msg_id 2:  "
+            'exception "gate closed" in no_wait handler ignored',
+            DatabaseLogEvent.GATE_CLOSED,
+            id="gate_closed",
+        ),
+        pytest.param(
+            "2022-04-17T04:44:07+00:00 db-node-1 !    INFO |  [shard 10] compaction - [Compact keyspace1.standard1 ff8f7410] "
+            "Compacting of 2 sstables interrupted due to: sstables::compaction_stopped_exception (user-triggered operation)",
+            DatabaseLogEvent.COMPACTION_STOPPED,
+            id="compaction_stopped",
+        ),
+        pytest.param(
+            "2026-07-30T11:37:43.815 db-node-1 !INFO | scylla[1] [shard 0: main] tablets - Detected tablet split for table ks.cf",
+            DatabaseLogEvent.TABLET_SPLIT,
+            id="tablet_split",
+        ),
+    ],
+)
+def test_info_level_lines_keep_lower_severity_classification(line, expected):
+    assert _classify(line).type == expected.type
 
 
 NODE_NAME = "db-node-1"
