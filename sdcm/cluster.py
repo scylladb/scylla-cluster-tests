@@ -378,7 +378,11 @@ def terminate_on_failure(func):
             return func(self, *args, **kwargs)
         except Exception:  # noqa: BLE001
             if self.parent_cluster:
-                self.log.error("Failed to initialize node %s, collecting logs and terminating", self.name)
+                # exc_info: print the actual failure BEFORE the log-collection/termination
+                # noise below buries it — the re-raise surfaces it again only much later
+                self.log.error(
+                    "Failed to initialize node %s, collecting logs and terminating", self.name, exc_info=True
+                )
                 try:
                     self.parent_cluster.terminate_node(self, scylla_shards=0)
                 except Exception:  # noqa: BLE001
