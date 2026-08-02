@@ -4189,12 +4189,15 @@ class ClusterTester(unittest.TestCase):
             self.save_cqlsh_output_in_file(
                 node=node, cmd="select JSON * from system.tablets", log_file="system_tablets.log"
             )
-            # Upload system.compaction_history directly to S3 to avoid loading large data into memory
-            s3_link, s3_filename = upload_system_table_to_s3(
-                node=node, table_name="system.compaction_history", test_id=self.test_config.test_id()
-            )
-            if s3_link:
-                self.argus_collect_logs({s3_filename: s3_link})
+            # Upload system.compaction_history directly to S3 to avoid loading large data into memory.
+            # The upload opens an SSH session of its own: the containerized backends run no sshd, and
+            # the xcloud nodes are reached through a tunnel which exposes no ssh login info.
+            if not node.is_docker() and node.ssh_login_info:
+                s3_link, s3_filename = upload_system_table_to_s3(
+                    node=node, table_name="system.compaction_history", test_id=self.test_config.test_id()
+                )
+                if s3_link:
+                    self.argus_collect_logs({s3_filename: s3_link})
             self.save_cqlsh_output_in_file(
                 node=node, cmd="desc schema with internals", log_file="schema_with_internals.log"
             )
