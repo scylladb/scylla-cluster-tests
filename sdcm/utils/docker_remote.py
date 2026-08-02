@@ -139,25 +139,52 @@ class RemoteDocker(BaseNode):
 
     def send_files(self, src, dst, **kwargs):
         remote_tempfile = self.node.remoter.run("mktemp", verbose=kwargs.get("verbose")).stdout.strip()
-        result = self.node.remoter.send_files(src, remote_tempfile, **kwargs)
-        result &= self.run(f"mkdir -p {Path(dst).parent}", ignore_status=True, verbose=kwargs.get("verbose")).ok
-        result &= self.node.remoter.run(
-            f"{self.sudo_needed} docker cp {remote_tempfile} {self.docker_id}:{dst}",
-            verbose=kwargs.get("verbose"),
-            ignore_status=True,
-        ).ok
+        try:
+            result = self.node.remoter.send_files(src, remote_tempfile, **kwargs)
+            result &= self.run(f"mkdir -p {Path(dst).parent}", ignore_status=True, verbose=kwargs.get("verbose")).ok
+            result &= self.node.remoter.run(
+                f"{self.sudo_needed} docker cp {remote_tempfile} {self.docker_id}:{dst}",
+                verbose=kwargs.get("verbose"),
+                ignore_status=True,
+            ).ok
+        finally:
+            self._remove_staging_file(remote_tempfile, verbose=kwargs.get("verbose"))
         return result
 
     def receive_files(self, src, dst, **kwargs):
         remote_tempfile = self.node.remoter.run("mktemp").stdout.strip()
-
-        result = self.node.remoter.run(
-            f"{self.sudo_needed} docker cp {self.docker_id}:{src} {remote_tempfile}",
-            verbose=kwargs.get("verbose"),
-            ignore_status=True,
-        ).ok
-        result &= self.node.remoter.receive_files(remote_tempfile, dst, **kwargs)
+        try:
+            result = self.node.remoter.run(
+                f"{self.sudo_needed} docker cp {self.docker_id}:{src} {remote_tempfile}",
+                verbose=kwargs.get("verbose"),
+                ignore_status=True,
+            ).ok
+            result &= self.node.remoter.receive_files(remote_tempfile, dst, **kwargs)
+        finally:
+            self._remove_staging_file(remote_tempfile, verbose=kwargs.get("verbose"))
         return result
+
+    def _remove_staging_file(self, remote_tempfile: str, verbose: bool | None = None) -> None:
+        """Remove the host-side 'mktemp' file a transfer was staged through.
+
+        Needs 'sudo' on the 'receive_files()' path: 'docker cp' writes its destination as root, and
+        '/tmp' is sticky, so an unprivileged 'rm' of that file fails. 'send_files()' only reads its
+        staging file, but goes through the same 'sudo' as a superset that works either way.
+
+        Swallows every failure because it runs from a 'finally' and must not become the error the
+        caller sees -- usually the connection that just broke the transfer. Deliberately not
+        'ignore_status': that would silence a non-zero 'rm' in the remoter too (see
+        'CommandRunner._print_command_results'), leaving no record that the file leaked, and it
+        would need a second branch here to log what the exception already carries.
+
+        Quotes the path because 'mktemp' builds it from TMPDIR: unquoted, a directory with a space
+        in it splits into arguments 'rm -f' then reports nothing about, exiting 0 on a path that does
+        not exist and putting the leak back exactly where this is meant to prevent it.
+        """
+        try:
+            self.node.remoter.run(f"{self.sudo_needed} rm -f -- {shlex.quote(remote_tempfile)}", verbose=verbose)
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("Failed to remove the staging file '%s': %s", remote_tempfile, exc)
 
     def _get_ipv6_ip_address(self):
         pass
