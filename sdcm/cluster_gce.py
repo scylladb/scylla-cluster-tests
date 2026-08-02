@@ -365,6 +365,11 @@ class GCENode(cluster.BaseNode):
 
     @cached_property
     def public_dns_name(self) -> str:
+        if not self.use_dns_names:
+            # Match BaseNode's default instead of resolving eagerly: nothing consumes a
+            # real PTR name when DNS names are off, and hosts without reverse records
+            # for the instance IP (e.g. minicloud guests) would fail node init here.
+            return self.name
         return resolve_ip_to_dns(self.public_ip_address)
 
 
