@@ -34,17 +34,25 @@ import math
 import os
 import posixpath
 import re
+import shutil
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import PurePosixPath
+from urllib.parse import urlparse
 
+import boto3
+import boto3.s3.transfer
+import botocore.config
 import yaml  # type: ignore
 
 from performance_regression_test import PerformanceRegressionTest
 from sdcm import sct_abs_path
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.utils.common import DEFAULT_AWS_REGION
 from sdcm.utils.vector_store_client import VectorStoreClient
 from sdcm.utils.vector_store_index import wait_for_index_build_seconds
 
@@ -54,6 +62,12 @@ RESULTS_FILE_NAME = "search_results.jsonl"
 # The SCT param naming the plan to run. One option for every search workload rather than one per
 # test: the plan format is the flow's, not any single workload's, so a vector-search test reuses it.
 TEST_CONFIG_PARAM = "search_test_config"
+
+# NOTE: plans fetched from S3 land here rather than next to the tracked ones, so that they do not
+#       show up as untracked files (the .gitignore covers every subdirectory of a workload's data
+#       directory) and are not sent to every loader with the top-level files of the rune
+#       script's directory.
+DOWNLOADED_DIR = "downloaded"
 
 DEFAULT_MAX_INDEX_WAIT = 1800
 DEFAULT_RATE = 0
@@ -253,6 +267,39 @@ def _first_query_example(local_ds_dir: str, queries_file: str) -> str:
     return ""
 
 
+@lru_cache(maxsize=1)
+def _s3_client():
+    # NOTE: shard files run to hundreds of MB and are fetched over the whole run, so retry more than
+    #       the botocore defaults do.
+    return boto3.client(
+        "s3",
+        region_name=DEFAULT_AWS_REGION,
+        config=botocore.config.Config(retries={"max_attempts": 5, "mode": "standard"}),
+    )
+
+
+@lru_cache(maxsize=1)
+def _s3_transfer_config():
+    return boto3.s3.transfer.TransferConfig(num_download_attempts=5)
+
+
+def _s3_download_file(bucket: str, key: str, local_path: str):
+    """Download a single file from S3 to a local path."""
+    _s3_client().download_file(bucket, key, local_path, Config=_s3_transfer_config())
+
+
+def _parse_s3_url(url: str) -> tuple[str, str]:
+    """Parse an 's3://bucket/prefix' URL into (bucket, prefix), the prefix without slashes at its ends."""
+    parsed = urlparse(url)
+    if parsed.scheme != "s3" or not parsed.hostname:
+        raise ValueError(f"Invalid S3 URL {url!r}: expected s3://<bucket>[/<prefix>]")
+    return parsed.hostname, parsed.path.strip("/")
+
+
+def _s3_key(prefix: str, name: str) -> str:
+    return f"{prefix}/{name}" if prefix else name
+
+
 def _parse_shard_spec(shards: list) -> list[int]:
     """Normalize shard spec into a flat list of ints.
 
@@ -287,17 +334,33 @@ def _parse_shard_spec(shards: list) -> list[int]:
     return result
 
 
-def resolve_test_config_path(config: str) -> str:
-    """Resolve the plan param to a local file.
+def resolve_test_config_path(workload: SearchWorkload, config: str) -> str:
+    """Resolve the plan param to a local file, downloading it if it is an S3 URL.
 
-    Two accepted forms, so that pointing a run at a different plan is a single overridable
-    param (SCT_SEARCH_TEST_CONFIG):
+    Three accepted forms, so that pointing a run at a different plan is a single overridable
+    param (SCT_SEARCH_TEST_CONFIG) instead of an edit to the nested `download_from_s3` mapping:
 
+      s3://bucket/key                      downloaded into the workload's '<base_dir>/downloaded/'
       /a/local/path                        used as-is
       data_dir/latte/fts_search/plan.yaml  relative to the SCT root, like every other file a
                                            test case names -- see 'scylla_d_overrides_files' and
                                            the '.rn' paths inside latte stress commands
+
+    A downloaded plan is cached under its full bucket and key rather than under its basename: the
+    param exists precisely so a run can point at any plan, and two of them named 'plan.yaml' would
+    otherwise share one local file -- the second run silently executing the first one's plan and
+    reporting its results against the wrong workload. It is downloaded again on every resolve, so a
+    plan updated in place on S3 is not served stale from an earlier run's copy.
     """
+    if config.startswith("s3://"):
+        bucket, key = _parse_s3_url(config)
+        # The key becomes a local path, so it must not be able to climb out of the download dir.
+        if not key or any(part in ("", ".", "..") for part in key.split("/")):
+            raise ValueError(f"Invalid S3 URL: {config} (its key is not a usable relative path)")
+        local_path = _local_path(workload, DOWNLOADED_DIR, bucket, *key.split("/"))
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        _s3_download_file(bucket, key, local_path)
+        return local_path
     if os.path.isabs(config):
         return config
     return sct_abs_path(config)
@@ -500,8 +563,8 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             record_hdr=False,
         )
 
-    def _load_step_shards(self, step, local_ds_dir, container_ds_dir, max_load_wait):
-        """Load all shard files for a step. Returns the record count."""
+    def _load_step_shards(self, step, bucket, prefix, local_ds_dir, container_ds_dir, max_load_wait):
+        """Download, load and clean up all shard files for a step. Returns the record count."""
         workload = self.WORKLOAD
         if "shards" in step:
             shard_ids = _parse_shard_spec(step["shards"])
@@ -514,6 +577,11 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         record_count = 0
         for shard_file in shard_files:
             local_shard_path = os.path.join(local_ds_dir, shard_file)
+            if bucket:
+                s3_key = _s3_key(prefix, shard_file)
+                os.makedirs(os.path.dirname(local_shard_path), exist_ok=True)
+                _s3_download_file(bucket, s3_key, local_shard_path)
+
             if not os.path.isfile(local_shard_path):
                 raise FileNotFoundError(f"Shard {shard_file} is not in the dataset directory {local_ds_dir}")
             shard_records = _count_tsv_lines(local_shard_path)
@@ -523,6 +591,9 @@ class SearchPerformanceTest(PerformanceRegressionTest):
 
             self._load_shard(local_ds_dir, container_ds_dir, shard_file, shard_records, max_load_wait)
             record_count += shard_records
+            if bucket:
+                # The full corpora do not fit on the runner's disk next to each other.
+                os.remove(local_shard_path)
         return record_count
 
     def _build_index(self, record_count, max_index_wait, index_name, keyspace) -> float | None:
@@ -666,7 +737,7 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         config_name = self.params.get(TEST_CONFIG_PARAM)
         if not config_name:
             raise ValueError(f"'{TEST_CONFIG_PARAM}' is not set: the search test needs a plan to run")
-        config_path = resolve_test_config_path(config_name)
+        config_path = resolve_test_config_path(self.WORKLOAD, config_name)
         if not os.path.isfile(config_path):
             raise FileNotFoundError(f"Test config '{config_name}' not found at {config_path}")
 
@@ -687,6 +758,10 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         names = [_checked_name(dataset["name"], "dataset name") for dataset in datasets]
         if duplicates := sorted({name for name in names if names.count(name) > 1}):
             raise ValueError(f"Duplicate dataset names in '{config_name}': {duplicates}")
+        # Checked now rather than when its dataset starts, which may be hours into the run.
+        for dataset in datasets:
+            if dataset.get("base_url"):
+                _parse_s3_url(dataset["base_url"])
         validate_plan_queries(datasets)
         for dataset in datasets:
             _has_invalid_queries(dataset)
@@ -719,18 +794,38 @@ class SearchPerformanceTest(PerformanceRegressionTest):
         if not steps:
             raise ValueError(f"Dataset '{dataset_name}' has no steps to run")
 
-        local_ds_dir = _local_path(workload, dataset_name)
+        bucket, prefix = _parse_s3_url(dataset["base_url"]) if dataset.get("base_url") else ("", "")
         container_ds_dir = f"{workload.container_root}/{dataset_name}"
-        # The corpora are generated rather than tracked, so name the directory that is missing
-        # instead of failing further down on an unhelpful open() of a shard inside it.
-        if not os.path.isdir(local_ds_dir):
-            raise FileNotFoundError(f"Dataset '{dataset_name}' has no local directory at {local_ds_dir}")
+        if bucket:
+            # A folder of this run's own: everything in it was downloaded now, and it all goes when the
+            # dataset is done, whatever happened. A local corpus of the same name is never touched.
+            downloads = _local_path(workload, DOWNLOADED_DIR, "datasets")
+            os.makedirs(downloads, exist_ok=True)
+            local_ds_dir = tempfile.mkdtemp(prefix=f"{dataset_name}-", dir=downloads)
+        else:
+            local_ds_dir = _local_path(workload, dataset_name)
+            # A dataset with no 'base_url' is an input, not a cache: nothing will create it, so name
+            # the directory that is missing instead of failing further down on an unhelpful open()
+            # of a shard inside it.
+            if not os.path.isdir(local_ds_dir):
+                raise FileNotFoundError(f"Dataset '{dataset_name}' has no local directory at {local_ds_dir}")
+        try:
+            self._run_dataset_in(dataset, dataset_name, steps, bucket, prefix, local_ds_dir, container_ds_dir)
+        finally:
+            if bucket:
+                shutil.rmtree(local_ds_dir, ignore_errors=True)
 
+    def _run_dataset_in(self, dataset, dataset_name, steps, bucket, prefix, local_ds_dir, container_ds_dir):
+        """The rest of '_run_dataset', once the dataset's local directory is chosen."""
+        workload = self.WORKLOAD
         max_index_wait = dataset.get("max_index_wait_secs", DEFAULT_MAX_INDEX_WAIT)
         max_load_wait = dataset.get("max_shard_load_secs", DEFAULT_MAX_SHARD_LOAD)
         defaults = dataset.get("defaults", {})
         has_invalid_queries = _has_invalid_queries(dataset)
         keyspace = (self.params.get("latte_schema_parameters") or {}).get("keyspace") or workload.default_keyspace
+
+        # Every step queries the same sets, so fetch the query/qrels files once up front.
+        self._download_dataset_files(bucket, prefix, local_ds_dir, dataset)
 
         # NOTE: the script drops with 'IF EXISTS', so on a fresh cluster this is a no-op.
         self._drop_table()
@@ -742,7 +837,9 @@ class SearchPerformanceTest(PerformanceRegressionTest):
             if index_name is not None:
                 self._drop_index(index_name, keyspace, max_index_wait)
 
-            total_record_count += self._load_step_shards(step, local_ds_dir, container_ds_dir, max_load_wait)
+            total_record_count += self._load_step_shards(
+                step, bucket, prefix, local_ds_dir, container_ds_dir, max_load_wait
+            )
 
             index_name = f"{workload.index_prefix}_{dataset_name}_{step_idx}"
             build_seconds = self._build_index(
@@ -821,6 +918,28 @@ class SearchPerformanceTest(PerformanceRegressionTest):
                 expected_p99_read_ms=expected_p99_read_ms,
                 latency=latency,
             )
+
+    def _download_dataset_files(self, bucket, prefix, local_dir, dataset):
+        """Download query and qrels files for a dataset from S3."""
+        if not bucket:
+            return
+        # Tracked separately, because 'qrels' is per query entry while the query file is per set: a
+        # set first named without qrels and later with them needs the second file, and a single
+        # already-seen set would skip the whole entry before ever looking at its 'qrels'. The search
+        # phase would then stage a qrels path that was never downloaded.
+        queries_downloaded = set()
+        qrels_downloaded = set()
+        for step in dataset.get("steps", []):
+            for q in step.get("queries", []):
+                qset = _checked_name(q["set"], "query set name")
+                if qset not in queries_downloaded:
+                    queries_downloaded.add(qset)
+                    queries_path = os.path.join(local_dir, f"queries_{qset}.tsv")
+                    _s3_download_file(bucket, _s3_key(prefix, f"queries_{qset}.tsv"), queries_path)
+                if q.get("qrels", False) and qset not in qrels_downloaded:
+                    qrels_downloaded.add(qset)
+                    qrels_path = os.path.join(local_dir, f"qrels_{qset}.tsv")
+                    _s3_download_file(bucket, _s3_key(prefix, f"qrels_{qset}.tsv"), qrels_path)
 
     def _record_search(self, expected_p99_read_ms: float, latency: dict, **fields):
         """Record one query configuration: what ran, and the latency and throughput it measured.

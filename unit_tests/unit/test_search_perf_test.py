@@ -22,6 +22,7 @@ import contextlib
 import json
 import logging
 import os
+import pathlib
 import re
 import types
 
@@ -270,6 +271,10 @@ def test_wait_for_vector_store_serving_raises_when_it_never_serves():
 
 # ---------------------------------------------------------------------------
 # Resolving the plan param to a local file
+#
+# The point of accepting a full S3 URL is that pointing a run at a different plan becomes a single
+# overridable string (SCT_SEARCH_TEST_CONFIG) instead of an edit to the nested 'download_from_s3'
+# mapping, which cannot be overridden from the environment.
 # ---------------------------------------------------------------------------
 
 
@@ -277,7 +282,7 @@ def test_a_relative_path_resolves_from_the_sct_root():
     """The plan is named the way every other file a test case points at is -- repo-relative -- so
     a plan outside the workload's own data directory needs no new param.
     """
-    resolved = resolve_test_config_path("data_dir/latte/search_bench/local_config.yaml")
+    resolved = resolve_test_config_path(WORKLOAD, "data_dir/latte/search_bench/local_config.yaml")
     assert resolved.endswith(os.path.join("data_dir", "latte", "search_bench", "local_config.yaml"))
     assert os.path.isabs(resolved)
 
@@ -285,7 +290,189 @@ def test_a_relative_path_resolves_from_the_sct_root():
 def test_absolute_path_is_used_as_is(tmp_path):
     plan = tmp_path / "my_plan.yaml"
     plan.write_text("datasets: []\n", encoding="utf-8")
-    assert resolve_test_config_path(str(plan)) == str(plan)
+    assert resolve_test_config_path(WORKLOAD, str(plan)) == str(plan)
+
+
+def test_s3_url_is_downloaded_into_the_workload_data_dir(monkeypatch, tmp_path):
+    downloads = []
+
+    def fake_download(bucket, key, local_path):
+        downloads.append((bucket, key, local_path))
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        with open(local_path, "w", encoding="utf-8") as plan:
+            plan.write("datasets: []\n")
+
+    # Redirect the data dir so the test never writes into the repo.
+    monkeypatch.setattr(search_perf_test, "_s3_download_file", fake_download)
+    monkeypatch.setattr(search_perf_test, "_local_path", lambda _workload, *parts: str(tmp_path.joinpath(*parts)))
+
+    resolved = resolve_test_config_path(WORKLOAD, "s3://my-bucket/fts/config/large_config.yaml")
+
+    # A downloaded plan goes into the gitignored subdirectory, not next to the tracked ones, and
+    # under its full bucket and key -- see 'test_plans_sharing_a_basename_do_not_share_a_file'.
+    expected = str(tmp_path / search_perf_test.DOWNLOADED_DIR / "my-bucket" / "fts/config/large_config.yaml")
+    assert resolved == expected
+    assert downloads == [("my-bucket", "fts/config/large_config.yaml", expected)]
+
+
+def test_plans_sharing_a_basename_do_not_share_a_file(monkeypatch, tmp_path):
+    """Caching by basename let the second run execute the first one's plan.
+
+    SCT_SEARCH_TEST_CONFIG exists so a run can point at any plan, which makes two of them called
+    'plan.yaml' an ordinary thing to happen -- and the failure is silent: the run finishes green and
+    reports its results under the other plan's workload.
+    """
+    monkeypatch.setattr(search_perf_test, "_s3_download_file", lambda _bucket, _key, _path: None)
+    monkeypatch.setattr(search_perf_test, "_local_path", lambda _workload, *parts: str(tmp_path.joinpath(*parts)))
+
+    first = resolve_test_config_path(WORKLOAD, "s3://my-bucket/sanity/plan.yaml")
+    second = resolve_test_config_path(WORKLOAD, "s3://my-bucket/large/plan.yaml")
+    other_bucket = resolve_test_config_path(WORKLOAD, "s3://other-bucket/sanity/plan.yaml")
+
+    assert len({first, second, other_bucket}) == 3
+
+
+def test_an_s3_plan_is_downloaded_again_over_an_earlier_copy(monkeypatch, tmp_path):
+    """The object may have been updated in place since an earlier run downloaded it."""
+    plan = tmp_path / search_perf_test.DOWNLOADED_DIR / "my-bucket" / "large_config.yaml"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("datasets: []\n", encoding="utf-8")
+    downloads = []
+    monkeypatch.setattr(search_perf_test, "_s3_download_file", lambda *args: downloads.append(args))
+    monkeypatch.setattr(search_perf_test, "_local_path", lambda _workload, *parts: str(tmp_path.joinpath(*parts)))
+
+    assert resolve_test_config_path(WORKLOAD, "s3://my-bucket/large_config.yaml") == str(plan)
+    assert downloads == [("my-bucket", "large_config.yaml", str(plan))]
+
+
+def test_malformed_s3_url_raises():
+    with pytest.raises(ValueError, match="Invalid S3 URL"):
+        resolve_test_config_path(WORKLOAD, "s3:///no-bucket/key.yaml")
+
+
+@pytest.mark.parametrize(
+    "url",
+    (
+        "s3://my-bucket/",
+        "s3://my-bucket/../../etc/plan.yaml",
+        "s3://my-bucket/config/../../../plan.yaml",
+        "s3://my-bucket/config//plan.yaml",
+    ),
+    ids=["empty-key", "climbing-key", "climbing-mid-key", "empty-segment"],
+)
+def test_a_key_that_is_not_a_usable_relative_path_raises(url):
+    """The key is joined onto the download directory now, so it must stay inside it."""
+    with pytest.raises(ValueError, match="Invalid S3 URL"):
+        resolve_test_config_path(WORKLOAD, url)
+
+
+# ---------------------------------------------------------------------------
+# Fetching a dataset's query and qrels files
+# ---------------------------------------------------------------------------
+
+
+def _downloaded_keys(monkeypatch, tmp_path, dataset) -> list[str]:
+    """Run the per-dataset query/qrels fetch, recording the keys it asks S3 for."""
+    keys = []
+    monkeypatch.setattr(search_perf_test, "_s3_download_file", lambda _bucket, key, _path: keys.append(key))
+    search_perf_test.SearchPerformanceTest._download_dataset_files(None, "my-bucket", "fts/10M", str(tmp_path), dataset)
+    return keys
+
+
+def test_qrels_are_fetched_for_a_set_that_first_appeared_without_them(monkeypatch, tmp_path):
+    """The dedup is per query set, but 'qrels' is per entry: skipping an already-seen set outright
+    would leave the search phase staging a qrels file that was never downloaded.
+    """
+    dataset = {
+        "steps": [
+            {"queries": [{"set": "term_common"}]},
+            {"queries": [{"set": "term_common", "qrels": True}]},
+        ]
+    }
+    assert _downloaded_keys(monkeypatch, tmp_path, dataset) == [
+        "fts/10M/queries_term_common.tsv",
+        "fts/10M/qrels_term_common.tsv",
+    ]
+
+
+def test_each_file_is_fetched_once_per_dataset(monkeypatch, tmp_path):
+    """Both files are shared by every step naming the set -- the shards are what differ per step."""
+    dataset = {
+        "steps": [
+            {"queries": [{"set": "term_common", "qrels": True}, {"set": "natural"}]},
+            {"queries": [{"set": "term_common", "qrels": True}, {"set": "natural"}]},
+        ]
+    }
+    assert _downloaded_keys(monkeypatch, tmp_path, dataset) == [
+        "fts/10M/queries_term_common.tsv",
+        "fts/10M/qrels_term_common.tsv",
+        "fts/10M/queries_natural.tsv",
+    ]
+
+
+def test_nothing_is_fetched_for_a_local_dataset(monkeypatch, tmp_path):
+    """A dataset with no 'base_url' resolves to an empty bucket: its files are the run's input."""
+    keys = []
+    monkeypatch.setattr(search_perf_test, "_s3_download_file", lambda _bucket, key, _path: keys.append(key))
+    search_perf_test.SearchPerformanceTest._download_dataset_files(
+        None, None, None, str(tmp_path), {"steps": [{"queries": [{"set": "term_common", "qrels": True}]}]}
+    )
+    assert keys == []
+
+
+@pytest.mark.parametrize(
+    "url, prefix",
+    (("s3://b/fts/10M", "fts/10M"), ("s3://b/fts/10M/", "fts/10M"), ("s3://b", "")),
+    ids=["prefix", "trailing-slash", "bucket-only"],
+)
+def test_a_base_url_prefix_has_no_slashes_at_its_ends(url, prefix):
+    """A trailing slash made every key 'fts/10M//shards/...', which S3 does not have."""
+    assert search_perf_test._parse_s3_url(url) == ("b", prefix)
+
+
+def test_a_base_url_must_be_an_s3_url():
+    with pytest.raises(ValueError, match="Invalid S3 URL"):
+        search_perf_test._parse_s3_url("https://b/fts/10M")
+
+
+def test_a_bucket_level_base_url_keys_files_at_the_bucket_root():
+    assert search_perf_test._s3_key("", "shards/documents_000.tsv") == "shards/documents_000.tsv"
+
+
+class _FolderTester:
+    """Records the local directory '_run_dataset' picks, and puts a downloaded file into it."""
+
+    WORKLOAD = WORKLOAD
+
+    def __init__(self, fail):
+        self.fail = fail
+        self.folders = []
+
+    def _run_dataset_in(self, dataset, dataset_name, steps, bucket, prefix, local_ds_dir, container_ds_dir):
+        self.folders.append(local_ds_dir)
+        (pathlib.Path(local_ds_dir) / "documents_000.tsv").write_text("d0\tbody\n", encoding="utf-8")
+        if self.fail:
+            raise RuntimeError("load failed")
+
+
+@pytest.mark.parametrize("fail", [False, True], ids=["done", "failed"])
+def test_a_base_url_dataset_downloads_into_a_folder_of_its_own(monkeypatch, tmp_path, fail):
+    """Everything in it was downloaded by this run, so all of it goes; a local corpus of the same
+    name is not touched.
+    """
+    monkeypatch.setattr(search_perf_test, "_local_path", lambda _workload, *parts: str(tmp_path.joinpath(*parts)))
+    (tmp_path / "ds").mkdir()
+    tester = _FolderTester(fail)
+
+    with pytest.raises(RuntimeError) if fail else contextlib.nullcontext():
+        search_perf_test.SearchPerformanceTest._run_dataset(
+            tester, {"name": "ds", "base_url": "s3://b/fts/ds", "steps": [{"shards": [0]}]}
+        )
+
+    (folder,) = tester.folders
+    assert pathlib.Path(folder).parent == tmp_path / search_perf_test.DOWNLOADED_DIR / "datasets"
+    assert not os.path.exists(folder)
+    assert (tmp_path / "ds").is_dir()
 
 
 # ---------------------------------------------------------------------------
@@ -434,7 +621,7 @@ def test_a_missing_shard_is_named_in_the_error(tmp_path):
 
     with pytest.raises(FileNotFoundError, match=r"Shard shards/records_000\.tsv is not in the dataset directory"):
         search_perf_test.SearchPerformanceTest._load_step_shards(
-            _Tester, {"shards": [0]}, str(tmp_path), "/tmp/bench/ds", 60
+            _Tester, {"shards": [0]}, None, "", str(tmp_path), "/tmp/bench/ds", 60
         )
 
 
@@ -476,7 +663,7 @@ def _load(tester, local_ds_dir, *shard_ids):
         (shards / f"records_{shard:03d}.tsv").write_text(f"doc_{shard}\tbody\n", encoding="utf-8")
     step = {"shards": list(shard_ids)}
     return search_perf_test.SearchPerformanceTest._load_step_shards(
-        tester, step, str(local_ds_dir), "/tmp/bench/ds", 60
+        tester, step, None, "", str(local_ds_dir), "/tmp/bench/ds", 60
     )
 
 
@@ -610,6 +797,13 @@ def _run_plan(tmp_path, plan, **kwargs):
     tester = _PlanTester(plan_path, **kwargs)
     search_perf_test.SearchPerformanceTest.run_search_benchmark(tester)
     return tester
+
+
+def test_a_bad_base_url_fails_the_plan_before_any_dataset_runs(tmp_path):
+    """Not when its dataset starts, after the ones before it have loaded."""
+    plan = "datasets:\n  - name: first\n  - name: second\n    base_url: https://example.com/ds\n"
+    with pytest.raises(ValueError, match="Invalid S3 URL"):
+        _run_plan(tmp_path, plan)
 
 
 def test_a_plan_runs_its_datasets_in_order(tmp_path):
@@ -872,6 +1066,11 @@ class _DatasetTester:
         pass
 
     def _create_schema(self):
+        pass
+
+    _run_dataset_in = search_perf_test.SearchPerformanceTest._run_dataset_in
+
+    def _download_dataset_files(self, *_):
         pass
 
     def _drop_index(self, *_):
