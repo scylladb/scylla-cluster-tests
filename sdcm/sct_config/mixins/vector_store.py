@@ -18,6 +18,7 @@ from typing import ClassVar
 from pydantic import BaseModel
 
 from sdcm.sct_config.types import SctField, String
+from sdcm.utils.vector_store_utils import DEFAULT_VECTOR_STORE_SOURCE_REF, DEFAULT_VECTOR_STORE_SOURCE_REPO
 
 
 class VectorStoreConfigMixin(BaseModel):
@@ -42,6 +43,22 @@ class VectorStoreConfigMixin(BaseModel):
     )
     vector_store_scylla_port: int = SctField(
         description="ScyllaDB connection port for Vector Store",
+    )
+    vector_store_source_build_timeout: int = SctField(
+        description="Max seconds to wait for vector-store source build to complete",
+    )
+    vector_store_source_ref: String = SctField(
+        description=f"""Git ref (branch, tag or full 40-character commit SHA) to build vector-store from source on the VS node.
+        Setting this (or 'vector_store_source_repo') switches provisioning from a prebuilt AMI to a
+        source build over the base AMI, and is mutually exclusive with 'vector_store_version'.
+        If omitted while 'vector_store_source_repo' is set, defaults to '{DEFAULT_VECTOR_STORE_SOURCE_REF}'.""",
+    )
+    vector_store_source_repo: String = SctField(
+        description=f"""Git repository URL to build vector-store from source on the VS node.
+        Setting this (or 'vector_store_source_ref') switches provisioning from a prebuilt AMI to a
+        source build over the base AMI, and is mutually exclusive with 'vector_store_version'.
+        If omitted while 'vector_store_source_ref' is set, defaults to {DEFAULT_VECTOR_STORE_SOURCE_REPO}.
+        Source builds are supported on the aws backend only.""",
     )
     vector_store_threads: int = SctField(
         description="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)",

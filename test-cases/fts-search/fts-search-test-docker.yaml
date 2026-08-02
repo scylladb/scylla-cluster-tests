@@ -73,7 +73,9 @@ docker_image: 'scylladb/scylla'
 scylla_version: 'latest'
 
 # The docker backend takes a prebuilt image only -- to test an unreleased vector-store, build it
-# locally ('docker build -t local/vector-store:dev .') and point these at it.
+# locally ('docker build -t local/vector-store:dev .') and point these at it. Do NOT set
+# vector_store_source_repo or vector_store_source_ref: they request a source build, which
+# sct_config.py rejects on this backend.
 vector_store_docker_image: 'scylladb/vector-store'
 vector_store_version: 'latest'
 

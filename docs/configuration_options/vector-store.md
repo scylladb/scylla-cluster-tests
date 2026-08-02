@@ -4,7 +4,7 @@
 
 The Vector Store service under test alongside Scylla.
 
-**9 options.**
+**12 options.**
 
 
 <a id="n_vector_store_nodes"></a>
@@ -49,6 +49,39 @@ ScyllaDB connection port for Vector Store
 **default:** 9042
 
 **type:** int
+
+
+<a id="vector_store_source_build_timeout"></a>
+
+## **vector_store_source_build_timeout** / SCT_VECTOR_STORE_SOURCE_BUILD_TIMEOUT
+
+Max seconds to wait for vector-store source build to complete
+
+**default:** 3600
+
+**type:** int
+
+
+<a id="vector_store_source_ref"></a>
+
+## **vector_store_source_ref** / SCT_VECTOR_STORE_SOURCE_REF
+
+Git ref (branch, tag or full 40-character commit SHA) to build vector-store from source on the VS node.<br>Setting this (or [`vector_store_source_repo`](#vector_store_source_repo)) switches provisioning from a prebuilt AMI to a<br>source build over the base AMI, and is mutually exclusive with [`vector_store_version`](#vector_store_version).<br>If omitted while [`vector_store_source_repo`](#vector_store_source_repo) is set, defaults to 'master'.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+<a id="vector_store_source_repo"></a>
+
+## **vector_store_source_repo** / SCT_VECTOR_STORE_SOURCE_REPO
+
+Git repository URL to build vector-store from source on the VS node.<br>Setting this (or [`vector_store_source_ref`](#vector_store_source_ref)) switches provisioning from a prebuilt AMI to a<br>source build over the base AMI, and is mutually exclusive with [`vector_store_version`](#vector_store_version).<br>If omitted while [`vector_store_source_ref`](#vector_store_source_ref) is set, defaults to https://github.com/scylladb/vector-store.git.<br>Source builds are supported on the aws backend only.
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 <a id="vector_store_threads"></a>

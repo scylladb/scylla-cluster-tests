@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import botocore.exceptions
 import pytest
 
-from sdcm.cluster_aws import AWSNode, VectorStoreAWSNode
+from sdcm.cluster_aws import AWSNode, VectorStoreAWSNode, VectorStoreSetAWS
 from sdcm.sct_events import Severity
 
 
@@ -206,3 +206,31 @@ def test_configure_vector_store_service_password_file_readable_by_service_user(v
     assert f"sudo chown vs-service: {VECTOR_STORE_PASSWORD_FILE}" in command
     assert f"sudo chmod 600 {VECTOR_STORE_PASSWORD_FILE}" in command
     assert password_calls[0].kwargs["verbose"] is False
+
+
+def test_an_ami_build_keeps_the_amis_install_dir_whatever_the_user(vector_store_aws_node):
+    """The AMI's unit reads /home/ubuntu/vector-store/.env, so that is where the config must go."""
+    assert vector_store_aws_node.vector_store_install_dir == "/home/ubuntu/vector-store"
+
+
+def test_a_source_build_installs_into_the_service_users_home(vector_store_aws_node):
+    """A source build writes its own unit, for the service user."""
+    vector_store_aws_node.parent_cluster.params["vector_store_source_ref"] = "master"
+    assert vector_store_aws_node.vector_store_install_dir == "/home/vs-service/vector-store"
+
+
+def test_the_service_is_stopped_before_a_source_build_replaces_its_binary():
+    """A running vector-store holds its binary, so copying over it fails ('Text file busy')."""
+    steps = Mock()
+    node = Mock(name="vs-node")
+    node.remoter.run.side_effect = lambda cmd, **_: steps.run(cmd)
+    node.install_vector_store_from_source.side_effect = steps.install
+    cluster = VectorStoreSetAWS.__new__(VectorStoreSetAWS)
+    cluster.nodes = [node]
+    cluster.params = {"vector_store_source_ref": "master"}
+    cluster.log = Mock()
+
+    cluster._reconfigure_vector_store_nodes()
+
+    assert [step[0] for step in steps.mock_calls][:2] == ["run", "install"]
+    assert steps.mock_calls[0].args == ("sudo systemctl stop vector-store",)
