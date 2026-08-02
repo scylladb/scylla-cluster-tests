@@ -323,6 +323,7 @@ Modular, task-specific guidance for AI agents lives in the `skills/` directory. 
 | package-installation | Guides writing remote package installation commands (apt-get, yum, dnf, zypper) in SCT. Use when adding install/update calls via remoter to ensure timeouts, retries, and non-interactive flags. | `skills/package-installation/SKILL.md` |
 | reviewing-pipeline-docs | Guides reviewing and generating test_metadata sections for SCT test-case YAML files. Use when adding or auditing test_metadata, checking description/tier/labels accuracy, or running lint-test-docs. | `skills/reviewing-pipeline-docs/SKILL.md` |
 | labeling-pipelines | Guides bulk-labeling and linting test-case YAML files with test_metadata. Use when finding coverage gaps, auto-fixing mismatches, or auditing label accuracy across a directory. | `skills/labeling-pipelines/SKILL.md` |
+| stack-sync | Manage stacked PRs via the gh-stack CLI extension (native GitHub stacked PR support). Use when splitting a large change into a chain of small reviewable PRs, checking stack status, or syncing/rebasing/merging stack layers. | `skills/stack-sync/SKILL.md` |
 
 When creating a new skill, follow the process in `skills/designing-skills/workflows/create-a-skill.md`.
 
