@@ -315,6 +315,8 @@ def send_result_to_argus(  # noqa: PLR0914
     result: dict,
     start_time: float = 0,
     error_thresholds: dict = None,
+    extra_columns: list[ColumnMetadata] = None,
+    extra_values: dict = None,
 ):
     """Sends results to Argus service.
 
@@ -330,8 +332,18 @@ def send_result_to_argus(  # noqa: PLR0914
     - Reactor stalls table is registered
       when relevant SCT events occured (result['reactor_stalls_stats'])
       during the measured time range.
+
+    :param extra_columns: caller-supplied columns appended to the main result table only (not the
+        summary table, since these are per-row metadata rather than something to aggregate). Used
+        together with 'extra_values' below; both are None for every existing caller.
+    :param extra_values: {column name: value} written once per row alongside the usual latency
+        cells, for the columns named in 'extra_columns'. Only emitted for callers whose result has a
+        single HDR tag (the same branch that writes 'duration'/'start time'): with several tags there
+        is one row per tag and no per-tag value to write, so they are skipped rather than repeated.
     """
     result_table, result_table_summary = workload_to_table[workload](), workload_to_table[workload]()
+    if extra_columns:
+        result_table.columns = [*result_table.columns, *extra_columns]
     if type(cycle) is int:
         cycle = f"Cycle #{cycle}"
     result_table.name = f"{workload} - {name} - latencies"
@@ -392,6 +404,9 @@ def send_result_to_argus(  # noqa: PLR0914
             result_table.add_result(column="Overview", row=row_name, value=overview_screenshot[0], status=Status.UNSET)
         if qa_screenshot:
             result_table.add_result(column="QA dashboard", row=row_name, value=qa_screenshot[0], status=Status.UNSET)
+        if extra_values:
+            for column_name, value in extra_values.items():
+                result_table.add_result(column=column_name, row=row_name, value=value, status=Status.UNSET)
 
     if hdr_summary_len > 2:
         result_table_summary.add_result(
