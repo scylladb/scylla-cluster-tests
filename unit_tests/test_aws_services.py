@@ -27,7 +27,7 @@ AWS_REGION = "us-east-1"
 @pytest.fixture(scope="session", autouse=True)
 def fixture_get_real_keys():
     KeyStore().sync(
-        keys=["scylla-qa-ec2", "scylla-test", "scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"],
+        keys=["scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"],
         local_path=Path("~/.ssh/").expanduser(),
         permissions=0o0600,
     )
@@ -62,8 +62,19 @@ def keystore_configure(moto_server):
         Key="aws_images_role.json",
         Body=b'{"role_arn": "arn:aws:iam::123456789012:role/role-name", "role_session_name": "role-session-name"}',
     )
-    for file in ("scylla-qa-ec2", "scylla-test", "scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"):
+    for file in ("scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"):
         bucket.upload_file(Filename=str(Path("~/.ssh").expanduser() / file), Key=file)
+
+    # The Secrets Manager backend (the default) reads `sct/<name>` secrets,
+    # so mirror the same entries into moto's Secrets Manager as well.
+    sm = boto3.client("secretsmanager", region_name=AWS_REGION, endpoint_url=moto_server)
+    sm.create_secret(Name="sct/gcp-sct-project-1.json", SecretString="{}")
+    sm.create_secret(
+        Name="sct/aws_images_role.json",
+        SecretString='{"role_arn": "arn:aws:iam::123456789012:role/role-name", "role_session_name": "role-session-name"}',
+    )
+    for file in ("scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"):
+        sm.create_secret(Name=f"sct/{file}", SecretBinary=(Path("~/.ssh").expanduser() / file).read_bytes())
 
 
 @pytest.fixture(scope="module")
@@ -91,9 +102,13 @@ def test_02_keystore_sync(tmp_path) -> None:
     Validate the sync is working and setting right permissions.
     """
     k = KeyStore()
-    k.sync(keys=["scylla-qa-ec2", "scylla-test", "scylla_test_id_ed25519"], local_path=tmp_path, permissions=0o0600)
+    k.sync(keys=["scylla_test_id_ed25519", "scylla_test_id_ed25519.pub"], local_path=tmp_path, permissions=0o0600)
 
     for file in tmp_path.iterdir():
+        if file.suffix == ".version":
+            # Secrets Manager sync writes a `<key>.version` sidecar holding
+            # only the secret's VersionId; it carries no secret material.
+            continue
         assert stat.S_IMODE(file.stat().st_mode) == 0o600
 
 
