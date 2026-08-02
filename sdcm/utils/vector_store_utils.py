@@ -19,6 +19,32 @@ from sdcm.utils.vector_store_client import VectorStoreClient
 
 LOGGER = logging.getLogger(__name__)
 
+# Fallbacks for a source build. Applied here rather than as schema defaults in
+# 'defaults/test_default.yaml' on purpose: source mode is inferred from either
+# 'vector_store_source_repo' or 'vector_store_source_ref' being set, so both have to stay
+# empty by default for that check to work. Giving 'vector_store_source_repo' a non-empty
+# schema default would make every run look like a source build.
+DEFAULT_VECTOR_STORE_SOURCE_REPO = "https://github.com/scylladb/vector-store.git"
+DEFAULT_VECTOR_STORE_SOURCE_REF = "master"
+
+
+def is_vector_store_source_build(params) -> bool:
+    """True if vector-store should be built from source instead of taken from a prebuilt AMI.
+
+    Deliberately checks *both* params: a repo on its own is a complete request ("build this
+    fork's default branch"), so keying off the ref alone would silently ignore it and
+    provision from the AMI instead.
+    """
+    return bool(params.get("vector_store_source_repo") or params.get("vector_store_source_ref"))
+
+
+def resolve_vector_store_source(params) -> tuple[str, str]:
+    """Return the (repo, ref) to build, applying the defaults for whichever half was omitted."""
+    return (
+        params.get("vector_store_source_repo") or DEFAULT_VECTOR_STORE_SOURCE_REPO,
+        params.get("vector_store_source_ref") or DEFAULT_VECTOR_STORE_SOURCE_REF,
+    )
+
 
 class VectorStoreNodeMixin:
     """Mixin class providing common Vector Store node functionality."""
@@ -40,6 +66,14 @@ class VectorStoreNodeMixin:
         if self._vector_store_client is None:
             self._vector_store_client = VectorStoreClient(self.vector_store_uri)
         return self._vector_store_client
+
+    def get_vector_store_source_build_info(self) -> tuple[str, str]:
+        """Return the '(sha, ref)' vector-store on this node was built from, or ('', '').
+
+        Only the aws backend can build from source (see is_vector_store_source_build); the other
+        backends always run a prebuilt image, so they have nothing to report.
+        """
+        return "", ""
 
     @cached_property
     def vector_store_uri(self) -> str:
@@ -106,9 +140,20 @@ class VectorStoreClusterMixin:
         """Submit Vector Store version to Argus."""
         if not self.nodes:
             return
+        node = self.nodes[0]
         try:
+            # Reading the build info runs a command on the node, so it belongs inside the guard:
+            # reporting the version is best-effort and must never fail cluster init.
+            source_repo, source_sha, source_ref = "", "", ""
+            if is_vector_store_source_build(self.params):
+                source_repo, _ = resolve_vector_store_source(self.params)
+                source_sha, source_ref = node.get_vector_store_source_build_info()
             VectorStoreVersionReporter(
-                self.nodes[0].get_vector_store_api_client(), self.test_config.argus_client()
+                node.get_vector_store_api_client(),
+                self.test_config.argus_client(),
+                source_repo=source_repo,
+                source_sha=source_sha,
+                source_ref=source_ref,
             ).report()
         except Exception:  # noqa: BLE001
             LOGGER.warning("Error submitting vector store version, VS package won't show in Argus.", exc_info=True)

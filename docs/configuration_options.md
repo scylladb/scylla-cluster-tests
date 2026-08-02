@@ -4916,6 +4916,33 @@ Vector Store indexing threads (if not set, defaults to number of CPU cores on VS
 **type:** int
 
 
+## **vector_store_source_repo** / SCT_VECTOR_STORE_SOURCE_REPO
+
+Git repository URL to build vector-store from source on the VS node.<br>Setting this (or 'vector_store_source_ref') switches provisioning from a prebuilt AMI to a<br>source build over the base AMI, and is mutually exclusive with 'vector_store_version'.<br>If omitted while 'vector_store_source_ref' is set, defaults to https://github.com/scylladb/vector-store.git.<br>Source builds are supported on the aws backend only.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **vector_store_source_ref** / SCT_VECTOR_STORE_SOURCE_REF
+
+Git ref (branch, tag or commit SHA) to build vector-store from source on the VS node.<br>Setting this (or 'vector_store_source_repo') switches provisioning from a prebuilt AMI to a<br>source build over the base AMI, and is mutually exclusive with 'vector_store_version'.<br>If omitted while 'vector_store_source_repo' is set, defaults to 'master'.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **vector_store_source_build_timeout** / SCT_VECTOR_STORE_SOURCE_BUILD_TIMEOUT
+
+Max seconds to wait for vector-store source build to complete
+
+**default:** 3600
+
+**type:** int
+
+
 ## **download_from_s3** / SCT_DOWNLOAD_FROM_S3
 
 Destination-source map of dirs/buckets to download from S3 before starting the test
