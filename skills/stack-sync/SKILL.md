@@ -76,7 +76,7 @@ $ARGUMENTS may contain:
 - `sync` - fetch, cascade-rebase, push, and sync PR state (the routine command; remember `--remote upstream`)
 - `rebase` - cascading rebase across the stack (finer control / conflict resolution)
 - `trunk` - jump to the stack's trunk branch
-- `merge [stack-number | pr-number]` - merge a PR and everything below it in the stack
+- `merge [stack-number | pr-number]` - merge the whole current stack, or up to and including a given PR
 - `checkout <stack-number | pr-number | pr-url | branch>` - check out a stack
 - `modify` - interactive TUI to reorder/rename/fold/drop branches (not agent-drivable)
 - `unstack [number]` - remove local tracking and/or the GitHub stack grouping
@@ -167,7 +167,7 @@ gh stack top / gh stack bottom
 ## merge [stack-number | pr-number]
 
 ```bash
-gh stack merge --yes           # current branch's PR + everything below it
+gh stack merge --yes           # whole current stack, bottom to top
 gh stack merge 15601 --yes     # merge up to and including PR #15601
 ```
 The optional argument is a stack number or a PR number - branch names are not accepted. Direct merges are all-or-nothing: if any PR can't be merged, none are. With a merge queue on the base branch, the PRs are enqueued together instead but may land in separate queue groups.
