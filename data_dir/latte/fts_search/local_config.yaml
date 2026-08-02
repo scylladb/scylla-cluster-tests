@@ -4,9 +4,9 @@
 # the goal is to exercise every branch of FtsSearchTest.test_fts_search, not to
 # produce meaningful performance numbers.
 #
-# Every shard/query file is read from data_dir/latte/fts_search/local_tiny/. The corpora are
-# generated, not tracked in git, and the run leaves them in place, so this is a one-off after a
-# fresh clone:
+# No `base_url` -> every shard/query file is read from
+# data_dir/latte/fts_search/local_tiny/ and no S3 access happens. The corpora are generated, not
+# tracked in git, and the run leaves them in place, so this is a one-off after a fresh clone:
 #   python3 data_dir/latte/fts_search/generate_local_dataset.py
 datasets:
   - name: local_tiny

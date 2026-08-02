@@ -66,8 +66,8 @@ cd <path-to>/scylla-cluster-tests
 unset DOCKER_HOST          # SCT's docker backend needs a real dockerd, not podman
 export JOB_NAME=local_run  # see note below
 
-# Generate the corpora if you have not already -- they are not tracked in git. The run reads
-# them in place and leaves them alone, so this is a one-off.
+# Generate the corpora if you have not already -- they are not tracked in git. A run with no
+# 'base_url' reads them in place and leaves them alone, so this is a one-off.
 python3 data_dir/latte/fts_search/generate_local_dataset.py
 
 ./docker/env/hydra.sh run-test fts_test.FtsSearchTest.test_fts_search \
@@ -240,10 +240,11 @@ docker ps -a --filter label=TestId -q | xargs -r docker rm -f
 
 The dataset/query plan is a separate YAML from the SCT test case:
 
-`search_test_config` accepts two forms (`resolve_test_config_path()` in `search_perf_test.py`):
+`search_test_config` accepts three forms (`resolve_test_config_path()` in `search_perf_test.py`):
 
 | Value | Resolved as |
 |---|---|
+| `s3://bucket/key` | downloaded into `data_dir/latte/fts_search/downloaded/<bucket>/<key>` (gitignored) |
 | `/abs/local/path` | used as-is |
 | `data_dir/latte/fts_search/plan.yaml` | relative to the SCT root |
 
@@ -252,11 +253,23 @@ test case will name its own plan through the same option.
 
 It has no default — which datasets, shards and query sets to run *is* the definition of the test,
 so a test case has to name a plan. The plans live in the repo, next to the rune scripts they
-drive:
+drive; only the corpora come from S3, and only for a dataset that carries a `base_url`:
 
 | Plan | Used by | Size |
 |---|---|---|
-| `local_config.yaml` | the docker test case | two tiny generated corpora, read from disk |
+| `local_config.yaml` | the docker test case | no `base_url` at all, everything read from disk |
+
+A dataset's shard files are fetched one at a time, right before the latte invocation that loads
+them, and deleted again once loaded — the full corpora do not fit next to each other on a runner's
+disk. Only what the run downloaded is deleted: a `base_url`-less dataset is the input rather than a
+cache, so a local plan keeps working across runs.
+
+To run a plan that is not in the repo, use the S3 form — it is a single string, so unlike a
+nested test-case mapping it can be overridden from the environment:
+
+```bash
+SCT_FTS_TEST_CONFIG=s3://my-bucket/my_plan.yaml ./sct.py run-test ...
+```
 
 Rate, duration and index-wait are per-query-set values inside the plan YAML — there are no SCT
 params for them. Per dataset:

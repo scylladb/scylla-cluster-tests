@@ -81,8 +81,8 @@ FTS_WORKLOAD = SearchWorkload(
 class FtsSearchTest(SearchPerformanceTest):
     """FTS (Full-Text Search / BM25) performance test.
 
-    Runs multi-dataset, multi-step FTS benchmarks from a YAML plan in the repo (see
-    'resolve_test_config_path'): per-shard loading, index building, query execution and Argus
+    Runs multi-dataset, multi-step FTS benchmarks from a YAML plan, in the repo or on S3 (see
+    'resolve_test_config_path'): per-shard downloads, index building, query execution and Argus
     reporting all come from 'SearchPerformanceTest'.
     """
 

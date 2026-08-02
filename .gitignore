@@ -69,10 +69,11 @@ fabric.properties
 # SSL artifacts
 data_dir/ssl_conf/
 
-# FTS corpora, one directory per dataset name in the test config, written by
-# data_dir/latte/fts_search/generate_local_dataset.py. Gitignored because they are generated, not
-# because they are temporary -- a run reads them in place. Only the rune scripts and the config
-# YAMLs are tracked here.
+# FTS corpora, one directory per dataset name in the test config: fetched from the dataset's
+# 'base_url' by the run that loads them, or written by
+# data_dir/latte/fts_search/generate_local_dataset.py. A locally generated corpus is read in place
+# and left alone; a fetched shard is deleted once loaded. Only the rune scripts and the config YAMLs
+# are tracked here.
 data_dir/latte/fts_search/*/
 
 # Internal private repo

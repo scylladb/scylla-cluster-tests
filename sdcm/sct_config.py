@@ -2436,7 +2436,8 @@ class SCTConfiguration(BaseModel):
 
     search_test_config: String = SctField(
         description="""Search test definition (datasets, shards, query sets and their runtime settings).
-        Accepts an absolute path, or one relative to the SCT root, e.g. data_dir/latte/fts_search/plan.yaml.
+        Accepts a full 's3://bucket/key' URL (downloaded into the workload's own data directory),
+        an absolute path, or one relative to the SCT root, e.g. data_dir/latte/fts_search/plan.yaml.
         Required by a search test: it is the definition of what to run, so there is nothing to fall back on.
         Per-query-set rate, duration and index-wait values live inside this file, not in SCT params.""",
     )
