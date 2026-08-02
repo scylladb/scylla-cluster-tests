@@ -75,7 +75,7 @@ def get_latte_operation_type(stress_cmd):
             counter_read = True
         elif re.findall(r"(?:^|_)(write|insert|update|delete)(?:_|$)", fn):
             write_found = True
-        elif re.findall(r"(?:^|_)(read|select|get|count)(?:_|$)", fn):
+        elif re.findall(r"(?:^|_)(read|select|get|count|search)(?:_|$)", fn):
             read_found = True
         else:
             return "user"
