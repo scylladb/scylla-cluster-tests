@@ -16,6 +16,7 @@ from sdcm.cluster import BaseNode
 from sdcm.keystore import KeyStore
 from sdcm.remote.remote_file import remote_file
 from sdcm.test_config import TestConfig
+from sdcm.utils.curl import curl_with_retry
 
 LOGGER = logging.getLogger(__name__)
 
@@ -342,27 +343,44 @@ class ScyllaDoctor:
                 extraction failure.
         """
         tmp_tarball = "/tmp/scylla_doctor_download.tar.gz"
-        # -f/--fail  → exit code 22 on HTTP 4xx/5xx instead of saving the error page
+        # --compressed → handle Content-Encoding (zstd/br/gzip) transparently; prevents
+        #                saving a zstd-compressed blob when CloudFront negotiates
+        #                compression with curl's advertised zstd support
         # -S/--show-error → print error message even when -f is used
-        # -L/--location  → follow redirects
+        # url is quoted: pre-signed S3 URLs contain '&' which the shell would split on
         self.node.remoter.run(
-            f"curl -fSL -o {tmp_tarball} '{url}'",
+            curl_with_retry(
+                f"'{url}'",
+                follow_redirects=True,
+                fail_early=True,
+                output=tmp_tarball,
+                extra_flags="-S --compressed",
+            ),
         )
-        # Sanity-check: a valid tarball is at least a few KB
+        # Sanity-check: verify the downloaded file is a valid gzip archive.
+        # Magic-byte check (1f8b) instead of the `file` command, which is not
+        # installed on minimal ScyllaDB AMIs.
         check = self.node.remoter.run(
-            f"test -s {tmp_tarball} && file {tmp_tarball}",
+            f"test -s {tmp_tarball} && head -c 2 {tmp_tarball} | od -An -tx1 | tr -d ' \\n'",
             verbose=False,
             ignore_status=True,
         )
-        if not check.ok or "gzip" not in check.stdout.lower():
-            body_head = self.node.remoter.run(
-                f"head -c 500 {tmp_tarball}",
+        if not check.ok or "1f8b" not in check.stdout.strip():
+            hexdump = self.node.remoter.run(
+                f"od -Ax -tx1z {tmp_tarball} | head -20",
                 verbose=False,
                 ignore_status=True,
             ).stdout.strip()
+            dns_result = self.node.remoter.run(
+                f"getent hosts {urlparse(url).hostname} || echo 'DNS_LOOKUP_FAILED'",
+                verbose=False,
+                ignore_status=True,
+            )
             self.node.remoter.run(f"rm -f {tmp_tarball}", verbose=False, ignore_status=True)
             raise ScyllaDoctorException(
-                f"Downloaded {description} file is not a valid gzip tarball. First 500 bytes of response:\n{body_head}"
+                f"Downloaded {description} file is not a valid gzip tarball.\n"
+                f"DNS: {dns_result.stdout.strip()}\n"
+                f"Hexdump:\n{hexdump}"
             )
         LOGGER.info("Extracting %s tarball...", description)
         # --no-same-owner: avoid chown failures in Docker containers running as non-root
