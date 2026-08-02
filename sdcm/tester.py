@@ -2300,11 +2300,14 @@ class ClusterTester(unittest.TestCase):
         self.loaders = cluster_docker.LoaderSetDocker(
             n_nodes=self.params.get("n_loaders"), **container_node_params, **common_params
         )
-        self.monitors = cluster_docker.MonitorSetDocker(
-            n_nodes=self.params.get("n_monitor_nodes"),
-            targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
-            **common_params,
-        )
+        if sum(self.params.get("n_monitor_nodes")) > 0:
+            self.monitors = cluster_docker.MonitorSetDocker(
+                n_nodes=self.params.get("n_monitor_nodes"),
+                targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                **common_params,
+            )
+        else:
+            self.monitors = NoMonitorSet()
 
     def get_cluster_baremetal(self):
         baremetal_info: cluster_baremetal.BareMetalCredentials = KeyStore().get_baremetal_config(

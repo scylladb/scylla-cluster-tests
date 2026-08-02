@@ -19,6 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from sdcm.cluster import NoMonitorSet
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import SctEvent
@@ -735,3 +736,37 @@ def test_init_argus_run_config_excludes_internal_fields(tester_with_argus):
     assert "multi_region_params" not in parsed
     assert "regions_data" not in parsed
     assert "target_db_image_ids" not in parsed
+
+
+# get_cluster_docker: the monitoring set follows 'n_monitor_nodes', as on every other backend
+
+
+def _docker_tester(tmp_path, n_monitor_nodes):
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "docker_monitors")
+    tester.params = FakeSCTConfiguration()
+    tester.params["n_monitor_nodes"] = n_monitor_nodes
+    tester.credentials = []
+    return tester
+
+
+def test_get_cluster_docker_zero_monitor_nodes_uses_no_monitor_set(tmp_path):
+    """'n_monitor_nodes: 0' must not start the monitoring stack on the docker backend."""
+    tester = _docker_tester(tmp_path, 0)
+
+    with patch("sdcm.tester.cluster_docker") as cluster_docker_mock, patch("sdcm.tester.UserRemoteCredentials"):
+        tester.get_cluster_docker()
+
+    assert isinstance(tester.monitors, NoMonitorSet)
+    cluster_docker_mock.MonitorSetDocker.assert_not_called()
+
+
+def test_get_cluster_docker_nonzero_monitor_nodes_builds_monitor_set_docker(tmp_path):
+    """A monitored docker run is unchanged: the parameter still builds a 'MonitorSetDocker'."""
+    tester = _docker_tester(tmp_path, 1)
+
+    with patch("sdcm.tester.cluster_docker") as cluster_docker_mock, patch("sdcm.tester.UserRemoteCredentials"):
+        tester.get_cluster_docker()
+
+    cluster_docker_mock.MonitorSetDocker.assert_called_once()
+    assert tester.monitors is cluster_docker_mock.MonitorSetDocker.return_value
