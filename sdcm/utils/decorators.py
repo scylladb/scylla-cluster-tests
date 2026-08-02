@@ -198,7 +198,9 @@ def latency_calculator_decorator(  # noqa: PLR0915
 
     For proper usage, it requires workload name (write, read, mixed) to be included in the test name
     or setting 'workload_name' test parameter.
-    Also requires monitoring set and 'use_hdrhistogram' test parameter to be set to True.
+    Also requires the 'use_hdrhistogram' test parameter to be set to True.
+    Monitoring set is optional: without it the Grafana screenshots and the Prometheus based metrics
+    are absent from the results, the rest is collected as usual.
 
     :param func: Remote method to run.
     :return: Wrapped method.
@@ -249,13 +251,15 @@ def latency_calculator_decorator(  # noqa: PLR0915
             all_nodes_list = list(set(start_node_list + end_node_list))
             end = time.time()
             test_name = tester.__repr__().split("testMethod=")[-1].split(">")[0]
-            if not monitoring_set or not monitoring_set.nodes or not tester.params.get("use_hdrhistogram"):
+            if not tester.params.get("use_hdrhistogram"):
                 if func_exception:
                     raise func_exception  # noqa: TRY201
                 return res
             try:
-                monitor = monitoring_set.nodes[0]
-                screenshots = monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)
+                monitor = monitoring_set.nodes[0] if monitoring_set and monitoring_set.nodes else None
+                screenshots = (
+                    monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start) if monitor else []
+                )
                 if workload_type:
                     workload = workload_type
                 elif "read_disk_only" in test_name:
@@ -287,7 +291,9 @@ def latency_calculator_decorator(  # noqa: PLR0915
                     if "cycles" not in latency_results[func_name]:
                         latency_results[func_name]["cycles"] = []
 
-                result = latency.collect_latency(monitor, start, end, workload, cluster, all_nodes_list)
+                result = (
+                    latency.collect_latency(monitor, start, end, workload, cluster, all_nodes_list) if monitor else {}
+                )
                 result["screenshots"] = screenshots
                 result["duration"] = f"{datetime.timedelta(seconds=int(end - start))}"
                 result["duration_in_sec"] = int(end - start)
