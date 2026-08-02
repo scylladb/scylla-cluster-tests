@@ -6805,8 +6805,15 @@ class BaseLoaderSet:
         test_id = self.tags.get("TestId")
         for loader in self.nodes:
             try:
+                # NOTE: every container of the run carries 'TestId', which on the docker backend includes the db,
+                #       monitoring and vector-store ones sharing the loader host. Narrow it down to the stress
+                #       containers with 'shell_marker', set at every 'RemoteDocker' call site - but not by
+                #       'NoSQLBenchStressThread', whose containers carry no labels at all and never matched.
                 loader.remoter.run(
-                    cmd=f"docker ps -a -q --filter label=TestId={test_id} | xargs docker rm -f",
+                    cmd=(
+                        f"docker ps -a -q --filter label=TestId={test_id} --filter label=shell_marker"
+                        " | xargs -r docker rm -f"
+                    ),
                     verbose=True,
                     ignore_status=True,
                 )
