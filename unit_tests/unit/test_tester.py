@@ -455,6 +455,7 @@ class TestSaveSchema:
         mock_node = MagicMock()
         mock_node.name = "test_node_1"
         mock_node._is_node_ready_run_scylla_commands.return_value = True
+        mock_node.is_docker.return_value = False
 
         # Mock run_cqlsh to return sample data
         mock_result = MagicMock()
@@ -556,6 +557,42 @@ class TestSaveSchema:
         assert mock_nodes[0].run_cqlsh.called
         assert not mock_nodes[1].run_cqlsh.called
         assert not mock_nodes[2].run_cqlsh.called
+
+
+@pytest.mark.parametrize(
+    "node_attrs",
+    (
+        pytest.param({"is_docker.return_value": True}, id="docker-node"),
+        pytest.param({"ssh_login_info": None}, id="xcloud-node"),
+    ),
+)
+def test_save_schema_skips_the_s3_upload_without_ssh_access(tmp_path, node_attrs):
+    """The upload opens an SSH session of its own, which the docker, k8s and xcloud nodes have not."""
+    tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path / "test_save_schema_no_ssh")
+    tester.logdir = str(tmp_path)
+
+    mock_node = MagicMock()
+    mock_node.name = "no-ssh-node-1"
+    mock_node._is_node_ready_run_scylla_commands.return_value = True
+    mock_node.is_docker.return_value = False
+    mock_node.run_cqlsh.return_value = MagicMock(stdout="Sample output")
+    mock_node.configure_mock(**node_attrs)
+
+    tester.db_cluster = MagicMock()
+    tester.db_cluster.nodes = [mock_node]
+
+    with (
+        patch("sdcm.tester.upload_system_table_to_s3") as mock_upload,
+        patch.object(tester, "argus_collect_logs") as mock_argus_logs,
+    ):
+        tester.save_schema()
+
+    mock_upload.assert_not_called()
+    mock_argus_logs.assert_not_called()
+    # the rest of the schema dump does not need SSH, so it must still run
+    assert "desc schema" in [call[0][0] for call in mock_node.run_cqlsh.call_args_list]
+    assert (tmp_path / "schema.log").exists()
 
 
 class TestEmrCleanResources:
