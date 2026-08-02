@@ -4,8 +4,7 @@
 # staging, index build timing from vector-store's 'full scan' log lines, per-query-set search, the
 # results file) without provisioning AWS.
 # The numbers this produces are meaningless -- under a thousand synthetic documents on a
-# containerised Scylla.
-# An aws test case for actual performance runs lands with the S3 dataset support.
+# containerised Scylla. Use test-cases/fts-search/fts-search-test.yaml for actual performance runs.
 #
 # Prerequisites:
 #   Generate the tiny dataset (not tracked in git; a one-off after a fresh clone):

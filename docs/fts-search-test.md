@@ -11,16 +11,16 @@ script to run, the vocabulary to report in, and the names to report under, all i
 `SearchWorkload`. Index build timing lives in
 `sdcm/utils/vector_store_index.py`, index and readiness polling in `sdcm/utils/vector_store_client.py`.
 
-So far there is one way to run it:
+Two ways to run it:
 
 | | Backend | Purpose | Cost | Wall clock |
 |---|---|---|---|---|
 | [Local](#1-local-correctness-run-docker-backend) | `docker` | Verify the test *orchestration* is correct | none | ~5 min |
+| [Real](#2-real-performance-run-aws-backend) | `aws` | Actual performance numbers | AWS instances | hours |
 
 The local run produces meaningless numbers — under a thousand synthetic documents on a
 containerised Scylla. Use it to check that shard staging, index building, metric
-parsing and the results file all work. A run on real hardware against real corpora comes
-separately.
+parsing and the results file all work before spending money on AWS.
 
 > **Note:** this test has not been tried on minicloud yet (`docs/minicloud.md`). Its lightweight
 > guests (1 vCPU, 4 GiB each) suit the local plan only, and minicloud's x86 KVM needs an x86
@@ -208,6 +208,74 @@ docker ps -a --filter label=TestId -q | xargs -r docker rm -f
 
 ---
 
+## 2. Real performance run (AWS backend)
+
+Uses `test-cases/fts-search/fts-search-test.yaml`: 1× `i4i.xlarge` DB, 1× `c5.large` loader,
+1× `r8g.xlarge` vector-store from the newest AMI, datasets pulled from
+`s3://full-text-search-sct/`, `test_duration: 240`. It defaults to the sanity-sized
+`sanity_config.yaml` plan; see [test config format](#notes-on-the-test-config-format) for the
+full run.
+
+`test_duration` covers both plans: a full `large_config.yaml` run, 100 shards per dataset, takes
+about an hour. Raise it with `SCT_TEST_DURATION` for a bigger plan; the Jenkins job's timeouts
+follow it. A single latte phase is bounded by the plan instead: a search by its `duration`, a load and an index
+build by `max_shard_load_secs` and `max_index_wait_secs` (defaults in `search_perf_test.py`).
+
+vector-store is the newest AMI, which serves full-text indexes since 1.11.0; pin a
+release with `vector_store_version`. To test unreleased code, set `vector_store_source_repo`
+and/or `vector_store_source_ref` instead: either one switches to a source build over that AMI, the
+other defaulting to `scylladb/vector-store` and `master`. The installer SCT ships
+(`data_dir/install_vector_store_from_source.sh`) shallow-fetches the ref over https without
+credentials, so any branch, tag or full SHA works, but a fork has to be public.
+
+Like every aws test case, the test case does not pin `scylla_version`: set `SCT_SCYLLA_VERSION`
+(or the job's `scylla_version` parameter) to a build with full-text index support, e.g.
+`master:latest`.
+
+### Running it by hand
+
+The run takes hours, so drive it from an SCT runner rather than a laptop:
+
+```bash
+export SCT_REGION_NAME=us-east-1        # as the Jenkins job; the default is eu-west-1
+export SCT_SCYLLA_VERSION=master:latest
+
+./docker/env/hydra.sh --execute-on-new-runner \
+  run-test fts_test.FtsSearchTest.test_fts_search \
+  --backend aws \
+  --config test-cases/fts-search/fts-search-test.yaml
+```
+
+The runner's IP lands in `./sct_runner_ip`; `--execute-on-runner $(cat sct_runner_ip)` reuses it.
+
+From a laptop, add `--config configurations/network_config/test_communication_public.yaml` so
+SCT connects to the nodes' public addresses, and stay in a region whose `SCT-2-sg` security group
+lets your IP in on port 22 -- `eu-west-1` (open to all), not `us-east-1`. Otherwise the run
+provisions its cluster and then fails in `Waiting for SSH to be up`.
+
+This test's own settings, as environment variables:
+
+```bash
+export SCT_VECTOR_STORE_SOURCE_REF=<branch|tag|full-sha>                     # a source build
+export SCT_VECTOR_STORE_SOURCE_REPO=https://github.com/<you>/vector-store.git  # of a fork
+export SCT_SEARCH_TEST_CONFIG=data_dir/latte/fts_search/large_config.yaml     # another plan
+export SCT_SEARCH_TEST_CONFIG=s3://my-bucket/my_plan.yaml                    # ... or one on S3
+```
+
+### Via Jenkins / Argus
+
+The job is `jenkins-pipelines/performance_staging/fts-search-test.jenkinsfile`, on aws in
+`us-east-1`; launching it from Argus runs the same job. Its pipeline,
+`perfRegressionParallelPipeline`, has only the generic parameters, so this test's settings go in
+the `extra_environment_variables` field, one `KEY=value` per line:
+
+```properties
+SCT_VECTOR_STORE_SOURCE_REF=my-branch
+SCT_SEARCH_TEST_CONFIG=data_dir/latte/fts_search/large_config.yaml
+```
+
+---
+
 ## Notes on the test config format
 
 The dataset/query plan is a separate YAML from the SCT test case:
@@ -223,18 +291,26 @@ The dataset/query plan is a separate YAML from the SCT test case:
 The option is not full-text specific: the plan format belongs to the shared flow, so a vector-search
 test case will name its own plan through the same option.
 
-It has no default — which datasets, shards and query sets to run *is* the definition of the test,
-so a test case has to name a plan. The plans live in the repo, next to the rune scripts they
-drive; only the corpora come from S3, and only for a dataset that carries a `base_url`:
+The plans live in the repo, next to the rune scripts they drive. Only the corpora come from S3: a
+dataset with a `base_url` downloads into a fresh folder under `downloaded/datasets/`, removed when
+the dataset is done. Its shards are fetched one at a time, right before the latte invocation that
+loads them, and deleted once loaded, as the full corpora do not fit next to each other on a
+runner's disk. A dataset without `base_url` is read in place and never deleted.
+
+A dataset's files -- the documents, `queries_<set>.tsv` and `qrels_<set>.tsv` -- follow the "Dataset
+Format" of `latte/full-text-search/README.md` in scylladb/vector-store, where `fts.rn` comes from.
+The 10M corpora were generated for VECTOR-765: an MS MARCO sample scaled to 10M documents, with
+about 510k `natural` queries and synthetic sets of 30 queries each (`term_*`, `phrase`,
+`boolean_*`), and no qrels. Each dataset's `manifest.json` on S3 records how it was built.
 
 | Plan | Used by | Size |
 |---|---|---|
+| `sanity_config.yaml` | the aws test case, by default | 5 of the 100 shards of `10M_20tok` (~500k docs), 2 loads with 2 rebuilds after each |
+| `large_config.yaml` | `SCT_SEARCH_TEST_CONFIG=data_dir/latte/fts_search/large_config.yaml` | both 10M-document datasets in full, 3 steps each |
 | `local_config.yaml` | the docker test case | no `base_url` at all, everything read from disk |
 
-A `base_url` dataset downloads into a fresh folder under `downloaded/datasets/`, removed when the
-dataset is done. Its shards are fetched one at a time, right before the latte invocation that loads
-them, and deleted once loaded: the full corpora do not fit next to each other on a runner's disk. A
-dataset without `base_url` is read in place and never deleted.
+The default is deliberately the small one: an aws run should be able to answer "does this build
+work end to end?" without committing to the full sweep.
 
 To run a plan that is not in the repo, use the S3 form — it is a single string, so unlike a
 nested test-case mapping it can be overridden from the environment:
@@ -298,14 +374,15 @@ steps:
 SCT checks only that they are shell-safe and not `rate`, a plan key SCT reads itself. latte itself
 rejects an option it does not know, and one given twice, as one SCT also sets, such as `duration`,
 would be. They are reported as given, as `stress_options` in the search record. Without
-`concurrency` latte runs 128 queries in flight, so a plan sets it.
+`concurrency` latte runs 128 queries in flight, so a plan sets it. The plans warm up 200 queries on
+the sets of about 30 queries a run repeats, and not on `natural`, whose queries are mostly new and
+meant to run cold.
 
 ### Repeated query configs
 
 A step may list the same query configuration more than once, e.g. to sample run-to-run variance.
 Every entry gets its own search record, told apart by `query_index`, its 1-based position in the
-step. `local_config.yaml` does it deliberately — `local_tiny`'s second step repeats
-`set: term_common` with identical parameters.
+step. `local_tiny`'s second step in `local_config.yaml` repeats one verbatim.
 
 ### Repeated builds on the same data
 
@@ -322,7 +399,8 @@ steps:
 ```
 
 Each build still gets its own record (keyed by dataset and step, one per step regardless of
-whether it loaded anything), so repeats do not collide.
+whether it loaded anything), so repeats do not collide -- see `sanity_config.yaml`, which follows
+each of its two loads with two warm rebuilds.
 
 An *absent* `shards` key is a different thing: it falls back to the step's `documents_file`, i.e.
 a single unsharded corpus. `local_smoke` in `local_config.yaml` uses one, and then a warm rebuild
