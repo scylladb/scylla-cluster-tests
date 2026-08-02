@@ -36,8 +36,10 @@ separately.
 full-text indexes need ScyllaDB 2026.3+ and vector-store 1.11.0+. A cached `latest` is not
 re-pulled, so `docker pull` it to refresh. For results you mean to compare, pin both builds instead,
 e.g. `SCT_SCYLLA_VERSION=2026.3.3 SCT_VECTOR_STORE_VERSION=1.11.0`.
-The docker backend takes a prebuilt image only, so to test an unreleased vector-store, build it
-from the vector-store repo and point `vector_store_docker_image` / `vector_store_version` in
+The docker backend takes a prebuilt image only: it has no equivalent of the AWS source-build path
+(`vector_store_source_repo` / `vector_store_source_ref`) and rejects those params outright. To test
+an unreleased vector-store, build it from the vector-store repo and point
+`vector_store_docker_image` / `vector_store_version` in
 `test-cases/fts-search/fts-search-test-docker.yaml` at it:
 
 ```bash

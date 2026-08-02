@@ -15,6 +15,7 @@ import json
 import logging
 import random
 import re
+import shlex
 import time
 from collections.abc import Callable
 from contextlib import ExitStack
@@ -28,7 +29,7 @@ import tenacity
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import EC2ServiceResource
 
-from sdcm import cluster, ec2_client, wait
+from sdcm import cluster, ec2_client, sct_abs_path, wait
 from sdcm.cluster_cassandra import BaseCassandraCluster, CassandraNodeMixin
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.kernel_panic_checker import AWSKernelPanicChecker
@@ -56,7 +57,12 @@ from sdcm.utils.common import MINICLOUD_PENDING_INSTANCES_TIMEOUT, PENDING_INSTA
 from sdcm.utils.decorators import retrying
 from sdcm.utils.minicloud.endpoint import is_minicloud_active
 from sdcm.utils.net import to_inet_ntop_format
-from sdcm.utils.vector_store_utils import VectorStoreClusterMixin, VectorStoreNodeMixin
+from sdcm.utils.vector_store_utils import (
+    VectorStoreClusterMixin,
+    VectorStoreNodeMixin,
+    is_vector_store_source_build,
+    resolve_vector_store_source,
+)
 from sdcm.wait import exponential_retry
 
 LOGGER = logging.getLogger(__name__)
@@ -69,6 +75,7 @@ SPOT_FLEET_LIMIT = 500
 SPOT_TERMINATION_CHECK_OVERHEAD = 15
 EBS_VOLUME = "attached"
 INSTANCE_STORE = "instance_store"
+VECTOR_STORE_INSTALL_SCRIPT = "data_dir/install_vector_store_from_source.sh"
 
 SPOT_TERMINATION_CHECK_DELAY = 0
 
@@ -1501,6 +1508,21 @@ class VectorStoreAWSNode(VectorStoreNodeMixin, AWSNode):
     def init(self):
         super().init()
 
+    @property
+    def vector_store_user(self) -> str:
+        return self.parent_cluster.params.get("ami_vector_store_user")
+
+    @property
+    def vector_store_install_dir(self) -> str:
+        """Where vector-store lives on the node, and so where its .env goes.
+
+        The AMI's unit hardcodes /home/ubuntu/vector-store; a source build writes its own unit, for
+        the service user's home.
+        """
+        if is_vector_store_source_build(self.parent_cluster.params):
+            return f"/home/{self.vector_store_user}/vector-store"
+        return "/home/ubuntu/vector-store"
+
     def configure_vector_store_service(self):
         """Configure Vector Store service"""
         # Vector Store service can read configuration from .env files
@@ -1515,20 +1537,53 @@ class VectorStoreAWSNode(VectorStoreNodeMixin, AWSNode):
         if username := self.parent_cluster.params.get("vector_store_scylla_username"):
             env_content += f"\nVECTOR_STORE_SCYLLADB_USERNAME={username}"
         if password := self.parent_cluster.params.get("vector_store_scylla_password"):
-            password_file_path = "/home/ubuntu/vector-store/.scylla_password"
+            password_file_path = f"{self.vector_store_install_dir}/.scylla_password"
             self.remoter.run(
                 f"echo -n '{password}' | sudo tee {password_file_path} > /dev/null && "
-                f"sudo chown {self.parent_cluster.params.get('ami_vector_store_user')}: {password_file_path} && "
+                f"sudo chown {self.vector_store_user}: {password_file_path} && "
                 f"sudo chmod 600 {password_file_path}",
                 verbose=False,
             )
             env_content += f"\nVECTOR_STORE_SCYLLADB_PASSWORD_FILE={password_file_path}"
 
-        self.remoter.run(f"echo '{env_content}' | sudo tee /home/ubuntu/vector-store/.env > /dev/null", verbose=True)
-        self.remoter.run(
-            f"sudo chown {self.parent_cluster.params.get('ami_vector_store_user')}: /home/ubuntu/vector-store/.env",
-            verbose=True,
+        env_path = f"{self.vector_store_install_dir}/.env"
+        self.remoter.run(f"echo '{env_content}' | sudo tee {env_path} > /dev/null", verbose=True)
+        self.remoter.run(f"sudo chown {self.vector_store_user}: {env_path}", verbose=True)
+
+    def install_vector_store_from_source(self):
+        """Build and install vector-store from source on the node, with the installer SCT ships."""
+        repo, ref = resolve_vector_store_source(self.parent_cluster.params)
+        timeout = self.parent_cluster.params.get("vector_store_source_build_timeout")
+
+        self.log.info("Installing vector-store from source: repo=%s ref=%s", repo, ref)
+
+        remote_script = "/tmp/install_vector_store_from_source.sh"
+        self.remoter.send_files(sct_abs_path(VECTOR_STORE_INSTALL_SCRIPT), remote_script, verbose=True)
+        # NOTE: run it through 'bash' rather than chmod+x'ing it, so a '/tmp' mounted noexec
+        #       (hardened AMIs do that) does not turn into a confusing 'Permission denied'.
+        #       The repo and the ref come from test params, so quote them properly instead of
+        #       trusting them to hold no shell metacharacters.
+        install_cmd = (
+            f"sudo bash {remote_script} --repo {shlex.quote(repo)} --ref {shlex.quote(ref)} "
+            f"--user {shlex.quote(self.vector_store_user)} "
+            f"--install-dir {shlex.quote(self.vector_store_install_dir)} --verbose"
         )
+        self.remoter.run(install_cmd, verbose=True, timeout=timeout)
+
+        self.log.info("vector-store installed from source successfully")
+
+    def get_vector_store_source_build_info(self) -> tuple[str, str]:
+        """Return the '(sha, ref)' of the source build on this node, or ('', '') if there is none.
+
+        Reads the marker the installer leaves behind, see data_dir/install_vector_store_from_source.sh.
+        """
+        result = self.remoter.run(
+            f"cat {self.vector_store_install_dir}/.source-commit", ignore_status=True, verbose=False
+        )
+        if not result.ok:
+            return "", ""
+        sha, _, ref = result.stdout.strip().partition(" ")
+        return sha, ref
 
 
 class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
@@ -1580,7 +1635,10 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
         self.log.info("Reconfiguring Vector Store nodes with Scylla cluster information")
         for node in self.nodes:
             try:
+                # Stopped first: a source build replaces the binary, which a running service holds.
                 node.remoter.run("sudo systemctl stop vector-store", ignore_status=True, verbose=True)
+                if is_vector_store_source_build(self.params):
+                    node.install_vector_store_from_source()
                 node.configure_vector_store_service()
                 node.remoter.run("sudo systemctl start vector-store", verbose=True)
             except Exception as e:
