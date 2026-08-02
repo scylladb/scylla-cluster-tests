@@ -11,16 +11,16 @@ script to run, the vocabulary to report in, and the names to report under, all i
 `SearchWorkload`. Index build timing and the Argus build table live in
 `sdcm/utils/vector_store_index.py`, index and readiness polling in `sdcm/utils/vector_store_client.py`.
 
-So far there is one way to run it:
+Two ways to run it:
 
 | | Backend | Purpose | Cost | Wall clock |
 |---|---|---|---|---|
 | [Local](#1-local-correctness-run-docker-backend) | `docker` | Verify the test *orchestration* is correct | none | ~5 min |
+| [Real](#2-real-performance-run-aws-backend) | `aws` | Actual performance numbers | AWS instances | hours |
 
 The local run produces meaningless numbers — 1 shard of 300 synthetic documents on a
 containerised Scylla. Use it to check that shard staging, index building, metric
-parsing and the Argus tables all work. A run on real hardware against real corpora comes
-separately.
+parsing and the Argus tables all work before spending money on AWS.
 
 > **Note:** minicloud cannot run this test. It emulates only `i4i.large` and
 > `n2-highmem-2`, the vector-store AMI is arm64 (minicloud is KVM on x86), and the
@@ -33,7 +33,8 @@ separately.
 ### One-time setup
 
 **Build a vector-store image.** The docker backend takes a prebuilt image only — it
-has no way to build vector-store itself. Build the commit you care
+has no equivalent of the AWS source-build path (`vector_store_source_repo` /
+`vector_store_source_ref`), and rejects those params outright. Build the commit you care
 about from the vector-store repo (it needs `fulltext_index` support, i.e.
 `crates/vector-store/src/fts_index/`):
 
@@ -96,8 +97,8 @@ if params.get("enable_argus") and get_job_name() != "local_run":
 
 So `unset JOB_NAME SCT_ENABLE_ARGUS` for a run whose results you want posted. Both are
 *environment* state, so they outlive the run that needed them — a `JOB_NAME=local_run`
-exported for one run is still set for the next one in the same shell, and that run will
-silently post nothing either. To confirm which gate you tripped:
+exported for a docker run is still set when you move on to an aws run in the same shell,
+and that aws run will silently post nothing either. To confirm which gate you tripped:
 
 ```bash
 grep -m1 -oE "'(enable_argus|job_name)': [^,]*" ~/sct-results/latest/argus.log
@@ -236,6 +237,176 @@ docker ps -a --filter label=TestId -q | xargs -r docker rm -f
 
 ---
 
+## 2. Real performance run (AWS backend)
+
+Uses `test-cases/fts-search/fts-search-test.yaml`: 1× `i4i.xlarge` DB, 1× `c5.large` loader,
+1× `r8g.xlarge` vector-store built from source, datasets pulled from
+`s3://full-text-search-sct/`, `test_duration: 600`. It defaults to the sanity-sized
+`sanity_config.yaml` plan; see [test config format](#notes-on-the-test-config-format) for the
+full run.
+
+`test_duration` is sized for the default plan. Raise it (`SCT_TEST_DURATION`, and the Jenkins job
+timeout with it) before running `large_config.yaml`, which loads 100 shards per dataset. It does
+not bound an individual latte phase: the search runs are bounded by their own `--duration`, and
+the load and index-build phases by `max_shard_load_secs` and `max_index_wait_secs` from the plan
+(defaults in `fts_test.py`).
+
+Which vector-store gets built is set by `vector_store_source_repo` and `vector_store_source_ref` —
+setting **either** switches provisioning from a prebuilt AMI to a source build, and both are
+mutually exclusive with `vector_store_version`. The test case sets only
+`vector_store_source_ref: 'master'`, since no released vector-store has full-text index support;
+the repo then defaults to `scylladb/vector-store` and the base AMI is picked automatically for the
+instance's architecture, so `ami_id_vector_store` is only for pinning a specific base.
+
+The installer is shipped from SCT (`data_dir/install_vector_store_from_source.sh`), not fetched
+from the ref being built, so any ref can be built — including ones predating the script upstream.
+Mirror changes to `scylladb/vector-store` (`scripts/install-from-source`).
+
+### Prerequisites
+
+```bash
+# Valid credentials for account 797456418907 -- sct.py gates every subcommand on this,
+# regardless of backend. Refresh via Okta if this fails.
+aws sts get-caller-identity
+```
+
+### Recommended: run on a dedicated SCT runner
+
+The test can run for hours, so drive it from an EC2 runner rather than your laptop —
+your machine can then be closed without killing the run:
+
+```bash
+cd <path-to>/scylla-cluster-tests
+
+export SCT_REGION_NAME=us-east-1        # matches the Jenkins job; default is eu-west-1
+export SCT_SCYLLA_VERSION=master:latest # needs full-text index support; see note below
+
+./docker/env/hydra.sh --execute-on-new-runner \
+  run-test fts_test.FtsSearchTest.test_fts_search \
+  --backend aws \
+  --config test-cases/fts-search/fts-search-test.yaml
+```
+
+This creates the runner, writes its IP to `./sct_runner_ip`, rsyncs the repo over and
+runs there. To send further commands to the same runner:
+
+```bash
+./docker/env/hydra.sh --execute-on-runner $(cat sct_runner_ip) \
+  run-test fts_test.FtsSearchTest.test_fts_search \
+  --backend aws --config test-cases/fts-search/fts-search-test.yaml
+```
+
+Delete `./sct_runner_ip` when you are done with the runner.
+
+### Directly from your machine
+
+Fine for a short debug run; your machine must stay awake for the whole test. Note the two
+differences from the runner invocation above — **without either one the run provisions its
+cluster and then dies in `Waiting for SSH to be up`**:
+
+```bash
+unset SCT_REGION_NAME                   # fall back to eu-west-1 -- see the region note below
+export SCT_SCYLLA_VERSION=master:latest
+
+./docker/env/hydra.sh run-test fts_test.FtsSearchTest.test_fts_search \
+  --backend aws \
+  --config test-cases/fts-search/fts-search-test.yaml \
+  --config configurations/network_config/test_communication_public.yaml
+```
+
+**Why the extra `network_config`.** SCT SSHes to whatever `scylla_network_config`'s
+`test_communication` entry resolves to, and `defaults/aws_config.yaml` sets it to
+`public: false` — the private VPC address, which is correct for a runner inside the VPC and
+unroutable from anywhere else. `configurations/network_config/test_communication_public.yaml`
+flips it to the public IP. Note that **`SCT_IP_SSH_CONNECTIONS=public` does not do this**: on
+aws that parameter is only the fallback for when `scylla_network_config` is unset, which it
+never is here (`ssh_connection_ip_type()`, `sdcm/provision/network_configuration.py`).
+
+**Why not `us-east-1`.** The SSH allowlist lives in each region's `SCT-2-sg` security group and
+differs per region — of the eight regions SCT provisions in, `eu-west-1` is the only one that
+opens port 22 to `0.0.0.0/0`. Everywhere else it is a handful of whitelisted office `/32`s, or
+nothing at all; `us-east-1` — the region the Jenkins job and the runner recipe above use —
+allows two. So from any region but `eu-west-1` a laptop run cannot connect *even with* the
+public network config, and no SCT config setting can fix it: use a runner there. These lists do
+change, so check rather than assume:
+
+```bash
+aws ec2 describe-security-groups --region <region> \
+  --filters Name=group-name,Values=SCT-2-sg \
+  --query 'SecurityGroups[].IpPermissions[?FromPort==`22`].IpRanges[].CidrIp'
+curl -s https://checkip.amazonaws.com   # your IP must be covered by one of them
+```
+
+**Why `SCT_SCYLLA_VERSION`.** Like every other aws test case, the test-case YAML does not pin
+`scylla_version` — the Jenkins job supplies it (the jenkinsfile passes `scylla_version:
+"master:latest"`). A manual run has to supply it too, and it must be a build with full-text
+index support.
+
+### Useful overrides
+
+Any config key can be overridden with an `SCT_`-prefixed environment variable —
+hydra forwards all of them.
+
+```bash
+# Keep the cluster alive to investigate a failure (default is destroy).
+export SCT_POST_BEHAVIOR_DB_NODES=keep-on-failure
+export SCT_POST_BEHAVIOR_LOADER_NODES=keep-on-failure
+export SCT_POST_BEHAVIOR_VECTOR_STORE_NODES=keep-on-failure
+
+# Test a branch of upstream vector-store (repo defaults to scylladb/vector-store).
+export SCT_VECTOR_STORE_SOURCE_REF=<branch|tag|sha>
+
+# Test your own fork (ref defaults to 'master', so this alone is enough).
+export SCT_VECTOR_STORE_SOURCE_REPO=https://github.com/<you>/vector-store.git
+
+# A different dataset plan: a path relative to the SCT root, or a full S3 URL.
+# The test case defaults to sanity_config.yaml; large_config.yaml is the full multi-hour run.
+export SCT_SEARCH_TEST_CONFIG=data_dir/latte/fts_search/large_config.yaml
+export SCT_SEARCH_TEST_CONFIG=s3://my-bucket/my_plan.yaml
+
+# On-demand instead of spot, if spot capacity is a problem.
+export SCT_INSTANCE_PROVISION=on_demand
+```
+
+### Via Jenkins / Argus
+
+The job is defined by
+`jenkins-pipelines/performance_staging/fts-search-test.jenkinsfile`
+(`backend: aws`, `region: us-east-1`, `test_config:
+test-cases/fts-search/fts-search-test.yaml`, `sub_tests: ["test_fts_search"]`,
+`scylla_version: master:latest`). Prefer this for anything that should be recorded in Argus
+properly — launching it from Argus is the same job, with `requested_by_user` filled in for you.
+
+The pipeline is the generic `perfRegressionParallelPipeline`, so its parameters are the generic
+ones: `scylla_version`, `provision_type`, the `post_behavior_*` set, `reuse_cluster`. **There is
+no vector-store parameter** — no `vector_store_source_repo`, no `vector_store_source_ref`, no
+`search_test_config`, and no `test_duration` either. Anything specific to this test goes through
+the `extra_environment_variables` text field, in Java properties format (one `KEY=value` per
+line):
+
+```properties
+# Which vector-store to build. Either key alone switches provisioning from a prebuilt AMI to a
+# source build; the test case already sets the ref to 'master', so overriding one is enough.
+SCT_VECTOR_STORE_SOURCE_REF=my-branch
+SCT_VECTOR_STORE_SOURCE_REPO=https://github.com/<you>/vector-store.git
+
+# Which dataset/query plan to run. Defaults to sanity_config.yaml; see the config format below.
+SCT_SEARCH_TEST_CONFIG=data_dir/latte/fts_search/large_config.yaml
+SCT_TEST_DURATION=3000
+```
+
+The ref is fetched on the vector-store instance by the SCT-shipped installer, over https with no
+credentials, so a **fork has to be public**. A branch of `scylladb/vector-store` needs only
+`SCT_VECTOR_STORE_SOURCE_REF`, since the repo defaults to that. Any branch, tag or SHA works — the
+installer does a shallow fetch of the single ref.
+
+`SCT_TEST_DURATION` is why the block above sets it: the test case's 600 is sized for the sanity
+plan, and `large_config.yaml` needs far more. The surrounding *job* timeout is not a parameter —
+the jenkinsfile pins it at 720 minutes, so a run that needs longer needs that number raised there
+too.
+
+---
+
 ## Notes on the test config format
 
 The dataset/query plan is a separate YAML from the SCT test case:
@@ -251,24 +422,26 @@ The dataset/query plan is a separate YAML from the SCT test case:
 The option is not full-text specific: the plan format belongs to the shared flow, so a vector-search
 test case will name its own plan through the same option.
 
-It has no default — which datasets, shards and query sets to run *is* the definition of the test,
-so a test case has to name a plan. The plans live in the repo, next to the rune scripts they
-drive; only the corpora come from S3, and only for a dataset that carries a `base_url`:
+The plans live in the repo, next to the rune scripts they drive. Only the corpora come from S3 —
+each dataset in a plan carries its own `base_url`, and its shard files are fetched one at a time,
+right before the latte invocation that loads them, and deleted again once loaded (the full corpora
+do not fit next to each other on a runner's disk). Only what the run downloaded is deleted, so a
+`base_url`-less local plan keeps working across runs.
 
 | Plan | Used by | Size |
 |---|---|---|
+| `sanity_config.yaml` | the aws test case, by default | 5 of the 100 shards of `10M_20tok` (~500k docs), 2 steps |
+| `large_config.yaml` | `SCT_SEARCH_TEST_CONFIG=data_dir/latte/fts_search/large_config.yaml` | both 10M-document datasets in full, 3 steps each |
 | `local_config.yaml` | the docker test case | no `base_url` at all, everything read from disk |
 
-A dataset's shard files are fetched one at a time, right before the latte invocation that loads
-them, and deleted again once loaded — the full corpora do not fit next to each other on a runner's
-disk. Only what the run downloaded is deleted: a `base_url`-less dataset is the input rather than a
-cache, so a local plan keeps working across runs.
+The default is deliberately the small one: an aws run should be able to answer "does this build
+work end to end?" without committing to the full sweep.
 
 To run a plan that is not in the repo, use the S3 form — it is a single string, so unlike a
 nested test-case mapping it can be overridden from the environment:
 
 ```bash
-SCT_FTS_TEST_CONFIG=s3://my-bucket/my_plan.yaml ./sct.py run-test ...
+SCT_SEARCH_TEST_CONFIG=s3://my-bucket/my_plan.yaml ./sct.py run-test ...
 ```
 
 Rate, duration and index-wait are per-query-set values inside the plan YAML — there are no SCT
@@ -336,8 +509,9 @@ ds | N docs | step #1 | term_common | limit=5 concurrency=32 rate=0 run #1
 ds | N docs | step #1 | term_common | limit=5 concurrency=32 rate=0 run #2
 ```
 
-`local_config.yaml` exercises it deliberately — `local_tiny`'s second step repeats
-`set: term_common` with identical parameters. Covered by `unit_tests/unit/test_search_perf_test.py`.
+`large_config.yaml` relies on this — the `shards: [10..99]` step of both datasets repeats
+`set: term_common` four times, and `local_tiny`'s second step repeats one verbatim. Covered by
+`unit_tests/unit/test_search_perf_test.py`.
 
 ### Repeated builds on the same data
 
@@ -357,8 +531,9 @@ steps:
 ```
 
 Each build still gets its own Argus row (`{dataset} | {doc_count} docs | build #{N}`, one per
-step regardless of whether it loaded anything), so repeats do not collide -- see `local_smoke`
-in `local_config.yaml`, which does a build followed by a warm rebuild on the same corpus.
+step regardless of whether it loaded anything), so repeats do not collide -- see
+`sanity_config.yaml`, which does a cold build followed by five warm rebuilds on the same ~500k
+documents.
 
 Queries are optional too (`step.get("queries", [])` defaults to none), so a step can be build-only.
 

@@ -81,8 +81,8 @@ def test_argus_names_are_the_ones_the_history_is_under():
     assert FTS_WORKLOAD.index_prefix == "fts_idx"
 
 
-def test_the_test_case_entry_point_exists():
-    """The name docs/fts-search-test.md tells you to run, and what the Jenkins job will name as its
-    sub_test once the aws test case lands. Renaming it breaks every documented invocation."""
+def test_the_test_case_entry_point_is_the_one_the_pipelines_call():
+    """jenkins-pipelines/performance_staging/fts-search-test.jenkinsfile names this sub_test, and
+    docs/fts-search-test.md tells you to run it. Renaming it breaks both."""
     assert callable(fts_test.FtsSearchTest.test_fts_search)
     assert fts_test.FtsSearchTest.WORKLOAD is FTS_WORKLOAD

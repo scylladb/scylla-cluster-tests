@@ -4,7 +4,7 @@
 # staging, index build timing from vector-store's 'full scan' log lines, per-query-set search,
 # Argus reporting with the expected_p99_read_ms table split) without provisioning AWS.
 # The numbers this produces are meaningless -- 300 synthetic documents on a containerised Scylla.
-# An aws test case for actual performance runs lands with the S3 dataset support.
+# Use test-cases/fts-search/fts-search-test.yaml for actual performance runs.
 #
 # Prerequisites:
 #   1. Build the vector-store image (needs 'fulltext_index' support):
