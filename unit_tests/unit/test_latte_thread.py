@@ -102,6 +102,8 @@ def test_find_latte_fn_names(cmd, items):
         ("latte run /foo/bar.rn %smulti_get -q -r 500", "read"),
         ("latte run /foo/bar.rn %sdo_get_all -q -r 500", "read"),
         ("latte run /foo/bar.rn %sget_all,get_single -q -r 500", "read"),
+        ("latte run /foo/bar.rn %ssearch -q -r 500", "read"),
+        ("latte run /foo/bar.rn %sdo_search -q -r 500", "read"),
         ("latte run /foo/bar.rn %scounter_read -q -r 500", "counter_read"),
         ("latte run /foo/bar.rn %sread,write -q -r 500", "mixed"),
         ("latte run /foo/bar.rn %swrite:1,read:2 -q -r 500", "mixed"),
