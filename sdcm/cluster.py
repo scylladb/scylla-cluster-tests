@@ -5584,9 +5584,13 @@ class BaseScyllaCluster:
         self.log.info("Update DB packages duration -> %s s", int(time_elapsed))
 
     def update_seed_provider(self):
-        for node in self.nodes:
+        def _update_node_seed_provider(node):
             with node.remote_scylla_yaml() as scylla_yml:
                 scylla_yml.seed_provider = node.proposed_scylla_yaml.seed_provider
+
+        # Each node update is an independent SSH read+write of scylla.yaml, so run them in
+        # parallel to avoid the serial per-node latency during cluster provisioning (SCT-731).
+        self.run_func_parallel(func=_update_node_seed_provider)
 
     def update_db_binary(self, node_list=None, start_service=True):
         if node_list is None:
