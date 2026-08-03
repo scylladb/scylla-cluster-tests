@@ -834,6 +834,12 @@ class BaseNode(AutoSshContainerMixin):
         if self._is_zero_token_node:
             scylla_yml.join_ring = False
         if append_scylla_yaml := copy.deepcopy(self.parent_cluster.params.get("append_scylla_yaml")) or {}:
+            if self.parent_cluster.node_type == "oracle-db":
+                # KMS / encryption-at-rest is a Scylla-only feature configured for the tested cluster only.
+                # The Oracle cluster (used as a reference in mixed_scylla/mixed_cassandra tests) must never
+                # run with KMS, so drop those keys before applying 'append_scylla_yaml'.
+                for kms_key in ("kms_hosts", "user_info_encryption", "system_info_encryption"):
+                    append_scylla_yaml.pop(kms_key, None)
             if any(
                 key in append_scylla_yaml for key in ("system_key_directory", "system_info_encryption", "kmip_hosts")
             ):

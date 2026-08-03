@@ -1027,9 +1027,10 @@ class ClusterTester(unittest.TestCase):
         if self.params.get("enterprise_disable_kms"):
             logging.debug("Skip configuring AWS KMS, `enterprise_disable_kms` is set in the config")
             return
-        if self.params.get("db_type") == "mixed_scylla":
-            logging.debug("Skip configuring AWS KMS, test uses mixed scylla versions")
-            return
+        # NOTE: KMS is a Scylla-only, enterprise feature. In mixed_scylla/mixed_cassandra setups
+        # (e.g. gemini), it is configured for the tested Scylla cluster only; the Oracle cluster is
+        # excluded from KMS in BaseNode.proposed_scylla_yaml (node_type == "oracle-db").
+        # The tested cluster is already gated as enterprise above, so we no longer skip mixed tests.
 
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options")):
             logging.debug(
