@@ -14,7 +14,14 @@ from sdcm.cluster_aws import CassandraAWSCluster
 
 
 def _make_nodes(count):
-    return [MagicMock(name=f"node-{i}") for i in range(count)]
+    # `MagicMock(name=...)` does NOT set an accessible `.name` attribute (it's a reserved
+    # constructor kwarg used for the mock's repr); assign the attribute explicitly instead.
+    nodes = []
+    for i in range(count):
+        node = MagicMock()
+        node.name = f"node-{i}"
+        nodes.append(node)
+    return nodes
 
 
 @pytest.fixture
@@ -43,3 +50,29 @@ def test_cassandra_wait_for_init_waits_for_all_nodes(cassandra_aws_cluster):
         CassandraAWSCluster.wait_for_init.__wrapped__(cassandra_aws_cluster)
 
     assert set(waited_nodes) == set(nodes)
+
+
+def test_cassandra_wait_for_init_runs_in_parallel(cassandra_aws_cluster):
+    nodes = _make_nodes(3)
+    cassandra_aws_cluster.nodes = nodes
+    barrier = threading.Barrier(3, timeout=10)
+
+    def _fake_wait_for(func, node, **kwargs):
+        barrier.wait()  # blocks unless all 3 run concurrently
+
+    with patch("sdcm.cluster_aws.wait.wait_for", side_effect=_fake_wait_for):
+        # would raise BrokenBarrierError if nodes were waited on serially
+        CassandraAWSCluster.wait_for_init.__wrapped__(cassandra_aws_cluster)
+
+
+def test_cassandra_wait_for_init_propagates_node_timeout(cassandra_aws_cluster):
+    nodes = _make_nodes(3)
+    cassandra_aws_cluster.nodes = nodes
+
+    def _fake_wait_for(func, node, **kwargs):
+        if node is nodes[1]:
+            raise TimeoutError(f"{node.name} did not come up in time")
+
+    with patch("sdcm.cluster_aws.wait.wait_for", side_effect=_fake_wait_for):
+        with pytest.raises(TimeoutError, match="did not come up in time"):
+            CassandraAWSCluster.wait_for_init.__wrapped__(cassandra_aws_cluster)

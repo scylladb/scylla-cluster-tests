@@ -13,7 +13,14 @@ from sdcm.cluster_aws import VectorStoreSetAWS
 
 
 def _make_nodes(count):
-    return [MagicMock(name=f"node-{i}") for i in range(count)]
+    # `MagicMock(name=...)` does NOT set an accessible `.name` attribute (it's a reserved
+    # constructor kwarg used for the mock's repr); assign the attribute explicitly instead.
+    nodes = []
+    for i in range(count):
+        node = MagicMock()
+        node.name = f"node-{i}"
+        nodes.append(node)
+    return nodes
 
 
 @pytest.fixture
@@ -45,6 +52,17 @@ def test_reconfigure_vector_store_nodes_reraises(vector_store_cluster):
 
     with pytest.raises(RuntimeError, match="boom"):
         vector_store_cluster._reconfigure_vector_store_nodes()
+
+    # All nodes run concurrently: the other nodes still get fully reconfigured
+    # (stop + start) even though nodes[1] failed and its exception propagates.
+    # This differs from the original serial loop, which stopped at the first
+    # failing node and never touched subsequent nodes.
+    for node in (nodes[0], nodes[2]):
+        node.configure_vector_store_service.assert_called_once()
+        assert node.remoter.run.call_count == 2  # stop + start
+
+    # nodes[1] failed between stop and start, so only the stop command ran.
+    assert nodes[1].remoter.run.call_count == 1
 
 
 def test_reconfigure_vector_store_nodes_empty_is_noop(vector_store_cluster):
