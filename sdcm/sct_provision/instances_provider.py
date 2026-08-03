@@ -81,7 +81,7 @@ def provision_sct_resources(params: SCTConfiguration, test_config: TestConfig, *
 
     Backends that support whole-cluster region fallback (currently GCE) get a pre-provision zone/AZ
     resolve, drive provisioning through the shared region-fallback loop for a single-region config,
-    and persist the resolved placement so a later Run Test step picks up any relocated region. Other
+    and persist the resolved placement so a later Run Test step picks up any relocated region or zone. Other
     backends (AWS uses its own layout; Azure/OCI have no fallback yet) provision once, unchanged - the
     shared shape is ready for them to opt in.
     """
@@ -128,12 +128,20 @@ def _provision_gce_resources(params: SCTConfiguration, test_config: TestConfig, 
     Capacity exhaustion escalates in two steps, each independently gated by its own config flag:
     ``fallback_to_next_availability_zone`` retries the remaining zones of the configured region, and
     only once those are gone does ``fallback_to_next_region`` relocate - the whole cluster for a
-    single-region config, or just the exhausted DC for a multi-region one. Either way a relocated
-    placement is persisted to the resolved-placement handoff so the later Run Test step (a separate
-    hydra command) picks it up, mirroring AWS.
+    single-region config, or just the exhausted DC for a multi-region one.
+
+    Any final placement that differs from the configured one - a relocated region, but also a
+    zone-only change from AZ fallback or from the resolver picking a zone when none is configured -
+    is persisted to the resolved-placement handoff. Unlike AWS, which finds instances region-wide by
+    ``test_id`` tag, GCE instance discovery is zone-scoped, so the later Run Test step (a separate
+    hydra command) must be pointed at the exact zone or it provisions a duplicate cluster.
     """
-    GceAZResolver(params).resolve()
+    # Both baselines must be captured before the resolver runs: with no availability_zone configured
+    # it picks a random valid zone, and that pick has to be detected as a change so the Run Test step
+    # reuses it instead of rolling its own.
     original_region = " ".join(params.gce_datacenters) if params.gce_datacenters else None
+    original_az = params.get("availability_zone")
+    GceAZResolver(params).resolve()
     test_id = str(test_config.test_id())
     network_name = params.get("gce_network")
 
@@ -158,9 +166,11 @@ def _provision_gce_resources(params: SCTConfiguration, test_config: TestConfig, 
     else:
         provision_attempt()
 
-    test_config.persist_resolved_placement_if_changed(
-        params.get("reuse_cluster") or str(test_config.test_id()),
-        original_region=original_region,
-        region_name=" ".join(params.gce_datacenters) if params.gce_datacenters else None,
-        availability_zone=params.get("availability_zone"),
-    )
+    region_name = " ".join(params.gce_datacenters) if params.gce_datacenters else None
+    availability_zone = params.get("availability_zone")
+    if region_name and (region_name != original_region or availability_zone != original_az):
+        test_config.write_resolved_placement(
+            params.get("reuse_cluster") or str(test_config.test_id()),
+            region_name=region_name,
+            availability_zone=availability_zone,
+        )

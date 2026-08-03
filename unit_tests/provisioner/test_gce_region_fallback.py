@@ -837,6 +837,65 @@ def test_provision_gce_resources_uses_zone_fallback_even_without_region_fallback
     wrapper.assert_called_once()  # provisioning still goes through the zone-retry wrapper
 
 
+def test_provision_gce_resources_persists_zone_only_change():
+    """A zone changed by AZ fallback (region untouched) is persisted for the separate Run Test step.
+
+    Regression: the handoff used to be written only on region change, but GCE instance discovery is
+    zone-scoped (no AWS-style region-wide test_id search), so a Run Test step aimed at the configured
+    zone would miss the instances and provision a duplicate cluster.
+    """
+    params = _make_params(fallback_to_next_region=False, fallback_to_next_availability_zone=True)
+    test_config = MagicMock()
+    test_config.test_id.return_value = "tid-1"
+
+    def zone_fallback_wrapper():
+        params["availability_zone"] = "c"
+
+    with (
+        patch("sdcm.sct_provision.instances_provider.GceAZResolver"),
+        patch(
+            "sdcm.sct_provision.instances_provider.gce_region_fallback.provision_with_az_fallback",
+            return_value=zone_fallback_wrapper,
+        ),
+    ):
+        provision_sct_resources(params=params, test_config=test_config)
+    test_config.write_resolved_placement.assert_called_once_with("tid-1", region_name="us-east1", availability_zone="c")
+
+
+def test_provision_gce_resources_persists_resolver_selected_zone():
+    """A zone the resolver picks when none is configured is persisted too.
+
+    With availability_zone unset the resolver chooses a random valid zone, so a separate Run Test
+    step would roll its own pick unless the provisioning step's choice is handed off.
+    """
+    params = _make_params(fallback_to_next_region=False, availability_zone=None)
+    test_config = MagicMock()
+    test_config.test_id.return_value = "tid-1"
+
+    def fake_resolve():
+        params["availability_zone"] = "d"
+
+    with (
+        patch("sdcm.sct_provision.instances_provider.GceAZResolver") as resolver,
+        patch("sdcm.sct_provision.instances_provider._provision_sct_resources_once"),
+    ):
+        resolver.return_value.resolve.side_effect = fake_resolve
+        provision_sct_resources(params=params, test_config=test_config)
+    test_config.write_resolved_placement.assert_called_once_with("tid-1", region_name="us-east1", availability_zone="d")
+
+
+def test_provision_gce_resources_skips_handoff_when_placement_unchanged():
+    """No handoff file is written when provisioning ends up in the configured region and zone."""
+    params = _make_params(fallback_to_next_region=False)
+    test_config = MagicMock()
+    with (
+        patch("sdcm.sct_provision.instances_provider.GceAZResolver"),
+        patch("sdcm.sct_provision.instances_provider._provision_sct_resources_once"),
+    ):
+        provision_sct_resources(params=params, test_config=test_config)
+    test_config.write_resolved_placement.assert_not_called()
+
+
 def test_provision_gce_resources_routes_to_fallback_when_multi_dc_enabled():
     """Multi-DC GCE configs also go through the fallback router (it dispatches to per-DC fallback)."""
     params = _make_params(fallback_to_next_region=True, gce_datacenter="us-east1 us-west1")
