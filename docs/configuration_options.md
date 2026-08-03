@@ -1215,7 +1215,7 @@ Cloud-agnostic instance sizing constraints for monitor nodes
 
 ## **instance_type_loader** / SCT_INSTANCE_TYPE_LOADER
 
-AWS image type of the loader node
+AWS image type of the loader node. Accepts a comma-separated list of interchangeable instance types (e.g. 'c6i.xlarge,c7i.xlarge'). The first entry is the preferred type and the only one used outside of EC2 Fleet provisioning; the extra entries are offered to EC2 Fleet as alternatives so spot capacity can be satisfied from more than one pool.
 
 **default:** N/A
 
@@ -1233,7 +1233,7 @@ AWS image type of the monitor node
 
 ## **instance_type_db** / SCT_INSTANCE_TYPE_DB
 
-AWS image type of the db node
+AWS image type of the db node. Accepts a comma-separated list of interchangeable instance types (e.g. 'i7i.large,i7ie.large,i4i.large'). The first entry is the preferred type and the only one used outside of EC2 Fleet provisioning; the extra entries are offered to EC2 Fleet as alternatives so spot capacity can be satisfied from more than one pool. Only list types with equivalent CPU/memory/disk characteristics - SCT does not verify this.
 
 **default:** N/A
 

@@ -21,6 +21,7 @@ from sdcm import cluster
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, attach_failed_region
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
+from sdcm.provision.aws.utils import split_instance_types
 from sdcm.provision.common.provision_plan import ProvisionPlan
 from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder
 from sdcm.provision.common.provisioner import TagsType
@@ -196,7 +197,12 @@ class ClusterBase(BaseModel):
 
     @property
     def _instance_type(self) -> str:
-        return self.params.get(self._INSTANCE_TYPE_PARAM_NAME)
+        return split_instance_types(self.params.get(self._INSTANCE_TYPE_PARAM_NAME))[0]
+
+    @property
+    def _instance_types(self) -> List[str]:
+        """All interchangeable instance types configured for this cluster, preferred one first."""
+        return split_instance_types(self.params.get(self._INSTANCE_TYPE_PARAM_NAME))
 
     @property
     def _test_duration(self) -> int:
@@ -212,7 +218,13 @@ class ClusterBase(BaseModel):
             provisioner=AWSInstanceProvisioner(),
         ).provision_plan
 
-    def _instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
+    def _instance_parameters(self, region_id: int, availability_zone: int = 0) -> List[AWSInstanceParams]:
+        """Build one instance parameter set per configured instance type.
+
+        The builder resolves `InstanceType` to the preferred type, so the remaining configured types
+        are applied as copies. The list is ordered by preference and only the EC2 Fleet path uses
+        more than the first entry.
+        """
         params_builder = self._INSTANCE_PARAMS_BUILDER(
             params=self.params,
             region_id=region_id,
@@ -220,9 +232,15 @@ class ClusterBase(BaseModel):
             availability_zone=availability_zone,
             placement_group=self.placement_group_name,
         )
-        return AWSInstanceParams(
+        base_parameters = AWSInstanceParams(
             **params_builder.model_dump(exclude_none=True, exclude_unset=True, exclude_defaults=True)
         )
+        return [
+            base_parameters
+            if instance_type == base_parameters.InstanceType
+            else base_parameters.model_copy(update={"InstanceType": instance_type})
+            for instance_type in self._instance_types
+        ]
 
     def _provision_az_instances(self, region_id, az_id, instance_parameters, node_tags, node_names, node_count):
         """Provision one (region, az) batch and tag capacity errors with region/AZ for fallback."""
@@ -293,7 +311,7 @@ class DBCluster(ClusterBase):
             install_agent=bool(agent_config.get("enabled") and agent_config.get("binary_url")),
         ).to_string()
 
-    def _zero_token_instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
+    def _zero_token_instance_parameters(self, region_id: int, availability_zone: int = 0) -> List[AWSInstanceParams]:
         params_builder = self._ZERO_TOKEN_INSTANCE_PARAMS_BUILDER(
             params=self.params,
             region_id=region_id,
@@ -301,9 +319,15 @@ class DBCluster(ClusterBase):
             availability_zone=availability_zone,
             placement_group=self.placement_group_name,
         )
-        return AWSInstanceParams(
+        base_parameters = AWSInstanceParams(
             **params_builder.model_dump(exclude_none=True, exclude_unset=True, exclude_defaults=True)
         )
+        return [
+            base_parameters
+            if instance_type == base_parameters.InstanceType
+            else base_parameters.model_copy(update={"InstanceType": instance_type})
+            for instance_type in split_instance_types(self.params.get(self._ZEROTOKEN_NODE_INSTANCE_TYPE_PARAM_NAME))
+        ]
 
     def _az_nodes(self, region_id: int) -> Tuple[List[int], List[int]]:
         az_token_nodes = [0] * len(self._azs)

@@ -16,7 +16,9 @@ cluster_target_size: 25
 n_loaders: 2
 
 # AWS
-instance_type_db: 'i7i.large'
+# Several interchangeable instance types are listed so EC2 Fleet can satisfy the spot request from
+# whichever pool has capacity. Relevant for large scale runs where a single pool is often exhausted.
+instance_type_db: 'i7i.large,i7ie.large,i4i.large'
 instance_type_loader: 'c6i.xlarge'
 instance_provision_fallback_on_demand: false
 

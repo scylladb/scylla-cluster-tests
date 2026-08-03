@@ -1079,13 +1079,24 @@ class SCTConfiguration(BaseModel):
         default=None, description="Cloud-agnostic instance sizing constraints for monitor nodes"
     )
     instance_type_loader: String = SctField(
-        description="AWS image type of the loader node",
+        description=(
+            "AWS image type of the loader node. Accepts a comma-separated list of interchangeable "
+            "instance types (e.g. 'c6i.xlarge,c7i.xlarge'). The first entry is the preferred type and "
+            "the only one used outside of EC2 Fleet provisioning; the extra entries are offered to "
+            "EC2 Fleet as alternatives so spot capacity can be satisfied from more than one pool."
+        ),
     )
     instance_type_monitor: String = SctField(
         description="AWS image type of the monitor node",
     )
     instance_type_db: String = SctField(
-        description="AWS image type of the db node",
+        description=(
+            "AWS image type of the db node. Accepts a comma-separated list of interchangeable "
+            "instance types (e.g. 'i7i.large,i7ie.large,i4i.large'). The first entry is the preferred "
+            "type and the only one used outside of EC2 Fleet provisioning; the extra entries are offered "
+            "to EC2 Fleet as alternatives so spot capacity can be satisfied from more than one pool. "
+            "Only list types with equivalent CPU/memory/disk characteristics - SCT does not verify this."
+        ),
     )
     instance_type_db_oracle: String = SctField(
         description="AWS image type of the oracle node",
