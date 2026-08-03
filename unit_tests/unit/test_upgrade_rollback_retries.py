@@ -90,7 +90,12 @@ def test_rollback_node_yum_downgrade_passes_retry_and_timeout():
     ],
 )
 def test_rollback_node_package_commands_are_retried(upgrade_rollback_mode, is_rhel_like, orig_ver, new_ver):
-    """Every yum/apt-get command invoked by ``_rollback_node`` must carry retry>=3."""
+    """Every yum/apt-get command invoked by ``_rollback_node`` must carry retry>=3.
+
+    Commands that download packages (install/downgrade) must additionally carry
+    timeout=600; plain ``remove`` commands don't download anything and aren't
+    expected to carry a timeout.
+    """
     fake_self = _build_fake_self(upgrade_rollback_mode=upgrade_rollback_mode, orig_ver=orig_ver, new_ver=new_ver)
     fake_node = _build_fake_node(is_rhel_like=is_rhel_like, orig_ver=orig_ver, new_ver=new_ver)
 
@@ -100,3 +105,6 @@ def test_rollback_node_package_commands_are_retried(upgrade_rollback_mode, is_rh
     assert package_manager_calls, "expected at least one yum/apt-get call to be exercised"
     for cmd, kwargs in package_manager_calls:
         assert kwargs.get("retry", 1) >= 3, f"command missing retry>=3: {cmd!r} (kwargs={kwargs!r})"
+        if "remove" in cmd:
+            continue
+        assert kwargs.get("timeout") == 600, f"command missing timeout=600: {cmd!r} (kwargs={kwargs!r})"
