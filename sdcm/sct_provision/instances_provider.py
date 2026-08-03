@@ -16,11 +16,15 @@ from typing import List, Any
 
 
 from sdcm.provision import provisioner_factory
+from sdcm.provision.common.fallback import is_region_fallback_enabled
+from sdcm.provision.gce import region_fallback as gce_region_fallback
+from sdcm.provision.gce.zone_resolver import GceAZResolver
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.provision.provisioner import (
     PricingModel,
     VmInstance,
     ProvisionError,
+    ProvisionUnrecoverableError,
     Provisioner,
     InstanceDefinition,
     OperationPreemptedError,
@@ -68,8 +72,27 @@ def provision_instances_with_fallback(
     return provisioned_instances
 
 
-def provision_sct_resources(params: SCTConfiguration, test_config: TestConfig, **provisioner_config: Any):
-    """Provisions instances according to SCT Configuration."""
+def provision_sct_resources(params: SCTConfiguration, test_config: TestConfig, **provisioner_config: Any) -> None:
+    """Provision instances per SCT config, with optional backend region fallback and placement handoff.
+
+    Backends that support whole-cluster region fallback (currently GCE) get a pre-provision zone/AZ
+    resolve, drive provisioning through the shared region-fallback loop for a single-region config,
+    and persist the resolved placement so a later Run Test step picks up any relocated region or zone. Other
+    backends (AWS uses its own layout; Azure/OCI have no fallback yet) provision once, unchanged - the
+    shared shape is ready for them to opt in.
+    """
+
+    def provision_once() -> None:
+        _provision_sct_resources_once(params=params, test_config=test_config, **provisioner_config)
+
+    if params.get("cluster_backend") == "gce":
+        _provision_gce_resources(params, test_config, provision_once)
+    else:
+        provision_once()
+
+
+def _provision_sct_resources_once(params: SCTConfiguration, test_config: TestConfig, **provisioner_config: Any) -> None:
+    """Provision every region's instances once in the currently configured region/AZ."""
     builder = region_definition_builder.get_builder(params=params, test_config=test_config)
     definitions_per_region = builder.build_all_region_definitions()
     pricing_model = PricingModel(params.get("instance_provision"))
@@ -87,4 +110,58 @@ def provision_sct_resources(params: SCTConfiguration, test_config: TestConfig, *
             definitions=request.definitions,
             pricing_model=pricing_model,
             fallback_on_demand=provision_fallback_on_demand,
+        )
+
+
+def _provision_gce_resources(params: SCTConfiguration, test_config: TestConfig, provision_once: Any) -> None:
+    """GCE provisioning: upfront zone filter, optional zone/region fallback, placement handoff.
+
+    Capacity exhaustion escalates in two steps, each independently gated by its own config flag:
+    ``fallback_to_next_availability_zone`` retries the remaining zones of the configured region, and
+    only once those are gone does ``fallback_to_next_region`` relocate - the whole cluster for a
+    single-region config, or just the exhausted DC for a multi-region one.
+
+    Any final placement that differs from the configured one - a relocated region, but also a
+    zone-only change from AZ fallback or from the resolver picking a zone when none is configured -
+    is persisted to the resolved-placement handoff. Unlike AWS, which finds instances region-wide by
+    ``test_id`` tag, GCE instance discovery is zone-scoped, so the later Run Test step (a separate
+    hydra command) must be pointed at the exact zone or it provisions a duplicate cluster.
+    """
+    # Both baselines must be captured before the resolver runs: with no availability_zone configured
+    # it picks a random valid zone, and that pick has to be detected as a change so the Run Test step
+    # reuses it instead of rolling its own.
+    original_region = " ".join(params.gce_datacenters) if params.gce_datacenters else None
+    original_az = params.get("availability_zone")
+    GceAZResolver(params).resolve()
+    test_id = str(test_config.test_id())
+    network_name = params.get("gce_network")
+
+    # Zone fallback wraps the single provisioning attempt, so it is exhausted before the region loop
+    # below ever sees a capacity error. The legacy cluster path has its own per-node zone retry in
+    # sdcm.cluster_gce; this is the modern path's equivalent.
+    provision_attempt = gce_region_fallback.provision_with_az_fallback(
+        params=params,
+        test_id=test_id,
+        network_name=network_name,
+        provision_once=provision_once,
+    )
+
+    if is_region_fallback_enabled(params):
+        gce_region_fallback.provision_with_fallback(
+            params=params,
+            test_id=test_id,
+            network_name=network_name,
+            provision_once=provision_attempt,
+            error_factory=ProvisionUnrecoverableError,
+        )
+    else:
+        provision_attempt()
+
+    region_name = " ".join(params.gce_datacenters) if params.gce_datacenters else None
+    availability_zone = params.get("availability_zone")
+    if region_name and (region_name != original_region or availability_zone != original_az):
+        test_config.write_resolved_placement(
+            params.get("reuse_cluster") or str(test_config.test_id()),
+            region_name=region_name,
+            availability_zone=availability_zone,
         )

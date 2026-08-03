@@ -3396,7 +3396,19 @@ On capacity errors, automatically retry provisioning in the next available AZ in
 
 **default:** N/A
 
+<<<<<<< HEAD
 **type:** boolean
+||||||| parent of f1e24d836 (feature(provision/gce): enable AZ and region fallback by default for GCE)
+**type:** bool
+
+**backend overrides:**
+- `True`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+=======
+**type:** bool
+
+**backend overrides:**
+- `True`: aws, gce, aws-siren, gce-siren, k8s-local-kind-aws, k8s-gke, k8s-eks
+>>>>>>> f1e24d836 (feature(provision/gce): enable AZ and region fallback by default for GCE)
 
 
 ## **pre_filter_unavailable_availability_zones** / SCT_PRE_FILTER_UNAVAILABLE_AVAILABILITY_ZONES
@@ -3414,7 +3426,43 @@ Before provisioning, probe capacity by launching and terminating one on-demand i
 
 **default:** N/A
 
+<<<<<<< HEAD
 **type:** boolean
+||||||| parent of 108a7b7ea (feature(provision/gce): add AZ + region + multi-DC capacity-exhaustion fallback)
+**type:** bool
+
+
+## **fallback_to_next_region** / SCT_FALLBACK_TO_NEXT_REGION
+
+On capacity errors, after all AZs in the configured region are exhausted, relocate the entire cluster to the next eligible region (should be VPC-peered with the runner region with infra-prepared and AMI available). Only applies during initial setup, to single region tests. AWS-only.
+
+**default:** False
+
+**type:** bool
+
+**backend overrides:**
+- `True`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+=======
+**type:** bool
+
+
+## **fallback_to_next_region** / SCT_FALLBACK_TO_NEXT_REGION
+
+On capacity errors, after all AZs/zones in the configured region are exhausted, relocate to the next eligible region: a single-region cluster moves as a whole, while in a multi-region test only the exhausted datacenter is relocated (to a region no other datacenter occupies) and the cluster is retried. On AWS the target region should be VPC-peered with the runner region with infra-prepared and AMI available; on GCE the global VPC and global images make any supported region eligible. Only applies during initial setup. Supported backends: AWS, GCE.
+
+**default:** False
+
+**type:** bool
+
+**backend overrides:**
+<<<<<<< HEAD
+- `True`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+>>>>>>> 108a7b7ea (feature(provision/gce): add AZ + region + multi-DC capacity-exhaustion fallback)
+||||||| parent of f1e24d836 (feature(provision/gce): enable AZ and region fallback by default for GCE)
+- `True`: aws, aws-siren, k8s-local-kind-aws, k8s-eks
+=======
+- `True`: aws, gce, aws-siren, gce-siren, k8s-local-kind-aws, k8s-gke, k8s-eks
+>>>>>>> f1e24d836 (feature(provision/gce): enable AZ and region fallback by default for GCE)
 
 
 ## **num_nodes_to_rollback** / SCT_NUM_NODES_TO_ROLLBACK

@@ -16,8 +16,37 @@ from functools import cached_property
 
 from botocore.exceptions import ClientError
 
+<<<<<<< HEAD
 from sdcm.provision.aws.az_resolver import AZResolver, is_az_fallback_enabled, run_pre_flight_capacity_probe
 from sdcm.provision.aws.capacity_errors import ProvisioningCapacityExhausted, is_capacity_error
+||||||| parent of 108a7b7ea (feature(provision/gce): add AZ + region + multi-DC capacity-exhaustion fallback)
+from sdcm.exceptions import CapacityReservationError
+from sdcm.provision.aws.az_resolver import (
+    AZResolver,
+    is_az_fallback_enabled,
+    is_region_fallback_enabled,
+    run_pre_flight_capacity_probe,
+)
+from sdcm.provision.aws.capacity_errors import (
+    ProvisioningCapacityExhausted,
+    RegionAMINotFoundError,
+    get_failed_region,
+    is_capacity_error,
+)
+=======
+from sdcm.exceptions import CapacityReservationError
+from sdcm.provision.aws.az_resolver import (
+    AZResolver,
+    run_pre_flight_capacity_probe,
+)
+from sdcm.provision.common.fallback import is_az_fallback_enabled, is_region_fallback_enabled
+from sdcm.provision.aws.capacity_errors import (
+    ProvisioningCapacityExhausted,
+    RegionAMINotFoundError,
+    get_failed_region,
+    is_capacity_error,
+)
+>>>>>>> 108a7b7ea (feature(provision/gce): add AZ + region + multi-DC capacity-exhaustion fallback)
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.aws.utils import ec2_clients
