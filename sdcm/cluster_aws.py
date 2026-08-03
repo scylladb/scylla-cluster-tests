@@ -1541,7 +1541,8 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
             return
 
         self.log.info("Reconfiguring Vector Store nodes with Scylla cluster information")
-        for node in self.nodes:
+
+        def _reconfigure_node(node):
             try:
                 node.remoter.run("sudo systemctl stop vector-store", ignore_status=True, verbose=True)
                 node.configure_vector_store_service()
@@ -1549,6 +1550,11 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
             except Exception as e:
                 self.log.error("Failed to reconfigure Vector Store node %s: %s", node.name, e)
                 raise
+
+        # Each node reconfiguration is an independent set of SSH commands, so run them in
+        # parallel to cut the serial per-node provisioning latency (SCT-729). run_func_parallel
+        # re-raises the first exception via future.result(), preserving the fail-fast behavior.
+        self.run_func_parallel(func=_reconfigure_node)
 
     def _create_node(
         self, instance, ami_username, node_prefix, node_index, base_logdir, dc_idx, rack, after_config=None
