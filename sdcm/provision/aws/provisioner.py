@@ -253,7 +253,6 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
                 template_id=template_id,
                 instance_types=instance_types,
                 spot=provision_parameters.spot,
-                valid_until=self._spot_valid_until,
             )
             log_ec2_fleet_errors(region_name=region_name, fleet_id=fleet_id, errors=errors)
             if len(instance_ids) < count:

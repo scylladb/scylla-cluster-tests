@@ -307,13 +307,15 @@ def create_ec2_fleet_instance_request(
     instance_types: List[str],
     spot: bool = True,
     tag_specifications: Sequence[TagSpecificationTypeDef] = None,
-    valid_until: datetime.datetime = None,
 ) -> Tuple[Optional[str], List[str], List[dict]]:
     """Request `count` instances via EC2 Fleet, diversified across `instance_types`.
 
     Uses `Type="instant"`, so the call is synchronous: the response already carries the provisioned
     instance ids and there is nothing to poll. This is the key behavioural difference from Spot
     Fleet, which required a describe/poll loop until the request became `fulfilled`.
+    `ValidUntil` is intentionally never sent: AWS rejects it outright for `instant` fleets
+    (`InvalidParameter: ValidUntil is not supported for given fleet type`) -- it's only valid for
+    the `request`/`maintain` fleet types SCT doesn't use.
 
     Returns a `(fleet_id, instance_ids, errors)` tuple. `errors` is the raw `Errors` list from the
     response and is non-empty on partial fulfillment even when some instances did come up.
@@ -336,8 +338,6 @@ def create_ec2_fleet_instance_request(
         params["SpotOptions"] = {"AllocationStrategy": EC2_FLEET_ALLOCATION_STRATEGY}
     if tag_specifications:
         params["TagSpecifications"] = tag_specifications
-    if valid_until:
-        params["ValidUntil"] = valid_until
 
     LOGGER.info(
         "Requesting EC2 Fleet in %s for %d instances across instance types %s",
