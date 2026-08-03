@@ -22,6 +22,8 @@ def _make_gce_node_mock(
     node.private_dns_name = private_dns
     node.public_dns_name = public_dns
     node.network_configuration = {}
+    # bind the real resolver so `network_interfaces` returns real device names, not MagicMock values
+    node._resolve_device_name = GCENode._resolve_device_name.__get__(node, GCENode)
     return node
 
 
@@ -39,7 +41,7 @@ def test_gce_node_network_interfaces_with_remoter_and_device_names():
     mock_iface = _make_gce_iface("10.0.0.1", "34.1.2.3")
     remoter = MagicMock()
     node = _make_gce_node_mock([mock_iface], remoter=remoter)
-    node.network_configuration = {"aa:bb:cc:dd:ee:f0": "ens4"}
+    node.network_configuration = {"42:01:0a:00:00:01": "ens4"}
 
     result = GCENode.network_interfaces.fget(node)
 
@@ -70,7 +72,7 @@ def test_gce_node_network_interfaces_no_public_ip():
     node = _make_gce_node_mock(
         [mock_iface], remoter=remoter, use_dns_names=False, private_dns="node-2.c.my-project.internal", public_dns=""
     )
-    node.network_configuration = {"aa:bb:cc:dd:ee:f0": "ens4"}
+    node.network_configuration = {"42:01:0a:00:00:02": "ens4"}
 
     result = GCENode.network_interfaces.fget(node)
 
@@ -96,7 +98,7 @@ def test_gce_node_network_interfaces_multiple_interfaces():
     iface1 = _make_gce_iface("10.0.1.1")
     remoter = MagicMock()
     node = _make_gce_node_mock([iface0, iface1], remoter=remoter, use_dns_names=False)
-    node.network_configuration = {"aa:bb:cc:dd:ee:f0": "ens4", "aa:bb:cc:dd:ee:f1": "ens5"}
+    node.network_configuration = {"42:01:0a:00:00:01": "ens4", "42:01:0a:00:01:01": "ens5"}
 
     result = GCENode.network_interfaces.fget(node)
 

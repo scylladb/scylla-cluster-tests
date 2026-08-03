@@ -25,7 +25,7 @@ from google.cloud import compute_v1
 from sdcm import cluster
 from sdcm.provision.gce.provisioner import GceProvisioner
 from sdcm.provision.gce.instance_provider import _is_zone_exhausted
-from sdcm.provision.network_configuration import NetworkInterface, ssh_connection_ip_type
+from sdcm.provision.network_configuration import NetworkInterface, network_interfaces_count, ssh_connection_ip_type
 from sdcm.provision.provisioner import PricingModel, ProvisionError, ZoneResourcesExhaustedError
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.sct_provision import region_definition_builder
@@ -37,6 +37,7 @@ from sdcm.utils.gce_utils import (
     get_gce_compute_disks_client,
     get_alternative_zones,
     wait_for_extended_operation,
+    gce_mac_address_for_ipv4,
     gce_private_addresses,
     gce_public_addresses,
     gce_set_labels,
@@ -189,15 +190,42 @@ class GCENode(cluster.BaseNode):
         ip_tuple = (gce_public_addresses(instance), gce_private_addresses(instance))
         return ip_tuple
 
+    def _resolve_device_name(self, devices: Dict[str, str], mac_address: str | None, device_index: int) -> str:
+        """Map a GCE network interface to its OS device name.
+
+        Matching by the MAC address GCE derives from the interface IPv4 keeps working while the
+        interface is still waiting for DHCP, so a guest-agent failure on a secondary NIC shows up
+        as a named interface without an address rather than being masked.
+        """
+        if not devices:
+            return ""
+        if mac_address and (device_name := devices.get(mac_address)):
+            return device_name
+
+        device_names = list(devices.values())
+        if device_index < len(device_names):
+            self.log.warning(
+                "Node %s: no interface with MAC %s found in %s, falling back to positional match for nic %s",
+                self.name,
+                mac_address,
+                devices,
+                device_index,
+            )
+            return device_names[device_index]
+        self.log.error(
+            "Node %s: cannot resolve the device name of nic %s (devices: %s)", self.name, device_index, devices
+        )
+        return ""
+
     @property
     def network_interfaces(self):
         interfaces = []
         devices = self.network_configuration if self.remoter else {}
-        device_names = list(devices.values()) if devices else []
         for idx, iface in enumerate(self._instance.network_interfaces):
             public_ip = None
             if iface.access_configs:
                 public_ip = iface.access_configs[0].nat_i_p or None
+            mac_address = gce_mac_address_for_ipv4(iface.network_i_p)
             interfaces.append(
                 NetworkInterface(
                     ipv4_public_address=public_ip,
@@ -207,8 +235,8 @@ class GCENode(cluster.BaseNode):
                     dns_private_name=self.private_dns_name if self.remoter else "",
                     dns_public_name=self.public_dns_name if self.remoter else "",
                     device_index=idx,
-                    device_name=device_names[idx] if idx < len(device_names) else "",
-                    mac_address=None,
+                    device_name=self._resolve_device_name(devices, mac_address, idx),
+                    mac_address=mac_address,
                     use_dns_names=self.use_dns_names,
                 )
             )
@@ -382,6 +410,7 @@ class GCECluster(cluster.BaseCluster):
             params=params,
             region_names=gce_region_names,
             node_type=node_type,
+            extra_network_interface=network_interfaces_count(params) > 1,
             add_nodes=add_nodes,
         )
         self.log.debug("GCECluster constructor")
