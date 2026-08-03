@@ -52,6 +52,7 @@ from sdcm.provision.aws.capacity_errors import RegionAMINotFoundError
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
+from sdcm.provision.aws.utils import split_instance_types
 from sdcm.utils.common import (
     ami_built_by_scylla,
     get_ami_tags,
@@ -4273,10 +4274,11 @@ class SCTConfiguration(BaseModel):
             for param_name in instance_type_params:
                 if instance_type := self.get(param_name):
                     for region in self.region_names:
-                        assert aws_check_instance_type_supported(instance_type, region), (
-                            f"Instance type '{instance_type}' (param: {param_name}) "
-                            f"is not supported in region '{region}'"
-                        )
+                        for single_instance_type in split_instance_types(instance_type):
+                            assert aws_check_instance_type_supported(single_instance_type, region), (
+                                f"Instance type '{single_instance_type}' (param: {param_name}) "
+                                f"is not supported in region '{region}'"
+                            )
 
         # Validate nemesis_grow_shrink_instance_type
         if instance_type := self.get("nemesis_grow_shrink_instance_type"):
