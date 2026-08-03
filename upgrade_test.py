@@ -339,7 +339,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 if node.distro.is_rhel_like:
                     node.remoter.run(rf"sudo yum update {scylla_pkg_ver}\* -y", retry=3, timeout=600)
                 else:
-                    node.remoter.sudo("apt-get update", retry=3)
+                    node.remoter.sudo("apt-get update", retry=3, timeout=600)
                     node.remoter.sudo(
                         f"DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade {scylla_pkg_ver} -y"
                         f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"',
