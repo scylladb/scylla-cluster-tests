@@ -14,7 +14,14 @@ from sdcm.cluster import BaseScyllaCluster, BaseCluster
 
 
 def _make_nodes(count):
-    return [MagicMock(name=f"node-{i}") for i in range(count)]
+    # `MagicMock(name=...)` does NOT set an accessible `.name` attribute (it's a reserved
+    # constructor kwarg used for the mock's repr); assign the attribute explicitly instead.
+    nodes = []
+    for i in range(count):
+        node = MagicMock()
+        node.name = f"node-{i}"
+        nodes.append(node)
+    return nodes
 
 
 def _attach_run_func_parallel(cluster):
